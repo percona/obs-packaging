@@ -77,6 +77,9 @@ Requires:        llvm17
 BuildRequires:        llvm19-devel clang19-devel
 Requires:        llvm19
 %endif
+%if 0%{?suse_version} > 1600
+BuildRequires:        llvm-devel clang-devel
+%endif
 %if 0%{?fedora} || 0%{?rhel} >= 8
 BuildRequires:        llvm-devel >= 19.0 clang-devel >= 19.0
 Requires:        llvm >= 19.0
@@ -88,7 +91,7 @@ This package provides JIT support for pg_repack
 
 %prep
 %setup -q -n %{sname}-%{version}
-%patch0 -p0
+%patch -P 0 -p0
 
 %build
 USE_PGXS=1 PATH=%{pginstdir}/bin/:$PATH %{__make} %{?_smp_mflags}
@@ -106,6 +109,11 @@ update-alternatives --remove pg_repack %{pginstdir}/bin/pg_repack
 %files
 %defattr(644,root,root)
 %doc COPYRIGHT doc/pg_repack.rst
+%dir %{pginstdir}
+%dir %{pginstdir}/bin
+%dir %{pginstdir}/lib
+%dir %{pginstdir}/share
+%dir %{pginstdir}/share/extension
 %attr (755,root,root) %{pginstdir}/bin/pg_repack
 %attr (755,root,root) %{pginstdir}/lib/pg_repack.so
 %{pginstdir}/share/extension/pg_repack--%{version}.sql
@@ -113,6 +121,9 @@ update-alternatives --remove pg_repack %{pginstdir}/bin/pg_repack
 
 %if %llvm
 %files llvmjit
+  %dir %{pginstdir}/lib/bitcode
+  %dir %{pginstdir}/lib/bitcode/pg_repack
+  %dir %{pginstdir}/lib/bitcode/pg_repack/pgut
   %{pginstdir}/lib/bitcode/pg_repack*.bc
   %{pginstdir}/lib/bitcode/pg_repack/*.bc
   %{pginstdir}/lib/bitcode/pg_repack/pgut/*.bc
