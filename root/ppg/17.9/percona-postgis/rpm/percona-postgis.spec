@@ -400,6 +400,11 @@ fi
 %defattr(-,root,root)
 %doc COPYING CREDITS NEWS TODO README.%{sname} doc/html loader/README.* doc/%{sname}.xml doc/ZMSgeoms.txt
 %license LICENSE.TXT
+%dir %{pginstdir}lib
+%dir %{pginstdir}share
+%dir %{pginstdir}share/contrib
+%dir %{pginstdir}share/contrib/%{sname}-%{postgismajorversion}
+%dir %{pginstdir}share/extension
 %{pginstdir}/bin/postgis
 %{pginstdir}/bin/postgis_restore
 %{pginstdir}/doc/extension/README.address_standardizer
@@ -455,12 +460,17 @@ fi
 %if %{sfcgal}
 %files devel
 %defattr(644,root,root)
+%dir %{pginstdir}lib
+%dir %{pginstdir}lib/bitcode
+%dir %{pginstdir}lib/bitcode/postgis_sfcgal-3
 %{pginstdir}/lib/bitcode/postgis_sfcgal-3/postgis_sfcgal_legacy.bc
 %endif
 
 %files docs
 %defattr(-,root,root)
 %doc %{sname}-%{version}.pdf
+%dir %{_mandir}/%{name}
+%dir %{_mandir}/%{name}/man1
 %{_mandir}/%{name}/man1/pgsql2shp.1.*
 %{_mandir}/%{name}/man1/pgtopo_export.1.*
 %{_mandir}/%{name}/man1/pgtopo_import.1.*
@@ -471,6 +481,30 @@ fi
 %if %shp2pgsqlgui
 %files gui
 %defattr(-,root,root)
+%dir %{pginstdir}share
+%dir %{pginstdir}share/applications
+%dir %{pginstdir}share/icons
+%dir %{pginstdir}share/icons/hicolor
+%dir %{pginstdir}share/icons/hicolor/8x8
+%dir %{pginstdir}share/icons/hicolor/8x8/apps
+%dir %{pginstdir}share/icons/hicolor/16x16
+%dir %{pginstdir}share/icons/hicolor/16x16/apps
+%dir %{pginstdir}share/icons/hicolor/22x22
+%dir %{pginstdir}share/icons/hicolor/22x22/apps
+%dir %{pginstdir}share/icons/hicolor/24x24
+%dir %{pginstdir}share/icons/hicolor/24x24/apps
+%dir %{pginstdir}share/icons/hicolor/32x32
+%dir %{pginstdir}share/icons/hicolor/32x32/apps
+%dir %{pginstdir}share/icons/hicolor/36x36
+%dir %{pginstdir}share/icons/hicolor/36x36/apps
+%dir %{pginstdir}share/icons/hicolor/40x40
+%dir %{pginstdir}share/icons/hicolor/40x40/apps
+%dir %{pginstdir}share/icons/hicolor/42x42
+%dir %{pginstdir}share/icons/hicolor/42x42/apps
+%dir %{pginstdir}share/icons/hicolor/48x48
+%dir %{pginstdir}share/icons/hicolor/48x48/apps
+%dir %{pginstdir}share/icons/hicolor/64x64
+%dir %{pginstdir}share/icons/hicolor/64x64/apps
 %{pginstdir}/bin/shp2pgsql-gui
 %{pginstdir}/share/applications/shp2pgsql-gui.desktop
 %{pginstdir}/share/icons/hicolor/*/apps/shp2pgsql-gui.png
@@ -478,6 +512,12 @@ fi
 
 %if %llvm
 %files llvmjit
+%dir %{pginstdir}lib
+%dir %{pginstdir}lib/bitcode
+%dir %{pginstdir}lib/bitcode/address_standardizer-3
+%dir %{pginstdir}lib/bitcode/postgis-%{postgissomajorversion}
+%dir %{pginstdir}lib/bitcode/postgis_sfcgal-%{postgissomajorversion}
+%dir %{pginstdir}lib/bitcode/postgis_topology-%{postgissomajorversion}
    %{pginstdir}/lib/bitcode/address_standardizer*.bc
    %{pginstdir}/lib/bitcode/address_standardizer-3/*.bc
    %{pginstdir}/lib/bitcode/postgis-%{postgissomajorversion}*.bc
@@ -498,6 +538,7 @@ fi
 %files utils
 %defattr(-,root,root)
 %doc utils/README
+%dir %{_datadir}/%{name}
 %attr(755,root,root) %{_datadir}/%{name}/*.pl
 %endif
 
