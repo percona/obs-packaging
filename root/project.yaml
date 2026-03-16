@@ -50,8 +50,11 @@ project-config: |
   %if "%_repository" == "openSUSE_Tumbleweed"
   # percona-telemetry-agent requires postgresql-server (generic); on Tumbleweed
   # this would resolve to postgresql-server-18 which conflicts with
-  # percona-postgresql17-server. Prefer our package over the system one.
+  # percona-postgresql17-server. Prefer our package over the system one, and
+  # explicitly prevent co-installation of the PG18 server meta-package.
   Prefer: percona-postgresql17-server
+  Conflict: percona-postgresql17-server postgresql-server-18
+  Conflict: percona-postgresql17-server postgresql18-server
   %endif
 
   %if "%_repository" == "Debian_13" || "%_repository" == "xUbuntu_24.04"
