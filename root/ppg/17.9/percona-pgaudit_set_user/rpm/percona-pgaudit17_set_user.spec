@@ -19,6 +19,9 @@ BuildRequires:	percona-postgresql%{pgmajorversion}-devel
 %if 0%{?rhel} || 0%{?fedora}
 BuildRequires:	clang llvm
 %endif
+%if 0%{?suse_version}
+BuildRequires:	clang llvm
+%endif
 
 Requires:	postgresql%{pgmajorversion}
 
