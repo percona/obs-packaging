@@ -188,7 +188,7 @@ Meta package to pull zookeeper related dependencies for patroni
 
 %prep
 %setup -q
-%patch0 -p1
+%patch -P 0 -p1
 %build
 %{__ospython} setup.py build
 
