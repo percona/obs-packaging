@@ -48,6 +48,10 @@ This sub-package delivers set of tests for the adapter.
 %setup -q -n %{srcname}-%{version}
 # delete shebangs
 find -name \*.py | xargs sed -i -e '1 {/^#!/d}'
+%if 0%{?suse_version} > 1600
+# Python 3.13 removed the private _PyInterpreterState_Get(); use public API
+sed -i 's/_PyInterpreterState_Get()/PyInterpreterState_Get()/g' psycopg/utils.c
+%endif
 
 
 %build
