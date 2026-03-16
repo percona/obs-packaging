@@ -66,6 +66,8 @@ Development headers and libraries for building pgpool-II client applications.
 
 %files
 %doc README TODO COPYING
+%dir %{_sysconfdir}/%{short_name}
+%dir %{_datadir}/%{short_name}
 %{_bindir}/*
 %config(noreplace) %{_sysconfdir}/%{short_name}/*.sample
 %{_datadir}/%{short_name}/insert_lock.sql
