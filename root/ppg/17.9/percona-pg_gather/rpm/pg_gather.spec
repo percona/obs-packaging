@@ -1,6 +1,6 @@
 %global sname   percona-pg_gather
 %global version %{version}
-%global pgmajorversion %{pgmajor}
+%global pgmajorversion 17
 %global pginstdir /usr/pgsql-%{pgmajorversion}
 
 Summary:        sql-only script to gather performance and configuration data from PostgreSQL databases
@@ -27,6 +27,9 @@ mkdir -p $RPM_BUILD_ROOT/%{_bindir} $RPM_BUILD_ROOT/%{pginstdir}
 %{__install} -p -D -m 0755 gather.sql %{buildroot}%{pginstdir}/share/contrib/gather.sql
 
 %files
+%dir %{pginstdir}
+%dir %{pginstdir}/share
+%dir %{pginstdir}/share/contrib
 %attr (755,root,root) %{pginstdir}/share/contrib/gather.sql
 
 %clean
