@@ -41,7 +41,11 @@ BuildRequires:  clang llvm
 %if 0%{?suse_version}
 BuildRequires:  clang llvm
 %endif
+%if 0%{?suse_version} >= 1500
+Requires:       libjson-c5 curl libopenssl3
+%else
 Requires:       json-c curl openssl
+%endif
 
 Epoch:          1
 Packager:       Percona Development Team <https://jira.percona.com>
