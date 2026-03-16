@@ -125,7 +125,7 @@ Source4:	%{sname}%{postgiscurrmajorversion}-filter-requires-perl-Pg.sh
 
 URL:		https://www.postgis.net/
 
-BuildRequires:	percona-postgresql%{pgmajorversion}-devel libxml2 libxslt autoconf gmp-devel pcre2-devel
+BuildRequires:	percona-postgresql%{pgmajorversion}-devel libxml2 libxslt autoconf automake gmp-devel pcre2-devel
 %if 0%{?rhel} && 0%{?rhel} == 9
 BuildRequires:	geos-devel libgeotiff-devel
 %else
