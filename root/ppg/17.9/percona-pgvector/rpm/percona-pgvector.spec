@@ -75,6 +75,10 @@ USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags} install DESTDIR
 %files
 %doc README.md
 %license LICENSE
+%dir /usr/pgsql-%{pgmajorversion}
+%dir /usr/pgsql-%{pgmajorversion}/lib
+%dir /usr/pgsql-%{pgmajorversion}/share
+%dir /usr/pgsql-%{pgmajorversion}/share/extension
 %{pginstdir}/lib/%{pname}.so
 %{pginstdir}/share/extension//%{pname}.control
 %{pginstdir}/share/extension/%{pname}*sql
@@ -83,6 +87,10 @@ USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags} install DESTDIR
 
 %if %llvm
 %files llvmjit
+   %dir /usr/pgsql-%{pgmajorversion}/lib
+   %dir /usr/pgsql-%{pgmajorversion}/lib/bitcode
+   %dir /usr/pgsql-%{pgmajorversion}/lib/bitcode/%{pname}
+   %dir /usr/pgsql-%{pgmajorversion}/lib/bitcode/%{pname}/src
    %{pginstdir}/lib/bitcode/%{pname}*.bc
    %{pginstdir}/lib/bitcode/%{pname}/src/*.bc
 %endif
