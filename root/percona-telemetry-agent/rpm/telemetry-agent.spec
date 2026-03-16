@@ -85,10 +85,10 @@ if ls /var/log/percona/telemetry-agent*log* >/dev/null 2>&1; then
 fi
 # Create telemetry history directory
 mkdir -p /usr/local/percona/telemetry/history
-chown daemon:percona-telemetry /usr/local/percona/telemetry/history
+chown daemon:percona-telemetry /usr/local/percona/telemetry/history || :
 chmod g+s /usr/local/percona/telemetry/history
 chmod u+s /usr/local/percona/telemetry/history
-chown daemon:percona-telemetry /usr/local/percona/telemetry
+chown daemon:percona-telemetry /usr/local/percona/telemetry || :
 # Fix permissions to be able to create Percona telemetry uuid file
 chgrp percona-telemetry /usr/local/percona
 chmod 775 /usr/local/percona
@@ -124,6 +124,8 @@ fi
 %config(noreplace) %attr(0640,root,root) /%{_sysconfdir}/sysconfig/percona-telemetry-agent
 %config(noreplace) %attr(0644,root,root) /%{_sysconfdir}/logrotate.d/percona-telemetry-agent
 %{_unitdir}/percona-telemetry-agent.service
+%dir /var/log/percona
+%dir %{_log_dir}
 %{_log_dir}/telemetry-agent.log
 %{_log_dir}/telemetry-agent-error.log
 
