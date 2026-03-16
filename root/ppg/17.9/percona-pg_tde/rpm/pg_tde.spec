@@ -29,8 +29,16 @@ License:        PostgreSQL
 URL:            https://github.com/percona/pg_tde
 Source0:        %{sname}-%{version}.tar.gz
 
-BuildRequires:  %{pg_name}-devel chrpath json-c-devel openssl-devel libcurl-devel lz4-devel zlib-devel libzstd-devel libxml2-devel libxslt-devel libselinux-devel pam-devel krb5-devel readline-devel
+BuildRequires:  %{pg_name}-devel chrpath openssl-devel libcurl-devel zlib-devel libzstd-devel libxml2-devel libxslt-devel libselinux-devel pam-devel krb5-devel readline-devel
+%if 0%{?suse_version} >= 1500
+BuildRequires:  libjson-c-devel liblz4-devel
+%else
+BuildRequires:  json-c-devel lz4-devel
+%endif
 %if 0%{?rhel} || 0%{?fedora}
+BuildRequires:  clang llvm
+%endif
+%if 0%{?suse_version}
 BuildRequires:  clang llvm
 %endif
 Requires:       json-c curl openssl
@@ -50,8 +58,11 @@ Requires:       %{name}%{?_isa} = %{version}-%{release}
 %if 0%{?suse_version} >= 1315 && 0%{?suse_version} <= 1499
 BuildRequires:  llvm6-devel clang6-devel
 %endif
-%if 0%{?suse_version} >= 1500
+%if 0%{?suse_version} >= 1500 && 0%{?suse_version} <= 1600
 BuildRequires:  llvm15-devel clang15-devel
+%endif
+%if 0%{?suse_version} > 1600
+BuildRequires:  llvm-devel clang-devel
 %endif
 
 %description llvmjit
