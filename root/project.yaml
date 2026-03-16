@@ -47,6 +47,13 @@ project-config: |
   Prefer: hdf-libs
   %endif
 
+  %if "%_repository" == "openSUSE_Tumbleweed"
+  # percona-telemetry-agent requires postgresql-server (generic); on Tumbleweed
+  # this would resolve to postgresql-server-18 which conflicts with
+  # percona-postgresql17-server. Prefer our package over the system one.
+  Prefer: percona-postgresql17-server
+  %endif
+
   %if "%_repository" == "Debian_13" || "%_repository" == "xUbuntu_24.04"
   # libgdal-dev transitively requires both libcurl4-openssl-dev and
   # libcurl4-gnutls-dev which conflict; ignore the gnutls variant so

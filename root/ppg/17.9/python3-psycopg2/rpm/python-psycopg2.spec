@@ -87,7 +87,8 @@ done
 
 
 %files tests
-%{python3_sitearch}/psycopg2/tests
+%dir %{python3_sitearch}/psycopg2/tests
+%{python3_sitearch}/psycopg2/tests/*
 
 
 %changelog
