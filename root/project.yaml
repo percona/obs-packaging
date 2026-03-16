@@ -55,7 +55,8 @@ project-config: |
   # requirements resolve to percona-postgresql17-server via its Provides.
   Prefer: percona-postgresql17-server
   Ignore: postgresql18-server
-  Ignore: postgresql-server-18
+  Ignore: postgresql-server
+  Ignore: postgresql
   %endif
 
   %if "%_repository" == "Debian_13" || "%_repository" == "xUbuntu_24.04"
