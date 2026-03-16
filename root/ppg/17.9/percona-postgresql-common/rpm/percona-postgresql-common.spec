@@ -143,6 +143,7 @@ sed -i '2d' files-percona-postgresql-common-dev
 %dir /usr/share/postgresql-common/t
 
 %post
+set +e
 # create postgres user
 groupadd -g 26 -o -r postgres >/dev/null 2>&1 || :
 useradd -M -n -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
