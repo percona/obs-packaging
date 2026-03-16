@@ -72,10 +72,10 @@ fi
 
 %post -n %{sname}%{pgrel}
 if getent group percona-telemetry > /dev/null 2>&1; then
-  usermod -a -G percona-telemetry postgres
-  install -d -m 2775 -o postgres -g percona-telemetry /usr/local/percona/telemetry/pg
+  usermod -a -G percona-telemetry postgres || :
+  install -d -m 2775 -o postgres -g percona-telemetry /usr/local/percona/telemetry/pg || :
 else
-  install -d -m 2775 -o postgres -g postgres /usr/local/percona/telemetry/pg
+  install -d -m 2775 -o postgres -g postgres /usr/local/percona/telemetry/pg || :
 fi
 %if 0%{?suse_version}
 # Update dynamic linker cache for new library path
