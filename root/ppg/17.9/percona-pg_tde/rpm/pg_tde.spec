@@ -93,6 +93,23 @@ install -m 644 ci_scripts/perl/PostgreSQL/Test/TdeCluster.pm %{buildroot}/%{pgin
 %files
 %doc README.md
 %license COPYRIGHT
+%dir %{pginstdir}
+%dir %{pginstdir}/bin
+%dir %{pginstdir}/lib
+%dir %{pginstdir}/lib/bitcode
+%dir %{pginstdir}/lib/bitcode/pg_tde
+%dir %{pginstdir}/lib/bitcode/pg_tde/src
+%dir %{pginstdir}/lib/bitcode/pg_tde/src/access
+%dir %{pginstdir}/lib/bitcode/pg_tde/src/catalog
+%dir %{pginstdir}/lib/bitcode/pg_tde/src/common
+%dir %{pginstdir}/lib/bitcode/pg_tde/src/encryption
+%dir %{pginstdir}/lib/bitcode/pg_tde/src/keyring
+%dir %{pginstdir}/lib/bitcode/pg_tde/src/libkmip
+%dir %{pginstdir}/lib/bitcode/pg_tde/src/libkmip/libkmip
+%dir %{pginstdir}/lib/bitcode/pg_tde/src/libkmip/libkmip/src
+%dir %{pginstdir}/lib/bitcode/pg_tde/src/smgr
+%dir %{pginstdir}/share
+%dir %{pginstdir}/share/extension
 %{pginstdir}/bin/pg_tde_change_key_provider
 %{pginstdir}/bin/pg_tde_archive_decrypt
 %{pginstdir}/bin/pg_tde_restore_encrypt
@@ -131,6 +148,9 @@ install -m 644 ci_scripts/perl/PostgreSQL/Test/TdeCluster.pm %{buildroot}/%{pgin
 %{pginstdir}/lib/bitcode/pg_tde/src/smgr/pg_tde_smgr.bc
 
 %files devel
+%dir %{pginstdir}/lib/pgxs/src/test/perl
+%dir %{pginstdir}/lib/pgxs/src/test/perl/PostgreSQL
+%dir %{pginstdir}/lib/pgxs/src/test/perl/PostgreSQL/Test
 %{pginstdir}/lib/pgxs/src/test/perl/PostgreSQL/Test/TdeCluster.pm
 
 %changelog
