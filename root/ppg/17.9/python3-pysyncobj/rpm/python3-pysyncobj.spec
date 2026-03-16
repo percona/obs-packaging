@@ -36,6 +36,8 @@ rm -rf $RPM_BUILD_ROOT
 
 %files -f INSTALLED_FILES
 %defattr(-,root,root)
+%dir %{python3_sitelib}/pysyncobj
+%dir %{python3_sitelib}/pysyncobj/__pycache__
 
 %changelog
 * Mon Mar 10 2026 Percona Build/Release Team <eng-build@percona.com> - 0.3.10-2
