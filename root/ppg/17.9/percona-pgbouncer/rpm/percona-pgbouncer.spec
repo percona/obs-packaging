@@ -56,7 +56,9 @@ Requires:	openldap
 %if %{systemd_enabled}
 BuildRequires:		systemd
 Requires:		systemd
+%if !0%{?suse_version}
 Requires(post):		systemd-sysv
+%endif
 Requires(post):		systemd
 Requires(preun):	systemd
 Requires(postun):	systemd
@@ -72,7 +74,7 @@ pgbouncer uses libevent for low-level socket handling.
 
 %prep
 %setup -q
-%patch0 -p0
+%patch -P 0 -p0
 
 
 %build
