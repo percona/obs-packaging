@@ -15,6 +15,9 @@ BuildArch:      noarch
 Vendor:         Filipp Ozinov <fippo@mail.ru>
 Url:            https://github.com/bakwc/PySyncObj
 BuildRequires:  python3-devel
+%if 0%{?suse_version}
+BuildRequires:  python3-setuptools
+%endif
 
 %description
 A library for replicating your python class between multiple servers, based on raft protocol
