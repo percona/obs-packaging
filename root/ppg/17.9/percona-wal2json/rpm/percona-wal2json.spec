@@ -13,7 +13,7 @@ Source0:	percona-%{sname}-%{version}.tar.gz
 Patch0:		%{sname}-pg%{pgmajorversion}-makefile-pgxs.patch
 URL:		https://github.com/eulerto/wal2json
 BuildRequires:	percona-postgresql%{pgmajorversion}-devel clang llvm
-Provides:	%{name} %{sname}%{pgmajorversion}
+Provides:	%{sname}%{pgmajorversion}
 Requires:	percona-postgresql%{pgmajorversion}-server
 Packager:       Percona Development Team <https://jira.percona.com>
 Vendor:         Percona, LLC
