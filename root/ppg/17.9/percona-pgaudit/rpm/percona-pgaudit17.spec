@@ -21,6 +21,9 @@ BuildRequires:  openssl-devel
 %if 0%{?rhel} || 0%{?fedora}
 BuildRequires:  clang llvm
 %endif
+%if 0%{?suse_version}
+BuildRequires:  clang llvm
+%endif
 BuildRequires:  krb5-devel
 
 Requires:       postgresql%{pgmajorversion}
@@ -64,6 +67,12 @@ sed -i 's:PG_CONFIG = pg_config:PG_CONFIG = /usr/pgsql-%{pgmajorversion}/bin/pg_
 %files
 %defattr(-,root,root,-)
 %doc %{pginstdir}/doc/extension/README-pgaudit.md
+%dir %{pginstdir}
+%dir %{pginstdir}/lib
+%dir %{pginstdir}/lib/bitcode
+%dir %{pginstdir}/lib/bitcode/pgaudit
+%dir %{pginstdir}/share
+%dir %{pginstdir}/share/extension
 %{pginstdir}/lib/pgaudit.so
 %{pginstdir}/share/extension/pgaudit--%{pgmajorversion}.*.sql
 %{pginstdir}/lib/bitcode/pgaudit*.bc
