@@ -38,6 +38,7 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-,root,root)
 %dir %{python3_sitelib}/pysyncobj
 %dir %{python3_sitelib}/pysyncobj/__pycache__
+%dir %{python3_sitelib}/pysyncobj-%{version}-py%{python3_version}.egg-info
 
 %changelog
 * Mon Mar 10 2026 Percona Build/Release Team <eng-build@percona.com> - 0.3.10-2
