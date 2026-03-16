@@ -75,9 +75,8 @@ for i in `find %{buildroot}%{python3_sitearch}/%{srcname}/tests/ -iname "*.py"`;
 done
 
 
-# Copy tests directory:
-%{__mkdir} -p %{buildroot}%{python3_sitearch}/%{srcname}/
-%{__cp} -rp tests %{buildroot}%{python3_sitearch}/%{srcname}/tests
+# Ensure tests are installed (setup.py does not install them)
+%{__mkdir} -p %{buildroot}%{python3_sitearch}/%{srcname}/tests
 %{__rm} -f %{buildroot}%{python3_sitearch}/%{srcname}/tests/test_async_keyword.py
 
 %files
