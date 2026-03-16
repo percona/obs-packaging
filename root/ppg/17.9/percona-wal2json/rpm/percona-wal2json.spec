@@ -48,6 +48,12 @@ schema-qualified, data types, and transaction ids.
 
 %files
 %doc %{pginstdir}/doc/extension/README-%{sname}.md
+%dir %{pginstdir}
+%dir %{pginstdir}/doc
+%dir %{pginstdir}/doc/extension
+%dir %{pginstdir}/lib
+%dir %{pginstdir}/lib/bitcode
+%dir %{pginstdir}/lib/bitcode/%{sname}
 %{pginstdir}/lib/%{sname}.so
 %{pginstdir}/lib/bitcode/%{sname}*.bc
 %{pginstdir}/lib/bitcode/%{sname}/*.bc
