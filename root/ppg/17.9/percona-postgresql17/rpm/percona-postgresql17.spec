@@ -161,8 +161,11 @@ BuildRequires:  llvm-devel >= 5.0 clang-devel >= 5.0
 %if 0%{?suse_version} >= 1315 && 0%{?suse_version} <= 1499
 BuildRequires:	llvm6-devel clang6-devel
 %endif
-%if 0%{?suse_version} >= 1500
+%if 0%{?suse_version} >= 1500 && 0%{?suse_version} <= 1600
 BuildRequires:  llvm17-devel clang17-devel clang17 llvm17
+%endif
+%if 0%{?suse_version} > 1600
+BuildRequires:  llvm-devel clang-devel
 %endif
 %endif
 
