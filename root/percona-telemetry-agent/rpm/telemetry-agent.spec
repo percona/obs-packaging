@@ -14,6 +14,9 @@ Source1: vendor.tar.gz
 BuildRequires: golang make git
 BuildRequires:  systemd
 BuildRequires:  pkgconfig(systemd)
+%if 0%{?suse_version}
+BuildRequires:  fillup
+%endif
 Requires:  logrotate
 Requires(post):   systemd
 Requires(preun):  systemd
@@ -60,8 +63,12 @@ install -D -m 0660 /dev/null %{buildroot}/%{_log_dir}/telemetry-agent.log
 install -D -m 0660 /dev/null  %{buildroot}/%{_log_dir}/telemetry-agent-error.log
 install -Dm 755 bin/telemetry-agent %{buildroot}/%{_bindir}/percona-telemetry-agent
 install -D -m 0644 packaging/conf/percona-telemetry-agent.logrotate %{buildroot}/%{_sysconfdir}/logrotate.d/percona-telemetry-agent
+%if 0%{?suse_version}
+install -D -m 0640 packaging/conf/percona-telemetry-agent.env %{buildroot}/%{_fillupdir}/sysconfig.percona-telemetry-agent
+%else
 install -m 0755 -d %{buildroot}/%{_sysconfdir}/sysconfig
 install -D -m 0640 packaging/conf/percona-telemetry-agent.env %{buildroot}/%{_sysconfdir}/sysconfig/percona-telemetry-agent
+%endif
 install -m 0755 -d %{buildroot}/%{_unitdir}
 install -m 0644 packaging/conf/percona-telemetry-agent.service %{buildroot}/%{_unitdir}/percona-telemetry-agent.service
 
@@ -75,6 +82,9 @@ fi
 usermod -a -G percona-telemetry daemon >/dev/null 2>&1 || :
 
 %post -n percona-telemetry-agent
+%if 0%{?suse_version}
+%fillup_only -n percona-telemetry-agent
+%endif
 chown -R daemon:percona-telemetry %{_log_dir} >/dev/null 2>&1 || :
 chmod g+w %{_log_dir}
 # Move the old logfiles, if present during update
@@ -121,7 +131,11 @@ fi
 
 %files -n percona-telemetry-agent
 %{_bindir}/percona-telemetry-agent
-%config(noreplace) %attr(0640,root,root) /%{_sysconfdir}/sysconfig/percona-telemetry-agent
+%if 0%{?suse_version}
+%{_fillupdir}/sysconfig.percona-telemetry-agent
+%else
+%config(noreplace) %attr(0640,root,root) %{_sysconfdir}/sysconfig/percona-telemetry-agent
+%endif
 %config(noreplace) %attr(0644,root,root) /%{_sysconfdir}/logrotate.d/percona-telemetry-agent
 %{_unitdir}/percona-telemetry-agent.service
 %dir /var/log/percona
