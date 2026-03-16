@@ -165,7 +165,7 @@ fi
 %{__rm} -rf %{buildroot}
 
 %files
-%doc %{_defaultdocdir}/pgbouncer
+%doc /usr/share/doc/%{sname}
 %if %{systemd_enabled}
 %license COPYRIGHT
 %endif
