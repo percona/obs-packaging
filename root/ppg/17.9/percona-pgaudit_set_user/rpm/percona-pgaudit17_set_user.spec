@@ -48,6 +48,14 @@ rm -rf ${RPM_BUILD_ROOT}
 
 %files
 %defattr(-,root,root)
+%dir %{pginstdir}
+%dir %{pginstdir}/lib
+%dir %{pginstdir}/lib/bitcode
+%dir %{pginstdir}/lib/bitcode/src
+%dir %{pginstdir}/lib/bitcode/src/set_user
+%dir %{pginstdir}/lib/bitcode/src/set_user/src
+%dir %{pginstdir}/share
+%dir %{pginstdir}/share/extension
 %{pginstdir}/lib/set_user.so
 %{pginstdir}/lib/bitcode/src/set_user.index.bc
 %{pginstdir}/lib/bitcode/src/set_user/src/set_user.bc
