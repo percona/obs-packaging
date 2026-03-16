@@ -24,6 +24,10 @@
 %global        __ospython %{_bindir}/python3.13
 %global        python3_pkgversion 313
 %endif
+%if 0%{?suse_version} > 1600
+%global        __ospython %{_bindir}/python3.13
+%global        python3_pkgversion 313
+%endif
 %{expand: %%global py3ver %(echo `%{__ospython} -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
