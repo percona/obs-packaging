@@ -24,6 +24,13 @@ repositories:
       - subproject: builddep
         repository: xUbuntu_24.04
     archs: [x86_64]
+  - name: openSUSE_Tumbleweed
+    paths:
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Tumbleweed
+        repository: standard
+      - subproject: builddep
+        repository: openSUSE_Tumbleweed
+    archs: [x86_64]
 project-config: |
   %if "%_repository" == "RockyLinux_8" || "%_repository" == "RHEL-8"  || "%_repository" == "RedHat_RHEL-8"
   ExpandFlags: module:llvm-toolset-rhel8
