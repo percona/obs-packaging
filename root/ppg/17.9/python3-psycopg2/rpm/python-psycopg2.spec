@@ -69,15 +69,14 @@ for i in `find doc -iname "*.css"`; do sed -i 's/\r//' $i; done
 %install
 export CFLAGS=${RPM_OPT_FLAGS} LDFLAGS=${RPM_LD_FLAGS}
   python3 setup.py build_ext --pg-config /usr/pgsql-17/bin/pg_config install --no-compile --root %{buildroot}
+%if !0%{?suse_version}
 cp -r tests/ %{buildroot}%{python3_sitearch}/%{srcname}/tests/
 for i in `find %{buildroot}%{python3_sitearch}/%{srcname}/tests/ -iname "*.py"`; do
   sed -i 's|#!/usr/bin/env python|#!/usr/bin/python3|' $i
 done
-
-
-# Ensure tests are installed (setup.py does not install them)
 %{__mkdir} -p %{buildroot}%{python3_sitearch}/%{srcname}/tests
 %{__rm} -f %{buildroot}%{python3_sitearch}/%{srcname}/tests/test_async_keyword.py
+%endif
 
 %files
 %license LICENSE
@@ -86,9 +85,10 @@ done
 %{python3_sitearch}/%{srcname}-%{version}-py%{python3_version}.egg-info
 
 
+%if !0%{?suse_version}
 %files tests
-%dir %{python3_sitearch}/psycopg2/tests
-%{python3_sitearch}/psycopg2/tests/*
+%{python3_sitearch}/psycopg2/tests
+%endif
 
 
 %changelog
