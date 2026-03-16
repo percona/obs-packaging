@@ -51,6 +51,22 @@
 %endif
 
 
+%if 0%{?suse_version} > 1600
+# openSUSE Tumbleweed: use standard unversioned package names (no PGDG versioned suffixes)
+%global geosfullversion 3.11.0
+%global geosinstdir /usr
+%global geosmajorversion %{nil}
+%global projfullversion 9.0.0
+%global projinstdir /usr
+%global projmajorversion %{nil}
+%global libgeotiffinstdir /usr
+%global libgeotiffmajorversion %{nil}
+%global gdalfullversion 3.0.0
+%global gdalinstdir /usr
+%global gdalmajorversion %{nil}
+%global libspatialiteinstdir /usr
+%endif
+
 # Override PROJ major version on RHEL 7.
 # libspatialite 4.3 does not build against 8.0.0 as of March 2021.
 # Also use GDAL 3.4
@@ -115,7 +131,9 @@ BuildRequires:	geos-devel libgeotiff-devel
 %else
 BuildRequires:	geos%{geosmajorversion}-devel >= %{geosfullversion}
 BuildRequires:	libgeotiff%{libgeotiffmajorversion}-devel
+%if !0%{?suse_version}
 BuildRequires:	pgdg-srpm-macros >= 1.0.52
+%endif
 %endif
 %if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
 Requires:       pcre2
@@ -146,8 +164,14 @@ BuildRequires:	gtk2-devel > 2.8.0
 %if 0%{?fedora} >= 41 || 0%{?rhel} >= 9
 BuildRequires:	SFCGAL SFCGAL-devel >= 2.1.0
 %endif
-%if 0%{?rhel} == 8 || 0%{?suse_version} >= 1500
+%if 0%{?rhel} == 8
 BuildRequires:        SFCGAL SFCGAL-devel
+%endif
+%if 0%{?suse_version} >= 1500 && 0%{?suse_version} <= 1600
+BuildRequires:        SFCGAL SFCGAL-devel
+%endif
+%if 0%{?suse_version} > 1600
+BuildRequires:        sfcgal sfcgal-devel
 %endif
 %endif
 
@@ -179,17 +203,18 @@ Requires:	geos proj libgeotiff gdal3.4-libs
 Requires:	geos%{geosmajorversion} >= %{geosfullversion}
 Requires:	proj%{projmajorversion} >= %{projfullversion}
 Requires:	libgeotiff%{libgeotiffmajorversion}
+%if %{raster}
 Requires:	gdal%{gdalmajorversion}-libs >= %{gdalfullversion}
 %endif
+%endif
 
-%if 0%{?suse_version} >= 1500
+%if 0%{?suse_version} >= 1500 && 0%{?suse_version} <= 1600
 Requires:	libjson-c5
 Requires:	libxerces-c-3_2
 BuildRequires:        libxerces-c-devel
 %endif
-%if 0%{?suse_version} == 1600
+%if 0%{?suse_version} > 1600
 Requires:        libjson-c5
-Requires:        libxerces-c-3_3
 BuildRequires:        libxerces-c-devel
 %endif
 %if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
