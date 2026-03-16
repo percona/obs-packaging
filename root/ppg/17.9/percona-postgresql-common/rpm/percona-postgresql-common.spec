@@ -115,6 +115,8 @@ cp debian/percona-postgresql-common.logrotate %{buildroot}/etc/logrotate.d/postg
 sed -i '2d' files-percona-postgresql-common-dev
 
 %files -n percona-postgresql-common -f files-percona-postgresql-common
+%dir /etc/postgresql-common
+%dir /usr/share/postgresql-common
 %attr(0755, root, root) %config /etc/init.d/postgresql
 #%attr(0755, root, root) /usr/share/postgresql-common/percona-postgresql-common.postinst
 /usr/share/postgresql-common/init-functions-compat
@@ -128,8 +130,17 @@ sed -i '2d' files-percona-postgresql-common-dev
 %endif
 
 %files -n percona-postgresql-client-common -f files-percona-postgresql-client-common
+%dir /etc/postgresql-common
+%dir /usr/share/perl5
+%dir /usr/share/postgresql-common
+%dir /usr/share/postgresql-common/pgdg
 
 %files -n percona-postgresql-common-dev -f files-percona-postgresql-common-dev
+%dir /usr/share/perl
+%dir /usr/share/perl5
+%dir /usr/share/postgresql-common
+%dir /usr/share/postgresql-common/dh_make_pgxs
+%dir /usr/share/postgresql-common/t
 
 %post
 # create postgres user
