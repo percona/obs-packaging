@@ -17,9 +17,13 @@
 %global	__ospython %{_bindir}/python3.12
 %global	python3_pkgversion 3.12
 %endif
-%if 0%{?suse_version}
-%global __ospython %{_bindir}/python%{python3_version}
-%global python3_pkgversion %{python3_version_nodots}
+%if 0%{?suse_version} == 1500
+%global __ospython %{_bindir}/python3.11
+%global python3_pkgversion 311
+%endif
+%if 0%{?suse_version} > 1600
+%global __ospython %{_bindir}/python3.13
+%global python3_pkgversion 313
 %endif
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
