@@ -48,6 +48,10 @@ Requires:	libldap-2_4-2
 BuildRequires:	openldap2-devel
 Requires:	libldap-2
 %endif
+%if 0%{?suse_version} > 1600
+BuildRequires:	openldap2-devel
+Requires:	libldap-2_5-0
+%endif
 %if 0%{?fedora} >= 41 || 0%{?rhel} >= 9
 BuildRequires:	openldap-devel
 Requires:	openldap
