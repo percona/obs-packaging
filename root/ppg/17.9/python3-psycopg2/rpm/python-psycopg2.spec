@@ -18,7 +18,9 @@ Vendor:         Percona, LLC
 BuildRequires:  python3-devel
 BuildRequires:  python3-setuptools
 # For RHEL 9 with Python 3.12
+%if 0%{?rhel}
 BuildRequires:  python3.12-setuptools
+%endif
 # rename from python36-psycopg2
 Provides:       python36-%{srcname} = %{version}-%{release}
 Obsoletes:      python36-%{srcname} < 2.9.1-1
