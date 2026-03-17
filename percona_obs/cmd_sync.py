@@ -38,6 +38,7 @@ from .common import (
 from .git_utils import (
     _check_git_clean,
     _generate_sync_message,
+    _has_non_obs_package_changes_since,
     _has_package_changes_since,
 )
 from .obs_api import (
@@ -372,12 +373,21 @@ def _resolve_branch_decision(
             f"branch decision: aggregate  {label}  (no changes since {short_sha})"
         )
         return True
-    # Git-log found commits since the last sync, but env-var expansion may
-    # still produce identical content (e.g. a hardcoded URL replaced with a
-    # ${VAR} token that expands to the same string).  Use the content check
-    # as the final arbiter so that such cosmetic changes do not force a
-    # source build.
-    return _content_check(f"git changes since {short_sha}", check_obsinfo=False)
+    # Git-log found commits since the last sync.  Determine whether the
+    # changes touch packaging files (rpm/, debian/, etc.) or only obs/ files.
+    #
+    # If only obs/ files changed (e.g. a cosmetic env-var rewrite), the
+    # obsinfo check would produce a false positive: HEAD advanced but the
+    # packaging content fetched by OBS at build time is unchanged.  Skip it.
+    #
+    # If packaging files changed, the obsinfo check correctly catches the
+    # mismatch between OBS's cached commit and the current remote HEAD, so
+    # enable it.
+    has_packaging_changes = _has_non_obs_package_changes_since(short_sha, package_path)
+    return _content_check(
+        f"git changes since {short_sha}",
+        check_obsinfo=has_packaging_changes,
+    )
 
 
 def _compute_branch_project(

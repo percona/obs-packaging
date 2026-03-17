@@ -44,6 +44,38 @@ def _check_git_clean() -> None:
         sys.exit(1)
 
 
+def _has_non_obs_package_changes_since(short_sha: str, package_path: Path) -> bool:
+    """Return True if any file outside obs/ in package_path has commits since short_sha.
+
+    Used to distinguish cosmetic obs/ rewrites (e.g. env-var substitutions)
+    from real packaging changes (rpm/, debian/, package.yaml, etc.) so that the
+    branch decision can skip the obsinfo check only when it is safe to do so.
+
+    Returns True (treat as changed) if the SHA is unknown or git fails.
+    """
+    result = subprocess.run(
+        ["git", "diff", "--name-only", f"{short_sha}..HEAD", "--", str(package_path)],
+        capture_output=True,
+        text=True,
+        cwd=_REPO_DIR,
+    )
+    if result.returncode != 0:
+        return True  # unknown SHA or git error — safe default
+    if not result.stdout.strip():
+        return False
+    # git diff --name-only outputs paths relative to the repo root with
+    # forward slashes on all platforms.
+    try:
+        obs_rel = str((package_path / "obs").relative_to(_REPO_DIR)) + "/"
+    except ValueError:
+        return True
+    for line in result.stdout.splitlines():
+        path = line.strip()
+        if path and not path.startswith(obs_rel):
+            return True
+    return False
+
+
 def _has_package_changes_since(short_sha: str, package_path: Path) -> bool:
     """Return True if the package directory has any git commits since short_sha.
 
