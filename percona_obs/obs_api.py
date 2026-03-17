@@ -186,7 +186,10 @@ def _fetch_obs_project_repository_names(apiurl: str, obs_project: str) -> set[st
         url = osc.core.makeurl(apiurl, ["build", obs_project])
         root = ET.fromstring(osc.connection.http_GET(url).read())
         return {e.get("name", "") for e in root.findall("entry") if e.get("name")}
-    except Exception:
+    except Exception as exc:
+        logger.debug(
+            f"_fetch_obs_project_repository_names: failed for {obs_project!r}: {exc}"
+        )
         return set()
 
 

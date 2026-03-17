@@ -16,6 +16,7 @@ BuildRequires:  systemd
 BuildRequires:  pkgconfig(systemd)
 %if 0%{?suse_version}
 BuildRequires:  fillup
+Requires(post): fillup
 %endif
 Requires:  logrotate
 Requires(post):   systemd

@@ -490,6 +490,10 @@ def cmd_sync(args):
     # Cache of branch-project → set of repository names, populated lazily in
     # Phase 1.  Avoids a redundant API call per package for the same project.
     _branch_repo_cache: dict[str, set[str]] = {}
+    # Cache of project_path → set of target repository names derived from
+    # project.yaml.  Avoids repeated YAML parsing for packages in the same
+    # project.
+    _target_repos_cache: dict[Path, set[str]] = {}
 
     # Pre-pass: two-stage project creation to handle OBS path-reference cycles.
     #
@@ -610,14 +614,17 @@ def cmd_sync(args):
                         )
                     )
                 branch_repos = _branch_repo_cache[branch_project]
-                target_config = _load_project_config_with_inheritance(
-                    package_path.parent, env_vars
-                )
-                target_repos = {
-                    r["name"]
-                    for r in target_config.get("repositories", [])
-                    if r.get("name")
-                }
+                proj_path = package_path.parent
+                if proj_path not in _target_repos_cache:
+                    target_config = _load_project_config_with_inheritance(
+                        proj_path, env_vars
+                    )
+                    _target_repos_cache[proj_path] = {
+                        r["name"]
+                        for r in target_config.get("repositories", [])
+                        if r.get("name")
+                    }
+                target_repos = _target_repos_cache[proj_path]
                 missing_repos = target_repos - branch_repos
                 if missing_repos:
                     logger.debug(

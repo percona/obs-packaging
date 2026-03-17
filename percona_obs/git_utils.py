@@ -45,7 +45,13 @@ def _check_git_clean() -> None:
 
 
 def _has_non_obs_package_changes_since(short_sha: str, package_path: Path) -> bool:
-    """Return True if any file outside obs/ in package_path has commits since short_sha.
+    """Return True if the net file-tree diff between short_sha and HEAD contains
+    any file outside the obs/ subdirectory of package_path.
+
+    Uses ``git diff --name-only`` which reports the *net* changes between the
+    two tree states (reverted commits cancel out).  This is intentional: we
+    want to know whether the packaging content that OBS will fetch is different,
+    not merely whether any commits were made.
 
     Used to distinguish cosmetic obs/ rewrites (e.g. env-var substitutions)
     from real packaging changes (rpm/, debian/, package.yaml, etc.) so that the

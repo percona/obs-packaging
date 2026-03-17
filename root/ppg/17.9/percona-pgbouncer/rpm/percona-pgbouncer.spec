@@ -165,7 +165,7 @@ fi
 %{__rm} -rf %{buildroot}
 
 %files
-%doc /usr/share/doc/%{sname}
+%doc %{_docdir}/%{sname}
 %if %{systemd_enabled}
 %license COPYRIGHT
 %endif
