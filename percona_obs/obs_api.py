@@ -174,6 +174,22 @@ def _fetch_obs_subproject_names(apiurl: str, rootprj: str) -> set[str]:
         return set()
 
 
+def _fetch_obs_project_repository_names(apiurl: str, obs_project: str) -> set[str]:
+    """Return the repository names configured for an OBS project.
+
+    Uses the /build/{project} endpoint which lists only repositories that are
+    actually configured (unlike /source/{project}/_meta which may include
+    disabled repositories in a different form).  Returns an empty set if the
+    project does not exist or on any error.
+    """
+    try:
+        url = osc.core.makeurl(apiurl, ["build", obs_project])
+        root = ET.fromstring(osc.connection.http_GET(url).read())
+        return {e.get("name", "") for e in root.findall("entry") if e.get("name")}
+    except Exception:
+        return set()
+
+
 def _fetch_combined_depinfo(
     apiurl: str, branch_projects: set[str], local_pkg_names: set[str]
 ) -> dict[str, set[str]]:

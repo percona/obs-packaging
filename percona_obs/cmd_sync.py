@@ -20,6 +20,7 @@ from .common import (
     REPO_ROOT,
     _REPO_DIR,
     _build_aggregate_xml,
+    _load_project_config_with_inheritance,
     _print_action,
     _print_aggregate,
     _print_ok,
@@ -52,6 +53,7 @@ from .obs_api import (
     _fetch_obs_file_md5s,
     _fetch_obs_package_latest_comment,
     _fetch_obs_package_names,
+    _fetch_obs_project_repository_names,
     _fetch_obs_subproject_names,
     _obs_project_exists,
     _upload_obs_files,
@@ -485,6 +487,9 @@ def cmd_sync(args):
     local_project_names: set[str] = set()
     local_packages_by_project: dict[str, set[str]] = {}
     dry_run_obs = args.dry_run or args.dry_run_remote
+    # Cache of branch-project → set of repository names, populated lazily in
+    # Phase 1.  Avoids a redundant API call per package for the same project.
+    _branch_repo_cache: dict[str, set[str]] = {}
 
     # Pre-pass: two-stage project creation to handle OBS path-reference cycles.
     #
@@ -590,8 +595,39 @@ def cmd_sync(args):
                 branch_env_vars=branch_env_vars,
             )
             if use_aggregate:
-                decisions[key] = "aggregate"
-                branch_project_for[key] = branch_project
+                # Guard: only aggregate when the branch project has every
+                # repository the target project requires.  If a new repository
+                # was added locally but doesn't exist in the branch project yet,
+                # an aggregate would produce no binaries for that repo.  Fall
+                # back to promote so OBS builds from source instead.
+                if branch_project not in _branch_repo_cache:
+                    logger.debug(
+                        f"branch decision: fetching repo list: {branch_project}"
+                    )
+                    _branch_repo_cache[branch_project] = (
+                        _fetch_obs_project_repository_names(
+                            branch_apiurl, branch_project
+                        )
+                    )
+                branch_repos = _branch_repo_cache[branch_project]
+                target_config = _load_project_config_with_inheritance(
+                    package_path.parent, env_vars
+                )
+                target_repos = {
+                    r["name"]
+                    for r in target_config.get("repositories", [])
+                    if r.get("name")
+                }
+                missing_repos = target_repos - branch_repos
+                if missing_repos:
+                    logger.debug(
+                        f"branch decision: promote  {obs_project_name}/{package_path.name}"
+                        f"  (repos missing from branch: {sorted(missing_repos)})"
+                    )
+                    decisions[key] = "promote"
+                else:
+                    decisions[key] = "aggregate"
+                    branch_project_for[key] = branch_project
             else:
                 decisions[key] = "promote"
         else:
