@@ -16,7 +16,7 @@ version_ge = $(shell dpkg --compare-versions $(MAJOR_VER) ge $(1) && echo y)
 include /usr/share/dpkg/architecture.mk
 include /usr/share/dpkg/pkg-info.mk
 include /usr/share/dpkg/vendor.mk
-export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all optimize=+lto
 DPKG_EXPORT_BUILDFLAGS = 1
 include /usr/share/dpkg/buildflags.mk
 
@@ -47,7 +47,6 @@ CONFIGURE_FLAGS = \
   --includedir=/usr/include/postgresql/ \
   --enable-nls \
   --enable-thread-safety \
-  --enable-debug \
   --enable-dtrace \
   --disable-rpath \
   --with-uuid=e2fs \
@@ -142,7 +141,7 @@ override_dh_auto_build-indep:
 
 override_dh_auto_build-arch:
 	# set MAKELEVEL to 0 to force building submake-generated-headers in src/Makefile.global(.in)
-	MAKELEVEL=0 $(MAKE) -C build/src all
+	MAKELEVEL=0 $(MAKE) -j$(shell nproc) -C build/src all
 	$(MAKE) -C build/doc man # build man only
 	$(MAKE) -C build/config all
 	$(MAKE) -C build/contrib all
