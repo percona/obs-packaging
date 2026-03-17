@@ -516,7 +516,6 @@ fi
 %dir %{pginstdir}lib/bitcode
 %dir %{pginstdir}lib/bitcode/address_standardizer-3
 %dir %{pginstdir}lib/bitcode/postgis-%{postgissomajorversion}
-%dir %{pginstdir}lib/bitcode/postgis_sfcgal-%{postgissomajorversion}
 %dir %{pginstdir}lib/bitcode/postgis_topology-%{postgissomajorversion}
    %{pginstdir}/lib/bitcode/address_standardizer*.bc
    %{pginstdir}/lib/bitcode/address_standardizer-3/*.bc
@@ -529,6 +528,7 @@ fi
     %{pginstdir}/lib/bitcode/postgis_raster-%{postgissomajorversion}/*.bc
    %endif
    %if %{sfcgal}
+   %dir %{pginstdir}lib/bitcode/postgis_sfcgal-%{postgissomajorversion}
    %{pginstdir}/lib/bitcode/postgis_sfcgal-%{postgissomajorversion}.index.bc
    %{pginstdir}/lib/bitcode/postgis_sfcgal-%{postgissomajorversion}/lwgeom_sfcgal.bc
    %endif
