@@ -16,12 +16,7 @@
 %global python3_pkgversion 3
 %global python3_pkgprefix python3
 %endif
-%if 0%{?rhel} && 0%{?rhel} == 9
-%global __ospython %{_bindir}/python3.12
-%global python3_pkgversion 3.12
-%global python3_pkgprefix python3
-%endif
-%if 0%{?rhel} && 0%{?rhel} >= 10
+%if 0%{?rhel} && 0%{?rhel} >= 9
 %global __ospython %{_bindir}/python3
 %global python3_pkgversion 3
 %global python3_pkgprefix python3
