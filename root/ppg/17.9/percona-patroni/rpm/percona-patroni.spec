@@ -95,7 +95,8 @@ caveats. Use wisely.
 %package -n %{name}-consul
 Summary:        Related components to use patroni with Consul
 Requires:        %{name} = %{epoch}:%{version}-%{release}
-Requires:        consul py-consul >= 1.6.0
+Requires:        consul
+Requires:        %{python3_pkgprefix}-py-consul >= 1.6.0
 Requires:        %{python3_pkgprefix}-requests
 %description -n %{name}-consul
 Meta package to pull consul related dependencies for patroni
