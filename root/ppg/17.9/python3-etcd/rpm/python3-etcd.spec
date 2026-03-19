@@ -62,6 +62,12 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-,root,root)
 %dir %{python3_sitelib}/etcd
 %dir %{python3_sitelib}/etcd/__pycache__
+%dir %{python3_sitelib}/etcd/tests
+%dir %{python3_sitelib}/etcd/tests/__pycache__
+%dir %{python3_sitelib}/etcd/tests/integration
+%dir %{python3_sitelib}/etcd/tests/integration/__pycache__
+%dir %{python3_sitelib}/etcd/tests/unit
+%dir %{python3_sitelib}/etcd/tests/unit/__pycache__
 %dir %{python3_sitelib}/python_etcd-%{version}-py%{python3_version}.egg-info
 
 %changelog
