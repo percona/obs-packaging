@@ -58,8 +58,14 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-,root,root)
 %dir %{python3_sitelib}/consul
 %dir %{python3_sitelib}/consul/__pycache__
+%dir %{python3_sitelib}/consul/api
+%dir %{python3_sitelib}/consul/api/__pycache__
+%dir %{python3_sitelib}/consul/api/acl
+%dir %{python3_sitelib}/consul/api/acl/__pycache__
+%dir %{python3_sitelib}/docs
+%dir %{python3_sitelib}/docs/__pycache__
 %dir %{python3_sitelib}/py_consul-%{version}-py%{python3_version}.egg-info
 
 %changelog
-* Wed Mar 19 2026 Percona Build/Release Team <eng-build@percona.com> - 1.7.1-1
+* Thu Mar 19 2026 Percona Build/Release Team <eng-build@percona.com> - 1.7.1-1
 - Initial build of py-consul 1.7.1
