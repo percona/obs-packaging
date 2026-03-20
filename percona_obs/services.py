@@ -241,28 +241,61 @@ def _obs_scm_cache_key(svc: ET.Element) -> str:
     )
     return hashlib.sha256("|".join(parts).encode()).hexdigest()
 
-
-def _git_head_sha(url: str, revision: str) -> str | None:
-    """Return the resolved commit SHA of revision on a remote git repository.
-
-    Tries branch ref first, then dereferenced annotated tag, then lightweight tag.
-    If revision is already a full ref path (starts with "refs/"), it is tried
-    directly and takes priority over the derived patterns — this supports refs
-    like "refs/pull/42/head" used by GitHub PR workflows.
-    Returns None if git is unavailable, the remote is unreachable, or
-    no matching ref is found.
+def _remote_commit_exists(remote_url: str, sha: str) -> bool:
     """
-    patterns = [
-        f"refs/heads/{revision}",
-        f"refs/tags/{revision}^{{}}",
-        f"refs/tags/{revision}",
-    ]
-    if revision.startswith("refs/"):
-        patterns = [revision] + patterns
+    Return True if `sha` exists in `remote_url` (commit object), False otherwise.
+    Uses subprocess.Popen for all git commands and a temporary repo.
+    """
+
+    _SHA1_RE = re.compile(r'^[0-9a-fA-F]{40}$')
+    if not _SHA1_RE.fullmatch(sha):
+        return False
+    
+    logger.debug(f"resolving git commit {sha} on {remote_url}")
+
+    tmpdir = tempfile.mkdtemp(prefix="git-check-")
     try:
-        logger.debug(f"resolving git revision {revision!r} on {url}")
+        def run(cmd):
+            p = subprocess.Popen(
+                cmd, cwd=tmpdir, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            try:
+                out, err = p.communicate(timeout=15)
+            except subprocess.TimeoutExpired:
+                p.kill()
+                p.communicate()
+                return 124, b"", b""
+            return p.returncode, out, err
+
+        # init repo and add remote
+        rc, _, _ = run(["git", "init", "-q"])
+        if rc != 0:
+            return False
+        rc, _, _ = run(["git", "remote", "add", "origin", remote_url])
+        if rc != 0:
+            return False
+
+        # attempt a shallow fetch of the SHA (may fail if remote doesn't expose it via refs)
+        run(["git", "fetch", "--no-tags", "--depth=1", "origin", sha])
+
+        # check for commit object existence
+        rc, _, _ = run(["git", "cat-file", "-e", f"{sha}^{{commit}}"])
+        return rc == 0
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+def _remote_reference_exists(remote_url: str, ref: str) -> str | None:
+    patterns = [
+        f"refs/heads/{ref}",
+        f"refs/tags/{ref}^{{}}",
+        f"refs/tags/{ref}",
+    ]
+    if ref.startswith("refs/"):
+        patterns = [ref] + patterns
+    try:
+        logger.debug(f"resolving git revision {ref!r} on {remote_url}")
         proc = subprocess.Popen(
-            ["git", "ls-remote", "--", url] + patterns,
+            ["git", "ls-remote", "--", remote_url] + patterns,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
@@ -289,11 +322,11 @@ def _git_head_sha(url: str, revision: str) -> str | None:
                 sha, ref = parts[0].strip(), parts[1].strip()
                 ref_map[ref] = sha
         # Preference order: explicit ref path, branch, dereferenced annotated tag, lightweight tag
-        if revision.startswith("refs/") and revision in ref_map:
-            return ref_map[revision]
-        branch_ref = f"refs/heads/{revision}"
-        deref_tag_ref = f"refs/tags/{revision}^{{}}"
-        lightweight_tag_ref = f"refs/tags/{revision}"
+        if ref.startswith("refs/") and ref in ref_map:
+            return ref_map[ref]
+        branch_ref = f"refs/heads/{ref}"
+        deref_tag_ref = f"refs/tags/{ref}^{{}}"
+        lightweight_tag_ref = f"refs/tags/{ref}"
         if branch_ref in ref_map:
             return ref_map[branch_ref]
         if deref_tag_ref in ref_map:
@@ -302,6 +335,25 @@ def _git_head_sha(url: str, revision: str) -> str | None:
             return ref_map[lightweight_tag_ref]
     except Exception:
         return None
+
+def _git_head_sha(url: str, revision: str) -> str | None:
+    """Return the resolved commit SHA of revision on a remote git repository.
+
+    Tries branch ref first, then dereferenced annotated tag, then lightweight tag.
+    If revision is already a full ref path (starts with "refs/"), it is tried
+    directly and takes priority over the derived patterns — this supports refs
+    like "refs/pull/42/head" used by GitHub PR workflows.
+    Returns None if git is unavailable, the remote is unreachable, or
+    no matching ref is found.
+    """
+    sha = _remote_reference_exists(url, revision)
+    if sha is not None:
+        return sha
+    
+    # revision not found, maybe it's a direct commit SHA; verify it exists in the remote
+    if _remote_commit_exists(url, revision):
+        return revision
+
     return None
 
 
