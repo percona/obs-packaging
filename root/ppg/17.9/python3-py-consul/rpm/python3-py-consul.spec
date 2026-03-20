@@ -10,6 +10,17 @@
 %global python3_pkgprefix python313
 %endif
 
+%if 0%{?rhel} && 0%{?rhel} >= 9
+%global __ospython %{_bindir}/python3.12
+%global python3_buildversion 3.12
+%global __requires_exclude ^python3\\.12dist
+%else
+%global __ospython %{_bindir}/python3
+%global python3_buildversion 3
+%endif
+%{expand: %%global py3ver %(echo `%{__ospython} -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
+%global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
+
 %define         name python3-py-consul
 
 Summary:        Python client for Consul
@@ -27,8 +38,8 @@ Packager:       Percona Development Team <https://jira.percona.com>
 Url:            https://github.com/criteo/py-consul
 Epoch:          1
 
-BuildRequires:  python3-devel
-BuildRequires:  python3-setuptools
+BuildRequires:  python%{python3_buildversion}-devel
+BuildRequires:  python%{python3_buildversion}-setuptools
 %if 0%{?suse_version}
 BuildRequires:  %{python3_pkgprefix}-setuptools
 %endif
@@ -46,10 +57,10 @@ sessions, events, ACLs, and more.
 %setup -n %{name}-%{version}
 
 %build
-python3 setup.py build
+%{__ospython} setup.py build
 
 %install
-python3 setup.py install --single-version-externally-managed -O1 --root=$RPM_BUILD_ROOT --record=INSTALLED_FILES
+%{__ospython} setup.py install --single-version-externally-managed -O1 --root=$RPM_BUILD_ROOT --record=INSTALLED_FILES
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -64,7 +75,7 @@ rm -rf $RPM_BUILD_ROOT
 %dir %{python3_sitelib}/consul/api/acl/__pycache__
 %dir %{python3_sitelib}/docs
 %dir %{python3_sitelib}/docs/__pycache__
-%dir %{python3_sitelib}/py_consul-%{version}-py%{python3_version}.egg-info
+%dir %{python3_sitelib}/py_consul-%{version}-py%{py3ver}.egg-info
 
 %changelog
 * Thu Mar 19 2026 Percona Build/Release Team <eng-build@percona.com> - 1.7.1-1

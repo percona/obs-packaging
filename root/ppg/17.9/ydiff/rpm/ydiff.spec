@@ -13,8 +13,9 @@
 %global python3_pkgversion 3
 %endif
 %if 0%{?rhel} && 0%{?rhel} >= 9
-%global __ospython %{_bindir}/python3
-%global python3_pkgversion 3
+%global __ospython %{_bindir}/python3.12
+%global python3_pkgversion 3.12
+%global __requires_exclude ^python3\\.12dist
 %endif
 %if 0%{?suse_version} == 1500
 %global        __ospython %{_bindir}/python3.11
