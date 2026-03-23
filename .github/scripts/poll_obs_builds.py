@@ -42,7 +42,7 @@ gh_repo = os.environ.get("GITHUB_REPOSITORY", "")
 gh_sha = os.environ.get("GITHUB_SHA", "")
 
 poll_interval = int(os.environ.get("OBS_POLL_INTERVAL", "30"))
-poll_timeout = int(os.environ.get("OBS_POLL_TIMEOUT", "3600"))
+poll_timeout = int(os.environ.get("OBS_POLL_TIMEOUT", "7200"))
 initial_wait = int(os.environ.get("OBS_INITIAL_WAIT", "30"))
 
 # ---------------------------------------------------------------------------
