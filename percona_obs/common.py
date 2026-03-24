@@ -236,9 +236,11 @@ def build_project_meta(
         repo_elem = ET.SubElement(root, "repository", name=repo["name"])
         # Each entry may use 'project:' for an absolute OBS project name, or
         # 'subproject:' for a name relative to rootprj (e.g. 'builddep' → '<rootprj>:builddep').
-        # Skip any path that resolves to this project itself — a project cannot
-        # reference itself as a repository path (e.g. builddep inheriting a
-        # 'subproject: builddep' entry from the root project.yaml).
+        # Skip a path only when it resolves to the exact same project+repository
+        # as the one being defined — a repository cannot list itself as its own
+        # path (e.g. builddep inheriting a 'subproject: builddep' entry from the
+        # root project.yaml).  A different repository within the same project is
+        # valid (e.g. 'images' depending on 'RockyLinux_9' of the same project).
         for path_info in repo.get("paths", []):
             if "subproject" in path_info:
                 proj = f"{rootprj}:{path_info['subproject']}"
@@ -252,7 +254,7 @@ def build_project_meta(
                     proj = f"{branch_rootprj}:{path_info['subproject']}"
             else:
                 proj = path_info["project"]
-            if proj == obs_project_name:
+            if proj == obs_project_name and path_info["repository"] == repo["name"]:
                 continue
             ET.SubElement(
                 repo_elem,

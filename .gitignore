@@ -6,3 +6,4 @@ virtualenv/
 .claude
 __pycache__/
 tmp/
+docs/plans/
