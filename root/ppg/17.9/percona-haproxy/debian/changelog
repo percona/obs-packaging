@@ -1,0 +1,5 @@
+percona-haproxy (1.0.0-1) unstable; urgency=low
+
+  * Initial build.
+
+ -- Percona Development Team <info@percona.com>  Tue, 10 Mar 2026 00:00:00 +0000
