@@ -1,0 +1,24 @@
+Source: percona-pg-stat-monitor
+Section: database
+Priority: optional
+Maintainer: Percona Development Team <info@percona.com>
+Build-Depends:
+ debhelper (>= 10),
+ percona-postgresql-server-dev-17,
+Standards-Version: 3.9.8
+Homepage: https://github.com/percona/pg_stat_monitor
+
+Package: percona-postgresql-17-pg-stat-monitor
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}, percona-postgresql-17 (>= 17) | postgresql-17 (>= 17)
+Provides: pg-stat-monitor, postgresql-17-pg-stat-monitor
+Description: Statistics collector for PostgreSQL
+ The pg_stat_monitor is a Query Performance Monitoring tool for PostgreSQL.
+ It attempts to provide a more holistic picture by providing much-needed query
+ performance insights in a single view.
+ .
+ pg_stat_monitor provides improved insights that allow database users to
+ understand query origins, execution, planning statistics and details, query
+ information, and metadata. This significantly improves observability, enabling
+ users to debug and tune query performance. pg_stat_monitor is developed on the
+ basis of pg_stat_statements as its more advanced replacement.

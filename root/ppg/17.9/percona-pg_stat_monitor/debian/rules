@@ -1,0 +1,27 @@
+#!/usr/bin/make -f
+
+export USE_PGXS=1
+PG_VERSION := 17
+PG_CONFIG := /usr/lib/postgresql/$(PG_VERSION)/bin/pg_config
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	$(MAKE) USE_PGXS=1 PG_CONFIG=$(PG_CONFIG)
+
+override_dh_auto_test:
+	# nothing to do here
+
+override_dh_auto_install:
+	$(MAKE) install USE_PGXS=1 PG_CONFIG=$(PG_CONFIG) \
+		DESTDIR=$(CURDIR)/debian/percona-postgresql-$(PG_VERSION)-pg-stat-monitor
+
+override_dh_installdocs:
+	dh_installdocs --all README.*
+
+override_dh_auto_clean:
+	$(MAKE) clean PG_CONFIG=$(PG_CONFIG) || true
+
+override_dh_builddeb:
+	dh_builddeb -- -Zgzip
