@@ -28,18 +28,20 @@ def _check_git_clean() -> None:
         )
         sys.exit(1)
 
-    # HEAD pushed to at least one remote
+    # Block only if there are unpushed commits that touch root/.
+    # 'git log HEAD --not --remotes -- root/' lists commits reachable from
+    # HEAD but not from any remote ref that change files under root/.
     result = subprocess.run(
-        ["git", "branch", "-r", "--contains", "HEAD"],
+        ["git", "log", "HEAD", "--not", "--remotes", "--oneline", "--", "root/"],
         capture_output=True,
         text=True,
         cwd=_REPO_DIR,
     )
     if result.returncode != 0:
-        print(f"error: git failed: {result.stderr.strip()}", file=sys.stderr)
+        print(f"error: git log failed: {result.stderr.strip()}", file=sys.stderr)
         sys.exit(1)
-    if not result.stdout.strip():
-        print("error: HEAD commit has not been pushed to any remote.", file=sys.stderr)
+    if result.stdout.strip():
+        print("error: there are unpushed commits that modify root/.", file=sys.stderr)
         print("       Push your branch before running this command.", file=sys.stderr)
         sys.exit(1)
 
