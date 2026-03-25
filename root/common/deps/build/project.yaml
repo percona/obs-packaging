@@ -1,0 +1,4 @@
+title: Common Build Dependencies Project
+description: |
+  Build-time dependency packages (Go toolchain, OBS source services) used by multiple projects.
+publish: false

@@ -54,4 +54,8 @@ Always use `git commit -s` (signed-off-by). Do not add `Co-Authored-By: Claude` 
 | `requirements.txt` | Runtime + dev dependencies (`osc`, `pyyaml`, `black`, `pyright`) |
 | `pyrightconfig.json` | Pyright config pointing at `venv/` and `percona_obs/` |
 | `root/` | All packaging content (project hierarchy mirrors OBS) |
+| `root/README.md` | Packaging tree structure — how `root/` maps to OBS projects |
+| `docs/PERCONA_OBS_TOOL.md` | `percona-obs` tool reference (profiles, sync, branching) |
+| `docs/PACKAGING_HOWTO.md` | Step-by-step guide for adding a new package from scratch |
+| `docs/HOWTO_IMPORT_PACKAGES_FROM_PERCONA_PACKAGING.md` | Step-by-step guide for importing from `percona/postgres-packaging` |
 | `.github/copilot-instructions.md` | Full project and architecture reference |

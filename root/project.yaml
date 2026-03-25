@@ -7,28 +7,28 @@ repositories:
         repository: standard
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
         repository: standard
-      - subproject: builddep
+      - subproject: common:deps:build
         repository: RockyLinux_9
     archs: [x86_64]
   - name: Debian_13
     paths:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:13
         repository: standard
-      - subproject: builddep
+      - subproject: common:deps:build
         repository: Debian_13
     archs: [x86_64]
   - name: xUbuntu_24.04
     paths:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:24.04
         repository: universe
-      - subproject: builddep
+      - subproject: common:deps:build
         repository: xUbuntu_24.04
     archs: [x86_64]
   - name: openSUSE_Tumbleweed
     paths:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Tumbleweed
         repository: standard
-      - subproject: builddep
+      - subproject: common:deps:build
         repository: openSUSE_Tumbleweed
     archs: [x86_64]
 project-config: |

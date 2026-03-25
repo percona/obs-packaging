@@ -1,3 +1,0 @@
-title: Build Dependencies
-description: "Build-time dependency packages (Go toolchain, OBS source services)."
-install: false

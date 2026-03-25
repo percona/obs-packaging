@@ -449,7 +449,7 @@ def _project_meta_subset_equal(current_bytes: bytes, desired_xml: str) -> bool:
 def _package_meta_subset_equal(current_bytes: bytes, desired_xml: str) -> bool:
     """Return True if the fields we manage are identical to what OBS has.
 
-    Compares title, description, and build disable flags.
+    Compares title, description, build flags, and publish flags.
     """
     try:
         current = ET.fromstring(current_bytes)
@@ -462,13 +462,15 @@ def _package_meta_subset_equal(current_bytes: bytes, desired_xml: str) -> bool:
     if _child_text(current, "description") != _child_text(desired, "description"):
         return False
 
-    def _disable_repos(elem: ET.Element) -> set[str]:
-        build = elem.find("build")
-        if build is None:
+    def _flag_entries(elem: ET.Element, section: str) -> set[tuple[str, str]]:
+        sec = elem.find(section)
+        if sec is None:
             return set()
-        return {d.get("repository", "") for d in build.findall("disable")}
+        return {(child.tag, child.get("repository", "")) for child in sec}
 
-    return _disable_repos(current) == _disable_repos(desired)
+    return _flag_entries(current, "build") == _flag_entries(
+        desired, "build"
+    ) and _flag_entries(current, "publish") == _flag_entries(desired, "publish")
 
 
 def _edit_project_meta(
@@ -579,6 +581,8 @@ def _apply_project_config(
         project_config.get("description", ""),
         project_config.get("repositories", []),
         rootprj,
+        publish=project_config.get("publish"),
+        build=project_config.get("build"),
     )
 
     # --- project meta ---
@@ -686,14 +690,15 @@ def _apply_package_config(
     Prints '+' for creates, '~' for updates, '=' for unchanged resources.
     """
     package_config = load_yaml(package_path / "package.yaml")
-    disable_cfg = package_config.get("disable") or {}
-    disable_build_repos: list[str] = (disable_cfg.get("build") or {}).get("repo") or []
+    build_flags: dict[str, bool] | None = package_config.get("build") or None
+    publish_flags: dict[str, bool] | None = package_config.get("publish") or None
     meta = build_package_meta(
         obs_project_name,
         package_name,
         package_config.get("title", ""),
         package_config.get("description", ""),
-        disable_build_repos=disable_build_repos or None,
+        build=build_flags,
+        publish=publish_flags,
     )
 
     logger.debug(f"  package meta XML:\n{meta}")

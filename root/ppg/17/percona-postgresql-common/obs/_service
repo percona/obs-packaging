@@ -1,0 +1,40 @@
+<services>
+  <service name="obs_scm">
+    <param name="url">${PERCONA_OBS_PACKAGING_REPO}</param>
+    <param name="scm">git</param>
+    <param name="revision">${PERCONA_OBS_PACKAGING_BRANCH}</param>
+    <param name="version">_none_</param>
+    <param name="extract">*.dsc</param>
+    <param name="subdir">${DEBIAN_PACKAGE_DIRECTORY}</param>
+    <param name="filename">debian</param>
+  </service>
+
+  <service name="obs_scm">
+    <param name="url">${PERCONA_OBS_PACKAGING_REPO}</param>
+    <param name="scm">git</param>
+    <param name="revision">${PERCONA_OBS_PACKAGING_BRANCH}</param>
+    <param name="version">_none_</param>
+    <param name="extract">*</param>
+    <param name="subdir">${RPM_PACKAGE_DIRECTORY}</param>
+    <param name="filename">rpm</param>
+  </service>
+
+  <service name="obs_scm">
+    <param name="url">https://salsa.debian.org/postgresql/postgresql-common.git</param>
+    <param name="scm">git</param>
+    <param name="revision">debian/289</param>
+    <param name="versionformat">@PARENT_TAG@</param>
+    <param name="versionrewrite-pattern">debian/(.*)</param>
+    <param name="filename">percona-postgresql-common</param>
+  </service>
+
+  <service mode="buildtime" name="tar" />
+
+  <service mode="buildtime" name="recompress">
+    <param name="file">*.tar</param>
+    <param name="compression">gz</param>
+  </service>
+
+  <service mode="buildtime" name="set_version" />
+</services>
+

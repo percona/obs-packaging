@@ -12,40 +12,45 @@ This repo contains RPM and Debian **packaging metadata** for building Percona so
 
 ```
 root/
-├── project.yaml             # OBS project config for the root project
-├── <package>/               # top-level package (no subproject)
-│   ├── debian/              # Debian packaging (control, rules, changelog, *.install, postinst/prerm hooks)
-│   ├── rpm/                 # RPM packaging (*.spec, patches, service files)
-│   ├── package.yaml         # optional OBS package config (title, description)
-│   └── obs/
-│       ├── _service         # OBS build service config — fetches sources and drives the build
-│       └── _multibuild      # Multi-flavor build config (PostgreSQL extensions only)
-├── <another-package>/       # packages and subprojects can be freely mixed at the root
-│   └── ...
-└── <subproject>/            # optional grouping (maps to an OBS subproject)
-    ├── project.yaml         # OBS project config for this subproject
-    ├── <package>/
-    │   ├── debian/
-    │   ├── rpm/
-    │   ├── package.yaml
-    │   └── obs/
-    │       ├── _service
-    │       └── _multibuild
-    └── <another-package>/
-        └── ...
+├── project.yaml                    # OBS project config for the root project
+├── common/                         # shared packages used across products
+│   └── deps/
+│       ├── build/                  # build-time deps (Go toolchain, OBS source services)
+│       │   └── <package>/
+│       │       └── obs/_aggregate  # aggregates from an external OBS project
+│       └── runtime/                # runtime deps shared across products
+│           └── <package>/          # e.g. percona-telemetry-agent
+│               ├── debian/
+│               ├── rpm/
+│               └── obs/_service
+└── <product>/                      # e.g. ppg/
+    ├── releases/                   # release pointer files (see root/README.md)
+    │   └── <name>/release.yaml
+    └── <major-version>/            # e.g. 17/
+        ├── project.yaml            # OBS project config for this subproject
+        ├── <package>/              # source packages
+        │   ├── debian/             # Debian packaging (control, rules, changelog, …)
+        │   ├── rpm/                # RPM packaging (*.spec, patches, service files)
+        │   ├── package.yaml        # optional OBS package config (title, description)
+        │   └── obs/
+        │       ├── _service        # OBS build service config
+        │       ├── _aggregate      # aggregates binaries from another OBS project
+        │       └── _multibuild     # multi-flavor builds (PostgreSQL extensions only)
+        └── <another-package>/
+            └── ...
 ```
 
 A directory is treated as a **package** if it contains an `obs/` subdirectory or a `package.yaml` file. Everything else is treated as a **project** (subproject grouping).
 
 ## Two Package Archetypes
 
-### 1. Standalone service (e.g., `percona-telemetry-agent/`)
+### 1. Standalone service (e.g., `common/deps/runtime/percona-telemetry-agent/`)
 - Single static package name (no version placeholder)
 - `obs/_service` fetches: packaging (debian + rpm subdirs) + upstream source + `go_modules` (manual)
 - `debian/rules` extracts version from `.obsinfo` file at build time
 - RPM `Release: 1%{?dist}`
 
-### 2. PostgreSQL extension (e.g., `ppg/17.9/percona-pg-telemetry/`)
+### 2. PostgreSQL extension (e.g., `ppg/17/percona-pg-telemetry/`)
 - Uses `@BUILD_FLAVOR@` placeholder throughout (replaced by PG major version at build time)
 - `obs/_multibuild` lists PG versions to build for: `<flavor>17</flavor>`
 - `debian/pgversions` specifies min PG version (e.g., `9.3+`)
@@ -55,8 +60,8 @@ A directory is treated as a **package** if it contains an `obs/` subdirectory or
 ## Critical Conventions
 
 **`obs/_service` structure** (all packages follow this pattern):
-1. First `obs_scm` service: fetch `debian/` subdir from this repo
-2. Second `obs_scm` service: fetch `rpm/` subdir from this repo
+1. First `obs_scm` service: fetch `debian/` subdir from this repo — use `<param name="subdir">${DEBIAN_PACKAGE_DIRECTORY}</param>`
+2. Second `obs_scm` service: fetch `rpm/` subdir from this repo — use `<param name="subdir">${RPM_PACKAGE_DIRECTORY}</param>`
 3. Third `obs_scm` service: fetch upstream source from its canonical repo
 4. Buildtime services: `tar`, `recompress` (gz), `set_version`
 5. `go_modules` (manual mode) — only for Go projects (telemetry-agent, etcd)
@@ -94,7 +99,7 @@ project-config: |              # raw OBS project config string
   %endif
 ```
 
-- `name` — absent or empty means the OBS project name is derived from the directory path relative to `root/` joined with `--rootprj` using colons (e.g. `home:Admin:ppg:17.9`). Set it explicitly only when the OBS project name must differ from the directory path.
+- `name` — absent or empty means the OBS project name is derived from the directory path relative to `root/` joined with `--rootprj` using colons (e.g. `home:Admin:ppg:17`). Set it explicitly only when the OBS project name must differ from the directory path.
 - `repositories[].paths` — list of path entries providing the base build environment. Each entry uses either `project:` (absolute OBS project name) or `subproject:` (resolved as `<rootprj>:<subproject>`) plus `repository:`.
 - `project-config` — passed verbatim to the OBS project config API; used for RPM macros, module expansion flags, etc.
 - `title` and `description` are informational only and never inherited by child projects.
@@ -114,7 +119,7 @@ When `percona-obs` pushes project metadata to OBS, it automatically injects one 
 
 Ancestor paths are injected closest-first (immediate parent before grandparent), followed by the upstream path from `project.yaml`. This gives every subproject **direct** visibility into packages built in all ancestor projects, without relying on OBS transitive resolution.
 
-For example, the `home:Admin:ppg:17.9` project gets this generated for each repository:
+For example, the `home:Admin:ppg:17` project gets this generated for each repository:
 ```xml
 <repository name="RockyLinux_9">
   <path project="home:Admin:ppg" repository="RockyLinux_9"/>           <!-- auto-injected: immediate parent -->
@@ -178,7 +183,7 @@ env:                                 # optional: variables for ${VAR} substituti
   -e REMOTE_OBS_ORG_INTERCONNECT:'openSUSE.org:' \
   profile create dev
 
-./percona-obs -P dev sync ppg:17.9 etcd --dirty --dry-run-remote
+./percona-obs -P dev sync ppg:17 etcd --dirty --dry-run-remote
 ```
 
 To add or update an env variable in an existing profile, use `-P` (to load the current state) plus `-e`:
@@ -287,7 +292,7 @@ When `--branch-from <profile>` is given, each package is individually evaluated:
 
 #### Branch project derivation
 
-The corresponding branch OBS project is derived by substituting the current `rootprj` prefix with the branch profile's `rootprj`. For example, if the current project is `home:Admin:percona-test:ppg:17.9` and the branch rootprj is `home:Admin:percona`, the branch project is `home:Admin:percona:ppg:17.9`.
+The corresponding branch OBS project is derived by substituting the current `rootprj` prefix with the branch profile's `rootprj`. For example, if the current project is `home:Admin:percona-test:ppg:17` and the branch rootprj is `home:Admin:percona`, the branch project is `home:Admin:percona:ppg:17`.
 
 #### Primary path — git SHA comparison
 
@@ -312,7 +317,7 @@ Fetch the expanded file list from OBS (`GET /source/<branch_project>/<package>?e
 
 **Sub-check 2 — Upstream obs_scm commit hash**
 
-If a `_service` file exists, extract the *upstream* `obs_scm` service — the one that fetches the actual software source. Packaging `obs_scm` services (whose `subdir` param matches `root/.+/(debian|rpm)$`) are excluded. If exactly one upstream `obs_scm` remains:
+If a `_service` file exists, extract the *upstream* `obs_scm` service — the one that fetches the actual software source. Packaging `obs_scm` services (whose `subdir` param matches `root/.+/(debian|rpm)$` or equals `${DEBIAN_PACKAGE_DIRECTORY}` / `${RPM_PACKAGE_DIRECTORY}`) are excluded. If exactly one upstream `obs_scm` remains:
 
 1. Resolve the remote HEAD SHA using `git ls-remote --` (30 s timeout), trying `refs/heads/<revision>`, then `refs/tags/<revision>^{}` (annotated tag), then `refs/tags/<revision>`.
 2. If resolution fails, treat the package as **changed** (conservative: cannot verify).
@@ -439,7 +444,7 @@ If `git ls-remote` fails or times out, obs_scm always runs and its output is not
 
 **Level 2 — manual service output cache** (`.cache/services/{upstream_commit}/`)
 
-After Phase 1 completes, `percona-obs` identifies the *upstream source* `obs_scm` service — the one that fetches the actual software being packaged — by filtering out every `obs_scm` whose `subdir` param matches the regex `root/.+/(debian|rpm)$` (those fetch packaging files from this repo). Exactly one service must remain; zero or two or more trigger a warning and the cache is skipped.
+After Phase 1 completes, `percona-obs` identifies the *upstream source* `obs_scm` service — the one that fetches the actual software being packaged — by filtering out every `obs_scm` whose `subdir` param matches `root/.+/(debian|rpm)$` or equals `${DEBIAN_PACKAGE_DIRECTORY}` / `${RPM_PACKAGE_DIRECTORY}` (those fetch packaging files from this repo). Exactly one service must remain; zero or two or more trigger a warning and the cache is skipped.
 
 The obsinfo file produced by that upstream obs_scm is named `{filename}.obsinfo` (where `filename` is the service's `filename` param, e.g. `etcd.obsinfo`). Its `commit:` field — the HEAD commit of the upstream repo at fetch time — is used as the cache key.
 
@@ -452,7 +457,7 @@ The obsinfo file produced by that upstream obs_scm is named `{filename}.obsinfo`
 
 When targeting a specific package (`sync <project> <package>`), the ancestor project chain is only walked if the target project does not yet exist on OBS (fast path avoids redundant GET calls otherwise).
 
-Project names use colon notation matching the directory hierarchy (e.g. `ppg:17.9`).
+Project names use colon notation matching the directory hierarchy (e.g. `ppg:17`).
 
 ### `build trigger [project] [package]`
 
@@ -522,7 +527,7 @@ listed after all trees as isolated packages. Cycles are detected and printed as
 
 Validates local project configuration without connecting to OBS.
 
-The optional `project` argument (colon notation, e.g. `ppg:17.9`) restricts validation to that subtree. If omitted, the entire `root/` tree is validated.
+The optional `project` argument (colon notation, e.g. `ppg:17`) restricts validation to that subtree. If omitted, the entire `root/` tree is validated.
 
 **Check 1 — subproject references**: every `subproject:` entry in all `project.yaml` files within the scope must resolve to an existing directory under `root/`.
 
@@ -537,8 +542,8 @@ Env resolution for the check (same precedence as all other commands):
 # Validate the entire tree against the dev profile
 ./percona-obs -P dev project verify
 
-# Validate only the ppg:17.9 subproject
-./percona-obs -P dev project verify ppg:17.9
+# Validate only the ppg:17 subproject
+./percona-obs -P dev project verify ppg:17
 
 # Check with an inline override (no profile file needed)
 ./percona-obs -e REMOTE_OBS_ORG_INTERCONNECT:'openSUSE.org:' project verify
@@ -547,7 +552,7 @@ Env resolution for the check (same precedence as all other commands):
 Exit code is 0 on success, 1 if any check fails.
 
 ## Adding a New PostgreSQL Extension
-1. Copy `ppg/17.9/percona-pg-telemetry/` as a template
+1. Copy `ppg/17/percona-pg-telemetry/` as a template
 2. Replace all `percona-pg-telemetry` references with the new package name
 3. Update `obs/_multibuild` flavors for the target PG versions
 4. Update `obs/_service` upstream URL to point to the new package's GitHub repo
@@ -566,7 +571,7 @@ When given an OBS package URL and a target location within `root/`, follow these
 
 ### Inputs
 - **OBS package URL** — the web UI URL, e.g. `http://192.168.1.103:3000/package/show/home:Admin/obs-service-tar_scm`
-- **Target location** — directory relative to `root/` where the package should land (e.g. `root/` for a top-level package, `root/ppg/17.9/` for a subproject package)
+- **Target location** — directory relative to `root/` where the package should land (e.g. `root/` for a top-level package, `root/ppg/17/` for a subproject package)
 - **Import mode** — `full` (copy source files) or `aggregate` (create `_aggregate` link)
 
 ### Step 1 — Determine the API URL
@@ -827,9 +832,9 @@ When branching is involved, always confirm which OBS instance is being queried:
 | Purpose | Exemplar |
 |---|---|
 | Go standalone package | `percona-telemetry-agent/` |
-| PG extension multi-version | `ppg/17.9/percona-pg-telemetry/` |
-| Large PG server package | `ppg/17.9/percona-postgresql17/` |
-| Third-party infrastructure service | `ppg/17.9/etcd/` |
+| PG extension multi-version | `ppg/17/percona-pg-telemetry/` |
+| Large PG server package | `ppg/17/percona-postgresql17/` |
+| Third-party infrastructure service | `ppg/17/etcd/` |
 | OBS aggregate (mirrors another OBS project) | `obs-service-tar_scm/` |
 | Root project config | `root/project.yaml` |
 | Management script | `percona-obs` (commands: `sync push`, `sync delete`, `sync promote`, `build trigger`, `build status`, `build dependency`, `profile create`, `profile list`, `project verify`) |
@@ -899,11 +904,15 @@ Permissions: `contents: read`, `pull-requests: write`, `statuses: write`.
 
 ### Service file env vars
 
-All `obs/_service` files in `root/` use two env vars that `percona-obs` substitutes before uploading to OBS:
+`${VAR}` tokens in `obs/_service`, `obs/_aggregate`, and `obs/_link` files are substituted by `apply_env_substitution()` before the file is uploaded to OBS. The following variables are available:
 
-| Variable | Purpose |
-|---|---|
-| `PERCONA_OBS_PACKAGING_BRANCH` | Git ref OBS checks out from the packaging repo (e.g. `main`, `refs/pull/42/head`) |
-| `PERCONA_OBS_PACKAGING_REPO` | HTTPS clone URL of the packaging repo OBS fetches from. Set to the fork's URL for PR profiles so OBS fetches packaging files from the correct repo when building promoted packages. |
+| Variable | Source | Purpose |
+|---|---|---|
+| `PERCONA_OBS_PACKAGING_BRANCH` | Profile env | Git ref OBS checks out from the packaging repo (e.g. `main`, `refs/pull/42/head`) |
+| `PERCONA_OBS_PACKAGING_REPO` | Profile env | HTTPS clone URL of the packaging repo OBS fetches from. Set to the fork's URL for PR profiles so OBS fetches packaging files from the correct repo when building promoted packages. |
+| `REMOTE_OBS_ORG_INTERCONNECT` | Profile env | Prefix for external OBS instance project references (e.g. `openSUSE.org:`). Empty string when no interconnect is used. |
+| `OBS_ROOTPRJ` | Auto-injected | The root OBS project name (`--rootprj`). Use this in `_aggregate` files to reference sibling subprojects without hardcoding the org prefix (e.g. `${OBS_ROOTPRJ}:common:deps:runtime`). |
+| `DEBIAN_PACKAGE_DIRECTORY` | Auto-injected per package | Path to the package's `debian/` subdir relative to the repo root (e.g. `root/ppg/17/percona-haproxy/debian`). Use as the `subdir` param in the first packaging `obs_scm` service. |
+| `RPM_PACKAGE_DIRECTORY` | Auto-injected per package | Path to the package's `rpm/` subdir relative to the repo root (e.g. `root/ppg/17/percona-haproxy/rpm`). Use as the `subdir` param in the second packaging `obs_scm` service. |
 
-These are declared in each `percona-obs` profile via `-e KEY:VALUE` at profile-creation time and applied by `apply_env_substitution()` in `services.py` before the `_service` XML is uploaded.
+`PERCONA_OBS_PACKAGING_BRANCH`, `PERCONA_OBS_PACKAGING_REPO`, and `REMOTE_OBS_ORG_INTERCONNECT` are declared in each `percona-obs` profile via `-e KEY:VALUE` at profile-creation time. `OBS_ROOTPRJ`, `DEBIAN_PACKAGE_DIRECTORY`, and `RPM_PACKAGE_DIRECTORY` are injected automatically and do not need to be declared manually.

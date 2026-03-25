@@ -89,6 +89,20 @@ def _copy_with_env_subst(
         shutil.copy2(src, dst_dir / src.name)
 
 
+def _pkg_env_vars(package_path: Path) -> dict[str, str]:
+    """Per-package env vars auto-injected into ${VAR} substitution.
+
+    DEBIAN_PACKAGE_DIRECTORY — path to the package's debian/ subdir relative
+    to the repo root (e.g. root/ppg/17/percona-haproxy/debian).
+    RPM_PACKAGE_DIRECTORY    — same for rpm/.
+    """
+    rel = package_path.relative_to(REPO_ROOT.parent)
+    return {
+        "DEBIAN_PACKAGE_DIRECTORY": (rel / "debian").as_posix(),
+        "RPM_PACKAGE_DIRECTORY": (rel / "rpm").as_posix(),
+    }
+
+
 def _multibuild_packages(obs_dir: Path, base_name: str) -> list[str]:
     """Return the OBS package names to use in an _aggregate for base_name.
 
@@ -467,18 +481,25 @@ def cmd_sync(args):
         _check_git_clean()
     targets = _resolve_targets(args)
 
-    # Validate obs_scm revisions for the resolved targets before any API calls.
-    scm_service_files = sorted(
-        pkg_path / "obs" / "_service"
-        for _, pkg_path in targets
-        if (pkg_path / "obs" / "_service").is_file()
-    )
     # Build env_vars from profile env + -e overrides (already merged by main()).
-    env_vars: dict[str, str] | None = (
-        parse_env_overrides(args.env_overrides) if args.env_overrides else None
-    )
+    # OBS_ROOTPRJ is always injected automatically so that _aggregate files can
+    # reference sibling subprojects (e.g. ${OBS_ROOTPRJ}:common:deps:runtime).
+    env_vars: dict[str, str] = {
+        **(parse_env_overrides(args.env_overrides) if args.env_overrides else {}),
+        "OBS_ROOTPRJ": args.rootprj,
+    }
 
-    scm_errors = _validate_obs_scm_revisions(scm_service_files, env_vars=env_vars)
+    # Validate obs_scm revisions per package so per-package vars are resolved.
+    scm_errors: list[tuple[Path, str, str]] = []
+    for _, pkg_path in targets:
+        svc_file = pkg_path / "obs" / "_service"
+        if svc_file.is_file():
+            scm_errors.extend(
+                _validate_obs_scm_revisions(
+                    [svc_file],
+                    env_vars={**env_vars, **_pkg_env_vars(pkg_path)},
+                )
+            )
     if scm_errors:
         for svc_file, url, revision in scm_errors:
             rel = svc_file.relative_to(REPO_ROOT.parent)
@@ -865,6 +886,7 @@ def cmd_sync(args):
         if not obs_dir.is_dir():
             continue
 
+        pkg_vars = {**env_vars, **_pkg_env_vars(package_path)}
         key = (obs_project_name, package_path.name)
         decision = decisions.get(key, "promote")
 
@@ -923,14 +945,14 @@ def cmd_sync(args):
                         obs_dir,
                         pkg_label=f"{obs_project_name}/{package_path.name}",
                         cache=not args.no_cache,
-                        env_vars=env_vars,
+                        env_vars=pkg_vars,
                     )
                     try:
                         combined = Path(tempfile.mkdtemp(prefix="percona-obs-upload-"))
                         try:
                             for f in obs_dir.iterdir():
                                 if f.is_file():
-                                    _copy_with_env_subst(f, combined, env_vars)
+                                    _copy_with_env_subst(f, combined, pkg_vars)
                             for art_name in manual_artifacts:
                                 shutil.copy2(workdir / art_name, combined / art_name)
                             files_changed = _upload_obs_files(
@@ -946,31 +968,21 @@ def cmd_sync(args):
                     finally:
                         shutil.rmtree(workdir, ignore_errors=True)
             else:
-                if env_vars:
-                    sub_dir = Path(tempfile.mkdtemp(prefix="percona-obs-upload-"))
-                    try:
-                        for f in obs_dir.iterdir():
-                            if f.is_file():
-                                _copy_with_env_subst(f, sub_dir, env_vars)
-                        files_changed = _upload_obs_files(
-                            apiurl,
-                            obs_project_name,
-                            package_path.name,
-                            sub_dir,
-                            message=message,
-                            dry_run=dry_run_obs,
-                        )
-                    finally:
-                        shutil.rmtree(sub_dir, ignore_errors=True)
-                else:
+                sub_dir = Path(tempfile.mkdtemp(prefix="percona-obs-upload-"))
+                try:
+                    for f in obs_dir.iterdir():
+                        if f.is_file():
+                            _copy_with_env_subst(f, sub_dir, pkg_vars)
                     files_changed = _upload_obs_files(
                         apiurl,
                         obs_project_name,
                         package_path.name,
-                        obs_dir,
+                        sub_dir,
                         message=message,
                         dry_run=dry_run_obs,
                     )
+                finally:
+                    shutil.rmtree(sub_dir, ignore_errors=True)
             # If obs/ files are unchanged but packaging files (debian/ or rpm/)
             # may have been pushed to the repo, trigger an OBS service run so
             # OBS re-fetches those subtrees and queues a rebuild.
@@ -980,7 +992,7 @@ def cmd_sync(args):
                     obs_project_name,
                     package_path.name,
                     service_file,
-                    env_vars,
+                    pkg_vars,
                 ):
                     _print_pending(f"trigger  {obs_project_name}/{package_path.name}")
                     if dry_run_obs:
@@ -1111,9 +1123,10 @@ def cmd_sync_promote(args) -> None:
     promoted = 0
     skipped = 0
 
-    env_vars: dict[str, str] | None = (
-        parse_env_overrides(args.env_overrides) if args.env_overrides else None
-    )
+    env_vars: dict[str, str] = {
+        **(parse_env_overrides(args.env_overrides) if args.env_overrides else {}),
+        "OBS_ROOTPRJ": args.rootprj,
+    }
 
     for obs_project, package_path in targets:
         project_path = package_path.parent
@@ -1124,6 +1137,8 @@ def cmd_sync_promote(args) -> None:
         if not obs_dir.is_dir():
             skipped += 1
             continue
+
+        pkg_vars = {**env_vars, **_pkg_env_vars(package_path)}
 
         # Check if the OBS package is currently a branch aggregate.
         latest_comment = _fetch_obs_package_latest_comment(
@@ -1147,14 +1162,14 @@ def cmd_sync_promote(args) -> None:
                 obs_dir,
                 pkg_label=f"{obs_project_name}/{package_path.name}",
                 cache=not args.no_cache,
-                env_vars=env_vars,
+                env_vars=pkg_vars,
             )
             try:
                 combined = Path(tempfile.mkdtemp(prefix="percona-obs-upload-"))
                 try:
                     for f in obs_dir.iterdir():
                         if f.is_file():
-                            _copy_with_env_subst(f, combined, env_vars)
+                            _copy_with_env_subst(f, combined, pkg_vars)
                     for art_name in manual_artifacts:
                         shutil.copy2(workdir / art_name, combined / art_name)
                     _upload_obs_files(
@@ -1170,31 +1185,21 @@ def cmd_sync_promote(args) -> None:
             finally:
                 shutil.rmtree(workdir, ignore_errors=True)
         else:
-            if env_vars:
-                sub_dir = Path(tempfile.mkdtemp(prefix="percona-obs-upload-"))
-                try:
-                    for f in obs_dir.iterdir():
-                        if f.is_file():
-                            _copy_with_env_subst(f, sub_dir, env_vars)
-                    _upload_obs_files(
-                        apiurl,
-                        obs_project_name,
-                        package_path.name,
-                        sub_dir,
-                        message=message,
-                        dry_run=dry_run,
-                    )
-                finally:
-                    shutil.rmtree(sub_dir, ignore_errors=True)
-            else:
+            sub_dir = Path(tempfile.mkdtemp(prefix="percona-obs-upload-"))
+            try:
+                for f in obs_dir.iterdir():
+                    if f.is_file():
+                        _copy_with_env_subst(f, sub_dir, pkg_vars)
                 _upload_obs_files(
                     apiurl,
                     obs_project_name,
                     package_path.name,
-                    obs_dir,
+                    sub_dir,
                     message=message,
                     dry_run=dry_run,
                 )
+            finally:
+                shutil.rmtree(sub_dir, ignore_errors=True)
         promoted += 1
 
     suffix = " (dry run)" if dry_run else ""

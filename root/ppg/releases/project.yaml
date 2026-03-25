@@ -1,0 +1,6 @@
+title: Percona Distribution for PostgreSQL — Releases
+description: |
+  Release snapshots for Percona Distribution for PostgreSQL.
+  Each subdirectory captures the package versions that made up a specific release.
+  This project contains no buildable packages.
+

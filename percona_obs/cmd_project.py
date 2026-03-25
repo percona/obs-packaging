@@ -524,7 +524,7 @@ def cmd_project_install(args) -> None:
     projects = [
         (obs_name, proj_path)
         for obs_name, proj_path in all_projects
-        if load_yaml(proj_path / "project.yaml").get("install") is not False
+        if load_yaml(proj_path / "project.yaml").get("publish") is not False
         and _has_direct_packages(proj_path)
     ]
 

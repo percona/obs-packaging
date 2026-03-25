@@ -24,8 +24,13 @@ _OBS_SCM_CACHE_DIR = _CACHE_DIR / "obs_scm"
 _SVC_CACHE_DIR = _CACHE_DIR / "services"
 
 # Matches the subdir param of obs_scm services that fetch packaging files
-# from this repo (e.g. "root/percona-telemetry-agent/debian").
-_PACKAGING_SUBDIR_RE = re.compile(r"root/.+/(?:debian|rpm)$")
+# from this repo (e.g. "root/ppg/17/percona-haproxy/debian" or the variable
+# form "${DEBIAN_PACKAGE_DIRECTORY}" / "${RPM_PACKAGE_DIRECTORY}").
+_PACKAGING_SUBDIR_RE = re.compile(
+    r"root/.+/(?:debian|rpm)$"
+    r"|\$\{DEBIAN_PACKAGE_DIRECTORY\}"
+    r"|\$\{RPM_PACKAGE_DIRECTORY\}"
+)
 
 
 def _has_manual_services(service_file: Path) -> bool:
@@ -42,9 +47,11 @@ def _get_upstream_obs_scm_info(
 ) -> tuple[str, str, str] | None:
     """Return (filename_prefix, url, revision) for the upstream obs_scm service.
 
-    Packaging obs_scm services (whose subdir matches root/.+/debian or
-    root/.+/rpm) are ignored.  Returns None if zero or more than one upstream
-    obs_scm services are found, or if filename/url params are missing.
+    Packaging obs_scm services (whose subdir matches _PACKAGING_SUBDIR_RE —
+    either a literal path like root/.+/debian or the variable form
+    ${DEBIAN_PACKAGE_DIRECTORY} / ${RPM_PACKAGE_DIRECTORY}) are ignored.
+    Returns None if zero or more than one upstream obs_scm services are found,
+    or if filename/url params are missing.
     """
     upstream: list[ET.Element] = []
     for svc in ET.parse(service_file).getroot().findall("service"):
@@ -141,7 +148,7 @@ def _get_packaging_obs_scm_infos(
 ) -> list[tuple[str, str, str, str]]:
     """Return (filename_prefix, url, revision, subdir) for packaging obs_scm services only.
 
-    Packaging services are those whose subdir matches root/.+/(debian|rpm).
+    Packaging services are those whose subdir matches _PACKAGING_SUBDIR_RE.
     Services without a filename or url param are skipped.
 
     If env_vars is provided, ${VAR} tokens in the service file are substituted
@@ -156,10 +163,11 @@ def _get_packaging_obs_scm_infos(
 def _find_upstream_obs_scm_filename(service_file: Path) -> str | None:
     """Return the filename param of the single upstream source obs_scm service.
 
-    Packaging obs_scm services (whose subdir matches root/.+/debian or
-    root/.+/rpm) are ignored.  Returns None — and logs a warning when
-    manual services are present — if zero or more than one upstream obs_scm
-    services are found.
+    Packaging obs_scm services (whose subdir matches _PACKAGING_SUBDIR_RE —
+    either a literal path like root/.+/debian or the variable form
+    ${DEBIAN_PACKAGE_DIRECTORY} / ${RPM_PACKAGE_DIRECTORY}) are ignored.
+    Returns None — and logs a warning when manual services are present — if
+    zero or more than one upstream obs_scm services are found.
     """
     upstream: list[ET.Element] = []
     for svc in ET.parse(service_file).getroot().findall("service"):

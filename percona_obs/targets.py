@@ -10,6 +10,11 @@ from .common import (
 )
 
 
+def _has_direct_packages(path: Path) -> bool:
+    """Return True if path directly contains at least one package directory."""
+    return any(child.is_dir() and is_package(child) for child in path.iterdir())
+
+
 def _resolve_targets(args) -> list[tuple[str, Path]]:
     """Resolve the list of (obs_project, package_path) targets from CLI args.
 
@@ -87,4 +92,6 @@ def _iter_project_chain(obs_project: str, project_path: Path):
             break
         path = path.parent
         proj = proj.rsplit(":", 1)[0]
-    yield from reversed(chain)
+    for proj, obs_name, path in reversed(chain):
+        if (path / "project.yaml").exists() or _has_direct_packages(path):
+            yield proj, obs_name, path

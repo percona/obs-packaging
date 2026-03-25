@@ -201,12 +201,35 @@ def _ancestor_projects(obs_project_name: str, rootprj: str) -> list[str]:
     return ancestors
 
 
+def _emit_flag_section(
+    parent: ET.Element,
+    tag: str,
+    flags: "dict[str, bool] | bool | None",
+) -> None:
+    """Append a <publish> or <build> XML section to *parent* based on *flags*.
+
+    flags=None        → no section emitted
+    flags=False       → <tag><disable/></tag>  (blanket, no repository attr)
+    flags={repo: bool}→ one <enable>/<disable repository="repo"> per entry
+    """
+    if flags is None:
+        return
+    sec = ET.SubElement(parent, tag)
+    if flags is False:
+        ET.SubElement(sec, "disable")
+    elif isinstance(flags, dict):
+        for repo, enabled in flags.items():
+            ET.SubElement(sec, "enable" if enabled else "disable", repository=repo)
+
+
 def build_project_meta(
     obs_project_name: str,
     title: str,
     description: str,
     repositories: list,
     rootprj: str,
+    publish: "dict[str, bool] | bool | None" = None,
+    build: "dict[str, bool] | None" = None,
 ) -> str:
     """Build OBS project metadata XML from project.yaml fields.
 
@@ -220,6 +243,8 @@ def build_project_meta(
     root = ET.Element("project", name=obs_project_name)
     ET.SubElement(root, "title").text = title
     ET.SubElement(root, "description").text = description
+    _emit_flag_section(root, "publish", publish)
+    _emit_flag_section(root, "build", build)
     for repo in repositories:
         repo_elem = ET.SubElement(root, "repository", name=repo["name"])
         for ancestor in ancestors:
@@ -253,16 +278,15 @@ def build_package_meta(
     package_name: str,
     title: str,
     description: str,
-    disable_build_repos: list[str] | None = None,
+    build: "dict[str, bool] | None" = None,
+    publish: "dict[str, bool] | None" = None,
 ) -> str:
     """Build OBS package metadata XML from package.yaml fields."""
     root = ET.Element("package", name=package_name, project=obs_project_name)
     ET.SubElement(root, "title").text = title
     ET.SubElement(root, "description").text = description
-    if disable_build_repos:
-        build_elem = ET.SubElement(root, "build")
-        for repo in disable_build_repos:
-            ET.SubElement(build_elem, "disable", repository=repo)
+    _emit_flag_section(root, "build", build)
+    _emit_flag_section(root, "publish", publish)
     ET.indent(root)
     return ET.tostring(root, encoding="unicode")
 
