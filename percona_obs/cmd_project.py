@@ -34,6 +34,7 @@ from .obs_api import (
     _decode_obs_response,
     _extract_obs_managed_elements,
     _fetch_obs_download_url,
+    _fetch_root_project_managed_elements,
     _inject_obs_managed_elements,
 )
 from .services import _git_head_sha
@@ -437,6 +438,11 @@ def cmd_project_config(args) -> None:
                 osc.conf.get_config(override_apiurl=raw_apiurl)
                 apiurl = osc.conf.config["apiurl"]
 
+    # Always resolve the root OBS project name — needed both for the project
+    # list and for inheriting person/group into new subprojects.
+    root_config = load_yaml(REPO_ROOT / "project.yaml")
+    root_obs_name = root_config.get("name") or args.rootprj
+
     # Resolve scope: a single project or the whole tree.
     if args.project:
         scope_path = resolve_project_path(args.project)
@@ -450,8 +456,6 @@ def cmd_project_config(args) -> None:
         scope_obs_name = f"{args.rootprj}:{args.project}"
         projects = list(find_projects(scope_path, scope_obs_name))
     else:
-        root_config = load_yaml(REPO_ROOT / "project.yaml")
-        root_obs_name = root_config.get("name") or args.rootprj
         projects = list(find_projects(REPO_ROOT, root_obs_name))
 
     sep = _col(_DIM, "─" * 60)
@@ -479,7 +483,14 @@ def cmd_project_config(args) -> None:
                 if managed:
                     meta = _inject_obs_managed_elements(meta, managed)
             except Exception:
-                pass  # project not on OBS yet — show local meta as-is
+                # Project not on OBS yet.  For subprojects, inherit person/group
+                # from the root project — matching what _create_project_skeleton
+                # does when it first creates the project.
+                if obs_project_name != root_obs_name:
+                    inherited = _fetch_root_project_managed_elements(
+                        apiurl, root_obs_name
+                    )
+                    meta = _inject_obs_managed_elements(meta, inherited)
 
         print(sep)
         print(_col(_BOLD, f"project meta  {obs_project_name}"))
