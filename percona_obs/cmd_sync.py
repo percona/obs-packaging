@@ -1019,7 +1019,7 @@ def cmd_sync(args):
         obs_subprojects = _fetch_obs_subproject_names(apiurl, args.rootprj)
         orphan_projects = obs_subprojects - local_project_names
         for orphan_proj in sorted(orphan_projects, key=lambda x: -x.count(":")):
-            _delete_obs_project(apiurl, orphan_proj, dry_run_obs)
+            _delete_obs_project(apiurl, orphan_proj, dry_run_obs, recursive=True)
 
     if args.dry_run:
         suffix = " (dry run)"

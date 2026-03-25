@@ -184,23 +184,6 @@ def apply_env_substitution(
     return _ENV_VAR_RE.sub(_replace, text)
 
 
-def _ancestor_projects(obs_project_name: str, rootprj: str) -> list[str]:
-    """Return all ancestor OBS project names from immediate parent to rootprj, inclusive.
-
-    For 'home:Admin:ppg:17.9' with rootprj 'home:Admin' returns:
-        ['home:Admin:ppg', 'home:Admin']
-    For the root project itself returns an empty list.
-    """
-    ancestors: list[str] = []
-    current = obs_project_name
-    while current != rootprj:
-        if ":" not in current:
-            break
-        current = current.rsplit(":", 1)[0]
-        ancestors.append(current)
-    return ancestors
-
-
 def _emit_flag_section(
     parent: ET.Element,
     tag: str,
@@ -233,13 +216,9 @@ def build_project_meta(
 ) -> str:
     """Build OBS project metadata XML from project.yaml fields.
 
-    For any project that is not the root project, each repository automatically
-    gets one <path> entry per ancestor OBS project (closest first), followed by
-    the upstream path from project.yaml. This gives every subproject direct
-    visibility into the packages built in all ancestor projects.
+    Only the paths explicitly listed in each repository's 'paths' list are
+    emitted. No automatic ancestor-project paths are injected.
     """
-    ancestors = _ancestor_projects(obs_project_name, rootprj)
-
     root = ET.Element("project", name=obs_project_name)
     ET.SubElement(root, "title").text = title
     ET.SubElement(root, "description").text = description
@@ -247,8 +226,6 @@ def build_project_meta(
     _emit_flag_section(root, "build", build)
     for repo in repositories:
         repo_elem = ET.SubElement(root, "repository", name=repo["name"])
-        for ancestor in ancestors:
-            ET.SubElement(repo_elem, "path", project=ancestor, repository=repo["name"])
         # Each entry may use 'project:' for an absolute OBS project name, or
         # 'subproject:' for a name relative to rootprj (e.g. 'builddep' → '<rootprj>:builddep').
         # Skip any path that resolves to this project itself — a project cannot
