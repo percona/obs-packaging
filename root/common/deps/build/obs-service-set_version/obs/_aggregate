@@ -1,5 +1,6 @@
 <aggregatelist>
   <aggregate project="${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Tools">
+    <repository source="16.0" target="openSUSE_Leap_16" />
     <package>obs-service-set_version</package>
   </aggregate>
 </aggregatelist>
