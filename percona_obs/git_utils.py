@@ -7,10 +7,12 @@ from .common import _REPO_DIR
 
 
 def _check_git_clean() -> None:
-    """Abort if the working tree has uncommitted changes or HEAD is not pushed to any remote."""
-    # Uncommitted changes (staged or unstaged, including untracked)
+    """Abort if the working tree has uncommitted changes under root/ or HEAD is not pushed to any remote."""
+    # Uncommitted changes (staged or unstaged, including untracked) — scoped to
+    # root/ so that changes to tooling files (percona_obs/, docs/, etc.) do not
+    # block a packaging sync.
     result = subprocess.run(
-        ["git", "status", "--porcelain"],
+        ["git", "status", "--porcelain", "--", "root/"],
         capture_output=True,
         text=True,
         cwd=_REPO_DIR,
@@ -19,9 +21,7 @@ def _check_git_clean() -> None:
         print(f"error: git status failed: {result.stderr.strip()}", file=sys.stderr)
         sys.exit(1)
     if result.stdout.strip():
-        print(
-            "error: there are uncommitted changes in the repository.", file=sys.stderr
-        )
+        print("error: there are uncommitted changes under root/.", file=sys.stderr)
         print(
             "       Commit or stash all changes before running this command.",
             file=sys.stderr,

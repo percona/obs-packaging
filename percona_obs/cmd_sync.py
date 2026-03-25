@@ -1004,6 +1004,12 @@ def cmd_sync(args):
     # Remove packages on OBS that no longer exist locally, but only when the
     # full package set of a project was processed (not a single-package sync).
     if args.package is None:
+        # Ensure the root project is included even when --non-recursive produces
+        # zero local packages (e.g. root/ has no direct-child packages).
+        if args.project is None:
+            root_config = load_yaml(REPO_ROOT / "project.yaml")
+            root_obs_name = root_config.get("name") or args.rootprj
+            local_packages_by_project.setdefault(root_obs_name, set())
         for proj_name, local_pkgs in local_packages_by_project.items():
             obs_pkgs = _fetch_obs_package_names(apiurl, proj_name)
             for orphan in sorted(obs_pkgs - local_pkgs):
@@ -1011,8 +1017,11 @@ def cmd_sync(args):
 
     # Remove subprojects on OBS that no longer exist locally, but only when
     # the full tree was processed (not a single-project or single-package sync).
+    # Skip when --non-recursive is active: sub-project directories were not
+    # scanned so local_project_names is incomplete and would incorrectly mark
+    # every sub-project as orphaned.
     # Delete deepest subprojects first so parents are empty before deletion.
-    if args.project is None:
+    if args.project is None and not getattr(args, "non_recursive", False):
         obs_subprojects = _fetch_obs_subproject_names(apiurl, args.rootprj)
         orphan_projects = obs_subprojects - local_project_names
         for orphan_proj in sorted(orphan_projects, key=lambda x: -x.count(":")):

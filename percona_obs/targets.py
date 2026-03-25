@@ -24,7 +24,7 @@ def _resolve_targets(args) -> list[tuple[str, Path]]:
 
     if args.project is None:
         targets = list(find_packages(REPO_ROOT, args.rootprj, recursive=recursive))
-        if not targets:
+        if not targets and recursive:
             print("error: no packages found under root", file=sys.stderr)
             sys.exit(1)
         return targets
