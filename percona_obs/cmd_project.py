@@ -445,6 +445,8 @@ def cmd_project_config(args) -> None:
             project_config.get("description", ""),
             project_config.get("repositories", []),
             args.rootprj,
+            publish=project_config.get("publish"),
+            build=project_config.get("build"),
         )
         project_config_str = (project_config.get("project-config") or "").strip()
 
