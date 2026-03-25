@@ -406,8 +406,19 @@ def _child_text(elem: ET.Element, tag: str) -> str:
     return (child.text or "").strip() if child is not None else ""
 
 
+def _flag_entries(elem: ET.Element, section: str) -> set[tuple[str, str]]:
+    """Return the set of (tag, repository-attr) pairs inside an OBS flag section.
+
+    Used to compare <publish> and <build> sections in project and package meta.
+    """
+    sec = elem.find(section)
+    if sec is None:
+        return set()
+    return {(child.tag, child.get("repository", "")) for child in sec}
+
+
 def _project_meta_subset_equal(current_bytes: bytes, desired_xml: str) -> bool:
-    """Return True if the title, description, and repositories we manage are identical.
+    """Return True if the title, description, repositories, and publish/build flags we manage are identical.
 
     Ignores OBS-managed elements (person, group, lock, link) so that ACL entries
     added via the web UI do not cause spurious updates.
@@ -421,6 +432,11 @@ def _project_meta_subset_equal(current_bytes: bytes, desired_xml: str) -> bool:
     if _child_text(current, "title") != _child_text(desired, "title"):
         return False
     if _child_text(current, "description") != _child_text(desired, "description"):
+        return False
+
+    if _flag_entries(current, "publish") != _flag_entries(desired, "publish"):
+        return False
+    if _flag_entries(current, "build") != _flag_entries(desired, "build"):
         return False
 
     current_repos = {r.get("name"): r for r in current.findall("repository")}
@@ -461,12 +477,6 @@ def _package_meta_subset_equal(current_bytes: bytes, desired_xml: str) -> bool:
         return False
     if _child_text(current, "description") != _child_text(desired, "description"):
         return False
-
-    def _flag_entries(elem: ET.Element, section: str) -> set[tuple[str, str]]:
-        sec = elem.find(section)
-        if sec is None:
-            return set()
-        return {(child.tag, child.get("repository", "")) for child in sec}
 
     return _flag_entries(current, "build") == _flag_entries(
         desired, "build"
