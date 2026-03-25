@@ -1,3 +1,4 @@
+import copy
 import hashlib
 import urllib.error
 import xml.etree.ElementTree as ET
@@ -301,6 +302,7 @@ def _create_project_skeleton(
     apiurl: str,
     obs_project_name: str,
     project_path: Path,
+    rootprj: str = "",
     dry_run: bool = False,
     env_vars: dict[str, str] | None = None,
 ) -> None:
@@ -311,6 +313,10 @@ def _create_project_skeleton(
     forward references to sibling or child projects that have not been created
     yet.  Stage 2 (_apply_project_config) fills in the full repository config
     once every project in the tree exists.
+
+    When *rootprj* is given and the project does not yet exist, person/group
+    elements are copied from the root project so that new subprojects inherit
+    the same access rights from the moment they are created.
 
     If the project already exists, this is a no-op.
     """
@@ -328,6 +334,11 @@ def _create_project_skeleton(
     ET.SubElement(root_el, "description").text = project_config.get("description", "")
     ET.indent(root_el)
     skeleton_meta = ET.tostring(root_el, encoding="unicode")
+
+    # Propagate person/group from the root project to new subprojects.
+    if rootprj and rootprj != obs_project_name:
+        inherited = _fetch_root_project_managed_elements(apiurl, rootprj)
+        skeleton_meta = _inject_obs_managed_elements(skeleton_meta, inherited)
 
     logger.debug(f"creating skeleton project: {obs_project_name}")
     _print_pending(f"project  {obs_project_name}")
@@ -401,9 +412,67 @@ def _delete_obs_project(
     _print_remove(f"project  {obs_project_name}")
 
 
+# OBS-managed project meta elements that we must never overwrite.
+# 'person' and 'group' grant access rights; 'lock' freezes the project;
+# 'link' connects linked projects.
+_OBS_MANAGED_ELEMS = {"person", "group", "lock", "link"}
+
+
 def _child_text(elem: ET.Element, tag: str) -> str:
     child = elem.find(tag)
     return (child.text or "").strip() if child is not None else ""
+
+
+def _extract_obs_managed_elements(xml_bytes: bytes) -> list[ET.Element]:
+    """Return deep copies of OBS-managed children (person/group/lock/link) from project XML."""
+    try:
+        root = ET.fromstring(xml_bytes)
+    except ET.ParseError:
+        return []
+    return [copy.deepcopy(child) for child in root if child.tag in _OBS_MANAGED_ELEMS]
+
+
+def _inject_obs_managed_elements(meta_xml: str, elements: list[ET.Element]) -> str:
+    """Insert OBS-managed elements into a locally-generated project meta XML string.
+
+    Elements are inserted after <description> (or <title> if no <description>
+    is present) and before any <publish>/<build>/<repository> elements, which
+    is the standard OBS element ordering.
+    Returns the original XML unchanged when *elements* is empty.
+    """
+    if not elements:
+        return meta_xml
+    try:
+        root = ET.fromstring(meta_xml)
+    except ET.ParseError:
+        return meta_xml
+    # Find insertion index: after the last title/description child.
+    insert_at = 0
+    for i, child in enumerate(root):
+        if child.tag in ("title", "description"):
+            insert_at = i + 1
+    for offset, elem in enumerate(elements):
+        root.insert(insert_at + offset, elem)
+    ET.indent(root)
+    return ET.tostring(root, encoding="unicode")
+
+
+def _fetch_root_project_managed_elements(apiurl: str, rootprj: str) -> list[ET.Element]:
+    """Return person/group elements from the root OBS project for propagation to new subprojects.
+
+    Only 'person' and 'group' are returned — 'lock' and 'link' are
+    project-specific and must not be inherited by child projects.
+    Returns an empty list when the root project does not yet exist or on any error.
+    """
+    try:
+        raw = _decode_obs_response(osc.core.show_project_meta(apiurl, rootprj))
+    except Exception:
+        return []
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError:
+        return []
+    return [copy.deepcopy(child) for child in root if child.tag in ("person", "group")]
 
 
 def _flag_entries(elem: ET.Element, section: str) -> set[tuple[str, str]]:
@@ -582,6 +651,11 @@ def _apply_project_config(
     With --dry-run, read-only OBS calls are made to compute the diff but no
     changes are written.
 
+    OBS-managed elements (person, group, lock, link) that exist on OBS are
+    always preserved: they are extracted from the current project meta and
+    re-injected into the locally-generated XML before uploading.  For new
+    projects, person/group elements are inherited from the root project.
+
     Prints '+' for creates, '~' for updates, '=' for unchanged resources.
     """
     project_config = _load_project_config_with_inheritance(project_path, env_vars)
@@ -614,16 +688,25 @@ def _apply_project_config(
 
     if not project_meta_exists:
         logger.debug(f"creating project meta: {obs_project_name}")
+        # New project: inherit person/group from the root project.
+        if rootprj != obs_project_name:
+            inherited = _fetch_root_project_managed_elements(apiurl, rootprj)
+            meta_to_upload = _inject_obs_managed_elements(meta, inherited)
+        else:
+            meta_to_upload = meta
         if not dry_run:
             paths_stripped = _edit_project_meta(
-                apiurl, obs_project_name, meta, force=False
+                apiurl, obs_project_name, meta_to_upload, force=False
             )
         _print_create(f"project meta  {obs_project_name}")
     elif force or not _project_meta_subset_equal(current, meta):
         logger.debug(f"updating project meta: {obs_project_name}")
+        # Existing project: preserve all OBS-managed elements (person/group/lock/link).
+        managed = _extract_obs_managed_elements(current)
+        meta_to_upload = _inject_obs_managed_elements(meta, managed)
         if not dry_run:
             paths_stripped = _edit_project_meta(
-                apiurl, obs_project_name, meta, force=force
+                apiurl, obs_project_name, meta_to_upload, force=force
             )
         _print_update(f"project meta  {obs_project_name}")
     else:

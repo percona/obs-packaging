@@ -567,7 +567,12 @@ def cmd_sync(args):
         sorted_projs = sorted(all_projects.items(), key=lambda kv: kv[1][0].count(":"))
         for _raw, (prj_name, proj_path) in sorted_projs:
             _create_project_skeleton(
-                apiurl, prj_name, proj_path, dry_run=dry_run_obs, env_vars=env_vars
+                apiurl,
+                prj_name,
+                proj_path,
+                args.rootprj,
+                dry_run=dry_run_obs,
+                env_vars=env_vars,
             )
         # Stage 2 pass 1: configure all projects.  Projects whose <path>
         # elements reference sibling/child projects that are still skeletons
@@ -838,6 +843,7 @@ def cmd_sync(args):
                             apiurl,
                             prj_name,
                             proj_path,
+                            args.rootprj,
                             dry_run=dry_run_obs,
                             env_vars=env_vars,
                         )
