@@ -27,7 +27,7 @@
 %global python3_pkgversion 311
 %global python3_pkgprefix python311
 %endif
-%if 0%{?suse_version} > 1600
+%if 0%{?suse_version} >= 1600
 %global __ospython %{_bindir}/python3.13
 %global python3_pkgversion 313
 %global python3_pkgprefix python313

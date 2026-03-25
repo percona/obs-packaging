@@ -6,7 +6,7 @@
 %if 0%{?suse_version} == 1500
 %global python3_pkgprefix python311
 %endif
-%if 0%{?suse_version} > 1600
+%if 0%{?suse_version} >= 1600
 %global python3_pkgprefix python313
 %endif
 

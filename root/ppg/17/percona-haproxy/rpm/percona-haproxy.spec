@@ -33,7 +33,11 @@ BuildRequires:  lua-devel >= 5.3
 Provides:       haproxy
 Epoch:          1
 
+%if 0%{?suse_version}
+Requires(pre):      shadow
+%else
 Requires(pre):      shadow-utils
+%endif
 %{?systemd_requires}
 
 %description

@@ -51,8 +51,8 @@
 %endif
 
 
-%if 0%{?suse_version} > 1600
-# openSUSE Tumbleweed: use standard unversioned package names (no PGDG versioned suffixes)
+%if 0%{?suse_version} >= 1600
+# openSUSE Leap 16 / Tumbleweed: use standard unversioned package names (no PGDG versioned suffixes)
 %global geosfullversion 3.11.0
 %global geosinstdir /usr
 %global geosmajorversion %{nil}
@@ -167,10 +167,10 @@ BuildRequires:	SFCGAL SFCGAL-devel >= 2.1.0
 %if 0%{?rhel} == 8
 BuildRequires:        SFCGAL SFCGAL-devel
 %endif
-%if 0%{?suse_version} >= 1500 && 0%{?suse_version} <= 1600
+%if 0%{?suse_version} >= 1500 && 0%{?suse_version} < 1600
 BuildRequires:        SFCGAL SFCGAL-devel
 %endif
-%if 0%{?suse_version} > 1600
+%if 0%{?suse_version} >= 1600
 BuildRequires:        sfcgal sfcgal-devel
 %endif
 %endif
@@ -208,12 +208,12 @@ Requires:	gdal%{gdalmajorversion}-libs >= %{gdalfullversion}
 %endif
 %endif
 
-%if 0%{?suse_version} >= 1500 && 0%{?suse_version} <= 1600
+%if 0%{?suse_version} >= 1500 && 0%{?suse_version} < 1600
 Requires:	libjson-c5
 Requires:	libxerces-c-3_2
 BuildRequires:        libxerces-c-devel
 %endif
-%if 0%{?suse_version} > 1600
+%if 0%{?suse_version} >= 1600
 Requires:        libjson-c5
 BuildRequires:        libxerces-c-devel
 %endif
