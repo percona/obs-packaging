@@ -77,6 +77,21 @@ _BRANCH_MSG_RE = re.compile(r"^branch: (\S+) \((.+)/[^/]+\)$")
 
 _OBS_SUBSTITUTABLE = {"_service", "_aggregate", "_link"}
 
+# Stem of the OBS sub-project that holds per-PR build environments.
+# This sub-project is managed exclusively by CI workflows and must never be
+# deleted by orphan cleanup or created by sync push.
+_PR_SUBPROJECT_STEM = "PR"
+
+
+def _is_pr_managed_project(obs_project: str, rootprj: str) -> bool:
+    """Return True if obs_project is the CI-managed PR sub-project or any child of it.
+
+    These projects are created and destroyed by CI workflows and must be invisible
+    to the orphan-deletion logic in sync push.
+    """
+    pr_root = f"{rootprj}:{_PR_SUBPROJECT_STEM}"
+    return obs_project == pr_root or obs_project.startswith(pr_root + ":")
+
 
 def _copy_with_env_subst(
     src: Path, dst_dir: Path, env_vars: dict[str, str] | None
@@ -1029,7 +1044,11 @@ def cmd_sync(args):
     # Delete deepest subprojects first so parents are empty before deletion.
     if args.project is None and not getattr(args, "non_recursive", False):
         obs_subprojects = _fetch_obs_subproject_names(apiurl, args.rootprj)
-        orphan_projects = obs_subprojects - local_project_names
+        orphan_projects = {
+            p
+            for p in obs_subprojects - local_project_names
+            if not _is_pr_managed_project(p, args.rootprj)
+        }
         for orphan_proj in sorted(orphan_projects, key=lambda x: -x.count(":")):
             _delete_obs_project(apiurl, orphan_proj, dry_run_obs, recursive=True)
 
