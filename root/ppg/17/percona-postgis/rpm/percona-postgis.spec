@@ -103,6 +103,10 @@
 %{!?raster:%global     raster 1}
 %endif
 
+%if 0%{?suse_version} == 1600
+# SFCGAL not available in openSUSE Leap 16 standard repo
+%global sfcgal 0
+%endif
 %if 0%{?fedora} >= 41 || 0%{?rhel} >= 7 || 0%{?suse_version} >= 1500
 %ifnarch ppc64 ppc64le
 # TODO

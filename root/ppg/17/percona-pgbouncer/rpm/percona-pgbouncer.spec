@@ -67,7 +67,11 @@ Requires(post):		systemd
 Requires(preun):	systemd
 Requires(postun):	systemd
 %endif
+%if 0%{?suse_version}
+Requires(pre):	shadow
+%else
 Requires:	/usr/sbin/useradd
+%endif
 Provides:   pgbouncer
 Epoch:		1
 
