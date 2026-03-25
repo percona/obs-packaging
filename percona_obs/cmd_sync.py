@@ -489,17 +489,14 @@ def cmd_sync(args):
         "OBS_ROOTPRJ": args.rootprj,
     }
 
-    # Validate obs_scm revisions per package so per-package vars are resolved.
-    scm_errors: list[tuple[Path, str, str]] = []
-    for _, pkg_path in targets:
-        svc_file = pkg_path / "obs" / "_service"
-        if svc_file.is_file():
-            scm_errors.extend(
-                _validate_obs_scm_revisions(
-                    [svc_file],
-                    env_vars={**env_vars, **_pkg_env_vars(pkg_path)},
-                )
-            )
+    # Collect all _service files with their per-package env vars, then validate
+    # in one pass so identical (url, revision) pairs are deduplicated globally.
+    scm_inputs = [
+        (pkg_path / "obs" / "_service", {**env_vars, **_pkg_env_vars(pkg_path)})
+        for _, pkg_path in targets
+        if (pkg_path / "obs" / "_service").is_file()
+    ]
+    scm_errors = _validate_obs_scm_revisions(scm_inputs)
     if scm_errors:
         for svc_file, url, revision in scm_errors:
             rel = svc_file.relative_to(REPO_ROOT.parent)

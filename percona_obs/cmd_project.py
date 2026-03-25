@@ -3,6 +3,7 @@ import re
 import sys
 import urllib.error
 import xml.etree.ElementTree as ET
+from collections.abc import Sequence
 from pathlib import Path
 
 import osc.conf
@@ -234,25 +235,28 @@ def _validate_env_vars(
 
 
 def _validate_obs_scm_revisions(
-    service_files: list[Path],
-    env_vars: dict[str, str] | None = None,
+    service_files: Sequence[tuple[Path, "dict[str, str] | None"]],
 ) -> list[tuple[Path, str, str]]:
     """Check that every obs_scm revision in the given _service files exists remotely.
 
-    Deduplicates by (url, revision) so shared repos only trigger one network call.
-    If *env_vars* is provided, ``${VAR}`` tokens in the file are substituted before
-    parsing.  Revisions that still contain unresolved ``${VAR}`` tokens after
-    substitution (because *env_vars* is None or incomplete) are silently skipped.
+    *service_files* is a list of ``(path, env_vars)`` pairs — each file is
+    substituted with its own env_vars before parsing.  This allows callers to
+    pass files from multiple packages (each with package-specific variables) in
+    a single call so that identical ``(url, revision)`` pairs are deduplicated
+    globally rather than validated once per package.
+
+    Revisions that still contain unresolved ``${VAR}`` tokens after substitution
+    are silently skipped.
 
     Returns a list of (service_file, url, revision) for unresolvable revisions.
     """
     # Collect all (url, revision) pairs with the first service file that uses them.
     seen: dict[tuple[str, str], Path] = {}
-    for svc_file in service_files:
+    for svc_file, file_env in service_files:
         try:
             text = svc_file.read_text("utf-8")
-            if env_vars:
-                text = apply_env_substitution(text, env_vars, source=svc_file)
+            if file_env:
+                text = apply_env_substitution(text, file_env, source=svc_file)
             root = ET.fromstring(text)
         except (ET.ParseError, OSError, SystemExit):
             continue
@@ -361,7 +365,7 @@ def cmd_project_verify(args) -> None:
     ref_errors = _validate_subproject_refs(scan_root)
     env_errors = _validate_env_vars(scan_root, env_vars)
     service_files = sorted(scan_root.rglob("obs/_service"))
-    scm_errors = _validate_obs_scm_revisions(service_files, env_vars=env_vars)
+    scm_errors = _validate_obs_scm_revisions([(f, env_vars) for f in service_files])
 
     # Validate project: path entries against the live OBS instance when a
     # profile is available (provides the apiurl and env var values).
