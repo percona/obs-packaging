@@ -30,7 +30,12 @@ from .common import (
     _print_ok,
 )
 from .cmd_profile import _load_profile
-from .obs_api import _fetch_obs_download_url
+from .obs_api import (
+    _decode_obs_response,
+    _extract_obs_managed_elements,
+    _fetch_obs_download_url,
+    _inject_obs_managed_elements,
+)
 from .services import _git_head_sha
 
 _YAML_FILENAMES = {"project.yaml", "package.yaml"}
@@ -419,6 +424,19 @@ def cmd_project_config(args) -> None:
         overrides = parse_env_overrides(args.env_overrides)
         env_vars = {**(env_vars or {}), **overrides}
 
+    # When not in offline mode, initialise osc so we can fetch live project meta.
+    apiurl: str | None = None
+    if not getattr(args, "offline", False):
+        if args.apiurl:
+            osc.conf.get_config(override_apiurl=args.apiurl)
+            apiurl = osc.conf.config["apiurl"]
+        elif args.profile:
+            profile = _load_profile(args.profile)
+            raw_apiurl = profile.get("apiurl", "")
+            if raw_apiurl:
+                osc.conf.get_config(override_apiurl=raw_apiurl)
+                apiurl = osc.conf.config["apiurl"]
+
     # Resolve scope: a single project or the whole tree.
     if args.project:
         scope_path = resolve_project_path(args.project)
@@ -449,6 +467,19 @@ def cmd_project_config(args) -> None:
             build=project_config.get("build"),
         )
         project_config_str = (project_config.get("project-config") or "").strip()
+
+        # When connected to OBS, merge in the live OBS-managed elements so the
+        # output reflects what sync would actually upload.
+        if apiurl:
+            try:
+                current_bytes = _decode_obs_response(
+                    osc.core.show_project_meta(apiurl, obs_project_name)
+                ).encode()
+                managed = _extract_obs_managed_elements(current_bytes)
+                if managed:
+                    meta = _inject_obs_managed_elements(meta, managed)
+            except Exception:
+                pass  # project not on OBS yet — show local meta as-is
 
         print(sep)
         print(_col(_BOLD, f"project meta  {obs_project_name}"))

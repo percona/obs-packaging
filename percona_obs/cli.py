@@ -387,6 +387,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Restrict output to this subproject and its children (colon notation, e.g. ppg:17.9). "
         "If omitted, all projects under root/ are shown.",
     )
+    project_config_parser.add_argument(
+        "--offline",
+        action="store_true",
+        default=False,
+        help="Do not connect to OBS. Show only the locally-generated meta "
+        "without merging OBS-managed elements (person/group/lock/link).",
+    )
     project_config_parser.set_defaults(func=cmd_project_config)
 
     return parser
