@@ -660,13 +660,18 @@ def cmd_sync(args):
             branch_project = _compute_branch_project(
                 obs_project_name, args.rootprj, branch_rootprj
             )
+            pkg_env = _pkg_env_vars(package_path)
             use_aggregate = _resolve_branch_decision(
                 apiurl,
                 branch_project,
                 package_path.name,
                 package_path,
-                env_vars,
-                branch_env_vars=branch_env_vars,
+                {**env_vars, **pkg_env},
+                branch_env_vars=(
+                    {**branch_env_vars, **pkg_env}
+                    if branch_env_vars is not None
+                    else None
+                ),
             )
             if use_aggregate:
                 # Guard: only aggregate when the branch project has every
@@ -734,7 +739,11 @@ def cmd_sync(args):
                             _profile_apiurl_cache[branch_profile_name] = apiurl or ""
                     src_apiurl = _profile_apiurl_cache[branch_profile_name]
                     if _content_matches_branch(
-                        src_apiurl, src_proj, package_path.name, obs_dir, env_vars
+                        src_apiurl,
+                        src_proj,
+                        package_path.name,
+                        obs_dir,
+                        {**env_vars, **_pkg_env_vars(package_path)},
                     ):
                         decisions[key] = "skip_branch"
                     else:
