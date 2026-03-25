@@ -17,12 +17,12 @@ repositories:
       - subproject: common:deps:build
         repository: Debian_13
     archs: [x86_64]
-  - name: xUbuntu_24.04
+  - name: Ubuntu_24.04
     paths:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:24.04
         repository: universe
       - subproject: common:deps:build
-        repository: xUbuntu_24.04
+        repository: Ubuntu_24.04
     archs: [x86_64]
   - name: openSUSE_Tumbleweed
     paths:
@@ -75,7 +75,7 @@ project-config: |
   Ignore: postgresql
   %endif
 
-  %if "%_repository" == "Debian_13" || "%_repository" == "xUbuntu_24.04"
+  %if "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04"
   # libgdal-dev transitively requires both libcurl4-openssl-dev and
   # libcurl4-gnutls-dev which conflict; ignore the gnutls variant so
   # the openssl variant is used consistently.

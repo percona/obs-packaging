@@ -1,6 +1,7 @@
 <aggregatelist>
   <aggregate project="${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Tools">
     <repository source="16.0" target="openSUSE_Leap_16" />
+    <repository source="xUbuntu_24.04" target="Ubuntu_24.04" />
     <package>obs-service-tar_scm</package>
   </aggregate>
 </aggregatelist>
