@@ -52,6 +52,7 @@ from .obs_api import (
     _fetch_obs_file_content,
     _fetch_obs_file_md5s,
     _fetch_obs_package_latest_comment,
+    _fetch_obs_package_meaningful_comment,
     _fetch_obs_package_names,
     _fetch_obs_project_repository_names,
     _fetch_obs_subproject_names,
@@ -220,6 +221,35 @@ def _content_matches_branch(
                 f"content check: obs_scm commit mismatch for {filename_prefix!r} "
                 f"(OBS={obs_commit!r}, remote={head_sha!r})  {branch_project}/{package_name}"
             )
+            # Before treating this as changed, check whether any commits in
+            # the range actually touch this subdir.  Only applies to
+            # packaging subdirs (e.g. root/.../debian, root/.../rpm) which
+            # are tracked in the local repo; upstream obs_scm services have
+            # an empty subdir and remain conservatively strict.
+            if _subdir and obs_commit:
+                try:
+                    git_result = subprocess.run(
+                        [
+                            "git",
+                            "log",
+                            "--oneline",
+                            f"{obs_commit}..{head_sha}",
+                            "--",
+                            _subdir,
+                        ],
+                        capture_output=True,
+                        text=True,
+                        cwd=_REPO_DIR,
+                        timeout=15,
+                    )
+                    if git_result.returncode == 0 and not git_result.stdout.strip():
+                        logger.debug(
+                            f"content check: no commits touch {_subdir!r} in range; "
+                            f"treating as match  {branch_project}/{package_name}"
+                        )
+                        continue  # this scm service matches; check the next one
+                except (subprocess.TimeoutExpired, OSError):
+                    pass  # cannot verify locally — fall through to conservative behaviour
             return False
 
     return True
@@ -356,7 +386,9 @@ def _resolve_branch_decision(
         return matches
 
     label = f"{branch_project}/{package_name}"
-    comment = _fetch_obs_package_latest_comment(apiurl, branch_project, package_name)
+    comment = _fetch_obs_package_meaningful_comment(
+        apiurl, branch_project, package_name
+    )
     if not comment:
         return _content_check("no revision comment in branch project")
 

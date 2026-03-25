@@ -95,6 +95,39 @@ def _fetch_obs_package_latest_comment(
         return None
 
 
+_TRIGGER_SERVICE_COMMENT = "trigger service run"
+
+
+def _fetch_obs_package_meaningful_comment(
+    apiurl: str, obs_project_name: str, package_name: str
+) -> str | None:
+    """Return the most recent revision comment that is not 'trigger service run'.
+
+    Walks the revision history from newest to oldest, skipping any revision
+    whose comment is exactly 'trigger service run' (case-insensitive).  This
+    allows the fast-path SHA comparison in --branch-from to work even when OBS
+    has created one or more 'trigger service run' revisions on top of the last
+    percona-obs sync.
+
+    Returns None if no meaningful comment exists, if the package does not
+    exist, or on any error.
+    """
+    logger.debug(f"fetching revision history: {obs_project_name}/{package_name}")
+    url = osc.core.makeurl(
+        apiurl, ["source", obs_project_name, package_name, "_history"]
+    )
+    try:
+        response = osc.connection.http_GET(url)
+        root = ET.fromstring(response.read())
+        for rev in reversed(root.findall("revision")):
+            comment = rev.findtext("comment")
+            if comment and comment.strip().lower() != _TRIGGER_SERVICE_COMMENT:
+                return comment.strip()
+        return None
+    except Exception:
+        return None
+
+
 def _fetch_obs_file_md5s(
     apiurl: str, obs_project_name: str, package_name: str, expanded: bool = False
 ) -> dict[str, str]:

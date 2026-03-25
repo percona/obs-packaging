@@ -241,20 +241,22 @@ def _obs_scm_cache_key(svc: ET.Element) -> str:
     )
     return hashlib.sha256("|".join(parts).encode()).hexdigest()
 
+
 def _remote_commit_exists(remote_url: str, sha: str) -> bool:
     """
     Return True if `sha` exists in `remote_url` (commit object), False otherwise.
     Uses subprocess.Popen for all git commands and a temporary repo.
     """
 
-    _SHA1_RE = re.compile(r'^[0-9a-fA-F]{40}$')
+    _SHA1_RE = re.compile(r"^[0-9a-fA-F]{40}$")
     if not _SHA1_RE.fullmatch(sha):
         return False
-    
+
     logger.debug(f"resolving git commit {sha} on {remote_url}")
 
     tmpdir = tempfile.mkdtemp(prefix="git-check-")
     try:
+
         def run(cmd):
             p = subprocess.Popen(
                 cmd, cwd=tmpdir, stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -283,6 +285,7 @@ def _remote_commit_exists(remote_url: str, sha: str) -> bool:
         return rc == 0
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
+
 
 def _remote_reference_exists(remote_url: str, ref: str) -> str | None:
     patterns = [
@@ -336,6 +339,7 @@ def _remote_reference_exists(remote_url: str, ref: str) -> str | None:
     except Exception:
         return None
 
+
 def _git_head_sha(url: str, revision: str) -> str | None:
     """Return the resolved commit SHA of revision on a remote git repository.
 
@@ -349,7 +353,7 @@ def _git_head_sha(url: str, revision: str) -> str | None:
     sha = _remote_reference_exists(url, revision)
     if sha is not None:
         return sha
-    
+
     # revision not found, maybe it's a direct commit SHA; verify it exists in the remote
     if _remote_commit_exists(url, revision):
         return revision
