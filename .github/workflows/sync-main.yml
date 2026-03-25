@@ -8,6 +8,7 @@ on:
   push:
     branches: [main]
     paths: ['root/**']
+  workflow_dispatch: {}
 
 jobs:
   sync:
