@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import osc.conf
@@ -592,15 +593,24 @@ def cmd_sync(args):
     _profile_apiurl_cache: dict[str, str] = {}
 
     _print_action("planning: checking sync decisions")
-    for obs_project, package_path in targets:
+
+    # Per-package decision function run in parallel via a thread pool.
+    # All closures over outer-scope variables are read-only except for the
+    # shared caches (_branch_repo_cache, _target_repos_cache,
+    # _profile_apiurl_cache), which are plain dicts.  Under CPython's GIL
+    # individual dict reads/writes are atomic, so concurrent cache misses that
+    # trigger duplicate HTTP calls are benign — both threads obtain the same
+    # result and one silently overwrites the other.
+    def _decide_package(
+        obs_project: str, package_path: Path
+    ) -> "tuple[tuple[str, str], str, str | None, str | None] | None":
         obs_dir = package_path / "obs"
         if not obs_dir.is_dir():
-            continue
+            return None
         project_path = package_path.parent
         project_config = load_yaml(project_path / "project.yaml")
         obs_project_name = project_config.get("name") or obs_project
         key: tuple[str, str] = (obs_project_name, package_path.name)
-        pkg_key_by_name[package_path.name] = key
 
         if branch_rootprj:
             branch_project = _compute_branch_project(
@@ -652,12 +662,11 @@ def cmd_sync(args):
                         f"branch decision: promote  {obs_project_name}/{package_path.name}"
                         f"  (repos missing from branch: {sorted(missing_repos)})"
                     )
-                    decisions[key] = "promote"
+                    return key, "promote", None, None
                 else:
-                    decisions[key] = "aggregate"
-                    branch_project_for[key] = branch_project
+                    return key, "aggregate", branch_project, None
             else:
-                decisions[key] = "promote"
+                return key, "promote", None, None
         else:
             # Without --branch-from the package may still hold a _aggregate from
             # a prior --branch-from sync.  Check whether content still matches.
@@ -684,20 +693,20 @@ def cmd_sync(args):
                             )
                             _profile_apiurl_cache[branch_profile_name] = apiurl or ""
                     src_apiurl = _profile_apiurl_cache[branch_profile_name]
-                    if _content_matches_branch(
-                        src_apiurl,
-                        src_proj,
-                        package_path.name,
-                        obs_dir,
-                        {**env_vars, **_pkg_env_vars(package_path)},
-                    ):
-                        decisions[key] = "skip_branch"
-                    else:
-                        decisions[key] = "promote"
+                    decision = (
+                        "skip_branch"
+                        if _content_matches_branch(
+                            src_apiurl,
+                            src_proj,
+                            package_path.name,
+                            obs_dir,
+                            {**env_vars, **_pkg_env_vars(package_path)},
+                        )
+                        else "promote"
+                    )
                     # Always record the source project and profile so that Phase 2
                     # dep queries use the correct OBS instance.
-                    branch_project_for[key] = src_proj
-                    branch_profile_for[key] = branch_profile_name
+                    return key, decision, src_proj, branch_profile_name
                 else:
                     # Prior comment is not a branch aggregate marker; it may
                     # be a plain sync: message.  Skip the upload if the obs/
@@ -732,9 +741,23 @@ def cmd_sync(args):
                                 )
                             ):
                                 skip = True
-                    decisions[key] = "skip" if skip else "promote"
+                    return key, "skip" if skip else "promote", None, None
             else:
-                decisions[key] = "promote"
+                return key, "promote", None, None
+
+    with ThreadPoolExecutor(max_workers=16) as _pool:
+        _futures = [_pool.submit(_decide_package, op, pp) for op, pp in targets]
+        for _fut in _futures:
+            _result = _fut.result()
+            if _result is None:
+                continue
+            _key, _decision, _bp, _profile = _result
+            pkg_key_by_name[_key[1]] = _key
+            decisions[_key] = _decision
+            if _bp is not None:
+                branch_project_for[_key] = _bp
+            if _profile is not None:
+                branch_profile_for[_key] = _profile
 
     # --- Phase 2: dep-triggered promotion (forward fixed-point) ---
     # If a package is being promoted (full sources), any package that depends
