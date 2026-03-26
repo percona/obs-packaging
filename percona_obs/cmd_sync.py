@@ -575,78 +575,9 @@ def cmd_sync(args):
     # project.
     _target_repos_cache: dict[Path, set[str]] = {}
 
-    # Pre-pass: two-stage project creation to handle OBS path-reference cycles.
-    #
-    # Stage 1 — create bare skeleton projects (no <repository> elements) for any
-    #   project that does not yet exist on OBS.  Projects are processed
-    #   shallowest-first (fewest ':' in the OBS name) so OBS parent projects
-    #   always exist before their children, regardless of path dependencies.
-    #
-    # Stage 2 — apply the full project config (repos, paths, build config) once
-    #   every project in the tree exists.  Because all projects are already
-    #   present by this point, OBS never raises repository_access_failure.
-    if args.package is None:
-        all_projects: dict[str, tuple[str, Path]] = {}
-        for obs_project, package_path in targets:
-            for raw_proj, prj_name, proj_path in _iter_project_chain(
-                obs_project, package_path.parent
-            ):
-                local_project_names.add(prj_name)
-                if raw_proj not in all_projects:
-                    all_projects[raw_proj] = (prj_name, proj_path)
-        sorted_projs = sorted(all_projects.items(), key=lambda kv: kv[1][0].count(":"))
-        for _raw, (prj_name, proj_path) in sorted_projs:
-            _create_project_skeleton(
-                apiurl,
-                prj_name,
-                proj_path,
-                args.rootprj,
-                dry_run=dry_run_obs,
-                env_vars=env_vars,
-            )
-        # Stage 2 pass 1: configure all projects.  Projects whose <path>
-        # elements reference sibling/child projects that are still skeletons
-        # will have those paths stripped and need a second pass.
-        needs_reconfig: list[tuple[str, str, Path]] = []
-        for raw_proj, (prj_name, proj_path) in sorted_projs:
-            stripped = _apply_project_config(
-                apiurl,
-                prj_name,
-                proj_path,
-                args.rootprj,
-                force=args.force,
-                dry_run=dry_run_obs,
-                env_vars=env_vars,
-            )
-            if stripped:
-                needs_reconfig.append((raw_proj, prj_name, proj_path))
-            seen_projects.add(raw_proj)
-        # Stage 2 pass 2: re-apply config for projects that had paths stripped.
-        # By now all sibling/child projects have their repositories configured,
-        # so OBS will accept the full meta.  Projects already correctly
-        # configured are detected by _project_meta_subset_equal and skipped.
-        for raw_proj, prj_name, proj_path in needs_reconfig:
-            _apply_project_config(
-                apiurl,
-                prj_name,
-                proj_path,
-                args.rootprj,
-                force=args.force,
-                dry_run=dry_run_obs,
-                env_vars=env_vars,
-            )
-
-    if args.project_only:
-        if args.dry_run:
-            suffix = " (dry run)"
-        elif args.dry_run_remote:
-            suffix = " (dry run: remote)"
-        else:
-            suffix = ""
-        _print_ok(f"sync successful{suffix}")
-        return
-
     # --- Phase 1: compute branch/promote decisions upfront ---
+    # Running this before the project pre-pass lets us know which projects
+    # actually need to be created when --branch-from is active.
     # decisions[(obs_project_name, pkg_name)]:
     #   "aggregate"   — upload _aggregate pointing to branch_project_for[key]
     #   "skip_branch" — leave existing aggregate on OBS unchanged (no upload)
@@ -892,11 +823,107 @@ def cmd_sync(args):
                             decisions[dep_key] = "promote"
                             changed = True
 
+    # Compute the set of OBS projects that actually need to be created.
+    # When --branch-from is active on a full-tree sync, only projects with at
+    # least one promoted package are created; projects whose packages are all
+    # aggregated are skipped and their subproject path references are redirected
+    # to the branch-source equivalents.  The root project is always included as
+    # a CI namespace anchor.
+    active_projects: set[str] | None = None
+    if branch_rootprj and args.package is None:
+        active_projects = {
+            obs_project for (obs_project, _), d in decisions.items() if d == "promote"
+        }
+        active_projects.add(args.rootprj)
+
+    # Pre-pass: two-stage project creation to handle OBS path-reference cycles.
+    #
+    # Stage 1 — create bare skeleton projects (no <repository> elements) for any
+    #   project that does not yet exist on OBS.  Projects are processed
+    #   shallowest-first (fewest ':' in the OBS name) so OBS parent projects
+    #   always exist before their children, regardless of path dependencies.
+    #
+    # Stage 2 — apply the full project config (repos, paths, build config) once
+    #   every project in the tree exists.  Because all projects are already
+    #   present by this point, OBS never raises repository_access_failure.
+    if args.package is None:
+        all_projects: dict[str, tuple[str, Path]] = {}
+        for obs_project, package_path in targets:
+            for raw_proj, prj_name, proj_path in _iter_project_chain(
+                obs_project, package_path.parent
+            ):
+                # With --branch-from, skip projects with no promoted packages.
+                if active_projects is not None and prj_name not in active_projects:
+                    continue
+                local_project_names.add(prj_name)
+                if raw_proj not in all_projects:
+                    all_projects[raw_proj] = (prj_name, proj_path)
+        sorted_projs = sorted(all_projects.items(), key=lambda kv: kv[1][0].count(":"))
+        for _raw, (prj_name, proj_path) in sorted_projs:
+            _create_project_skeleton(
+                apiurl,
+                prj_name,
+                proj_path,
+                args.rootprj,
+                dry_run=dry_run_obs,
+                env_vars=env_vars,
+            )
+        # Stage 2 pass 1: configure all projects.  Projects whose <path>
+        # elements reference sibling/child projects that are still skeletons
+        # will have those paths stripped and need a second pass.
+        needs_reconfig: list[tuple[str, str, Path]] = []
+        for raw_proj, (prj_name, proj_path) in sorted_projs:
+            stripped = _apply_project_config(
+                apiurl,
+                prj_name,
+                proj_path,
+                args.rootprj,
+                force=args.force,
+                dry_run=dry_run_obs,
+                env_vars=env_vars,
+                active_projects=active_projects,
+                branch_rootprj=branch_rootprj,
+            )
+            if stripped:
+                needs_reconfig.append((raw_proj, prj_name, proj_path))
+            seen_projects.add(raw_proj)
+        # Stage 2 pass 2: re-apply config for projects that had paths stripped.
+        # By now all sibling/child projects have their repositories configured,
+        # so OBS will accept the full meta.  Projects already correctly
+        # configured are detected by _project_meta_subset_equal and skipped.
+        for raw_proj, prj_name, proj_path in needs_reconfig:
+            _apply_project_config(
+                apiurl,
+                prj_name,
+                proj_path,
+                args.rootprj,
+                force=args.force,
+                dry_run=dry_run_obs,
+                env_vars=env_vars,
+                active_projects=active_projects,
+                branch_rootprj=branch_rootprj,
+            )
+
+    if args.project_only:
+        if args.dry_run:
+            suffix = " (dry run)"
+        elif args.dry_run_remote:
+            suffix = " (dry run: remote)"
+        else:
+            suffix = ""
+        _print_ok(f"sync successful{suffix}")
+        return
+
     # --- Phase 3: execute uploads based on decisions ---
     for obs_project, package_path in targets:
         project_path = package_path.parent
         project_config = load_yaml(project_path / "project.yaml")
         obs_project_name = project_config.get("name") or obs_project
+
+        # With --branch-from on a full-tree sync, skip projects that were not
+        # created because all their packages are aggregated from the branch source.
+        if active_projects is not None and obs_project_name not in active_projects:
+            continue
 
         if args.package is not None:
             # Single-package target: ensure the project hierarchy exists on OBS
@@ -931,6 +958,8 @@ def cmd_sync(args):
                             force=args.force,
                             dry_run=dry_run_obs,
                             env_vars=env_vars,
+                            active_projects=active_projects,
+                            branch_rootprj=branch_rootprj,
                         )
                         if stripped:
                             chain_needs_reconfig.append((raw_proj, prj_name, proj_path))
@@ -944,6 +973,8 @@ def cmd_sync(args):
                         force=args.force,
                         dry_run=dry_run_obs,
                         env_vars=env_vars,
+                        active_projects=active_projects,
+                        branch_rootprj=branch_rootprj,
                     )
 
         _apply_package_config(

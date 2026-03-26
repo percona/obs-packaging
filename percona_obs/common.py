@@ -213,11 +213,19 @@ def build_project_meta(
     rootprj: str,
     publish: "dict[str, bool] | bool | None" = None,
     build: "dict[str, bool] | None" = None,
+    active_projects: "set[str] | None" = None,
+    branch_rootprj: str | None = None,
 ) -> str:
     """Build OBS project metadata XML from project.yaml fields.
 
     Only the paths explicitly listed in each repository's 'paths' list are
     emitted. No automatic ancestor-project paths are injected.
+
+    When ``active_projects`` and ``branch_rootprj`` are provided (i.e. during a
+    ``--branch-from`` sync that skips pass-through projects), any ``subproject:``
+    path entry that would resolve to a PR sub-project not present in
+    ``active_projects`` is redirected to the corresponding branch-source project
+    (``branch_rootprj:X``) instead.
     """
     root = ET.Element("project", name=obs_project_name)
     ET.SubElement(root, "title").text = title
@@ -234,6 +242,14 @@ def build_project_meta(
         for path_info in repo.get("paths", []):
             if "subproject" in path_info:
                 proj = f"{rootprj}:{path_info['subproject']}"
+                # When a --branch-from sync skips pass-through projects, redirect
+                # any subproject path that wasn't created to the branch source.
+                if (
+                    active_projects is not None
+                    and proj not in active_projects
+                    and branch_rootprj is not None
+                ):
+                    proj = f"{branch_rootprj}:{path_info['subproject']}"
             else:
                 proj = path_info["project"]
             if proj == obs_project_name:

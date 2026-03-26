@@ -657,6 +657,8 @@ def _apply_project_config(
     force: bool = False,
     dry_run: bool = False,
     env_vars: dict[str, str] | None = None,
+    active_projects: "set[str] | None" = None,
+    branch_rootprj: str | None = None,
 ) -> bool:
     """Create or update OBS project metadata and build config from project.yaml.
 
@@ -677,6 +679,10 @@ def _apply_project_config(
     projects, person/group elements are inherited from the root project.
 
     Prints '+' for creates, '~' for updates, '=' for unchanged resources.
+
+    ``active_projects`` and ``branch_rootprj`` are forwarded to
+    ``build_project_meta`` to enable path substitution for skipped pass-through
+    projects in ``--branch-from`` syncs.
     """
     project_config = _load_project_config_with_inheritance(project_path, env_vars)
     meta = build_project_meta(
@@ -687,6 +693,8 @@ def _apply_project_config(
         rootprj,
         publish=project_config.get("publish"),
         build=project_config.get("build"),
+        active_projects=active_projects,
+        branch_rootprj=branch_rootprj,
     )
 
     # --- project meta ---
