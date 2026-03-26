@@ -291,6 +291,7 @@ def _packaging_scm_has_updates(
     package_name: str,
     service_file: Path,
     env_vars: dict[str, str] | None,
+    missing_obsinfo_means_updated: bool = False,
 ) -> bool:
     """Return True if any packaging obs_scm service has new commits vs OBS.
 
@@ -298,6 +299,12 @@ def _packaging_scm_has_updates(
     and compares the recorded commit hash against the current remote HEAD.
     Returns False when remote HEAD cannot be resolved (conservative: no spurious
     triggers) or when no packaging obs_scm services are present.
+
+    When ``missing_obsinfo_means_updated`` is True, a packaging service whose
+    obsinfo is absent from OBS is treated as updated (returns True).  Use this
+    in the sync decision path where a missing obsinfo means OBS never fetched
+    that subdir — so we must re-upload.  The default (False) preserves the
+    conservative build-trigger behaviour where a missing obsinfo is skipped.
     """
     packaging_infos = _get_packaging_obs_scm_infos(service_file, env_vars)
     if not packaging_infos:
@@ -324,6 +331,12 @@ def _packaging_scm_has_updates(
             None,
         )
         if not obsinfo_name:
+            if missing_obsinfo_means_updated:
+                logger.debug(
+                    f"packaging scm check: no obsinfo for {filename_prefix!r} "
+                    f"in {obs_project}/{package_name}, treating as updated"
+                )
+                return True
             continue
         obsinfo_bytes = _fetch_obs_file_content(
             apiurl, obs_project, package_name, obsinfo_name, expanded=True
@@ -758,10 +771,11 @@ def cmd_sync(args):
                     # Prior comment is not a branch aggregate marker; it may
                     # be a plain sync: message.  Skip the upload if the obs/
                     # template files have not changed since the last sync.
-                    # rpm/ and debian/ changes are intentionally ignored: OBS
-                    # fetches packaging from PERCONA_OBS_PACKAGING_BRANCH at
-                    # build time, so a different env var value alone is not a
-                    # reason to re-upload the _service file.
+                    # Local rpm/ and debian/ changes are intentionally ignored:
+                    # OBS fetches packaging from PERCONA_OBS_PACKAGING_BRANCH at
+                    # build time.  However, if env vars changed the branch, the
+                    # packaging content may differ between the old branch (what
+                    # OBS has) and the new branch — use obsinfo to detect this.
                     skip = False
                     sm = _SYNC_MSG_RE.match(prior_comment)
                     if sm and not sm.group(2).startswith("local changes on"):
@@ -769,7 +783,24 @@ def cmd_sync(args):
                         if not _has_package_content_changes_since(
                             short_sha, package_path
                         ):
-                            skip = True
+                            pkg_env = {
+                                **env_vars,
+                                **_pkg_env_vars(package_path),
+                            }
+                            _svc_file = obs_dir / "_service"
+                            if (
+                                not _svc_file.is_file()
+                                or not pkg_env
+                                or not _packaging_scm_has_updates(
+                                    apiurl,
+                                    obs_project_name,
+                                    package_path.name,
+                                    _svc_file,
+                                    pkg_env,
+                                    missing_obsinfo_means_updated=True,
+                                )
+                            ):
+                                skip = True
                     decisions[key] = "skip" if skip else "promote"
             else:
                 decisions[key] = "promote"
