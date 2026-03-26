@@ -146,6 +146,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Only sync project configuration (meta and build config); skip all package syncing.",
     )
     sync_push_parser.add_argument(
+        "--no-scm-validate",
+        action="store_true",
+        default=False,
+        dest="no_scm_validate",
+        help="Skip validation of obs_scm git revisions before syncing.",
+    )
+    sync_push_parser.add_argument(
         "--branch-from",
         metavar="PROFILE",
         default=None,

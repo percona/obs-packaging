@@ -41,6 +41,7 @@ from .git_utils import (
     _generate_sync_message,
     _has_non_obs_package_changes_since,
     _has_package_changes_since,
+    _has_package_content_changes_since,
 )
 from .obs_api import (
     _apply_package_config,
@@ -511,15 +512,16 @@ def cmd_sync(args):
         for _, pkg_path in targets
         if (pkg_path / "obs" / "_service").is_file()
     ]
-    scm_errors = _validate_obs_scm_revisions(scm_inputs)
-    if scm_errors:
-        for svc_file, url, revision in scm_errors:
-            rel = svc_file.relative_to(REPO_ROOT.parent)
-            print(
-                f"error: {rel}: obs_scm revision '{revision}' not found in {url}",
-                file=sys.stderr,
-            )
-        sys.exit(1)
+    if not args.no_scm_validate:
+        scm_errors = _validate_obs_scm_revisions(scm_inputs)
+        if scm_errors:
+            for svc_file, url, revision in scm_errors:
+                rel = svc_file.relative_to(REPO_ROOT.parent)
+                print(
+                    f"error: {rel}: obs_scm revision '{revision}' not found in {url}",
+                    file=sys.stderr,
+                )
+            sys.exit(1)
 
     apiurl = osc.conf.config["apiurl"]
 
@@ -715,7 +717,7 @@ def cmd_sync(args):
         else:
             # Without --branch-from the package may still hold a _aggregate from
             # a prior --branch-from sync.  Check whether content still matches.
-            prior_comment = _fetch_obs_package_latest_comment(
+            prior_comment = _fetch_obs_package_meaningful_comment(
                 apiurl, obs_project_name, package_path.name
             )
             if prior_comment:
@@ -753,7 +755,22 @@ def cmd_sync(args):
                     branch_project_for[key] = src_proj
                     branch_profile_for[key] = branch_profile_name
                 else:
-                    decisions[key] = "promote"
+                    # Prior comment is not a branch aggregate marker; it may
+                    # be a plain sync: message.  Skip the upload if the obs/
+                    # template files have not changed since the last sync.
+                    # rpm/ and debian/ changes are intentionally ignored: OBS
+                    # fetches packaging from PERCONA_OBS_PACKAGING_BRANCH at
+                    # build time, so a different env var value alone is not a
+                    # reason to re-upload the _service file.
+                    skip = False
+                    sm = _SYNC_MSG_RE.match(prior_comment)
+                    if sm and not sm.group(2).startswith("local changes on"):
+                        short_sha = sm.group(1)
+                        if not _has_package_content_changes_since(
+                            short_sha, package_path
+                        ):
+                            skip = True
+                    decisions[key] = "skip" if skip else "promote"
             else:
                 decisions[key] = "promote"
 
@@ -835,6 +852,7 @@ def cmd_sync(args):
                         if dep_key and decisions.get(dep_key) in (
                             "aggregate",
                             "skip_branch",
+                            "skip",
                         ):
                             _print_action(
                                 f"dep-promote: {dep_key[0]}/{dep_key[1]}"
@@ -937,7 +955,7 @@ def cmd_sync(args):
                 shutil.rmtree(agg_dir, ignore_errors=True)
             for pkg_name in pkg_names:
                 _print_aggregate(f"{obs_project_name}/{pkg_name}  → {bp}/{pkg_name}")
-        elif decision == "skip_branch":
+        elif decision in ("skip_branch", "skip"):
             _print_same(f"files  {obs_project_name}/{package_path.name}")
         else:  # "promote"
             message = args.message or _generate_sync_message(args.dirty)

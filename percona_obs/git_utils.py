@@ -84,6 +84,37 @@ def _has_non_obs_package_changes_since(short_sha: str, package_path: Path) -> bo
     return False
 
 
+def _has_package_content_changes_since(short_sha: str, package_path: Path) -> bool:
+    """Return True if any file under package_path has net content changes since short_sha.
+
+    Uses ``git diff --name-only`` (tree-state comparison) rather than ``git log``
+    (commit counting).  This means:
+    - Rebased commits with identical content are not counted as changes.
+    - Reverted changes cancel out and are not counted.
+    - Env-var substitution values baked into obs/ files at upload time do not
+      appear here because the local templates still contain the raw ``${VAR}``
+      tokens — those never change unless the template itself is edited.
+
+    Returns True (treat as changed) if the SHA is unknown or git fails.
+    """
+    result = subprocess.run(
+        [
+            "git",
+            "diff",
+            "--name-only",
+            f"{short_sha}..HEAD",
+            "--",
+            str(package_path),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=_REPO_DIR,
+    )
+    if result.returncode != 0:
+        return True
+    return bool(result.stdout.strip())
+
+
 def _has_package_changes_since(short_sha: str, package_path: Path) -> bool:
     """Return True if the package directory has any git commits since short_sha.
 
