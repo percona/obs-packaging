@@ -47,7 +47,7 @@ jobs:
             profile create main
 
       - name: Sync to OBS
-        run: venv/bin/python -m percona_obs --verbose -P main sync push
+        run: venv/bin/python -m percona_obs --verbose -P main sync push --no-scm-validate
 
       # Poll OBS until all builds reach a terminal state, then set a dedicated
       # "OBS Build" commit status (success / failure / error on timeout).

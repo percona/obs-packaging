@@ -84,7 +84,8 @@ jobs:
             -P "pr-${PR_NUMBER}" sync push \
             --dirty \
             --dry-run \
-            --branch-from main
+            --branch-from main \
+            --no-scm-validate
 
       # --dirty skips the git-clean check (PR checkouts are typically a
       # detached HEAD not reachable via git branch -r --contains HEAD).
@@ -98,6 +99,7 @@ jobs:
             -P "pr-${PR_NUMBER}" sync push \
             --dirty \
             --branch-from main \
+            --no-scm-validate \
             | tee /tmp/sync-output.txt
 
       # Poll OBS until all builds in the PR project reach a terminal state.
