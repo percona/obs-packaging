@@ -58,8 +58,6 @@ def _obs_api_error(
         except ET.ParseError:
             summary = decoded.strip() or summary
     msg = f"{code}: {summary}" if code else summary
-    if code == "repo_dependency":
-        msg += "\n  hint: use --force to bypass"
     raise SystemExit(f"error {context}:\n  {msg}")
 
 
@@ -622,6 +620,28 @@ def _edit_project_meta(
             except urllib.error.HTTPError as e2:
                 _obs_api_error(e2, f"writing project meta for {obs_project_name}")
             return True  # paths were stripped; caller must schedule a retry
+        elif err_code == "repo_dependency":
+            # OBS refuses to remove a repository because another project's
+            # repository still lists it as a path dependency.  This happens
+            # during a rename (e.g. xUbuntu_24.04 → Ubuntu_24.04) when the
+            # dependent project hasn't been updated yet.  Retry with force=True
+            # so OBS accepts the change; the dependency resolves once the
+            # dependent project is synced.
+            logger.debug(
+                f"repo_dependency on update, retrying with force=True: {obs_project_name}"
+            )
+            try:
+                with _silence_stdout():
+                    osc.core.edit_meta(
+                        metatype="prj",
+                        path_args=(obs_project_name,),
+                        data=[meta],
+                        force=True,
+                        apiurl=apiurl,
+                    )
+            except urllib.error.HTTPError as e2:
+                _obs_api_error(e2, f"writing project meta for {obs_project_name}")
+            return False
         else:
             _obs_api_error(
                 e, f"writing project meta for {obs_project_name}", body=err_body
