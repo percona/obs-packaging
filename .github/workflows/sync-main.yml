@@ -26,6 +26,7 @@ jobs:
           # Full history is required: sync push reads git log to detect
           # per-package changes since the last OBS sync commit SHA.
           fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
 
       - uses: ./.github/actions/obs-setup
         with:
