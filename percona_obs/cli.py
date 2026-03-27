@@ -441,11 +441,10 @@ def build_parser() -> argparse.ArgumentParser:
         "version field alongside image and tag.",
     )
     project_versions_parser.add_argument(
-        "--save-markdown",
-        metavar="FILE",
-        default=None,
-        dest="save_markdown",
-        help="Save the version list as a Markdown table to FILE.",
+        "--markdown",
+        action="store_true",
+        default=False,
+        help="Output a Markdown table instead of YAML.",
     )
     project_versions_parser.set_defaults(func=cmd_project_versions)
 

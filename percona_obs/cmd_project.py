@@ -882,10 +882,7 @@ def cmd_project_versions(args) -> None:
                         apiurl, obs_proj, repo, arch, pkg_name
                     )
 
-    print(yaml.dump(records, default_flow_style=False, allow_unicode=True), end="")
-
-    save_path: str | None = getattr(args, "save_markdown", None)
-    if save_path:
+    if getattr(args, "markdown", False):
         packages = [r for r in records if r["type"] == "package"]
         images = [r for r in records if r["type"] == "image"]
         md_lines: list[str] = []
@@ -931,4 +928,6 @@ def cmd_project_versions(args) -> None:
                     md_lines.append(f"| {r['name']} | {r['project']} | {img} | {tag} |")
             md_lines.append("")
 
-        Path(save_path).write_text("\n".join(md_lines), encoding="utf-8")
+        print("\n".join(md_lines), end="")
+    else:
+        print(yaml.dump(records, default_flow_style=False, allow_unicode=True), end="")
