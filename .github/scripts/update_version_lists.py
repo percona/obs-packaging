@@ -221,6 +221,12 @@ def main() -> None:
 
     print(f"Distribution projects to update: {[pid for pid, _ in projects]}")
 
+    # Configure git and pull before writing any files so there are no unstaged
+    # changes when rebase runs.
+    run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=REPO_ROOT)
+    run(["git", "config", "user.name", "github-actions[bot]"], cwd=REPO_ROOT)
+    run(["git", "pull", "--rebase"], cwd=REPO_ROOT)
+
     VERSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
     for project_id, outfile in projects:
@@ -243,9 +249,6 @@ def main() -> None:
     update_readme(all_version_files)
 
     # Commit and push only when something actually changed.
-    run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=REPO_ROOT)
-    run(["git", "config", "user.name", "github-actions[bot]"], cwd=REPO_ROOT)
-    run(["git", "pull", "--rebase"], cwd=REPO_ROOT)
     run(["git", "add", str(VERSIONS_DIR), str(README)], cwd=REPO_ROOT)
 
     result = subprocess.run(
