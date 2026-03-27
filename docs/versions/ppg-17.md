@@ -33,4 +33,5 @@
 
 | Package | Project | Image | Tag | Version |
 | ------- | ------- | ----- | --- | ------- |
-| ppg-image | ppg:17:containers | percona-distribution-postgresql | 17.9 | unknown-1 |
+| ppg-image | ppg:17:containers | percona-distribution-postgresql | 17.9 | unknown-2 |
+| ppg-postgis-image | ppg:17:containers | percona-distribution-postgresql-postgis | 17.9 | unknown-1 |
