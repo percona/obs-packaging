@@ -13,7 +13,12 @@ from .cmd_profile import (
     cmd_profile_create,
     cmd_profile_list,
 )
-from .cmd_project import cmd_project_config, cmd_project_install, cmd_project_verify
+from .cmd_project import (
+    cmd_project_config,
+    cmd_project_install,
+    cmd_project_verify,
+    cmd_project_versions,
+)
 from .cmd_sync import cmd_sync, cmd_sync_delete, cmd_sync_promote
 from .common import _DIM, _col, logger
 
@@ -402,6 +407,38 @@ def build_parser() -> argparse.ArgumentParser:
         "without merging OBS-managed elements (person/group/lock/link).",
     )
     project_config_parser.set_defaults(func=cmd_project_config)
+
+    project_versions_parser = project_subparsers.add_parser(
+        "versions",
+        help="List all packages with their upstream version (YAML to stdout).",
+    )
+    project_versions_parser.add_argument(
+        "project",
+        nargs="?",
+        default=None,
+        help="Restrict to this project (colon notation, e.g. ppg:17). "
+        "If omitted, all packages under root/ are listed.",
+    )
+    project_versions_parser.add_argument(
+        "package",
+        nargs="?",
+        default=None,
+        help="Show only this package. Requires project.",
+    )
+    project_versions_parser.add_argument(
+        "--recursive",
+        action="store_true",
+        default=False,
+        help="Also list packages in subprojects.",
+    )
+    project_versions_parser.add_argument(
+        "--save-markdown",
+        metavar="FILE",
+        default=None,
+        dest="save_markdown",
+        help="Save the version list as a Markdown table to FILE.",
+    )
+    project_versions_parser.set_defaults(func=cmd_project_versions)
 
     return parser
 

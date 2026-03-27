@@ -21,6 +21,7 @@ from .common import (
     _load_project_config_with_inheritance,
     apply_env_substitution,
     build_project_meta,
+    find_packages,
     find_projects,
     is_package,
     is_project,
@@ -37,10 +38,154 @@ from .obs_api import (
     _fetch_root_project_managed_elements,
     _inject_obs_managed_elements,
 )
-from .services import _git_head_sha
+from .services import _git_head_sha, _git_tag_for_sha
 
 _YAML_FILENAMES = {"project.yaml", "package.yaml"}
 _OBS_FILENAMES = {"_service", "_aggregate", "_link"}
+
+_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _extract_version_from_service(service_file: Path) -> "str | None":
+    """Return the upstream version from an obs/_service file, or None."""
+    try:
+        text = service_file.read_text("utf-8")
+        root_el = ET.fromstring(text)
+    except (ET.ParseError, OSError):
+        return None
+
+    for svc in root_el.findall("service"):
+        if svc.get("name") != "obs_scm":
+            continue
+        params = {p.get("name"): (p.text or "").strip() for p in svc.findall("param")}
+        if params.get("filename") in ("debian", "rpm"):
+            continue  # packaging service, not upstream
+
+        version = params.get("version", "")
+        versionformat = params.get("versionformat", "")
+        revision = params.get("revision", "")
+
+        if version and version != "_none_":
+            return version
+        if versionformat and versionformat != "@PARENT_TAG@":
+            return versionformat
+        if versionformat == "@PARENT_TAG@":
+            pattern = params.get("versionrewrite-pattern", "")
+            if pattern and revision:
+                try:
+                    m = re.match(pattern, revision)
+                    if m and m.lastindex:
+                        return m.group(1)
+                except re.error:
+                    pass
+            # revision is a commit SHA — look up the tag that points to it
+            if _SHA_RE.match(revision):
+                url = params.get("url", "")
+                if url and not _ENV_VAR_RE.search(url):
+                    tag = _git_tag_for_sha(url, revision)
+                    if tag is not None:
+                        if pattern:
+                            try:
+                                m = re.match(pattern, tag)
+                                if m and m.lastindex:
+                                    return m.group(1)
+                            except re.error:
+                                pass
+                        return tag
+            if revision and not _ENV_VAR_RE.search(revision):
+                return revision
+            return None
+        if revision and not _ENV_VAR_RE.search(revision):
+            return revision
+        return None
+
+    return None
+
+
+# Matches local aggregate project names: "${OBS_ROOTPRJ}:colon:notation"
+_LOCAL_AGGREGATE_RE = re.compile(r"^\$\{OBS_ROOTPRJ\}:(.+)$")
+
+
+def _follow_aggregate(aggregate_file: Path) -> "str | None":
+    """Follow an _aggregate pointer to its source package and return its version.
+
+    Only local aggregates (project="${OBS_ROOTPRJ}:local:path") are followed.
+    External aggregates return None.
+    """
+    try:
+        text = aggregate_file.read_text("utf-8")
+        root_el = ET.fromstring(text)
+    except (ET.ParseError, OSError):
+        return None
+
+    for agg in root_el.findall("aggregate"):
+        project_attr = (agg.get("project") or "").strip()
+        pkg_el = agg.find("package")
+        if pkg_el is None:
+            continue
+        pkg_name = (pkg_el.text or "").strip()
+        if not pkg_name:
+            continue
+
+        m = _LOCAL_AGGREGATE_RE.match(project_attr)
+        if not m:
+            continue  # external aggregate
+
+        local_project = m.group(1)
+        target_path = REPO_ROOT.joinpath(*local_project.split(":")) / pkg_name
+        if not target_path.is_dir():
+            continue
+
+        service_file = target_path / "obs" / "_service"
+        if service_file.is_file():
+            return _extract_version_from_service(service_file)
+
+    return None
+
+
+def _package_project_id(package_path: Path) -> str:
+    """Return colon-notation project id for a package path (e.g. 'ppg:17')."""
+    rel = package_path.parent.relative_to(REPO_ROOT)
+    if str(rel) == ".":
+        return ""
+    return ":".join(rel.parts)
+
+
+def _detect_container_info(
+    obs_path: Path,
+) -> "tuple[str | None, str | None] | None":
+    """Return (image_name, tag) if obs_path contains a container definition, else None.
+
+    Checks for a Dockerfile first, then a *.kiwi file.
+    Returns (None, None) when a container file is found but name/tag cannot be parsed.
+    Returns None (not a tuple) when no container definition is found.
+    """
+    # --- Dockerfile ---
+    dockerfile = obs_path / "Dockerfile"
+    if dockerfile.is_file():
+        for line in dockerfile.read_text("utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("#!BuildTag:"):
+                tag_value = line[len("#!BuildTag:") :].strip()
+                if ":" in tag_value:
+                    image, tag = tag_value.rsplit(":", 1)
+                    return image.strip(), tag.strip()
+                return tag_value, None
+        return None, None  # Dockerfile present but no BuildTag
+
+    # --- KIWI ---
+    kiwi_files = sorted(obs_path.glob("*.kiwi"))
+    if kiwi_files:
+        try:
+            root_el = ET.fromstring(kiwi_files[0].read_text("utf-8"))
+            cc = root_el.find(".//containerconfig")
+            if cc is not None:
+                return cc.get("name"), cc.get("tag")
+        except ET.ParseError:
+            pass
+        return None, None  # KIWI present but unparseable
+
+    return None  # not a container image
 
 
 def _validate_subproject_refs(root: Path) -> list[tuple[Path, str]]:
@@ -645,3 +790,90 @@ def cmd_project_install(args) -> None:
         elif pkg_mgr == "zypper":
             print("zypper --gpg-auto-import-keys refresh")
             print()
+
+
+def cmd_project_versions(args) -> None:
+    """List all packages with their upstream version (YAML to stdout)."""
+    package_name: str | None = getattr(args, "package", None)
+
+    if package_name and not args.project:
+        raise SystemExit(
+            "error: a project argument is required when specifying a package"
+        )
+
+    if args.project:
+        scope_path = resolve_project_path(args.project)
+        if not scope_path.is_dir():
+            raise SystemExit(
+                f"error: project '{args.project}' not found "
+                f"(expected {scope_path.relative_to(REPO_ROOT.parent)})"
+            )
+        if not is_project(scope_path):
+            raise SystemExit(f"error: '{args.project}' is a package, not a project")
+    else:
+        scope_path = REPO_ROOT
+
+    if package_name:
+        package_path = scope_path / package_name
+        if not package_path.is_dir() or not is_package(package_path):
+            raise SystemExit(
+                f"error: package '{package_name}' not found under '{args.project}'"
+            )
+        package_paths = [package_path]
+    else:
+        package_paths = [
+            p for _, p in find_packages(scope_path, "", recursive=args.recursive)
+        ]
+
+    records: list[dict[str, object]] = []
+    for package_path in package_paths:
+        obs_path = package_path / "obs"
+        container_info = _detect_container_info(obs_path) if obs_path.is_dir() else None
+        base = {"name": package_path.name, "project": _package_project_id(package_path)}
+        if container_info is not None:
+            image, tag = container_info
+            records.append({**base, "type": "image", "image": image, "tag": tag})
+        else:
+            service_file = obs_path / "_service"
+            aggregate_file = obs_path / "_aggregate"
+            version: str | None = None
+            if service_file.is_file():
+                version = _extract_version_from_service(service_file)
+            elif aggregate_file.is_file():
+                version = _follow_aggregate(aggregate_file)
+            records.append({**base, "type": "package", "version": version})
+
+    print(yaml.dump(records, default_flow_style=False, allow_unicode=True), end="")
+
+    save_path: str | None = getattr(args, "save_markdown", None)
+    if save_path:
+        packages = [r for r in records if r["type"] == "package"]
+        images = [r for r in records if r["type"] == "image"]
+        md_lines: list[str] = []
+
+        if packages:
+            md_lines += [
+                "## Packages",
+                "",
+                "| Package | Project | Version |",
+                "| ------- | ------- | ------- |",
+            ]
+            for r in packages:
+                ver = r.get("version") or "(none)"
+                md_lines.append(f"| {r['name']} | {r['project']} | {ver} |")
+            md_lines.append("")
+
+        if images:
+            md_lines += [
+                "## Container Images",
+                "",
+                "| Package | Project | Image | Tag |",
+                "| ------- | ------- | ----- | --- |",
+            ]
+            for r in images:
+                img = r.get("image") or "(none)"
+                tag = r.get("tag") or "(none)"
+                md_lines.append(f"| {r['name']} | {r['project']} | {img} | {tag} |")
+            md_lines.append("")
+
+        Path(save_path).write_text("\n".join(md_lines), encoding="utf-8")

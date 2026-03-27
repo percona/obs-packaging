@@ -369,6 +369,62 @@ def _git_head_sha(url: str, revision: str) -> str | None:
     return None
 
 
+def _git_tag_for_sha(url: str, sha: str) -> str | None:
+    """Return the tag name whose commit SHA equals *sha* on a remote repository.
+
+    Fetches all tags via ``git ls-remote --tags``.  Annotated tags are
+    dereferenced (``^{}``) so the returned SHA is always the underlying commit,
+    not the tag object.  Lightweight tags are included as a fallback.
+
+    Returns None if no matching tag is found, git is unavailable, the remote
+    is unreachable, or the call times out.
+    """
+    try:
+        logger.debug(f"resolving tag for SHA {sha!r} on {url}")
+        proc = subprocess.Popen(
+            ["git", "ls-remote", "--tags", "--", url],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        try:
+            stdout_bytes, _ = proc.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            if proc.stdout:
+                proc.stdout.close()
+            if proc.stderr:
+                proc.stderr.close()
+            proc.wait()
+            return None
+        if proc.returncode != 0:
+            return None
+        stdout = stdout_bytes.decode("utf-8", errors="replace")
+        # Build tag_name → commit_sha mapping.  Dereferenced annotated tag
+        # entries (refs/tags/v1.0.0^{}) take priority over lightweight ones
+        # because they carry the actual commit SHA rather than the tag object SHA.
+        tag_map: dict[str, str] = {}
+        deref_tags: set[str] = set()
+        for line in stdout.splitlines():
+            parts = line.split("\t", 1)
+            if len(parts) != 2:
+                continue
+            ref_sha, ref = parts[0].strip(), parts[1].strip()
+            if ref.endswith("^{}") and ref.startswith("refs/tags/"):
+                tag = ref[len("refs/tags/") : -len("^{}")]
+                tag_map[tag] = ref_sha
+                deref_tags.add(tag)
+            elif ref.startswith("refs/tags/"):
+                tag = ref[len("refs/tags/") :]
+                if tag not in deref_tags:
+                    tag_map[tag] = ref_sha
+        for tag, tag_sha in tag_map.items():
+            if tag_sha == sha:
+                return tag
+        return None
+    except Exception:
+        return None
+
+
 def _obs_scm_lookup(cache_key: str, head_sha: str) -> list[str] | None:
     """Return cached obs_scm output filenames for (cache_key, head_sha), or None."""
     entry = _OBS_SCM_CACHE_DIR / cache_key / head_sha
