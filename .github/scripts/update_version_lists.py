@@ -139,6 +139,10 @@ _VERSION_LISTS_DESCRIPTION = (
 
 
 def update_readme(all_version_files: list[Path]) -> None:
+    obs_web_url = os.environ.get("OBS_WEB_URL", "").rstrip("/")
+    obs_rootprj = os.environ.get("OBS_ROOTPRJ", "")
+    include_obs_link = bool(obs_web_url and obs_rootprj)
+
     content = README.read_text(encoding="utf-8")
 
     # Remove any existing "## Version Lists" section (up to the next ## heading
@@ -149,16 +153,32 @@ def update_readme(all_version_files: list[Path]) -> None:
         README.write_text(content, encoding="utf-8")
         return
 
-    rows = "\n".join(
-        f"| `{file_to_project_id(f)}` | [{f.relative_to(REPO_ROOT)}]({f.relative_to(REPO_ROOT)}) |"
-        for f in all_version_files
-    )
+    if include_obs_link:
+        header = "| Distribution | OBS Project | Version List |"
+        sep    = "|---|---|---|"
+        rows = "\n".join(
+            (
+                f"| `{file_to_project_id(f)}` "
+                f"| [{obs_rootprj}:{file_to_project_id(f)}]"
+                f"({obs_web_url}/project/show/{obs_rootprj}:{file_to_project_id(f)}) "
+                f"| [{f.relative_to(REPO_ROOT)}]({f.relative_to(REPO_ROOT)}) |"
+            )
+            for f in all_version_files
+        )
+    else:
+        header = "| Distribution | Version List |"
+        sep    = "|---|---|"
+        rows = "\n".join(
+            f"| `{file_to_project_id(f)}` | [{f.relative_to(REPO_ROOT)}]({f.relative_to(REPO_ROOT)}) |"
+            for f in all_version_files
+        )
+
     section = (
         "\n## Version Lists\n"
         f"\n{_VERSION_LISTS_DESCRIPTION}\n"
         "\n"
-        "| Distribution | Version List |\n"
-        "|---|---|\n"
+        f"{header}\n"
+        f"{sep}\n"
         f"{rows}\n"
     )
 

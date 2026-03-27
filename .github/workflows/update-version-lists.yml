@@ -45,5 +45,7 @@ jobs:
         env:
           # Zero SHA causes the script to regenerate all distribution projects.
           GITHUB_EVENT_BEFORE: "0000000000000000000000000000000000000000"
+          OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
+          OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/update_version_lists.py

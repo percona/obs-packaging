@@ -68,6 +68,8 @@ jobs:
         if: steps.poll.outcome == 'success'
         env:
           GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+          OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
+          OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/update_version_lists.py
 
