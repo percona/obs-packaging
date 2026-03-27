@@ -61,6 +61,16 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/poll_obs_builds.py
 
+      # Update docs/versions/<dist>.md for each distribution project touched
+      # by this push, and refresh the README "## Version Lists" section.
+      # Only runs when OBS builds all succeed.
+      - name: Update version lists
+        if: steps.poll.outcome == 'success'
+        env:
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+          PYTHONPATH: ${{ github.workspace }}
+        run: venv/bin/python .github/scripts/update_version_lists.py
+
       # Push the badge JSON to the orphan `badges` branch so it can be
       # embedded in README.md via a shields.io endpoint badge.
       # Runs even when the poll step fails so the badge always reflects the

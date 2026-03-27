@@ -1,0 +1,49 @@
+name: Update version lists
+
+# Manually trigger to bootstrap docs/versions/ or refresh all version-list
+# files without waiting for a full sync-main run.
+#
+# Regenerates docs/versions/<dist>.md for every distribution project found
+# under root/ and updates the "## Version Lists" section of README.md.
+# Commits and pushes the result to main.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  update:
+    name: Regenerate all version list files
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/obs-setup
+        with:
+          obs-apiurl: ${{ vars.OBS_APIURL }}
+          obs-user: ${{ vars.OBS_USER }}
+          obs-password: ${{ secrets.OBS_PASSWORD }}
+
+      - name: Create percona-obs profile
+        env:
+          OBS_APIURL: ${{ vars.OBS_APIURL }}
+          OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
+        run: |
+          venv/bin/python -m percona_obs \
+            -A "$OBS_APIURL" \
+            -R "$OBS_ROOTPRJ" \
+            -e "REMOTE_OBS_ORG_INTERCONNECT:" \
+            -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
+            -e "PERCONA_OBS_PACKAGING_REPO:${{ github.server_url }}/${{ github.repository }}.git" \
+            profile create main
+
+      - name: Update version lists
+        env:
+          # Zero SHA causes the script to regenerate all distribution projects.
+          GITHUB_EVENT_BEFORE: "0000000000000000000000000000000000000000"
+          PYTHONPATH: ${{ github.workspace }}
+        run: venv/bin/python .github/scripts/update_version_lists.py
