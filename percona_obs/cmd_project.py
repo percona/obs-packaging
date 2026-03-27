@@ -38,6 +38,11 @@ from .obs_api import (
     _fetch_root_project_managed_elements,
     _inject_obs_managed_elements,
 )
+from .cmd_build import (
+    _fetch_build_results,
+    _fetch_pkg_versrel,
+    _fetch_versrel_from_history,
+)
 from .services import _git_head_sha, _git_tag_for_sha
 
 _YAML_FILENAMES = {"project.yaml", "package.yaml"}
@@ -843,6 +848,40 @@ def cmd_project_versions(args) -> None:
                 version = _follow_aggregate(aggregate_file)
             records.append({**base, "type": "package", "version": version})
 
+    if getattr(args, "online", False):
+        if not args.apiurl or not args.rootprj:
+            raise SystemExit(
+                "error: --online requires an OBS connection; "
+                "supply -P/--profile or both -A/--apiurl and -R/--rootprj"
+            )
+        osc.conf.get_config(override_apiurl=args.apiurl)
+        apiurl = osc.conf.config["apiurl"]
+
+        # Group all records by OBS project to batch _fetch_build_results calls.
+        obs_project_records: dict[str, list[dict[str, object]]] = {}
+        for record in records:
+            project_id = str(record["project"])
+            obs_proj = f"{args.rootprj}:{project_id}" if project_id else args.rootprj
+            obs_project_records.setdefault(obs_proj, []).append(record)
+
+        for obs_proj, proj_records in obs_project_records.items():
+            _, succeeded_archs = _fetch_build_results(apiurl, obs_proj)
+            for record in proj_records:
+                pkg_name = str(record["name"])
+                repo_map = succeeded_archs.get(pkg_name)
+                if not repo_map:
+                    record["version"] = None
+                    continue
+                repo, (arch, _) = next(iter(sorted(repo_map.items())))
+                if record["type"] == "package":
+                    record["version"] = _fetch_pkg_versrel(
+                        apiurl, obs_proj, repo, arch, pkg_name
+                    )
+                else:  # image
+                    record["version"] = _fetch_versrel_from_history(
+                        apiurl, obs_proj, repo, arch, pkg_name
+                    )
+
     print(yaml.dump(records, default_flow_style=False, allow_unicode=True), end="")
 
     save_path: str | None = getattr(args, "save_markdown", None)
@@ -864,16 +903,32 @@ def cmd_project_versions(args) -> None:
             md_lines.append("")
 
         if images:
-            md_lines += [
-                "## Container Images",
-                "",
-                "| Package | Project | Image | Tag |",
-                "| ------- | ------- | ----- | --- |",
-            ]
-            for r in images:
-                img = r.get("image") or "(none)"
-                tag = r.get("tag") or "(none)"
-                md_lines.append(f"| {r['name']} | {r['project']} | {img} | {tag} |")
+            online = getattr(args, "online", False)
+            if online:
+                md_lines += [
+                    "## Container Images",
+                    "",
+                    "| Package | Project | Image | Tag | Version |",
+                    "| ------- | ------- | ----- | --- | ------- |",
+                ]
+                for r in images:
+                    img = r.get("image") or "(none)"
+                    tag = r.get("tag") or "(none)"
+                    ver = r.get("version") or "(none)"
+                    md_lines.append(
+                        f"| {r['name']} | {r['project']} | {img} | {tag} | {ver} |"
+                    )
+            else:
+                md_lines += [
+                    "## Container Images",
+                    "",
+                    "| Package | Project | Image | Tag |",
+                    "| ------- | ------- | ----- | --- |",
+                ]
+                for r in images:
+                    img = r.get("image") or "(none)"
+                    tag = r.get("tag") or "(none)"
+                    md_lines.append(f"| {r['name']} | {r['project']} | {img} | {tag} |")
             md_lines.append("")
 
         Path(save_path).write_text("\n".join(md_lines), encoding="utf-8")

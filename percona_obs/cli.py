@@ -432,6 +432,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Also list packages in subprojects.",
     )
     project_versions_parser.add_argument(
+        "--online",
+        action="store_true",
+        default=False,
+        help="Query the OBS instance for the last successfully built version "
+        "(includes release number, e.g. 3.5.26-6.1). Requires -P/--profile or "
+        "-A/-R. For packages: replaces version. For container images: adds a "
+        "version field alongside image and tag.",
+    )
+    project_versions_parser.add_argument(
         "--save-markdown",
         metavar="FILE",
         default=None,

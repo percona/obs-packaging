@@ -170,6 +170,30 @@ def _fetch_pkg_versrel(
     return None
 
 
+def _fetch_versrel_from_history(
+    apiurl: str, obs_project: str, repo: str, arch: str, pkg: str
+) -> str | None:
+    """Return the versrel of the most recent build from the build history.
+
+    Uses GET /build/{project}/{repo}/{arch}/{pkg}/_history?limit=1.
+    Works for any package type including container images.
+    """
+    url = osc.core.makeurl(
+        apiurl,
+        ["build", obs_project, repo, arch, pkg, "_history"],
+        query={"limit": "1"},
+    )
+    try:
+        response = osc.connection.http_GET(url)
+        root = ET.fromstring(response.read())
+        entry = root.find("entry")
+        if entry is not None:
+            return entry.get("versrel")
+    except Exception:
+        pass
+    return None
+
+
 def _print_pkg_repos(
     repo_results: dict[str, dict[str, str]],
     prefix: str,
