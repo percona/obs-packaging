@@ -16,7 +16,12 @@ LABEL name="Percona Distribution for PostgreSQL with PostGIS" \
 # Force-remove it with rpm --nodeps so the subsequent dnf update can install the replacement.
 RUN rpm -e --nodeps openssl-fips-provider-so
 RUN dnf -y update
-RUN dnf -y install glibc-langpack-en systemd-rpm-macros file
+RUN dnf -y install \
+           glibc-langpack-en \
+           systemd-rpm-macros \
+           file \
+           mariadb-connector-c-config \
+           crypto-policies-scripts
 
 ARG PPG_REPO=testing
 
