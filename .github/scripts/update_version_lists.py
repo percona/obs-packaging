@@ -131,11 +131,19 @@ def file_to_project_id(path: Path) -> str:
     return name.replace("-", ":")
 
 
+_VERSION_LISTS_DESCRIPTION = (
+    "Per-distribution package version lists, updated automatically after every "
+    "successful OBS build. Each file lists all packages and container images with "
+    "the version and release number last successfully built on OBS."
+)
+
+
 def update_readme(all_version_files: list[Path]) -> None:
     content = README.read_text(encoding="utf-8")
 
-    # Strip any existing "## Version Lists" section (and everything after it).
-    content = re.sub(r"\n## Version Lists\n[\s\S]*$", "", content)
+    # Remove any existing "## Version Lists" section (up to the next ## heading
+    # or end of file) so it can be regenerated in the correct position.
+    content = re.sub(r"\n## Version Lists\n[\s\S]*?(?=\n## |\Z)", "", content)
 
     if not all_version_files:
         README.write_text(content, encoding="utf-8")
@@ -145,13 +153,22 @@ def update_readme(all_version_files: list[Path]) -> None:
         f"| `{file_to_project_id(f)}` | [{f.relative_to(REPO_ROOT)}]({f.relative_to(REPO_ROOT)}) |"
         for f in all_version_files
     )
-    content += (
+    section = (
         "\n## Version Lists\n"
+        f"\n{_VERSION_LISTS_DESCRIPTION}\n"
         "\n"
         "| Distribution | Version List |\n"
         "|---|---|\n"
         f"{rows}\n"
     )
+
+    # Insert before "## Documentation" so the section appears right after the
+    # repository introduction, not at the end of the file.
+    if "\n## Documentation\n" in content:
+        content = content.replace("\n## Documentation\n", section + "\n## Documentation\n", 1)
+    else:
+        content += section
+
     README.write_text(content, encoding="utf-8")
 
 
