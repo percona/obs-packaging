@@ -11,6 +11,10 @@ LABEL name="Percona Distribution for PostgreSQL with PostGIS" \
       maintainer="Percona Development <info@percona.com>" \
       org.opencontainers.image.authors="info@percona.com"
 
+# openssl-fips-provider-so is not properly obsoleted by the newer openssl-fips-provider
+# (el9_7+), causing a file conflict on /usr/lib64/ossl-modules/fips.so during dnf update.
+# Force-remove it with rpm --nodeps so the subsequent dnf update can install the replacement.
+RUN rpm -e --nodeps openssl-fips-provider-so
 RUN dnf -y update
 RUN dnf -y install glibc-langpack-en systemd-rpm-macros file
 
