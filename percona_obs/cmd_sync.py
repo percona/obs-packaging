@@ -11,7 +11,7 @@ from pathlib import Path
 import osc.conf
 import osc.core
 
-from .cmd_profile import _load_profile, _load_profile_env_strings
+from .cmd_profile import _load_profile, _load_profile_env_strings, _load_profile_env
 from .cmd_project import (
     _validate_obs_scm_revisions,
     _validate_project_path_refs,
@@ -149,6 +149,7 @@ def _content_matches_branch(
     branch_project: str,
     package_name: str,
     obs_dir: Path,
+    branch_env_vars: dict[str, str] | None = None,
     env_vars: dict[str, str] | None = None,
     check_obsinfo: bool = True,
 ) -> bool:
@@ -182,9 +183,10 @@ def _content_matches_branch(
     for filepath in sorted(obs_dir.iterdir()):
         if not filepath.is_file():
             continue
-        if env_vars and filepath.name in _OBS_SUBSTITUTABLE:
+        check_vars = branch_env_vars if branch_env_vars is not None else env_vars
+        if check_vars and filepath.name in _OBS_SUBSTITUTABLE:
             content = apply_env_substitution(
-                filepath.read_text("utf-8"), env_vars, source=filepath
+                filepath.read_text("utf-8"), check_vars, source=filepath
             ).encode("utf-8")
         else:
             content = filepath.read_bytes()
@@ -410,7 +412,6 @@ def _resolve_branch_decision(
     when the branch project was last synced, rather than with the current
     profile's values.  Falls back to ``env_vars`` when not provided.
     """
-    check_env_vars = branch_env_vars if branch_env_vars is not None else env_vars
 
     def _content_check(reason: str, check_obsinfo: bool = True) -> bool:
         logger.debug(f"branch decision: content check  {label}  ({reason})")
@@ -420,7 +421,8 @@ def _resolve_branch_decision(
             branch_project,
             package_name,
             obs_dir,
-            check_env_vars,
+            branch_env_vars,
+            env_vars,
             check_obsinfo=check_obsinfo,
         )
         if matches:
@@ -590,14 +592,15 @@ def cmd_sync(args):
     # pkg_key_by_name[(pkg_name)] → key, used for dep propagation lookups.
     pkg_key_by_name: dict[str, tuple[str, str]] = {}
     # Cache of loaded profiles to avoid repeated file reads within Phase 1.
-    _profile_apiurl_cache: dict[str, str] = {}
+    _profile_cache: dict[str, dict[str, str]] = {}
+    _profile_env_vars_cache: dict[str, dict[str, str]] = {}
 
     _print_action("planning: checking sync decisions")
 
     # Per-package decision function run in parallel via a thread pool.
     # All closures over outer-scope variables are read-only except for the
     # shared caches (_branch_repo_cache, _target_repos_cache,
-    # _profile_apiurl_cache), which are plain dicts.  Under CPython's GIL
+    # _profile_cache), which are plain dicts.  Under CPython's GIL
     # individual dict reads/writes are atomic, so concurrent cache misses that
     # trigger duplicate HTTP calls are benign — both threads obtain the same
     # result and one silently overwrites the other.
@@ -680,19 +683,23 @@ def cmd_sync(args):
                     src_proj = bm.group(2)
                     # Resolve the apiurl for this branch profile; it may be on a
                     # different OBS instance (cross-instance branching).
-                    if branch_profile_name not in _profile_apiurl_cache:
+                    if branch_profile_name not in _profile_cache:
                         try:
                             bp = _load_profile(branch_profile_name)
-                            _profile_apiurl_cache[branch_profile_name] = (
-                                bp.get("apiurl") or apiurl or ""
+                            _profile_cache[branch_profile_name] = bp
+                            _profile_env_vars_cache[branch_profile_name] = (
+                                _load_profile_env(branch_profile_name)
                             )
                         except SystemExit:
                             logger.debug(
                                 f"branch profile {branch_profile_name!r} not found,"
                                 f" falling back to target apiurl for {src_proj}"
                             )
-                            _profile_apiurl_cache[branch_profile_name] = apiurl or ""
-                    src_apiurl = _profile_apiurl_cache[branch_profile_name]
+                            _profile_cache[branch_profile_name] = {
+                                "apiurl": apiurl or ""
+                            }
+                            _profile_env_vars_cache[branch_profile_name] = {}
+                    src_apiurl = _profile_cache[branch_profile_name]["apiurl"]
                     decision = (
                         "skip_branch"
                         if _content_matches_branch(
@@ -700,6 +707,10 @@ def cmd_sync(args):
                             src_proj,
                             package_path.name,
                             obs_dir,
+                            {
+                                **_profile_env_vars_cache.get(branch_profile_name, {}),
+                                **_pkg_env_vars(package_path),
+                            },
                             {**env_vars, **_pkg_env_vars(package_path)},
                         )
                         else "promote"
@@ -789,7 +800,9 @@ def cmd_sync(args):
             src_projects_by_apiurl = {apiurl or "": {key[0] for key in decisions}}
             for key, src_proj in branch_project_for.items():
                 profile_name = branch_profile_for.get(key, "")
-                src_apiurl = _profile_apiurl_cache.get(profile_name) or apiurl or ""
+                src_apiurl = (
+                    _profile_cache.get(profile_name, {}).get("apiurl") or apiurl or ""
+                )
                 src_projects_by_apiurl.setdefault(src_apiurl, set()).add(src_proj)
             dep_projects = {key[0] for key in decisions} | set(
                 branch_project_for.values()

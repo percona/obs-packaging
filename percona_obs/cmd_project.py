@@ -30,7 +30,7 @@ from .common import (
     resolve_project_path,
     _print_ok,
 )
-from .cmd_profile import _load_profile
+from .cmd_profile import _load_profile, _load_profile_env
 from .obs_api import (
     _decode_obs_response,
     _extract_obs_managed_elements,
@@ -465,21 +465,6 @@ def _validate_obs_scm_revisions(
                 errors.append(result)
 
     return errors
-
-
-def _load_profile_env(profile_name: str) -> dict[str, str]:
-    """Return the env dict from .profile/<profile_name>.yaml, or exit on error."""
-    profile_path = _PROFILES_DIR / f"{profile_name}.yaml"
-    if not profile_path.is_file():
-        raise SystemExit(f"error: profile {profile_name!r} not found: {profile_path}")
-    with profile_path.open(encoding="utf-8") as fh:
-        data: object = yaml.safe_load(fh) or {}
-    env_list = data.get("env", []) if isinstance(data, dict) else []
-    return {
-        item["name"]: item["value"] if item.get("value") is not None else ""
-        for item in (env_list if isinstance(env_list, list) else [])
-        if isinstance(item, dict) and "name" in item
-    }
 
 
 def cmd_project_verify(args) -> None:

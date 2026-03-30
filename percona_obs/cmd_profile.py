@@ -62,6 +62,21 @@ def _load_profile_env_strings(name: str) -> list[str]:
     ]
 
 
+def _load_profile_env(profile_name: str) -> dict[str, str]:
+    """Return the env dict from .profile/<profile_name>.yaml, or exit on error."""
+    profile_path = _PROFILES_DIR / f"{profile_name}.yaml"
+    if not profile_path.is_file():
+        raise SystemExit(f"error: profile {profile_name!r} not found: {profile_path}")
+    with profile_path.open(encoding="utf-8") as fh:
+        data: object = yaml.safe_load(fh) or {}
+    env_list = data.get("env", []) if isinstance(data, dict) else []
+    return {
+        item["name"]: item["value"] if item.get("value") is not None else ""
+        for item in (env_list if isinstance(env_list, list) else [])
+        if isinstance(item, dict) and "name" in item
+    }
+
+
 def cmd_profile_create(args: argparse.Namespace) -> None:
     if not args.apiurl:
         raise SystemExit("error: -A/--apiurl is required for 'profile create'")
