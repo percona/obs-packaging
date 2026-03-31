@@ -9,6 +9,9 @@
 %if 0%{?suse_version} >= 1600
 %global python3_pkgprefix python313
 %endif
+%if 0%{?rhel} && 0%{?rhel} >= 9
+%global python3_pkgprefix python3.12
+%endif
 
 %if 0%{?rhel} && 0%{?rhel} >= 9
 %global __ospython %{_bindir}/python3.12
@@ -21,13 +24,14 @@
 %{expand: %%global py3ver %(echo `%{__ospython} -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
-%define         name python3-etcd
+%define srcname python3-etcd
+%define pkgname %{python3_pkgprefix}-etcd
 
 Summary:        A python client for etcd
-Name:           %{name}
+Name:           %{pkgname}
 Version:        1.0.0
 Release:        1%{?dist}
-Source0:        %{name}-%{version}.tar.gz
+Source0:        %{srcname}-%{version}.tar.gz
 License:        MIT
 Group:          Development/Libraries
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-buildroot
@@ -58,7 +62,7 @@ Includes support for the etcd v2 API with SSL client certificate
 authentication, cluster failover, and read/write/delete operations.
 
 %prep
-%setup -n %{name}-%{version}
+%setup -n %{srcname}-%{version}
 
 %build
 %{__ospython} setup.py build
@@ -82,5 +86,7 @@ rm -rf $RPM_BUILD_ROOT
 %dir %{python3_sitelib}/python_etcd-%{version}-py%{py3ver}.egg-info
 
 %changelog
+* Sun Mar 30 2026 Percona Build/Release Team <eng-build@percona.com> - 0.4.5-2
+- Use python3.12 package name on RHEL >= 9
 * Thu Mar 19 2026 Percona Build/Release Team <eng-build@percona.com> - 0.4.5-1
 - Initial build of python-etcd 0.4.5

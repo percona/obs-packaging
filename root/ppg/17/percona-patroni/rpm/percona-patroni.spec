@@ -19,7 +19,7 @@
 %if 0%{?rhel} && 0%{?rhel} >= 9
 %global __ospython %{_bindir}/python3.12
 %global python3_pkgversion 3.12
-%global python3_pkgprefix python3
+%global python3_pkgprefix python3.12
 %global __requires_exclude ^python3\\.12dist
 %endif
 %if 0%{?suse_version} == 1500
@@ -46,12 +46,14 @@ Source1:        %{sname}.service
 Patch0:         disable-sphinx-github-style.patch
 URL:            https://github.com/zalando/%{sname}
 
-BuildRequires:  python%{python3_pkgversion}-setuptools python%{python3_pkgversion}-devel
+BuildRequires:  python%{python3_pkgversion}-setuptools
+BuildRequires:  python%{python3_pkgversion}-devel
 
-Requires:       %{python3_pkgprefix}-six %{python3_pkgprefix}-dateutil
-Requires:        %{python3_pkgprefix}-ydiff < 1.5
-Requires:        %{python3_pkgprefix}-ydiff >= 1.4.2
-Requires:     %{name}-etcd
+Requires:       %{python3_pkgprefix}-six
+Requires:       %{python3_pkgprefix}-dateutil
+Requires:       %{python3_pkgprefix}-ydiff < 1.5
+Requires:       %{python3_pkgprefix}-ydiff >= 1.4.2
+Requires:       %{name}-etcd
 
 
 %if !0%{?suse_version}

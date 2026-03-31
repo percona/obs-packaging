@@ -4,27 +4,17 @@
     <param name="scm">git</param>
     <param name="revision">${PERCONA_OBS_PACKAGING_BRANCH}</param>
     <param name="version">_none_</param>
-    <param name="extract">*.dsc</param>
-    <param name="subdir">${DEBIAN_PACKAGE_DIRECTORY}</param>
-    <param name="filename">debian</param>
-  </service>
-
-  <service name="obs_scm">
-    <param name="url">${PERCONA_OBS_PACKAGING_REPO}</param>
-    <param name="scm">git</param>
-    <param name="revision">${PERCONA_OBS_PACKAGING_BRANCH}</param>
-    <param name="version">_none_</param>
     <param name="extract">*</param>
     <param name="subdir">${RPM_PACKAGE_DIRECTORY}</param>
     <param name="filename">rpm</param>
   </service>
 
   <service name="obs_scm">
-    <param name="url">https://github.com/psycopg/psycopg2.git</param>
+    <param name="url">https://github.com/jquast/blessed.git</param>
     <param name="scm">git</param>
-    <param name="revision">2.9.10</param>
-    <param name="version">2.9.10</param>
-    <param name="filename">psycopg2</param>
+    <param name="revision">1.22.0</param>
+    <param name="versionformat">@PARENT_TAG@</param>
+    <param name="filename">python3-blessed</param>
   </service>
 
   <service mode="buildtime" name="tar" />
