@@ -1,15 +1,17 @@
 #!UseOBSRepositories
-#!BuildTag: percona-distribution-postgresql-postgis:17.9
+#!BuildTag: percona-distribution-postgresql-with-postgis:17.9
 #
 
 FROM percona-ubi9-minimal:latest
 
-LABEL name="Percona Distribution for PostgreSQL with PostGIS" \
+LABEL name="Percona Distribution for PostgreSQL" \
       description="Essential / key PostgreSQL17 components with PostGIS. Percona Distribution for PostgreSQL features core components, tools and add-ons from the community, tested to work together in demanding enterprise environments." \
       vendor="Percona" \
       summary="Percona base selection of PostgreSQL17 components with PostGIS" \
       maintainer="Percona Development <info@percona.com>" \
       org.opencontainers.image.authors="info@percona.com"
+LABEL version="17.9"
+LABEL release="1"
 
 # openssl-fips-provider-so is not properly obsoleted by the newer openssl-fips-provider
 # (el9_7+), causing a file conflict on /usr/lib64/ossl-modules/fips.so during dnf update.
@@ -73,11 +75,11 @@ RUN set -ex; \
 	percona-postgresql${PPG_MAJOR_VERSION}-llvmjit \
 	percona-pgvector_${PPG_MAJOR_VERSION}-llvmjit \
 	python3-etcd \
-        percona-postgis3_${PPG_MAJOR_VERSION} \
-        percona-postgis3_${PPG_MAJOR_VERSION}-client \
-        percona-postgis3_${PPG_MAJOR_VERSION}-gui \
-        percona-postgis3_${PPG_MAJOR_VERSION}-llvmjit \
-        percona-postgis3_${PPG_MAJOR_VERSION}-utils \
+        percona-postgis35_${PPG_MAJOR_VERSION} \
+        percona-postgis35_${PPG_MAJOR_VERSION}-client \
+        percona-postgis35_${PPG_MAJOR_VERSION}-gui \
+        percona-postgis35_${PPG_MAJOR_VERSION}-llvmjit \
+        percona-postgis35_${PPG_MAJOR_VERSION}-utils \
         percona-wal2json${PPG_MAJOR_VERSION}; \
     dnf clean all; \
     rm -rf /var/cache/dnf /var/cache/yum $PGDATA && mkdir -p $PGDATA /docker-entrypoint-initdb.d; \

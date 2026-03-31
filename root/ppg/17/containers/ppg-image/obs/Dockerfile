@@ -9,6 +9,8 @@ LABEL name="Percona Distribution for PostgreSQL" \
       summary="Percona base selection of PostgreSQL17 components" \
       maintainer="Percona Development <info@percona.com>" \
       org.opencontainers.image.authors="info@percona.com"
+LABEL version="17.9"
+LABEL release="1"
 
 # openssl-fips-provider-so is not properly obsoleted by the newer openssl-fips-provider
 # (el9_7+), causing a file conflict on /usr/lib64/ossl-modules/fips.so during dnf update.
