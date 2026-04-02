@@ -9,7 +9,7 @@
 | percona-pg-telemetry | ppg:17 | 1.2.0-1+2.2 |
 | percona-pg_gather | ppg:17 | 32-1+2.1 |
 | percona-pg_repack | ppg:17 | 1.5.3-1+2.2 |
-| percona-pg_stat_monitor | ppg:17 | 2.3.2-1+2.2 |
+| percona-pg_stat_monitor | ppg:17 | 2.3.2-1+3.1 |
 | percona-pg_tde | ppg:17 | 2.1.2-1+2.2 |
 | percona-pgaudit | ppg:17 | 17.1-1+2.2 |
 | percona-pgaudit_set_user | ppg:17 | 4.2.0-1+2.2 |
