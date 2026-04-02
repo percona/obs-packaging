@@ -659,14 +659,16 @@ def _apply_project_config(
     env_vars: dict[str, str] | None = None,
     active_projects: "set[str] | None" = None,
     branch_rootprj: str | None = None,
-) -> bool:
+) -> "tuple[bool, bool]":
     """Create or update OBS project metadata and build config from project.yaml.
 
-    Returns True if the project meta had repository <path> elements stripped
-    due to repository_access_failure (meaning a second pass is needed once all
-    sibling/child projects have their repositories configured on OBS).
-    Returns False when the full meta was accepted without modification, or when
-    in dry-run mode (no actual writes happen).
+    Returns (paths_stripped, project_changed):
+    - paths_stripped: True if the project meta had repository <path> elements
+      stripped due to repository_access_failure (meaning a second pass is needed
+      once all sibling/child projects have their repositories configured on OBS).
+    - project_changed: True if the project meta or project-config was created or
+      updated (i.e. something that affects how packages are built changed).
+    Both are False in dry-run mode (no actual writes happen).
 
     Skips the API call when the content already matches what OBS has, unless
     --force is given (which bypasses both the local comparison and OBS conflict checks).
@@ -702,6 +704,7 @@ def _apply_project_config(
     current = b""
     project_meta_exists = True
     paths_stripped = False
+    project_changed = False
     _print_pending(f"project meta  {obs_project_name}")
     try:
         logger.debug(f"fetching project meta: {obs_project_name}")
@@ -726,6 +729,7 @@ def _apply_project_config(
             paths_stripped = _edit_project_meta(
                 apiurl, obs_project_name, meta_to_upload, force=False
             )
+        project_changed = True
         _print_create(f"project meta  {obs_project_name}")
     elif force or not _project_meta_subset_equal(current, meta):
         logger.debug(f"updating project meta: {obs_project_name}")
@@ -736,6 +740,7 @@ def _apply_project_config(
             paths_stripped = _edit_project_meta(
                 apiurl, obs_project_name, meta_to_upload, force=force
             )
+        project_changed = True
         _print_update(f"project meta  {obs_project_name}")
     else:
         logger.debug(f"project meta unchanged: {obs_project_name}")
@@ -771,6 +776,7 @@ def _apply_project_config(
                     )
             except urllib.error.HTTPError as e:
                 _obs_api_error(e, f"creating project config for {obs_project_name}")
+        project_changed = True
         _print_create(f"project config  {obs_project_name}")
     elif force or current_conf.strip() != project_config_str.strip():
         logger.debug(f"updating project config: {obs_project_name}")
@@ -786,12 +792,58 @@ def _apply_project_config(
                     )
             except urllib.error.HTTPError as e:
                 _obs_api_error(e, f"updating project config for {obs_project_name}")
+        project_changed = True
         _print_update(f"project config  {obs_project_name}")
     else:
         logger.debug(f"project config unchanged: {obs_project_name}")
         _print_same(f"project config  {obs_project_name}")
 
-    return paths_stripped
+    return paths_stripped, project_changed
+
+
+def check_project_config_changed(
+    apiurl: str,
+    obs_project_name: str,
+    project_path: Path,
+    rootprj: str,
+    env_vars: "dict[str, str] | None" = None,
+    active_projects: "set[str] | None" = None,
+    branch_rootprj: "str | None" = None,
+) -> bool:
+    """Return True if the local project config differs from what is on OBS.
+
+    Read-only: never writes to OBS. Used before Phase 1 decisions to detect
+    projects whose config changed so packages can be triggered/promoted.
+    Returns True for projects that do not yet exist on OBS (will be created).
+    """
+    project_config = _load_project_config_with_inheritance(project_path, env_vars)
+    desired_meta = build_project_meta(
+        obs_project_name,
+        project_config.get("title", ""),
+        project_config.get("description", ""),
+        project_config.get("repositories", []),
+        rootprj,
+        publish=project_config.get("publish"),
+        build=project_config.get("build"),
+        debuginfo=project_config.get("debuginfo"),
+        active_projects=active_projects,
+        branch_rootprj=branch_rootprj,
+    )
+    desired_conf = (project_config.get("project-config") or "").strip()
+    try:
+        current_meta = _decode_obs_response(
+            osc.core.show_project_meta(apiurl, obs_project_name)
+        ).encode()
+        current_conf = _decode_obs_response(
+            osc.core.show_project_conf(apiurl, obs_project_name)
+        ).strip()
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return True  # project doesn't exist yet — counts as changed
+        raise
+    meta_changed = not _project_meta_subset_equal(current_meta, desired_meta)
+    conf_changed = current_conf != desired_conf
+    return meta_changed or conf_changed
 
 
 def _apply_package_config(

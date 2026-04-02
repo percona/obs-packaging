@@ -48,6 +48,7 @@ from .obs_api import (
     _apply_package_config,
     _apply_project_config,
     _create_project_skeleton,
+    check_project_config_changed,
     _delete_obs_package,
     _delete_obs_project,
     _fetch_combined_depinfo,
@@ -595,6 +596,35 @@ def cmd_sync(args):
     _profile_cache: dict[str, dict[str, str]] = {}
     _profile_env_vars_cache: dict[str, dict[str, str]] = {}
 
+    # --- Pre-Phase 1: detect projects whose config changed on OBS (read-only) ---
+    # Runs before Phase 1 decisions so we can flip aggregate/skip → promote for
+    # packages in changed projects before the pre-pass creates project skeletons.
+    config_changed_projects: set[str] = set()
+    if targets:
+        _unique_proj_paths: dict[str, tuple[str, Path]] = {}
+        for _op, _pp in targets:
+            _proj_path = _pp.parent
+            _proj_cfg = load_yaml(_proj_path / "project.yaml")
+            _proj_name = _proj_cfg.get("name") or _op
+            if _proj_name not in _unique_proj_paths:
+                _unique_proj_paths[_proj_name] = (_op, _proj_path)
+
+        def _check_proj_changed(
+            item: "tuple[str, tuple[str, Path]]",
+        ) -> "tuple[str, bool]":
+            _pname, (_op2, _ppath) = item
+            _changed = check_project_config_changed(
+                apiurl, _pname, _ppath, args.rootprj, env_vars=env_vars
+            )
+            return _pname, _changed
+
+        with ThreadPoolExecutor(max_workers=8) as _proj_pool:
+            for _pname, _changed in _proj_pool.map(
+                _check_proj_changed, _unique_proj_paths.items()
+            ):
+                if _changed:
+                    config_changed_projects.add(_pname)
+
     _print_action("planning: checking sync decisions")
 
     # Per-package decision function run in parallel via a thread pool.
@@ -859,6 +889,22 @@ def cmd_sync(args):
                             decisions[dep_key] = "promote"
                             changed = True
 
+    # --- Config-triggered promotion (--branch-from only) ---
+    # Packages in a project whose config changed must be promoted to the target
+    # OBS so they are rebuilt with the new config, even if their source files
+    # didn't change (they would otherwise stay as aggregate/skip).
+    if branch_rootprj and config_changed_projects:
+        for _key, _decision in list(decisions.items()):
+            if _key[0] in config_changed_projects and _decision in (
+                "aggregate",
+                "skip",
+                "skip_branch",
+            ):
+                _print_action(
+                    f"config-promote: {_key[0]}/{_key[1]}" f"  (project config changed)"
+                )
+                decisions[_key] = "promote"
+
     # Compute the set of OBS projects that actually need to be created.
     # When --branch-from is active on a full-tree sync, only projects with at
     # least one promoted package are created; projects whose packages are all
@@ -909,7 +955,7 @@ def cmd_sync(args):
         # will have those paths stripped and need a second pass.
         needs_reconfig: list[tuple[str, str, Path]] = []
         for raw_proj, (prj_name, proj_path) in sorted_projs:
-            stripped = _apply_project_config(
+            stripped, _ = _apply_project_config(
                 apiurl,
                 prj_name,
                 proj_path,
@@ -928,7 +974,7 @@ def cmd_sync(args):
         # so OBS will accept the full meta.  Projects already correctly
         # configured are detected by _project_meta_subset_equal and skipped.
         for raw_proj, prj_name, proj_path in needs_reconfig:
-            _apply_project_config(
+            _, _ = _apply_project_config(
                 apiurl,
                 prj_name,
                 proj_path,
@@ -951,6 +997,9 @@ def cmd_sync(args):
         return
 
     # --- Phase 3: execute uploads based on decisions ---
+    # Track packages that were triggered by file changes so the config-triggered
+    # rebuild sweep below doesn't double-trigger them.
+    already_triggered: set[tuple[str, str]] = set()
     for obs_project, package_path in targets:
         project_path = package_path.parent
         project_config = load_yaml(project_path / "project.yaml")
@@ -986,7 +1035,7 @@ def cmd_sync(args):
                 chain_needs_reconfig: list[tuple[str, str, Path]] = []
                 for raw_proj, (prj_name, proj_path) in sorted_chain:
                     if raw_proj not in seen_projects:
-                        stripped = _apply_project_config(
+                        stripped, _ = _apply_project_config(
                             apiurl,
                             prj_name,
                             proj_path,
@@ -1001,7 +1050,7 @@ def cmd_sync(args):
                             chain_needs_reconfig.append((raw_proj, prj_name, proj_path))
                         seen_projects.add(raw_proj)
                 for raw_proj, prj_name, proj_path in chain_needs_reconfig:
-                    _apply_project_config(
+                    _, _ = _apply_project_config(
                         apiurl,
                         prj_name,
                         proj_path,
@@ -1145,6 +1194,24 @@ def cmd_sync(args):
                     else:
                         osc.core.runservice(apiurl, obs_project_name, package_path.name)
                         _print_ok(f"trigger  {obs_project_name}/{package_path.name}")
+                    already_triggered.add((obs_project_name, package_path.name))
+
+    # --- Config-triggered rebuild (plain sync push, no --branch-from) ---
+    # OBS does not auto-rebuild when project config (meta or prjconf) changes.
+    # Trigger a service run for every package in a changed project that was not
+    # already triggered by file changes above.
+    if config_changed_projects and not branch_rootprj:
+        for obs_project_name, pkg_name in decisions:
+            if obs_project_name not in config_changed_projects:
+                continue
+            if (obs_project_name, pkg_name) in already_triggered:
+                continue
+            _print_pending(f"trigger  {obs_project_name}/{pkg_name}")
+            if dry_run_obs:
+                _print_ok(f"trigger  {obs_project_name}/{pkg_name}  [dry-run]")
+            else:
+                osc.core.runservice(apiurl, obs_project_name, pkg_name)
+                _print_ok(f"trigger  {obs_project_name}/{pkg_name}")
 
     # --- orphan cleanup ---
     # Remove packages on OBS that no longer exist locally, but only when the
