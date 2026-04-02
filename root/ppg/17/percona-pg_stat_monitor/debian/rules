@@ -15,7 +15,7 @@ override_dh_auto_test:
 
 override_dh_auto_install:
 	$(MAKE) install USE_PGXS=1 PG_CONFIG=$(PG_CONFIG) \
-		DESTDIR=$(CURDIR)/debian/percona-postgresql-$(PG_VERSION)-pg-stat-monitor
+		DESTDIR=$(CURDIR)/debian/percona-pg-stat-monitor$(PG_VERSION)
 
 override_dh_installdocs:
 	dh_installdocs --all README.*
