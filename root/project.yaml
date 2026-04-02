@@ -38,6 +38,11 @@ repositories:
       - subproject: common:deps:build
         repository: openSUSE_Leap_16
     archs: [x86_64]
+debuginfo:
+  RockyLinux_9: true
+  openSUSE_Tumbleweed: true
+  openSUSE_Leap_16: true
+
 project-config: |
   %if "%_repository" == "RockyLinux_8" || "%_repository" == "RHEL-8"  || "%_repository" == "RedHat_RHEL-8"
   ExpandFlags: module:llvm-toolset-rhel8

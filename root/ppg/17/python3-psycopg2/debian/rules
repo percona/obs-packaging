@@ -25,9 +25,6 @@ override_dh_link:
 	rm -rf $(CURDIR)/debian/python3-psycopg2-dbg/usr/share/doc/python3-psycopg2-dbg
 	dh_link
 
-override_dh_strip:
-	dh_strip --no-automatic-dbgsym
-
 override_dh_auto_test-arch:
 #ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 #ifneq ($(DEB_HOST_ARCH),hurd-i386)

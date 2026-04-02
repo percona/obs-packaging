@@ -213,6 +213,7 @@ def build_project_meta(
     rootprj: str,
     publish: "dict[str, bool] | bool | None" = None,
     build: "dict[str, bool] | None" = None,
+    debuginfo: "dict[str, bool] | bool | None" = None,
     active_projects: "set[str] | None" = None,
     branch_rootprj: str | None = None,
 ) -> str:
@@ -232,6 +233,7 @@ def build_project_meta(
     ET.SubElement(root, "description").text = description
     _emit_flag_section(root, "publish", publish)
     _emit_flag_section(root, "build", build)
+    _emit_flag_section(root, "debuginfo", debuginfo)
     for repo in repositories:
         repo_elem = ET.SubElement(root, "repository", name=repo["name"])
         # Each entry may use 'project:' for an absolute OBS project name, or

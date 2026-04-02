@@ -695,6 +695,7 @@ def _apply_project_config(
         rootprj,
         publish=project_config.get("publish"),
         build=project_config.get("build"),
+        debuginfo=project_config.get("debuginfo"),
         active_projects=active_projects,
         branch_rootprj=branch_rootprj,
     )
