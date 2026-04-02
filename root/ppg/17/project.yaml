@@ -2,3 +2,7 @@ title: Percona Distribution for PostgreSQL 17
 description: |
   Packages for Percona Distribution for PostgreSQL 17 — the server, extensions,
   HA components (Patroni, etcd, HAProxy, pgBouncer, pgPool-II), and companion tools.
+debuginfo:
+  RockyLinux_9: true
+  openSUSE_Tumbleweed: true
+  openSUSE_Leap_16: true
