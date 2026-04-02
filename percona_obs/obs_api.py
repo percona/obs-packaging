@@ -505,6 +505,8 @@ def _project_meta_subset_equal(current_bytes: bytes, desired_xml: str) -> bool:
         return False
     if _flag_entries(current, "build") != _flag_entries(desired, "build"):
         return False
+    if _flag_entries(current, "debuginfo") != _flag_entries(desired, "debuginfo"):
+        return False
 
     current_repos = {r.get("name"): r for r in current.findall("repository")}
     desired_repos = {r.get("name"): r for r in desired.findall("repository")}
