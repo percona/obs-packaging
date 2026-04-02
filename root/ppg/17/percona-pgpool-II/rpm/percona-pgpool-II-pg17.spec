@@ -13,8 +13,6 @@
 %define short_name      pgpool-II
 %define pgmajorversion  17
 %define pghome          /usr/pgsql-%{pgmajorversion}
-%global _unique_build_ids 0
-
 Summary:        pgpool-II connection pooling server for PostgreSQL %{pgmajorversion}
 Name:           percona-pgpool-II-pg%{pgmajorversion}
 Version:        1.0.0

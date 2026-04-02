@@ -1,4 +1,3 @@
-%global debug_package %{nil}
 %define pgmajorversion 17
 %global pginstdir /usr/pgsql-%{pgmajorversion}
 

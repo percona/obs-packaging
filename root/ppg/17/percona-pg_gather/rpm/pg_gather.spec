@@ -1,3 +1,4 @@
+%global debug_package %{nil}
 %global sname   percona-pg_gather
 %global version %{version}
 %global pgmajorversion 17

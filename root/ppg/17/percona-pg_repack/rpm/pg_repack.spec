@@ -1,7 +1,6 @@
 %define pg_version 17
 %define pg_name percona-postgresql%{pg_version}
 %global _default_patch_fuzz 2
-%global debug_package %{nil}
 %global sname   percona-pg_repack
 %global pgmajorversion %{pg_version}
 %global pginstdir /usr/pgsql-%{pgmajorversion}
