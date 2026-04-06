@@ -151,10 +151,14 @@ install -m 0440 src/redhat/pgpool_sudoers.d \
 mkdir -p %{buildroot}%{_varlogdir}
 mkdir -p %{buildroot}%{_varlibdir}
 
+# fix man page permissions (spurious execute bit from make install)
+find %{buildroot}%{_mandir} -type f -exec chmod 644 {} \;
+
 # remove static libs
 rm -f %{buildroot}%{_libdir}/libpcp.{a,la}
 
 %pre
+%{?suse_version:%service_add_pre pgpool.service}
 groupadd -g 26 -o -r postgres >/dev/null 2>&1 || :
 useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
         -c "PostgreSQL Server" -u 26 postgres >/dev/null 2>&1 || :
@@ -162,6 +166,7 @@ useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
 %post
 /sbin/ldconfig
 %systemd_post pgpool.service
+systemd-tmpfiles --create %{_tmpfilesdir}/%{name}.conf 2>/dev/null || :
 
 %preun
 %systemd_preun pgpool.service
@@ -201,6 +206,7 @@ useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
 %{_datadir}/%{short_name}/pgpool.pam
 %{_libdir}/libpcp.so.*
 %{_tmpfilesdir}/%{name}.conf
+%ghost %dir /run/pgpool
 %ghost %dir %{_sysconfdir}/sudoers.d
 %{_sysconfdir}/sudoers.d/pgpool
 %{_unitdir}/pgpool.service
