@@ -174,8 +174,6 @@ useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
 %{_bindir}/watchdog_setup
 %{_bindir}/pgproto
 %{_bindir}/wd_cli
-%{_mandir}/man8/*.8*
-%{_mandir}/man1/*.1*
 %{_datadir}/%{short_name}/insert_lock.sql
 %{_datadir}/%{short_name}/pgpool.pam
 %{_libdir}/libpcp.so.*
