@@ -3,6 +3,7 @@ Section: database
 Priority: optional
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
+ debhelper (>= 10),
  bison,
  chrpath,
  docbook,
@@ -20,6 +21,7 @@ Build-Depends:
  openjade,
  opensp,
  percona-postgresql-server-dev-17,
+ percona-postgresql-server-dev-all,
  postgresql-common,
  xsltproc,
 Standards-Version: 4.7.2

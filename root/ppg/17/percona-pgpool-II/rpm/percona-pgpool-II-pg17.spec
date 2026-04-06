@@ -42,7 +42,9 @@ BuildRequires:  libmemcached-devel
 %endif
 BuildRequires:  systemd
 Requires:       percona-postgresql%{pgmajorversion} >= %{pgmajorversion}
+%if 0%{?rhel}
 Requires(post):   systemd-sysv
+%endif
 Requires(post):   systemd
 Requires(preun):  systemd
 Requires(postun): systemd

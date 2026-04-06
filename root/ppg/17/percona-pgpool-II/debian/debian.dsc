@@ -22,6 +22,7 @@ Build-Depends:
  openjade,
  opensp,
  percona-postgresql-server-dev-17,
+ percona-postgresql-server-dev-all,
  postgresql-common,
  xsltproc
 Debtransform-Release: 1
