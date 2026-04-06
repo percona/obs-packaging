@@ -1,0 +1,8 @@
+usr/bin/*
+usr/lib/libpcp.so.*
+usr/share/pgpool-II/*
+usr/share/man/man1/*
+usr/share/man/man8/*
+etc/pgpool2/*.sample
+etc/pgpool2/aws_eip_if_cmd.sh.sample   usr/share/doc/percona-pgpool2/examples
+etc/pgpool2/aws_rtb_if_cmd.sh.sample   usr/share/doc/percona-pgpool2/examples

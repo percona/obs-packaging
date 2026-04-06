@@ -7,9 +7,11 @@ Build-Depends:
  bison,
  flex,
  libpq-dev,
+ postgresql-server-dev-17 | percona-postgresql-server-dev-17,
  libmemcached-dev,
  libssl-dev,
  libpam0g-dev,
+ libldap-dev,
  pkg-config,
  libtool,
  autoconf,
@@ -19,9 +21,25 @@ Homepage: https://www.pgpool.net/
 
 Package: percona-pgpool2
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, postgresql-client | percona-postgresql-17
+Depends: ${shlibs:Depends}, ${misc:Depends}, postgresql-client-17 | percona-postgresql-17
 Description: connection pooling server and replication proxy for PostgreSQL
  pgpool-II is a middleware that works between PostgreSQL servers and a
  PostgreSQL database client. It provides the following features:
  Connection Pool, Replication, Load Balance, Limiting Exceeding Connections,
  Parallel Query.
+
+Package: percona-pgpool2-dev
+Architecture: any
+Section: libdevel
+Depends: ${misc:Depends}, percona-pgpool2 (= ${binary:Version})
+Description: development files for pgpool-II
+ Header files and development libraries for building pgpool-II client
+ applications using the PCP protocol library (libpcp).
+
+Package: percona-pgpool2-recovery
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, percona-pgpool2 (= ${binary:Version}),
+ postgresql-17 | percona-postgresql-17
+Description: PostgreSQL 17 recovery extension for pgpool-II
+ The pgpool-recovery and pgpool_adm PostgreSQL extensions used by pgpool-II
+ for online recovery and administration functions.
