@@ -5,6 +5,7 @@ Architecture: any
 Version: 1.0.0
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
+ debhelper (>= 10),
  bison,
  chrpath,
  docbook,
@@ -23,7 +24,7 @@ Build-Depends:
  opensp,
  percona-postgresql-server-dev-17,
  percona-postgresql-server-dev-all,
- postgresql-common,
+ percona-postgresql-common,
  xsltproc
 Debtransform-Release: 1
 Debtransform-Files-Tar: debian.tar.gz rpm.tar.gz
