@@ -202,11 +202,13 @@ useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
 %{_libdir}/libpcp.so.*
 %attr(755,postgres,postgres) %dir %{_varrundir}
 %{_tmpfilesdir}/%{name}.conf
+%ghost %dir %{_sysconfdir}/sudoers.d
 %{_sysconfdir}/sudoers.d/pgpool
 %{_unitdir}/pgpool.service
 %attr(0755,postgres,postgres) %dir %{_varlogdir}
 %attr(0755,postgres,postgres) %dir %{_varlibdir}
 %defattr(600,postgres,postgres,-)
+%dir %{_sysconfdir}/%{short_name}
 %{_sysconfdir}/%{short_name}/pgpool.conf.sample
 %{_sysconfdir}/%{short_name}/pcp.conf.sample
 %{_sysconfdir}/%{short_name}/pool_hba.conf.sample
@@ -228,6 +230,9 @@ useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
 %{_libdir}/libpcp.so
 
 %files extensions
+%ghost %dir %{pghome}/lib
+%ghost %dir %{pghome}/share
+%ghost %dir %{pghome}/share/extension
 %{pghome}/share/extension/pgpool-recovery.sql
 %{pghome}/share/extension/pgpool_recovery--1.1.sql
 %{pghome}/share/extension/pgpool_recovery--1.2.sql
@@ -253,6 +258,9 @@ useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
 %{pghome}/share/extension/pgpool_adm--1.5--1.6.sql
 %{pghome}/share/extension/pgpool_adm.control
 %{pghome}/lib/pgpool_adm.so
+%ghost %dir %{pghome}/lib/bitcode
+%dir %{pghome}/lib/bitcode/pgpool-recovery
+%dir %{pghome}/lib/bitcode/pgpool_adm
 %{pghome}/lib/bitcode/pgpool-recovery.index.bc
 %{pghome}/lib/bitcode/pgpool-recovery/pgpool-recovery.bc
 %{pghome}/lib/bitcode/pgpool_adm.index.bc
