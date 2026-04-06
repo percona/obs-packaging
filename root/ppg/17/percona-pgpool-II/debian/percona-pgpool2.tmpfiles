@@ -1,1 +1,2 @@
-d /run/pgpool 0755 postgres postgres -
+# See tmpfiles.d(5) for details
+d /var/run/postgresql 2775 postgres postgres -

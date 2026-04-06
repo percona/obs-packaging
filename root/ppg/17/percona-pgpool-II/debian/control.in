@@ -86,11 +86,11 @@ Description: pgpool control protocol library - headers
  PostgreSQL database client.  This package contains headers for the pgpool
  control protocol library (libpcp).
 
-Package: postgresql-17-pgpool2
+Package: postgresql-PGVERSION-pgpool2
 Architecture: linux-any
 Depends:
  libpgpool2 (>= ${binary:Version}),
- postgresql-17 | percona-postgresql-17,
+ postgresql-PGVERSION | percona-postgresql-PGVERSION,
  ${misc:Depends},
  ${shlibs:Depends},
 Breaks:
@@ -98,7 +98,7 @@ Breaks:
 Description: connection pool server and replication proxy for PostgreSQL - modules
  pgpool-II is a middleware that works between PostgreSQL servers and a
  PostgreSQL database client.  This package contains support modules for
- the PostgreSQL 17 server:
+ the PostgreSQL PGVERSION server:
  .
   * pgpool_adm
   * pgpool_recovery (PostgreSQL 9.1 and above)

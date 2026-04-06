@@ -1,8 +1,16 @@
-usr/bin/*
-usr/lib/libpcp.so.*
-usr/share/pgpool-II/*
-usr/share/man/man1/*
-usr/share/man/man8/*
-etc/pgpool2/*.sample
-etc/pgpool2/aws_eip_if_cmd.sh.sample   usr/share/doc/percona-pgpool2/examples
-etc/pgpool2/aws_rtb_if_cmd.sh.sample   usr/share/doc/percona-pgpool2/examples
+debian/pool_passwd				etc/pgpool2
+etc/pgpool2/pcp.conf				etc/pgpool2
+etc/pgpool2/pool_hba.conf			etc/pgpool2
+etc/pgpool2/escalation.sh.sample		usr/share/doc/pgpool2/examples
+etc/pgpool2/failover.sh.sample			usr/share/doc/pgpool2/examples
+etc/pgpool2/follow_primary.sh.sample		usr/share/doc/pgpool2/examples
+etc/pgpool2/pgpool_remote_start.sample		usr/share/doc/pgpool2/examples
+etc/pgpool2/recovery_1st_stage.sample		usr/share/doc/pgpool2/examples
+etc/pgpool2/replication_mode_recovery_1st_stage.sample	usr/share/doc/pgpool2/examples
+etc/pgpool2/replication_mode_recovery_2nd_stage.sample	usr/share/doc/pgpool2/examples
+usr/sbin
+usr/share/pgpool-II/*.sql			usr/share/pgpool2
+usr/share/pgpool-II/pgpool.pam			usr/share/doc/pgpool2/examples
+usr/share/pgpool2/pgpool.conf
+etc/pgpool2/aws_eip_if_cmd.sh.sample		usr/share/doc/pgpool2/examples
+etc/pgpool2/aws_rtb_if_cmd.sh.sample		usr/share/doc/pgpool2/examples

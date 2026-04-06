@@ -1,17 +1,16 @@
 [Unit]
-Description=Pgpool-II
-After=syslog.target network.target
+Description=pgpool-II
+Documentation=man:pgpool(8)
+Wants=postgresql.service
+After=network.target
 
 [Service]
-
 User=postgres
-Group=postgres
-
-EnvironmentFile=-/etc/sysconfig/pgpool
-
-ExecStart=/usr/bin/pgpool -f /etc/pgpool2/pgpool.conf $OPTS
-ExecStop=/usr/bin/pgpool -f /etc/pgpool2/pgpool.conf $STOP_OPTS stop
-ExecReload=/usr/bin/pgpool -f /etc/pgpool2/pgpool.conf reload
+ExecStart=/usr/sbin/pgpool -n
+ExecReload=/bin/kill -HUP $MAINPID
+KillSignal=SIGINT
+StandardOutput=syslog
+SyslogFacility=local0
 
 [Install]
 WantedBy=multi-user.target
