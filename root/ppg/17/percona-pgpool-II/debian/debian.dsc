@@ -21,7 +21,7 @@ Build-Depends:
  libxml2-utils,
  openjade,
  opensp,
- postgresql-server-dev-all | percona-postgresql-server-dev-17,
+ percona-postgresql-server-dev-17,
  postgresql-common,
  xsltproc
 Debtransform-Release: 1

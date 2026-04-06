@@ -21,9 +21,17 @@ BuildRequires:  percona-postgresql%{pgmajorversion}-devel
 BuildRequires:  bison flex
 BuildRequires:  pam-devel
 BuildRequires:  openssl-devel
+%if 0%{?suse_version}
+BuildRequires:  openldap2-devel
+%else
 BuildRequires:  openldap-devel
+%endif
 BuildRequires:  libtool autoconf automake gcc
+%if 0%{?suse_version}
+BuildRequires:  libxslt-tools libxslt docbook_4 docbook-xsl-stylesheets docbook-dsssl-stylesheets openjade
+%else
 BuildRequires:  jade libxslt docbook-dtds docbook-style-xsl docbook-style-dsssl
+%endif
 %if 0%{?rhel} >= 8
 BuildRequires:  llvm-devel clang-devel clang
 %endif
