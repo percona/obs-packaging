@@ -20,6 +20,9 @@ BuildRequires:  pam-devel
 BuildRequires:  openssl-devel
 BuildRequires:  openldap-devel
 BuildRequires:  libtool autoconf automake gcc
+%if 0%{?rhel} >= 8
+BuildRequires:  llvm-devel clang-devel clang
+%endif
 %if 0%{?rhel} >= 9
 BuildRequires:  libmemcached-awesome-devel
 %else
