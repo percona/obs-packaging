@@ -200,7 +200,6 @@ useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
 %{_datadir}/%{short_name}/insert_lock.sql
 %{_datadir}/%{short_name}/pgpool.pam
 %{_libdir}/libpcp.so.*
-%attr(755,postgres,postgres) %dir %{_varrundir}
 %{_tmpfilesdir}/%{name}.conf
 %ghost %dir %{_sysconfdir}/sudoers.d
 %{_sysconfdir}/sudoers.d/pgpool

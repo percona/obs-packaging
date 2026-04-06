@@ -1,4 +1,7 @@
 addFilter("binary-or-shlib-defines-rpath")
+addFilter("dir-or-file-in-var-run")
+addFilter("filelist-forbidden-fhs23")
+addFilter("filelist-forbidden-sysconfig")
 addFilter("env-script-interpreter")
 addFilter("files-duplicate")
 addFilter("files-duplicated-waste")
