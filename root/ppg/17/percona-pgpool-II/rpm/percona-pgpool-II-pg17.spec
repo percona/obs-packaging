@@ -32,7 +32,7 @@ BuildRequires:  libxslt-tools libxslt docbook_4 docbook-xsl-stylesheets docbook-
 %else
 BuildRequires:  jade libxslt docbook-dtds docbook-style-xsl docbook-style-dsssl
 %endif
-%if 0%{?rhel} >= 8
+%if 0%{?rhel} >= 8 || 0%{?suse_version}
 BuildRequires:  llvm-devel clang-devel clang
 %endif
 %if 0%{?rhel} >= 9
