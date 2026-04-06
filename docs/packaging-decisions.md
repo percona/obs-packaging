@@ -56,45 +56,127 @@
 
 ## percona-pgpool-II
 
-### Debian/Ubuntu
-- **Dual compat conflict**: `debian/compat` contained `13` AND `debian/control` had
-  `debhelper-compat (= 13)` in Build-Depends. Modern debhelper (>= 12) requires specifying
-  the compat level exactly once. **Fix**: removed `debian/compat` file; kept the
-  `debhelper-compat (= 13)` build-dep in `debian/control`.
-- **Build-Depends**: Does not include `percona-postgresql17-devel` because pgpool-II connects
-  to PostgreSQL via libpq (client lib), not server headers. Uses `libpq-dev` instead.
+The Debian packaging was rebuilt from scratch from the upstream Debian package at
+`salsa.debian.org/postgresql/pgpool2` tag `debian/4.7.0-1`, with the same transformations
+applied by `pgpool2_builder.sh` from `percona/postgres-packaging` branch `17.9`.
+The RPM spec was rewritten based on the same builder script.
 
-### RockyLinux_9 RPM
-- **Bogus changelog date**: `Mon Mar 10 2026` was wrong; March 10, 2026 is a Tuesday.
-  RPM rejects changelogs with wrong day-of-week. **Fix**: changed to `Tue Mar 10 2026`.
-- **sysconfdir for sample configs**: pgpool-II's `make install` installs sample configs
-  (`pgpool.conf.sample`, `pcp.conf.sample`, `pool_hba.conf.sample`) to `$(sysconfdir)/`.
-  With the default `%configure` macro, `--sysconfdir=/etc` puts them in `/etc/` directly,
-  but the spec's `%files` expected them at `/etc/pgpool-II/*.sample`. **Fix**: added
-  `--sysconfdir=%{_sysconfdir}/%{short_name}` to the `%configure` call so configs install
-  to `/etc/pgpool-II/`. This also sets the default config search path for pgpool at runtime.
-- **Man pages removed from %files**: pgpool-II 4.7 does not install man pages during
-  `make install` without additional doc build tooling (jade/opensp). Removed
-  `%{_mandir}/man8/*` from `%files` to avoid "file not found" errors.
-- **autoreconf required**: pgpool-II's configure.ac is not pre-generated in the git checkout,
-  so `libtoolize && autoreconf --force --install` must run before `%configure`. This is
-  needed because we build directly from the upstream git tag.
-- **Duplicate build-ids (pcp_* utilities)**: pgpool-II's `pcp_*` utility binaries are all
-  symlinks to a single binary. RPM's build-id check detects them as sharing the same build-id
-  and fails. **Fix**: `%global _unique_build_ids 0` suppresses this check.
-- **Installed but unpackaged files**: `make install` installs headers, static libs, and data
-  files not listed in the initial `%files`. Added `%package devel` for headers/static libs;
-  added `libpcp.so.*`, `insert_lock.sql`, and `pgpool.pam` to the main `%files`.
+### Source and builder script reference
 
-### Debian/Ubuntu (gram.h generation)
-- **gram.h not generated before parallel make**: pgpool-II generates `gram.h` and
-  `gram_minimal.h` from `gram.y` via bison. When `dh_auto_build` launches parallel make,
-  compilation of files that `#include "gram.h"` races against bison generation.
-  **Fix**: added `override_dh_auto_build` in `debian/rules` to run
-  `make -C src/parser gram.h gram_minimal.h` before `dh_auto_build`.
-- **bison and flex missing from Build-Depends**: Without `bison` and `flex` in
-  `debian/control` and `debian.dsc` Build-Depends, they are not installed in the build
-  chroot and the gram.h generation step fails with "flex: command not found".
+- Upstream Debian base: `https://salsa.debian.org/postgresql/pgpool2/-/tree/debian/4.7.0-1/debian`
+- Builder script: `percona/postgres-packaging@17.9/pgpool2/pgpool2_builder.sh`
+- Key builder variables: `PGPOOL2_VERSION=4.7.0`, `PG_MAJOR=17`
+
+### Transformations from builder.sh applied to Debian files
+
+- Package renamed `pgpool2` → `percona-pgpool2` throughout
+- Maintainer set to `Percona Development Team <info@percona.com>`
+- `debian/compat` set to `10` (builder removes `debhelper-compat (= 13)` from Build-Depends
+  and replaces with `debian/compat` file containing `10`)
+- `autoreconf --force --install` added to `debian/rules` configure step (upstream source is
+  a git checkout without pre-generated configure)
+- `override_dh_builddeb` added to `debian/rules` to force gzip compression (`-Zgzip`)
+- AWS sample scripts entries appended to `percona-pgpool2.install`
+- `debian/pgversions` contains `17` to drive `pg_buildext` loops
+
+### Debian packaging structure
+
+- `debian/control` and `debian/control.in` maintained separately:
+  - `control` has `17` hardcoded (used for the actual build)
+  - `control.in` has `PGVERSION` placeholder (for `pg_buildext updatecontrol` if ever needed)
+- PostgreSQL extensions built via `pg_buildext supported-versions .` loop in
+  `override_dh_auto_install` in `debian/rules`; output package is `postgresql-17-pgpool2`
+- `pgpool.conf` managed by `ucf` — installed from
+  `/usr/share/pgpool2/pgpool.conf` into `/etc/pgpool2/pgpool.conf` at install time
+  via `percona-pgpool2.postinst`
+- `pool_passwd` and `pgpool_node_id` are empty files shipped in `debian/pool_passwd` and
+  installed to `/etc/pgpool2/` by `percona-pgpool2.install`
+
+### Debian Build-Depends decisions
+
+- `debhelper (>= 10)` must be explicit because `debhelper-compat (= 13)` was removed from
+  Build-Depends (replaced by `debian/compat` file). Without it, `dh` binary is not installed.
+- `percona-postgresql-server-dev-17` used instead of `postgresql-server-dev-all` to avoid OBS
+  dependency ambiguity (multiple satisfiers). Both are listed alongside each other would
+  trigger "have choice" errors.
+- `percona-postgresql-server-dev-all` added (in addition to `-17`) because it provides
+  `/usr/share/postgresql-common/pgxs_debian_control.mk` used by `debian/rules`.
+- `percona-postgresql-common` used instead of `postgresql-common` (Percona's package).
+
+### Debian postinst bug (transcription error from upstream)
+
+The upstream `pgpool2.postinst` uses `\`$1'` (escaped backtick) in the error echo:
+```sh
+echo "postinst called with unknown argument \`$1'" >&2
+```
+Our `percona-pgpool2.postinst` lost the backslash, leaving an unescaped backtick that
+causes `Syntax error: EOF in backquote substitution` when the script runs. Fixed by
+restoring the `\` escape.
+
+### RPM spec decisions
+
+- **`%undefine _unique_build_ids`**: `pcp_*` utility binaries are all hard-linked to a single
+  binary; RPM's build-id uniqueness check fails because they share the same build-id.
+- **`autoreconf` in `%build`**: upstream git checkout has no pre-generated `configure`;
+  `libtoolize && autoreconf --force --install` runs before `%configure`.
+- **`--sysconfdir=%{_sysconfdir}/%{short_name}`**: ensures sample configs install to
+  `/etc/pgpool-II/` (not `/etc/`), matching the `%files` layout.
+- **Man pages**: built via `make %{?_smp_mflags} -C doc` in `%build` and installed manually
+  with `install doc/src/sgml/man1/*.1` / `man8/*.8`. Requires `jade libxslt` and docbook
+  packages. Man pages also built for Debian (`percona-pgpool2.manpages`), so parity is kept.
+- **`%package extensions`**: PostgreSQL extension modules (`pgpool-recovery.so`,
+  `pgpool_adm.so`) and LLVM bitcode files go in a separate subpackage, following the pattern
+  used in Percona's upstream packaging.
+- **LLVM bitcode**: `pgpool-recovery` and `pgpool_adm` extensions produce bitcode during
+  `make install`. Requires `llvm-devel clang-devel clang` in BuildRequires on both RHEL >= 8
+  and openSUSE (`%if 0%{?rhel} >= 8 || 0%{?suse_version}`).
+
+### RPM cross-distro (openSUSE vs RHEL) conditionals
+
+| Concern | RHEL package | SUSE package | Conditional |
+|---|---|---|---|
+| LDAP | `openldap-devel` | `openldap2-devel` | `%if 0%{?suse_version}` |
+| DocBook XSL | `docbook-style-xsl` | `docbook-xsl-stylesheets` | `%if 0%{?suse_version}` |
+| DocBook DSSSL | `docbook-style-dsssl` | `docbook-dsssl-stylesheets` | `%if 0%{?suse_version}` |
+| DocBook DTDs | `docbook-dtds` | `docbook_4` | `%if 0%{?suse_version}` |
+| SGML jade | `jade` | `openjade` | `%if 0%{?suse_version}` |
+| memcached | `libmemcached-devel` (RHEL<9) / `libmemcached-awesome-devel` (RHEL>=9) | `libmemcached-devel` | `%if 0%{?rhel} >= 9` |
+| systemd-sysv | `Requires(post): systemd-sysv` | not available | `%if 0%{?rhel}` |
+| service pre-hook | not needed | `%service_add_pre pgpool.service` | `%{?suse_version:...}` |
+
+### RPM openSUSE rpmlint suppressions
+
+openSUSE's post-build rpmlint check is stricter than RHEL's. The following are suppressed
+via `percona-pgpool-II-pg17-rpmlintrc`:
+
+- `filelist-forbidden-sysconfig`: `/etc/sysconfig/pgpool` — SUSE prefers `%{_fillupdir}`;
+  acceptable for Percona third-party packages
+- `filelist-forbidden-fhs23`: `/usr/pgsql-17` — Percona's non-standard PostgreSQL path,
+  used on all platforms
+- `dir-or-file-in-var-run`: historical; fixed by removing `%dir %{_varrundir}` from `%files`
+  (tmpfiles.d handles creation at runtime)
+- `non-conffile-in-etc`: `.sample` files in `/etc/pgpool-II/` are not user-editable configs
+- `sudoers-file-unauthorized`: sudoers file content not pre-approved in SUSE allowlist
+- `unused-rpmlintrc-filter`: some RHEL-specific filters in rpmlintrc don't trigger on SUSE
+- `zero-length`: `pool_passwd` and `pgpool_node_id` are intentionally empty placeholder files
+
+### RPM %files directory ownership (openSUSE)
+
+openSUSE's filelist check requires every directory in the RPM payload to be owned by some
+installed package. Added:
+
+- `%dir %{_sysconfdir}/%{short_name}` — directory created and owned by this package
+- `%ghost %dir %{_sysconfdir}/sudoers.d` — system dir owned by `sudo` at runtime
+- `%ghost %dir /run/pgpool` — created at runtime by tmpfiles.d
+- `%ghost %dir %{pghome}/lib`, `%{pghome}/share`, `%{pghome}/share/extension` — owned by
+  `percona-postgresql17` at runtime
+- `%ghost %dir %{pghome}/lib/bitcode` — parent of bitcode subdirs we create
+- `%dir %{pghome}/lib/bitcode/pgpool-recovery` and `%dir %{pghome}/lib/bitcode/pgpool_adm`
+  — subdirectories created by this package's `make install`
+
+Man page permissions are fixed in `%install` with
+`find %{buildroot}%{_mandir} -type f -exec chmod 644 {} \;` to suppress
+`spurious-executable-perm` (man pages installed with execute bit by upstream's `make install`).
 
 ## percona-postgis
 
