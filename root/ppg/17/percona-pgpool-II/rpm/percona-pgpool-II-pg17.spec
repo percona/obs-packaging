@@ -6,6 +6,9 @@
 %global _varlogdir      %{_localstatedir}/log/pgpool
 %global _varlibdir      %{_localstatedir}/lib/pgpool
 
+# pcp_* tools are all the same binary (hardlinked); suppress duplicate build-id errors
+%undefine _unique_build_ids
+
 Summary:        pgpool-II connection pooling server for PostgreSQL %{pgmajorversion}
 Name:           percona-pgpool-II-pg%{pgmajorversion}
 Version:        1.0.0
@@ -20,6 +23,7 @@ BuildRequires:  pam-devel
 BuildRequires:  openssl-devel
 BuildRequires:  openldap-devel
 BuildRequires:  libtool autoconf automake gcc
+BuildRequires:  jade libxslt docbook-dtds docbook-style-xsl docbook-style-dsssl
 %if 0%{?rhel} >= 8
 BuildRequires:  llvm-devel clang-devel clang
 %endif
@@ -72,6 +76,7 @@ autoreconf --force --install
     --disable-rpath
 make -C src/parser gram.h gram_minimal.h
 make %{?_smp_mflags}
+make %{?_smp_mflags} -C doc
 
 %install
 export PATH=%{pghome}/bin:$PATH
@@ -80,6 +85,12 @@ make %{?_smp_mflags} DESTDIR=%{buildroot} install
 # install PostgreSQL extensions
 make %{?_smp_mflags} DESTDIR=%{buildroot} install -C src/sql/pgpool-recovery
 make %{?_smp_mflags} DESTDIR=%{buildroot} install -C src/sql/pgpool_adm
+
+# install man pages built from doc
+install -d %{buildroot}%{_mandir}/man1
+install doc/src/sgml/man1/*.1 %{buildroot}%{_mandir}/man1
+install -d %{buildroot}%{_mandir}/man8
+install doc/src/sgml/man8/*.8 %{buildroot}%{_mandir}/man8
 
 # config directories
 install -d %{buildroot}%{_datadir}/%{short_name}
@@ -174,6 +185,8 @@ useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
 %{_bindir}/watchdog_setup
 %{_bindir}/pgproto
 %{_bindir}/wd_cli
+%{_mandir}/man8/*.8*
+%{_mandir}/man1/*.1*
 %{_datadir}/%{short_name}/insert_lock.sql
 %{_datadir}/%{short_name}/pgpool.pam
 %{_libdir}/libpcp.so.*
@@ -230,6 +243,10 @@ useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
 %{pghome}/share/extension/pgpool_adm--1.5--1.6.sql
 %{pghome}/share/extension/pgpool_adm.control
 %{pghome}/lib/pgpool_adm.so
+%{pghome}/lib/bitcode/pgpool-recovery.index.bc
+%{pghome}/lib/bitcode/pgpool-recovery/pgpool-recovery.bc
+%{pghome}/lib/bitcode/pgpool_adm.index.bc
+%{pghome}/lib/bitcode/pgpool_adm/pgpool_adm.bc
 
 %changelog
 * Tue Mar 10 2026 Percona Build/Release Team <eng-build@percona.com> - 4.7.0-1
