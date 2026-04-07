@@ -22,7 +22,7 @@
   <service name="obs_scm">
     <param name="url">https://github.com/percona/support-snippets.git</param>
     <param name="scm">git</param>
-    <param name="revision">master</param>
+    <param name="revision">02536d04e77ec22f434221078d766582272bd1e7</param>
     <param name="version">32</param>
     <param name="subdir">postgresql/pg_gather</param>
     <param name="filename">percona-pg_gather</param>
