@@ -3,9 +3,10 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-export USE_PGXS=1
+# Using pg_buildext
+include /usr/share/postgresql-common/pgxs_debian_control.mk
 
-PG_VERSION := 17
+export USE_PGXS=1
 
 %:
 	dh $@
@@ -14,17 +15,17 @@ override_dh_builddeb:
 	dh_builddeb -- -Zgzip
 
 override_dh_auto_build:
-	$(MAKE) PG_CONFIG=/usr/lib/postgresql/$(PG_VERSION)/bin/pg_config
+	+pg_buildext clean . build-%v
+	+pg_buildext build . build-%v
 
 override_dh_auto_test:
 	# nothing to do here
 
 override_dh_auto_install:
-	$(MAKE) install PG_CONFIG=/usr/lib/postgresql/$(PG_VERSION)/bin/pg_config DESTDIR=$(CURDIR)/debian/percona-pg-telemetry-$(PG_VERSION)
+	+pg_buildext install . build-%v percona-pg-telemetry17
 
 override_dh_installdocs:
 	dh_installdocs --all README.*
 
 override_dh_auto_clean:
 	rm -rf results/* regression.*
-	$(MAKE) clean || true
