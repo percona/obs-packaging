@@ -16,6 +16,10 @@ Release:        1%{?dist}
 License:        BSD
 URL:            https://www.pgpool.net/
 Source0:        pgpool2-%{version}.tar.gz
+Patch0:         pgpool_socket_dir.patch
+Patch1:         pcp_unix_domain_path.patch
+Patch2:         pgpool_log.patch
+Patch3:         pgpool.conf.sample.patch
 
 BuildRequires:  percona-postgresql%{pgmajorversion}-devel
 BuildRequires:  bison flex
@@ -70,6 +74,10 @@ PostgreSQL extensions (pgpool-recovery, pgpool_adm) for use with pgpool-II.
 
 %prep
 %setup -q -n pgpool2-%{version}
+%patch0 -p0
+%patch1 -p0
+%patch2 -p0
+%patch3 -p0
 
 %build
 libtoolize
