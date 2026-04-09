@@ -6,3 +6,51 @@ debuginfo:
   RockyLinux_9: true
   openSUSE_Tumbleweed: true
   openSUSE_Leap_16: true
+repositories:
+  - name: RockyLinux_9
+    paths:
+      - subproject: ppg:common:deps:build
+        repository: RockyLinux_9
+      - subproject: common:deps:build
+        repository: RockyLinux_9
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+        repository: standard
+    archs: [x86_64]
+  - name: Debian_13
+    paths:
+      - subproject: ppg:common:deps:build
+        repository: Debian_13
+      - subproject: common:deps:build
+        repository: Debian_13
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:13
+        repository: standard
+    archs: [x86_64]
+  - name: Ubuntu_24.04
+    paths:
+      - subproject: ppg:common:deps:build
+        repository: Ubuntu_24.04
+      - subproject: common:deps:build
+        repository: Ubuntu_24.04
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:24.04
+        repository: universe
+    archs: [x86_64]
+  - name: openSUSE_Tumbleweed
+    paths:
+      - subproject: ppg:common:deps:build
+        repository: openSUSE_Tumbleweed
+      - subproject: common:deps:build
+        repository: openSUSE_Tumbleweed
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Tumbleweed
+        repository: standard
+    archs: [x86_64]
+  - name: openSUSE_Leap_16
+    paths:
+      - subproject: ppg:common:deps:build
+        repository: openSUSE_Leap_16
+      - subproject: common:deps:build
+        repository: openSUSE_Leap_16
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Leap:16.0
+        repository: standard
+    archs: [x86_64]
