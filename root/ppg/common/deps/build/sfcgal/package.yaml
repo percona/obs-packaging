@@ -1,0 +1,8 @@
+title: SFCGAL
+description: |
+  SFCGAL is a C++ wrapper library around CGAL with the aim of supporting
+  ISO 19107:2013 and OGC Simple Features Access 1.2 for 3D operations.
+  Used by PostGIS for advanced 3D geometry operations.
+build:
+  Debian_13: false
+  Ubuntu_24.04: false
