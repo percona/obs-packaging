@@ -74,10 +74,10 @@ PostgreSQL extensions (pgpool-recovery, pgpool_adm) for use with pgpool-II.
 
 %prep
 %setup -q -n pgpool2-%{version}
-%patch0 -p0
-%patch1 -p0
-%patch2 -p0
-%patch3 -p0
+%patch -P 0 -p0
+%patch -P 1 -p0
+%patch -P 2 -p0
+%patch -P 3 -p0
 
 %build
 libtoolize
