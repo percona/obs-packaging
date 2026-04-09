@@ -47,7 +47,6 @@ Requires:       libjson-c5 curl libopenssl3
 Requires:       json-c curl openssl
 %endif
 
-Epoch:          1
 Packager:       Percona Development Team <https://jira.percona.com>
 Vendor:         Percona, Inc
 
