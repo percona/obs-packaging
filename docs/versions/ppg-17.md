@@ -10,13 +10,13 @@
 | percona-pg_gather | ppg:17 | 32-1+4.1 |
 | percona-pg_repack | ppg:17 | 1.5.3-1+3.2 |
 | percona-pg_stat_monitor | ppg:17 | 2.3.2-1+4.2 |
-| percona-pg_tde | ppg:17 | 2.1.2-1+3.2 |
+| percona-pg_tde | ppg:17 | 2.1.2-1+4.1 |
 | percona-pgaudit | ppg:17 | 17.1-1+3.2 |
 | percona-pgaudit_set_user | ppg:17 | 4.2.0-1+3.2 |
 | percona-pgbackrest | ppg:17 | 2.58.0-1+3.2 |
 | percona-pgbadger | ppg:17 | 13.2-1+3.1 |
 | percona-pgbouncer | ppg:17 | 1.25.1-1+4.1 |
-| percona-pgpool-II | ppg:17 | 4.7.0-1+4.1 |
+| percona-pgpool-II | ppg:17 | 4.7.0-1+5.1 |
 | percona-pgvector | ppg:17 | 0.8.2-1+3.1 |
 | percona-postgis | ppg:17 | 3.5.5-1+5.1 |
 | percona-postgresql-common | ppg:17 | 289-1+3.1 |
@@ -41,7 +41,7 @@
 | python3-six | ppg:17 | 1.17.0-1.2 |
 | python3-wcwidth | ppg:17 | 0.2.13-1.2 |
 | python3-zstandard | ppg:17 | 0.23.0-2.2 |
-| sfcgal | ppg:17 | (none) |
+| sfcgal | ppg:17 | 2.2.0-1.2 |
 | ydiff | ppg:17 | 1.4.2-1+1.1 |
 
 ## Container Images
