@@ -812,12 +812,14 @@ def check_project_config_changed(
     env_vars: "dict[str, str] | None" = None,
     active_projects: "set[str] | None" = None,
     branch_rootprj: "str | None" = None,
-) -> bool:
-    """Return True if the local project config differs from what is on OBS.
+) -> "tuple[bool, bool]":
+    """Return (changed, is_new) describing the project's config state on OBS.
+
+    changed  -- True if the local config differs from OBS (or the project is new).
+    is_new   -- True if the project does not yet exist on OBS (HTTP 404).
 
     Read-only: never writes to OBS. Used before Phase 1 decisions to detect
     projects whose config changed so packages can be triggered/promoted.
-    Returns True for projects that do not yet exist on OBS (will be created).
     """
     project_config = _load_project_config_with_inheritance(project_path, env_vars)
     desired_meta = build_project_meta(
@@ -842,11 +844,11 @@ def check_project_config_changed(
         ).strip()
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            return True  # project doesn't exist yet — counts as changed
+            return True, True  # project doesn't exist yet
         raise
     meta_changed = not _project_meta_subset_equal(current_meta, desired_meta)
     conf_changed = current_conf != desired_conf
-    return meta_changed or conf_changed
+    return meta_changed or conf_changed, False
 
 
 def _apply_package_config(

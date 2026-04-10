@@ -599,7 +599,15 @@ def cmd_sync(args):
     # --- Pre-Phase 1: detect projects whose config changed on OBS (read-only) ---
     # Runs before Phase 1 decisions so we can flip aggregate/skip → promote for
     # packages in changed projects before the pre-pass creates project skeletons.
+    #
+    # config_changed_projects: existing OBS projects whose config differs locally.
+    # new_projects: projects that don't exist on OBS yet (HTTP 404).
+    #
+    # Only config_changed_projects drives config-promotion in --branch-from mode.
+    # New projects are not config-promoted: their packages will be aggregated from
+    # the branch source and rebuilt in the new project context automatically.
     config_changed_projects: set[str] = set()
+    new_projects: set[str] = set()
     if targets:
         _unique_proj_paths: dict[str, tuple[str, Path]] = {}
         for _op, _pp in targets:
@@ -611,18 +619,20 @@ def cmd_sync(args):
 
         def _check_proj_changed(
             item: "tuple[str, tuple[str, Path]]",
-        ) -> "tuple[str, bool]":
+        ) -> "tuple[str, bool, bool]":
             _pname, (_op2, _ppath) = item
-            _changed = check_project_config_changed(
+            _changed, _is_new = check_project_config_changed(
                 apiurl, _pname, _ppath, args.rootprj, env_vars=env_vars
             )
-            return _pname, _changed
+            return _pname, _changed, _is_new
 
         with ThreadPoolExecutor(max_workers=8) as _proj_pool:
-            for _pname, _changed in _proj_pool.map(
+            for _pname, _changed, _is_new in _proj_pool.map(
                 _check_proj_changed, _unique_proj_paths.items()
             ):
-                if _changed:
+                if _is_new:
+                    new_projects.add(_pname)
+                elif _changed:
                     config_changed_projects.add(_pname)
 
     _print_action("planning: checking sync decisions")
@@ -1198,11 +1208,12 @@ def cmd_sync(args):
 
     # --- Config-triggered rebuild (plain sync push, no --branch-from) ---
     # OBS does not auto-rebuild when project config (meta or prjconf) changes.
-    # Trigger a service run for every package in a changed project that was not
-    # already triggered by file changes above.
-    if config_changed_projects and not branch_rootprj:
+    # Trigger a service run for every package in a changed or new project that
+    # was not already triggered by file changes above.
+    _trigger_projects = config_changed_projects | new_projects
+    if _trigger_projects and not branch_rootprj:
         for obs_project_name, pkg_name in decisions:
-            if obs_project_name not in config_changed_projects:
+            if obs_project_name not in _trigger_projects:
                 continue
             if (obs_project_name, pkg_name) in already_triggered:
                 continue
