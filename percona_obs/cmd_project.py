@@ -111,15 +111,16 @@ def _extract_version_from_service(service_file: Path) -> "str | None":
 _LOCAL_AGGREGATE_RE = re.compile(r"^\$\{OBS_ROOTPRJ\}:(.+)$")
 
 
-def _follow_aggregate(aggregate_file: Path) -> "str | None":
-    """Follow an _aggregate pointer to its source package and return its version.
+def _resolve_aggregate_source(
+    aggregate_file: Path,
+) -> "tuple[str, str] | None":
+    """Return (local_project_id, pkg_name) for the first resolvable local aggregate.
 
-    Only local aggregates (project="${OBS_ROOTPRJ}:local:path") are followed.
-    External aggregates return None.
+    Returns None for external aggregates or unparseable files.
+    local_project_id uses colon notation (e.g. 'ppg:common:deps:build').
     """
     try:
-        text = aggregate_file.read_text("utf-8")
-        root_el = ET.fromstring(text)
+        root_el = ET.fromstring(aggregate_file.read_text("utf-8"))
     except (ET.ParseError, OSError):
         return None
 
@@ -141,10 +142,26 @@ def _follow_aggregate(aggregate_file: Path) -> "str | None":
         if not target_path.is_dir():
             continue
 
-        service_file = target_path / "obs" / "_service"
-        if service_file.is_file():
-            return _extract_version_from_service(service_file)
+        return local_project, pkg_name
 
+    return None
+
+
+def _follow_aggregate(aggregate_file: Path) -> "str | None":
+    """Follow an _aggregate pointer to its source package and return its version.
+
+    Only local aggregates (project="${OBS_ROOTPRJ}:local:path") are followed.
+    External aggregates return None.
+    """
+    src = _resolve_aggregate_source(aggregate_file)
+    if src is None:
+        return None
+    local_project, pkg_name = src
+    service_file = (
+        REPO_ROOT.joinpath(*local_project.split(":")) / pkg_name / "obs" / "_service"
+    )
+    if service_file.is_file():
+        return _extract_version_from_service(service_file)
     return None
 
 
@@ -831,6 +848,10 @@ def cmd_project_versions(args) -> None:
                 version = _extract_version_from_service(service_file)
             elif aggregate_file.is_file():
                 version = _follow_aggregate(aggregate_file)
+                agg_src = _resolve_aggregate_source(aggregate_file)
+                if agg_src:
+                    base["_agg_src_project"] = agg_src[0]
+                    base["_agg_src_pkg"] = agg_src[1]
             records.append({**base, "type": "package", "version": version})
 
     if getattr(args, "online", False):
@@ -843,16 +864,25 @@ def cmd_project_versions(args) -> None:
         apiurl = osc.conf.config["apiurl"]
 
         # Group all records by OBS project to batch _fetch_build_results calls.
-        obs_project_records: dict[str, list[dict[str, object]]] = {}
+        # Aggregate packages are looked up in their source project, not the
+        # aggregate project, because the actual build happens in the source.
+        obs_project_records: dict[str, list[tuple[dict[str, object], str]]] = {}
         for record in records:
-            project_id = str(record["project"])
-            obs_proj = f"{args.rootprj}:{project_id}" if project_id else args.rootprj
-            obs_project_records.setdefault(obs_proj, []).append(record)
+            if "_agg_src_project" in record:
+                src_proj = str(record["_agg_src_project"])
+                src_pkg = str(record["_agg_src_pkg"])
+                obs_proj = f"{args.rootprj}:{src_proj}"
+            else:
+                project_id = str(record["project"])
+                obs_proj = (
+                    f"{args.rootprj}:{project_id}" if project_id else args.rootprj
+                )
+                src_pkg = str(record["name"])
+            obs_project_records.setdefault(obs_proj, []).append((record, src_pkg))
 
-        for obs_proj, proj_records in obs_project_records.items():
+        for obs_proj, pkg_record_pairs in obs_project_records.items():
             _, succeeded_archs = _fetch_build_results(apiurl, obs_proj)
-            for record in proj_records:
-                pkg_name = str(record["name"])
+            for record, pkg_name in pkg_record_pairs:
                 repo_map = succeeded_archs.get(pkg_name)
                 if not repo_map:
                     record["version"] = None
@@ -866,6 +896,10 @@ def cmd_project_versions(args) -> None:
                     record["version"] = _fetch_versrel_from_history(
                         apiurl, obs_proj, repo, arch, pkg_name
                     )
+
+    for record in records:
+        record.pop("_agg_src_project", None)
+        record.pop("_agg_src_pkg", None)
 
     if getattr(args, "markdown", False):
         packages = [r for r in records if r["type"] == "package"]
