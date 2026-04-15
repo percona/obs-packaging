@@ -14,6 +14,7 @@ on:
 jobs:
   sync:
     name: Build packages in OBS
+    environment: obs-build
     runs-on: ubuntu-latest
     permissions:
       # Required to post/update the PR comment.

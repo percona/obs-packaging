@@ -6,3 +6,4 @@ description: |
 build:
   Debian_13: false
   Ubuntu_24.04: false
+  Ubuntu_26.04: false

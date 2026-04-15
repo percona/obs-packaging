@@ -36,6 +36,15 @@ repositories:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:24.04
         repository: universe
     archs: [x86_64]
+  - name: Ubuntu_26.04
+    paths:
+      - subproject: ppg:common:deps:build
+        repository: Ubuntu_26.04
+      - subproject: common:deps:build
+        repository: Ubuntu_26.04
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:26.04
+        repository: universe
+    archs: [x86_64]
   - name: openSUSE_Tumbleweed
     paths:
       - subproject: ppg:common:deps:build
