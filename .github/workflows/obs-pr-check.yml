@@ -114,6 +114,25 @@ jobs:
             --no-scm-validate \
             | tee /tmp/sync-output.txt
 
+      # If the PR adds release.yaml files, test the release flow by running
+      # sync release against the PR's OBS project.
+      - name: Test release (if PR adds release.yaml)
+        if: steps.sync.outcome == 'success'
+        run: |
+          RELEASES=$(git diff --name-only --diff-filter=A origin/main...HEAD -- 'root/*/releases/*/release.yaml')
+          if [ -z "$RELEASES" ]; then
+            echo "No release commits in this PR"
+            exit 0
+          fi
+          for release_file in $RELEASES; do
+            rel_path="${release_file#root/}"
+            rel_dir="${rel_path%/release.yaml}"
+            rel_project="${rel_dir//\//:}"
+            echo "Releasing: $rel_project"
+            venv/bin/python -m percona_obs -P "pr-${PR_NUMBER}" \
+              sync release --force "$rel_project"
+          done
+
       # Poll OBS until all builds in the PR project reach a terminal state.
       # Fails the job (and PR check) if any build fails, is broken, or is
       # unresolvable.  Skipped when the sync step did not succeed.

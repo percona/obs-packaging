@@ -108,6 +108,11 @@ def resolve_project_path(project: str) -> Path:
     return REPO_ROOT.joinpath(*project.split(":"))
 
 
+def _is_release_dir(path: Path) -> bool:
+    """Return True if *path* is a release directory (contains release.yaml)."""
+    return (path / "release.yaml").is_file()
+
+
 def is_package(path: Path) -> bool:
     """A directory is a package if it contains an obs/ subdirectory or a package.yaml file."""
     return (path / "obs").is_dir() or (path / "package.yaml").exists()
@@ -129,6 +134,8 @@ def find_packages(project_path: Path, obs_project: str, recursive: bool = True):
     """
     for child in sorted(project_path.iterdir()):
         if not child.is_dir():
+            continue
+        if _is_release_dir(child):
             continue
         if is_package(child):
             yield obs_project, child
@@ -352,7 +359,7 @@ def find_projects(path: Path, obs_project: str):
     obs_project_name = config.get("name") or obs_project
     yield obs_project_name, path
     for child in sorted(path.iterdir()):
-        if child.is_dir() and is_project(child):
+        if child.is_dir() and not _is_release_dir(child) and is_project(child):
             yield from find_projects(child, f"{obs_project}:{child.name}")
 
 

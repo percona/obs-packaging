@@ -31,6 +31,7 @@ from .common import (
     find_projects,
     is_package,
     load_yaml,
+    load_yaml_with_env,
     logger,
     parse_env_overrides,
     resolve_project_path,
@@ -1136,3 +1137,145 @@ def cmd_sync_promote(args) -> None:
 
     suffix = " (dry run)" if dry_run else ""
     _print_ok(f"promote successful{suffix}  ({promoted} promoted, {skipped} skipped)")
+
+
+def cmd_sync_release(args) -> None:
+    """Release packages from an OBS source project to a release target.
+
+    Reads the release.yaml for the given release project identifier,
+    checks that the source project is up-to-date, then runs ``osc release``
+    to transfer binaries to the release target project.
+    """
+    release_path = resolve_project_path(args.project)
+    release_file = release_path / "release.yaml"
+    if not release_file.is_file():
+        raise SystemExit(
+            f"error: release.yaml not found at {release_path.relative_to(_REPO_DIR)}"
+        )
+
+    env_vars = parse_env_overrides(args.env_overrides) if args.env_overrides else {}
+    release_data = load_yaml_with_env(release_file, env_vars)
+
+    source_project_id = release_data.get("project")
+    if not source_project_id:
+        raise SystemExit(f"error: release.yaml missing 'project' field: {release_file}")
+
+    apiurl: str = osc.conf.config["apiurl"]
+    source_obs_project = f"{args.rootprj}:{source_project_id}"
+    release_obs_project = f"{args.rootprj}:{args.project}"
+
+    # Idempotency: skip if the release project already exists on OBS.
+    _print_pending(f"checking release project {release_obs_project}")
+    if _obs_project_exists(apiurl, release_obs_project):
+        _print_same(f"release  {release_obs_project}  (already exists)")
+        return
+
+    # Validate that the source project has not diverged since the release tag.
+    if not args.force:
+        # Check 1: git-level divergence since the release tag.
+        tag = release_data.get("revision", "")
+        source_path = resolve_project_path(source_project_id)
+        if tag:
+            _print_pending(
+                f"checking for changes in {source_project_id} since tag {tag}"
+            )
+            result = subprocess.run(
+                [
+                    "git",
+                    "diff",
+                    "--name-only",
+                    f"{tag}..HEAD",
+                    "--",
+                    str(source_path),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=_REPO_DIR,
+            )
+            if result.returncode != 0:
+                print(result.stderr, end="", file=sys.stderr)
+                raise SystemExit(
+                    f"error: git diff failed — is the tag '{tag}' present locally?"
+                )
+            changed_files = [
+                line.strip() for line in result.stdout.splitlines() if line.strip()
+            ]
+            if changed_files:
+                print(
+                    f"error: source project {source_project_id} has changed since "
+                    f"tag {tag}:",
+                    file=sys.stderr,
+                )
+                for f in changed_files:
+                    print(f"  {f}", file=sys.stderr)
+                raise SystemExit(
+                    "The source project has diverged from the release tag. "
+                    "Use --force to skip this check."
+                )
+
+        # Check 2: OBS-level divergence (external edits directly in OBS).
+        _print_pending(f"validating source project {source_obs_project} is up-to-date")
+        cmd = [
+            sys.executable,
+            "-m",
+            "percona_obs",
+        ]
+        if args.profile:
+            cmd += ["-P", args.profile]
+        else:
+            cmd += ["-A", apiurl, "-R", args.rootprj]
+        cmd += [
+            "sync",
+            "push",
+            "--dry-run",
+            "--no-scm-validate",
+            source_project_id,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=_REPO_DIR)
+        if result.returncode != 0:
+            print(result.stderr, end="", file=sys.stderr)
+            raise SystemExit(
+                f"error: sync push --dry-run failed for {source_project_id}"
+            )
+        # Check for promote indicators in the output.  Promoted packages
+        # produce lines starting with "  + " (new files) or "  ~ " (updated).
+        pending_lines = [
+            line
+            for line in result.stdout.splitlines()
+            if line.startswith("  + ") or line.startswith("  ~ ")
+        ]
+        if pending_lines:
+            print(
+                f"error: source project {source_project_id} has pending changes:",
+                file=sys.stderr,
+            )
+            for line in pending_lines:
+                print(f"  {line}", file=sys.stderr)
+            raise SystemExit(
+                "Sync the source project before releasing: "
+                f"percona-obs sync push {source_project_id}"
+            )
+
+    # Run osc release to transfer binaries.
+    _print_pending(f"releasing {source_obs_project} → {release_obs_project}")
+    result = subprocess.run(
+        [
+            "osc",
+            "-A",
+            apiurl,
+            "release",
+            source_obs_project,
+            "--target-project",
+            release_obs_project,
+            "--no-delay",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(result.stderr, end="", file=sys.stderr)
+        if result.stdout.strip():
+            print(result.stdout, end="", file=sys.stderr)
+        raise SystemExit(f"error: osc release failed for {source_obs_project}")
+
+    _print_ok(f"release  {source_obs_project} → {release_obs_project}")

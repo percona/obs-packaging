@@ -16,10 +16,11 @@ from .cmd_profile import (
 from .cmd_project import (
     cmd_project_config,
     cmd_project_install,
+    cmd_project_release,
     cmd_project_verify,
     cmd_project_versions,
 )
-from .cmd_sync import cmd_sync, cmd_sync_delete, cmd_sync_promote
+from .cmd_sync import cmd_sync, cmd_sync_delete, cmd_sync_promote, cmd_sync_release
 from .common import _DIM, _col, logger
 
 
@@ -239,6 +240,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sync_promote_parser.set_defaults(func=cmd_sync_promote)
 
+    sync_release_parser = sync_subparsers.add_parser(
+        "release",
+        help="Release packages from OBS source project to release target.",
+    )
+    sync_release_parser.add_argument(
+        "project",
+        help="Release project identifier (e.g. ppg:releases:17.9).",
+    )
+    sync_release_parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Skip source project sync validation.",
+    )
+    sync_release_parser.set_defaults(func=cmd_sync_release)
+
     build_parser_ = subparsers.add_parser(
         "build",
         help="Trigger OBS builds or check their status.",
@@ -430,6 +447,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output a Markdown table instead of YAML.",
     )
     project_versions_parser.set_defaults(func=cmd_project_versions)
+
+    project_release_parser = project_subparsers.add_parser(
+        "release",
+        help="Cut a release: create release.yaml, commit, and tag.",
+    )
+    project_release_parser.add_argument(
+        "project",
+        help="Source project to release from (colon notation, e.g. ppg:17).",
+    )
+    project_release_parser.add_argument(
+        "release_name",
+        metavar="release-name",
+        help="Release name (e.g. 17.9). Used as the subdirectory under releases/.",
+    )
+    project_release_parser.set_defaults(func=cmd_project_release)
 
     return parser
 

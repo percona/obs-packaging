@@ -1,0 +1,65 @@
+name: OBS Release
+
+# Triggered when a release tag is pushed (e.g. ppg/17.9).
+# Runs `osc release` to transfer binaries from the source OBS project to
+# the release target project, then generates a version list for the release.
+
+on:
+  push:
+    tags: ['*/*']
+
+jobs:
+  release:
+    name: Release packages in OBS
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    env:
+      OBS_APIURL: ${{ vars.OBS_APIURL }}
+      OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/obs-setup
+        with:
+          obs-apiurl: ${{ vars.OBS_APIURL }}
+          obs-user: ${{ vars.OBS_USER }}
+          obs-password: ${{ secrets.OBS_PASSWORD }}
+
+      - name: Create percona-obs profile
+        run: |
+          venv/bin/python -m percona_obs \
+            -A "$OBS_APIURL" \
+            -R "$OBS_ROOTPRJ" \
+            -e "REMOTE_OBS_ORG_INTERCONNECT:" \
+            -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
+            -e "PERCONA_OBS_PACKAGING_REPO:${{ github.server_url }}/${{ github.repository }}.git" \
+            profile create main
+
+      # Derive the release project from the tag name.
+      # Tag ppg/17.9 → release project ppg:releases:17.9
+      - name: Derive release project
+        id: release-info
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          PRODUCT="${TAG%%/*}"
+          VERSION="${TAG#*/}"
+          RELEASE_PROJECT="${PRODUCT}:releases:${VERSION}"
+          echo "release_project=$RELEASE_PROJECT" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Release to OBS
+        run: |
+          venv/bin/python -m percona_obs -P main \
+            sync release "${{ steps.release-info.outputs.release_project }}"
+
+      - name: Generate release version list
+        run: |
+          venv/bin/python -m percona_obs -P main \
+            project versions \
+            "${{ steps.release-info.outputs.release_project }}" \
+            --online --markdown

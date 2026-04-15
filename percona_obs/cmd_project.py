@@ -1,5 +1,7 @@
+import argparse
 import concurrent.futures
 import re
+import subprocess
 import sys
 import urllib.error
 import xml.etree.ElementTree as ET
@@ -16,9 +18,12 @@ from .common import (
     _DIM,
     _PROFILES_DIR,
     _RED,
+    _REPO_DIR,
     _col,
     _ENV_VAR_RE,
     _load_project_config_with_inheritance,
+    _print_create,
+    _print_ok,
     apply_env_substitution,
     build_project_meta,
     find_packages,
@@ -28,7 +33,6 @@ from .common import (
     load_yaml,
     parse_env_overrides,
     resolve_project_path,
-    _print_ok,
 )
 from .cmd_profile import _load_profile, _load_profile_env
 from .obs_api import (
@@ -950,3 +954,76 @@ def cmd_project_versions(args) -> None:
         print("\n".join(md_lines), end="")
     else:
         print(yaml.dump(records, default_flow_style=False, allow_unicode=True), end="")
+
+
+def cmd_project_release(args: argparse.Namespace) -> None:
+    """Cut a release: create release.yaml, commit, and tag."""
+    product = args.project.split(":")[0]
+
+    # Validate the source project directory exists.
+    source_path = resolve_project_path(args.project)
+    if not source_path.is_dir():
+        raise SystemExit(
+            f"error: source project directory does not exist: {source_path}"
+        )
+
+    release_dir = REPO_ROOT / product / "releases" / args.release_name
+    release_file = release_dir / "release.yaml"
+
+    if release_file.exists():
+        raise SystemExit(
+            f"error: release already exists: {release_file.relative_to(_REPO_DIR)}"
+        )
+
+    # Build release.yaml content.
+    revision = f"{product}/{args.release_name}"
+    release_data = {
+        "repository": "${PERCONA_OBS_PACKAGING_REPO}",
+        "revision": revision,
+        "project": args.project,
+    }
+    release_yaml = yaml.dump(release_data, default_flow_style=False, allow_unicode=True)
+
+    release_project = f"{product}:releases:{args.release_name}"
+    commit_msg = f"Release {release_project} from {args.project}"
+    tag_name = f"{product}/{args.release_name}"
+
+    # Show what will be created and ask for confirmation.
+    print(f"Release directory: {release_dir.relative_to(_REPO_DIR)}/")
+    print()
+    print(f"  release.yaml:")
+    for line in release_yaml.splitlines():
+        print(f"    {line}")
+    print()
+    print(f"  Commit message: {commit_msg}")
+    print(f"  Tag:            {tag_name}")
+    print()
+
+    try:
+        answer = input("Create release? [y/N] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        raise SystemExit("Aborted.")
+    if answer not in ("y", "yes"):
+        raise SystemExit("Aborted.")
+
+    # Write release.yaml.
+    release_dir.mkdir(parents=True, exist_ok=True)
+    with release_file.open("w") as f:
+        yaml.dump(release_data, f, default_flow_style=False, allow_unicode=True)
+    _print_create(str(release_file.relative_to(_REPO_DIR)))
+
+    # Git add, commit -s, and tag.
+    rel_path = str(release_file.relative_to(_REPO_DIR))
+    subprocess.run(["git", "add", rel_path], cwd=_REPO_DIR, check=True)
+    subprocess.run(
+        ["git", "commit", "-s", "-m", commit_msg, "--", rel_path],
+        cwd=_REPO_DIR,
+        check=True,
+    )
+    subprocess.run(["git", "tag", tag_name], cwd=_REPO_DIR, check=True)
+
+    _print_ok(f"{commit_msg} (tag: {tag_name})")
+    print()
+    print("  Push the commit and tag to the remote:")
+    print(f"    git push && git push origin {tag_name}")
