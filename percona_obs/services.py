@@ -575,8 +575,10 @@ def _run_local_services(
         name = svc.get("name", "")
         binary = _OBS_SERVICE_DIR / name
         if not binary.exists():
-            logger.warning(f"service binary not found, skipping: {binary}")
-            return []
+            raise SystemExit(
+                f"error: service binary not found: {binary}\n"
+                f"  Install the package that provides this service."
+            )
 
         cmd: list[str] = [str(binary)]
         for param in svc.findall("param"):
