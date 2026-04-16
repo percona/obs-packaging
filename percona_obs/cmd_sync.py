@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -38,11 +39,9 @@ from .common import (
     resolve_project_path,
 )
 from .git_utils import (
-    _check_git_clean,
     _generate_sync_message,
     _has_non_obs_package_changes_since,
     _has_package_changes_since,
-    _has_package_content_changes_since,
 )
 from .obs_api import (
     _apply_package_config,
@@ -64,9 +63,8 @@ from .obs_api import (
 )
 from .services import (
     _get_all_obs_scm_infos,
-    _get_packaging_obs_scm_infos,
     _git_head_sha,
-    _has_manual_services,
+    _has_runnable_services,
     _run_local_services,
 )
 from .targets import _iter_project_chain, _resolve_targets
@@ -167,8 +165,8 @@ def _content_matches_branch(
        commit hash recorded in the OBS obsinfo file must match the current
        remote HEAD.
 
-    Used as a fallback when the branch was synced with --dirty (so the revision
-    SHA in the commit message cannot be trusted for git-log comparison).
+    Used as a fallback when the revision SHA in the commit message cannot be
+    trusted for git-log comparison (e.g. local sync, manual OBS commit).
 
     Pass ``check_obsinfo=False`` when the caller has already verified via
     git-log that the only file-level changes are cosmetic (e.g. env-var
@@ -287,107 +285,6 @@ def _content_matches_branch(
             return False
 
     return True
-
-
-def _packaging_scm_has_updates(
-    apiurl: str,
-    obs_project: str,
-    package_name: str,
-    service_file: Path,
-    env_vars: dict[str, str] | None,
-    missing_obsinfo_means_updated: bool = False,
-) -> bool:
-    """Return True if any packaging obs_scm service has new commits vs OBS.
-
-    Fetches the .obsinfo for each packaging obs_scm service (debian/ or rpm/)
-    and compares the recorded commit hash against the current remote HEAD.
-    Returns False when remote HEAD cannot be resolved (conservative: no spurious
-    triggers) or when no packaging obs_scm services are present.
-
-    When ``missing_obsinfo_means_updated`` is True, a packaging service whose
-    obsinfo is absent from OBS is treated as updated (returns True).  Use this
-    in the sync decision path where a missing obsinfo means OBS never fetched
-    that subdir — so we must re-upload.  The default (False) preserves the
-    conservative build-trigger behaviour where a missing obsinfo is skipped.
-    """
-    packaging_infos = _get_packaging_obs_scm_infos(service_file, env_vars)
-    if not packaging_infos:
-        return False
-    obs_md5s = _fetch_obs_file_md5s(apiurl, obs_project, package_name, expanded=True)
-    for filename_prefix, scm_url, scm_revision, subdir in packaging_infos:
-        head_sha = _git_head_sha(scm_url, scm_revision)
-        if not head_sha:
-            logger.debug(
-                f"packaging scm check: cannot resolve remote HEAD "
-                f"for {scm_url}@{scm_revision}, skipping trigger"
-            )
-            continue
-        _obs_scm_prefix = f"_service:obs_scm:{filename_prefix}"
-        obsinfo_name = next(
-            (
-                name
-                for name in obs_md5s
-                if (
-                    name.startswith(filename_prefix) or name.startswith(_obs_scm_prefix)
-                )
-                and name.endswith(".obsinfo")
-            ),
-            None,
-        )
-        if not obsinfo_name:
-            if missing_obsinfo_means_updated:
-                logger.debug(
-                    f"packaging scm check: no obsinfo for {filename_prefix!r} "
-                    f"in {obs_project}/{package_name}, treating as updated"
-                )
-                return True
-            continue
-        obsinfo_bytes = _fetch_obs_file_content(
-            apiurl, obs_project, package_name, obsinfo_name, expanded=True
-        )
-        if not obsinfo_bytes:
-            continue
-        obs_commit: str | None = None
-        for line in obsinfo_bytes.decode("utf-8", errors="replace").splitlines():
-            if line.startswith("commit:"):
-                obs_commit = line.split(":", 1)[1].strip() or None
-                break
-        if obs_commit != head_sha:
-            # The remote HEAD moved since OBS last fetched.  If we have the
-            # subdir, do a local git log check to see whether any of those
-            # commits actually touch that directory.  If git log returns empty,
-            # there are no packaging changes and no trigger is needed.
-            if subdir and obs_commit:
-                try:
-                    git_result = subprocess.run(
-                        [
-                            "git",
-                            "log",
-                            "--oneline",
-                            f"{obs_commit}..{head_sha}",
-                            "--",
-                            subdir,
-                        ],
-                        capture_output=True,
-                        text=True,
-                        cwd=_REPO_DIR,
-                        timeout=15,
-                    )
-                    if git_result.returncode == 0 and not git_result.stdout.strip():
-                        logger.debug(
-                            f"packaging scm: {filename_prefix!r} HEAD moved but "
-                            f"no commits touch {subdir!r}, skipping trigger  "
-                            f"{obs_project}/{package_name}"
-                        )
-                        continue
-                except (subprocess.TimeoutExpired, OSError):
-                    pass  # can't verify locally — fall through to trigger
-            logger.debug(
-                f"packaging scm: {filename_prefix!r} has new commits "
-                f"(OBS={obs_commit!r}, remote={head_sha!r})  {obs_project}/{package_name}"
-            )
-            return True
-    return False
 
 
 def _resolve_branch_decision(
@@ -510,8 +407,6 @@ def cmd_sync(args):
             print(f"error: {rel}: {msg}", file=sys.stderr)
         sys.exit(1)
 
-    if not args.dirty:
-        _check_git_clean()
     targets = _resolve_targets(args)
 
     # Build env_vars from profile env + -e overrides (already merged by main()).
@@ -565,12 +460,14 @@ def cmd_sync(args):
         branch_rootprj = branch_profile.get("rootprj", "")
         _branch_env_strings = _load_profile_env_strings(args.branch_from)
         branch_env_vars = (
-            parse_env_overrides(_branch_env_strings) if _branch_env_strings else None
+            parse_env_overrides(_branch_env_strings) if _branch_env_strings else {}
         )
+        if branch_rootprj:
+            branch_env_vars["OBS_ROOTPRJ"] = branch_rootprj
     seen_projects: set = set()
     local_project_names: set[str] = set()
     local_packages_by_project: dict[str, set[str]] = {}
-    dry_run_obs = args.dry_run or args.dry_run_remote
+    dry_run_obs = args.dry_run
     # Cache of branch-project → set of repository names, populated lazily in
     # Phase 1.  Avoids a redundant API call per package for the same project.
     _branch_repo_cache: dict[str, set[str]] = {}
@@ -711,90 +608,10 @@ def cmd_sync(args):
             else:
                 return key, "promote", None, None
         else:
-            # Without --branch-from the package may still hold a _aggregate from
-            # a prior --branch-from sync.  Check whether content still matches.
-            prior_comment = _fetch_obs_package_meaningful_comment(
-                apiurl, obs_project_name, package_path.name
-            )
-            if prior_comment:
-                bm = _BRANCH_MSG_RE.match(prior_comment)
-                if bm:
-                    branch_profile_name = bm.group(1)
-                    src_proj = bm.group(2)
-                    # Resolve the apiurl for this branch profile; it may be on a
-                    # different OBS instance (cross-instance branching).
-                    if branch_profile_name not in _profile_cache:
-                        try:
-                            bp = _load_profile(branch_profile_name)
-                            _profile_cache[branch_profile_name] = bp
-                            _profile_env_vars_cache[branch_profile_name] = (
-                                _load_profile_env(branch_profile_name)
-                            )
-                        except SystemExit:
-                            logger.debug(
-                                f"branch profile {branch_profile_name!r} not found,"
-                                f" falling back to target apiurl for {src_proj}"
-                            )
-                            _profile_cache[branch_profile_name] = {
-                                "apiurl": apiurl or ""
-                            }
-                            _profile_env_vars_cache[branch_profile_name] = {}
-                    src_apiurl = _profile_cache[branch_profile_name]["apiurl"]
-                    decision = (
-                        "skip_branch"
-                        if _content_matches_branch(
-                            src_apiurl,
-                            src_proj,
-                            package_path.name,
-                            obs_dir,
-                            {
-                                **_profile_env_vars_cache.get(branch_profile_name, {}),
-                                **_pkg_env_vars(package_path),
-                            },
-                            {**env_vars, **_pkg_env_vars(package_path)},
-                        )
-                        else "promote"
-                    )
-                    # Always record the source project and profile so that Phase 2
-                    # dep queries use the correct OBS instance.
-                    return key, decision, src_proj, branch_profile_name
-                else:
-                    # Prior comment is not a branch aggregate marker; it may
-                    # be a plain sync: message.  Skip the upload if the obs/
-                    # template files have not changed since the last sync.
-                    # Local rpm/ and debian/ changes are intentionally ignored:
-                    # OBS fetches packaging from PERCONA_OBS_PACKAGING_BRANCH at
-                    # build time.  However, if env vars changed the branch, the
-                    # packaging content may differ between the old branch (what
-                    # OBS has) and the new branch — use obsinfo to detect this.
-                    skip = False
-                    sm = _SYNC_MSG_RE.match(prior_comment)
-                    if sm and not sm.group(2).startswith("local changes on"):
-                        short_sha = sm.group(1)
-                        if not _has_package_content_changes_since(
-                            short_sha, package_path
-                        ):
-                            pkg_env = {
-                                **env_vars,
-                                **_pkg_env_vars(package_path),
-                            }
-                            _svc_file = obs_dir / "_service"
-                            if (
-                                not _svc_file.is_file()
-                                or not pkg_env
-                                or not _packaging_scm_has_updates(
-                                    apiurl,
-                                    obs_project_name,
-                                    package_path.name,
-                                    _svc_file,
-                                    pkg_env,
-                                    missing_obsinfo_means_updated=True,
-                                )
-                            ):
-                                skip = True
-                    return key, "skip" if skip else "promote", None, None
-            else:
-                return key, "promote", None, None
+            # Without --branch-from, always promote.  The upload function
+            # compares file MD5s against OBS and only uploads what changed,
+            # so unchanged packages are effectively skipped at upload time.
+            return key, "promote", None, None
 
     with ThreadPoolExecutor(max_workers=16) as _pool:
         _futures = [_pool.submit(_decide_package, op, pp) for op, pp in targets]
@@ -960,6 +777,10 @@ def cmd_sync(args):
                 dry_run=dry_run_obs,
                 env_vars=env_vars,
             )
+        # Give OBS a moment to settle after creating skeleton projects
+        # before applying the full configuration.
+        if sorted_projs and not dry_run_obs:
+            time.sleep(5)
         # Stage 2 pass 1: configure all projects.  Projects whose <path>
         # elements reference sibling/child projects that are still skeletons
         # will have those paths stripped and need a second pass.
@@ -997,19 +818,14 @@ def cmd_sync(args):
             )
 
     if args.project_only:
-        if args.dry_run:
-            suffix = " (dry run)"
-        elif args.dry_run_remote:
-            suffix = " (dry run: remote)"
-        else:
-            suffix = ""
+        suffix = " (dry run)" if args.dry_run else ""
         _print_ok(f"sync successful{suffix}")
         return
 
     # --- Phase 3: execute uploads based on decisions ---
     # Track packages that were triggered by file changes so the config-triggered
     # rebuild sweep below doesn't double-trigger them.
-    already_triggered: set[tuple[str, str]] = set()
+
     for obs_project, package_path in targets:
         project_path = package_path.parent
         project_config = load_yaml(project_path / "project.yaml")
@@ -1042,6 +858,11 @@ def cmd_sync(args):
                             dry_run=dry_run_obs,
                             env_vars=env_vars,
                         )
+                if (
+                    any(_raw not in seen_projects for _raw, _ in sorted_chain)
+                    and not dry_run_obs
+                ):
+                    time.sleep(5)
                 chain_needs_reconfig: list[tuple[str, str, Path]] = []
                 for raw_proj, (prj_name, proj_path) in sorted_chain:
                     if raw_proj not in seen_projects:
@@ -1115,60 +936,44 @@ def cmd_sync(args):
         elif decision in ("skip_branch", "skip"):
             _print_same(f"files  {obs_project_name}/{package_path.name}")
         else:  # "promote"
-            message = args.message or _generate_sync_message(args.dirty)
+            message = args.message or _generate_sync_message()
             service_file = obs_dir / "_service"
             run_services = (
                 not args.no_services
                 and service_file.is_file()
-                and _has_manual_services(service_file)
+                and _has_runnable_services(service_file)
             )
             files_changed = False
             if run_services:
-                if args.dry_run and not args.dry_run_remote:
-                    # Pure dry-run: cannot run services; show service names and
-                    # report obs/ diff as-is.
-                    svc_root = ET.parse(service_file).getroot()
-                    for svc in svc_root.findall("service"):
-                        if svc.get("mode") == "manual":
-                            svc_name = svc.get("name", "?")
-                            _print_update(
-                                f"service {svc_name}  {obs_project_name}/{package_path.name}"
-                            )
-                    files_changed = _upload_obs_files(
-                        apiurl,
-                        obs_project_name,
-                        package_path.name,
-                        obs_dir,
-                        message=message,
-                        dry_run=True,
-                    )
-                else:
-                    workdir, manual_artifacts = _run_local_services(
-                        obs_dir,
-                        pkg_label=f"{obs_project_name}/{package_path.name}",
-                        cache=not args.no_cache,
-                        env_vars=pkg_vars,
-                    )
+                workdir, _all_artifacts = _run_local_services(
+                    obs_dir,
+                    pkg_label=f"{obs_project_name}/{package_path.name}",
+                    cache=not args.no_cache,
+                    env_vars=pkg_vars,
+                )
+                try:
+                    combined = Path(tempfile.mkdtemp(prefix="percona-obs-upload-"))
                     try:
-                        combined = Path(tempfile.mkdtemp(prefix="percona-obs-upload-"))
-                        try:
-                            for f in obs_dir.iterdir():
-                                if f.is_file():
-                                    _copy_with_env_subst(f, combined, pkg_vars)
-                            for art_name in manual_artifacts:
-                                shutil.copy2(workdir / art_name, combined / art_name)
-                            files_changed = _upload_obs_files(
-                                apiurl,
-                                obs_project_name,
-                                package_path.name,
-                                combined,
-                                message=message,
-                                dry_run=dry_run_obs,
-                            )
-                        finally:
-                            shutil.rmtree(combined, ignore_errors=True)
+                        # Copy obs/ files excluding _service.
+                        for f in obs_dir.iterdir():
+                            if f.is_file() and f.name != "_service":
+                                _copy_with_env_subst(f, combined, pkg_vars)
+                        # Copy all service artifacts (cleanup already done).
+                        for f in workdir.iterdir():
+                            if f.is_file():
+                                shutil.copy2(f, combined / f.name)
+                        files_changed = _upload_obs_files(
+                            apiurl,
+                            obs_project_name,
+                            package_path.name,
+                            combined,
+                            message=message,
+                            dry_run=dry_run_obs,
+                        )
                     finally:
-                        shutil.rmtree(workdir, ignore_errors=True)
+                        shutil.rmtree(combined, ignore_errors=True)
+                finally:
+                    shutil.rmtree(workdir, ignore_errors=True)
             else:
                 sub_dir = Path(tempfile.mkdtemp(prefix="percona-obs-upload-"))
                 try:
@@ -1185,44 +990,6 @@ def cmd_sync(args):
                     )
                 finally:
                     shutil.rmtree(sub_dir, ignore_errors=True)
-            # If obs/ files are unchanged but packaging files (debian/ or rpm/)
-            # may have been pushed to the repo, trigger an OBS service run so
-            # OBS re-fetches those subtrees and queues a rebuild.
-            if not files_changed and service_file.is_file():
-                if _packaging_scm_has_updates(
-                    apiurl,
-                    obs_project_name,
-                    package_path.name,
-                    service_file,
-                    pkg_vars,
-                ):
-                    _print_pending(f"trigger  {obs_project_name}/{package_path.name}")
-                    if dry_run_obs:
-                        _print_ok(
-                            f"trigger  {obs_project_name}/{package_path.name}  [dry-run]"
-                        )
-                    else:
-                        osc.core.runservice(apiurl, obs_project_name, package_path.name)
-                        _print_ok(f"trigger  {obs_project_name}/{package_path.name}")
-                    already_triggered.add((obs_project_name, package_path.name))
-
-    # --- Config-triggered rebuild (plain sync push, no --branch-from) ---
-    # OBS does not auto-rebuild when project config (meta or prjconf) changes.
-    # Trigger a service run for every package in a changed or new project that
-    # was not already triggered by file changes above.
-    _trigger_projects = config_changed_projects | new_projects
-    if _trigger_projects and not branch_rootprj:
-        for obs_project_name, pkg_name in decisions:
-            if obs_project_name not in _trigger_projects:
-                continue
-            if (obs_project_name, pkg_name) in already_triggered:
-                continue
-            _print_pending(f"trigger  {obs_project_name}/{pkg_name}")
-            if dry_run_obs:
-                _print_ok(f"trigger  {obs_project_name}/{pkg_name}  [dry-run]")
-            else:
-                osc.core.runservice(apiurl, obs_project_name, pkg_name)
-                _print_ok(f"trigger  {obs_project_name}/{pkg_name}")
 
     # --- orphan cleanup ---
     # Remove packages on OBS that no longer exist locally, but only when the
@@ -1255,12 +1022,7 @@ def cmd_sync(args):
         for orphan_proj in sorted(orphan_projects, key=lambda x: -x.count(":")):
             _delete_obs_project(apiurl, orphan_proj, dry_run_obs, recursive=True)
 
-    if args.dry_run:
-        suffix = " (dry run)"
-    elif args.dry_run_remote:
-        suffix = " (dry run: remote)"
-    else:
-        suffix = ""
+    suffix = " (dry run)" if args.dry_run else ""
     _print_ok(f"sync successful{suffix}")
 
 
@@ -1348,9 +1110,6 @@ def cmd_sync_promote(args) -> None:
       sync promote <project>              — promote all packages under a project
       sync promote <project> <package>    — promote a single package
     """
-    if not args.dirty:
-        _check_git_clean()
-
     targets = _resolve_targets(args)
     apiurl = osc.conf.config["apiurl"]
     dry_run = args.dry_run
@@ -1384,15 +1143,15 @@ def cmd_sync_promote(args) -> None:
             continue
 
         # It's a branch — promote to full sources.
-        message = args.message or _generate_sync_message(args.dirty)
+        message = args.message or _generate_sync_message()
         service_file = obs_dir / "_service"
         run_services = (
             not args.no_services
             and service_file.is_file()
-            and _has_manual_services(service_file)
+            and _has_runnable_services(service_file)
         )
         if run_services and not dry_run:
-            workdir, manual_artifacts = _run_local_services(
+            workdir, _all_artifacts = _run_local_services(
                 obs_dir,
                 pkg_label=f"{obs_project_name}/{package_path.name}",
                 cache=not args.no_cache,
@@ -1402,10 +1161,11 @@ def cmd_sync_promote(args) -> None:
                 combined = Path(tempfile.mkdtemp(prefix="percona-obs-upload-"))
                 try:
                     for f in obs_dir.iterdir():
-                        if f.is_file():
+                        if f.is_file() and f.name != "_service":
                             _copy_with_env_subst(f, combined, pkg_vars)
-                    for art_name in manual_artifacts:
-                        shutil.copy2(workdir / art_name, combined / art_name)
+                    for f in workdir.iterdir():
+                        if f.is_file():
+                            shutil.copy2(f, combined / f.name)
                     _upload_obs_files(
                         apiurl,
                         obs_project_name,

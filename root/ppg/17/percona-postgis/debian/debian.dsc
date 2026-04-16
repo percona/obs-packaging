@@ -32,4 +32,4 @@ Build-Depends:
  libxml2-utils,
  docbook-xsl
 Debtransform-Release: 1
-Debtransform-Files-Tar: debian.tar.gz rpm.tar.gz
+Debtransform-Files-Tar: debian.tar.gz

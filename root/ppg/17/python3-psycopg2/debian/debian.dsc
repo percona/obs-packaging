@@ -13,4 +13,4 @@ Build-Depends:
  python3-sphinx (>= 1.0.7+dfsg-1~),
  python3-setuptools
 Debtransform-Release: 1
-Debtransform-Files-Tar: debian.tar.gz rpm.tar.gz
+Debtransform-Files-Tar: debian.tar.gz

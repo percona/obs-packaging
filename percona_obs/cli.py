@@ -100,12 +100,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Force update even if OBS reports a conflict.",
     )
     sync_push_parser.add_argument(
-        "--dirty",
-        action="store_true",
-        default=False,
-        help="Skip the git clean check (allow uncommitted changes or an unpushed HEAD).",
-    )
-    sync_push_parser.add_argument(
         "-m",
         "--message",
         default="",
@@ -116,13 +110,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         default=False,
-        help="Simulate actions without writing anything to OBS.",
-    )
-    sync_push_parser.add_argument(
-        "--dry-run-remote",
-        action="store_true",
-        default=False,
-        help="Run local services but skip all OBS write calls. Use to verify services work without committing to OBS.",
+        help="Run local services but skip all OBS write calls. "
+        "Use to verify service output and the upload diff without committing to OBS.",
     )
     sync_push_parser.add_argument(
         "--no-services",
@@ -222,12 +211,6 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="?",
         default=None,
         help="Package name. If omitted, all packages under the project are targeted.",
-    )
-    sync_promote_parser.add_argument(
-        "--dirty",
-        action="store_true",
-        default=False,
-        help="Skip the git clean check (allow uncommitted changes or an unpushed HEAD).",
     )
     sync_promote_parser.add_argument(
         "-m",

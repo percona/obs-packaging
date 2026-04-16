@@ -16,7 +16,15 @@ from .common import (
 )
 
 _OBS_SERVICE_DIR = Path("/usr/lib/obs/service")
-_SKIP_MODES = {"buildtime", "serveronly", "disabled"}
+_SKIP_MODES = {"serveronly", "disabled"}
+
+_SERVICE_PREFIX_RE = re.compile(r"^_service:[^:]+:")
+
+
+def _strip_service_prefix(name: str) -> str:
+    """Strip the ``_service:<name>:`` prefix that OBS service binaries add."""
+    return _SERVICE_PREFIX_RE.sub("", name)
+
 
 # Cache directories (relative to the repo root, ignored by git)
 _CACHE_DIR = _REPO_DIR / ".cache"
@@ -40,6 +48,17 @@ def _has_manual_services(service_file: Path) -> bool:
     except (ET.ParseError, OSError):
         return False
     return any(svc.get("mode") == "manual" for svc in root.findall("service"))
+
+
+def _has_runnable_services(service_file: Path) -> bool:
+    """Return True if any service can be run locally (not serveronly/disabled)."""
+    try:
+        root = ET.parse(service_file).getroot()
+    except (ET.ParseError, OSError):
+        return False
+    return any(
+        svc.get("mode", "") not in _SKIP_MODES for svc in root.findall("service")
+    )
 
 
 def _get_upstream_obs_scm_info(
@@ -454,27 +473,81 @@ def _obs_scm_store(
         raise
 
 
+def _copy_local_packaging(obs_dir: Path, workdir: Path, pkg_label: str) -> None:
+    """Copy debian/ and rpm/ packaging files from the local package directory.
+
+    RPM: copy all files from ``<pkg>/rpm/`` into *workdir*.
+    Debian: copy ``*.dsc`` files and compress the ``debian/`` directory into
+    ``debian.tar.gz`` in *workdir*.
+    """
+    pkg_dir = obs_dir.parent
+    rpm_dir = pkg_dir / "rpm"
+    deb_dir = pkg_dir / "debian"
+    if rpm_dir.is_dir():
+        rpm_files = [f for f in sorted(rpm_dir.iterdir()) if f.is_file()]
+        for f in rpm_files:
+            shutil.copy2(f, workdir / f.name)
+        logger.debug(
+            f"copied {len(rpm_files)} file(s) from rpm/: "
+            f"{[f.name for f in rpm_files]}"
+        )
+        _print_ok(f"packaging rpm/  {pkg_label}  ({len(rpm_files)} files)")
+    if deb_dir.is_dir():
+        dsc_files = sorted(deb_dir.glob("*.dsc"))
+        for f in dsc_files:
+            shutil.copy2(f, workdir / f.name)
+        result = subprocess.run(
+            [
+                "tar",
+                "czf",
+                str(workdir / "debian.tar.gz"),
+                "-C",
+                str(pkg_dir),
+                "debian",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise SystemExit(
+                f"error: creating debian.tar.gz failed:\n  {result.stderr.strip()}"
+            )
+        dsc_names = [f.name for f in dsc_files]
+        logger.debug(f"created debian.tar.gz + copied {dsc_names}")
+        _print_ok(
+            f"packaging debian/  {pkg_label}  "
+            f"(debian.tar.gz + {len(dsc_files)} .dsc)"
+        )
+
+
 def _run_local_services(
     obs_dir: Path,
     pkg_label: str = "",
     cache: bool = True,
     env_vars: dict[str, str] | None = None,
 ) -> tuple[Path, list[str]]:
-    """Run all non-buildtime OBS services locally; return (workdir, manual_artifact_names).
+    """Run all OBS services locally; return (workdir, all_artifact_names).
 
-    Execution is split into two phases:
-      Phase 1 — non-manual services (obs_scm etc.): for each obs_scm service a
-                fast git ls-remote checks whether the remote HEAD matches a
-                cached run; on a hit the cached files are restored and the
-                obs_scm invocation is skipped entirely.  On a miss obs_scm runs
-                normally and its output is stored to the cache.
+    Execution is split into three phases plus an extraction step:
+      Phase 1 — non-manual, non-buildtime services (obs_scm etc.): for each
+                obs_scm service a fast git ls-remote checks whether the remote
+                HEAD matches a cached run; on a hit the cached files are restored
+                and the obs_scm invocation is skipped entirely.  On a miss
+                obs_scm runs normally and its output is stored to the cache.
       Cache check — after phase 1 the upstream source obsinfo is read for its
-                    commit hash.  On a cache hit the manual services are skipped
-                    and the cached artifacts are returned immediately.
+                    commit hash.  On a cache hit the manual and buildtime
+                    services are skipped and the cached artifacts are returned.
       Phase 2 — manual services (go_modules etc.): run on a cache miss.
-                Results are stored to the service cache on success.
+      Extraction — ``.obscpio`` archives are extracted via ``cpio`` into
+                   directories (replicating what the OBS build script does
+                   before buildtime services run).  The ``.obscpio`` files are
+                   removed after extraction.
+      Phase 3 — buildtime services (tar, recompress, set_version): transform
+                the extracted source directories into final archives.  Run last
+                in declared order.  Results from Phases 2 and 3 are stored to
+                the service cache.
 
-    Modes "buildtime", "serveronly", and "disabled" are skipped entirely.
+    Modes "serveronly" and "disabled" are skipped entirely.
     Each service binary is expected at /usr/lib/obs/service/<name>.  If a
     binary is missing a warning is logged and the service is skipped.
 
@@ -535,15 +608,17 @@ def _run_local_services(
         generated: list[str] = []
         for out_file in sorted(outdir.iterdir()):
             if out_file.is_file():
-                shutil.move(str(out_file), str(workdir / out_file.name))
-                generated.append(out_file.name)
+                clean_name = _strip_service_prefix(out_file.name)
+                shutil.move(str(out_file), str(workdir / clean_name))
+                generated.append(clean_name)
         shutil.rmtree(outdir, ignore_errors=True)
         logger.debug(f"service {name!r} produced: {generated}")
         _print_ok(f"service {name}  {pkg_label}")
         return generated
 
-    # ── Phase 1: non-manual services (obs_scm, …) ──────────────────────────
+    # ── Phase 1: non-manual, non-buildtime services (obs_scm, …) ────────────
     manual_svcs: list[ET.Element] = []
+    buildtime_svcs: list[ET.Element] = []
     for svc in svc_root.findall("service"):
         mode = svc.get("mode", "")
         if mode in _SKIP_MODES:
@@ -552,8 +627,21 @@ def _run_local_services(
         if mode == "manual":
             manual_svcs.append(svc)
             continue
+        if mode == "buildtime":
+            buildtime_svcs.append(svc)
+            continue
 
         svc_name = svc.get("name", "")
+
+        # Skip packaging obs_scm services — debian/ and rpm/ files are
+        # copied directly from the local package directory after Phase 3.
+        if svc_name == "obs_scm":
+            subdir_el = svc.find("param[@name='subdir']")
+            subdir = (subdir_el.text or "").strip() if subdir_el is not None else ""
+            if subdir and _PACKAGING_SUBDIR_RE.match(subdir):
+                logger.debug(f"skipping packaging obs_scm (subdir={subdir!r})")
+                continue
+
         if cache and svc_name == "obs_scm":
             # Resolve the remote HEAD SHA with a fast ls-remote before
             # deciding whether to run obs_scm (full clone) or restore from cache.
@@ -599,7 +687,11 @@ def _run_local_services(
             _run_one(svc)
 
     # ── Cache check ─────────────────────────────────────────────────────────
+    # If the upstream source commit is unchanged, manual and buildtime service
+    # artifacts can be restored from cache (skipping Phases 2 and 3).
     commit_hash: str | None = None
+    cache_hit = False
+    cached_names: list[str] | None = None
     if cache:
         upstream_filename = _find_upstream_obs_scm_filename(service_file)
         if upstream_filename:
@@ -612,26 +704,85 @@ def _run_local_services(
                             _SVC_CACHE_DIR / commit_hash / art_name,
                             workdir / art_name,
                         )
-                    for svc in manual_svcs:
+                    for svc in manual_svcs + buildtime_svcs:
                         _print_same(
                             f"service {svc.get('name', '?')}  {pkg_label}  (cached)"
                         )
                     logger.debug(
                         f"cache hit ({commit_hash[:12]}): "
-                        f"skipping {len(manual_svcs)} manual service(s)"
+                        f"skipping {len(manual_svcs)} manual + "
+                        f"{len(buildtime_svcs)} buildtime service(s)"
                     )
-                    return workdir, cached_names
+                    cache_hit = True
 
-    # ── Phase 2: manual services ────────────────────────────────────────────
-    manual_artifacts: list[str] = []
-    for svc in manual_svcs:
-        manual_artifacts.extend(_run_one(svc))
+    if cache_hit:
+        post_phase1_artifacts: list[str] = list(cached_names or [])
+        # Copy local packaging, then re-apply cached artifacts on top so that
+        # set_version-updated files (.dsc, .spec) overwrite the pristine copies.
+        _copy_local_packaging(obs_dir, workdir, pkg_label)
+        for art_name in post_phase1_artifacts:
+            src = _SVC_CACHE_DIR / (commit_hash or "") / art_name
+            if src.is_file():
+                shutil.copy2(src, workdir / art_name)
+    else:
+        # ── Phase 2: manual services (go_modules, …) ─────────────────────
+        post_phase1_artifacts = []
+        for svc in manual_svcs:
+            post_phase1_artifacts.extend(_run_one(svc))
 
-    # ── Cache store ─────────────────────────────────────────────────────────
-    if cache and commit_hash and manual_artifacts:
-        try:
-            _cache_store(commit_hash, workdir, manual_artifacts)
-        except Exception as exc:
-            logger.warning(f"cache store failed: {exc}")
+        # ── Extract .obscpio archives ────────────────────────────────────
+        # Buildtime services (tar, recompress, set_version) expect extracted
+        # directories, not .obscpio files.  The OBS build script extracts
+        # these before running buildtime services; we replicate that here.
+        for obscpio in sorted(workdir.glob("*.obscpio")):
+            logger.debug(f"extracting {obscpio.name}")
+            result = subprocess.run(
+                [
+                    "cpio",
+                    "--extract",
+                    "--unconditional",
+                    "--preserve-modification-time",
+                    "--make-directories",
+                ],
+                input=obscpio.read_bytes(),
+                capture_output=True,
+                cwd=str(workdir),
+            )
+            if result.returncode != 0:
+                raise SystemExit(
+                    f"error: cpio extract of {obscpio.name} failed:\n"
+                    f"  {result.stderr.decode('utf-8', errors='replace').strip()}"
+                )
+            obscpio.unlink()
 
-    return workdir, manual_artifacts
+        # ── Copy local packaging files ────────────────────────────────────
+        # Copy debian/ and rpm/ from the local package directory before
+        # Phase 3 so that buildtime services like set_version can find
+        # .dsc and .spec files.
+        _copy_local_packaging(obs_dir, workdir, pkg_label)
+
+        # ── Phase 3: buildtime services (tar, recompress, set_version) ───
+        # Transform extracted source directories into final archives.
+        for svc in buildtime_svcs:
+            post_phase1_artifacts.extend(_run_one(svc))
+
+        # ── Cache store ──────────────────────────────────────────────────
+        # Filter to files that still exist — buildtime services may consume
+        # intermediates (e.g. recompress replaces .tar with .tar.gz).
+        surviving = [n for n in post_phase1_artifacts if (workdir / n).is_file()]
+        if cache and commit_hash and surviving:
+            try:
+                _cache_store(commit_hash, workdir, surviving)
+            except Exception as exc:
+                logger.warning(f"cache store failed: {exc}")
+        post_phase1_artifacts = surviving
+
+    # ── Cleanup: remove intermediates that should not be uploaded ─────────
+    (workdir / "_service").unlink(missing_ok=True)
+    for child in list(workdir.iterdir()):
+        if child.is_dir():
+            shutil.rmtree(child, ignore_errors=True)
+        elif child.suffix == ".obscpio":
+            child.unlink()
+
+    return workdir, post_phase1_artifacts

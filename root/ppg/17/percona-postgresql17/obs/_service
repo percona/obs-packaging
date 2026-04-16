@@ -1,44 +1,20 @@
 <services>
   <service name="obs_scm">
-    <param name="url">${PERCONA_OBS_PACKAGING_REPO}</param>
-    <param name="scm">git</param>
-    <param name="revision">${PERCONA_OBS_PACKAGING_BRANCH}</param>
-    <param name="version">_none_</param>
-    <param name="extract">*.dsc</param>
-    <param name="subdir">${DEBIAN_PACKAGE_DIRECTORY}</param>
-    <param name="filename">debian</param>
-  </service>
-
-  <service name="obs_scm">
-    <param name="url">${PERCONA_OBS_PACKAGING_REPO}</param>
-    <param name="scm">git</param>
-    <param name="revision">${PERCONA_OBS_PACKAGING_BRANCH}</param>
-    <param name="version">_none_</param>
-    <param name="extract">*</param>
-    <param name="subdir">${RPM_PACKAGE_DIRECTORY}</param>
-    <param name="filename">rpm</param>
-  </service>
-
-  <service name="obs_scm">
     <param name="url">https://github.com/Percona-Lab/postgres.git</param>
     <param name="scm">git</param>
     <param name="revision">release-17.9.1</param>
     <param name="version">17.9</param>
     <param name="filename">percona-postgresql</param>
   </service>
-
   <service mode="buildtime" name="tar" />
-
   <service mode="buildtime" name="recompress">
     <param name="file">*.tar</param>
     <param name="compression">gz</param>
   </service>
-
   <service mode="buildtime" name="set_version">
     <param name="version">2:17.9</param>
     <param name="file">percona-postgresql17-xUbuntu_24.04.dsc</param>
   </service>
-  
   <service mode="buildtime" name="set_version">
     <param name="version">17.9</param>
     <param name="file">percona-postgresql17.spec</param>

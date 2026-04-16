@@ -6,4 +6,4 @@ Version: 1.0.0
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends: debhelper (>= 9), percona-postgresql-all
 Debtransform-Release: 1
-Debtransform-Files-Tar: debian.tar.gz rpm.tar.gz
+Debtransform-Files-Tar: debian.tar.gz

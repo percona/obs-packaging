@@ -22,4 +22,4 @@ Build-Depends: debhelper-compat (= 10),
                txt2man,
                zlib1g-dev
 Debtransform-Release: 1
-Debtransform-Files-Tar: debian.tar.gz rpm.tar.gz
+Debtransform-Files-Tar: debian.tar.gz

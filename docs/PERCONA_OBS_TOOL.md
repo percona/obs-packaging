@@ -79,7 +79,7 @@ List all available profiles and their settings:
 Once a profile exists, activate it with `-P`:
 
 ```sh
-./percona-obs -P local sync ppg:17 etcd --dirty --dry-run-remote
+./percona-obs -P local sync ppg:17 etcd --dry-run
 ```
 
 Explicit `-A`/`-R` flags always override the profile values when both are given.
@@ -94,16 +94,7 @@ Explicit `-A`/`-R` flags always override the profile values when both are given.
 ./percona-obs -P local sync push --dry-run
 ```
 
-Shows everything that would be created or updated. Nothing is written to OBS.
-
-### Preview changes and also run local services (Go vendoring, etc.)
-
-```sh
-./percona-obs -P local sync push --dry-run-remote
-```
-
-Same as `--dry-run` but also runs `mode="manual"` services locally, letting you verify
-that tools like `go_modules` work correctly before committing anything to OBS.
+Runs all services locally and shows what would be uploaded to OBS. Nothing is written.
 
 ### Sync all packages
 
@@ -245,7 +236,7 @@ Use `build dependency` to inspect these relationships before syncing:
    local commits touch that package since that SHA. No commits → aggregate. Commits → upload.
 
 2. **Content check fallback** — used when the revision message is absent, in a different
-   format, or was written with `--dirty`. Compares MD5s of every local `obs/` file against
+   format, or was written from an unpushed branch. Compares MD5s of every local `obs/` file against
    what OBS holds, and also verifies that the upstream source commit hash in the `.obsinfo`
    file matches the current remote HEAD via `git ls-remote`. Both must match → aggregate.
 

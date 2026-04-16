@@ -10,4 +10,4 @@ Build-Depends:
  python3-all,
  python3-setuptools
 Debtransform-Release: 1
-Debtransform-Files-Tar: debian.tar.gz rpm.tar.gz
+Debtransform-Files-Tar: debian.tar.gz

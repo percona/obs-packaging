@@ -6,5 +6,5 @@ Version: 280
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends: debhelper (>= 9), debhelper (>= 10.1) | dh-systemd (>= 1.19), libreadline-dev
 Debtransform-Release: 1
-Debtransform-Files-Tar: debian.tar.gz rpm.tar.gz
+Debtransform-Files-Tar: debian.tar.gz
 

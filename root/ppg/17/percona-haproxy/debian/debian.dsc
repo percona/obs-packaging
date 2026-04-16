@@ -13,4 +13,4 @@ Build-Depends: debhelper (>= 9.0.0),
                libcrypt-dev
 Build-Depends-Indep: python3, python3-mako
 Debtransform-Release: 1
-Debtransform-Files-Tar: debian.tar.gz rpm.tar.gz
+Debtransform-Files-Tar: debian.tar.gz

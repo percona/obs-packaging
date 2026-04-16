@@ -135,11 +135,10 @@ def _has_package_changes_since(short_sha: str, package_path: Path) -> bool:
     return bool(result.stdout.strip())
 
 
-def _generate_sync_message(dirty: bool) -> str:
+def _generate_sync_message() -> str:
     """Build the default OBS commit message from the current git state.
 
-    Normal:  sync: <branch>@<short-sha> (<remote_url>)
-    Dirty:   sync: <branch>@<short-sha> (local changes on <hostname>)
+    Format: sync: <branch>@<short-sha> (<remote_url> or <hostname>)
     """
 
     def _git(*args: str) -> str:
@@ -151,23 +150,18 @@ def _generate_sync_message(dirty: bool) -> str:
     short_sha = _git("rev-parse", "--short", "HEAD")
     branch = _git("rev-parse", "--abbrev-ref", "HEAD")
 
-    if dirty:
-        hostname = socket.gethostname()
-        return f"sync: {branch}@{short_sha} (local changes on {hostname})"
-
     # Discover which remote contains HEAD rather than assuming "origin".
     # `git branch -r --contains HEAD` returns lines like "  origin/main", "  upstream/main".
-    # Pick the first remote name found; fall back to "unknown" if none.
-    remote_name = "unknown"
+    # Pick the first remote name found; fall back to hostname.
+    remote_name = ""
     for line in _git("branch", "-r", "--contains", "HEAD").splitlines():
         token = line.strip().split("/")[0]
         if token:
             remote_name = token
             break
-    remote_url = (
-        _git("remote", "get-url", remote_name)
-        if remote_name != "unknown"
-        else "unknown"
-    )
+    if remote_name:
+        detail = _git("remote", "get-url", remote_name)
+    else:
+        detail = f"local changes on {socket.gethostname()}"
 
-    return f"sync: {branch}@{short_sha} ({remote_url})"
+    return f"sync: {branch}@{short_sha} ({detail})"

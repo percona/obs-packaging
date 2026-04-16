@@ -1,25 +1,5 @@
 <services>
   <service name="obs_scm">
-    <param name="url">${PERCONA_OBS_PACKAGING_REPO}</param>
-    <param name="scm">git</param>
-    <param name="revision">${PERCONA_OBS_PACKAGING_BRANCH}</param>
-    <param name="version">_none_</param>
-    <param name="extract">*.dsc</param>
-    <param name="subdir">${DEBIAN_PACKAGE_DIRECTORY}</param>
-    <param name="filename">debian</param>
-  </service>
-
-  <service name="obs_scm">
-    <param name="url">${PERCONA_OBS_PACKAGING_REPO}</param>
-    <param name="scm">git</param>
-    <param name="revision">${PERCONA_OBS_PACKAGING_BRANCH}</param>
-    <param name="version">_none_</param>
-    <param name="extract">*</param>
-    <param name="subdir">${RPM_PACKAGE_DIRECTORY}</param>
-    <param name="filename">rpm</param>
-  </service>
-
-  <service name="obs_scm">
     <param name="url">https://github.com/percona/telemetry-agent.git</param>
     <param name="scm">git</param>
     <param name="revision">0da0fd01ffe3e518931ce9f903813196c0e94515</param>
@@ -27,7 +7,6 @@
     <param name="versionrewrite-pattern">v(.*)</param>
     <param name="filename">percona-telemetry-agent</param>
   </service>
-
   <service mode="buildtime" name="tar" />
   <service mode="buildtime" name="recompress">
     <param name="file">*.tar</param>
@@ -38,4 +17,3 @@
     <param name="archive">*percona-telemetry-agent-*</param>
   </service>
 </services>
-

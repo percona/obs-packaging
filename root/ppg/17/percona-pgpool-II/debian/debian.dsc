@@ -27,4 +27,4 @@ Build-Depends:
  percona-postgresql-common,
  xsltproc
 Debtransform-Release: 1
-Debtransform-Files-Tar: debian.tar.gz rpm.tar.gz
+Debtransform-Files-Tar: debian.tar.gz

@@ -966,7 +966,6 @@ def _upload_obs_files(
     new_files: list[str] = []
     updated_files: list[str] = []
     removed: list[str] = []
-    uncertain: list[str] = []
     local_files: set[str] = set()
 
     for filepath in sorted(obs_dir.iterdir()):
@@ -1000,12 +999,8 @@ def _upload_obs_files(
                 raise
 
     for obs_name in sorted(obs_md5s.keys() - local_files):
-        if dry_run:
-            # In dry-run mode services were not run, so OBS-only files may be
-            # service-generated artifacts rather than genuine deletions.
-            uncertain.append(obs_name)
-        else:
-            removed.append(obs_name)
+        removed.append(obs_name)
+        if not dry_run:
             logger.debug(f"deleting {obs_name} → {obs_project_name}/{package_name}")
             url = osc.core.makeurl(
                 apiurl,
@@ -1015,7 +1010,7 @@ def _upload_obs_files(
             osc.connection.http_DELETE(url)
 
     certain = new_files + updated_files + removed
-    if not certain and not uncertain:
+    if not certain:
         logger.debug(f"no files changed: {obs_project_name}/{package_name}")
         _print_same(f"{len(local_files)} files  {obs_project_name}/{package_name}")
         return False
@@ -1033,22 +1028,12 @@ def _upload_obs_files(
         )
         osc.connection.http_POST(url)
 
-    total = len(certain) + len(uncertain)
-    label = f"{total} files  {obs_project_name}/{package_name}"
-    if certain:
-        _print_update(label)
-    else:
-        # Only uncertain files: package is probably unchanged but service
-        # outputs on OBS cannot be verified without running the services.
-        print(f"  {_col(_YELLOW, '!')} {label}")
+    label = f"{len(certain)} files  {obs_project_name}/{package_name}"
+    _print_update(label)
     for name in new_files:
         print(f"      |_ {_col(_GREEN, '+')} {name}")
     for name in updated_files:
         print(f"      |_ {_col(_YELLOW, '~')} {name}")
     for name in removed:
         print(f"      |_ {_col(_RED, '-')} {name}")
-    for name in uncertain:
-        print(
-            f"      |_ {_col(_YELLOW, '!')} {name}  (service output, skipped in dry-run)"
-        )
     return True

@@ -183,7 +183,7 @@ env:                                 # optional: variables for ${VAR} substituti
   -e REMOTE_OBS_ORG_INTERCONNECT:'openSUSE.org:' \
   profile create dev
 
-./percona-obs -P dev sync ppg:17 etcd --dirty --dry-run-remote
+./percona-obs -P dev sync ppg:17 etcd --dry-run
 ```
 
 To add or update an env variable in an existing profile, use `-P` (to load the current state) plus `-e`:
@@ -243,27 +243,19 @@ Use `project verify -P <profile>` to validate that all `${VAR}` tokens in the tr
 
 In dry-run mode the same `+`/`~`/`=`/`-`/`!` symbols are used — the `(dry run)` note on the final `✔` line indicates nothing was written.
 
-### Git safeguard
-
-`sync` aborts if:
-- the working tree has uncommitted or untracked changes (`git status --porcelain`), or
-- the HEAD commit has not been pushed to any remote (`git branch -r --contains HEAD`).
-
-Use `--dirty` to skip this check (e.g. for local testing or CI pipelines that manage their own state).
-
 ### Change detection
 
 `sync` compares the desired state against what OBS currently holds **before** making any write call:
 
 - **Project / package meta** — the managed fields (title, description, repositories) are compared as XML; OBS-managed fields (ACL entries, person/group/lock) are ignored.
 - **Project config** — the raw string is compared after stripping leading/trailing whitespace.
-- **`obs/` files** — each file's MD5 is compared to the MD5 returned by the OBS source directory listing. Only changed files are uploaded. Files present on OBS but absent locally are deleted (real sync) or marked `!` (dry-run, where they may be service-generated artifacts). All uploads and deletions are committed as a single OBS source revision.
+- **`obs/` files** — each file's MD5 is compared to the MD5 returned by the OBS source directory listing. Only changed files are uploaded. Files present on OBS but absent locally are deleted. All uploads and deletions are committed as a single OBS source revision.
 
-Every resource is always printed with its status (`+`/`~`/`=`/`-`/`!`). The `=` line is printed even when nothing changed. Use `--force` to bypass comparison and always write.
+Every resource is always printed with its status (`+`/`~`/`=`/`-`). The `=` line is printed even when nothing changed. Use `--force` to bypass comparison and always write.
 
-### `sync push [--force] [--dirty] [--dry-run] [--dry-run-remote] [--no-services] [--no-cache] [--non-recursive] [--project-only] [--branch-from PROFILE] [-m MSG] [project] [package]`
+### `sync push [--force] [--dry-run] [--no-services] [--no-cache] [--non-recursive] [--project-only] [--branch-from PROFILE] [-m MSG] [project] [package]`
 
-Syncs local packaging files to OBS, creating or updating projects and packages (`obs/_service`, `obs/_multibuild`). For each target package, all ancestor projects (from root down) are created/updated first, then the package meta is applied, then `obs/` source files are synced as a **single OBS source revision** — new and changed files are uploaded, files removed locally are deleted from OBS.
+Syncs local packaging files to OBS. For each target package, all ancestor projects (from root down) are created/updated first, then the package meta is applied, then source files are synced as a **single OBS source revision**. Services are run locally to produce the upstream source tarball and packaging artifacts; the `_service` file is **not** uploaded to OBS.
 
 | Call form | Effect |
 |---|---|
@@ -274,17 +266,13 @@ Syncs local packaging files to OBS, creating or updating projects and packages (
 
 Options:
 - `--force` — bypass OBS conflict checks; always write meta and files regardless of diff.
-- `--dirty` — skip the git safeguard (allow uncommitted changes or an unpushed HEAD).
-- `--dry-run` — make read-only OBS calls to compute what would change, but write nothing. The same `+`/`~`/`=`/`-`/`!` symbols are used. Local services are **not** run; OBS-only files (likely service outputs) are shown with `!` instead of `-`.
-- `--dry-run-remote` — run local services for real, then report what would be uploaded to OBS without writing. Use to verify manual services work before committing. All OBS writes are skipped but the `+`/`~`/`=` output reflects what would change.
-- `--no-services` — skip local service execution; upload `obs/` as-is even if `_service` declares manual services.
+- `--dry-run` — run local services and report what would be uploaded to OBS without writing. All OBS writes are skipped but the `+`/`~`/`=`/`-` output reflects what would change.
+- `--no-services` — skip local service execution; upload `obs/` as-is.
 - `--no-cache` — bypass both cache levels; always run obs_scm and manual services from scratch.
 - `--non-recursive` — only sync packages directly under the specified project; do not descend into sub-projects.
 - `--project-only` — only sync project configuration (meta and build config); skip all package syncing.
 - `--branch-from PROFILE` — for each package unchanged since the given profile's last sync, upload only an `_aggregate` file that reuses pre-built binaries from that profile's OBS project instead of uploading sources. The branch profile may target a different OBS instance. After the initial changed/unchanged classification, a second phase queries OBS `_builddepinfo` and automatically promotes any additional packages whose build dependencies or dependents were promoted (bidirectional fixed-point propagation). The aggregate message format is `branch: <profile> (<source_project>/<package>)`.
-- `-m MSG` / `--message MSG` — commit message recorded in the OBS source revision. When omitted, a message is generated automatically:
-  - Normal: `sync: <branch>@<short-sha> (<remote_url>)`
-  - With `--dirty`: `sync: <branch>@<short-sha> (local changes on <hostname>)`
+- `-m MSG` / `--message MSG` — commit message recorded in the OBS source revision. When omitted, a message is generated automatically: `sync: <branch>@<short-sha> (<remote_url> or <hostname>)`
 
 ### `--branch-from` decision process
 
@@ -298,7 +286,7 @@ The corresponding branch OBS project is derived by substituting the current `roo
 
 1. Fetch the latest source revision comment from the branch OBS project for this package (`GET /source/<branch_project>/<package>/_history`).
 2. Match it against the sync message pattern `sync: <branch>@<sha> (<detail>)`.
-3. If the message matches and the detail does **not** start with `"local changes on"` (i.e. was a clean sync):
+3. If the message matches and the detail does **not** start with `"local changes on"` (i.e. was synced from a pushed branch):
    - Call `git log` to check whether any commits touching `<package_path>` exist since `<sha>`.
    - **No commits** → aggregate (package unchanged). **Commits exist** → upload sources.
 
@@ -307,7 +295,7 @@ The corresponding branch OBS project is derived by substituting the current `roo
 The content check is used when the revision comment cannot be trusted:
 - No comment on the branch (new project, never synced)
 - Comment doesn't match the `sync:` format (e.g. manual commit, older format)
-- Sync message says `"local changes on <hostname>"` (was synced with `--dirty`)
+- Sync message says `"local changes on <hostname>"` (HEAD was not pushed to any remote)
 
 Content check (`_content_matches_branch`) performs two sub-checks:
 
@@ -398,7 +386,7 @@ Options:
 
 Projects that do not exist on OBS are silently skipped. Projects are always deleted with `force=True` to bypass inter-project repository dependency checks when removing a whole tree.
 
-### `sync promote [--dirty] [--dry-run] [--no-services] [--no-cache] [-m MSG] [project] [package]`
+### `sync promote [--dry-run] [--no-services] [--no-cache] [-m MSG] [project] [package]`
 
 Promotes branch packages (created by a prior `--branch-from` sync) back to full source syncs. For each targeted package whose latest OBS revision comment matches the `branch:` pattern, the `_aggregate` is replaced with the local `obs/` source files (running any `mode="manual"` services as needed). Packages that already hold real sources are skipped (`=` output).
 
@@ -411,7 +399,7 @@ Promotes branch packages (created by a prior `--branch-from` sync) back to full 
 Detection: reads the latest OBS revision comment via `_fetch_obs_package_latest_comment`; if it matches `_BRANCH_MSG_RE` (`^branch: \S+ \((.+)/[^/]+\)$`), the package is a branch and will be promoted. Packages without an `obs/` directory are silently skipped.
 
 Options:
-- `--dirty` — skip the git clean check.
+
 - `--dry-run` — show what would be promoted without writing to OBS. Services are not run in dry-run mode.
 - `--no-services` — upload `obs/` files as-is without running manual services.
 - `--no-cache` — disable the service artifact cache.
@@ -744,8 +732,7 @@ Always start with a fully-verbose, non-destructive run:
 ```
 
 - `--verbose` enables `DEBUG`-level log messages (prefixed `  · `), showing every OBS API call, unchanged-item decisions, dep-promotion steps, and cache hits/misses.
-- `--dry-run` prevents any write to OBS, so the run is safe to repeat indefinitely.
-- `--dirty` skips the git clean check when testing from a working tree with uncommitted changes.
+- `--dry-run` runs local services and reports what would change on OBS without writing anything.
 
 For `build dependency`, which has no dry-run flag, just run it directly against the test profile:
 
@@ -876,9 +863,8 @@ Permissions: `contents: write`, `statuses: write`.
 3. Creates **two** `percona-obs` profiles:
    - `main` — points at `OBS_ROOTPRJ`; used only as the `--branch-from` source so the tool can read each package's last-sync SHA from the main OBS project.
    - `pr-<N>` — points at `OBS_PR_ROOTPRJ:pr-<N>` (the PR-specific OBS root project). Its `PERCONA_OBS_PACKAGING_BRANCH` is set to `refs/pull/<N>/head` (a GitHub pseudo-ref resolvable via `git ls-remote` for all PRs including forks) and `PERCONA_OBS_PACKAGING_REPO` is set to `github.event.pull_request.head.repo.clone_url` (the fork's repo URL when the PR comes from a fork).
-4. Runs `percona-obs -P pr-<N> sync push --dirty --branch-from main`:
+4. Runs `percona-obs -P pr-<N> sync push --branch-from main`:
    - For each package, compares `git log <main-last-sync-sha>..HEAD -- <package-path>`. If no commits → uploads an `_aggregate` file pointing at the corresponding main OBS package (binary reuse, no build needed). If changed → uploads full sources to the PR project.
-   - `--dirty` bypasses the git-clean check (PR checkouts are detached HEADs not reachable via `git branch -r --contains HEAD`).
 5. Posts (or updates) a PR comment with the OBS project URL and a table showing how many packages were built from source vs. aggregated from main. The comment is identified by an HTML marker `<!-- obs-pr-check -->` so it is updated in place on subsequent pushes to the PR. If the sync step failed, the comment is updated with an error notice instead.
 
 **Required repository config**: `OBS_APIURL`, `OBS_WEB_URL`, `OBS_ROOTPRJ`, `OBS_PR_ROOTPRJ`, `OBS_USER` (vars); `OBS_PASSWORD` (secret).

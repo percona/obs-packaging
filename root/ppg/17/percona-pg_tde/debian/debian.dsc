@@ -21,4 +21,4 @@ Build-Depends:
  libreadline-dev,
  shtool
 Debtransform-Release: 1
-Debtransform-Files-Tar: debian.tar.gz rpm.tar.gz
+Debtransform-Files-Tar: debian.tar.gz
