@@ -945,7 +945,7 @@ def cmd_sync(args):
             )
             files_changed = False
             if run_services:
-                workdir, _all_artifacts = _run_local_services(
+                workdir = _run_local_services(
                     obs_dir,
                     pkg_label=f"{obs_project_name}/{package_path.name}",
                     cache=not args.no_cache,
@@ -1151,7 +1151,7 @@ def cmd_sync_promote(args) -> None:
             and _has_runnable_services(service_file)
         )
         if run_services and not dry_run:
-            workdir, _all_artifacts = _run_local_services(
+            workdir = _run_local_services(
                 obs_dir,
                 pkg_label=f"{obs_project_name}/{package_path.name}",
                 cache=not args.no_cache,
