@@ -506,10 +506,19 @@ def _copy_local_packaging(obs_dir: Path, workdir: Path, pkg_label: str) -> None:
         dsc_files = sorted(deb_dir.glob("*.dsc"))
         for f in dsc_files:
             shutil.copy2(f, workdir / f.name)
+        # Build a reproducible tarball: identical source content → identical
+        # bytes → identical MD5, so a no-op sync push does not re-upload
+        # debian.tar.gz on every run.
         result = subprocess.run(
             [
                 "tar",
-                "czf",
+                "--sort=name",
+                "--owner=0",
+                "--group=0",
+                "--numeric-owner",
+                "--mtime=@0",
+                "--use-compress-program=gzip -n",
+                "-cf",
                 str(workdir / "debian.tar.gz"),
                 "-C",
                 str(pkg_dir),
