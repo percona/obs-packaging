@@ -26,6 +26,16 @@ def _strip_service_prefix(name: str) -> str:
     return _SERVICE_PREFIX_RE.sub("", name)
 
 
+def _is_kiwi_service(name: str) -> bool:
+    """Return True if *name* is an OBS kiwi-image helper service.
+
+    Kiwi services (kiwi_label_helper, kiwi_metainfo_helper, kiwi_import, …)
+    require kiwi tooling and image-build context that isn't available locally;
+    they're left to run server-side at buildtime on the OBS build workers.
+    """
+    return name.startswith("kiwi_")
+
+
 # Cache directories (relative to the repo root, ignored by git)
 _CACHE_DIR = _REPO_DIR / ".cache"
 _OBS_SCM_CACHE_DIR = _CACHE_DIR / "obs_scm"
@@ -619,10 +629,20 @@ def _run_local_services(
     # ── Phase 1: non-manual, non-buildtime services (obs_scm, …) ────────────
     manual_svcs: list[ET.Element] = []
     buildtime_svcs: list[ET.Element] = []
+    kiwi_svcs: list[ET.Element] = []
     for svc in svc_root.findall("service"):
         mode = svc.get("mode", "")
         if mode in _SKIP_MODES:
             logger.debug(f"skipping service {svc.get('name')!r} (mode={mode!r})")
+            continue
+        svc_name_for_filter = svc.get("name", "")
+        if _is_kiwi_service(svc_name_for_filter):
+            logger.debug(
+                f"skipping kiwi service {svc_name_for_filter!r} — "
+                f"runs server-side at buildtime"
+            )
+            _print_same(f"service {svc_name_for_filter}  {pkg_label}  (server-side)")
+            kiwi_svcs.append(svc)
             continue
         if mode == "manual":
             manual_svcs.append(svc)
@@ -762,7 +782,16 @@ def _run_local_services(
         _run_one(svc)
 
     # ── Cleanup: remove intermediates that should not be uploaded ─────────
-    (workdir / "_service").unlink(missing_ok=True)
+    # If we skipped any kiwi services, keep a _service file in the upload
+    # that contains only those skipped services so OBS runs them server-side
+    # at buildtime.  Otherwise drop _service entirely.
+    if kiwi_svcs:
+        filtered_root = ET.Element("services")
+        for svc in kiwi_svcs:
+            filtered_root.append(svc)
+        (workdir / "_service").write_bytes(ET.tostring(filtered_root, encoding="utf-8"))
+    else:
+        (workdir / "_service").unlink(missing_ok=True)
     for child in list(workdir.iterdir()):
         if child.is_dir():
             shutil.rmtree(child, ignore_errors=True)
