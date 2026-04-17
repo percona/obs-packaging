@@ -28,6 +28,20 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
 
+      # Persists the content-addressed .cache/ tree (Phase 1 obs_scm outputs
+      # and Phase 2 manual-service outputs such as go_modules vendor tarballs)
+      # across runs.  Without this, every main sync regenerates vendor
+      # tarballs with new file mtimes and needlessly re-uploads them.
+      # Entries are content-addressed so a partial hit via restore-keys is
+      # always safe: unused SHA-keyed subdirs are ignored.
+      - name: Restore percona-obs cache
+        uses: actions/cache@v4
+        with:
+          path: .cache
+          key: percona-obs-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            percona-obs-${{ runner.os }}-
+
       - uses: ./.github/actions/obs-setup
         with:
           obs-apiurl: ${{ vars.OBS_APIURL }}

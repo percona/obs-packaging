@@ -35,6 +35,22 @@ jobs:
           # per package to detect which packages changed since main's last sync.
           fetch-depth: 0
 
+      # Persists the content-addressed .cache/ tree (Phase 1 obs_scm outputs
+      # and Phase 2 manual-service outputs such as go_modules vendor tarballs)
+      # across runs.  The cache is keyed by the PR head commit so re-running
+      # the workflow on the same commit is a full hit and Phase 1/2 services
+      # are skipped entirely -- otherwise each fresh checkout would regenerate
+      # vendor tarballs with new file mtimes, producing different MD5s and
+      # needless re-uploads.  Entries are content-addressed so a partial hit
+      # via restore-keys is always safe: unused SHA-keyed subdirs are ignored.
+      - name: Restore percona-obs cache
+        uses: actions/cache@v4
+        with:
+          path: .cache
+          key: percona-obs-${{ runner.os }}-${{ github.event.pull_request.head.sha }}
+          restore-keys: |
+            percona-obs-${{ runner.os }}-
+
       - uses: ./.github/actions/obs-setup
         with:
           obs-apiurl: ${{ vars.OBS_APIURL }}
