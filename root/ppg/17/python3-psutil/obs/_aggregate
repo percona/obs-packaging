@@ -1,0 +1,5 @@
+<aggregatelist>
+  <aggregate project="${OBS_ROOTPRJ}:ppg:common:deps">
+    <package>python3-psutil</package>
+  </aggregate>
+</aggregatelist>
