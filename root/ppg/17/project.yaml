@@ -9,7 +9,7 @@ debuginfo:
 repositories:
   - name: RockyLinux_9
     paths:
-      - subproject: ppg:common:deps:build
+      - subproject: ppg:common:deps
         repository: RockyLinux_9
       - subproject: common:deps:build
         repository: RockyLinux_9
@@ -20,7 +20,7 @@ repositories:
     archs: [x86_64]
   - name: Debian_13
     paths:
-      - subproject: ppg:common:deps:build
+      - subproject: ppg:common:deps
         repository: Debian_13
       - subproject: common:deps:build
         repository: Debian_13
@@ -29,7 +29,7 @@ repositories:
     archs: [x86_64]
   - name: Ubuntu_24.04
     paths:
-      - subproject: ppg:common:deps:build
+      - subproject: ppg:common:deps
         repository: Ubuntu_24.04
       - subproject: common:deps:build
         repository: Ubuntu_24.04
@@ -38,7 +38,7 @@ repositories:
     archs: [x86_64]
   - name: Ubuntu_26.04
     paths:
-      - subproject: ppg:common:deps:build
+      - subproject: ppg:common:deps
         repository: Ubuntu_26.04
       - subproject: common:deps:build
         repository: Ubuntu_26.04
@@ -47,7 +47,7 @@ repositories:
     archs: [x86_64]
   - name: openSUSE_Tumbleweed
     paths:
-      - subproject: ppg:common:deps:build
+      - subproject: ppg:common:deps
         repository: openSUSE_Tumbleweed
       - subproject: common:deps:build
         repository: openSUSE_Tumbleweed
@@ -56,7 +56,7 @@ repositories:
     archs: [x86_64]
   - name: openSUSE_Leap_16
     paths:
-      - subproject: ppg:common:deps:build
+      - subproject: ppg:common:deps
         repository: openSUSE_Leap_16
       - subproject: common:deps:build
         repository: openSUSE_Leap_16

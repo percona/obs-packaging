@@ -1,0 +1,4 @@
+title: PPG Common Dependencies
+description: |
+  Build-time and runtime packages shared across Percona Distribution for PostgreSQL versions.
+publish: false

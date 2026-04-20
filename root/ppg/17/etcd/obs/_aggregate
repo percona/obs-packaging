@@ -1,5 +1,5 @@
 <aggregatelist>
   <aggregate project="${OBS_ROOTPRJ}:ppg:common:deps">
-    <package>sfcgal</package>
+    <package>etcd</package>
   </aggregate>
 </aggregatelist>
