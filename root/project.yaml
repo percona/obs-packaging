@@ -62,37 +62,6 @@ project-config: |
   Prefer: hdf-libs
   %endif
 
-  %if "%_repository" == "openSUSE_Tumbleweed"
-  # percona-postgresql17-server conflicts with postgresql18-server and the
-  # postgresql-server-18 meta-package (both own /var/lib/pgsql). The DNF stack
-  # (pulled in by percona-telemetry-agent -> yum-utils) recommends postgresql18-server
-  # on Tumbleweed. Suppress those packages entirely so that postgresql-server
-  # requirements resolve to percona-postgresql17-server via its Provides.
-  Prefer: percona-postgresql17-server
-  # Our python3-dateutil and python3-six packages shadow the SUSE system packages
-  # (python313-python-dateutil, python313-six). Prefer system packages so that
-  # build deps like python3-dnf-plugins-core and python3-libmodulemd resolve correctly.
-  Prefer: python313-python-dateutil
-  Prefer: python313-six
-  Ignore: postgresql18-server
-  Ignore: postgresql-server
-  Ignore: postgresql
-  %endif
-
-  %if "%_repository" == "openSUSE_Leap_16"
-  # Same conflict as Tumbleweed: the system PostgreSQL packages conflict with
-  # percona-postgresql17-server. Suppress them so dependencies resolve correctly.
-  Prefer: percona-postgresql17-server
-  # Our python3-dateutil and python3-six packages shadow the SUSE system packages
-  # (python313-python-dateutil, python313-six). Prefer system packages so that
-  # build deps like python3-dnf-plugins-core and python3-libmodulemd resolve correctly.
-  Prefer: python313-python-dateutil
-  Prefer: python313-six
-  Ignore: postgresql18-server
-  Ignore: postgresql-server
-  Ignore: postgresql
-  %endif
-
   %if "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
   # libgdal-dev transitively requires both libcurl4-openssl-dev and
   # libcurl4-gnutls-dev which conflict; ignore the gnutls variant so

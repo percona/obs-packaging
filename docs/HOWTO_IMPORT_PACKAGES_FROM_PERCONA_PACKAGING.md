@@ -1,7 +1,7 @@
 # Importing a Package from `percona/postgres-packaging`
 
 This guide explains how to port a package from the
-[`percona/postgres-packaging`](https://github.com/percona/postgres-packaging/tree/17.9)
+[`percona/postgres-packaging`](https://github.com/percona/postgres-packaging)
 repository into this OBS packaging repository.
 
 For adding a package from scratch (without an existing `percona/postgres-packaging` source),
@@ -9,10 +9,35 @@ see [PACKAGING_HOWTO.md](PACKAGING_HOWTO.md) instead.
 
 ---
 
+> ## ⚠️ Source of truth: upstream, not a prior ppg major
+>
+> When porting a package to a new ppg major (e.g. bootstrapping `ppg:18` while
+> `ppg:17` exists), always start from the authoritative upstream sources for the
+> target major — **never** copy a package tree from the previous ppg and
+> mechanically rename `17 → 18`.
+>
+> **Why:** the checked-in tree under an existing ppg major is the output of that
+> major's `<pkg>_builder.sh` at a point in time. Between majors, Percona's
+> overlays evolve (new binary packages like `libpq-oauth` / `percona-postgresql-18-jit`,
+> bumped debhelper levels, new `.install` lists, added/dropped patches, new
+> configure flags like `--with-oauth --with-libcurl --with-liburing`). A
+> `17 → 18` sed compiles but ships stale packaging and silently loses the
+> target-major-specific work.
+>
+> **The flow:** replicate the `get_sources()` section of the target branch's
+> `<pkg>_builder.sh` (see Step 3 below). It's the only source of truth for what
+> the package should look like at that version.
+>
+> Prior-major trees are still useful as *references* — e.g. for rpmlintrc
+> overrides, SUSE `%dir` patterns, or an OBS-specific `debian.dsc` shape — but
+> never as the basis for `debian/control`, `debian/rules`, or the `.spec` body.
+
+---
+
 ## Background
 
-`percona/postgres-packaging` (branch `17.9`) is a **CI builder** repository. Each
-package directory there contains:
+`percona/postgres-packaging` (one branch per PG major, e.g. `17.9`, `18.3`) is a
+**CI builder** repository. Each package directory there contains:
 
 - A `*_builder.sh` — orchestrates fetching the upstream source, applying Percona
   overrides, and building RPMs/DEBs on a CI host.
@@ -92,11 +117,13 @@ The builder's `get_sources()` function shows:
 
 ### Step 2 — Create the directory skeleton
 
+Pick the target ppg major (`17`, `18`, …) based on which branch of
+`percona/postgres-packaging` you're pulling from:
+
 ```bash
 PKG=<package-name>
-mkdir -p root/ppg/17/$PKG/debian/source
-mkdir -p root/ppg/17/$PKG/rpm
-mkdir -p root/ppg/17/$PKG/obs
+PPG=<target-major>   # e.g. 18
+mkdir -p root/ppg/$PPG/$PKG/{debian/source,debian/patches,rpm,obs}
 ```
 
 ---
@@ -408,15 +435,50 @@ and let the repository owner handle the merge manually.
 | Package type | `source/format` | `debian.dsc` extra tarballs | `_multibuild` | Example |
 |---|---|---|---|---|
 | Plain app | `3.0 (quilt)` | none | no | `etcd` |
-| PG extension | `3.0 (native)` | none | yes | `percona-pg-telemetry` |
+| PG extension (salsa-based) | `3.0 (quilt)` | none | no | `percona-pgaudit`, `percona-pgvector` |
+| PG extension (no salsa packaging) | `3.0 (native)` | none | yes | `percona-pg-telemetry` |
 | Go app with vendored deps | `3.0 (quilt)` | `vendor-*.tar.gz` | no | `etcd` |
-| Upstream DEB packaging patched | `3.0 (quilt)` | none | no | `percona-postgresql17` |
+| Upstream DEB packaging patched | `3.0 (quilt)` | none | no | `percona-postgresql18` |
 | Standalone package, no upstream patches | `3.0 (native)` | none | no | `percona-postgresql-common` |
 
 ---
 
 ## Common Pitfalls
 
+- **Never port from a prior ppg major.** Always rebuild from upstream (see the
+  warning box at the top of this doc). `17 → 18` sed produces packaging that
+  *builds* but silently misses target-major-specific changes — new binary
+  packages, bumped debhelper levels, new configure flags, dropped/added patches.
+- **OBS `set_version` recurses on `%{version}` / `%{release}` placeholders.**
+  Percona's upstream `.spec` templates use `Version: %{version}` / `Release:
+  %{release}%{?dist}` for `rpmbuild --define`. Under OBS, `set_version` *prepends*
+  the new version rather than replacing the macro, producing `Version:
+  18.3%{version}` → recursive expansion → build error. Replace both with
+  literals in the spec (e.g. `Version: 18.0`, `Release: 1%{?dist}`).
+- **SUSE's `check-filelist` rejects unowned directories.** On openSUSE, any
+  directory a package creates must be owned by *some* package. PG extensions
+  commonly miss `%dir %{pginstdir}/lib/bitcode/<extname>` and
+  `%dir %{pginstdir}/lib/bitcode/<extname>/src`. Add them to the llvmjit-shipping
+  `%files` section.
+- **PG 18 extensions need `krb5-devel` / `libkrb5-dev` BuildRequires.** PG 18
+  unconditionally `#include <gssapi/gssapi.h>` in server headers pulled by any
+  extension via `libpq-be.h`. Add `krb5-devel` (RPM) / `libkrb5-dev` (DEB)
+  explicitly — it's not dragged in by `percona-postgresql18-devel`.
+- **PG 18 extensions need explicit `clang` + `llvm` BuildRequires on SUSE.**
+  PGXS invokes `clang` to produce `.bc` bitcode and `llvm-lto` to link them.
+  `percona-postgresql18-devel` pulls `llvm-devel` (headers) but not the runtime
+  binaries. Add distro-conditioned BuildRequires:
+  ```
+  %if 0%{?suse_version} >= 1600
+  BuildRequires:  clang19 llvm19
+  %endif
+  %if 0%{?suse_version} == 1500
+  BuildRequires:  clang17 llvm17
+  %endif
+  %if 0%{?fedora} || 0%{?rhel}
+  BuildRequires:  clang llvm
+  %endif
+  ```
 - **`debian.dsc` version is a placeholder.** Always use `Version: 1.0.0`. OBS
   overwrites it with the version it extracts from the upstream source.
 - **`Debtransform-Files-Tar` must be complete.** Every tarball that OBS needs to

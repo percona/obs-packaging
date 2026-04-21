@@ -1,0 +1,10 @@
+--- a/bin/Makefile
++++ b/bin/Makefile
+@@ -34,6 +34,4 @@ PGXS := $(shell $(PG_CONFIG) --pgxs)
+ include $(PGXS)
+ 
+ # remove dependency on libxml2, libxslt, and libpam.
+-# XXX: find a better way to make sure we are linking with libraries
+-# from pg_config which we actually need.
+-LIBS := $(filter-out -ledit -lgssapi_krb5 -lpam -lselinux -lxml2 -lxslt, $(LIBS))
++LIBS := $(libpq_pgport) -lpgcommon -lpgport

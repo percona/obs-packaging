@@ -1,0 +1,14 @@
+--- a/src/interfaces/libpq/Makefile
++++ b/src/interfaces/libpq/Makefile
+@@ -110,10 +110,7 @@ $(call add_to_list,PKG_CONFIG_REQUIRES_P
+ endif
+ 
+ ifeq ($(with_libcurl),yes)
+-# libpq.so doesn't link against libcurl, but libpq.a needs libpq-oauth, and
+-# libpq-oauth needs libcurl. Put both into *.private.
+-$(call add_to_list,PKG_CONFIG_REQUIRES_PRIVATE,libcurl)
+-%.pc: override SHLIB_LINK_INTERNAL += -lpq-oauth
++%.pc: override SHLIB_LINK_INTERNAL += -lpq-oauth -lcurl
+ endif
+ 
+ all: all-lib libpq-refs-stamp

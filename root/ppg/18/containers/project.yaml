@@ -1,0 +1,55 @@
+title: Percona Container Images for PostgreSQL 18
+description: |
+  This project contains container images for Percona Software for PostgreSQL 18.
+
+repositories:
+  - name: RockyLinux_9
+    paths:
+      - subproject: common:deps:build
+        repository: RockyLinux_9
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+        repository: standard
+    archs: [x86_64]
+  - name: images
+    paths:
+      - subproject: ppg:18:containers
+        repository: RockyLinux_9
+      - subproject: ppg:18
+        repository: RockyLinux_9
+      - subproject: common:containers:ubi9
+        repository: images
+      - subproject: common:containers:ubi9
+        repository: RockyLinux_9
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+        repository: appstream
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+        repository: baseos
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+        repository: appstream
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+        repository: baseos
+    archs: [x86_64]
+
+project-config: |
+  %if "%_repository" == "RockyLinux_9"
+  Type: spec
+  Ignore: kbd-legacy < 2.4.0-11
+  %endif
+
+  %if "%_repository" == "images"
+  Type: docker
+  BuildEngine: podman
+
+  ExpandFlags: filterbasecontainerpkgs
+  Prefer: redhat-release
+  Prefer: glibc-minimal-langpack
+  Prefer: gpgme
+  Prefer: iptables-nft
+  Ignore: rocky-release
+
+  Prefer: glibc-minimal-langpack
+
+  BuildFlags: sbom:cyclonedx
+  %endif

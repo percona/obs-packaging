@@ -1,0 +1,5 @@
+percona-ppg-server-18 (18.3-1) unstable; urgency=low
+
+  * Initial release of Percona Distribution for PostgreSQL 18 base metapackage.
+
+ -- Percona Development Team <info@percona.com>  Tue, 21 Apr 2026 12:00:00 +0000

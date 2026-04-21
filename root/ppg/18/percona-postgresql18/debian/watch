@@ -1,0 +1,4 @@
+version=3
+opts=uversionmangle=s/alpha/~alpha/;s/beta/~beta/;s/rc/~rc/ \
+https://ftp.postgresql.org/pub/source/v(18.*)/postgresql-(18.*).tar.bz2
+

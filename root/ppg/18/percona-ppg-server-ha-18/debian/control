@@ -1,0 +1,20 @@
+Source: percona-ppg-server-ha-18
+Section: database
+Priority: optional
+Maintainer: Percona Development Team <info@percona.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Homepage: https://www.percona.com/software/postgresql-distribution
+
+Package: percona-ppg-server-ha-18
+Architecture: any
+Depends:
+ etcd | etcd-server,
+ etcd-client,
+ percona-patroni,
+ percona-haproxy,
+ percona-postgresql-18,
+ ${misc:Depends},
+Description: Essential / key PostgreSQL 18 high availability components
+ Percona Distribution for PostgreSQL features core components, tools and add-ons
+ from the community, tested to work together in demanding enterprise environments.

@@ -62,6 +62,7 @@ from .obs_api import (
     _upload_obs_files,
 )
 from .services import (
+    _copy_local_packaging,
     _get_all_obs_scm_infos,
     _git_head_sha,
     _has_runnable_services,
@@ -980,6 +981,13 @@ def cmd_sync(args):
                     for f in obs_dir.iterdir():
                         if f.is_file():
                             _copy_with_env_subst(f, sub_dir, pkg_vars)
+                    # Copy local debian/ and rpm/ packaging for service-less
+                    # packages (e.g. metapackages with hardcoded versions).
+                    _copy_local_packaging(
+                        obs_dir,
+                        sub_dir,
+                        pkg_label=f"{obs_project_name}/{package_path.name}",
+                    )
                     files_changed = _upload_obs_files(
                         apiurl,
                         obs_project_name,

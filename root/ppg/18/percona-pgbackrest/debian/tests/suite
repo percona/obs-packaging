@@ -1,0 +1,93 @@
+#!/bin/bash
+
+# This test expects postgresql version 9.3 or higher.
+
+set -e
+
+cleanfiles()
+{
+  echo "Cleaning files..."
+  rm -rf $tempdir
+  rm -f $tempconf
+  rm -rf $templock
+  rm -rf $templog
+}
+
+pgbackresttest()
+{
+  pgbackrest --stanza=demo --log-level-console=info --config=$tempconf stanza-create
+  pgbackrest --stanza=demo --log-level-console=info --config=$tempconf check
+  pgbackrest --stanza=demo --log-level-console=info --config=$tempconf backup
+  pgbackrest --config=$tempconf info
+}
+
+startvirtualenv()
+{
+  tempconf=$(mktemp)
+  PGVIRTUAL=1 exec pg_virtualenv -t \
+    -o "archive_command=pgbackrest --stanza=demo --config=$tempconf archive-push %p" \
+    -o "archive_mode=on" \
+    -o "listen_addresses=*" \
+    -o "log_line_prefix=" \
+    -o "max_wal_senders=3" \
+    -o "wal_level=hot_standby" \
+    -i "-A trust -k" "$0" "$tempconf"
+}
+
+checkdirvirt()
+{
+  virtdir=$(psql -AqtX -c "SHOW data_directory";)
+  if [ -z "$virtdir" ]
+    then
+      echo "Couldn't find temporary dir..."
+      exit 1
+  fi
+}
+
+createfilesdirs()
+{
+  tempdir=$(mktemp -d)
+  templog=$(mktemp -d)
+  templock=$(mktemp -d)
+}
+
+modifypgbackconf()
+{
+cat > $tempconf << EOL
+[demo]
+db-path=$virtdir
+db-user=$PGUSER
+db-port=$PGPORT
+log-path=$templog
+lock-path=$templock
+[global]
+repo-path=$tempdir
+retention-full=2
+EOL
+}
+
+trap cleanfiles 0 2 3 15
+
+##########################################################
+
+# pgBackRest need to run as cluster owner.
+# pg_virtualenv restarts create the cluster as user postgres if we run
+# as root. So, restarting as postgres if we run as root looks like a
+# good idea.
+if [ $(whoami) == "root" ]; then
+  su - postgres -c "exec $0 $*"
+  exit $?
+fi
+
+if [ ! -z "$1" ]
+  then
+    tempconf=$1
+fi
+
+if [ -z "$PGVIRTUAL" ]; then
+    startvirtualenv
+fi
+checkdirvirt
+createfilesdirs
+modifypgbackconf
+pgbackresttest

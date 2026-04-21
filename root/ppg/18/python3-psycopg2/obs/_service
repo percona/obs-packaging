@@ -1,0 +1,15 @@
+<services>
+  <service name="obs_scm">
+    <param name="url">https://github.com/psycopg/psycopg2.git</param>
+    <param name="scm">git</param>
+    <param name="revision">2.9.10</param>
+    <param name="version">2.9.10</param>
+    <param name="filename">psycopg2</param>
+  </service>
+  <service mode="buildtime" name="tar" />
+  <service mode="buildtime" name="recompress">
+    <param name="file">*.tar</param>
+    <param name="compression">gz</param>
+  </service>
+  <service mode="buildtime" name="set_version" />
+</services>

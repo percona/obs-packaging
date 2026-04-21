@@ -1,0 +1,5 @@
+percona-pg-gather (32-1) unstable; urgency=low
+
+  * Initial Percona build of pg_gather 32 for PostgreSQL 18.
+
+ -- Percona Development Team <info@percona.com>  Mon, 20 Apr 2026 12:00:00 +0000
