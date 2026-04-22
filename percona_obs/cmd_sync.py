@@ -4,7 +4,6 @@ import shutil
 import sys
 import tempfile
 import time
-import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -20,7 +19,6 @@ from .cmd_project import (
 from .common import (
     REPO_ROOT,
     _REPO_DIR,
-    _build_aggregate_xml,
     _load_project_config_with_inheritance,
     _print_action,
     _print_aggregate,
@@ -113,30 +111,6 @@ def _pkg_env_vars(package_path: Path) -> dict[str, str]:
         "DEBIAN_PACKAGE_DIRECTORY": (rel / "debian").as_posix(),
         "RPM_PACKAGE_DIRECTORY": (rel / "rpm").as_posix(),
     }
-
-
-def _multibuild_packages(obs_dir: Path, base_name: str) -> list[str]:
-    """Return the OBS package names to use in an _aggregate for base_name.
-
-    For plain packages: [base_name].
-    For multibuild packages: ["{base_name}:{flavor}", ...] plus the bare
-    base_name if buildemptyflavor is absent or not "false".
-    """
-    multibuild_file = obs_dir / "_multibuild"
-    if not multibuild_file.is_file():
-        return [base_name]
-    try:
-        root = ET.parse(multibuild_file).getroot()
-    except ET.ParseError:
-        return [base_name]
-    flavors = [el.text.strip() for el in root.findall("flavor") if el.text]
-    if not flavors:
-        return [base_name]
-    include_empty = root.get("buildemptyflavor", "true").lower() != "false"
-    packages = [f"{base_name}:{flavor}" for flavor in flavors]
-    if include_empty:
-        packages.append(base_name)
-    return packages
 
 
 def _content_matches_branch(
@@ -408,8 +382,8 @@ def cmd_sync(args):
     # Running this before the project pre-pass lets us know which projects
     # actually need to be created when --branch-from is active.
     # decisions[(obs_project_name, pkg_name)]:
-    #   "aggregate"   — upload _aggregate pointing to branch_project_for[key]
-    #   "skip_branch" — leave existing aggregate on OBS unchanged (no upload)
+    #   "aggregate"   — skip package; served via project PATH from branch_project_for[key]
+    #   "skip_branch" — (reserved) leave unchanged
     #   "promote"     — upload full obs/ sources
     decisions: dict[tuple[str, str], str] = {}
     branch_project_for: dict[tuple[str, str], str] = {}
@@ -873,6 +847,14 @@ def cmd_sync(args):
                         branch_rootprj=branch_rootprj,
                     )
 
+        obs_dir = package_path / "obs"
+        key = (obs_project_name, package_path.name)
+        decision = decisions.get(key, "promote")
+
+        if decision != "promote":
+            _print_aggregate(f"files  {obs_project_name}/{package_path.name}")
+            continue
+
         _apply_package_config(
             apiurl,
             obs_project_name,
@@ -885,78 +867,71 @@ def cmd_sync(args):
             package_path.name
         )
 
-        obs_dir = package_path / "obs"
         if not obs_dir.is_dir():
             continue
 
         pkg_vars = {**env_vars, **_pkg_env_vars(package_path)}
-        key = (obs_project_name, package_path.name)
-        decision = decisions.get(key, "promote")
-
-        if decision in ("aggregate", "skip_branch", "skip"):
-            _print_same(f"files  {obs_project_name}/{package_path.name}")
-        else:  # "promote"
-            message = args.message or _generate_sync_message()
-            service_file = obs_dir / "_service"
-            run_services = (
-                not args.no_services
-                and service_file.is_file()
-                and _has_runnable_services(service_file)
+        message = args.message or _generate_sync_message()
+        service_file = obs_dir / "_service"
+        run_services = (
+            not args.no_services
+            and service_file.is_file()
+            and _has_runnable_services(service_file)
+        )
+        files_changed = False
+        if run_services:
+            workdir = _run_local_services(
+                obs_dir,
+                pkg_label=f"{obs_project_name}/{package_path.name}",
+                cache=not args.no_cache,
+                env_vars=pkg_vars,
             )
-            files_changed = False
-            if run_services:
-                workdir = _run_local_services(
-                    obs_dir,
-                    pkg_label=f"{obs_project_name}/{package_path.name}",
-                    cache=not args.no_cache,
-                    env_vars=pkg_vars,
-                )
+            try:
+                combined = Path(tempfile.mkdtemp(prefix="percona-obs-upload-"))
                 try:
-                    combined = Path(tempfile.mkdtemp(prefix="percona-obs-upload-"))
-                    try:
-                        # Copy obs/ files excluding _service.
-                        for f in obs_dir.iterdir():
-                            if f.is_file() and f.name != "_service":
-                                _copy_with_env_subst(f, combined, pkg_vars)
-                        # Copy all service artifacts (cleanup already done).
-                        for f in workdir.iterdir():
-                            if f.is_file():
-                                shutil.copy2(f, combined / f.name)
-                        files_changed = _upload_obs_files(
-                            apiurl,
-                            obs_project_name,
-                            package_path.name,
-                            combined,
-                            message=message,
-                            dry_run=dry_run_obs,
-                        )
-                    finally:
-                        shutil.rmtree(combined, ignore_errors=True)
-                finally:
-                    shutil.rmtree(workdir, ignore_errors=True)
-            else:
-                sub_dir = Path(tempfile.mkdtemp(prefix="percona-obs-upload-"))
-                try:
+                    # Copy obs/ files excluding _service.
                     for f in obs_dir.iterdir():
+                        if f.is_file() and f.name != "_service":
+                            _copy_with_env_subst(f, combined, pkg_vars)
+                    # Copy all service artifacts (cleanup already done).
+                    for f in workdir.iterdir():
                         if f.is_file():
-                            _copy_with_env_subst(f, sub_dir, pkg_vars)
-                    # Copy local debian/ and rpm/ packaging for service-less
-                    # packages (e.g. metapackages with hardcoded versions).
-                    _copy_local_packaging(
-                        obs_dir,
-                        sub_dir,
-                        pkg_label=f"{obs_project_name}/{package_path.name}",
-                    )
+                            shutil.copy2(f, combined / f.name)
                     files_changed = _upload_obs_files(
                         apiurl,
                         obs_project_name,
                         package_path.name,
-                        sub_dir,
+                        combined,
                         message=message,
                         dry_run=dry_run_obs,
                     )
                 finally:
-                    shutil.rmtree(sub_dir, ignore_errors=True)
+                    shutil.rmtree(combined, ignore_errors=True)
+            finally:
+                shutil.rmtree(workdir, ignore_errors=True)
+        else:
+            sub_dir = Path(tempfile.mkdtemp(prefix="percona-obs-upload-"))
+            try:
+                for f in obs_dir.iterdir():
+                    if f.is_file():
+                        _copy_with_env_subst(f, sub_dir, pkg_vars)
+                # Copy local debian/ and rpm/ packaging for service-less
+                # packages (e.g. metapackages with hardcoded versions).
+                _copy_local_packaging(
+                    obs_dir,
+                    sub_dir,
+                    pkg_label=f"{obs_project_name}/{package_path.name}",
+                )
+                files_changed = _upload_obs_files(
+                    apiurl,
+                    obs_project_name,
+                    package_path.name,
+                    sub_dir,
+                    message=message,
+                    dry_run=dry_run_obs,
+                )
+            finally:
+                shutil.rmtree(sub_dir, ignore_errors=True)
 
     # --- orphan cleanup ---
     # Remove packages on OBS that no longer exist locally, but only when the
