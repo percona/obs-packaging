@@ -7,7 +7,6 @@ Summary:  Lightweight Go-based su replacement for containers
 License:  GPL-3.0-only
 URL:      https://github.com/tianon/gosu
 Source0:  gosu-%{version}.tar.gz
-Source1:  go.mod
 Source2:  vendor.tar.gz
 
 BuildRequires: golang
@@ -19,12 +18,11 @@ where su and sudo have TTY and signal-forwarding issues.
 
 %prep
 %setup -q -n gosu-%{version}
-cp %{SOURCE1} go.mod
 tar -xzf %{SOURCE2}
 
 %build
 export CGO_ENABLED=0
-go build -mod=vendor -ldflags='-d -s -w' -o gosu .
+go build -mod=vendor -trimpath -ldflags='-d -w' -o gosu .
 
 %install
 install -Dm755 gosu %{buildroot}%{_sbindir}/gosu
@@ -35,5 +33,5 @@ install -Dm755 gosu %{buildroot}%{_sbindir}/gosu
 %attr(755, root, root) %{_sbindir}/gosu
 
 %changelog
-* Tue Mar 24 2026 Radoslav Dias <rdias@percona.com> - 1.11-1
-- Initial packaging of gosu 1.11
+* Tue Mar 24 2026 Ricardo Dias <ricardo.dias@percona.com> - 1.19-1
+- Initial packaging of gosu 1.19

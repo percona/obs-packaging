@@ -32,6 +32,9 @@ repositories:
         repository: baseos
     archs: [x86_64]
 
+publish:
+  RockyLinux_9: false
+
 project-config: |
   %if "%_repository" == "RockyLinux_9"
   Type: spec
