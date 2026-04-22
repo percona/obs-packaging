@@ -246,14 +246,34 @@ def build_project_meta(
         for path_info in repo.get("paths", []):
             if "subproject" in path_info:
                 proj = f"{rootprj}:{path_info['subproject']}"
-                # When a --branch-from sync skips pass-through projects, redirect
-                # any subproject path that wasn't created to the branch source.
-                if (
-                    active_projects is not None
-                    and proj not in active_projects
-                    and branch_rootprj is not None
-                ):
-                    proj = f"{branch_rootprj}:{path_info['subproject']}"
+                if active_projects is not None and branch_rootprj is not None:
+                    if proj not in active_projects:
+                        # Pass-through project skipped: redirect to branch source.
+                        proj = f"{branch_rootprj}:{path_info['subproject']}"
+                    else:
+                        # Active project: emit branch source first so promoted
+                        # packages take precedence, then the target project as
+                        # fallback for packages not present in the branch.
+                        branch_proj = f"{branch_rootprj}:{path_info['subproject']}"
+                        repo_name = path_info["repository"]
+                        if not (
+                            branch_proj == obs_project_name
+                            and repo_name == repo["name"]
+                        ):
+                            ET.SubElement(
+                                repo_elem,
+                                "path",
+                                project=branch_proj,
+                                repository=repo_name,
+                            )
+                        if not (proj == obs_project_name and repo_name == repo["name"]):
+                            ET.SubElement(
+                                repo_elem,
+                                "path",
+                                project=proj,
+                                repository=repo_name,
+                            )
+                        continue
             else:
                 proj = path_info["project"]
             if proj == obs_project_name and path_info["repository"] == repo["name"]:

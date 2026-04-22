@@ -1,7 +1,6 @@
 import hashlib
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
 import time
@@ -40,7 +39,6 @@ from .common import (
 )
 from .git_utils import (
     _generate_sync_message,
-    _has_non_obs_package_changes_since,
     _has_package_changes_since,
 )
 from .obs_api import (
@@ -51,7 +49,6 @@ from .obs_api import (
     _delete_obs_package,
     _delete_obs_project,
     _fetch_combined_depinfo,
-    _fetch_obs_file_content,
     _fetch_obs_file_md5s,
     _fetch_obs_package_latest_comment,
     _fetch_obs_package_meaningful_comment,
@@ -63,8 +60,6 @@ from .obs_api import (
 )
 from .services import (
     _copy_local_packaging,
-    _get_all_obs_scm_infos,
-    _git_head_sha,
     _has_runnable_services,
     _run_local_services,
 )
@@ -151,141 +146,88 @@ def _content_matches_branch(
     obs_dir: Path,
     branch_env_vars: dict[str, str] | None = None,
     env_vars: dict[str, str] | None = None,
-    check_obsinfo: bool = True,
 ) -> bool:
-    """Return True if local obs/ files match what is in branch_project on OBS.
+    """Return True if what sync push would upload matches what is in branch_project on OBS.
 
-    Two checks are performed:
-    1. MD5s of all local obs/ files must match the corresponding files on OBS.
-       For files in _OBS_SUBSTITUTABLE (_service, _aggregate, _link), env_vars
-       substitution is applied before computing the MD5 so that tokens like
-       ${PERCONA_OBS_PACKAGING_BRANCH} compare correctly against the expanded
-       content that percona-obs uploaded to OBS.
-    2. (Only when ``check_obsinfo`` is True) For every obs_scm service present
-       (upstream source and packaging subdirs such as debian/ or rpm/), the
-       commit hash recorded in the OBS obsinfo file must match the current
-       remote HEAD.
+    Builds the same combined directory that sync push would produce — obs/ files
+    plus service artifacts plus packaging files — then compares it bidirectionally
+    against the files currently on OBS.
 
-    Used as a fallback when the revision SHA in the commit message cannot be
-    trusted for git-log comparison (e.g. local sync, manual OBS commit).
+    For packages with runnable services the services are executed locally (with
+    caching) to obtain tarballs, obsinfo, and packaging artifacts.  For packages
+    without runnable services only _copy_local_packaging is called to produce
+    packaging artifacts alongside the obs/ files.
 
-    Pass ``check_obsinfo=False`` when the caller has already verified via
-    git-log that the only file-level changes are cosmetic (e.g. env-var
-    substitutions).  In that case the obsinfo comparison would produce false
-    positives whenever the remote branch has advanced without touching the
-    package's actual content.
+    ``branch_env_vars`` are the env vars of the branch-from profile and are used
+    for ${VAR} substitution in substitutable files (_aggregate, _link) so that the
+    comparison reproduces what was uploaded when the branch project was last synced.
+    Falls back to ``env_vars`` when not provided.
     """
     obs_md5s = _fetch_obs_file_md5s(apiurl, branch_project, package_name, expanded=True)
     if not obs_md5s:
         logger.debug(f"content check: no files in {branch_project}/{package_name}")
         return False
 
-    for filepath in sorted(obs_dir.iterdir()):
-        if not filepath.is_file():
-            continue
-        check_vars = branch_env_vars if branch_env_vars is not None else env_vars
-        if check_vars and filepath.name in _OBS_SUBSTITUTABLE:
-            content = apply_env_substitution(
-                filepath.read_text("utf-8"), check_vars, source=filepath
-            ).encode("utf-8")
-        else:
-            content = filepath.read_bytes()
-        local_md5 = hashlib.md5(content).hexdigest()
-        if obs_md5s.get(filepath.name) != local_md5:
-            logger.debug(
-                f"content check: {filepath.name} differs  {branch_project}/{package_name}"
-            )
-            return False
-
-    if not check_obsinfo:
-        return True
-
+    check_vars = branch_env_vars if branch_env_vars is not None else env_vars
     service_file = obs_dir / "_service"
-    if not service_file.is_file():
-        return True
+    run_services = service_file.is_file() and _has_runnable_services(service_file)
 
-    scm_infos = _get_all_obs_scm_infos(service_file, env_vars)
-    if not scm_infos:
-        return True  # no obs_scm services; file MD5 match is sufficient
-
-    for filename_prefix, scm_url, scm_revision, _subdir in scm_infos:
-        head_sha = _git_head_sha(scm_url, scm_revision)
-        if not head_sha:
-            logger.debug(
-                f"content check: cannot resolve remote HEAD for {scm_url}@{scm_revision}"
-            )
-            return False  # conservative: can't verify → treat as changed
-
-        # OBS stores service-generated files with a "_service:<name>:" prefix when
-        # the service runs server-side; match both the bare name and that prefix.
-        _obs_scm_prefix = f"_service:obs_scm:{filename_prefix}"
-        obsinfo_name = next(
-            (
-                name
-                for name in obs_md5s
-                if (
-                    name.startswith(filename_prefix) or name.startswith(_obs_scm_prefix)
+    combined = Path(tempfile.mkdtemp(prefix="percona-obs-check-"))
+    workdir: Path | None = None
+    try:
+        if run_services:
+            try:
+                workdir = _run_local_services(
+                    obs_dir,
+                    pkg_label=f"{branch_project}/{package_name}",
+                    cache=True,
+                    env_vars=check_vars,
                 )
-                and name.endswith(".obsinfo")
-            ),
-            None,
-        )
-        if not obsinfo_name:
-            logger.debug(
-                f"content check: no obsinfo for {filename_prefix!r} "
-                f"in {branch_project}/{package_name}"
+            except SystemExit:
+                logger.debug(
+                    f"content check: service run failed  {branch_project}/{package_name}"
+                )
+                return False
+            for f in obs_dir.iterdir():
+                if f.is_file() and f.name != "_service":
+                    _copy_with_env_subst(f, combined, check_vars)
+            for f in workdir.iterdir():
+                if f.is_file():
+                    shutil.copy2(f, combined / f.name)
+        else:
+            for f in obs_dir.iterdir():
+                if f.is_file():
+                    _copy_with_env_subst(f, combined, check_vars)
+            _copy_local_packaging(
+                obs_dir,
+                combined,
+                pkg_label=f"{branch_project}/{package_name}",
             )
-            return False
 
-        obsinfo_bytes = _fetch_obs_file_content(
-            apiurl, branch_project, package_name, obsinfo_name, expanded=True
-        )
-        if not obsinfo_bytes:
-            return False
+        local_md5s: dict[str, str] = {}
+        for f in combined.iterdir():
+            if f.is_file():
+                local_md5s[f.name] = hashlib.md5(f.read_bytes()).hexdigest()
 
-        obs_commit: str | None = None
-        for line in obsinfo_bytes.decode("utf-8", errors="replace").splitlines():
-            if line.startswith("commit:"):
-                obs_commit = line.split(":", 1)[1].strip() or None
-                break
+        for fname, local_md5 in sorted(local_md5s.items()):
+            if obs_md5s.get(fname) != local_md5:
+                logger.debug(
+                    f"content check: {fname} differs  {branch_project}/{package_name}"
+                )
+                return False
 
-        if obs_commit != head_sha:
-            logger.debug(
-                f"content check: obs_scm commit mismatch for {filename_prefix!r} "
-                f"(OBS={obs_commit!r}, remote={head_sha!r})  {branch_project}/{package_name}"
-            )
-            # Before treating this as changed, check whether any commits in
-            # the range actually touch this subdir.  Only applies to
-            # packaging subdirs (e.g. root/.../debian, root/.../rpm) which
-            # are tracked in the local repo; upstream obs_scm services have
-            # an empty subdir and remain conservatively strict.
-            if _subdir and obs_commit:
-                try:
-                    git_result = subprocess.run(
-                        [
-                            "git",
-                            "log",
-                            "--oneline",
-                            f"{obs_commit}..{head_sha}",
-                            "--",
-                            _subdir,
-                        ],
-                        capture_output=True,
-                        text=True,
-                        cwd=_REPO_DIR,
-                        timeout=15,
-                    )
-                    if git_result.returncode == 0 and not git_result.stdout.strip():
-                        logger.debug(
-                            f"content check: no commits touch {_subdir!r} in range; "
-                            f"treating as match  {branch_project}/{package_name}"
-                        )
-                        continue  # this scm service matches; check the next one
-                except (subprocess.TimeoutExpired, OSError):
-                    pass  # cannot verify locally — fall through to conservative behaviour
-            return False
+        for fname in obs_md5s:
+            if fname not in local_md5s:
+                logger.debug(
+                    f"content check: {fname} in OBS but not local  {branch_project}/{package_name}"
+                )
+                return False
 
-    return True
+        return True
+    finally:
+        shutil.rmtree(combined, ignore_errors=True)
+        if workdir is not None:
+            shutil.rmtree(workdir, ignore_errors=True)
 
 
 def _resolve_branch_decision(
@@ -302,8 +244,8 @@ def _resolve_branch_decision(
     known git SHA and no local commits since that SHA.
 
     Fallback (content check): when the revision message cannot be trusted —
-    no message, non-sync format, or a dirty sync — compare obs/ file MD5s and
-    the upstream obs_scm commit hash against what OBS currently holds.
+    no message, non-sync format, or a dirty sync — build the combined upload
+    directory locally and compare it against what OBS currently holds.
 
     ``branch_env_vars`` are the env vars of the branch-from profile.  They
     are used for content comparison so that substitutable tokens (e.g.
@@ -312,7 +254,7 @@ def _resolve_branch_decision(
     profile's values.  Falls back to ``env_vars`` when not provided.
     """
 
-    def _content_check(reason: str, check_obsinfo: bool = True) -> bool:
+    def _content_check(reason: str) -> bool:
         logger.debug(f"branch decision: content check  {label}  ({reason})")
         obs_dir = package_path / "obs"
         matches = _content_matches_branch(
@@ -322,7 +264,6 @@ def _resolve_branch_decision(
             obs_dir,
             branch_env_vars,
             env_vars,
-            check_obsinfo=check_obsinfo,
         )
         if matches:
             logger.debug(f"branch decision: aggregate  {label}  (content matches)")
@@ -352,21 +293,7 @@ def _resolve_branch_decision(
             f"branch decision: aggregate  {label}  (no changes since {short_sha})"
         )
         return True
-    # Git-log found commits since the last sync.  Determine whether the
-    # changes touch packaging files (rpm/, debian/, etc.) or only obs/ files.
-    #
-    # If only obs/ files changed (e.g. a cosmetic env-var rewrite), the
-    # obsinfo check would produce a false positive: HEAD advanced but the
-    # packaging content fetched by OBS at build time is unchanged.  Skip it.
-    #
-    # If packaging files changed, the obsinfo check correctly catches the
-    # mismatch between OBS's cached commit and the current remote HEAD, so
-    # enable it.
-    has_packaging_changes = _has_non_obs_package_changes_since(short_sha, package_path)
-    return _content_check(
-        f"git changes since {short_sha}",
-        check_obsinfo=has_packaging_changes,
-    )
+    return _content_check(f"git changes since {short_sha}")
 
 
 def _compute_branch_project(
@@ -966,27 +893,7 @@ def cmd_sync(args):
         key = (obs_project_name, package_path.name)
         decision = decisions.get(key, "promote")
 
-        if decision == "aggregate":
-            bp = branch_project_for[key]
-            agg_message = f"branch: {args.branch_from} ({bp}/{package_path.name})"
-            pkg_names = _multibuild_packages(obs_dir, package_path.name)
-            agg_xml = _build_aggregate_xml(bp, pkg_names)
-            agg_dir = Path(tempfile.mkdtemp(prefix="percona-obs-agg-"))
-            try:
-                (agg_dir / "_aggregate").write_text(agg_xml, encoding="utf-8")
-                _upload_obs_files(
-                    apiurl,
-                    obs_project_name,
-                    package_path.name,
-                    agg_dir,
-                    message=agg_message,
-                    dry_run=dry_run_obs,
-                )
-            finally:
-                shutil.rmtree(agg_dir, ignore_errors=True)
-            for pkg_name in pkg_names:
-                _print_aggregate(f"{obs_project_name}/{pkg_name}  → {bp}/{pkg_name}")
-        elif decision in ("skip_branch", "skip"):
+        if decision in ("aggregate", "skip_branch", "skip"):
             _print_same(f"files  {obs_project_name}/{package_path.name}")
         else:  # "promote"
             message = args.message or _generate_sync_message()
