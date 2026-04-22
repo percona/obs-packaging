@@ -546,11 +546,20 @@ def _flag_entries(elem: ET.Element, section: str) -> set[tuple[str, str]]:
     return {(child.tag, child.get("repository", "")) for child in sec}
 
 
-def _project_meta_subset_equal(current_bytes: bytes, desired_xml: str) -> bool:
+def _project_meta_subset_equal(
+    current_bytes: bytes,
+    desired_xml: str,
+    ignore_path_projects: "frozenset[str] | None" = None,
+) -> bool:
     """Return True if the title, description, repositories, and publish/build flags we manage are identical.
 
     Ignores OBS-managed elements (person, group, lock, link) so that ACL entries
     added via the web UI do not cause spurious updates.
+
+    When ``ignore_path_projects`` is given, <path> entries whose ``project``
+    attribute is in that set are stripped from *both* sides before comparing.
+    Used by ``check_project_config_changed`` to exclude auto-injected branch
+    source paths from the cascade-trigger comparison.
     """
     try:
         current = ET.fromstring(current_bytes)
@@ -577,13 +586,16 @@ def _project_meta_subset_equal(current_bytes: bytes, desired_xml: str) -> bool:
 
     for name, d_repo in desired_repos.items():
         c_repo = current_repos[name]
-        d_paths = [
-            (p.get("project"), p.get("repository")) for p in d_repo.findall("path")
-        ]
-        c_paths = [
-            (p.get("project"), p.get("repository")) for p in c_repo.findall("path")
-        ]
-        if d_paths != c_paths:
+
+        def _paths(repo: ET.Element) -> list[tuple[str | None, str | None]]:
+            return [
+                (p.get("project"), p.get("repository"))
+                for p in repo.findall("path")
+                if ignore_path_projects is None
+                or p.get("project") not in ignore_path_projects
+            ]
+
+        if _paths(d_repo) != _paths(c_repo):
             return False
         if [a.text for a in d_repo.findall("arch")] != [
             a.text for a in c_repo.findall("arch")
@@ -908,7 +920,17 @@ def check_project_config_changed(
         if e.code == 404:
             return True, True  # project doesn't exist yet
         raise
-    meta_changed = not _project_meta_subset_equal(current_meta, desired_meta)
+    # Exclude auto-injected branch source paths from the cascade-trigger
+    # comparison.  These paths exist solely so that non-promoted packages
+    # remain visible as build deps; adding or removing them should not
+    # cause packages to be re-promoted.
+    ignore: frozenset[str] | None = None
+    if branch_rootprj is not None:
+        if obs_project_name == rootprj:
+            ignore = frozenset({branch_rootprj})
+        elif obs_project_name.startswith(rootprj + ":"):
+            ignore = frozenset({branch_rootprj + obs_project_name[len(rootprj) :]})
+    meta_changed = not _project_meta_subset_equal(current_meta, desired_meta, ignore)
     conf_changed = current_conf != desired_conf
     return meta_changed or conf_changed, False
 
