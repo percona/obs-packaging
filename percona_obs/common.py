@@ -224,9 +224,14 @@ def build_project_meta(
 
     When ``active_projects`` and ``branch_rootprj`` are provided (i.e. during a
     ``--branch-from`` sync that skips pass-through projects), any ``subproject:``
-    path entry that would resolve to a PR sub-project not present in
-    ``active_projects`` is redirected to the corresponding branch-source project
+    path entry that would resolve to a project not present in ``active_projects``
+    is redirected to the corresponding branch-source project
     (``branch_rootprj:X``) instead.
+
+    Additionally, each repository gets a leading ``<path>`` entry pointing to
+    the branch counterpart of ``obs_project_name`` itself.  This ensures that
+    non-promoted packages (absent from the target project) remain visible as
+    build dependencies when building promoted packages in the same project.
     """
     root = ET.Element("project", name=obs_project_name)
     ET.SubElement(root, "title").text = title
@@ -234,8 +239,21 @@ def build_project_meta(
     _emit_flag_section(root, "publish", publish)
     _emit_flag_section(root, "build", build)
     _emit_flag_section(root, "debuginfo", debuginfo)
+    # When --branch-from is active, compute the branch counterpart of this
+    # project so that non-promoted packages (absent from the target) remain
+    # visible as build dependencies via a leading <path> entry.
+    self_branch_proj: str | None = None
+    if branch_rootprj is not None:
+        if obs_project_name == rootprj:
+            self_branch_proj = branch_rootprj
+        elif obs_project_name.startswith(rootprj + ":"):
+            self_branch_proj = branch_rootprj + obs_project_name[len(rootprj) :]
     for repo in repositories:
         repo_elem = ET.SubElement(root, "repository", name=repo["name"])
+        if self_branch_proj:
+            ET.SubElement(
+                repo_elem, "path", project=self_branch_proj, repository=repo["name"]
+            )
         # Each entry may use 'project:' for an absolute OBS project name, or
         # 'subproject:' for a name relative to rootprj (e.g. 'builddep' → '<rootprj>:builddep').
         # Skip a path only when it resolves to the exact same project+repository
