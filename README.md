@@ -18,6 +18,7 @@ Per-distribution package version lists, updated automatically after every succes
 | Distribution | OBS Project | Version List |
 |---|---|---|
 | `ppg:17` | [isv:percona:ppg:17](https://build.opensuse.org/project/show/isv:percona:ppg:17) | [docs/versions/ppg-17.md](docs/versions/ppg-17.md) |
+| `ppg:18` | [isv:percona:ppg:18](https://build.opensuse.org/project/show/isv:percona:ppg:18) | [docs/versions/ppg-18.md](docs/versions/ppg-18.md) |
 
 ## Documentation
 
