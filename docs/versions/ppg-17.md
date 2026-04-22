@@ -2,7 +2,7 @@
 
 | Package | Project | Version |
 | ------- | ------- | ------- |
-| gosu | ppg:17:containers | 1.11-2.2 |
+| gosu | ppg:17:containers | 1.19-2.1 |
 | etcd | ppg:17 | 3.5.26-1+1.1 |
 | percona-haproxy | ppg:17 | 2.8.18-1+6.1 |
 | percona-patroni | ppg:17 | 4.1.0-1+6.3 |
