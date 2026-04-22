@@ -25,7 +25,7 @@ from .common import (
     REPO_ROOT,
 )
 from .obs_api import _fetch_combined_depinfo, _fetch_obs_package_latest_comment
-from .targets import _resolve_targets
+from .targets import _resolve_targets, is_dockerfile_image
 
 # Must match the same pattern as _BRANCH_MSG_RE in cmd_sync.py.
 # Group 1 = profile name, group 2 = source OBS project.
@@ -402,6 +402,10 @@ def cmd_build_dependency(args) -> None:
     # _builddepinfo is queried from the correct OBS instance for each.
     profile_apiurl_cache: dict[str, str] = {}
     query_projects_by_apiurl: dict[str, set[str]] = {}
+    image_pkg_by_apiurl: dict[str, dict[str, tuple[str, str, str]]] = {}
+    pkg_path_by_name: dict[str, Path] = {
+        pkg_path.name: pkg_path for _, pkg_path in targets
+    }
     for obs_name, pkg_name in pkg_obs_name:
         comment = _fetch_obs_package_latest_comment(apiurl, obs_name, pkg_name)
         if comment:
@@ -423,14 +427,34 @@ def cmd_build_dependency(args) -> None:
                         profile_apiurl_cache[profile_name] = apiurl or ""
                 src_apiurl = profile_apiurl_cache[profile_name]
                 query_projects_by_apiurl.setdefault(src_apiurl, set()).add(src_project)
+                _pkg_path = pkg_path_by_name.get(pkg_name)
+                if _pkg_path and is_dockerfile_image(_pkg_path):
+                    image_pkg_by_apiurl.setdefault(src_apiurl, {})[pkg_name] = (
+                        src_project,
+                        "images",
+                        "x86_64",
+                    )
                 continue
         # Not an aggregate (promoted or freshly synced): query the target OBS.
         query_projects_by_apiurl.setdefault(apiurl or "", set()).add(obs_name)
+        _pkg_path = pkg_path_by_name.get(pkg_name)
+        if _pkg_path and is_dockerfile_image(_pkg_path):
+            image_pkg_by_apiurl.setdefault(apiurl or "", {})[pkg_name] = (
+                obs_name,
+                "images",
+                "x86_64",
+            )
 
     # Fetch build dependency info from each OBS instance and merge.
     fwd_deps: dict[str, set[str]] = {}
     for q_apiurl, q_projects in query_projects_by_apiurl.items():
-        partial = _fetch_combined_depinfo(q_apiurl, q_projects, all_pkg_names)
+        _img = image_pkg_by_apiurl.get(q_apiurl, {})
+        partial = _fetch_combined_depinfo(
+            q_apiurl,
+            q_projects,
+            all_pkg_names,
+            image_pkgs=_img or None,
+        )
         for pkg, deps in partial.items():
             fwd_deps.setdefault(pkg, set()).update(deps)
 

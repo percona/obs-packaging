@@ -68,7 +68,7 @@ from .services import (
     _has_runnable_services,
     _run_local_services,
 )
-from .targets import _iter_project_chain, _resolve_targets
+from .targets import _iter_project_chain, _resolve_targets, is_dockerfile_image
 
 # Matches the standard sync commit message: sync: <branch>@<sha> (<detail>)
 _SYNC_MSG_RE = re.compile(r"^sync: [^@]+@([0-9a-f]+) \((.+)\)$")
@@ -494,45 +494,6 @@ def cmd_sync(args):
     _profile_cache: dict[str, dict[str, str]] = {}
     _profile_env_vars_cache: dict[str, dict[str, str]] = {}
 
-    # --- Pre-Phase 1: detect projects whose config changed on OBS (read-only) ---
-    # Runs before Phase 1 decisions so we can flip aggregate/skip → promote for
-    # packages in changed projects before the pre-pass creates project skeletons.
-    #
-    # config_changed_projects: existing OBS projects whose config differs locally.
-    # new_projects: projects that don't exist on OBS yet (HTTP 404).
-    #
-    # Only config_changed_projects drives config-promotion in --branch-from mode.
-    # New projects are not config-promoted: their packages will be aggregated from
-    # the branch source and rebuilt in the new project context automatically.
-    config_changed_projects: set[str] = set()
-    new_projects: set[str] = set()
-    if targets:
-        _unique_proj_paths: dict[str, tuple[str, Path]] = {}
-        for _op, _pp in targets:
-            _proj_path = _pp.parent
-            _proj_cfg = load_yaml(_proj_path / "project.yaml")
-            _proj_name = _proj_cfg.get("name") or _op
-            if _proj_name not in _unique_proj_paths:
-                _unique_proj_paths[_proj_name] = (_op, _proj_path)
-
-        def _check_proj_changed(
-            item: "tuple[str, tuple[str, Path]]",
-        ) -> "tuple[str, bool, bool]":
-            _pname, (_op2, _ppath) = item
-            _changed, _is_new = check_project_config_changed(
-                apiurl, _pname, _ppath, args.rootprj, env_vars=env_vars
-            )
-            return _pname, _changed, _is_new
-
-        with ThreadPoolExecutor(max_workers=8) as _proj_pool:
-            for _pname, _changed, _is_new in _proj_pool.map(
-                _check_proj_changed, _unique_proj_paths.items()
-            ):
-                if _is_new:
-                    new_projects.add(_pname)
-                elif _changed:
-                    config_changed_projects.add(_pname)
-
     _print_action("planning: checking sync decisions")
 
     # Per-package decision function run in parallel via a thread pool.
@@ -669,13 +630,56 @@ def cmd_sync(args):
             f"planning: checking build dependencies ({len(dep_projects)} project(s))"
         )
         if branch_rootprj:
+            image_pkgs: dict[str, tuple[str, str, str]] = {
+                pkg_path.name: (
+                    _compute_branch_project(obs_project, args.rootprj, branch_rootprj),
+                    "images",
+                    "x86_64",
+                )
+                for obs_project, pkg_path in targets
+                if is_dockerfile_image(pkg_path)
+            }
             fwd_deps = _fetch_combined_depinfo(
-                branch_apiurl, dep_projects, local_pkg_names
+                branch_apiurl,
+                dep_projects,
+                local_pkg_names,
+                image_pkgs=image_pkgs or None,
             )
         else:
+            # Build a per-apiurl image_pkgs map so _fetch_combined_depinfo can
+            # enrich the fwd-dep map with Dockerfile-image -> RPM edges.
+            # Each image package is routed to the same OBS instance as its
+            # source project (branch instance for aggregates, target for others).
+            image_pkg_by_apiurl_sync: dict[str, dict[str, tuple[str, str, str]]] = {}
+            for obs_project, pkg_path in targets:
+                if not is_dockerfile_image(pkg_path):
+                    continue
+                _key = (obs_project, pkg_path.name)
+                if _key in branch_project_for:
+                    _profile_name = branch_profile_for.get(_key, "")
+                    _ia = (
+                        _profile_cache.get(_profile_name, {}).get("apiurl")
+                        or apiurl
+                        or ""
+                    )
+                    _proj = branch_project_for[_key]
+                else:
+                    _ia = apiurl or ""
+                    _proj = obs_project
+                image_pkg_by_apiurl_sync.setdefault(_ia, {})[pkg_path.name] = (
+                    _proj,
+                    "images",
+                    "x86_64",
+                )
             all_fwd_deps: dict[str, set[str]] = {}
             for q_apiurl, q_projects in src_projects_by_apiurl.items():
-                partial = _fetch_combined_depinfo(q_apiurl, q_projects, local_pkg_names)
+                _img = image_pkg_by_apiurl_sync.get(q_apiurl, {})
+                partial = _fetch_combined_depinfo(
+                    q_apiurl,
+                    q_projects,
+                    local_pkg_names,
+                    image_pkgs=_img or None,
+                )
                 for pkg, deps in partial.items():
                     all_fwd_deps.setdefault(pkg, set()).update(deps)
             fwd_deps = all_fwd_deps
@@ -716,6 +720,54 @@ def cmd_sync(args):
                             )
                             decisions[dep_key] = "promote"
                             changed = True
+
+    # --- Phase 2.5: detect projects whose config changed on OBS (read-only) ---
+    # Runs after Phase 1 + Phase 2 so a preliminary active_projects (projects
+    # with at least one promote decision) is known and can be passed to
+    # build_project_meta via check_project_config_changed.  Without it, the
+    # desired meta would use raw subproject paths while the meta on OBS has
+    # them redirected to branch_rootprj, producing a false "config changed"
+    # verdict that would flip every aggregate to a promote on re-sync.
+    config_changed_projects: set[str] = set()
+    if targets:
+        _preliminary_active: set[str] | None = None
+        if branch_rootprj and args.package is None:
+            _preliminary_active = {
+                obs_project
+                for (obs_project, _), d in decisions.items()
+                if d == "promote"
+            }
+            _preliminary_active.add(args.rootprj)
+
+        _unique_proj_paths: dict[str, tuple[str, Path]] = {}
+        for _op, _pp in targets:
+            _proj_path = _pp.parent
+            _proj_cfg = load_yaml(_proj_path / "project.yaml")
+            _proj_name = _proj_cfg.get("name") or _op
+            if _proj_name not in _unique_proj_paths:
+                _unique_proj_paths[_proj_name] = (_op, _proj_path)
+
+        def _check_proj_changed(
+            item: "tuple[str, tuple[str, Path]]",
+        ) -> "tuple[str, bool, bool]":
+            _pname, (_op2, _ppath) = item
+            _changed, _is_new = check_project_config_changed(
+                apiurl,
+                _pname,
+                _ppath,
+                args.rootprj,
+                env_vars=env_vars,
+                active_projects=_preliminary_active,
+                branch_rootprj=branch_rootprj,
+            )
+            return _pname, _changed, _is_new
+
+        with ThreadPoolExecutor(max_workers=8) as _proj_pool:
+            for _pname, _changed, _is_new in _proj_pool.map(
+                _check_proj_changed, _unique_proj_paths.items()
+            ):
+                if not _is_new and _changed:
+                    config_changed_projects.add(_pname)
 
     # --- Config-triggered promotion (--branch-from only) ---
     # Packages in a project whose config changed must be promoted to the target

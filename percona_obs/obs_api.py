@@ -225,8 +225,51 @@ def _fetch_obs_project_repository_names(apiurl: str, obs_project: str) -> set[st
         return set()
 
 
+def _fetch_image_pkg_deps(
+    apiurl: str,
+    branch_project: str,
+    repo: str,
+    arch: str,
+    pkg_name: str,
+    provided_by: dict[str, str],
+    local_pkg_names: set[str],
+) -> set[str]:
+    """Return local source packages a Dockerfile image depends on, via _buildinfo.
+
+    OBS's project-level _builddepinfo does not expose the RPM packages parsed
+    by Build::Docker from the Dockerfile's RUN dnf/zypper/apt/apk install
+    blocks — only the FROM base container shows up.  The per-package _buildinfo
+    endpoint does include them, as <bdep name="..."/> entries.  Look each bdep
+    name up in the provided_by map (built from _builddepinfo) to translate
+    binary → local source package.
+    """
+    try:
+        url = osc.core.makeurl(
+            apiurl, ["build", branch_project, repo, arch, pkg_name, "_buildinfo"]
+        )
+        root = ET.fromstring(osc.connection.http_GET(url).read())
+    except Exception as exc:
+        logger.debug(
+            f"_fetch_image_pkg_deps: error fetching {branch_project}/{repo}/{arch}/{pkg_name}: {exc}"
+        )
+        return set()
+
+    deps: set[str] = set()
+    for bdep in root.findall("bdep"):
+        name = bdep.get("name", "")
+        if not name:
+            continue
+        provider = provided_by.get(name)
+        if provider and provider != pkg_name and provider in local_pkg_names:
+            deps.add(provider)
+    return deps
+
+
 def _fetch_combined_depinfo(
-    apiurl: str, branch_projects: set[str], local_pkg_names: set[str]
+    apiurl: str,
+    branch_projects: set[str],
+    local_pkg_names: set[str],
+    image_pkgs: "dict[str, tuple[str, str, str]] | None" = None,
 ) -> dict[str, set[str]]:
     """Return a forward build-dependency map across multiple OBS branch projects.
 
@@ -238,6 +281,10 @@ def _fetch_combined_depinfo(
     Because OBS _builddepinfo for a project includes packages inherited via
     <path> entries, querying branch projects gives the full cross-project dep
     graph.  Returns {} if no project has build results yet or on any error.
+
+    ``image_pkgs`` optionally extends the map with Dockerfile-image → RPM
+    edges that OBS omits from _builddepinfo.  It maps image pkg_name →
+    (branch_project, repo, arch) to query per-package _buildinfo for.
     """
     # Collect provided_by and all <package> elements from all branch projects.
     provided_by: dict[str, str] = {}  # binary_name → source_pkg
@@ -292,6 +339,21 @@ def _fetch_combined_depinfo(
             provider = provided_by.get(binary)
             if provider and provider != src and provider in local_pkg_names:
                 fwd_deps.setdefault(src, set()).add(provider)
+
+    # Enrich with Dockerfile-image → RPM edges from per-package _buildinfo.
+    if image_pkgs:
+        for pkg_name, (branch_project, repo, arch) in image_pkgs.items():
+            extra = _fetch_image_pkg_deps(
+                apiurl,
+                branch_project,
+                repo,
+                arch,
+                pkg_name,
+                provided_by,
+                local_pkg_names,
+            )
+            if extra:
+                fwd_deps.setdefault(pkg_name, set()).update(extra)
 
     return fwd_deps
 

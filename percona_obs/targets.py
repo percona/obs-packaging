@@ -15,6 +15,11 @@ def _has_direct_packages(path: Path) -> bool:
     return any(child.is_dir() and is_package(child) for child in path.iterdir())
 
 
+def is_dockerfile_image(package_path: Path) -> bool:
+    """Return True if package_path is a Dockerfile-based container image package."""
+    return (package_path / "obs" / "Dockerfile").is_file()
+
+
 def _resolve_targets(args) -> list[tuple[str, Path]]:
     """Resolve the list of (obs_project, package_path) targets from CLI args.
 
