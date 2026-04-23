@@ -408,8 +408,6 @@ def cmd_sync(args):
         obs_project: str, package_path: Path
     ) -> "tuple[tuple[str, str], str, str | None, str | None] | None":
         obs_dir = package_path / "obs"
-        if not obs_dir.is_dir():
-            return None
         project_path = package_path.parent
         project_config = load_yaml(project_path / "project.yaml")
         obs_project_name = project_config.get("name") or obs_project
@@ -867,9 +865,6 @@ def cmd_sync(args):
             package_path.name
         )
 
-        if not obs_dir.is_dir():
-            continue
-
         pkg_vars = {**env_vars, **_pkg_env_vars(package_path)}
         message = args.message or _generate_sync_message()
         service_file = obs_dir / "_service"
@@ -912,9 +907,10 @@ def cmd_sync(args):
         else:
             sub_dir = Path(tempfile.mkdtemp(prefix="percona-obs-upload-"))
             try:
-                for f in obs_dir.iterdir():
-                    if f.is_file():
-                        _copy_with_env_subst(f, sub_dir, pkg_vars)
+                if obs_dir.is_dir():
+                    for f in obs_dir.iterdir():
+                        if f.is_file():
+                            _copy_with_env_subst(f, sub_dir, pkg_vars)
                 # Copy local debian/ and rpm/ packaging for service-less
                 # packages (e.g. metapackages with hardcoded versions).
                 _copy_local_packaging(

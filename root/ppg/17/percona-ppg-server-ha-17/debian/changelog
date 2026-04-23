@@ -1,0 +1,5 @@
+percona-ppg-server-ha-17 (17.9-1) unstable; urgency=low
+
+  * Initial release of Percona Distribution for PostgreSQL 17 HA metapackage.
+
+ -- Percona Development Team <info@percona.com>  Thu, 23 Apr 2026 12:00:00 +0000
