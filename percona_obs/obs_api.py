@@ -1121,3 +1121,136 @@ def _upload_obs_files(
     for name in removed:
         print(f"      |_ {_col(_RED, '-')} {name}")
     return True
+
+
+def _create_release_project(
+    apiurl: str,
+    source_obs_project: str,
+    release_obs_project: str,
+    dry_run: bool = False,
+) -> list[str]:
+    """Create the release target project on OBS.
+
+    Reads the source project meta to discover repository names and
+    architectures, then creates a new project with those same repositories
+    (no <path> entries), builds globally disabled.
+
+    Returns the list of repository names found in the source project.
+    """
+    raw = _decode_obs_response(osc.core.show_project_meta(apiurl, source_obs_project))
+    source_root = ET.fromstring(raw)
+
+    repo_names: list[str] = []
+    release_root = ET.Element("project", name=release_obs_project)
+    ET.SubElement(release_root, "title").text = release_obs_project
+    ET.SubElement(release_root, "description").text = (
+        f"Release snapshot of {source_obs_project}"
+    )
+    build_elem = ET.SubElement(release_root, "build")
+    ET.SubElement(build_elem, "disable")
+
+    for repo_elem in source_root.findall("repository"):
+        repo_name = repo_elem.get("name", "")
+        if not repo_name:
+            continue
+        repo_names.append(repo_name)
+        new_repo = ET.SubElement(release_root, "repository", name=repo_name)
+        for arch_elem in repo_elem.findall("arch"):
+            arch_copy = ET.SubElement(new_repo, "arch")
+            arch_copy.text = arch_elem.text
+
+    ET.indent(release_root, space="  ")
+    meta = ET.tostring(release_root, encoding="unicode")
+
+    _print_create(release_obs_project)
+    if not dry_run:
+        _edit_project_meta(apiurl, release_obs_project, meta, force=False)
+
+    return repo_names
+
+
+def _add_release_targets(
+    apiurl: str,
+    source_obs_project: str,
+    release_obs_project: str,
+    repo_names: list[str],
+    dry_run: bool = False,
+) -> None:
+    """Add <releasetarget> entries to the source project's repositories.
+
+    For each repository in repo_names, appends a releasetarget element
+    pointing to the release project (trigger="manual") unless one is
+    already present.
+    """
+    raw = _decode_obs_response(osc.core.show_project_meta(apiurl, source_obs_project))
+    root = ET.fromstring(raw)
+
+    added = 0
+    for repo_elem in root.findall("repository"):
+        repo_name = repo_elem.get("name", "")
+        if repo_name not in repo_names:
+            continue
+        already = any(
+            rt.get("project") == release_obs_project
+            for rt in repo_elem.findall("releasetarget")
+        )
+        if not already:
+            ET.SubElement(
+                repo_elem,
+                "releasetarget",
+                project=release_obs_project,
+                repository=repo_name,
+                trigger="manual",
+            )
+            added += 1
+
+    if added:
+        ET.indent(root, space="  ")
+        meta = ET.tostring(root, encoding="unicode")
+        _print_update(f"{source_obs_project}  (added {added} releasetarget(s))")
+        if not dry_run:
+            _edit_project_meta(apiurl, source_obs_project, meta, force=False)
+    else:
+        _print_same(f"{source_obs_project}  (releasetargets already present)")
+
+
+def _remove_release_targets(
+    apiurl: str,
+    source_obs_project: str,
+    release_obs_project: str,
+    dry_run: bool = False,
+) -> None:
+    """Remove <releasetarget> entries added by _add_release_targets.
+
+    Safe to call when no releasetargets are present (no-op).
+    Never raises — errors are printed as warnings so the caller's
+    finally-block does not mask the primary exception.
+    """
+    try:
+        raw = _decode_obs_response(
+            osc.core.show_project_meta(apiurl, source_obs_project)
+        )
+        root = ET.fromstring(raw)
+
+        removed = 0
+        for repo_elem in root.findall("repository"):
+            for rt in repo_elem.findall("releasetarget"):
+                if rt.get("project") == release_obs_project:
+                    repo_elem.remove(rt)
+                    removed += 1
+
+        if removed:
+            ET.indent(root, space="  ")
+            meta = ET.tostring(root, encoding="unicode")
+            _print_update(
+                f"{source_obs_project}  (restored: removed {removed} releasetarget(s))"
+            )
+            if not dry_run:
+                _edit_project_meta(apiurl, source_obs_project, meta, force=False)
+        else:
+            _print_same(f"{source_obs_project}  (no releasetargets to remove)")
+    except Exception as exc:
+        print(
+            f"warning: failed to restore {source_obs_project} repo config: {exc}",
+            flush=True,
+        )

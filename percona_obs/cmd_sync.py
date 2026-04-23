@@ -1,6 +1,7 @@
 import hashlib
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -41,9 +42,11 @@ from .git_utils import (
     _has_package_changes_since,
 )
 from .obs_api import (
+    _add_release_targets,
     _apply_package_config,
     _apply_project_config,
     _create_project_skeleton,
+    _create_release_project,
     check_project_config_changed,
     _delete_obs_package,
     _delete_obs_project,
@@ -55,6 +58,7 @@ from .obs_api import (
     _fetch_obs_project_repository_names,
     _fetch_obs_subproject_names,
     _obs_project_exists,
+    _remove_release_targets,
     _upload_obs_files,
 )
 from .services import (
@@ -1143,8 +1147,10 @@ def cmd_sync_release(args) -> None:
     """Release packages from an OBS source project to a release target.
 
     Reads the release.yaml for the given release project identifier,
-    checks that the source project is up-to-date, then runs ``osc release``
-    to transfer binaries to the release target project.
+    checks that the source project is up-to-date, creates the release
+    target project on OBS, configures releasetarget entries on the source
+    project, runs ``osc release``, then restores the source project's
+    repository configuration.
     """
     release_path = resolve_project_path(args.project)
     release_file = release_path / "release.yaml"
@@ -1164,9 +1170,12 @@ def cmd_sync_release(args) -> None:
     source_obs_project = f"{args.rootprj}:{source_project_id}"
     release_obs_project = f"{args.rootprj}:{args.project}"
 
-    # Idempotency: skip if the release project already exists on OBS.
+    # Idempotency: if the release project already exists the release has
+    # already been done.  Clean up any stale releasetarget entries that may
+    # have been left behind by a partial previous run, then exit.
     _print_pending(f"checking release project {release_obs_project}")
     if _obs_project_exists(apiurl, release_obs_project):
+        _remove_release_targets(apiurl, source_obs_project, release_obs_project)
         _print_same(f"release  {release_obs_project}  (already exists)")
         return
 
@@ -1256,26 +1265,20 @@ def cmd_sync_release(args) -> None:
                 f"percona-obs sync push {source_project_id}"
             )
 
-    # Run osc release to transfer binaries.
-    _print_pending(f"releasing {source_obs_project} → {release_obs_project}")
-    result = subprocess.run(
-        [
-            "osc",
-            "-A",
-            apiurl,
-            "release",
-            source_obs_project,
-            "--target-project",
-            release_obs_project,
-            "--no-delay",
-        ],
-        capture_output=True,
-        text=True,
+    # Create the release target project on OBS (build disabled, same repos as source).
+    repo_names = _create_release_project(
+        apiurl, source_obs_project, release_obs_project
     )
-    if result.returncode != 0:
-        print(result.stderr, end="", file=sys.stderr)
-        if result.stdout.strip():
-            print(result.stdout, end="", file=sys.stderr)
-        raise SystemExit(f"error: osc release failed for {source_obs_project}")
 
-    _print_ok(f"release  {source_obs_project} → {release_obs_project}")
+    # Add releasetarget entries to the source project repositories, then
+    # run osc release.  Always restore the source project afterwards.
+    _add_release_targets(apiurl, source_obs_project, release_obs_project, repo_names)
+    try:
+        _print_pending(f"releasing {source_obs_project} → {release_obs_project}")
+        subprocess.run(
+            ["osc", "-A", apiurl, "release", source_obs_project, "--no-delay"],
+            check=True,
+        )
+        _print_ok(f"release  {source_obs_project} → {release_obs_project}")
+    finally:
+        _remove_release_targets(apiurl, source_obs_project, release_obs_project)
