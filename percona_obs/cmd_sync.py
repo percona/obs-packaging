@@ -47,6 +47,7 @@ from .obs_api import (
     _apply_project_config,
     _create_project_skeleton,
     _create_release_project,
+    _create_update_subproject,
     check_project_config_changed,
     _delete_obs_package,
     _delete_obs_project,
@@ -58,6 +59,7 @@ from .obs_api import (
     _fetch_obs_project_repository_names,
     _fetch_obs_subproject_names,
     _obs_project_exists,
+    _read_project_repo_info,
     _remove_release_targets,
     _upload_obs_files,
 )
@@ -1174,8 +1176,20 @@ def cmd_sync_release(args) -> None:
     # already been done.  Clean up any stale releasetarget entries that may
     # have been left behind by a partial previous run, then exit.
     _print_pending(f"checking release project {release_obs_project}")
+    updates_obs_project = f"{release_obs_project}:Updates"
     if _obs_project_exists(apiurl, release_obs_project):
         _remove_release_targets(apiurl, source_obs_project, release_obs_project)
+        if not _obs_project_exists(apiurl, updates_obs_project):
+            repo_names, repo_archs = _read_project_repo_info(
+                apiurl, release_obs_project
+            )
+            _create_update_subproject(
+                apiurl,
+                updates_obs_project,
+                [release_obs_project],
+                repo_names,
+                repo_archs,
+            )
         _print_same(f"release  {release_obs_project}  (already exists)")
         return
 
@@ -1266,7 +1280,7 @@ def cmd_sync_release(args) -> None:
             )
 
     # Create the release target project on OBS (build disabled, same repos as source).
-    repo_names = _create_release_project(
+    repo_names, repo_archs = _create_release_project(
         apiurl, source_obs_project, release_obs_project
     )
 
@@ -1279,6 +1293,16 @@ def cmd_sync_release(args) -> None:
             ["osc", "-A", apiurl, "release", source_obs_project, "--no-delay"],
             check=True,
         )
-        _print_ok(f"release  {source_obs_project} → {release_obs_project}")
     finally:
         _remove_release_targets(apiurl, source_obs_project, release_obs_project)
+
+    # Create the Updates subproject with builds disabled and paths to the base release.
+    _create_update_subproject(
+        apiurl,
+        updates_obs_project,
+        [release_obs_project],
+        repo_names,
+        repo_archs,
+    )
+
+    _print_ok(f"release  {source_obs_project} → {release_obs_project}")

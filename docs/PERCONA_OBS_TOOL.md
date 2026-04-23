@@ -423,13 +423,11 @@ The process has two steps:
 `project release <source-project> <release-name>` does the following:
 
 1. Shows a preview of what will be created and asks for confirmation.
-2. Creates `root/<product>/releases/<release-name>/release.yaml` with:
-   ```yaml
-   repository: ${PERCONA_OBS_PACKAGING_REPO}
-   revision: <product>/<release-name>
-   project: <source-project>
-   ```
-3. Commits the file with `git commit -s -m "Release <release-project> from <source-project>"`.
+2. Creates three files under `root/<product>/releases/<release-name>/`:
+   - `release.yaml` — records repository, git tag, and source OBS project.
+   - `project.yaml` — title and description for the release project.
+   - `Updates/project.yaml` — title and description for the Updates subproject.
+3. Commits all three files with `git commit -s -m "Release <release-project> from <source-project>"`.
 4. Creates a git tag `<product>/<release-name>` (e.g. `ppg/17.9`).
 
 After the command completes, push both the commit and the tag:
@@ -465,6 +463,9 @@ project identifier and performs the following steps:
 5. **Runs `osc release <source-project> --no-delay`** to copy the built binaries.
 6. **Restores the source project** by removing the `<releasetarget>` entries,
    so it is ready for the next release.
+7. **Creates the `Updates` subproject** (`<release-project>:Updates`) with the
+   same repositories and architectures as the release project, builds globally
+   disabled, and `<path>` entries pointing to the base release project.
 
 Skip the divergence checks (useful in CI when `--force` is passed by the
 PR-check workflow):
@@ -482,11 +483,22 @@ root/
 └── ppg/
     └── releases/
         └── 17.9/
-            └── release.yaml
+            ├── release.yaml
+            ├── project.yaml
+            └── Updates/
+                └── project.yaml
 ```
 
 The `releases/` directory is excluded from normal `sync push` traversal — it is
-never synced to OBS as a source project.
+never synced to OBS as a source project.  However, **targeted syncs into Updates
+are supported**:
+
+```sh
+./percona-obs -P local sync push ppg:releases:17.9:Updates my-update-package
+```
+
+This syncs packages directly into the `<rootprj>:ppg:releases:17.9:Updates` OBS
+project without touching the base release project's configuration.
 
 ---
 

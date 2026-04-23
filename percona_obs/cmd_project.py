@@ -957,7 +957,7 @@ def cmd_project_versions(args) -> None:
 
 
 def cmd_project_release(args: argparse.Namespace) -> None:
-    """Cut a release: create release.yaml, commit, and tag."""
+    """Cut a release: create release.yaml, project.yaml, Updates/project.yaml, commit, and tag."""
     product = args.project.split(":")[0]
 
     # Validate the source project directory exists.
@@ -988,11 +988,41 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     commit_msg = f"Release {release_project} from {args.project}"
     tag_name = f"{product}/{args.release_name}"
 
+    # Build project.yaml content for the release directory.
+    project_data = {
+        "title": f"{product} releases {args.release_name}",
+        "description": (
+            f"Release snapshot of {args.project} (release {release_project}).\n"
+            "Binaries are populated by osc release and builds are disabled.\n"
+            "This project is read-only — do not add or edit packages directly.\n"
+        ),
+    }
+    project_yaml = yaml.dump(project_data, default_flow_style=False, allow_unicode=True)
+
+    # Build project.yaml for the Updates subproject.
+    updates_data = {
+        "title": f"{product} releases {args.release_name} — Updates",
+        "description": (
+            f"Updates subproject for {release_project}.\n"
+            f"Contains update packages for {args.project} that have passed QA validation.\n"
+            f"Packages build against the base release ({release_project}).\n"
+        ),
+    }
+    updates_yaml = yaml.dump(updates_data, default_flow_style=False, allow_unicode=True)
+
     # Show what will be created and ask for confirmation.
     print(f"Release directory: {release_dir.relative_to(_REPO_DIR)}/")
     print()
     print(f"  release.yaml:")
     for line in release_yaml.splitlines():
+        print(f"    {line}")
+    print()
+    print(f"  project.yaml:")
+    for line in project_yaml.splitlines():
+        print(f"    {line}")
+    print()
+    print(f"  Updates/project.yaml:")
+    for line in updates_yaml.splitlines():
         print(f"    {line}")
     print()
     print(f"  Commit message: {commit_msg}")
@@ -1007,17 +1037,33 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     if answer not in ("y", "yes"):
         raise SystemExit("Aborted.")
 
-    # Write release.yaml.
+    # Write all files.
     release_dir.mkdir(parents=True, exist_ok=True)
     with release_file.open("w") as f:
         yaml.dump(release_data, f, default_flow_style=False, allow_unicode=True)
     _print_create(str(release_file.relative_to(_REPO_DIR)))
 
-    # Git add, commit -s, and tag.
-    rel_path = str(release_file.relative_to(_REPO_DIR))
-    subprocess.run(["git", "add", rel_path], cwd=_REPO_DIR, check=True)
+    project_file = release_dir / "project.yaml"
+    with project_file.open("w") as f:
+        yaml.dump(project_data, f, default_flow_style=False, allow_unicode=True)
+    _print_create(str(project_file.relative_to(_REPO_DIR)))
+
+    updates_dir = release_dir / "Updates"
+    updates_dir.mkdir(exist_ok=True)
+    updates_file = updates_dir / "project.yaml"
+    with updates_file.open("w") as f:
+        yaml.dump(updates_data, f, default_flow_style=False, allow_unicode=True)
+    _print_create(str(updates_file.relative_to(_REPO_DIR)))
+
+    # Git add all three files, commit -s, and tag.
+    paths = [
+        str(release_file.relative_to(_REPO_DIR)),
+        str(project_file.relative_to(_REPO_DIR)),
+        str(updates_file.relative_to(_REPO_DIR)),
+    ]
+    subprocess.run(["git", "add", *paths], cwd=_REPO_DIR, check=True)
     subprocess.run(
-        ["git", "commit", "-s", "-m", commit_msg, "--", rel_path],
+        ["git", "commit", "-s", "-m", commit_msg, "--", *paths],
         cwd=_REPO_DIR,
         check=True,
     )

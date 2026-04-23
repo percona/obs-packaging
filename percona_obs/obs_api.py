@@ -1123,24 +1123,45 @@ def _upload_obs_files(
     return True
 
 
+def _read_project_repo_info(
+    apiurl: str,
+    obs_project: str,
+) -> tuple[list[str], dict[str, list[str]]]:
+    """Return (repo_names, repo_archs) from an existing OBS project's meta.
+
+    repo_names is an ordered list of repository names.
+    repo_archs maps each repo name to its list of architecture strings.
+    """
+    raw = _decode_obs_response(osc.core.show_project_meta(apiurl, obs_project))
+    root = ET.fromstring(raw)
+
+    repo_names: list[str] = []
+    repo_archs: dict[str, list[str]] = {}
+    for repo_elem in root.findall("repository"):
+        repo_name = repo_elem.get("name", "")
+        if not repo_name:
+            continue
+        repo_names.append(repo_name)
+        repo_archs[repo_name] = [a.text for a in repo_elem.findall("arch") if a.text]
+    return repo_names, repo_archs
+
+
 def _create_release_project(
     apiurl: str,
     source_obs_project: str,
     release_obs_project: str,
     dry_run: bool = False,
-) -> list[str]:
+) -> tuple[list[str], dict[str, list[str]]]:
     """Create the release target project on OBS.
 
     Reads the source project meta to discover repository names and
     architectures, then creates a new project with those same repositories
     (no <path> entries), builds globally disabled.
 
-    Returns the list of repository names found in the source project.
+    Returns (repo_names, repo_archs) describing the repositories created.
     """
-    raw = _decode_obs_response(osc.core.show_project_meta(apiurl, source_obs_project))
-    source_root = ET.fromstring(raw)
+    repo_names, repo_archs = _read_project_repo_info(apiurl, source_obs_project)
 
-    repo_names: list[str] = []
     release_root = ET.Element("project", name=release_obs_project)
     ET.SubElement(release_root, "title").text = release_obs_project
     ET.SubElement(release_root, "description").text = (
@@ -1149,15 +1170,10 @@ def _create_release_project(
     build_elem = ET.SubElement(release_root, "build")
     ET.SubElement(build_elem, "disable")
 
-    for repo_elem in source_root.findall("repository"):
-        repo_name = repo_elem.get("name", "")
-        if not repo_name:
-            continue
-        repo_names.append(repo_name)
+    for repo_name in repo_names:
         new_repo = ET.SubElement(release_root, "repository", name=repo_name)
-        for arch_elem in repo_elem.findall("arch"):
-            arch_copy = ET.SubElement(new_repo, "arch")
-            arch_copy.text = arch_elem.text
+        for arch in repo_archs[repo_name]:
+            ET.SubElement(new_repo, "arch").text = arch
 
     ET.indent(release_root, space="  ")
     meta = ET.tostring(release_root, encoding="unicode")
@@ -1166,7 +1182,47 @@ def _create_release_project(
     if not dry_run:
         _edit_project_meta(apiurl, release_obs_project, meta, force=False)
 
-    return repo_names
+    return repo_names, repo_archs
+
+
+def _create_update_subproject(
+    apiurl: str,
+    sub_obs_project: str,
+    path_projects: list[str],
+    repo_names: list[str],
+    repo_archs: dict[str, list[str]],
+    dry_run: bool = False,
+) -> None:
+    """Create an Updates subproject on OBS with builds globally disabled.
+
+    For each repository, adds <path> entries for each project in
+    path_projects (in order), then the architecture list.  Builds are
+    globally disabled so that packages are only built when explicitly
+    re-enabled.
+    """
+    root = ET.Element("project", name=sub_obs_project)
+    ET.SubElement(root, "title").text = sub_obs_project
+    ET.SubElement(root, "description").text = (
+        f"Updates subproject for {sub_obs_project}.\n"
+        "Contains update packages that have passed QA validation.\n"
+        "Packages build against the base release project."
+    )
+    build_elem = ET.SubElement(root, "build")
+    ET.SubElement(build_elem, "disable")
+
+    for repo_name in repo_names:
+        repo_elem = ET.SubElement(root, "repository", name=repo_name)
+        for path_prj in path_projects:
+            ET.SubElement(repo_elem, "path", project=path_prj, repository=repo_name)
+        for arch in repo_archs.get(repo_name, []):
+            ET.SubElement(repo_elem, "arch").text = arch
+
+    ET.indent(root, space="  ")
+    meta = ET.tostring(root, encoding="unicode")
+
+    _print_create(sub_obs_project)
+    if not dry_run:
+        _edit_project_meta(apiurl, sub_obs_project, meta, force=False)
 
 
 def _add_release_targets(

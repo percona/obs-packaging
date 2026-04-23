@@ -3,6 +3,7 @@ from pathlib import Path
 
 from .common import (
     REPO_ROOT,
+    _is_release_dir,
     find_packages,
     is_package,
     load_yaml,
@@ -98,5 +99,7 @@ def _iter_project_chain(obs_project: str, project_path: Path):
         path = path.parent
         proj = proj.rsplit(":", 1)[0]
     for proj, obs_name, path in reversed(chain):
+        if _is_release_dir(path):
+            continue  # release dirs are managed by sync release, not sync push
         if (path / "project.yaml").exists() or _has_direct_packages(path):
             yield proj, obs_name, path
