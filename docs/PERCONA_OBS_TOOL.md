@@ -401,6 +401,95 @@ are silently excluded from the output.
 
 ---
 
+## Releasing packages
+
+A release captures a specific point-in-time snapshot of a source OBS project —
+copying its built binaries into a separate, immutable release project.
+
+The process has two steps:
+
+1. **`project release`** — records the intent locally: creates `release.yaml`,
+   commits it, and tags the repository.
+2. **`sync release`** — acts on OBS: creates the release target project,
+   configures `osc release` machinery, copies the binaries, and then cleans
+   up the source project configuration.
+
+### Step 1 — Cut a release record
+
+```sh
+./percona-obs -P local project release ppg:17 17.9
+```
+
+`project release <source-project> <release-name>` does the following:
+
+1. Shows a preview of what will be created and asks for confirmation.
+2. Creates `root/<product>/releases/<release-name>/release.yaml` with:
+   ```yaml
+   repository: ${PERCONA_OBS_PACKAGING_REPO}
+   revision: <product>/<release-name>
+   project: <source-project>
+   ```
+3. Commits the file with `git commit -s -m "Release <release-project> from <source-project>"`.
+4. Creates a git tag `<product>/<release-name>` (e.g. `ppg/17.9`).
+
+After the command completes, push both the commit and the tag:
+
+```sh
+git push && git push origin ppg/17.9
+```
+
+> Pushing the tag triggers the `obs-release.yml` CI workflow which runs
+> `sync release` automatically in CI.
+
+### Step 2 — Sync the release to OBS
+
+```sh
+./percona-obs -P local sync release ppg:releases:17.9
+```
+
+`sync release <release-project>` reads `release.yaml` for the given release
+project identifier and performs the following steps:
+
+1. **Idempotency check** — if the release project already exists on OBS, any
+   stale configuration left by a partial previous run is cleaned up and the
+   command exits early.
+2. **Divergence validation** (skipped with `--force`):
+   - Checks that no files under the source project have changed since the
+     release tag (`git diff <tag>..HEAD`).
+   - Runs `sync push --dry-run` against the source project to confirm OBS is
+     up-to-date with the local tree.
+3. **Creates the release project on OBS** with the same repository names and
+   architectures as the source project, but with builds globally disabled.
+4. **Adds `<releasetarget>` entries** to each repository of the source project,
+   pointing to the new release project with `trigger="manual"`.
+5. **Runs `osc release <source-project> --no-delay`** to copy the built binaries.
+6. **Restores the source project** by removing the `<releasetarget>` entries,
+   so it is ready for the next release.
+
+Skip the divergence checks (useful in CI when `--force` is passed by the
+PR-check workflow):
+
+```sh
+./percona-obs -P local sync release ppg:releases:17.9 --force
+```
+
+### Release directory layout
+
+Release records live under `root/<product>/releases/`:
+
+```
+root/
+└── ppg/
+    └── releases/
+        └── 17.9/
+            └── release.yaml
+```
+
+The `releases/` directory is excluded from normal `sync push` traversal — it is
+never synced to OBS as a source project.
+
+---
+
 ## Deleting a project from OBS
 
 ### Preview what would be deleted
