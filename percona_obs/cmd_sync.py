@@ -1,4 +1,5 @@
 import hashlib
+import os
 import re
 import shutil
 import subprocess
@@ -80,6 +81,10 @@ _BRANCH_MSG_RE = re.compile(r"^branch: (\S+) \((.+)/[^/]+\)$")
 
 
 _OBS_SUBSTITUTABLE = {"_service", "_aggregate", "_link"}
+
+# Resolve osc relative to the running Python so it works inside a venv even
+# when the venv's bin/ directory is not on PATH (e.g. CI runners).
+_OSC_BIN = os.path.join(os.path.dirname(sys.executable), "osc")
 
 # Stem of the OBS sub-project that holds per-PR build environments.
 # This sub-project is managed exclusively by CI workflows and must never be
@@ -1199,7 +1204,7 @@ def _sync_release_subprojects(
         try:
             _print_pending(f"releasing {source_sub_obs} → {release_sub_obs}")
             subprocess.run(
-                ["osc", "-A", apiurl, "release", source_sub_obs, "--no-delay"],
+                [_OSC_BIN, "-A", apiurl, "release", source_sub_obs, "--no-delay"],
                 check=True,
             )
         finally:
@@ -1391,7 +1396,7 @@ def cmd_sync_release(args) -> None:
     try:
         _print_pending(f"releasing {source_obs_project} → {release_obs_project}")
         subprocess.run(
-            ["osc", "-A", apiurl, "release", source_obs_project, "--no-delay"],
+            [_OSC_BIN, "-A", apiurl, "release", source_obs_project, "--no-delay"],
             check=True,
         )
     finally:
@@ -1449,7 +1454,7 @@ def cmd_sync_release_pr(args) -> None:
             continue
         _print_pending(f"osc release  {obs_name}")
         result = subprocess.run(
-            ["osc", "-A", apiurl, "release", obs_name, "--no-delay"],
+            [_OSC_BIN, "-A", apiurl, "release", obs_name, "--no-delay"],
             capture_output=True,
             text=True,
         )
