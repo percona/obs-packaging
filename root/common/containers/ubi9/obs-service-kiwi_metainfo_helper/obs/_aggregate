@@ -1,5 +1,0 @@
-<aggregatelist>
-  <aggregate project="${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Tools">
-    <package>obs-service-kiwi_metainfo_helper</package>
-  </aggregate>
-</aggregatelist>
