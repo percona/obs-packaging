@@ -1273,7 +1273,9 @@ def cmd_sync_release(args) -> None:
         # Check 1: git-level divergence since the release tag.
         tag = release_data.get("revision", "")
         source_path = resolve_project_path(source_project_id)
-        if tag:
+        if tag and getattr(args, "skip_tag_check", False):
+            _print_same(f"skipping tag divergence check for {tag} (--skip-tag-check)")
+        elif tag:
             _print_pending(
                 f"checking for changes in {source_project_id} since tag {tag}"
             )

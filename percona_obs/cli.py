@@ -260,6 +260,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         help="Skip source project sync validation.",
     )
+    sync_release_parser.add_argument(
+        "--skip-tag-check",
+        action="store_true",
+        default=False,
+        help="Skip the git tag divergence check (Check 1). "
+        "Use when the release tag has not been created locally yet.",
+    )
     sync_release_parser.set_defaults(func=cmd_sync_release)
 
     sync_release_pr_parser = sync_subparsers.add_parser(
