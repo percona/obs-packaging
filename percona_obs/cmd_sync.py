@@ -678,6 +678,28 @@ def cmd_sync(args):
                 active_projects=_preliminary_active,
                 branch_rootprj=branch_rootprj,
             )
+            if not _is_new:
+                return _pname, _changed, _is_new
+            # PR project is new — fall back to comparing local config against
+            # the corresponding production project.  If production exists and
+            # its config differs from the local desired config (e.g. a new arch
+            # was added to root/project.yaml), treat this as a config change so
+            # the PR project gets created and its packages are promoted.
+            if branch_rootprj:
+                _prod_name = _compute_branch_project(
+                    _pname, args.rootprj, branch_rootprj
+                )
+                _prod_changed, _prod_is_new = check_project_config_changed(
+                    branch_apiurl,
+                    _prod_name,
+                    _ppath,
+                    branch_rootprj,
+                    env_vars=branch_env_vars,
+                    active_projects=None,
+                    branch_rootprj=None,
+                )
+                if not _prod_is_new and _prod_changed:
+                    return _pname, True, False  # config differs from production
             return _pname, _changed, _is_new
 
         with ThreadPoolExecutor(max_workers=8) as _proj_pool:
