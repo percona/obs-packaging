@@ -1018,7 +1018,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             {
                 "name": repo["name"],
                 "paths": [
-                    {"project": release_obs_project, "repository": repo["name"]},
+                    {"subproject": release_project, "repository": repo["name"]},
                     *repo["paths"],
                 ],
                 "archs": repo["archs"],
