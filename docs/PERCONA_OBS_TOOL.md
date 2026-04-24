@@ -406,13 +406,12 @@ are silently excluded from the output.
 A release captures a specific point-in-time snapshot of a source OBS project —
 copying its built binaries into a separate, immutable release project.
 
-The process has two steps:
+The process is PR-based:
 
-1. **`project release`** — records the intent locally: creates `release.yaml`,
-   commits it, and tags the repository.
-2. **`sync release`** — acts on OBS: creates the release target project,
-   configures `osc release` machinery, copies the binaries, and then cleans
-   up the source project configuration.
+1. **`project release`** — records the intent locally: creates `release.yaml` and all
+   supporting `project.yaml` files, commits them, and asks you to open a pull request.
+2. **CI on PR merge** — `obs-pr-cleanup.yml` creates the git tag automatically.
+3. **`obs-release.yml`** — triggered by the tag, runs `sync release` in CI.
 
 ### Step 1 — Cut a release record
 
@@ -423,37 +422,56 @@ The process has two steps:
 `project release <source-project> <release-name>` does the following:
 
 1. Shows a preview of what will be created and asks for confirmation.
-2. Creates three files under `root/<product>/releases/<release-name>/`:
-   - `release.yaml` — records repository, git tag, and source OBS project.
-   - `project.yaml` — title and description for the release project.
-   - `Updates/project.yaml` — title and description for the Updates subproject.
-3. Commits all three files with `git commit -s -m "Release <release-project> from <source-project>"`.
-4. Creates a git tag `<product>/<release-name>` (e.g. `ppg/17.9`).
+2. Fetches the source project's repository topology from OBS.
+3. Creates files under `root/<product>/releases/<release-name>/`:
+   - `release.yaml` — records the git revision and source OBS project.
+   - `project.yaml` — base release project (builds disabled, mirrors source repos).
+   - `Updates/project.yaml` — Updates subproject (builds disabled, paths to base release).
+   - `<subproject>/project.yaml` for each source subproject (e.g. `containers/`) — builds
+     enabled, paths rewritten to reference `Updates` and the base release project so
+     container images rebuild automatically when packages are updated.
+4. Commits all files with `git commit -s -m "Release <release-project> from <source-project>"`.
 
-After the command completes, push both the commit and the tag:
-
-```sh
-git push && git push origin ppg/17.9
-```
-
-> Pushing the tag triggers the `obs-release.yml` CI workflow which runs
-> `sync release` automatically in CI.
-
-### Step 2 — Sync the release to OBS
+After the command completes, push the branch and open a pull request:
 
 ```sh
-./percona-obs -P local sync release ppg:releases:17.9
+git push -u origin HEAD
 ```
 
-`sync release <release-project>` reads `release.yaml` for the given release
-project identifier and performs the following steps:
+> The release tag (`ppg/17.9`) is created automatically by CI when the PR is merged.
+> That tag then triggers the `obs-release.yml` workflow, which runs `sync release`.
+
+### Step 2 — CI validates and ships the release
+
+When the release PR is open, the `obs-pr-check.yml` workflow runs
+`sync release --force` against a staging OBS project to validate that the release
+can be performed cleanly.
+
+On merge:
+
+1. `obs-pr-cleanup.yml` detects the added `release.yaml` and creates the git tag
+   `<product>/<release-name>` (e.g. `ppg/17.9`).
+2. The tag triggers `obs-release.yml`, which runs `sync release` against production OBS.
+3. After `sync release` finishes, `obs-release.yml` polls OBS until all builds reach a
+   terminal state, then updates the version list documentation.
+
+### Running `sync release` manually
+
+For local testing or recovery from a partial run:
+
+```sh
+./percona-obs -P local sync release ppg:releases:17.9 --skip-tag-check
+```
+
+`sync release <release-project>` reads `release.yaml` and performs:
 
 1. **Idempotency check** — if the release project already exists on OBS, any
-   stale configuration left by a partial previous run is cleaned up and the
-   command exits early.
+   stale `<releasetarget>` configuration from a partial previous run is cleaned up
+   and the command exits early.
 2. **Divergence validation** (skipped with `--force`):
-   - Checks that no files under the source project have changed since the
-     release tag (`git diff <tag>..HEAD`).
+   - Checks that no files under the source project have changed since the release tag
+     (`git diff <tag>..HEAD`). Pass `--skip-tag-check` to skip this check when the
+     tag has not been created locally yet.
    - Runs `sync push --dry-run` against the source project to confirm OBS is
      up-to-date with the local tree.
 3. **Creates the release project on OBS** with the same repository names and
@@ -463,12 +481,15 @@ project identifier and performs the following steps:
 5. **Runs `osc release <source-project> --no-delay`** to copy the built binaries.
 6. **Restores the source project** by removing the `<releasetarget>` entries,
    so it is ready for the next release.
-7. **Creates the `Updates` subproject** (`<release-project>:Updates`) with the
-   same repositories and architectures as the release project, builds globally
-   disabled, and `<path>` entries pointing to the base release project.
+7. **Creates the `Updates` subproject** (`<release-project>:Updates`) with the same
+   repositories and architectures as the release project, builds globally disabled,
+   and `<path>` entries pointing to the base release project.
+8. **Creates each release subproject** (e.g. `<release-project>:containers`) — applies
+   the subproject's `project.yaml`, runs `osc release` for the source subproject, then
+   blanket-disables builds for all non-container-image packages (packages without a
+   `Dockerfile` in their `obs/` directory) so only image builds run.
 
-Skip the divergence checks (useful in CI when `--force` is passed by the
-PR-check workflow):
+Skip all divergence checks (used by CI):
 
 ```sh
 ./percona-obs -P local sync release ppg:releases:17.9 --force
@@ -485,7 +506,9 @@ root/
         └── 17.9/
             ├── release.yaml
             ├── project.yaml
-            └── Updates/
+            ├── Updates/
+            │   └── project.yaml
+            └── containers/
                 └── project.yaml
 ```
 

@@ -47,47 +47,52 @@ Each product directory contains:
 
 ### `releases/`
 
-Release pointer files. Each subdirectory represents a released distribution and contains a `release.yaml`
-that records the git revision and OBS source project used for that release.
+Release definitions. Each subdirectory represents one released version and contains a `release.yaml`
+plus the `project.yaml` files that define the OBS release project topology.
 
 ```
 releases/
-└── <name>/                 # one subdirectory per release, e.g. 17.9/
-    └── release.yaml        # release pointer (see below)
+└── <name>/                    # one subdirectory per release, e.g. 17.9/
+    ├── release.yaml           # release pointer
+    ├── project.yaml           # base release project (builds disabled)
+    ├── Updates/
+    │   └── project.yaml       # Updates subproject (builds disabled)
+    └── <subproject>/          # one per source subproject, e.g. containers/
+        └── project.yaml       # release subproject (builds enabled for images)
 ```
 
 Each subdirectory name identifies a release. The convention is to use the product minor version
 (e.g. `17.9`), but any descriptive name works.
 
+The `release.yaml` format:
+
+```yaml
+repository: ${PERCONA_OBS_PACKAGING_REPO}
+revision: <percona-product>/17.9    # e.g. ppg/17.9 — the git tag
+project: <percona-product>:17       # e.g. ppg:17 — OBS source project
+```
+
+| Field | Description |
+|---|---|
+| `repository` | URL of this git repository. Use `${PERCONA_OBS_PACKAGING_REPO}` to inherit from the CI environment. |
+| `revision` | Git tag in `repository` whose packaging sources were used for this release. Convention: `<product>/<MAJOR.MINOR>` (e.g. `ppg/17.9`). |
+| `project` | OBS source project to release from (relative to `rootprj`). |
+
 #### Cutting a release
 
-1. Create a new subdirectory named after the release and add a `release.yaml` inside it:
+Use the `project release` command — it generates all required files, commits them, and
+prompts you to open a pull request:
 
-   ```yaml
-   repository: ${PERCONA_OBS_PACKAGING_REPO}
-   revision: <percona-product>/17.9    # e.g. ppg/17.9
-   project: <percona-product>:17       # e.g. ppg:17, adjust the major version as needed
-   ```
+```sh
+./percona-obs -P <profile> project release ppg:17 17.9
+```
 
-   | Field | Description |
-   |---|---|
-   | `repository` | URL of this git repository. Use `${PERCONA_OBS_PACKAGING_REPO}` to inherit from the environment. |
-   | `revision` | Branch name, tag, or commit SHA in `repository` that contains the packaging sources for this release. Convention: `<percona-product>/<MAJOR.MINOR>` (e.g. `ppg/17.9`). |
-   | `project` | OBS source project to release from. Passed as the argument to `osc release <project>`. |
+The command fetches the source project's build topology from OBS, creates the release
+directory with all `project.yaml` and `release.yaml` files, and commits everything.
+See `docs/PERCONA_OBS_TOOL.md` for the full workflow description.
 
-   The `project` field identifies the development project whose packages are promoted to the release target.
-   The release itself is managed in OBS — this file is the pointer that `percona-obs` uses to
-   locate the right sources and trigger the release.
-
-2. Commit the changes with the message:
-
-   ```
-   Release <release-project> from <source-project>
-   ```
-
-   For example: `Release ppg:releases:17.9 from ppg:17`.
-
-3. Tag the commit (e.g. `ppg/17.9`) and push both the commit and the tag to the remote.
+The release tag (`ppg/17.9`) and the OBS release project are created automatically
+by CI when the pull request is merged — do not create the tag manually.
 
 ### `<major-version>/`
 
