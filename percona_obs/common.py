@@ -281,8 +281,15 @@ def build_project_meta(
                         # fallback for packages not present in the branch.
                         branch_proj = f"{branch_rootprj}:{path_info['subproject']}"
                         repo_name = path_info["repository"]
+                        # Skip if already emitted as the leading self_branch_proj path
+                        # (happens when the subproject reference points back to the
+                        # project being configured, e.g. common:deps:build inheriting
+                        # a path to itself from the root project.yaml).
                         if not (
                             branch_proj == obs_project_name
+                            and repo_name == repo["name"]
+                        ) and not (
+                            branch_proj == self_branch_proj
                             and repo_name == repo["name"]
                         ):
                             ET.SubElement(
