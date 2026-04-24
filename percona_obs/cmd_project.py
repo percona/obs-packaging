@@ -1114,7 +1114,6 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         print(f"    {line}")
     print()
     print(f"  Commit message: {commit_msg}")
-    print(f"  Tag:            {tag_name}")
     print()
 
     try:
