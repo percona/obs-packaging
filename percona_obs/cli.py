@@ -20,7 +20,13 @@ from .cmd_project import (
     cmd_project_verify,
     cmd_project_versions,
 )
-from .cmd_sync import cmd_sync, cmd_sync_delete, cmd_sync_promote, cmd_sync_release
+from .cmd_sync import (
+    cmd_sync,
+    cmd_sync_delete,
+    cmd_sync_promote,
+    cmd_sync_release,
+    cmd_sync_release_pr,
+)
 from .common import _DIM, _col, logger
 
 
@@ -255,6 +261,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip source project sync validation.",
     )
     sync_release_parser.set_defaults(func=cmd_sync_release)
+
+    sync_release_pr_parser = sync_subparsers.add_parser(
+        "release-pr",
+        help="Run osc release on all PR projects to publish packages to production.",
+    )
+    sync_release_pr_parser.set_defaults(func=cmd_sync_release_pr)
 
     build_parser_ = subparsers.add_parser(
         "build",

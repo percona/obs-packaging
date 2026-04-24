@@ -261,6 +261,13 @@ def build_project_meta(
             ET.SubElement(
                 repo_elem, "path", project=self_branch_proj, repository=repo["name"]
             )
+            ET.SubElement(
+                repo_elem,
+                "releasetarget",
+                project=self_branch_proj,
+                repository=repo["name"],
+                trigger="manual",
+            )
         # Each entry may use 'project:' for an absolute OBS project name, or
         # 'subproject:' for a name relative to rootprj (e.g. 'builddep' → '<rootprj>:builddep').
         # Skip a path only when it resolves to the exact same project+repository

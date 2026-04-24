@@ -763,6 +763,13 @@ def _apply_project_config(
     projects in ``--branch-from`` syncs.
     """
     project_config = _load_project_config_with_inheritance(project_path, env_vars)
+    # In --branch-from (PR) context, always enable builds regardless of the
+    # project.yaml setting.  Release/Updates projects have build:disable:true
+    # in their yaml for production but must allow builds in PR projects so
+    # that promoted packages can be tested.
+    build = project_config.get("build")
+    if branch_rootprj is not None:
+        build = None
     meta = build_project_meta(
         obs_project_name,
         project_config.get("title", ""),
@@ -770,7 +777,7 @@ def _apply_project_config(
         project_config.get("repositories", []),
         rootprj,
         publish=project_config.get("publish"),
-        build=project_config.get("build"),
+        build=build,
         debuginfo=project_config.get("debuginfo"),
         active_projects=active_projects,
         branch_rootprj=branch_rootprj,
@@ -1123,27 +1130,88 @@ def _upload_obs_files(
     return True
 
 
-def _read_project_repo_info(
+def _obs_meta_to_yaml_repos(
+    repo_elems: list[ET.Element],
+    rootprj: str,
+) -> list[dict]:
+    """Convert OBS <repository> elements to the project.yaml repositories format.
+
+    Paths within rootprj are expressed as {subproject: X, repository: Y};
+    external paths use {project: <absolute OBS name>, repository: Y}.
+    """
+    repos: list[dict] = []
+    for repo in repo_elems:
+        name = repo.get("name", "")
+        if not name:
+            continue
+        paths: list[dict] = []
+        for path in repo.findall("path"):
+            proj = path.get("project", "")
+            rep = path.get("repository", "")
+            if not proj or not rep:
+                continue
+            if proj == rootprj:
+                paths.append({"subproject": "", "repository": rep})
+            elif proj.startswith(rootprj + ":"):
+                subprj = proj[len(rootprj) + 1 :]
+                paths.append({"subproject": subprj, "repository": rep})
+            else:
+                paths.append({"project": proj, "repository": rep})
+        archs = [a.text for a in repo.findall("arch") if a.text]
+        repos.append({"name": name, "paths": paths, "archs": archs})
+    return repos
+
+
+def _obs_meta_to_yaml_debuginfo(
+    meta_root: ET.Element,
+) -> dict[str, bool] | None:
+    """Parse <debuginfo> flags from an OBS project meta XML element.
+
+    Returns a {repository_name: True/False} dict, or None if no debuginfo
+    element is present.
+    """
+    debuginfo_elem = meta_root.find("debuginfo")
+    if debuginfo_elem is None:
+        return None
+    result: dict[str, bool] = {}
+    for enable in debuginfo_elem.findall("enable"):
+        repo = enable.get("repository")
+        if repo:
+            result[repo] = True
+    for disable in debuginfo_elem.findall("disable"):
+        repo = disable.get("repository")
+        if repo:
+            result[repo] = False
+    return result or None
+
+
+def _read_project_release_source(
     apiurl: str,
     obs_project: str,
-) -> tuple[list[str], dict[str, list[str]]]:
-    """Return (repo_names, repo_archs) from an existing OBS project's meta.
+) -> tuple[list[ET.Element], ET.Element | None]:
+    """Return (repository_elements, debuginfo_element) from source meta.
 
-    repo_names is an ordered list of repository names.
-    repo_archs maps each repo name to its list of architecture strings.
+    Repository elements are deep-copied and have any <releasetarget>
+    children stripped so they can be re-used verbatim in a release
+    project.  The debuginfo element (if present) is likewise deep-copied.
     """
     raw = _decode_obs_response(osc.core.show_project_meta(apiurl, obs_project))
     root = ET.fromstring(raw)
 
-    repo_names: list[str] = []
-    repo_archs: dict[str, list[str]] = {}
+    repo_elems: list[ET.Element] = []
     for repo_elem in root.findall("repository"):
-        repo_name = repo_elem.get("name", "")
-        if not repo_name:
+        if not repo_elem.get("name"):
             continue
-        repo_names.append(repo_name)
-        repo_archs[repo_name] = [a.text for a in repo_elem.findall("arch") if a.text]
-    return repo_names, repo_archs
+        clone = copy.deepcopy(repo_elem)
+        for rt in clone.findall("releasetarget"):
+            clone.remove(rt)
+        repo_elems.append(clone)
+
+    debuginfo_elem = root.find("debuginfo")
+    if debuginfo_elem is not None:
+        debuginfo_elem = copy.deepcopy(debuginfo_elem)
+
+    return repo_elems, debuginfo_elem
 
 
 def _create_release_project(
@@ -1151,16 +1219,20 @@ def _create_release_project(
     source_obs_project: str,
     release_obs_project: str,
     dry_run: bool = False,
-) -> tuple[list[str], dict[str, list[str]]]:
+) -> list[ET.Element]:
     """Create the release target project on OBS.
 
-    Reads the source project meta to discover repository names and
-    architectures, then creates a new project with those same repositories
-    (no <path> entries), builds globally disabled.
+    Reads the source project meta and copies its <repository> elements
+    verbatim (names, archs, <path> chains) so the release project is a
+    faithful snapshot of the source's build topology.  Also copies the
+    source's <debuginfo> block.  Builds are globally disabled.
 
-    Returns (repo_names, repo_archs) describing the repositories created.
+    Returns the list of source repository elements (useful for building
+    the Updates subproject on top of the same path chain).
     """
-    repo_names, repo_archs = _read_project_repo_info(apiurl, source_obs_project)
+    repo_elems, debuginfo_elem = _read_project_release_source(
+        apiurl, source_obs_project
+    )
 
     release_root = ET.Element("project", name=release_obs_project)
     ET.SubElement(release_root, "title").text = release_obs_project
@@ -1170,10 +1242,11 @@ def _create_release_project(
     build_elem = ET.SubElement(release_root, "build")
     ET.SubElement(build_elem, "disable")
 
-    for repo_name in repo_names:
-        new_repo = ET.SubElement(release_root, "repository", name=repo_name)
-        for arch in repo_archs[repo_name]:
-            ET.SubElement(new_repo, "arch").text = arch
+    if debuginfo_elem is not None:
+        release_root.append(copy.deepcopy(debuginfo_elem))
+
+    for repo_elem in repo_elems:
+        release_root.append(copy.deepcopy(repo_elem))
 
     ET.indent(release_root, space="  ")
     meta = ET.tostring(release_root, encoding="unicode")
@@ -1182,23 +1255,58 @@ def _create_release_project(
     if not dry_run:
         _edit_project_meta(apiurl, release_obs_project, meta, force=False)
 
-    return repo_names, repo_archs
+    return repo_elems
+
+
+def _copy_project_conf(
+    apiurl: str,
+    source_obs_project: str,
+    target_obs_project: str,
+    dry_run: bool = False,
+) -> None:
+    """Copy the prjconf from source_obs_project to target_obs_project.
+
+    The target project is assumed to exist and to have an empty prjconf.
+    """
+    _print_pending(f"project config  {target_obs_project}")
+    try:
+        source_conf = _decode_obs_response(
+            osc.core.show_project_conf(apiurl, source_obs_project)
+        )
+    except urllib.error.HTTPError as e:
+        _obs_api_error(e, f"fetching project config for {source_obs_project}")
+        return
+
+    if not dry_run:
+        try:
+            with _silence_stdout():
+                osc.core.edit_meta(
+                    metatype="prjconf",
+                    path_args=(target_obs_project,),
+                    data=[source_conf],
+                    force=False,
+                    apiurl=apiurl,
+                )
+        except urllib.error.HTTPError as e:
+            _obs_api_error(e, f"writing project config for {target_obs_project}")
+            return
+    _print_create(f"project config  {target_obs_project}")
 
 
 def _create_update_subproject(
     apiurl: str,
     sub_obs_project: str,
-    path_projects: list[str],
-    repo_names: list[str],
-    repo_archs: dict[str, list[str]],
+    base_release_project: str,
+    source_repo_elems: list[ET.Element],
     dry_run: bool = False,
 ) -> None:
     """Create an Updates subproject on OBS with builds globally disabled.
 
-    For each repository, adds <path> entries for each project in
-    path_projects (in order), then the architecture list.  Builds are
-    globally disabled so that packages are only built when explicitly
-    re-enabled.
+    Each repository is built from the corresponding source repository:
+    a <path> pointing at the base release project is prepended, followed
+    by the source's original <path> entries, then the source's <arch>
+    entries.  Builds are globally disabled so that packages are only
+    built when explicitly re-enabled.
     """
     root = ET.Element("project", name=sub_obs_project)
     ET.SubElement(root, "title").text = sub_obs_project
@@ -1210,12 +1318,18 @@ def _create_update_subproject(
     build_elem = ET.SubElement(root, "build")
     ET.SubElement(build_elem, "disable")
 
-    for repo_name in repo_names:
+    for source_repo in source_repo_elems:
+        repo_name = source_repo.get("name", "")
+        if not repo_name:
+            continue
         repo_elem = ET.SubElement(root, "repository", name=repo_name)
-        for path_prj in path_projects:
-            ET.SubElement(repo_elem, "path", project=path_prj, repository=repo_name)
-        for arch in repo_archs.get(repo_name, []):
-            ET.SubElement(repo_elem, "arch").text = arch
+        ET.SubElement(
+            repo_elem, "path", project=base_release_project, repository=repo_name
+        )
+        for path in source_repo.findall("path"):
+            repo_elem.append(copy.deepcopy(path))
+        for arch in source_repo.findall("arch"):
+            repo_elem.append(copy.deepcopy(arch))
 
     ET.indent(root, space="  ")
     meta = ET.tostring(root, encoding="unicode")

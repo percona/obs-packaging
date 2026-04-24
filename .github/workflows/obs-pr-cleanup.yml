@@ -29,6 +29,20 @@ jobs:
           obs-user: ${{ vars.OBS_USER }}
           obs-password: ${{ secrets.OBS_PASSWORD }}
 
+      # When a PR is merged (not just closed), release the built packages from
+      # each PR project to its production counterpart via osc release.  This
+      # uses the <releasetarget> entries that sync push --branch-from added to
+      # every active project's repository configuration.
+      - name: Release PR packages to production (merged PRs only)
+        if: github.event.pull_request.merged == true
+        run: |
+          PR_ROOTPRJ="${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}"
+
+          venv/bin/python -m percona_obs --verbose \
+            -A "$OBS_APIURL" \
+            -R "$PR_ROOTPRJ" \
+            sync release-pr
+
       # Delete the PR's root project and all its sub-projects.
       # --yes skips the confirmation prompt.
       # --recursive ensures OBS deletes projects that still contain packages

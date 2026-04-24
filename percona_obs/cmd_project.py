@@ -41,6 +41,9 @@ from .obs_api import (
     _fetch_obs_download_url,
     _fetch_root_project_managed_elements,
     _inject_obs_managed_elements,
+    _obs_meta_to_yaml_debuginfo,
+    _obs_meta_to_yaml_repos,
+    _read_project_release_source,
 )
 from .cmd_build import (
     _fetch_build_results,
@@ -975,6 +978,53 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             f"error: release already exists: {release_file.relative_to(_REPO_DIR)}"
         )
 
+    release_project = f"{product}:releases:{args.release_name}"
+    commit_msg = f"Release {release_project} from {args.project}"
+    tag_name = f"{product}/{args.release_name}"
+
+    # Fetch the source project's repository config and prjconf from OBS so
+    # the generated yaml files include complete build topology (repos, paths,
+    # archs, debuginfo, prjconf).  This lets _apply_project_config() manage
+    # the release and Updates OBS projects without special-casing empty repos.
+    if not args.rootprj:
+        raise SystemExit(
+            "error: rootprj is required for 'project release': "
+            "supply -R/--rootprj or -P/--profile"
+        )
+    osc.conf.get_config(override_apiurl=args.apiurl)
+    apiurl: str = osc.conf.config["apiurl"]
+    source_obs_project = f"{args.rootprj}:{args.project}"
+    release_obs_project = f"{args.rootprj}:{release_project}"
+
+    raw_meta = _decode_obs_response(
+        osc.core.show_project_meta(apiurl, source_obs_project)
+    )
+    meta_root = ET.fromstring(raw_meta)
+    source_repo_elems, _ = _read_project_release_source(apiurl, source_obs_project)
+    source_repos = _obs_meta_to_yaml_repos(source_repo_elems, args.rootprj)
+    source_debuginfo = _obs_meta_to_yaml_debuginfo(meta_root)
+    try:
+        source_prjconf = _decode_obs_response(
+            osc.core.show_project_conf(apiurl, source_obs_project)
+        ).strip()
+    except urllib.error.HTTPError:
+        source_prjconf = ""
+
+    # Build Updates repos: same repos as source but with the base release
+    # project prepended as the first <path> for each repository.
+    updates_repos = []
+    for repo in source_repos:
+        updates_repos.append(
+            {
+                "name": repo["name"],
+                "paths": [
+                    {"project": release_obs_project, "repository": repo["name"]},
+                    *repo["paths"],
+                ],
+                "archs": repo["archs"],
+            }
+        )
+
     # Build release.yaml content.
     revision = f"{product}/{args.release_name}"
     release_data = {
@@ -984,30 +1034,38 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     }
     release_yaml = yaml.dump(release_data, default_flow_style=False, allow_unicode=True)
 
-    release_project = f"{product}:releases:{args.release_name}"
-    commit_msg = f"Release {release_project} from {args.project}"
-    tag_name = f"{product}/{args.release_name}"
-
-    # Build project.yaml content for the release directory.
-    project_data = {
+    # Build project.yaml for the base release directory — complete snapshot of
+    # the source project's build topology with builds globally disabled.
+    project_data: dict = {
         "title": f"{product} releases {args.release_name}",
         "description": (
             f"Release snapshot of {args.project} (release {release_project}).\n"
             "Binaries are populated by osc release and builds are disabled.\n"
             "This project is read-only — do not add or edit packages directly.\n"
         ),
+        "build": {"disable": True},
+        "repositories": source_repos,
     }
+    if source_debuginfo:
+        project_data["debuginfo"] = source_debuginfo
+    if source_prjconf:
+        project_data["project-config"] = source_prjconf
     project_yaml = yaml.dump(project_data, default_flow_style=False, allow_unicode=True)
 
-    # Build project.yaml for the Updates subproject.
-    updates_data = {
+    # Build project.yaml for the Updates subproject — same topology with the
+    # base release project as the first path, builds globally disabled.
+    updates_data: dict = {
         "title": f"{product} releases {args.release_name} — Updates",
         "description": (
             f"Updates subproject for {release_project}.\n"
             f"Contains update packages for {args.project} that have passed QA validation.\n"
             f"Packages build against the base release ({release_project}).\n"
         ),
+        "build": {"disable": True},
+        "repositories": updates_repos,
     }
+    if source_prjconf:
+        updates_data["project-config"] = source_prjconf
     updates_yaml = yaml.dump(updates_data, default_flow_style=False, allow_unicode=True)
 
     # Show what will be created and ask for confirmation.

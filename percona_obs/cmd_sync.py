@@ -46,6 +46,7 @@ from .obs_api import (
     _apply_package_config,
     _apply_project_config,
     _create_project_skeleton,
+    _copy_project_conf,
     _create_release_project,
     _create_update_subproject,
     check_project_config_changed,
@@ -59,7 +60,7 @@ from .obs_api import (
     _fetch_obs_project_repository_names,
     _fetch_obs_subproject_names,
     _obs_project_exists,
-    _read_project_repo_info,
+    _read_project_release_source,
     _remove_release_targets,
     _upload_obs_files,
 )
@@ -1180,15 +1181,14 @@ def cmd_sync_release(args) -> None:
     if _obs_project_exists(apiurl, release_obs_project):
         _remove_release_targets(apiurl, source_obs_project, release_obs_project)
         if not _obs_project_exists(apiurl, updates_obs_project):
-            repo_names, repo_archs = _read_project_repo_info(
-                apiurl, release_obs_project
+            source_repo_elems, _ = _read_project_release_source(
+                apiurl, source_obs_project
             )
             _create_update_subproject(
                 apiurl,
                 updates_obs_project,
-                [release_obs_project],
-                repo_names,
-                repo_archs,
+                release_obs_project,
+                source_repo_elems,
             )
         _print_same(f"release  {release_obs_project}  (already exists)")
         return
@@ -1280,9 +1280,14 @@ def cmd_sync_release(args) -> None:
             )
 
     # Create the release target project on OBS (build disabled, same repos as source).
-    repo_names, repo_archs = _create_release_project(
+    source_repo_elems = _create_release_project(
         apiurl, source_obs_project, release_obs_project
     )
+    repo_names = [r.get("name", "") for r in source_repo_elems if r.get("name")]
+
+    # Copy the source project's prjconf (Prefer/Ignore/ExpandFlags rules) to
+    # the release project so it is a faithful snapshot of source build rules.
+    _copy_project_conf(apiurl, source_obs_project, release_obs_project)
 
     # Add releasetarget entries to the source project repositories, then
     # run osc release.  Always restore the source project afterwards.
@@ -1296,13 +1301,56 @@ def cmd_sync_release(args) -> None:
     finally:
         _remove_release_targets(apiurl, source_obs_project, release_obs_project)
 
-    # Create the Updates subproject with builds disabled and paths to the base release.
+    # Create the Updates subproject with builds disabled; repos inherit the
+    # source's <path> chain with the base release project prepended.
     _create_update_subproject(
         apiurl,
         updates_obs_project,
-        [release_obs_project],
-        repo_names,
-        repo_archs,
+        release_obs_project,
+        source_repo_elems,
     )
 
     _print_ok(f"release  {source_obs_project} → {release_obs_project}")
+
+
+def cmd_sync_release_pr(args) -> None:
+    """Run osc release on all OBS projects in a PR tree.
+
+    Called on PR merge, before sync delete, to publish built packages from
+    the PR project into the corresponding production projects via the
+    <releasetarget> entries added by sync push --branch-from.
+    """
+    apiurl: str = osc.conf.config["apiurl"]
+
+    root_path = REPO_ROOT
+    root_obs = args.rootprj
+
+    projects = list(find_projects(root_path, root_obs))
+    if not projects:
+        _print_ok("release-pr: no projects found")
+        return
+
+    released = 0
+    skipped = 0
+    for obs_name, _ in projects:
+        if not _obs_project_exists(apiurl, obs_name):
+            skipped += 1
+            continue
+        _print_pending(f"osc release  {obs_name}")
+        result = subprocess.run(
+            ["osc", "-A", apiurl, "release", obs_name, "--no-delay"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            print(
+                f"warning: osc release {obs_name} exited {result.returncode}: "
+                f"{result.stderr.strip()}",
+                flush=True,
+            )
+        else:
+            released += 1
+            _print_ok(f"released  {obs_name}")
+
+    suffix = f"({released} released, {skipped} skipped — not on OBS)"
+    _print_ok(f"release-pr done  {suffix}")
