@@ -227,6 +227,28 @@ Use `build dependency` to inspect these relationships before syncing:
 ./percona-obs -P local build dependency
 ```
 
+### Project configuration change detection
+
+In addition to per-package file comparisons, `percona-obs` detects when a **project's
+configuration has changed** and promotes all packages in that project for rebuild —
+even if their source files are identical to the branch project. This handles scenarios
+like adding a new architecture to `root/project.yaml`, which is inherited by every
+subproject that does not define its own `repositories:` list.
+
+Two cases are handled:
+
+- **Re-sync of an existing PR project**: the local desired config is compared against
+  the PR project's current meta on OBS. If they differ (e.g. a new arch was added),
+  all packages in that project are promoted.
+- **New PR project** (first sync of a new PR): since the PR project does not exist on
+  OBS yet, the local desired config is compared against the **corresponding production
+  project** instead. If the production project exists and its config differs from local,
+  the affected PR projects are created and all their packages promoted.
+
+This ensures that an architecture or repository change introduced in a PR is always
+built and tested for the packages that belong to affected projects, even when those
+packages have no direct source file changes.
+
 ### How unchanged packages are detected
 
 `percona-obs` uses a two-level decision for each package:
@@ -522,6 +544,29 @@ are supported**:
 
 This syncs packages directly into the `<rootprj>:ppg:releases:17.9:Updates` OBS
 project without touching the base release project's configuration.
+
+### Non-release PR: copying binaries to production on merge
+
+When a PR that updates packages (rather than creating a release snapshot) is merged,
+`obs-pr-cleanup.yml` runs `sync release-pr` before deleting the PR project. This copies
+the PR's built binaries to the corresponding production OBS projects via the
+`<releasetarget>` entries that `sync push --branch-from` added to every active PR
+project's repository configuration.
+
+Before copying binaries, `sync release-pr` automatically:
+
+1. Reads the `<releasetarget>` entries from each PR project's live OBS meta to
+   discover the production project counterparts — no naming convention is assumed.
+2. Applies any pending project configuration changes (new repositories, added
+   architectures) to those production projects. This ensures that a config change
+   introduced by the PR takes effect in production at the same time as the new binaries.
+3. Runs `osc release <pr-project> --no-delay` for each PR project that exists on OBS.
+
+To run manually for recovery (replace `<pr-rootprj>` with e.g. `home:Admin:percona:PR:pr-42`):
+
+```sh
+./percona-obs -A <apiurl> -R <pr-rootprj> sync release-pr
+```
 
 ---
 

@@ -345,6 +345,42 @@ against locally-controlled sources rather than the branch copy.
 4. All packages whose decision was changed to `"promote"` by Phase 2 log a message
    indicating which dep triggered them.
 
+#### Phase 2.5 — Project config change detection and config-triggered promotion
+
+After dependency propagation, `sync push --branch-from` checks whether each in-scope project's
+desired metadata (repositories, build flags, `project-config`) differs from what is currently on
+OBS — and promotes all packages in that project if a difference is detected.
+
+**Why this is necessary**: a PR may change only `root/project.yaml` (e.g. adding a new architecture
+like `aarch64`). No package files change, so Phase 1 assigns `"aggregate"` to everything and Phase 2
+propagates nothing. Phase 2.5 detects the config change and upgrades every package in the affected
+projects to `"promote"`, causing them to be built from source on the new architecture.
+
+**How it works**:
+
+1. For every project in the PR namespace, call `check_project_config_changed(apiurl, pr_project, ...)`.
+   This builds the locally-desired project meta XML and compares it against the live OBS meta.
+
+2. The function returns `(changed: bool, is_new: bool)`.
+   - `is_new=False, changed=True` → project already existed on OBS and its config changed → add to
+     `config_changed_projects` and promote all packages.
+   - `is_new=True` (PR project does not yet exist) → fallback comparison:
+     - Derive the corresponding production project name (the branch source project under
+       `branch_rootprj`).
+     - Call `check_project_config_changed(branch_apiurl, prod_project, ...)` to compare the local
+       desired config against what the production project currently has on the branch OBS.
+     - If `not is_new and changed` in that comparison (production exists and its config differs from
+       local) → return `(changed=True, is_new=False)` so the project enters `config_changed_projects`.
+   - Otherwise → no config-triggered promotion for this project.
+
+3. Projects in `config_changed_projects` force all their packages to `"promote"`, and those projects
+   are included in `active_projects` so they are created on the PR OBS.
+
+**Why the fallback is safe**: for a re-sync of an existing PR project `is_new=False`, so the
+fallback is never reached. For a new PR where no inherited config changed, the fallback compares
+local vs production and finds them equal → no spurious promotions. Only when an arch (or other
+config field) was genuinely added does the fallback produce a promotion trigger.
+
 #### Plain `sync push` with a `branch:` aggregate already on OBS
 
 When running `sync push` *without* `--branch-from` (i.e. a full source sync), but the package on OBS already holds a `branch:` aggregate from a previous `--branch-from` run, uploading sources would overwrite the aggregate unnecessarily. To detect this:
@@ -385,6 +421,34 @@ Options:
 - `--dry-run` — show what would be deleted without making any changes.
 
 Projects that do not exist on OBS are silently skipped. Projects are always deleted with `force=True` to bypass inter-project repository dependency checks when removing a whole tree.
+
+### `sync release-pr [--yes] [project]`
+
+Copies binaries from a PR OBS project to the corresponding production project using `osc release`,
+then updates the production project configs to match the local desired state. Used to merge a
+non-release PR (one that does not create a version tag) once its OBS builds pass.
+
+**How it works**:
+
+1. Walk the PR project tree (under `rootprj`) and call `osc release` for every package in every
+   PR sub-project that exists on OBS. `osc release` copies binary packages from the PR project into
+   the production project (identified by the `<releasetarget>` in each repository's OBS meta).
+
+2. After releasing, discover which production projects were targeted by reading the
+   `<releasetarget project="...">` elements from each PR project's OBS meta.
+
+3. For each discovered production project, call `_apply_project_config()` to sync the locally
+   desired project meta to the production OBS — this propagates any config changes (e.g. a newly
+   added architecture) that were part of the PR but are not yet in the production project.
+   The `env_vars` dict for this step is seeded from the active profile env overrides (so
+   `${REMOTE_OBS_ORG_INTERCONNECT}` and similar vars are available) plus
+   `OBS_ROOTPRJ=<production_rootprj>`.
+
+**Important**: `sync release-pr` only releases binaries; it does not delete the PR project. Run
+`sync delete --yes --recursive` afterward (as `obs-pr-cleanup.yml` does) to clean up.
+
+Options:
+- `--yes` / `-y` — skip the confirmation prompt.
 
 ### `sync promote [--dry-run] [--no-services] [--no-cache] [-m MSG] [project] [package]`
 
@@ -872,11 +936,27 @@ Permissions: `contents: read`, `pull-requests: write`, `statuses: write`.
 
 `OBS_PR_ROOTPRJ` is the base prefix for PR-specific projects, e.g. `home:Admin:percona:pr`. The full PR project becomes `home:Admin:percona:pr:pr-42`. It is intentionally separate from `OBS_ROOTPRJ` so PR projects live in a distinct namespace and are never confused with the main project tree.
 
-### Workflow 3 — `obs-pr-cleanup.yml` (delete PR project on close)
+### Workflow 3 — `obs-pr-cleanup.yml` (release or delete PR project on close)
 
 **Trigger**: `pull_request` against `main` (type: `closed`) where at least one file under `root/**` changed.
 
-**What it does**: Runs `percona-obs -A $OBS_APIURL -R $OBS_PR_ROOTPRJ:pr-<N> sync delete --yes --recursive` to delete the PR-specific OBS root project and all its sub-projects. OBS 404 responses are handled gracefully (no error) so the cleanup is safe even if the PR check never ran. `--recursive` ensures projects are deleted even if a build was still in progress when the PR was closed.
+**What it does**: Two paths depending on whether the PR is a release PR (i.e. it created a version tag).
+
+**Release PR path** (a version tag like `ppg/17.9.1` was pushed during the PR lifecycle):
+The PR built packages against a specific tagged upstream version and those binaries are already in the
+production project via the normal release pipeline. Only cleanup is needed:
+- Runs `percona-obs -A $OBS_APIURL -R $OBS_PR_ROOTPRJ:pr-<N> sync delete --yes --recursive`.
+
+**Non-release PR path** (no version tag — only packaging or config changes):
+The PR's OBS builds contain binaries that need to be promoted to the production project before cleanup:
+1. Runs `percona-obs -A $OBS_APIURL -R $OBS_PR_ROOTPRJ:pr-<N> sync release-pr --yes` to copy
+   binaries from every PR sub-project into the corresponding production project (via `osc release`)
+   and to sync any updated project configs (e.g. newly added architectures) to the production OBS.
+2. Runs `percona-obs -A $OBS_APIURL -R $OBS_PR_ROOTPRJ:pr-<N> sync delete --yes --recursive`
+   to delete the PR project and all its sub-projects.
+
+OBS 404 responses are handled gracefully in `sync delete` so the cleanup is safe even if the PR
+check never ran. `--recursive` ensures projects are deleted even if a build was still in progress.
 
 **Required repository config**: `OBS_APIURL`, `OBS_PR_ROOTPRJ`, `OBS_USER` (vars); `OBS_PASSWORD` (secret).
 
