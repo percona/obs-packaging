@@ -351,7 +351,11 @@ def cmd_sync(args):
     # catches mismatches like a missing trailing ':' in an env var value
     # (e.g. REMOTE_OBS_ORG_INTERCONNECT=openSUSE.org instead of openSUSE.org:)
     # before any projects or packages are created or modified.
-    path_ref_errors = _validate_project_path_refs(REPO_ROOT, env_vars, apiurl)
+    # Scope the scan to the target project subtree when a specific project is
+    # given, so unrelated project.yaml files (e.g. releases/*/Updates) that
+    # reference OBS projects not yet created are not validated.
+    _path_ref_root = resolve_project_path(args.project) if args.project else REPO_ROOT
+    path_ref_errors = _validate_project_path_refs(_path_ref_root, env_vars, apiurl)
     if path_ref_errors:
         for yaml_path, msg in path_ref_errors:
             rel = yaml_path.relative_to(REPO_ROOT.parent)
