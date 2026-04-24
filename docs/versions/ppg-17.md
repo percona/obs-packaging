@@ -21,6 +21,8 @@
 | percona-postgis | ppg:17 | 3.5.5-1+6.1 |
 | percona-postgresql-common | ppg:17 | 289-1+4.1 |
 | percona-postgresql17 | ppg:17 | 17.9-1+5.1 |
+| percona-ppg-server-17 | ppg:17 | 17.9-1 |
+| percona-ppg-server-ha-17 | ppg:17 | 17.9-1 |
 | percona-telemetry-agent | ppg:17 | 1.0.9-1+5.1 |
 | percona-wal2json | ppg:17 | 2.6-1+2.1 |
 | python3-attrs | ppg:17 | 22.1.0-1.2 |

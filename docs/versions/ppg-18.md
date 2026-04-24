@@ -22,6 +22,8 @@
 | percona-postgis | ppg:18 | 3.5.5-1+1.1 |
 | percona-postgresql-common | ppg:18 | 289-1+1.1 |
 | percona-postgresql18 | ppg:18 | 18.3-1+1.1 |
+| percona-ppg-server-18 | ppg:18 | 18.3-1 |
+| percona-ppg-server-ha-18 | ppg:18 | 18.3-1 |
 | percona-wal2json | ppg:18 | 2.6-0+1.1 |
 | python3-attrs | ppg:18 | 22.1.0-1.2 |
 | python3-blessed | ppg:18 | 1.22.0-1.2 |
