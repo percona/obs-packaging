@@ -1,4 +1,0 @@
-title: "An OBS source service: Update spec file version"
-description: |
-  Very simply script to update the version in .spec or .dsc files according
-  to a given version or to the existing files.

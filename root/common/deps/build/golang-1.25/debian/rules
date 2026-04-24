@@ -1,5 +1,7 @@
 #!/usr/bin/make -f
 export DH_VERBOSE=1
+GOARCH := $(shell dpkg --print-architecture)
+OBS_SOURCES := /usr/src/packages/SOURCES
 
 %:
 	dh $@
@@ -16,7 +18,11 @@ override_dh_strip_nondeterminism:
 
 override_dh_auto_install:
 	mkdir -p debian/golang-1.25/usr/local/go
+ifeq ($(GOARCH),arm64)
+	tar xzf $(OBS_SOURCES)/go1.25.7.linux-arm64.tar.gz --strip-components=1 -C debian/golang-1.25/usr/local/go
+else
 	find . -maxdepth 1 ! -name debian ! -name . -exec cp -a {} debian/golang-1.25/usr/local/go/ \;
+endif
 	mkdir -p debian/golang-1.25/usr/bin
 	ln -sf /usr/local/go/bin/go debian/golang-1.25/usr/bin/go
 	ln -sf /usr/local/go/bin/gofmt debian/golang-1.25/usr/bin/gofmt

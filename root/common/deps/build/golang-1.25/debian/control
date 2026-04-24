@@ -1,11 +1,11 @@
 Source: golang-1.25
 Section: devel
 Priority: optional
-Maintainer: Admin <admin@obs>
+Maintainer: Percona Development Team <info@percona.com>
 Build-Depends: debhelper (>= 9)
 
 Package: golang-1.25
-Architecture: amd64
+Architecture: any
 Provides: golang-go
 Description: Go programming language toolchain version 1.25
  The Go programming language toolchain, version 1.25.7,

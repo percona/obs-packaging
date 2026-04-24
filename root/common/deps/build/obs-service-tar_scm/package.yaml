@@ -1,6 +1,0 @@
-title: OBS source service to create a tar ball from a SCM repository
-description: |
-  This service uses a scm client to checkout or update from a given repository.
-  Supported are svn, git, hg and bzr.
-
-  The authoritative source is https://github.com/openSUSE/obs-service-tar_scm
