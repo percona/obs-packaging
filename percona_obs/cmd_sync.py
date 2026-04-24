@@ -1466,7 +1466,13 @@ def cmd_sync_release_pr(args) -> None:
     if prod_to_path:
         # production_rootprj is the shallowest project (fewest ':' separators).
         production_rootprj = min(prod_to_path, key=lambda x: x.count(":"))
-        env_vars: dict[str, str] = {"OBS_ROOTPRJ": production_rootprj}
+        # Seed from profile/CLI env vars (already merged into args.env_overrides
+        # by cli.py) so that variables like REMOTE_OBS_ORG_INTERCONNECT are
+        # defined, then override OBS_ROOTPRJ with the production rootprj.
+        env_vars: dict[str, str] = {
+            **(parse_env_overrides(args.env_overrides) if args.env_overrides else {}),
+            "OBS_ROOTPRJ": production_rootprj,
+        }
         _print_action("release-pr: syncing production project configs")
         for prod_obs_name, proj_path in prod_to_path.items():
             _apply_project_config(
