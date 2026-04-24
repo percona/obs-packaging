@@ -64,6 +64,7 @@ from .obs_api import (
     _obs_project_exists,
     _read_project_release_source,
     _remove_release_targets,
+    _fetch_releasetarget_project,
     _upload_obs_files,
 )
 from .services import (
@@ -1450,20 +1451,24 @@ def cmd_sync_release_pr(args) -> None:
         _print_ok("release-pr: no projects found")
         return
 
-    # Derive the production rootprj from the PR rootprj by stripping the
-    # :PR:pr-N suffix (e.g. isv:percona:PR:pr-35 → isv:percona).
-    # Sync production project configs first so release targets have the right
-    # repos/archs before osc release runs.
-    _pr_marker = f":{_PR_SUBPROJECT_STEM}:"
-    _pr_marker_idx = root_obs.find(_pr_marker)
-    if _pr_marker_idx != -1:
-        production_rootprj = root_obs[:_pr_marker_idx]
-        env_vars = {"OBS_ROOTPRJ": production_rootprj}
+    # Discover production project counterparts by reading <releasetarget>
+    # elements from each PR project's live OBS meta.  Sync those production
+    # project configs before releasing so that any repo or arch changes
+    # introduced by the PR are applied to the release targets first.
+    prod_to_path: dict[str, Path] = {}
+    for pr_obs_name, proj_path in projects:
+        if not _obs_project_exists(apiurl, pr_obs_name):
+            continue
+        prod_proj = _fetch_releasetarget_project(apiurl, pr_obs_name)
+        if prod_proj:
+            prod_to_path[prod_proj] = proj_path
+
+    if prod_to_path:
+        # production_rootprj is the shallowest project (fewest ':' separators).
+        production_rootprj = min(prod_to_path, key=lambda x: x.count(":"))
+        env_vars: dict[str, str] = {"OBS_ROOTPRJ": production_rootprj}
         _print_action("release-pr: syncing production project configs")
-        for pr_obs_name, proj_path in projects:
-            prod_obs_name = _compute_branch_project(
-                pr_obs_name, root_obs, production_rootprj
-            )
+        for prod_obs_name, proj_path in prod_to_path.items():
             _apply_project_config(
                 apiurl,
                 prod_obs_name,
