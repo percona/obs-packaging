@@ -1435,6 +1435,10 @@ def cmd_sync_release_pr(args) -> None:
     Called on PR merge, before sync delete, to publish built packages from
     the PR project into the corresponding production projects via the
     <releasetarget> entries added by sync push --branch-from.
+
+    Before releasing, syncs the production project configs so that any repo
+    or arch changes introduced by the PR (e.g. adding aarch64) are applied
+    to the release targets before osc release runs.
     """
     apiurl: str = osc.conf.config["apiurl"]
 
@@ -1445,6 +1449,28 @@ def cmd_sync_release_pr(args) -> None:
     if not projects:
         _print_ok("release-pr: no projects found")
         return
+
+    # Derive the production rootprj from the PR rootprj by stripping the
+    # :PR:pr-N suffix (e.g. isv:percona:PR:pr-35 → isv:percona).
+    # Sync production project configs first so release targets have the right
+    # repos/archs before osc release runs.
+    _pr_marker = f":{_PR_SUBPROJECT_STEM}:"
+    _pr_marker_idx = root_obs.find(_pr_marker)
+    if _pr_marker_idx != -1:
+        production_rootprj = root_obs[:_pr_marker_idx]
+        env_vars = {"OBS_ROOTPRJ": production_rootprj}
+        _print_action("release-pr: syncing production project configs")
+        for pr_obs_name, proj_path in projects:
+            prod_obs_name = _compute_branch_project(
+                pr_obs_name, root_obs, production_rootprj
+            )
+            _apply_project_config(
+                apiurl,
+                prod_obs_name,
+                proj_path,
+                production_rootprj,
+                env_vars=env_vars,
+            )
 
     released = 0
     skipped = 0
