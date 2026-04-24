@@ -3,6 +3,11 @@ name: Sync to OBS (main)
 # Runs whenever a push to main touches any file under root/.
 # Syncs the full package tree to OBS, creating or updating projects and
 # packages as needed, and removing any OBS packages that were deleted locally.
+#
+# Skipped when the push adds release.yaml files (release commits) — those
+# are handled by obs-release.yml after obs-pr-cleanup.yml pushes the tag.
+# Running sync push for release commits would race with obs-release.yml and
+# pre-create the release OBS project structure before binaries are populated.
 
 on:
   push:
@@ -13,7 +18,6 @@ on:
 jobs:
   sync:
     name: percona-obs sync push
-    if: "!startsWith(github.event.head_commit.message, 'Release ')"
     runs-on: ubuntu-latest
     permissions:
       # Required to push the badge JSON to the badges branch.
@@ -31,6 +35,22 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
 
+      # Detect whether this push adds release.yaml files.  If so, skip all
+      # OBS steps — obs-release.yml will handle the release project creation
+      # after obs-pr-cleanup.yml pushes the tag.
+      - name: Detect release commits
+        id: release-guard
+        run: |
+          RELEASES=$(git diff --name-only --diff-filter=A \
+            "${{ github.event.before }}" HEAD \
+            -- 'root/*/releases/*/release.yaml')
+          if [ -n "$RELEASES" ]; then
+            echo "detected=true" >> "$GITHUB_OUTPUT"
+            echo "Release files added — sync push will be skipped"
+          else
+            echo "detected=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # Persists the content-addressed .cache/ tree (Phase 1 obs_scm outputs
       # and Phase 2 manual-service outputs such as go_modules vendor tarballs)
       # across runs.  Without this, every main sync regenerates vendor
@@ -38,6 +58,7 @@ jobs:
       # Entries are content-addressed so a partial hit via restore-keys is
       # always safe: unused SHA-keyed subdirs are ignored.
       - name: Restore percona-obs cache
+        if: steps.release-guard.outputs.detected != 'true'
         uses: actions/cache@v4
         with:
           path: .cache
@@ -46,12 +67,14 @@ jobs:
             percona-obs-${{ runner.os }}-
 
       - uses: ./.github/actions/obs-setup
+        if: steps.release-guard.outputs.detected != 'true'
         with:
           obs-apiurl: ${{ vars.OBS_APIURL }}
           obs-user: ${{ vars.OBS_USER }}
           obs-password: ${{ secrets.OBS_PASSWORD }}
 
       - name: Create percona-obs profile
+        if: steps.release-guard.outputs.detected != 'true'
         env:
           OBS_APIURL: ${{ vars.OBS_APIURL }}
           OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
@@ -68,6 +91,7 @@ jobs:
       # osc release to publish the PR's built packages to production.  Wait
       # for it to finish so this sync push sees the released binaries.
       - name: Wait for pending PR cleanup
+        if: steps.release-guard.outputs.detected != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -86,12 +110,14 @@ jobs:
           fi
 
       - name: Sync to OBS
+        if: steps.release-guard.outputs.detected != 'true'
         run: venv/bin/python -m percona_obs --verbose -P main sync push --no-scm-validate
 
       # Poll OBS until all builds reach a terminal state, then set a dedicated
       # "OBS Build" commit status (success / failure / error on timeout).
       - name: Poll OBS build status
         id: poll
+        if: steps.release-guard.outputs.detected != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           OBS_APIURL: ${{ vars.OBS_APIURL }}
@@ -104,7 +130,7 @@ jobs:
       # by this push, and refresh the README "## Version Lists" section.
       # Only runs when OBS builds all succeed.
       - name: Update version lists
-        if: steps.poll.outcome == 'success'
+        if: steps.release-guard.outputs.detected != 'true' && steps.poll.outcome == 'success'
         env:
           GITHUB_EVENT_BEFORE: ${{ github.event.before }}
           OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}

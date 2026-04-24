@@ -980,7 +980,6 @@ def cmd_project_release(args: argparse.Namespace) -> None:
 
     release_project = f"{product}:releases:{args.release_name}"
     commit_msg = f"Release {release_project} from {args.project}"
-    tag_name = f"{product}/{args.release_name}"
 
     # Fetch the source project's repository config and prjconf from OBS so
     # the generated yaml files include complete build topology (repos, paths,
@@ -1113,7 +1112,8 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         yaml.dump(updates_data, f, default_flow_style=False, allow_unicode=True)
     _print_create(str(updates_file.relative_to(_REPO_DIR)))
 
-    # Git add all three files, commit -s, and tag.
+    # Git add all three files and commit -s.  The release tag is created
+    # automatically by obs-pr-cleanup.yml when the PR is merged.
     paths = [
         str(release_file.relative_to(_REPO_DIR)),
         str(project_file.relative_to(_REPO_DIR)),
@@ -1125,9 +1125,8 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         cwd=_REPO_DIR,
         check=True,
     )
-    subprocess.run(["git", "tag", tag_name], cwd=_REPO_DIR, check=True)
 
-    _print_ok(f"{commit_msg} (tag: {tag_name})")
+    _print_ok(commit_msg)
     print()
-    print("  Push the commit and tag to the remote:")
-    print(f"    git push && git push origin {tag_name}")
+    print("  Open a pull request — the release tag is created automatically on merge.")
+    print("    git push -u origin HEAD")

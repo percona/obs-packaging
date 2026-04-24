@@ -1,8 +1,10 @@
 name: OBS Release
 
 # Triggered when a release tag is pushed (e.g. ppg/17.9).
-# Runs `osc release` to transfer binaries from the source OBS project to
-# the release target project, then generates a version list for the release.
+# The tag is created automatically by obs-pr-cleanup.yml when a PR that adds
+# a release.yaml file is merged.
+# Runs `sync release` to transfer binaries from the source OBS project to
+# the release target project, then updates the version list documentation.
 
 on:
   push:
@@ -23,6 +25,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
 
       - uses: ./.github/actions/obs-setup
         with:
@@ -57,9 +60,13 @@ jobs:
           venv/bin/python -m percona_obs -P main \
             sync release "${{ steps.release-info.outputs.release_project }}"
 
-      - name: Generate release version list
-        run: |
-          venv/bin/python -m percona_obs -P main \
-            project versions \
-            "${{ steps.release-info.outputs.release_project }}" \
-            --online --markdown
+      # Update docs/versions/<dist>.md for all distribution projects and
+      # refresh the README "## Version Lists" section.  GITHUB_EVENT_BEFORE is
+      # omitted so the script regenerates all version lists (appropriate for a
+      # tag-triggered run where there is no meaningful "before" SHA).
+      - name: Update version lists
+        env:
+          OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
+          OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
+          PYTHONPATH: ${{ github.workspace }}
+        run: venv/bin/python .github/scripts/update_version_lists.py

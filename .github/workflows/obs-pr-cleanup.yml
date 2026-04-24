@@ -3,6 +3,17 @@ name: OBS PR Cleanup
 # When a PR is closed (merged or abandoned), delete the PR-specific OBS
 # project that was created by obs-pr-check.yml.  The delete is a no-op if
 # the project never existed (e.g. the PR was closed before the check ran).
+#
+# On merge, one of two actions is taken depending on the PR contents:
+#
+#   Release PR (adds root/*/releases/*/release.yaml):
+#     A git tag (<product>/<version>, e.g. ppg/17.9) is pushed, triggering
+#     obs-release.yml to run sync release on the production OBS project.
+#     sync release-pr is skipped — binaries are populated by obs-release.yml.
+#
+#   Non-release PR (package updates, including Updates subprojects):
+#     sync release-pr is run to copy built PR binaries to production via
+#     the <releasetarget> entries added by sync push --branch-from.
 
 on:
   pull_request:
@@ -14,6 +25,9 @@ jobs:
   cleanup:
     name: percona-obs sync delete pr-${{ github.event.number }}
     runs-on: ubuntu-latest
+    permissions:
+      # Required to push release tags via the GitHub API.
+      contents: write
 
     env:
       PR_NUMBER: ${{ github.event.number }}
@@ -29,13 +43,53 @@ jobs:
           obs-user: ${{ vars.OBS_USER }}
           obs-password: ${{ secrets.OBS_PASSWORD }}
 
-      # When a PR is merged (not just closed), release the built packages from
-      # each PR project to its production counterpart via osc release.  This
-      # uses the <releasetarget> entries that sync push --branch-from added to
-      # every active project's repository configuration.
-      - name: Release PR packages to production (merged PRs only)
+      # For release PRs (ones that add release.yaml files): push a git tag so
+      # obs-release.yml fires and runs sync release on the production OBS project.
+      # The tag name is derived from the release path:
+      #   root/ppg/releases/17.9/release.yaml  →  ppg/17.9
+      - name: Create release tag (merged release PRs only)
         if: github.event.pull_request.merged == true
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          RELEASES=$(gh pr view "$PR_NUMBER" \
+            --json files \
+            --jq '.files[] | select(.status == "added") | .path' \
+            | grep -E '^root/.*/releases/.*/release\.yaml$' || true)
+          if [ -z "$RELEASES" ]; then
+            echo "No release files added — skipping tag creation"
+            exit 0
+          fi
+          for release_file in $RELEASES; do
+            rel_dir="${release_file#root/}"
+            rel_dir="${rel_dir%/release.yaml}"
+            product="${rel_dir%%/*}"
+            version="${rel_dir#*/releases/}"
+            tag_name="${product}/${version}"
+            echo "Creating tag ${tag_name} → ${{ github.sha }}"
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+              -X POST \
+              -f "ref=refs/tags/${tag_name}" \
+              -f "sha=${{ github.sha }}"
+          done
+
+      # For non-release PRs: release built PR packages to their production
+      # counterparts via osc release.  This uses the <releasetarget> entries
+      # that sync push --branch-from added to every active project's repository
+      # configuration.  Skipped for release PRs — obs-release.yml handles those.
+      - name: Release PR packages to production (merged non-release PRs only)
+        if: github.event.pull_request.merged == true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASES=$(gh pr view "$PR_NUMBER" \
+            --json files \
+            --jq '.files[] | select(.status == "added") | .path' \
+            | grep -E '^root/.*/releases/.*/release\.yaml$' || true)
+          if [ -n "$RELEASES" ]; then
+            echo "Release PR — binaries will be populated by obs-release.yml; skipping sync release-pr"
+            exit 0
+          fi
           PR_ROOTPRJ="${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}"
 
           venv/bin/python -m percona_obs --verbose \
