@@ -1116,14 +1116,6 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     for line in release_yaml.splitlines():
         print(f"    {line}")
     print()
-    print(f"  project.yaml:")
-    for line in project_yaml.splitlines():
-        print(f"    {line}")
-    print()
-    print(f"  Updates/project.yaml:")
-    for line in updates_yaml.splitlines():
-        print(f"    {line}")
-    print()
     print(f"  Commit message: {commit_msg}")
     print()
 
