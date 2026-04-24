@@ -959,6 +959,37 @@ def cmd_project_versions(args) -> None:
         print(yaml.dump(records, default_flow_style=False, allow_unicode=True), end="")
 
 
+def _rewrite_subproject_paths(
+    repos: list[dict],
+    source_project_id: str,
+    release_project_id: str,
+) -> list[dict]:
+    """Rewrite subproject: path entries for a release subproject yaml.
+
+    Rules applied to each path entry:
+      subproject == source_project_id             →  release_project_id:Updates
+      subproject starts with source_project_id:   →  replace prefix with release_project_id
+      everything else (project:, external)        →  unchanged
+    """
+    result = []
+    for repo in repos:
+        new_paths = []
+        for path_entry in repo.get("paths", []):
+            subprj = path_entry.get("subproject")
+            if subprj is not None:
+                if subprj == source_project_id:
+                    path_entry = {
+                        **path_entry,
+                        "subproject": f"{release_project_id}:Updates",
+                    }
+                elif subprj.startswith(source_project_id + ":"):
+                    tail = subprj[len(source_project_id) :]
+                    path_entry = {**path_entry, "subproject": release_project_id + tail}
+            new_paths.append(path_entry)
+        result.append({**repo, "paths": new_paths})
+    return result
+
+
 def cmd_project_release(args: argparse.Namespace) -> None:
     """Cut a release: create release.yaml, project.yaml, Updates/project.yaml, commit, and tag."""
     product = args.project.split(":")[0]
@@ -1112,12 +1143,51 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         yaml.dump(updates_data, f, default_flow_style=False, allow_unicode=True)
     _print_create(str(updates_file.relative_to(_REPO_DIR)))
 
-    # Git add all three files and commit -s.  The release tag is created
+    # Walk source project subprojects (e.g. containers/) and generate a
+    # corresponding release subproject yaml for each with path substitutions:
+    # references to the source project become references to the Updates subproject
+    # so container images rebuild automatically when packages are updated.
+    # Builds are intentionally left enabled (no build:{disable}) for these subprojects.
+    source_dir = resolve_project_path(args.project)
+    sub_files: list[Path] = []
+    for sub_obs_id, sub_path in find_projects(source_dir, args.project):
+        if sub_obs_id == args.project:
+            continue  # skip the source project itself
+        subproject_name = sub_obs_id[len(args.project) + 1 :]  # e.g. "containers"
+        source_sub_config = load_yaml(sub_path / "project.yaml")
+
+        rewritten_repos = _rewrite_subproject_paths(
+            source_sub_config.get("repositories", []),
+            args.project,
+            release_project,
+        )
+        sub_data: dict = {
+            "title": f"{product} releases {args.release_name} — {subproject_name}",
+            "description": (
+                f"{subproject_name.capitalize()} subproject for {release_project}.\n"
+                f"Rebuilds against {release_project}:Updates when packages are updated.\n"
+            ),
+            "repositories": rewritten_repos,
+        }
+        for key in ("debuginfo", "publish", "project-config"):
+            if key in source_sub_config:
+                sub_data[key] = source_sub_config[key]
+
+        release_sub_dir = release_dir / subproject_name
+        release_sub_dir.mkdir(exist_ok=True)
+        release_sub_file = release_sub_dir / "project.yaml"
+        with release_sub_file.open("w") as f:
+            yaml.dump(sub_data, f, default_flow_style=False, allow_unicode=True)
+        _print_create(str(release_sub_file.relative_to(_REPO_DIR)))
+        sub_files.append(release_sub_file)
+
+    # Git add all files and commit -s.  The release tag is created
     # automatically by obs-pr-cleanup.yml when the PR is merged.
     paths = [
         str(release_file.relative_to(_REPO_DIR)),
         str(project_file.relative_to(_REPO_DIR)),
         str(updates_file.relative_to(_REPO_DIR)),
+        *[str(f.relative_to(_REPO_DIR)) for f in sub_files],
     ]
     subprocess.run(["git", "add", *paths], cwd=_REPO_DIR, check=True)
     subprocess.run(

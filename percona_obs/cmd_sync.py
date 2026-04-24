@@ -1150,6 +1150,62 @@ def cmd_sync_promote(args) -> None:
     _print_ok(f"promote successful{suffix}  ({promoted} promoted, {skipped} skipped)")
 
 
+def _sync_release_subprojects(
+    apiurl: str,
+    args,
+    source_project_id: str,
+    release_obs_project: str,
+    release_path: Path,
+    env_vars: dict[str, str],
+) -> None:
+    """Create and populate OBS subprojects for a release (e.g. containers).
+
+    Walks the local source project directory for subprojects that have a
+    corresponding project.yaml under the release tree.  For each one:
+      - Applies the project config to OBS (creating the project if absent).
+      - Adds releasetargets to the source subproject, runs osc release, then
+        removes the releasetargets.
+
+    Subprojects without a matching release project.yaml are silently skipped.
+    """
+    source_path = resolve_project_path(source_project_id)
+    for sub_obs_id, _sub_path in find_projects(source_path, source_project_id):
+        if sub_obs_id == source_project_id:
+            continue
+        subproject_name = sub_obs_id[len(source_project_id) + 1 :]
+        release_sub_obs = f"{release_obs_project}:{subproject_name}"
+        release_sub_path = release_path / subproject_name
+
+        if not (release_sub_path / "project.yaml").is_file():
+            continue
+
+        _apply_project_config(
+            apiurl,
+            release_sub_obs,
+            release_sub_path,
+            args.rootprj,
+            env_vars=env_vars,
+        )
+
+        source_sub_obs = f"{args.rootprj}:{sub_obs_id}"
+        source_sub_repo_elems, _ = _read_project_release_source(apiurl, source_sub_obs)
+        source_sub_repo_names = [
+            r.get("name", "") for r in source_sub_repo_elems if r.get("name")
+        ]
+        _add_release_targets(
+            apiurl, source_sub_obs, release_sub_obs, source_sub_repo_names
+        )
+        try:
+            _print_pending(f"releasing {source_sub_obs} → {release_sub_obs}")
+            subprocess.run(
+                ["osc", "-A", apiurl, "release", source_sub_obs, "--no-delay"],
+                check=True,
+            )
+        finally:
+            _remove_release_targets(apiurl, source_sub_obs, release_sub_obs)
+        _print_ok(f"released  {source_sub_obs} → {release_sub_obs}")
+
+
 def cmd_sync_release(args) -> None:
     """Release packages from an OBS source project to a release target.
 
@@ -1194,6 +1250,21 @@ def cmd_sync_release(args) -> None:
                 release_obs_project,
                 source_repo_elems,
             )
+        _sync_release_subprojects(
+            apiurl,
+            args,
+            source_project_id,
+            release_obs_project,
+            release_path,
+            env_vars={
+                **(
+                    parse_env_overrides(args.env_overrides)
+                    if args.env_overrides
+                    else {}
+                ),
+                "OBS_ROOTPRJ": args.rootprj,
+            },
+        )
         _print_same(f"release  {release_obs_project}  (already exists)")
         return
 
@@ -1312,6 +1383,21 @@ def cmd_sync_release(args) -> None:
         updates_obs_project,
         release_obs_project,
         source_repo_elems,
+    )
+
+    # Create and populate release subprojects that mirror the source project's
+    # subprojects (e.g. containers).  These have builds enabled so that container
+    # images rebuild automatically when packages are updated via Updates.
+    _sync_release_subprojects(
+        apiurl,
+        args,
+        source_project_id,
+        release_obs_project,
+        release_path,
+        env_vars={
+            **(parse_env_overrides(args.env_overrides) if args.env_overrides else {}),
+            "OBS_ROOTPRJ": args.rootprj,
+        },
     )
 
     _print_ok(f"release  {source_obs_project} → {release_obs_project}")
