@@ -967,7 +967,9 @@ def _rewrite_subproject_paths(
     """Rewrite subproject: path entries for a release subproject yaml.
 
     Rules applied to each path entry:
-      subproject == source_project_id             →  release_project_id:Updates
+      subproject == source_project_id             →  two entries:
+                                                       release_project_id:Updates  (updated pkgs)
+                                                       release_project_id          (base release)
       subproject starts with source_project_id:   →  replace prefix with release_project_id
       everything else (project:, external)        →  unchanged
     """
@@ -978,10 +980,19 @@ def _rewrite_subproject_paths(
             subprj = path_entry.get("subproject")
             if subprj is not None:
                 if subprj == source_project_id:
-                    path_entry = {
-                        **path_entry,
-                        "subproject": f"{release_project_id}:Updates",
-                    }
+                    # Insert Updates first so updated packages shadow the base release,
+                    # then the base release as fallback for packages not yet updated.
+                    repo_name = path_entry.get("repository")
+                    new_paths.append(
+                        {
+                            "subproject": f"{release_project_id}:Updates",
+                            "repository": repo_name,
+                        }
+                    )
+                    new_paths.append(
+                        {"subproject": release_project_id, "repository": repo_name}
+                    )
+                    continue
                 elif subprj.startswith(source_project_id + ":"):
                     tail = subprj[len(source_project_id) :]
                     path_entry = {**path_entry, "subproject": release_project_id + tail}
