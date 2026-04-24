@@ -1105,6 +1105,65 @@ def _apply_package_config(
         _print_same(f"package  {obs_project_name}/{package_name}")
 
 
+def _disable_package_builds(
+    apiurl: str,
+    obs_project_name: str,
+    package_name: str,
+    force: bool = False,
+    dry_run: bool = False,
+) -> None:
+    """Blanket-disable builds for an OBS package across all repos.
+
+    Fetches current meta, replaces any existing <build> section with
+    <build><disable/></build>, and updates OBS only when the content changes
+    (or when force is given).
+    """
+    _print_pending(f"package  {obs_project_name}/{package_name}")
+    raw: str
+    try:
+        raw = _decode_obs_response(
+            osc.core.show_package_meta(apiurl, obs_project_name, package_name)
+        )
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            _print_same(
+                f"package  {obs_project_name}/{package_name} (not found, skipped)"
+            )
+            return
+        _obs_api_error(
+            e, f"fetching package meta for {obs_project_name}/{package_name}"
+        )
+        return  # unreachable; _obs_api_error raises SystemExit
+
+    root = ET.fromstring(raw)
+    for existing in root.findall("build"):
+        root.remove(existing)
+    build_el = ET.SubElement(root, "build")
+    ET.SubElement(build_el, "disable")
+    ET.indent(root)
+    new_meta = ET.tostring(root, encoding="unicode")
+
+    if not force and new_meta == raw:
+        _print_same(f"package  {obs_project_name}/{package_name}")
+        return
+
+    if not dry_run:
+        try:
+            with _silence_stdout():
+                osc.core.edit_meta(
+                    metatype="pkg",
+                    path_args=(obs_project_name, package_name),
+                    data=[new_meta],
+                    force=force,
+                    apiurl=apiurl,
+                )
+        except urllib.error.HTTPError as e:
+            _obs_api_error(
+                e, f"updating package meta for {obs_project_name}/{package_name}"
+            )
+    _print_update(f"package  {obs_project_name}/{package_name}")
+
+
 def _upload_obs_files(
     apiurl: str,
     obs_project_name: str,

@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      statuses: write
 
     env:
       OBS_APIURL: ${{ vars.OBS_APIURL }}
@@ -60,11 +61,27 @@ jobs:
           venv/bin/python -m percona_obs -P main \
             sync release "${{ steps.release-info.outputs.release_project }}"
 
+      # Poll OBS until all builds reach a terminal state (succeeded, failed,
+      # disabled, excluded).  For a release project most repos have builds
+      # disabled so they resolve immediately; only the containers subproject
+      # actually schedules builds.
+      - name: Poll OBS build status
+        id: poll
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OBS_APIURL: ${{ vars.OBS_APIURL }}
+          OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
+          OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
+          PYTHONPATH: ${{ github.workspace }}
+        run: venv/bin/python .github/scripts/poll_obs_builds.py
+
       # Update docs/versions/<dist>.md for all distribution projects and
       # refresh the README "## Version Lists" section.  GITHUB_EVENT_BEFORE is
       # omitted so the script regenerates all version lists (appropriate for a
       # tag-triggered run where there is no meaningful "before" SHA).
+      # Only runs when OBS builds all succeed.
       - name: Update version lists
+        if: steps.poll.outcome == 'success'
         env:
           OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
           OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}

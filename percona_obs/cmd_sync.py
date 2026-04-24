@@ -45,6 +45,7 @@ from .obs_api import (
     _add_release_targets,
     _apply_package_config,
     _apply_project_config,
+    _disable_package_builds,
     _create_project_skeleton,
     _copy_project_conf,
     _create_release_project,
@@ -1204,6 +1205,24 @@ def _sync_release_subprojects(
         finally:
             _remove_release_targets(apiurl, source_sub_obs, release_sub_obs)
         _print_ok(f"released  {source_sub_obs} → {release_sub_obs}")
+
+        # Disable builds for non-container-image packages.
+        # osc release copies binaries but not package _meta; packages without
+        # a Dockerfile are dependency RPMs that must not build in the release.
+        source_sub_local_path = resolve_project_path(sub_obs_id)
+        for pkg_name in osc.core.meta_get_packagelist(apiurl, release_sub_obs):
+            if not pkg_name:
+                continue
+            local_pkg = source_sub_local_path / pkg_name
+            if (local_pkg / "obs" / "Dockerfile").is_file():
+                continue
+            _disable_package_builds(
+                apiurl,
+                release_sub_obs,
+                pkg_name,
+                force=args.force,
+                dry_run=getattr(args, "dry_run", False),
+            )
 
 
 def cmd_sync_release(args) -> None:
