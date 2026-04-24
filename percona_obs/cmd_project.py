@@ -37,8 +37,11 @@ from .common import (
 from .cmd_profile import _load_profile, _load_profile_env
 from .obs_api import (
     _decode_obs_response,
+    _detect_obs_container_info,
     _extract_obs_managed_elements,
+    _fetch_all_pkg_archs,
     _fetch_obs_download_url,
+    _fetch_obs_package_names,
     _fetch_root_project_managed_elements,
     _inject_obs_managed_elements,
     _obs_meta_to_yaml_debuginfo,
@@ -178,6 +181,97 @@ def _package_project_id(package_path: Path) -> str:
     if str(rel) == ".":
         return ""
     return ":".join(rel.parts)
+
+
+def _is_under_release_project(path: Path) -> bool:
+    """True when *path* itself or any ancestor up to REPO_ROOT contains release.yaml."""
+    p = path
+    while p != REPO_ROOT:
+        if (p / "release.yaml").is_file():
+            return True
+        if p.parent == p:
+            break
+        p = p.parent
+    return False
+
+
+def _fill_release_online_records(
+    args: "argparse.Namespace",
+    apiurl: str,
+    scope_path: Path,
+    records: "list[dict[str, object]]",
+) -> None:
+    """Populate *records* in-place for an OBS release project.
+
+    Queries OBS for the package list and their built versrels.  Handles the
+    main release project and each subproject directory (when args.recursive is True).
+    """
+
+    def _repo_arch_pairs_from_yaml(project_path: Path) -> list[tuple[str, str]]:
+        """Return [(repo, arch), ...] from a local project.yaml as fallback."""
+        data = load_yaml(project_path / "project.yaml")
+        pairs: list[tuple[str, str]] = []
+        for repo in data.get("repositories", []):
+            name = repo.get("name", "")
+            for arch in repo.get("archs", []):
+                if name and arch:
+                    pairs.append((name, arch))
+        return pairs
+
+    def _versrel(obs_proj: str, repo: str, arch: str, pkg: str) -> "str | None":
+        """Try binary listing first (RPM/DEB), then build history (containers)."""
+        v = _fetch_pkg_versrel(apiurl, obs_proj, repo, arch, pkg)
+        if v is None:
+            v = _fetch_versrel_from_history(apiurl, obs_proj, repo, arch, pkg)
+        return v
+
+    def _collect(proj_id: str, project_path: Path) -> None:
+        obs_proj = f"{args.rootprj}:{proj_id}" if proj_id else args.rootprj
+        pkg_names = sorted(_fetch_obs_package_names(apiurl, obs_proj))
+        if not pkg_names:
+            return
+        pkg_archs = _fetch_all_pkg_archs(apiurl, obs_proj)
+        fallback_pairs = _repo_arch_pairs_from_yaml(project_path)
+        for pkg_name in pkg_names:
+            repo_arch = pkg_archs.get(pkg_name)
+            version: str | None = None
+            if repo_arch:
+                repo, arch = repo_arch
+                version = _versrel(obs_proj, repo, arch, pkg_name)
+            elif fallback_pairs:
+                for repo, arch in fallback_pairs:
+                    version = _versrel(obs_proj, repo, arch, pkg_name)
+                    if version is not None:
+                        break
+            base: dict[str, object] = {"name": pkg_name, "project": proj_id}
+            container_info = _detect_obs_container_info(apiurl, obs_proj, pkg_name)
+            if container_info is not None:
+                image, tag = container_info
+                records.append(
+                    {
+                        **base,
+                        "type": "image",
+                        "image": image,
+                        "tag": tag,
+                        "version": version,
+                    }
+                )
+            else:
+                records.append({**base, "type": "package", "version": version})
+
+    _collect(args.project or "", scope_path)
+
+    if getattr(args, "recursive", True):
+        for child in sorted(scope_path.iterdir()):
+            if not child.is_dir():
+                continue
+            if not (child / "project.yaml").is_file():
+                continue
+            if (child / "release.yaml").is_file():
+                continue
+            base_id = args.project or ""
+            sub_proj_id = f"{base_id}:{child.name}" if base_id else child.name
+            _collect(sub_proj_id, child)
 
 
 def _detect_container_info(
@@ -827,6 +921,8 @@ def cmd_project_versions(args) -> None:
     else:
         scope_path = REPO_ROOT
 
+    is_release = _is_under_release_project(scope_path)
+
     if package_name:
         package_path = scope_path / package_name
         if not package_path.is_dir() or not is_package(package_path):
@@ -835,9 +931,11 @@ def cmd_project_versions(args) -> None:
             )
         package_paths = [package_path]
     else:
-        package_paths = [
-            p for _, p in find_packages(scope_path, "", recursive=args.recursive)
-        ]
+        package_paths = (
+            []
+            if is_release
+            else [p for _, p in find_packages(scope_path, "", recursive=args.recursive)]
+        )
 
     records: list[dict[str, object]] = []
     for package_path in package_paths:
@@ -870,39 +968,45 @@ def cmd_project_versions(args) -> None:
         osc.conf.get_config(override_apiurl=args.apiurl)
         apiurl = osc.conf.config["apiurl"]
 
-        # Group all records by OBS project to batch _fetch_build_results calls.
-        # Aggregate packages are looked up in their source project, not the
-        # aggregate project, because the actual build happens in the source.
-        obs_project_records: dict[str, list[tuple[dict[str, object], str]]] = {}
-        for record in records:
-            if "_agg_src_project" in record:
-                src_proj = str(record["_agg_src_project"])
-                src_pkg = str(record["_agg_src_pkg"])
-                obs_proj = f"{args.rootprj}:{src_proj}"
-            else:
-                project_id = str(record["project"])
-                obs_proj = (
-                    f"{args.rootprj}:{project_id}" if project_id else args.rootprj
-                )
-                src_pkg = str(record["name"])
-            obs_project_records.setdefault(obs_proj, []).append((record, src_pkg))
+        if is_release and not package_name:
+            # Release projects have no local package trees; fetch list and
+            # versions directly from OBS (builds are disabled but released
+            # binaries are still accessible via the build binary endpoint).
+            _fill_release_online_records(args, apiurl, scope_path, records)
+        else:
+            # Group all records by OBS project to batch _fetch_build_results calls.
+            # Aggregate packages are looked up in their source project, not the
+            # aggregate project, because the actual build happens in the source.
+            obs_project_records: dict[str, list[tuple[dict[str, object], str]]] = {}
+            for record in records:
+                if "_agg_src_project" in record:
+                    src_proj = str(record["_agg_src_project"])
+                    src_pkg = str(record["_agg_src_pkg"])
+                    obs_proj = f"{args.rootprj}:{src_proj}"
+                else:
+                    project_id = str(record["project"])
+                    obs_proj = (
+                        f"{args.rootprj}:{project_id}" if project_id else args.rootprj
+                    )
+                    src_pkg = str(record["name"])
+                obs_project_records.setdefault(obs_proj, []).append((record, src_pkg))
 
-        for obs_proj, pkg_record_pairs in obs_project_records.items():
-            _, succeeded_archs = _fetch_build_results(apiurl, obs_proj)
-            for record, pkg_name in pkg_record_pairs:
-                repo_map = succeeded_archs.get(pkg_name)
-                if not repo_map:
-                    record["version"] = None
-                    continue
-                repo, (arch, _) = next(iter(sorted(repo_map.items())))
-                if record["type"] == "package":
-                    record["version"] = _fetch_pkg_versrel(
-                        apiurl, obs_proj, repo, arch, pkg_name
-                    )
-                else:  # image
-                    record["version"] = _fetch_versrel_from_history(
-                        apiurl, obs_proj, repo, arch, pkg_name
-                    )
+            for obs_proj, pkg_record_pairs in obs_project_records.items():
+                _, succeeded_archs = _fetch_build_results(apiurl, obs_proj)
+                for record, pkg_name in pkg_record_pairs:
+                    repo_map = succeeded_archs.get(pkg_name)
+                    if not repo_map:
+                        record["version"] = None
+                        continue
+                    repo, (arch, _) = next(iter(sorted(repo_map.items())))
+                    if record["type"] == "package":
+                        record["version"] = _fetch_pkg_versrel(
+                            apiurl, obs_proj, repo, arch, pkg_name
+                        )
+                    else:  # image
+                        record["version"] = _fetch_versrel_from_history(
+                            apiurl, obs_proj, repo, arch, pkg_name
+                        )
 
     for record in records:
         record.pop("_agg_src_project", None)

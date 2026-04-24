@@ -180,6 +180,53 @@ def _fetch_obs_file_content(
         return None
 
 
+def _detect_obs_container_info(
+    apiurl: str, obs_project: str, package: str
+) -> "tuple[str | None, str | None] | None":
+    """Return (image_name, tag) if the OBS package is a container image, else None.
+
+    Mirrors _detect_container_info for packages stored on the OBS server.
+    Checks for a Dockerfile first, then a *.kiwi file.
+    Returns (None, None) when a container file is found but name/tag cannot be parsed.
+    Returns None (not a tuple) when no container definition is found.
+    """
+    import xml.etree.ElementTree as _ET
+
+    file_md5s = _fetch_obs_file_md5s(apiurl, obs_project, package, expanded=True)
+
+    if "Dockerfile" in file_md5s:
+        content = _fetch_obs_file_content(
+            apiurl, obs_project, package, "Dockerfile", expanded=True
+        )
+        if content:
+            for line in content.decode("utf-8", errors="replace").splitlines():
+                line = line.strip()
+                if line.startswith("#!BuildTag:"):
+                    tag_value = line[len("#!BuildTag:") :].strip()
+                    if ":" in tag_value:
+                        image, tag = tag_value.rsplit(":", 1)
+                        return image.strip(), tag.strip()
+                    return tag_value, None
+        return None, None
+
+    kiwi_files = sorted(f for f in file_md5s if f.endswith(".kiwi"))
+    if kiwi_files:
+        content = _fetch_obs_file_content(
+            apiurl, obs_project, package, kiwi_files[0], expanded=True
+        )
+        if content:
+            try:
+                root_el = _ET.fromstring(content.decode("utf-8", errors="replace"))
+                cc = root_el.find(".//containerconfig")
+                if cc is not None:
+                    return cc.get("name"), cc.get("tag")
+            except _ET.ParseError:
+                pass
+        return None, None
+
+    return None
+
+
 def _fetch_obs_package_names(apiurl: str, obs_project_name: str) -> set[str]:
     """Return the set of package names currently in an OBS project.
 
@@ -189,6 +236,37 @@ def _fetch_obs_package_names(apiurl: str, obs_project_name: str) -> set[str]:
         return {p for p in osc.core.meta_get_packagelist(apiurl, obs_project_name) if p}
     except Exception:
         return set()
+
+
+def _fetch_all_pkg_archs(apiurl: str, obs_project: str) -> dict[str, tuple[str, str]]:
+    """Return {base_pkg: (repo, arch)} for all packages in an OBS project.
+
+    Queries the build _result endpoint.  Prefers the (repo, arch) where the
+    package has status "succeeded"; falls back to any other status (including
+    "disabled", used for release projects where binaries exist from the OBS
+    release action but builds are disabled).  Returns {} on error.
+    """
+    url = osc.core.makeurl(apiurl, ["build", obs_project, "_result"])
+    try:
+        root = ET.fromstring(osc.connection.http_GET(url).read())
+    except Exception:
+        return {}
+
+    succeeded: dict[str, tuple[str, str]] = {}
+    fallback: dict[str, tuple[str, str]] = {}
+    for result_elem in root.findall("result"):
+        repo = result_elem.get("repository", "")
+        arch = result_elem.get("arch", "")
+        for status_elem in result_elem.findall("status"):
+            base_pkg = status_elem.get("package", "").partition(":")[0]
+            if not base_pkg:
+                continue
+            if status_elem.get("code") == "succeeded":
+                succeeded.setdefault(base_pkg, (repo, arch))
+            else:
+                fallback.setdefault(base_pkg, (repo, arch))
+
+    return {**fallback, **succeeded}
 
 
 def _fetch_obs_subproject_names(apiurl: str, rootprj: str) -> set[str]:
