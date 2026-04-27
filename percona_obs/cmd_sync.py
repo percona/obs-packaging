@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -112,6 +113,55 @@ def _copy_with_env_subst(
         (dst_dir / src.name).write_text(text, "utf-8")
     else:
         shutil.copy2(src, dst_dir / src.name)
+
+
+def _rewrite_aggregate_for_branch(
+    content: str,
+    rootprj: str,
+    branch_rootprj: str,
+    active_projects: "set[str] | None",
+) -> str:
+    """Rewrite _aggregate XML so references to inactive PR subprojects point to branch_rootprj.
+
+    When a package in a PR project aggregates from a sibling subproject that
+    was NOT promoted (not in active_projects), the sibling doesn't exist on
+    OBS under rootprj.  Redirect those aggregate references to branch_rootprj
+    so OBS pulls the binaries from the production counterpart instead.
+    """
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return content
+    changed = False
+    for agg in root.findall("aggregate"):
+        proj = agg.get("project", "")
+        if proj == rootprj or proj.startswith(rootprj + ":"):
+            if active_projects is None or proj not in active_projects:
+                suffix = proj[len(rootprj) :]  # "" or ":sub:project"
+                new_proj = branch_rootprj + suffix
+                agg.set("project", new_proj)
+                changed = True
+    if not changed:
+        return content
+    ET.indent(root, space="  ")
+    return ET.tostring(root, encoding="unicode", xml_declaration=False)
+
+
+def _rewrite_aggregates_in_dir(
+    directory: Path,
+    rootprj: str,
+    branch_rootprj: str,
+    active_projects: "set[str] | None",
+) -> None:
+    """Rewrite all _aggregate files in directory in-place for branch mode."""
+    agg_file = directory / "_aggregate"
+    if agg_file.is_file():
+        original = agg_file.read_text("utf-8")
+        rewritten = _rewrite_aggregate_for_branch(
+            original, rootprj, branch_rootprj, active_projects
+        )
+        if rewritten != original:
+            agg_file.write_text(rewritten, "utf-8")
 
 
 def _pkg_env_vars(package_path: Path) -> dict[str, str]:
@@ -671,26 +721,11 @@ def cmd_sync(args):
             item: "tuple[str, tuple[str, Path]]",
         ) -> "tuple[str, bool, bool]":
             _pname, (_op2, _ppath) = item
-            _changed, _is_new = check_project_config_changed(
-                apiurl,
-                _pname,
-                _ppath,
-                args.rootprj,
-                env_vars=env_vars,
-                active_projects=_preliminary_active,
-                branch_rootprj=branch_rootprj,
-            )
-            if not _is_new and _changed:
-                return _pname, True, False
-            # Fall back to comparing local config against the production project.
-            # This handles two cases:
-            # 1. PR project is new: if production exists and its config differs
-            #    from local, treat this as a config change so the PR project gets
-            #    created and its packages are promoted.
-            # 2. PR project already exists but its config is already in sync with
-            #    local (second+ sync of the same PR): if production still has the
-            #    old config, packages must remain promoted so they continue to be
-            #    built with the new config (e.g. a newly added arch).
+            # In --branch-from mode always compare local desired config against
+            # the PRODUCTION project, not the PR project's current state on OBS.
+            # The PR project may have stale meta from a previous sync (e.g. old
+            # path order) which would produce a false "config changed" verdict
+            # and promote packages that haven't actually changed.
             if branch_rootprj:
                 _prod_name = _compute_branch_project(
                     _pname, args.rootprj, branch_rootprj
@@ -704,8 +739,20 @@ def cmd_sync(args):
                     active_projects=None,
                     branch_rootprj=None,
                 )
-                if not _prod_is_new and _prod_changed:
-                    return _pname, True, False  # config differs from production
+                if _prod_is_new:
+                    # Production project doesn't exist yet — treat as new (no
+                    # config-triggered promotion needed; Phase 1 covers it).
+                    return _pname, False, True
+                return _pname, _prod_changed, False
+            _changed, _is_new = check_project_config_changed(
+                apiurl,
+                _pname,
+                _ppath,
+                args.rootprj,
+                env_vars=env_vars,
+                active_projects=_preliminary_active,
+                branch_rootprj=branch_rootprj,
+            )
             return _pname, _changed, _is_new
 
         with ThreadPoolExecutor(max_workers=8) as _proj_pool:
@@ -939,6 +986,10 @@ def cmd_sync(args):
                     for f in workdir.iterdir():
                         if f.is_file():
                             shutil.copy2(f, combined / f.name)
+                    if branch_rootprj:
+                        _rewrite_aggregates_in_dir(
+                            combined, args.rootprj, branch_rootprj, active_projects
+                        )
                     files_changed = _upload_obs_files(
                         apiurl,
                         obs_project_name,
@@ -965,6 +1016,10 @@ def cmd_sync(args):
                     sub_dir,
                     pkg_label=f"{obs_project_name}/{package_path.name}",
                 )
+                if branch_rootprj:
+                    _rewrite_aggregates_in_dir(
+                        sub_dir, args.rootprj, branch_rootprj, active_projects
+                    )
                 files_changed = _upload_obs_files(
                     apiurl,
                     obs_project_name,
