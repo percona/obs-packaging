@@ -17,7 +17,7 @@ repositories:
         repository: standard
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
         repository: standard
-    archs: [x86_64]
+    archs: [x86_64, aarch64]
   - name: Debian_13
     paths:
       - subproject: ppg:common:deps
@@ -26,7 +26,7 @@ repositories:
         repository: Debian_13
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:13
         repository: standard
-    archs: [x86_64]
+    archs: [x86_64, aarch64]
   - name: Ubuntu_24.04
     paths:
       - subproject: ppg:common:deps
@@ -35,7 +35,7 @@ repositories:
         repository: Ubuntu_24.04
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:24.04
         repository: universe
-    archs: [x86_64]
+    archs: [x86_64, aarch64]
   - name: Ubuntu_26.04
     paths:
       - subproject: ppg:common:deps
@@ -44,7 +44,7 @@ repositories:
         repository: Ubuntu_26.04
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:26.04
         repository: universe
-    archs: [x86_64]
+    archs: [x86_64, aarch64]
   - name: openSUSE_Tumbleweed
     paths:
       - subproject: ppg:common:deps
@@ -53,7 +53,7 @@ repositories:
         repository: openSUSE_Tumbleweed
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Tumbleweed
         repository: standard
-    archs: [x86_64]
+    archs: [x86_64, aarch64]
   - name: openSUSE_Leap_16
     paths:
       - subproject: ppg:common:deps
@@ -62,7 +62,7 @@ repositories:
         repository: openSUSE_Leap_16
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Leap:16.0
         repository: standard
-    archs: [x86_64]
+    archs: [x86_64, aarch64]
 
 project-config: |
   %if "%_repository" == "RockyLinux_8" || "%_repository" == "RHEL-8"  || "%_repository" == "RedHat_RHEL-8"
