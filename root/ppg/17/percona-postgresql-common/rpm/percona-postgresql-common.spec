@@ -14,6 +14,10 @@ Requires:       percona-postgresql-client-common
 Requires:       perl-JSON
 Epoch:		1
 
+%if 0%{?suse_version} > 1600
+BuildRequires:  update-alternatives
+%endif
+
 %description
 The postgresql-common package provides a structure under which
 multiple versions of PostgreSQL may be installed and/or multiple
