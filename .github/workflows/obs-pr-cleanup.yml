@@ -43,6 +43,21 @@ jobs:
           obs-user: ${{ vars.OBS_USER }}
           obs-password: ${{ secrets.OBS_PASSWORD }}
 
+      # Create the pr-N profile so subsequent steps can use -P "pr-N" instead
+      # of repeating -A and -R.  PERCONA_OBS_PACKAGING_BRANCH is recorded in
+      # the profile so sync release-pr can reference the correct source ref.
+      - name: Create percona-obs profiles
+        run: |
+          PR_ROOTPRJ="${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}"
+
+          venv/bin/python -m percona_obs \
+            -A "$OBS_APIURL" \
+            -R "$PR_ROOTPRJ" \
+            -e "REMOTE_OBS_ORG_INTERCONNECT:" \
+            -e "PERCONA_OBS_PACKAGING_BRANCH:refs/pull/${PR_NUMBER}/head" \
+            -e "PERCONA_OBS_PACKAGING_REPO:${{ github.event.pull_request.head.repo.clone_url }}" \
+            profile create "pr-${PR_NUMBER}"
+
       # For release PRs (ones that add release.yaml files): push a git tag so
       # obs-release.yml fires and runs sync release on the production OBS project.
       # The tag name is derived from the release path:
@@ -90,11 +105,9 @@ jobs:
             echo "Release PR — binaries will be populated by obs-release.yml; skipping sync release-pr"
             exit 0
           fi
-          PR_ROOTPRJ="${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}"
 
           venv/bin/python -m percona_obs --verbose \
-            -A "$OBS_APIURL" \
-            -R "$PR_ROOTPRJ" \
+            -P "pr-${PR_NUMBER}" \
             sync release-pr
 
       # Delete the PR's root project and all its sub-projects.
@@ -104,11 +117,8 @@ jobs:
       # 404 responses are handled gracefully by percona-obs (no error).
       - name: Delete PR OBS project
         run: |
-          PR_ROOTPRJ="${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}"
-
           venv/bin/python -m percona_obs --verbose \
-            -A "$OBS_APIURL" \
-            -R "$PR_ROOTPRJ" \
+            -P "pr-${PR_NUMBER}" \
             sync delete \
             --yes \
             --recursive
