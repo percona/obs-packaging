@@ -402,7 +402,7 @@ def cmd_build_dependency(args) -> None:
     # _builddepinfo is queried from the correct OBS instance for each.
     profile_apiurl_cache: dict[str, str] = {}
     query_projects_by_apiurl: dict[str, set[str]] = {}
-    image_pkg_by_apiurl: dict[str, dict[str, tuple[str, str, str]]] = {}
+    image_pkg_by_apiurl: dict[str, dict[str, list[tuple[str, str, str]]]] = {}
     pkg_path_by_name: dict[str, Path] = {
         pkg_path.name: pkg_path for _, pkg_path in targets
     }
@@ -429,21 +429,17 @@ def cmd_build_dependency(args) -> None:
                 query_projects_by_apiurl.setdefault(src_apiurl, set()).add(src_project)
                 _pkg_path = pkg_path_by_name.get(pkg_name)
                 if _pkg_path and is_dockerfile_image(_pkg_path):
-                    image_pkg_by_apiurl.setdefault(src_apiurl, {})[pkg_name] = (
-                        src_project,
-                        "images",
-                        "x86_64",
-                    )
+                    image_pkg_by_apiurl.setdefault(src_apiurl, {}).setdefault(
+                        pkg_name, []
+                    ).append((src_project, "images", "x86_64"))
                 continue
         # Not an aggregate (promoted or freshly synced): query the target OBS.
         query_projects_by_apiurl.setdefault(apiurl or "", set()).add(obs_name)
         _pkg_path = pkg_path_by_name.get(pkg_name)
         if _pkg_path and is_dockerfile_image(_pkg_path):
-            image_pkg_by_apiurl.setdefault(apiurl or "", {})[pkg_name] = (
-                obs_name,
-                "images",
-                "x86_64",
-            )
+            image_pkg_by_apiurl.setdefault(apiurl or "", {}).setdefault(
+                pkg_name, []
+            ).append((obs_name, "images", "x86_64"))
 
     # Fetch build dependency info from each OBS instance and merge.
     fwd_deps: dict[str, set[str]] = {}

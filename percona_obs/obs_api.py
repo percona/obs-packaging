@@ -347,7 +347,7 @@ def _fetch_combined_depinfo(
     apiurl: str,
     branch_projects: set[str],
     local_pkg_names: set[str],
-    image_pkgs: "dict[str, tuple[str, str, str]] | None" = None,
+    image_pkgs: "dict[str, list[tuple[str, str, str]]] | None" = None,
 ) -> dict[str, set[str]]:
     """Return a forward build-dependency map across multiple OBS branch projects.
 
@@ -420,18 +420,19 @@ def _fetch_combined_depinfo(
 
     # Enrich with Dockerfile-image → RPM edges from per-package _buildinfo.
     if image_pkgs:
-        for pkg_name, (branch_project, repo, arch) in image_pkgs.items():
-            extra = _fetch_image_pkg_deps(
-                apiurl,
-                branch_project,
-                repo,
-                arch,
-                pkg_name,
-                provided_by,
-                local_pkg_names,
-            )
-            if extra:
-                fwd_deps.setdefault(pkg_name, set()).update(extra)
+        for pkg_name, entries in image_pkgs.items():
+            for branch_project, repo, arch in entries:
+                extra = _fetch_image_pkg_deps(
+                    apiurl,
+                    branch_project,
+                    repo,
+                    arch,
+                    pkg_name,
+                    provided_by,
+                    local_pkg_names,
+                )
+                if extra:
+                    fwd_deps.setdefault(pkg_name, set()).update(extra)
 
     return fwd_deps
 

@@ -460,8 +460,10 @@ def cmd_sync(args):
     branch_project_for: dict[tuple[str, str], str] = {}
     # profile that was used in the branch: comment (plain-push path only).
     branch_profile_for: dict[tuple[str, str], str] = {}
-    # pkg_key_by_name[(pkg_name)] → key, used for dep propagation lookups.
-    pkg_key_by_name: dict[str, tuple[str, str]] = {}
+    # pkg_keys_by_name[(pkg_name)] → all (project, pkg_name) keys with that
+    # name; a list because the same package name can appear in multiple projects
+    # (e.g. ppg-image in both ppg:17:containers and ppg:18:containers).
+    pkg_keys_by_name: dict[str, list[tuple[str, str]]] = {}
     # Cache of loaded profiles to avoid repeated file reads within Phase 1.
     _profile_cache: dict[str, dict[str, str]] = {}
     _profile_env_vars_cache: dict[str, dict[str, str]] = {}
@@ -552,7 +554,7 @@ def cmd_sync(args):
             if _result is None:
                 continue
             _key, _decision, _bp, _profile = _result
-            pkg_key_by_name[_key[1]] = _key
+            pkg_keys_by_name.setdefault(_key[1], []).append(_key)
             decisions[_key] = _decision
             if _bp is not None:
                 branch_project_for[_key] = _bp
@@ -570,7 +572,7 @@ def cmd_sync(args):
         # not exist yet (first sync) and their build results are not meaningful
         # for dep-promotion decisions.
         # Without --branch-from, query the target projects on the target OBS.
-        local_pkg_names = set(pkg_key_by_name.keys())
+        local_pkg_names = set(pkg_keys_by_name.keys())
         src_projects_by_apiurl: dict[str, set[str]] = {}
         if branch_rootprj:
             # Include all branch projects, not just those with aggregate decisions.
@@ -600,15 +602,18 @@ def cmd_sync(args):
             f"planning: checking build dependencies ({len(dep_projects)} project(s))"
         )
         if branch_rootprj:
-            image_pkgs: dict[str, tuple[str, str, str]] = {
-                pkg_path.name: (
-                    _compute_branch_project(obs_project, args.rootprj, branch_rootprj),
-                    "images",
-                    "x86_64",
-                )
-                for obs_project, pkg_path in targets
-                if is_dockerfile_image(pkg_path)
-            }
+            image_pkgs: dict[str, list[tuple[str, str, str]]] = {}
+            for _ip_proj, _ip_path in targets:
+                if is_dockerfile_image(_ip_path):
+                    image_pkgs.setdefault(_ip_path.name, []).append(
+                        (
+                            _compute_branch_project(
+                                _ip_proj, args.rootprj, branch_rootprj
+                            ),
+                            "images",
+                            "x86_64",
+                        )
+                    )
             fwd_deps = _fetch_combined_depinfo(
                 branch_apiurl,
                 dep_projects,
@@ -620,7 +625,9 @@ def cmd_sync(args):
             # enrich the fwd-dep map with Dockerfile-image -> RPM edges.
             # Each image package is routed to the same OBS instance as its
             # source project (branch instance for aggregates, target for others).
-            image_pkg_by_apiurl_sync: dict[str, dict[str, tuple[str, str, str]]] = {}
+            image_pkg_by_apiurl_sync: dict[
+                str, dict[str, list[tuple[str, str, str]]]
+            ] = {}
             for obs_project, pkg_path in targets:
                 if not is_dockerfile_image(pkg_path):
                     continue
@@ -636,11 +643,9 @@ def cmd_sync(args):
                 else:
                     _ia = apiurl or ""
                     _proj = obs_project
-                image_pkg_by_apiurl_sync.setdefault(_ia, {})[pkg_path.name] = (
-                    _proj,
-                    "images",
-                    "x86_64",
-                )
+                image_pkg_by_apiurl_sync.setdefault(_ia, {}).setdefault(
+                    pkg_path.name, []
+                ).append((_proj, "images", "x86_64"))
             all_fwd_deps: dict[str, set[str]] = {}
             for q_apiurl, q_projects in src_projects_by_apiurl.items():
                 _img = image_pkg_by_apiurl_sync.get(q_apiurl, {})
@@ -678,18 +683,18 @@ def cmd_sync(args):
                     _, pkg_name = key
                     # Forward: promote packages that depend on this one.
                     for dependent in rdeps.get(pkg_name, set()):
-                        dep_key = pkg_key_by_name.get(dependent)
-                        if dep_key and decisions.get(dep_key) in (
-                            "aggregate",
-                            "skip_branch",
-                            "skip",
-                        ):
-                            _print_action(
-                                f"dep-promote: {dep_key[0]}/{dep_key[1]}"
-                                f"  (depends on promoted {pkg_name})"
-                            )
-                            decisions[dep_key] = "promote"
-                            changed = True
+                        for dep_key in pkg_keys_by_name.get(dependent, []):
+                            if decisions.get(dep_key) in (
+                                "aggregate",
+                                "skip_branch",
+                                "skip",
+                            ):
+                                _print_action(
+                                    f"dep-promote: {dep_key[0]}/{dep_key[1]}"
+                                    f"  (depends on promoted {pkg_name})"
+                                )
+                                decisions[dep_key] = "promote"
+                                changed = True
 
     # --- Phase 2.5: detect projects whose config changed on OBS (read-only) ---
     # Runs after Phase 1 + Phase 2 so a preliminary active_projects (projects
