@@ -65,7 +65,6 @@ from .obs_api import (
     _obs_project_exists,
     _read_project_release_source,
     _remove_release_targets,
-    _fetch_releasetarget_project,
     _upload_obs_files,
 )
 from .services import (
@@ -227,16 +226,18 @@ def _content_matches_branch(
                     f"content check: service run failed  {branch_project}/{package_name}"
                 )
                 return False
-            for f in obs_dir.iterdir():
-                if f.is_file() and f.name != "_service":
-                    _copy_with_env_subst(f, combined, check_vars)
+            if obs_dir.is_dir():
+                for f in obs_dir.iterdir():
+                    if f.is_file() and f.name != "_service":
+                        _copy_with_env_subst(f, combined, check_vars)
             for f in workdir.iterdir():
                 if f.is_file():
                     shutil.copy2(f, combined / f.name)
         else:
-            for f in obs_dir.iterdir():
-                if f.is_file():
-                    _copy_with_env_subst(f, combined, check_vars)
+            if obs_dir.is_dir():
+                for f in obs_dir.iterdir():
+                    if f.is_file():
+                        _copy_with_env_subst(f, combined, check_vars)
             _copy_local_packaging(
                 obs_dir,
                 combined,
@@ -1516,82 +1517,3 @@ def cmd_sync_release(args) -> None:
     )
 
     _print_ok(f"release  {source_obs_project} → {release_obs_project}")
-
-
-def cmd_sync_release_pr(args) -> None:
-    """Run osc release on all OBS projects in a PR tree.
-
-    Called on PR merge, before sync delete, to publish built packages from
-    the PR project into the corresponding production projects via the
-    <releasetarget> entries added by sync push --branch-from.
-
-    Before releasing, syncs the production project configs so that any repo
-    or arch changes introduced by the PR (e.g. adding aarch64) are applied
-    to the release targets before osc release runs.
-    """
-    apiurl: str = osc.conf.config["apiurl"]
-
-    root_path = REPO_ROOT
-    root_obs = args.rootprj
-
-    projects = list(find_projects(root_path, root_obs))
-    if not projects:
-        _print_ok("release-pr: no projects found")
-        return
-
-    # Discover production project counterparts by reading <releasetarget>
-    # elements from each PR project's live OBS meta.  Sync those production
-    # project configs before releasing so that any repo or arch changes
-    # introduced by the PR are applied to the release targets first.
-    prod_to_path: dict[str, Path] = {}
-    for pr_obs_name, proj_path in projects:
-        if not _obs_project_exists(apiurl, pr_obs_name):
-            continue
-        prod_proj = _fetch_releasetarget_project(apiurl, pr_obs_name)
-        if prod_proj:
-            prod_to_path[prod_proj] = proj_path
-
-    if prod_to_path:
-        # production_rootprj is the shallowest project (fewest ':' separators).
-        production_rootprj = min(prod_to_path, key=lambda x: x.count(":"))
-        # Seed from profile/CLI env vars (already merged into args.env_overrides
-        # by cli.py) so that variables like REMOTE_OBS_ORG_INTERCONNECT are
-        # defined, then override OBS_ROOTPRJ with the production rootprj.
-        env_vars: dict[str, str] = {
-            **(parse_env_overrides(args.env_overrides) if args.env_overrides else {}),
-            "OBS_ROOTPRJ": production_rootprj,
-        }
-        _print_action("release-pr: syncing production project configs")
-        for prod_obs_name, proj_path in prod_to_path.items():
-            _apply_project_config(
-                apiurl,
-                prod_obs_name,
-                proj_path,
-                production_rootprj,
-                env_vars=env_vars,
-            )
-
-    released = 0
-    skipped = 0
-    for obs_name, _ in projects:
-        if not _obs_project_exists(apiurl, obs_name):
-            skipped += 1
-            continue
-        _print_pending(f"osc release  {obs_name}")
-        result = subprocess.run(
-            [_OSC_BIN, "-A", apiurl, "release", obs_name, "--no-delay"],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            print(
-                f"warning: osc release {obs_name} exited {result.returncode}: "
-                f"{result.stderr.strip()}",
-                flush=True,
-            )
-        else:
-            released += 1
-            _print_ok(f"released  {obs_name}")
-
-    suffix = f"({released} released, {skipped} skipped — not on OBS)"
-    _print_ok(f"release-pr done  {suffix}")

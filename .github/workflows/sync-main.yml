@@ -87,28 +87,6 @@ jobs:
             -e "PERCONA_OBS_PACKAGING_REPO:${{ github.server_url }}/${{ github.repository }}.git" \
             profile create main
 
-      # If a PR was just merged, obs-pr-cleanup.yml may still be running
-      # osc release to publish the PR's built packages to production.  Wait
-      # for it to finish so this sync push sees the released binaries.
-      - name: Wait for pending PR cleanup
-        if: steps.release-guard.outputs.detected != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # Brief pause so a concurrently-triggered cleanup run has time to appear.
-          sleep 60
-          RUN_ID=$(gh run list \
-            --workflow=obs-pr-cleanup.yml \
-            --status=in_progress \
-            --json=databaseId \
-            --jq='.[0].databaseId // empty')
-          if [ -n "$RUN_ID" ]; then
-            echo "Waiting for PR cleanup run $RUN_ID to finish..."
-            gh run watch "$RUN_ID" || true
-          else
-            echo "No PR cleanup in progress."
-          fi
-
       - name: Sync to OBS
         if: steps.release-guard.outputs.detected != 'true'
         run: venv/bin/python -m percona_obs --verbose -P main sync push --no-scm-validate

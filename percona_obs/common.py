@@ -331,15 +331,6 @@ def build_project_meta(
             )
         for _proj, _repo in tail_paths:
             ET.SubElement(repo_elem, "path", project=_proj, repository=_repo)
-        # <releasetarget> must follow all <path> elements (OBS schema order).
-        if self_branch_proj:
-            ET.SubElement(
-                repo_elem,
-                "releasetarget",
-                project=self_branch_proj,
-                repository=repo["name"],
-                trigger="manual",
-            )
         for arch in repo.get("archs", []):
             ET.SubElement(repo_elem, "arch").text = arch
     ET.indent(root)

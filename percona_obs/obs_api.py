@@ -1477,26 +1477,6 @@ def _create_update_subproject(
         _edit_project_meta(apiurl, sub_obs_project, meta, force=False)
 
 
-def _fetch_releasetarget_project(apiurl: str, obs_project: str) -> str | None:
-    """Return the release target project name from an OBS project's repository meta.
-
-    Scans all repositories and returns the first non-empty ``project`` attribute
-    found on a ``<releasetarget>`` child element.  Returns None when no
-    releasetarget is present or on any error.
-    """
-    try:
-        raw = _decode_obs_response(osc.core.show_project_meta(apiurl, obs_project))
-        root = ET.fromstring(raw)
-        for repo_el in root.findall("repository"):
-            for rt in repo_el.findall("releasetarget"):
-                proj = rt.get("project", "")
-                if proj:
-                    return proj
-        return None
-    except Exception:
-        return None
-
-
 def _add_release_targets(
     apiurl: str,
     source_obs_project: str,
