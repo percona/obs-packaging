@@ -15,7 +15,6 @@ Optional environment variables
 OBS_WEB_URL         OBS web-UI base URL; used as the status target_url.
                     Defaults to OBS_APIURL.
 OBS_POLL_INTERVAL   Seconds between polls (default: 30)
-OBS_POLL_TIMEOUT    Maximum seconds to wait before giving up (default: 3600)
 OBS_INITIAL_WAIT    Seconds to wait before the first poll so OBS has time to
                     schedule builds after a fresh service upload (default: 30)
 """
@@ -42,7 +41,6 @@ gh_repo = os.environ.get("GITHUB_REPOSITORY", "")
 gh_sha = os.environ.get("GITHUB_SHA", "")
 
 poll_interval = int(os.environ.get("OBS_POLL_INTERVAL", "30"))
-poll_timeout = int(os.environ.get("OBS_POLL_TIMEOUT", "7200"))
 initial_wait = int(os.environ.get("OBS_INITIAL_WAIT", "30"))
 
 # ---------------------------------------------------------------------------
@@ -114,14 +112,10 @@ def write_badge(
     broken: int,
     unresolvable: int,
     excluded: int,
-    timed_out: bool = False,
 ) -> None:
     """Write a shields.io endpoint JSON badge to _BADGE_PATH."""
     msg = f"\u2714 {succeeded}  \u2717 {failed}  \u26d4 {broken}  \u26a0 {unresolvable}  \u2014 {excluded}"
-    if timed_out:
-        color = "orange"
-        msg = f"timed out \u2014 {msg}"
-    elif failed > 0 or broken > 0:
+    if failed > 0 or broken > 0:
         color = "red"
     elif unresolvable > 0:
         color = "yellow"
@@ -174,8 +168,6 @@ time.sleep(initial_wait)
 # ---------------------------------------------------------------------------
 # Poll loop
 # ---------------------------------------------------------------------------
-start = time.monotonic()
-
 while True:
     state_counts: dict[str, int] = {}
     per_repo_counts: dict[str, dict[str, int]] = {}
@@ -195,21 +187,11 @@ while True:
     broken = sum(state_counts.get(s, 0) for s in BROKEN_STATES)
     unresolvable = sum(state_counts.get(s, 0) for s in UNRESOLVABLE_STATES)
     excluded = sum(state_counts.get(s, 0) for s in EXCLUDED_STATES)
-    elapsed = int(time.monotonic() - start)
-
     summary = ", ".join(f"{s}={n}" for s, n in sorted(state_counts.items()))
-    print(f"[{elapsed}s] {summary or 'no results yet'}", flush=True)
+    print(f"{summary or 'no results yet'}", flush=True)
 
     if total > 0 and still_building == 0:
         break
-
-    if time.monotonic() - start > poll_timeout:
-        msg = f"Timed out after {poll_timeout // 60}min — {still_building} build(s) still running"
-        print(f"ERROR: {msg}", file=sys.stderr)
-        set_commit_status("error", msg)
-        write_badge(succeeded, failed, broken, unresolvable, excluded, timed_out=True)
-        write_details(per_repo_counts, succeeded, failed, broken, unresolvable, excluded)
-        sys.exit(2)
 
     time.sleep(poll_interval)
 
