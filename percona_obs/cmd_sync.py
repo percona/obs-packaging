@@ -362,7 +362,9 @@ def cmd_sync(args):
     # given, so unrelated project.yaml files (e.g. releases/*/Updates) that
     # reference OBS projects not yet created are not validated.
     _path_ref_root = resolve_project_path(args.project) if args.project else REPO_ROOT
-    path_ref_errors = _validate_project_path_refs(_path_ref_root, env_vars, apiurl)
+    path_ref_errors = _validate_project_path_refs(
+        _path_ref_root, env_vars, apiurl, rootprj=args.rootprj
+    )
     if path_ref_errors:
         for yaml_path, msg in path_ref_errors:
             rel = yaml_path.relative_to(REPO_ROOT.parent)
