@@ -9,7 +9,7 @@ repositories:
         repository: RockyLinux_9
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
         repository: standard
-    archs: [x86_64]
+    archs: [x86_64, aarch64]
   - name: images
     paths:
       - subproject: ppg:17:containers
@@ -30,7 +30,7 @@ repositories:
         repository: appstream
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
         repository: baseos
-    archs: [x86_64]
+    archs: [x86_64, aarch64]
 
 publish:
   RockyLinux_9: false
