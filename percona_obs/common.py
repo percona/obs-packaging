@@ -257,10 +257,6 @@ def build_project_meta(
             self_branch_proj = branch_rootprj + obs_project_name[len(rootprj) :]
     for repo in repositories:
         repo_elem = ET.SubElement(root, "repository", name=repo["name"])
-        if self_branch_proj:
-            ET.SubElement(
-                repo_elem, "path", project=self_branch_proj, repository=repo["name"]
-            )
         # Each entry may use 'project:' for an absolute OBS project name, or
         # 'subproject:' for a name relative to rootprj (e.g. 'builddep' → '<rootprj>:builddep').
         # Skip a path only when it resolves to the exact same project+repository
@@ -268,23 +264,46 @@ def build_project_meta(
         # path (e.g. builddep inheriting a 'subproject: builddep' entry from the
         # root project.yaml).  A different repository within the same project is
         # valid (e.g. 'images' depending on 'RockyLinux_9' of the same project).
+        #
+        # When --branch-from is active the path order for each repository must be:
+        #   1. PR subproject paths (active subprojects, so promoted builds are seen first)
+        #   2. Production/branch subproject paths (fallback for non-promoted packages)
+        #   3. self_branch_proj (production counterpart of this project — fallback for
+        #      same-project non-promoted packages; always after PR subproject paths)
+        #   4. Remaining paths (redirected-to-production inactive subprojects, external)
+        #
+        # Paths pointing to PR projects must come before production paths so that OBS
+        # resolves promoted PR packages before stale production packages when computing
+        # build dependencies.
+        pr_paths: list[tuple[str, str]] = (
+            []
+        )  # (project, repository) for active PR subprojects
+        prod_paths: list[tuple[str, str]] = (
+            []
+        )  # production fallbacks for those same subprojects
+        tail_paths: list[tuple[str, str]] = []  # redirected inactive + external paths
+
         for path_info in repo.get("paths", []):
             if "subproject" in path_info:
                 proj = f"{rootprj}:{path_info['subproject']}"
                 if active_projects is not None and branch_rootprj is not None:
                     if proj not in active_projects:
                         # Pass-through project skipped: redirect to branch source.
-                        proj = f"{branch_rootprj}:{path_info['subproject']}"
+                        redirected = f"{branch_rootprj}:{path_info['subproject']}"
+                        if not (
+                            redirected == obs_project_name
+                            and path_info["repository"] == repo["name"]
+                        ):
+                            tail_paths.append((redirected, path_info["repository"]))
                     else:
-                        # Active project: emit branch source first so promoted
-                        # packages take precedence, then the target project as
-                        # fallback for packages not present in the branch.
+                        # Active PR subproject: PR path first, production fallback second.
                         branch_proj = f"{branch_rootprj}:{path_info['subproject']}"
                         repo_name = path_info["repository"]
-                        # Skip if already emitted as the leading self_branch_proj path
-                        # (happens when the subproject reference points back to the
-                        # project being configured, e.g. common:deps:build inheriting
-                        # a path to itself from the root project.yaml).
+                        if not (proj == obs_project_name and repo_name == repo["name"]):
+                            pr_paths.append((proj, repo_name))
+                        # Skip production fallback if it duplicates self_branch_proj
+                        # (avoids a redundant path when the subproject reference points
+                        # to the project being configured itself).
                         if not (
                             branch_proj == obs_project_name
                             and repo_name == repo["name"]
@@ -292,30 +311,26 @@ def build_project_meta(
                             branch_proj == self_branch_proj
                             and repo_name == repo["name"]
                         ):
-                            ET.SubElement(
-                                repo_elem,
-                                "path",
-                                project=branch_proj,
-                                repository=repo_name,
-                            )
-                        if not (proj == obs_project_name and repo_name == repo["name"]):
-                            ET.SubElement(
-                                repo_elem,
-                                "path",
-                                project=proj,
-                                repository=repo_name,
-                            )
-                        continue
+                            prod_paths.append((branch_proj, repo_name))
+                    continue
             else:
                 proj = path_info["project"]
             if proj == obs_project_name and path_info["repository"] == repo["name"]:
                 continue
+            tail_paths.append((proj, path_info["repository"]))
+
+        # Emit in priority order: PR subprojects → production fallbacks →
+        # self_branch_proj → remaining (inactive redirects + external).
+        for _proj, _repo in pr_paths:
+            ET.SubElement(repo_elem, "path", project=_proj, repository=_repo)
+        for _proj, _repo in prod_paths:
+            ET.SubElement(repo_elem, "path", project=_proj, repository=_repo)
+        if self_branch_proj:
             ET.SubElement(
-                repo_elem,
-                "path",
-                project=proj,
-                repository=path_info["repository"],
+                repo_elem, "path", project=self_branch_proj, repository=repo["name"]
             )
+        for _proj, _repo in tail_paths:
+            ET.SubElement(repo_elem, "path", project=_proj, repository=_repo)
         # <releasetarget> must follow all <path> elements (OBS schema order).
         if self_branch_proj:
             ET.SubElement(
