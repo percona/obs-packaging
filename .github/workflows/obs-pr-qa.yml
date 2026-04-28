@@ -1,0 +1,173 @@
+name: OBS PR QA
+
+# Triggered after OBS PR Check succeeds.  Finds the percona-distribution-postgresql
+# container images built in the PR's OBS project, then runs Molecule-based Docker
+# tests via Jenkins and reports the result as an "OBS QA" commit status on the PR.
+#
+# The workflow is a no-op (no status posted) when the PR project contains no
+# percona-distribution-postgresql container images.
+
+on:
+  workflow_run:
+    workflows: ["OBS PR Check"]
+    types: [completed]
+
+jobs:
+  qa:
+    name: Container image QA
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    permissions:
+      # Required to post "OBS QA" commit status on the PR head commit.
+      statuses: write
+
+    env:
+      OBS_APIURL: ${{ vars.OBS_APIURL }}
+      OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/obs-setup
+        with:
+          obs-apiurl: ${{ vars.OBS_APIURL }}
+          obs-user: ${{ vars.OBS_USER }}
+          obs-password: ${{ secrets.OBS_PASSWORD }}
+
+      # Derive the PR number and head SHA from the workflow_run event.
+      # pull_requests[0].number is available for same-repo PRs; for forks it is
+      # empty so we fall back to searching the GitHub API by head SHA.
+      - name: Resolve PR number and head SHA
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          HEAD_SHA="${{ github.event.workflow_run.head_sha }}"
+          PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
+          if [ -z "$PR_NUMBER" ]; then
+            PR_NUMBER=$(gh api "repos/${GITHUB_REPOSITORY}/pulls" \
+              --jq ".[] | select(.head.sha == \"${HEAD_SHA}\") | .number" | head -1)
+          fi
+          if [ -z "$PR_NUMBER" ]; then
+            echo "Could not resolve PR number for commit ${HEAD_SHA}" >&2
+            exit 1
+          fi
+          echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "head_sha=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
+
+      # Scan all subprojects of the PR project for percona-distribution-postgresql
+      # container images (packages with a Dockerfile #!BuildTag: matching that
+      # pattern).  Outputs: has_images, container_project, registry_url,
+      # docker_tag, server_version.
+      - name: Find container images in OBS PR project
+        id: images
+        env:
+          OBS_PR_PROJECT: ${{ vars.OBS_PR_ROOTPRJ }}:pr-${{ steps.pr.outputs.pr_number }}
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          venv/bin/python .github/scripts/find_obs_container_images.py
+
+      - name: Set pending QA status
+        if: steps.images.outputs.has_images == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
+            -X POST \
+            -f "state=pending" \
+            -f "context=OBS QA" \
+            -f "description=Container image QA running..."
+
+      # POST buildWithParameters to Jenkins.  Captures the queue item URL from
+      # the Location response header and stores it in GITHUB_ENV for the poll step.
+      - name: Trigger Jenkins QA job
+        id: trigger
+        if: steps.images.outputs.has_images == 'true'
+        env:
+          JENKINS_URL: ${{ vars.JENKINS_URL }}
+          JENKINS_USER: ${{ vars.JENKINS_USER }}
+          JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
+          DOCKER_TAG: ${{ steps.images.outputs.docker_tag }}
+          REGISTRY_URL: ${{ steps.images.outputs.registry_url }}
+        run: |
+          HTTP_CODE=$(curl -s \
+            -D /tmp/jenkins-trigger-headers.txt \
+            -o /dev/null \
+            -w "%{http_code}" \
+            -u "${JENKINS_USER}:${JENKINS_API_TOKEN}" \
+            -X POST \
+            "${JENKINS_URL}/job/docker-server-parallel-generic/buildWithParameters" \
+            --data-urlencode "DOCKER_TAG=${DOCKER_TAG}" \
+            --data-urlencode "SERVER_VERSION=${DOCKER_TAG}" \
+            --data-urlencode "REPOSITORY=${REGISTRY_URL}" \
+            --data-urlencode "TESTING_BRANCH=main" \
+            --data-urlencode "WITH_POSTGIS=false" \
+            --data-urlencode "DESTROY_ENV=true")
+          if [ "$HTTP_CODE" != "201" ]; then
+            echo "Jenkins returned HTTP ${HTTP_CODE} (expected 201)" >&2
+            cat /tmp/jenkins-trigger-headers.txt >&2
+            exit 1
+          fi
+          QUEUE_URL=$(grep -i '^Location:' /tmp/jenkins-trigger-headers.txt \
+            | awk '{print $2}' | tr -d '\r')
+          if [ -z "$QUEUE_URL" ]; then
+            echo "No Location header in Jenkins response" >&2
+            cat /tmp/jenkins-trigger-headers.txt >&2
+            exit 1
+          fi
+          echo "JENKINS_QUEUE_URL=${QUEUE_URL}" >> "$GITHUB_ENV"
+          echo "Jenkins queue item: ${QUEUE_URL}"
+
+      # Poll the Jenkins queue item until a build starts, then poll the build
+      # until it reaches a terminal state.  Writes BUILD_URL and BUILD_RESULT
+      # to /tmp/jenkins-result.txt for the status step.
+      - name: Poll Jenkins build
+        id: poll
+        if: steps.trigger.outcome == 'success'
+        env:
+          JENKINS_URL: ${{ vars.JENKINS_URL }}
+          JENKINS_USER: ${{ vars.JENKINS_USER }}
+          JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          venv/bin/python .github/scripts/poll_jenkins.py | tee /tmp/jenkins-result.txt
+
+      # Always runs (after the pending status was posted) so the final status is
+      # never left as "pending" regardless of which earlier step failed.
+      - name: Post QA commit status
+        if: always() && steps.images.outputs.has_images == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+        run: |
+          BUILD_URL=$(grep '^BUILD_URL=' /tmp/jenkins-result.txt 2>/dev/null \
+            | cut -d= -f2- || true)
+          BUILD_RESULT=$(grep '^BUILD_RESULT=' /tmp/jenkins-result.txt 2>/dev/null \
+            | cut -d= -f2- || true)
+
+          POLL_OUTCOME="${{ steps.poll.outcome }}"
+          TRIGGER_OUTCOME="${{ steps.trigger.outcome }}"
+
+          if [ "$POLL_OUTCOME" = "success" ] && [ "$BUILD_RESULT" = "SUCCESS" ]; then
+            STATE="success"
+            DESC="Container QA passed"
+          elif [ "$POLL_OUTCOME" = "success" ]; then
+            STATE="failure"
+            DESC="Container QA failed: ${BUILD_RESULT}"
+          elif [ "$TRIGGER_OUTCOME" != "success" ]; then
+            STATE="failure"
+            DESC="Failed to trigger Jenkins job"
+          else
+            STATE="failure"
+            DESC="Jenkins polling failed or timed out"
+          fi
+
+          ARGS=(-X POST
+            -f "state=${STATE}"
+            -f "context=OBS QA"
+            -f "description=${DESC}")
+          if [ -n "$BUILD_URL" ]; then
+            ARGS+=(-f "target_url=${BUILD_URL}")
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" "${ARGS[@]}"
