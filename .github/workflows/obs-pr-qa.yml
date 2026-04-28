@@ -2,7 +2,8 @@ name: OBS PR QA
 
 # Triggered after OBS PR Check succeeds.  Finds the percona-distribution-postgresql
 # container images built in the PR's OBS project, then runs Molecule-based Docker
-# tests via Jenkins and reports the result as an "OBS QA" commit status on the PR.
+# tests via Jenkins in two parallel variants (with and without PostGIS) and reports
+# each result as a separate commit status on the PR.
 #
 # The workflow is a no-op (no status posted) when the PR project contains no
 # percona-distribution-postgresql container images.
@@ -13,17 +14,24 @@ on:
     types: [completed]
 
 jobs:
-  qa:
-    name: Container image QA
+  # ──────────────────────────────────────────────────────────────────────────
+  # detect: resolve the PR context and find container images in OBS.
+  # Runs once; its outputs are consumed by both parallel qa matrix jobs.
+  # ──────────────────────────────────────────────────────────────────────────
+  detect:
+    name: Detect container images
     runs-on: ubuntu-latest
     if: github.event.workflow_run.conclusion == 'success'
-    permissions:
-      # Required to post "OBS QA" commit status on the PR head commit.
-      statuses: write
 
     env:
       OBS_APIURL: ${{ vars.OBS_APIURL }}
       OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
+
+    outputs:
+      has_images: ${{ steps.images.outputs.has_images }}
+      registry_url: ${{ steps.images.outputs.registry_url }}
+      docker_tag: ${{ steps.images.outputs.docker_tag }}
+      head_sha: ${{ steps.pr.outputs.head_sha }}
 
     steps:
       - uses: actions/checkout@v4
@@ -57,8 +65,7 @@ jobs:
 
       # Scan all subprojects of the PR project for percona-distribution-postgresql
       # container images (packages with a Dockerfile #!BuildTag: matching that
-      # pattern).  Outputs: has_images, container_project, registry_url,
-      # docker_tag, server_version.
+      # pattern).  Outputs: has_images, registry_url, docker_tag, server_version.
       - name: Find container images in OBS PR project
         id: images
         env:
@@ -67,29 +74,53 @@ jobs:
         run: |
           venv/bin/python .github/scripts/find_obs_container_images.py
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # qa: trigger and poll Jenkins, once per matrix variant (with/without PostGIS).
+  # Both variants run in parallel after detect completes.
+  # Does not need OBS credentials — only curl and stdlib Python.
+  # ──────────────────────────────────────────────────────────────────────────
+  qa:
+    name: Jenkins QA (${{ matrix.status_context }})
+    needs: detect
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.has_images == 'true'
+    permissions:
+      # Required to post the commit status on the PR head commit.
+      statuses: write
+
+    strategy:
+      matrix:
+        include:
+          - with_postgis: "false"
+            status_context: "OBS QA"
+          - with_postgis: "true"
+            status_context: "OBS QA / PostGIS"
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Set pending QA status
-        if: steps.images.outputs.has_images == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          HEAD_SHA: ${{ needs.detect.outputs.head_sha }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
             -X POST \
             -f "state=pending" \
-            -f "context=OBS QA" \
+            -f "context=${{ matrix.status_context }}" \
             -f "description=Container image QA running..."
 
       # POST buildWithParameters to Jenkins.  Captures the queue item URL from
       # the Location response header and stores it in GITHUB_ENV for the poll step.
       - name: Trigger Jenkins QA job
         id: trigger
-        if: steps.images.outputs.has_images == 'true'
         env:
           JENKINS_URL: ${{ vars.JENKINS_URL }}
           JENKINS_USER: ${{ vars.JENKINS_USER }}
           JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
-          DOCKER_TAG: ${{ steps.images.outputs.docker_tag }}
-          REGISTRY_URL: ${{ steps.images.outputs.registry_url }}
+          DOCKER_TAG: ${{ needs.detect.outputs.docker_tag }}
+          REGISTRY_URL: ${{ needs.detect.outputs.registry_url }}
         run: |
           HTTP_CODE=$(curl -s \
             -D /tmp/jenkins-trigger-headers.txt \
@@ -102,7 +133,7 @@ jobs:
             --data-urlencode "SERVER_VERSION=${DOCKER_TAG}" \
             --data-urlencode "REPOSITORY=${REGISTRY_URL}" \
             --data-urlencode "TESTING_BRANCH=main" \
-            --data-urlencode "WITH_POSTGIS=false" \
+            --data-urlencode "WITH_POSTGIS=${{ matrix.with_postgis }}" \
             --data-urlencode "DESTROY_ENV=true")
           if [ "$HTTP_CODE" != "201" ]; then
             echo "Jenkins returned HTTP ${HTTP_CODE} (expected 201)" >&2
@@ -129,17 +160,16 @@ jobs:
           JENKINS_URL: ${{ vars.JENKINS_URL }}
           JENKINS_USER: ${{ vars.JENKINS_USER }}
           JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
-          PYTHONPATH: ${{ github.workspace }}
         run: |
-          venv/bin/python .github/scripts/poll_jenkins.py | tee /tmp/jenkins-result.txt
+          python3 .github/scripts/poll_jenkins.py | tee /tmp/jenkins-result.txt
 
       # Always runs (after the pending status was posted) so the final status is
       # never left as "pending" regardless of which earlier step failed.
       - name: Post QA commit status
-        if: always() && steps.images.outputs.has_images == 'true'
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          HEAD_SHA: ${{ needs.detect.outputs.head_sha }}
         run: |
           BUILD_URL=$(grep '^BUILD_URL=' /tmp/jenkins-result.txt 2>/dev/null \
             | cut -d= -f2- || true)
@@ -165,7 +195,7 @@ jobs:
 
           ARGS=(-X POST
             -f "state=${STATE}"
-            -f "context=OBS QA"
+            -f "context=${{ matrix.status_context }}"
             -f "description=${DESC}")
           if [ -n "$BUILD_URL" ]; then
             ARGS+=(-f "target_url=${BUILD_URL}")
