@@ -137,6 +137,7 @@ jobs:
       # so --source-rootprj is used to read its topology from there while the
       # release target is still created under the PR project.
       - name: Test release (if PR adds release.yaml)
+        id: release
         if: steps.detect.outputs.is_release_pr == 'true' || steps.sync.outcome == 'success'
         run: |
           RELEASES=$(git diff --name-only --diff-filter=A origin/main...HEAD -- 'root/*/releases/*/release.yaml')
@@ -175,7 +176,9 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
+          IS_RELEASE_PR: ${{ steps.detect.outputs.is_release_pr }}
           SYNC_OUTCOME: ${{ steps.sync.outcome }}
+          RELEASE_OUTCOME: ${{ steps.release.outcome }}
           POLL_OUTCOME: ${{ steps.poll.outcome }}
           WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
@@ -187,7 +190,9 @@ jobs:
           repo             = os.environ['GITHUB_REPOSITORY']
           obs_web_url      = os.environ['OBS_WEB_URL'].rstrip('/')
           obs_pr_rootprj   = os.environ['OBS_PR_ROOTPRJ']
+          is_release_pr    = os.environ.get('IS_RELEASE_PR') == 'true'
           sync_ok          = os.environ['SYNC_OUTCOME'] == 'success'
+          release_outcome  = os.environ.get('RELEASE_OUTCOME', '')
           poll_outcome     = os.environ.get('POLL_OUTCOME', '')
           workflow_run_url = os.environ['WORKFLOW_RUN_URL']
           timestamp        = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')
@@ -202,7 +207,25 @@ jobs:
           except (OSError, json.JSONDecodeError):
               pass
 
-          if sync_ok:
+          if is_release_pr:
+              if release_outcome == 'success':
+                  heading = '## OBS Release Check — ✅ Release dry-run passed'
+              elif release_outcome == 'failure':
+                  heading = '## OBS Release Check — ❌ Release dry-run failed'
+              elif release_outcome == 'skipped':
+                  heading = '## OBS Release Check — ⏭️ Release test skipped'
+              else:
+                  heading = '## OBS Release Check'
+              lines = [
+                  '<!-- obs-pr-check -->',
+                  heading,
+                  '',
+                  'This PR adds a release record. No packages are built in OBS.',
+                  f'The release dry-run created **[{pr_rootprj}]({project_url})** on OBS.',
+                  '',
+                  f'> _Updated: {timestamp}_',
+              ]
+          elif sync_ok:
               try:
                   output = open('/tmp/sync-output.txt').read()
               except OSError:
