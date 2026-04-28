@@ -2,8 +2,8 @@
 """Find percona-distribution-postgresql container images in an OBS PR project.
 
 Traverses all subprojects of OBS_PR_PROJECT, finds any that have an 'images'
-repository, then checks each package for a Dockerfile or .kiwi file with a
-BuildTag matching percona-distribution-postgresql*.
+repository, then checks each package for a .containerinfo build artifact with
+a tag matching percona-distribution-postgresql*.
 
 Required environment variables:
   OBS_APIURL        OBS API URL
@@ -12,15 +12,14 @@ Required environment variables:
 """
 
 import os
-import re
 import sys
 
 import osc.conf
 
 from percona_obs.obs_api import (
-    _detect_obs_container_info,
+    _fetch_all_pkg_archs,
+    _fetch_build_containerinfo,
     _fetch_obs_package_names,
-    _fetch_obs_project_repository_names,
     _fetch_obs_subproject_names,
 )
 
@@ -43,26 +42,41 @@ def _write_output(**kwargs: str) -> None:
 
 
 for project in sorted(subprojects):
-    repos = _fetch_obs_project_repository_names(apiurl, project)
-    if "images" not in repos:
-        continue
-    print(f"  {project!r} has 'images' repository — scanning packages", flush=True)
     packages = _fetch_obs_package_names(apiurl, project)
+    if not packages:
+        continue
+    print(f"  Scanning {len(packages)} package(s) in {project!r}", flush=True)
+    pkg_archs = _fetch_all_pkg_archs(apiurl, project)
 
+    container_version: str | None = None
     base_tag: str | None = None
     has_postgis = False
 
     for pkg in sorted(packages):
-        info = _detect_obs_container_info(apiurl, project, pkg)
-        if info is None:
+        repo_arch = pkg_archs.get(pkg)
+        if not repo_arch:
             continue
-        image_name, tag = info
-        if not image_name or "percona-distribution-postgresql" not in image_name:
+        repo, arch = repo_arch
+        ci = _fetch_build_containerinfo(apiurl, project, repo, arch, pkg)
+        if ci is None:
             continue
-        print(f"    Found container image: {image_name}:{tag}", flush=True)
-        if base_tag is None:
-            base_tag = tag
-        if "postgis" in image_name.lower():
+        tags_list: list[str] = ci.get("tags") or []
+        if not any("percona-distribution-postgresql" in t for t in tags_list):
+            continue
+
+        print(f"    Found container image tags: {tags_list}", flush=True)
+
+        if container_version is None:
+            container_version = ci.get("version") or ""
+            # Pick the most specific tag (longest, e.g. "18.3-1") as base_tag.
+            for full_tag in tags_list:
+                if "percona-distribution-postgresql" not in full_tag:
+                    continue
+                tag_part = full_tag.rsplit(":", 1)[1] if ":" in full_tag else full_tag
+                if base_tag is None or len(tag_part) > len(base_tag):
+                    base_tag = tag_part
+
+        if "postgis" in pkg.lower() or any("postgis" in t.lower() for t in tags_list):
             has_postgis = True
 
     if base_tag is None:
@@ -70,10 +84,7 @@ for project in sorted(subprojects):
 
     registry_path = project.lower().replace(":", "/")
     registry_url = f"registry.opensuse.org/{registry_path}/images"
-    docker_tag = ""
-    m = re.search(r"(\d+\.\d+)", base_tag)
-    if m:
-        docker_tag = m.group(1)
+    docker_tag = container_version or base_tag
 
     _write_output(
         has_images="true",

@@ -227,6 +227,50 @@ def _detect_obs_container_info(
     return None
 
 
+def _fetch_build_containerinfo(
+    apiurl: str,
+    obs_project: str,
+    repo: str,
+    arch: str,
+    pkg: str,
+) -> "dict | None":
+    """Fetch and parse the .containerinfo JSON from OBS build results.
+
+    Lists the binary files for the package to find the .containerinfo filename,
+    then fetches and JSON-parses it.  Returns the parsed dict on success, or
+    None when the file is absent or the package has not yet built successfully.
+
+    The containerinfo JSON contains at minimum: name, version, release, tags
+    (a list of fully-resolved image:tag strings), buildtime, disturl.
+    """
+    import json
+
+    url = osc.core.makeurl(apiurl, ["build", obs_project, repo, arch, pkg])
+    try:
+        root = ET.fromstring(osc.connection.http_GET(url).read())
+    except Exception:
+        return None
+
+    containerinfo_filename: str | None = None
+    for binary in root.findall("binary"):
+        name = binary.get("filename", "")
+        if name.endswith(".containerinfo"):
+            containerinfo_filename = name
+            break
+
+    if not containerinfo_filename:
+        return None
+
+    ci_url = osc.core.makeurl(
+        apiurl, ["build", obs_project, repo, arch, pkg, containerinfo_filename]
+    )
+    try:
+        data = osc.connection.http_GET(ci_url).read()
+        return json.loads(data)
+    except Exception:
+        return None
+
+
 def _fetch_obs_package_names(apiurl: str, obs_project_name: str) -> set[str]:
     """Return the set of package names currently in an OBS project.
 

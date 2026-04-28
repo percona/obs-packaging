@@ -40,6 +40,7 @@ from .obs_api import (
     _detect_obs_container_info,
     _extract_obs_managed_elements,
     _fetch_all_pkg_archs,
+    _fetch_build_containerinfo,
     _fetch_obs_download_url,
     _fetch_obs_package_names,
     _fetch_root_project_managed_elements,
@@ -195,6 +196,20 @@ def _is_under_release_project(path: Path) -> bool:
     return False
 
 
+def _apply_containerinfo(record: "dict[str, object]", ci: dict) -> None:
+    """Enrich an image record in-place with data from a .containerinfo dict.
+
+    Sets ``version`` from the containerinfo version field (already a versrel
+    string such as '18.3-1.1').  Sets ``tags`` to the list of tag-only strings
+    (the image-name prefix is stripped because ``image`` is a separate field).
+    Removes the stale ``tag`` field (raw Dockerfile template value).
+    """
+    record["version"] = ci.get("version") or None
+    raw_tags: list[str] = ci.get("tags") or []
+    record["tags"] = [t.rsplit(":", 1)[1] if ":" in t else t for t in raw_tags]
+    record.pop("tag", None)
+
+
 def _fill_release_online_records(
     args: "argparse.Namespace",
     apiurl: str,
@@ -247,15 +262,20 @@ def _fill_release_online_records(
             container_info = _detect_obs_container_info(apiurl, obs_proj, pkg_name)
             if container_info is not None:
                 image, tag = container_info
-                records.append(
-                    {
-                        **base,
-                        "type": "image",
-                        "image": image,
-                        "tag": tag,
-                        "version": version,
-                    }
-                )
+                rec: dict[str, object] = {
+                    **base,
+                    "type": "image",
+                    "image": image,
+                    "tag": tag,
+                    "version": version,
+                }
+                if repo_arch:
+                    ci = _fetch_build_containerinfo(
+                        apiurl, obs_proj, repo_arch[0], repo_arch[1], pkg_name
+                    )
+                    if ci is not None:
+                        _apply_containerinfo(rec, ci)
+                records.append(rec)
             else:
                 records.append({**base, "type": "package", "version": version})
 
@@ -1004,9 +1024,15 @@ def cmd_project_versions(args) -> None:
                             apiurl, obs_proj, repo, arch, pkg_name
                         )
                     else:  # image
-                        record["version"] = _fetch_versrel_from_history(
+                        ci = _fetch_build_containerinfo(
                             apiurl, obs_proj, repo, arch, pkg_name
                         )
+                        if ci is not None:
+                            _apply_containerinfo(record, ci)
+                        else:
+                            record["version"] = _fetch_versrel_from_history(
+                                apiurl, obs_proj, repo, arch, pkg_name
+                            )
 
     for record in records:
         record.pop("_agg_src_project", None)
@@ -1035,15 +1061,20 @@ def cmd_project_versions(args) -> None:
                 md_lines += [
                     "## Container Images",
                     "",
-                    "| Package | Project | Image | Tag | Version |",
-                    "| ------- | ------- | ----- | --- | ------- |",
+                    "| Package | Project | Image | Version | Tags |",
+                    "| ------- | ------- | ----- | ------- | ---- |",
                 ]
                 for r in images:
                     img = r.get("image") or "(none)"
-                    tag = r.get("tag") or "(none)"
                     ver = r.get("version") or "(none)"
+                    tags: list = r.get("tags") or []  # type: ignore[assignment]
+                    if tags:
+                        tags_str = " ".join(f"`{t}`" for t in tags)
+                    else:
+                        fallback = r.get("tag")
+                        tags_str = f"`{fallback}`" if fallback else "(none)"
                     md_lines.append(
-                        f"| {r['name']} | {r['project']} | {img} | {tag} | {ver} |"
+                        f"| {r['name']} | {r['project']} | {img} | {ver} | {tags_str} |"
                     )
             else:
                 md_lines += [
