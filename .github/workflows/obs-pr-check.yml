@@ -156,6 +156,27 @@ jobs:
               "$rel_project"
           done
 
+      # For release-only PRs there are no package builds to poll.  Report the
+      # commit status immediately based on the release dry-run outcome so the
+      # "OBS Build" check does not stay pending indefinitely.
+      - name: Report release PR commit status
+        if: steps.detect.outputs.is_release_pr == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ steps.release.outcome }}" = "success" ]; then
+            STATE="success"
+            DESC="Release dry-run passed"
+          else
+            STATE="failure"
+            DESC="Release dry-run failed"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -X POST \
+            -f "state=${STATE}" \
+            -f "context=OBS Build" \
+            -f "description=${DESC}"
+
       # Poll OBS until all builds in the PR project reach a terminal state.
       # Fails the job (and PR check) if any build fails, is broken, or is
       # unresolvable.  Skipped when the sync step did not succeed.
