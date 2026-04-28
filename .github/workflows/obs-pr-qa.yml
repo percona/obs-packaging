@@ -92,9 +92,9 @@ jobs:
       matrix:
         include:
           - with_postgis: "false"
-            status_context: "OBS QA"
+            status_context: "QA Testing percona-distribution-postgresql image"
           - with_postgis: "true"
-            status_context: "OBS QA / PostGIS"
+            status_context: "QA Testing percona-distribution-postgresql-with-postgis image"
       fail-fast: false
 
     steps:

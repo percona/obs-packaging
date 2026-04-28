@@ -57,7 +57,7 @@ for project in sorted(subprojects):
             continue
         print(f"    Found container image: {image_name}:{tag}", flush=True)
         registry_path = project.lower().replace(":", "/")
-        registry_url = f"registry.opensuse.org/{registry_path}"
+        registry_url = f"registry.opensuse.org/{registry_path}/images"
         docker_tag = ""
         if tag:
             m = re.search(r"(\d+\.\d+)", tag)
