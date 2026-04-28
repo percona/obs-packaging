@@ -216,12 +216,27 @@ jobs:
                   heading = '## OBS Release Check — ⏭️ Release test skipped'
               else:
                   heading = '## OBS Release Check'
+
+              # Derive the per-release OBS project links from the added release.yaml files.
+              added = subprocess.run(
+                  ['git', 'diff', '--name-only', '--diff-filter=A',
+                   'origin/main...HEAD', '--', 'root/*/releases/*/release.yaml'],
+                  capture_output=True, text=True,
+              ).stdout.strip().splitlines()
+              release_links = []
+              for rf in added:
+                  rel_dir = rf.removeprefix('root/').removesuffix('/release.yaml')
+                  rel_project = rel_dir.replace('/', ':')
+                  obs_proj = f"{pr_rootprj}:{rel_project}"
+                  release_links.append(f'**[{obs_proj}]({obs_web_url}/project/show/{obs_proj})**')
+              projects_str = ', '.join(release_links) if release_links else f'**{pr_rootprj}**'
+
               lines = [
                   '<!-- obs-pr-check -->',
                   heading,
                   '',
                   'This PR adds a release record. No packages are built in OBS.',
-                  f'The release dry-run created **[{pr_rootprj}]({project_url})** on OBS.',
+                  f'The release dry-run created {projects_str} on OBS.',
                   '',
                   f'> _Updated: {timestamp}_',
               ]
