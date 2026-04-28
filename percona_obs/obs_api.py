@@ -804,6 +804,25 @@ def _edit_project_meta(
     return False  # unreachable; _obs_api_error always raises
 
 
+def _disable_project_builds(apiurl: str, obs_project_name: str) -> None:
+    """Add a blanket ``<build><disable/>`` flag to an existing OBS project.
+
+    Fetches the current meta, injects the flag if not already present, and
+    pushes it back.  Used to ensure release subprojects (e.g. containers)
+    never schedule builds in a PR-check context where the source project
+    lives in a different namespace and builds would fail or be meaningless.
+    """
+    raw = _decode_obs_response(osc.core.show_project_meta(apiurl, obs_project_name))
+    root = ET.fromstring(raw)
+    if root.find("build") is None:
+        build_elem = ET.SubElement(root, "build")
+        ET.SubElement(build_elem, "disable")
+        ET.indent(root, space="  ")
+        meta = ET.tostring(root, encoding="unicode")
+        _edit_project_meta(apiurl, obs_project_name, meta, force=False)
+        _print_update(f"project meta  {obs_project_name}  (builds disabled)")
+
+
 def _apply_project_config(
     apiurl: str,
     obs_project_name: str,

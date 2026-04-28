@@ -48,6 +48,7 @@ from .obs_api import (
     _apply_package_config,
     _apply_project_config,
     _disable_package_builds,
+    _disable_project_builds,
     _create_project_skeleton,
     _copy_project_conf,
     _create_release_project,
@@ -1254,6 +1255,7 @@ def _sync_release_subprojects(
     release_path: Path,
     env_vars: dict[str, str],
     source_rootprj: str | None = None,
+    disable_builds: bool = False,
 ) -> None:
     """Create and populate OBS subprojects for a release (e.g. containers).
 
@@ -1291,6 +1293,8 @@ def _sync_release_subprojects(
                 args.rootprj,
                 env_vars=env_vars,
             )
+        if disable_builds:
+            _disable_project_builds(apiurl, release_sub_obs)
 
         source_sub_obs = f"{source_rootprj or args.rootprj}:{sub_obs_id}"
         source_sub_repo_elems, _ = _read_project_release_source(apiurl, source_sub_obs)
@@ -1389,6 +1393,7 @@ def cmd_sync_release(args) -> None:
                 "OBS_ROOTPRJ": args.rootprj,
             },
             source_rootprj=source_rootprj,
+            disable_builds=source_rootprj is not None,
         )
         _print_same(f"release  {release_obs_project}  (already exists)")
         return
@@ -1515,6 +1520,8 @@ def cmd_sync_release(args) -> None:
     # Create and populate release subprojects that mirror the source project's
     # subprojects (e.g. containers).  These have builds enabled so that container
     # images rebuild automatically when packages are updated via Updates.
+    # When source_rootprj is set (PR check), builds are disabled so no images
+    # are scheduled in the PR-specific namespace.
     _sync_release_subprojects(
         apiurl,
         args,
@@ -1526,6 +1533,7 @@ def cmd_sync_release(args) -> None:
             "OBS_ROOTPRJ": args.rootprj,
         },
         source_rootprj=source_rootprj,
+        disable_builds=source_rootprj is not None,
     )
 
     _print_ok(f"release  {source_obs_project} → {release_obs_project}")
