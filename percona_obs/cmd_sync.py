@@ -1253,6 +1253,7 @@ def _sync_release_subprojects(
     release_obs_project: str,
     release_path: Path,
     env_vars: dict[str, str],
+    source_rootprj: str | None = None,
 ) -> None:
     """Create and populate OBS subprojects for a release (e.g. containers).
 
@@ -1283,7 +1284,7 @@ def _sync_release_subprojects(
             env_vars=env_vars,
         )
 
-        source_sub_obs = f"{args.rootprj}:{sub_obs_id}"
+        source_sub_obs = f"{source_rootprj or args.rootprj}:{sub_obs_id}"
         source_sub_repo_elems, _ = _read_project_release_source(apiurl, source_sub_obs)
         source_sub_repo_names = [
             r.get("name", "") for r in source_sub_repo_elems if r.get("name")
@@ -1379,6 +1380,7 @@ def cmd_sync_release(args) -> None:
                 ),
                 "OBS_ROOTPRJ": args.rootprj,
             },
+            source_rootprj=source_rootprj,
         )
         _print_same(f"release  {release_obs_project}  (already exists)")
         return
@@ -1515,6 +1517,7 @@ def cmd_sync_release(args) -> None:
             **(parse_env_overrides(args.env_overrides) if args.env_overrides else {}),
             "OBS_ROOTPRJ": args.rootprj,
         },
+        source_rootprj=source_rootprj,
     )
 
     _print_ok(f"release  {source_obs_project} → {release_obs_project}")
