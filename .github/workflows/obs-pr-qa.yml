@@ -32,6 +32,7 @@ jobs:
       registry_url: ${{ steps.images.outputs.registry_url }}
       docker_tag: ${{ steps.images.outputs.docker_tag }}
       head_sha: ${{ steps.pr.outputs.head_sha }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
 
     steps:
       - uses: actions/checkout@v4
@@ -65,7 +66,7 @@ jobs:
 
       # Scan all subprojects of the PR project for percona-distribution-postgresql
       # container images (packages with a Dockerfile #!BuildTag: matching that
-      # pattern).  Outputs: has_images, registry_url, docker_tag, server_version.
+      # pattern).  Outputs: has_images, has_postgis_images, registry_url, docker_tag.
       - name: Find container images in OBS PR project
         id: images
         env:
@@ -73,6 +74,19 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
         run: |
           venv/bin/python .github/scripts/find_obs_container_images.py
+
+      # Build the qa job matrix dynamically: the PostGIS variant is only included
+      # when a percona-distribution-postgresql-with-postgis image was detected.
+      - name: Build QA matrix
+        id: matrix
+        if: steps.images.outputs.has_images == 'true'
+        run: |
+          if [ "${{ steps.images.outputs.has_postgis_images }}" = "true" ]; then
+            MATRIX='[{"with_postgis":"false","status_context":"OBS QA"},{"with_postgis":"true","status_context":"OBS QA / PostGIS"}]'
+          else
+            MATRIX='[{"with_postgis":"false","status_context":"OBS QA"}]'
+          fi
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
 
   # ──────────────────────────────────────────────────────────────────────────
   # qa: trigger and poll Jenkins, once per matrix variant (with/without PostGIS).
@@ -90,11 +104,7 @@ jobs:
 
     strategy:
       matrix:
-        include:
-          - with_postgis: "false"
-            status_context: "QA Testing percona-distribution-postgresql image"
-          - with_postgis: "true"
-            status_context: "QA Testing percona-distribution-postgresql-with-postgis image"
+        include: ${{ fromJSON(needs.detect.outputs.matrix) }}
       fail-fast: false
 
     steps:

@@ -48,6 +48,10 @@ for project in sorted(subprojects):
         continue
     print(f"  {project!r} has 'images' repository — scanning packages", flush=True)
     packages = _fetch_obs_package_names(apiurl, project)
+
+    base_tag: str | None = None
+    has_postgis = False
+
     for pkg in sorted(packages):
         info = _detect_obs_container_info(apiurl, project, pkg)
         if info is None:
@@ -56,21 +60,30 @@ for project in sorted(subprojects):
         if not image_name or "percona-distribution-postgresql" not in image_name:
             continue
         print(f"    Found container image: {image_name}:{tag}", flush=True)
-        registry_path = project.lower().replace(":", "/")
-        registry_url = f"registry.opensuse.org/{registry_path}/images"
-        docker_tag = ""
-        if tag:
-            m = re.search(r"(\d+\.\d+)", tag)
-            if m:
-                docker_tag = m.group(1)
-        _write_output(
-            has_images="true",
-            container_project=project,
-            registry_url=registry_url,
-            docker_tag=docker_tag,
-            server_version=docker_tag,
-        )
-        sys.exit(0)
+        if base_tag is None:
+            base_tag = tag
+        if "postgis" in image_name.lower():
+            has_postgis = True
+
+    if base_tag is None:
+        continue
+
+    registry_path = project.lower().replace(":", "/")
+    registry_url = f"registry.opensuse.org/{registry_path}/images"
+    docker_tag = ""
+    m = re.search(r"(\d+\.\d+)", base_tag)
+    if m:
+        docker_tag = m.group(1)
+
+    _write_output(
+        has_images="true",
+        has_postgis_images="true" if has_postgis else "false",
+        container_project=project,
+        registry_url=registry_url,
+        docker_tag=docker_tag,
+        server_version=docker_tag,
+    )
+    sys.exit(0)
 
 print("No percona-distribution-postgresql container images found in PR project")
 _write_output(has_images="false")
