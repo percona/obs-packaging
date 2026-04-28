@@ -1067,15 +1067,21 @@ def _rewrite_subproject_paths(
     repos: list[dict],
     source_project_id: str,
     release_project_id: str,
+    skip_subproject: str | None = None,
 ) -> list[dict]:
     """Rewrite subproject: path entries for a release subproject yaml.
 
     Rules applied to each path entry:
       subproject == source_project_id             →  two entries:
-                                                       release_project_id:Updates  (updated pkgs)
+                                                       release_project_id:updates  (updated pkgs)
                                                        release_project_id          (base release)
-      subproject starts with source_project_id:   →  replace prefix with release_project_id
+      subproject starts with source_project_id:   →  replace prefix with release_project_id;
+                                                       skip if the result equals skip_subproject
       everything else (project:, external)        →  unchanged
+
+    skip_subproject: if set, any rewritten subproject entry that resolves to this
+    value is dropped.  Used to remove self-referencing paths from release subprojects
+    (e.g. containers referencing itself).
     """
     result = []
     for repo in repos:
@@ -1084,12 +1090,12 @@ def _rewrite_subproject_paths(
             subprj = path_entry.get("subproject")
             if subprj is not None:
                 if subprj == source_project_id:
-                    # Insert Updates first so updated packages shadow the base release,
+                    # Insert updates first so updated packages shadow the base release,
                     # then the base release as fallback for packages not yet updated.
                     repo_name = path_entry.get("repository")
                     new_paths.append(
                         {
-                            "subproject": f"{release_project_id}:Updates",
+                            "subproject": f"{release_project_id}:updates",
                             "repository": repo_name,
                         }
                     )
@@ -1099,7 +1105,10 @@ def _rewrite_subproject_paths(
                     continue
                 elif subprj.startswith(source_project_id + ":"):
                     tail = subprj[len(source_project_id) :]
-                    path_entry = {**path_entry, "subproject": release_project_id + tail}
+                    rewritten = release_project_id + tail
+                    if skip_subproject and rewritten == skip_subproject:
+                        continue
+                    path_entry = {**path_entry, "subproject": rewritten}
             new_paths.append(path_entry)
         result.append({**repo, "paths": new_paths})
     return result
@@ -1242,7 +1251,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         yaml.dump(project_data, f, default_flow_style=False, allow_unicode=True)
     _print_create(str(project_file.relative_to(_REPO_DIR)))
 
-    updates_dir = release_dir / "Updates"
+    updates_dir = release_dir / "updates"
     updates_dir.mkdir(exist_ok=True)
     updates_file = updates_dir / "project.yaml"
     with updates_file.open("w") as f:
@@ -1266,12 +1275,13 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             source_sub_config.get("repositories", []),
             args.project,
             release_project,
+            skip_subproject=f"{release_project}:{subproject_name}",
         )
         sub_data: dict = {
             "title": f"{product} releases {args.release_name} — {subproject_name}",
             "description": (
                 f"{subproject_name.capitalize()} subproject for {release_project}.\n"
-                f"Rebuilds against {release_project}:Updates when packages are updated.\n"
+                f"Rebuilds against {release_project}:updates when packages are updated.\n"
             ),
             "repositories": rewritten_repos,
         }

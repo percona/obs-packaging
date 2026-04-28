@@ -411,7 +411,7 @@ def cmd_sync(args):
     # (e.g. REMOTE_OBS_ORG_INTERCONNECT=openSUSE.org instead of openSUSE.org:)
     # before any projects or packages are created or modified.
     # Scope the scan to the target project subtree when a specific project is
-    # given, so unrelated project.yaml files (e.g. releases/*/Updates) that
+    # given, so unrelated project.yaml files (e.g. releases/*/updates) that
     # reference OBS projects not yet created are not validated.
     _path_ref_root = resolve_project_path(args.project) if args.project else REPO_ROOT
     path_ref_errors = _validate_project_path_refs(
@@ -1365,7 +1365,7 @@ def cmd_sync_release(args) -> None:
     # already been done.  Clean up any stale releasetarget entries that may
     # have been left behind by a partial previous run, then exit.
     _print_pending(f"checking release project {release_obs_project}")
-    updates_obs_project = f"{release_obs_project}:Updates"
+    updates_obs_project = f"{release_obs_project}:updates"
     if _obs_project_exists(apiurl, release_obs_project):
         _remove_release_targets(apiurl, source_obs_project, release_obs_project)
         if not _obs_project_exists(apiurl, updates_obs_project):
