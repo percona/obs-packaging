@@ -1276,13 +1276,22 @@ def _sync_release_subprojects(
         if not (release_sub_path / "project.yaml").is_file():
             continue
 
-        _apply_project_config(
+        paths_stripped, _ = _apply_project_config(
             apiurl,
             release_sub_obs,
             release_sub_path,
             args.rootprj,
             env_vars=env_vars,
         )
+        if paths_stripped:
+            _apply_project_config(
+                apiurl,
+                release_sub_obs,
+                release_sub_path,
+                args.rootprj,
+                force=True,
+                env_vars=env_vars,
+            )
 
         source_sub_obs = f"{source_rootprj or args.rootprj}:{sub_obs_id}"
         source_sub_repo_elems, _ = _read_project_release_source(apiurl, source_sub_obs)
