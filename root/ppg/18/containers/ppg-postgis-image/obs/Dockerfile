@@ -1,6 +1,8 @@
 #!UseOBSRepositories
-#!BuildTag: percona-distribution-postgresql-with-postgis:18.3
-#
+#!BuildVersion: 18.3
+#!BuildTag: percona-distribution-postgresql-with-postgis:<VERSION>-<RELEASE>
+#!BuildTag: percona-distribution-postgresql-with-postgis:<VERSION>
+#!BuildTag: percona-distribution-postgresql-with-postgis:18
 
 FROM percona-ubi9-minimal:latest
 
@@ -28,7 +30,7 @@ RUN dnf -y install \
 
 ARG PPG_REPO=testing
 
-ENV PPG_VERSION 18.3-1
+ENV PPG_VERSION 18.3
 ENV PPG_MAJOR_VERSION 18
 ENV PPG_MINOR_VERSION 3
 ENV OS_VER el9
