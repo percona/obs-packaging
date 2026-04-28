@@ -266,6 +266,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip the git tag divergence check (Check 1). "
         "Use when the release tag has not been created locally yet.",
     )
+    sync_release_parser.add_argument(
+        "--source-rootprj",
+        default=None,
+        metavar="ROOTPRJ",
+        help="Root project to use when resolving the source OBS project. "
+        "Defaults to the active profile's root project. "
+        "Only intended for testing release PRs in CI, where the source "
+        "project lives in the production namespace but the release target "
+        "is created in a PR-specific namespace.",
+    )
     sync_release_parser.set_defaults(func=cmd_sync_release)
 
     build_parser_ = subparsers.add_parser(

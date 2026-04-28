@@ -517,6 +517,20 @@ Skip all divergence checks (used by CI):
 ./percona-obs -P local sync release ppg:releases:17.9 --force
 ```
 
+#### `--source-rootprj ROOTPRJ`
+
+Override the root project used to resolve the **source** OBS project.  By
+default `sync release` prefixes `source_project_id` (read from `release.yaml`)
+with the active profile's root project.  `--source-rootprj` substitutes a
+different root project for that lookup only; the release target project is
+still created under the active profile's root project.
+
+> **This flag is only intended for testing release PRs in CI.**  The PR check
+> workflow (`obs-pr-check.yml`) runs `sync release --force --source-rootprj
+> "$OBS_ROOTPRJ"` so it can read the source project topology from the
+> production namespace while writing the release target into the PR-specific
+> namespace.  Do not use it in normal local or production release runs.
+
 ### Release directory layout
 
 Release records live under `root/<product>/releases/`:

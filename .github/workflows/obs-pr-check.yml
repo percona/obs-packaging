@@ -91,10 +91,26 @@ jobs:
             -e "PERCONA_OBS_PACKAGING_REPO:${{ github.event.pull_request.head.repo.clone_url }}" \
             profile create "pr-${PR_NUMBER}"
 
+      # Detect whether this is a release-only PR (all changed files under
+      # root/ are under root/*/releases/).  Release-only PRs skip the package
+      # sync steps entirely — releases/ is excluded from sync push traversal
+      # so there is nothing to build.
+      - name: Detect release-only PR
+        id: detect
+        run: |
+          CHANGED=$(git diff --name-only origin/main...HEAD -- 'root/**')
+          NON_RELEASE=$(echo "$CHANGED" | grep -v '^root/[^/]*/releases/' || true)
+          if [ -z "$CHANGED" ] || [ -n "$NON_RELEASE" ]; then
+            echo "is_release_pr=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_release_pr=true" >> "$GITHUB_OUTPUT"
+          fi
+
       # Dry run: shows the sync plan (which packages will be promoted vs
       # aggregated) before the real sync starts, making progress visible early.
       # A failure here aborts the workflow before the real sync runs.
       - name: Plan sync (dry run)
+        if: steps.detect.outputs.is_release_pr != 'true'
         run: |
           venv/bin/python -u -m percona_obs \
             -P "pr-${PR_NUMBER}" sync push \
@@ -107,6 +123,7 @@ jobs:
       # Output is tee'd to a file so the comment step can parse package counts.
       - name: Sync PR to OBS
         id: sync
+        if: steps.detect.outputs.is_release_pr != 'true'
         run: |
           venv/bin/python -u -m percona_obs --verbose \
             -P "pr-${PR_NUMBER}" sync push \
@@ -115,9 +132,12 @@ jobs:
             | tee /tmp/sync-output.txt
 
       # If the PR adds release.yaml files, test the release flow by running
-      # sync release against the PR's OBS project.
+      # sync release against the PR's OBS project.  The source project lives
+      # in the production namespace (OBS_ROOTPRJ) — not in the PR namespace —
+      # so --source-rootprj is used to read its topology from there while the
+      # release target is still created under the PR project.
       - name: Test release (if PR adds release.yaml)
-        if: steps.sync.outcome == 'success'
+        if: steps.detect.outputs.is_release_pr == 'true' || steps.sync.outcome == 'success'
         run: |
           RELEASES=$(git diff --name-only --diff-filter=A origin/main...HEAD -- 'root/*/releases/*/release.yaml')
           if [ -z "$RELEASES" ]; then
@@ -130,7 +150,9 @@ jobs:
             rel_project="${rel_dir//\//:}"
             echo "Releasing: $rel_project"
             venv/bin/python -m percona_obs -P "pr-${PR_NUMBER}" \
-              sync release --force "$rel_project"
+              sync release --force \
+              --source-rootprj "$OBS_ROOTPRJ" \
+              "$rel_project"
           done
 
       # Poll OBS until all builds in the PR project reach a terminal state.

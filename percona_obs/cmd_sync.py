@@ -1344,7 +1344,8 @@ def cmd_sync_release(args) -> None:
         raise SystemExit(f"error: release.yaml missing 'project' field: {release_file}")
 
     apiurl: str = osc.conf.config["apiurl"]
-    source_obs_project = f"{args.rootprj}:{source_project_id}"
+    source_rootprj = getattr(args, "source_rootprj", None) or args.rootprj
+    source_obs_project = f"{source_rootprj}:{source_project_id}"
     release_obs_project = f"{args.rootprj}:{args.project}"
 
     # Idempotency: if the release project already exists the release has
