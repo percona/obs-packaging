@@ -1289,7 +1289,6 @@ def _sync_release_subprojects(
                 release_sub_obs,
                 release_sub_path,
                 args.rootprj,
-                force=True,
                 env_vars=env_vars,
             )
 
