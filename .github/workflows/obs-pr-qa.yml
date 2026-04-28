@@ -121,6 +121,7 @@ jobs:
           JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
           DOCKER_TAG: ${{ needs.detect.outputs.docker_tag }}
           REGISTRY_URL: ${{ needs.detect.outputs.registry_url }}
+          TESTING_BRANCH: ${{ vars.JENKINS_TESTING_BRANCH }}
         run: |
           HTTP_CODE=$(curl -s \
             -D /tmp/jenkins-trigger-headers.txt \
@@ -132,7 +133,7 @@ jobs:
             --data-urlencode "DOCKER_TAG=${DOCKER_TAG}" \
             --data-urlencode "SERVER_VERSION=${DOCKER_TAG}" \
             --data-urlencode "REPOSITORY=${REGISTRY_URL}" \
-            --data-urlencode "TESTING_BRANCH=main" \
+            --data-urlencode "TESTING_BRANCH=${TESTING_BRANCH}" \
             --data-urlencode "WITH_POSTGIS=${{ matrix.with_postgis }}" \
             --data-urlencode "DESTROY_ENV=true")
           if [ "$HTTP_CODE" != "201" ]; then
