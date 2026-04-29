@@ -406,6 +406,12 @@ def cmd_build_dependency(args) -> None:
     pkg_path_by_name: dict[str, Path] = {
         pkg_path.name: pkg_path for _, pkg_path in targets
     }
+    # Project-aware local_pkg_set: each package's source/binary lives in
+    # exactly one OBS project (the target project for promoted packages or
+    # the branch source project for aggregates).  _fetch_combined_depinfo
+    # uses this to filter dep edges and avoid conflating same-named packages
+    # across unrelated projects.
+    local_pkg_set: set[tuple[str, str]] = set()
     for obs_name, pkg_name in pkg_obs_name:
         comment = _fetch_obs_package_latest_comment(apiurl, obs_name, pkg_name)
         if comment:
@@ -427,6 +433,7 @@ def cmd_build_dependency(args) -> None:
                         profile_apiurl_cache[profile_name] = apiurl or ""
                 src_apiurl = profile_apiurl_cache[profile_name]
                 query_projects_by_apiurl.setdefault(src_apiurl, set()).add(src_project)
+                local_pkg_set.add((src_project, pkg_name))
                 _pkg_path = pkg_path_by_name.get(pkg_name)
                 if _pkg_path and is_dockerfile_image(_pkg_path):
                     image_pkg_by_apiurl.setdefault(src_apiurl, {}).setdefault(
@@ -435,6 +442,7 @@ def cmd_build_dependency(args) -> None:
                 continue
         # Not an aggregate (promoted or freshly synced): query the target OBS.
         query_projects_by_apiurl.setdefault(apiurl or "", set()).add(obs_name)
+        local_pkg_set.add((obs_name, pkg_name))
         _pkg_path = pkg_path_by_name.get(pkg_name)
         if _pkg_path and is_dockerfile_image(_pkg_path):
             image_pkg_by_apiurl.setdefault(apiurl or "", {}).setdefault(
@@ -442,17 +450,20 @@ def cmd_build_dependency(args) -> None:
             ).append((obs_name, "images", "x86_64"))
 
     # Fetch build dependency info from each OBS instance and merge.
+    # _fetch_combined_depinfo returns a project-aware map keyed by
+    # (project, pkg_name); the dep-tree renderer below is name-only, so
+    # flatten back to {pkg_name: {dep_pkg_name}} on read.
     fwd_deps: dict[str, set[str]] = {}
     for q_apiurl, q_projects in query_projects_by_apiurl.items():
         _img = image_pkg_by_apiurl.get(q_apiurl, {})
         partial = _fetch_combined_depinfo(
             q_apiurl,
             q_projects,
-            all_pkg_names,
+            local_pkg_set,
             image_pkgs=_img or None,
         )
-        for pkg, deps in partial.items():
-            fwd_deps.setdefault(pkg, set()).update(deps)
+        for (_src_proj, pkg), deps in partial.items():
+            fwd_deps.setdefault(pkg, set()).update(dep_name for _, dep_name in deps)
 
     if not fwd_deps:
         print(_col(_DIM, "(no build dependency information available)"))

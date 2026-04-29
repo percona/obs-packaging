@@ -503,10 +503,6 @@ def cmd_sync(args):
     branch_project_for: dict[tuple[str, str], str] = {}
     # profile that was used in the branch: comment (plain-push path only).
     branch_profile_for: dict[tuple[str, str], str] = {}
-    # pkg_keys_by_name[(pkg_name)] → all (project, pkg_name) keys with that
-    # name; a list because the same package name can appear in multiple projects
-    # (e.g. ppg-image in both ppg:17:containers and ppg:18:containers).
-    pkg_keys_by_name: dict[str, list[tuple[str, str]]] = {}
     # Cache of loaded profiles to avoid repeated file reads within Phase 1.
     _profile_cache: dict[str, dict[str, str]] = {}
     _profile_env_vars_cache: dict[str, dict[str, str]] = {}
@@ -597,7 +593,6 @@ def cmd_sync(args):
             if _result is None:
                 continue
             _key, _decision, _bp, _profile = _result
-            pkg_keys_by_name.setdefault(_key[1], []).append(_key)
             decisions[_key] = _decision
             if _bp is not None:
                 branch_project_for[_key] = _bp
@@ -610,12 +605,36 @@ def cmd_sync(args):
     has_promotes = any(d == "promote" for d in decisions.values())
     has_branches = any(d in ("aggregate", "skip_branch") for d in decisions.values())
     if has_promotes and has_branches:
+        # The dep graph is tracked project-aware: each edge carries the
+        # OBS project where the package source/binary lives.  This prevents
+        # same-named packages in unrelated projects (e.g. percona-pgaudit
+        # in both ppg:17 and ppg:18) from being conflated, which would
+        # otherwise cause spurious cross-major dep-promotions.
+        #
+        # _src_project_for_key(key) returns the project where the package's
+        # source/binary lives on OBS:
+        #   --branch-from active: always the branch counterpart of key[0].
+        #   no --branch-from: branch_project_for[key] for aggregates (only
+        #     possible via plain-push origin), else key[0] (the target).
+        def _src_project_for_key(_key: tuple[str, str]) -> str:
+            if branch_rootprj:
+                return _compute_branch_project(_key[0], args.rootprj, branch_rootprj)
+            return branch_project_for.get(_key, _key[0])
+
+        # Map (src_project, pkg_name) → decisions key, so dep edges keyed
+        # by source project can be translated back to decisions keys for
+        # the promotion loop.  This is also the local_pkg_set passed to
+        # _fetch_combined_depinfo for filtering dep edges to local packages.
+        src_to_decision_key: dict[tuple[str, str], tuple[str, str]] = {
+            (_src_project_for_key(_k), _k[1]): _k for _k in decisions
+        }
+        local_pkg_set = set(src_to_decision_key.keys())
+
         # When --branch-from is active, build dep info lives in the branch (dev)
         # OBS instance; query only those projects.  Target projects (test) may
         # not exist yet (first sync) and their build results are not meaningful
         # for dep-promotion decisions.
         # Without --branch-from, query the target projects on the target OBS.
-        local_pkg_names = set(pkg_keys_by_name.keys())
         src_projects_by_apiurl: dict[str, set[str]] = {}
         if branch_rootprj:
             # Include all branch projects, not just those with aggregate decisions.
@@ -660,7 +679,7 @@ def cmd_sync(args):
             fwd_deps = _fetch_combined_depinfo(
                 branch_apiurl,
                 dep_projects,
-                local_pkg_names,
+                local_pkg_set,
                 image_pkgs=image_pkgs or None,
             )
         else:
@@ -689,21 +708,21 @@ def cmd_sync(args):
                 image_pkg_by_apiurl_sync.setdefault(_ia, {}).setdefault(
                     pkg_path.name, []
                 ).append((_proj, "images", "x86_64"))
-            all_fwd_deps: dict[str, set[str]] = {}
+            all_fwd_deps: dict[tuple[str, str], set[tuple[str, str]]] = {}
             for q_apiurl, q_projects in src_projects_by_apiurl.items():
                 _img = image_pkg_by_apiurl_sync.get(q_apiurl, {})
                 partial = _fetch_combined_depinfo(
                     q_apiurl,
                     q_projects,
-                    local_pkg_names,
+                    local_pkg_set,
                     image_pkgs=_img or None,
                 )
-                for pkg, deps in partial.items():
-                    all_fwd_deps.setdefault(pkg, set()).update(deps)
+                for src_key, deps in partial.items():
+                    all_fwd_deps.setdefault(src_key, set()).update(deps)
             fwd_deps = all_fwd_deps
         logger.debug(
             f"dep-promote: builddepinfo covers {len(fwd_deps)} local packages"
-            f" with known local build deps; local_pkg_names={local_pkg_names}"
+            f" with known local build deps; local_pkg_set={local_pkg_set}"
         )
         if not fwd_deps:
             _print_action(
@@ -711,11 +730,21 @@ def cmd_sync(args):
                 " (branch projects may not have build results yet)"
             )
         else:
-            # Build reverse map: rdeps[A] = {packages that depend on A}.
-            rdeps: dict[str, set[str]] = {}
-            for pkg, deps in fwd_deps.items():
-                for dep in deps:
-                    rdeps.setdefault(dep, set()).add(pkg)
+            # Build reverse map in decisions-key namespace:
+            # rdeps[(target_proj, dep_pkg)] = {(target_proj, src_pkg), ...}
+            # Only edges where both sides map to a decisions key are kept;
+            # this is what makes dep-promotion project-aware (no spurious
+            # cross-project promotions on package-name collisions).
+            rdeps: dict[tuple[str, str], set[tuple[str, str]]] = {}
+            for src_key, deps in fwd_deps.items():
+                src_dec_key = src_to_decision_key.get(src_key)
+                if src_dec_key is None:
+                    continue
+                for dep_src_key in deps:
+                    dep_dec_key = src_to_decision_key.get(dep_src_key)
+                    if dep_dec_key is None:
+                        continue
+                    rdeps.setdefault(dep_dec_key, set()).add(src_dec_key)
             # Iterate until no new promotions are triggered.
             changed = True
             while changed:
@@ -723,21 +752,19 @@ def cmd_sync(args):
                 for key, decision in list(decisions.items()):
                     if decision != "promote":
                         continue
-                    _, pkg_name = key
                     # Forward: promote packages that depend on this one.
-                    for dependent in rdeps.get(pkg_name, set()):
-                        for dep_key in pkg_keys_by_name.get(dependent, []):
-                            if decisions.get(dep_key) in (
-                                "aggregate",
-                                "skip_branch",
-                                "skip",
-                            ):
-                                _print_action(
-                                    f"dep-promote: {dep_key[0]}/{dep_key[1]}"
-                                    f"  (depends on promoted {pkg_name})"
-                                )
-                                decisions[dep_key] = "promote"
-                                changed = True
+                    for dep_key in rdeps.get(key, set()):
+                        if decisions.get(dep_key) in (
+                            "aggregate",
+                            "skip_branch",
+                            "skip",
+                        ):
+                            _print_action(
+                                f"dep-promote: {dep_key[0]}/{dep_key[1]}"
+                                f"  (depends on promoted {key[0]}/{key[1]})"
+                            )
+                            decisions[dep_key] = "promote"
+                            changed = True
 
     # --- Phase 2.5: detect projects whose config changed on OBS (read-only) ---
     # Runs after Phase 1 + Phase 2 so a preliminary active_projects (projects

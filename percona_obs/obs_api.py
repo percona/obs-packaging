@@ -353,9 +353,9 @@ def _fetch_image_pkg_deps(
     repo: str,
     arch: str,
     pkg_name: str,
-    provided_by: dict[str, str],
-    local_pkg_names: set[str],
-) -> set[str]:
+    provided_by: dict[str, tuple[str, str]],
+    local_pkg_set: set[tuple[str, str]],
+) -> set[tuple[str, str]]:
     """Return local source packages a Dockerfile image depends on, via _buildinfo.
 
     OBS's project-level _builddepinfo does not expose the RPM packages parsed
@@ -363,7 +363,11 @@ def _fetch_image_pkg_deps(
     blocks — only the FROM base container shows up.  The per-package _buildinfo
     endpoint does include them, as <bdep name="..."/> entries.  Look each bdep
     name up in the provided_by map (built from _builddepinfo) to translate
-    binary → local source package.
+    binary → (home_project, source_pkg).
+
+    Each returned dep edge is a ``(home_project, src_pkg)`` tuple so callers
+    can attribute the dep to the correct project (preventing same-named
+    packages in unrelated projects from being conflated).
     """
     try:
         url = osc.core.makeurl(
@@ -376,13 +380,17 @@ def _fetch_image_pkg_deps(
         )
         return set()
 
-    deps: set[str] = set()
+    deps: set[tuple[str, str]] = set()
     for bdep in root.findall("bdep"):
         name = bdep.get("name", "")
         if not name:
             continue
         provider = provided_by.get(name)
-        if provider and provider != pkg_name and provider in local_pkg_names:
+        if (
+            provider
+            and provider != (branch_project, pkg_name)
+            and provider in local_pkg_set
+        ):
             deps.add(provider)
     return deps
 
@@ -390,27 +398,43 @@ def _fetch_image_pkg_deps(
 def _fetch_combined_depinfo(
     apiurl: str,
     branch_projects: set[str],
-    local_pkg_names: set[str],
+    local_pkg_set: set[tuple[str, str]],
     image_pkgs: "dict[str, list[tuple[str, str, str]]] | None" = None,
-) -> dict[str, set[str]]:
-    """Return a forward build-dependency map across multiple OBS branch projects.
+) -> dict[tuple[str, str], set[tuple[str, str]]]:
+    """Return a project-aware forward build-dependency map across OBS projects.
 
     Queries _builddepinfo for each project in branch_projects, merges the
-    provided_by maps (binary → source package), then builds a forward dep map:
-    fwd_deps[A] = set of source packages that A build-depends on, filtered to
-    packages whose names appear in local_pkg_names.
+    provided_by maps (binary → (home_project, source_pkg)), then builds a
+    forward dep map:
 
-    Because OBS _builddepinfo for a project includes packages inherited via
-    <path> entries, querying branch projects gives the full cross-project dep
-    graph.  Returns {} if no project has build results yet or on any error.
+        fwd_deps[(P, A)] = set of (Q, B) where source pkg A in project P
+                           build-depends on a binary produced by source pkg
+                           B in project Q.
+
+    Edges are filtered to entries whose ``(project, name)`` tuple is in
+    ``local_pkg_set`` (the producer side).  Tracking projects on both ends
+    prevents conflating same-named packages that live in unrelated projects
+    (e.g. ``percona-pgaudit`` exists separately under ppg:17 and ppg:18).
+
+    OBS _builddepinfo for a project includes <package> entries inherited from
+    <path> targets; those carry a ``project`` attribute pointing at their
+    home project.  We only attribute a <package> element to the project we
+    queried, skipping inherited entries — they are picked up directly when
+    their home project is queried.
+
+    Returns ``{}`` if no project has build results yet or on any error.
 
     ``image_pkgs`` optionally extends the map with Dockerfile-image → RPM
     edges that OBS omits from _builddepinfo.  It maps image pkg_name →
-    (branch_project, repo, arch) to query per-package _buildinfo for.
+    list of (branch_project, repo, arch) to query per-package _buildinfo for.
     """
     # Collect provided_by and all <package> elements from all branch projects.
-    provided_by: dict[str, str] = {}  # binary_name → source_pkg
-    all_pkg_elems: list[tuple[ET.Element, str]] = []
+    # provided_by maps binary_name → (home_project, source_pkg).
+    provided_by: dict[str, tuple[str, str]] = {}
+    # Each entry: (pkg_elem, home_project, src) where home_project is the
+    # OBS project this <package> belongs to (the queried project, after
+    # filtering out inherited entries).
+    all_pkg_elems: list[tuple[ET.Element, str, str]] = []
 
     for obs_project in branch_projects:
         try:
@@ -439,28 +463,35 @@ def _fetch_combined_depinfo(
             continue
 
         for pkg_elem in dep_root.findall("package"):
+            # Skip <package> entries inherited from path targets — they are
+            # attributed to their home project when that project is queried,
+            # not to the queried project here.
+            elem_proj = pkg_elem.get("project", "")
+            if elem_proj and elem_proj != obs_project:
+                continue
             raw_src = pkg_elem.get("name", "")
             if not raw_src:
                 continue
             # Strip multibuild flavor suffix (e.g. "pkg:flavor" → "pkg") so
             # that dep lookups always use the base package name.
             src = raw_src.split(":")[0]
-            all_pkg_elems.append((pkg_elem, src))
+            all_pkg_elems.append((pkg_elem, obs_project, src))
             for subpkg in pkg_elem.findall("subpkg"):
                 binary = (subpkg.text or "").strip()
                 if binary:
-                    provided_by[binary] = src
+                    provided_by[binary] = (obs_project, src)
 
-    # Build forward dep map: fwd_deps[A] = {local packages A depends on}.
-    fwd_deps: dict[str, set[str]] = {}
-    for pkg_elem, src in all_pkg_elems:
+    # Build forward dep map: fwd_deps[(P, A)] = {(Q, B), ...}.
+    fwd_deps: dict[tuple[str, str], set[tuple[str, str]]] = {}
+    for pkg_elem, home_project, src in all_pkg_elems:
         if not src:
             continue
+        src_key = (home_project, src)
         for pkgdep in pkg_elem.findall("pkgdep"):
             binary = (pkgdep.text or "").strip()
             provider = provided_by.get(binary)
-            if provider and provider != src and provider in local_pkg_names:
-                fwd_deps.setdefault(src, set()).add(provider)
+            if provider and provider != src_key and provider in local_pkg_set:
+                fwd_deps.setdefault(src_key, set()).add(provider)
 
     # Enrich with Dockerfile-image → RPM edges from per-package _buildinfo.
     if image_pkgs:
@@ -473,10 +504,10 @@ def _fetch_combined_depinfo(
                     arch,
                     pkg_name,
                     provided_by,
-                    local_pkg_names,
+                    local_pkg_set,
                 )
                 if extra:
-                    fwd_deps.setdefault(pkg_name, set()).update(extra)
+                    fwd_deps.setdefault((branch_project, pkg_name), set()).update(extra)
 
     return fwd_deps
 
