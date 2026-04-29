@@ -2,7 +2,7 @@
 
 | Package | Project | Version |
 | ------- | ------- | ------- |
-| gosu | ppg:17:containers | 1.19-2.1 |
+| gosu | ppg:17:containers | 1.19-2.2 |
 | etcd | ppg:17 | 3.5.26-1+1.2 |
 | percona-haproxy | ppg:17 | 2.8.18-1+1.1 |
 | percona-patroni | ppg:17 | 4.1.0-1+2.2 |
@@ -25,30 +25,30 @@
 | percona-ppg-server-ha-17 | ppg:17 | 17.9-1 |
 | percona-telemetry-agent | ppg:17 | 1.0.9-1+5.2 |
 | percona-wal2json | ppg:17 | 2.6-1+2.5 |
-| python3-attrs | ppg:17 | 22.1.0-1.2 |
-| python3-blessed | ppg:17 | 1.22.0-1.2 |
-| python3-boto3 | ppg:17 | 1.38.19-1.2 |
-| python3-botocore | ppg:17 | 1.38.19-1.2 |
-| python3-click | ppg:17 | 8.1.7-1.2 |
-| python3-dateutil | ppg:17 | 2.9.0.post0-1.2 |
-| python3-dns | ppg:17 | 1.15.0-1.2 |
-| python3-etcd | ppg:17 | 0.4.5-1.2 |
-| python3-kazoo | ppg:17 | 2.8.0-1.2 |
-| python3-lz4 | ppg:17 | 4.3.3-1.2 |
-| python3-prettytable | ppg:17 | 3.4.0-1.2 |
-| python3-psutil | ppg:17 | 6.1.1-1.2 |
-| python3-psycopg2 | ppg:17 | 2.9.10-1.1 |
-| python3-py-consul | ppg:17 | 1.6.0-1.1 |
+| python3-attrs | ppg:17 | 22.1.0-1.3 |
+| python3-blessed | ppg:17 | 1.22.0-1.3 |
+| python3-boto3 | ppg:17 | 1.38.19-1.3 |
+| python3-botocore | ppg:17 | 1.38.19-1.3 |
+| python3-click | ppg:17 | 8.1.7-1.3 |
+| python3-dateutil | ppg:17 | 2.9.0.post0-1.3 |
+| python3-dns | ppg:17 | 1.15.0-1.3 |
+| python3-etcd | ppg:17 | 0.4.5-1.3 |
+| python3-kazoo | ppg:17 | 2.8.0-1.3 |
+| python3-lz4 | ppg:17 | 4.3.3-1.3 |
+| python3-prettytable | ppg:17 | 3.4.0-1.3 |
+| python3-psutil | ppg:17 | 6.1.1-1.3 |
+| python3-psycopg2 | ppg:17 | 2.9.10-2.1 |
+| python3-py-consul | ppg:17 | 1.6.0-1.2 |
 | python3-pysyncobj | ppg:17 | 0.3.10-1+1.1 |
-| python3-six | ppg:17 | 1.17.0-1.2 |
-| python3-wcwidth | ppg:17 | 0.2.13-1.2 |
-| python3-zstandard | ppg:17 | 0.23.0-1.2 |
-| sfcgal | ppg:17 | 2.2.0-1.2 |
+| python3-six | ppg:17 | 1.17.0-1.3 |
+| python3-wcwidth | ppg:17 | 0.2.13-1.3 |
+| python3-zstandard | ppg:17 | 0.23.0-1.3 |
+| sfcgal | ppg:17 | 2.2.0-1.3 |
 | ydiff | ppg:17 | 1.4.2-1+1.1 |
 
 ## Container Images
 
-| Package | Project | Image | Tag | Version |
-| ------- | ------- | ----- | --- | ------- |
-| ppg-image | ppg:17:containers | percona-distribution-postgresql | 17.9 | unknown-2 |
-| ppg-postgis-image | ppg:17:containers | percona-distribution-postgresql-with-postgis | 17.9 | unknown-2 |
+| Package | Project | Image | Version | Tags |
+| ------- | ------- | ----- | ------- | ---- |
+| ppg-image | ppg:17:containers | percona-distribution-postgresql | 17.9 | `17.9-3.1` `17.9` `17` |
+| ppg-postgis-image | ppg:17:containers | percona-distribution-postgresql-with-postgis | 17.9 | `17.9-3.1` `17.9` `17` |
