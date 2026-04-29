@@ -1,6 +1,6 @@
-title: Percona Container Images for PostgreSQL 17
+title: Percona UBI-9 Container Images for PostgreSQL 17
 description: |
-  This project contains container images for Percona Software for PostgreSQL 17.
+  This project contains UBI-9 based container images for Percona Software for PostgreSQL 17.
 
 repositories:
   - name: RockyLinux_9
@@ -12,7 +12,7 @@ repositories:
     archs: [x86_64, aarch64]
   - name: images
     paths:
-      - subproject: ppg:17:containers
+      - subproject: ppg:17:containers:ubi9
         repository: RockyLinux_9
       - subproject: ppg:17
         repository: RockyLinux_9
