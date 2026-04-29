@@ -2,7 +2,7 @@
 
 | Package | Project | Version |
 | ------- | ------- | ------- |
-| gosu | ppg:17:containers | 1.19-2.2 |
+| gosu | ppg:17:containers:ubi9 | 1.19-2.2 |
 | etcd | ppg:17 | 3.5.26-1+1.2 |
 | percona-haproxy | ppg:17 | 2.8.18-1+1.1 |
 | percona-patroni | ppg:17 | 4.1.0-1+2.2 |
@@ -50,5 +50,5 @@
 
 | Package | Project | Image | Version | Tags |
 | ------- | ------- | ----- | ------- | ---- |
-| ppg-image | ppg:17:containers | percona-distribution-postgresql | 17.9 | `17.9-3.1` `17.9` `17` |
-| ppg-postgis-image | ppg:17:containers | percona-distribution-postgresql-with-postgis | 17.9 | `17.9-3.1` `17.9` `17` |
+| percona-distribution-postgresql | ppg:17:containers:ubi9 | percona-distribution-postgresql | 17.9 | `17.9-1.1` `17.9` `17` |
+| percona-distribution-postgresql-with-postgis | ppg:17:containers:ubi9 | percona-distribution-postgresql-with-postgis | 17.9 | `17.9-1.1` `17.9` `17` |
