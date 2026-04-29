@@ -1,5 +1,8 @@
 #!UseOBSRepositories
-#!BuildTag: percona-distribution-postgresql:17.9
+#!BuildVersion: 17.9
+#!BuildTag: percona-distribution-postgresql:<VERSION>-<RELEASE>
+#!BuildTag: percona-distribution-postgresql:<VERSION>
+#!BuildTag: percona-distribution-postgresql:17
 
 FROM percona-ubi9-minimal:latest
 
@@ -21,7 +24,7 @@ RUN dnf -y install glibc-langpack-en systemd-rpm-macros file
 
 ARG PPG_REPO=testing
 
-ENV PPG_VERSION 17.9-1
+ENV PPG_VERSION 17.9
 ENV PPG_MAJOR_VERSION 17
 ENV PPG_MINOR_VERSION 9
 ENV OS_VER el9

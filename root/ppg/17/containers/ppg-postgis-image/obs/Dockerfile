@@ -1,6 +1,8 @@
 #!UseOBSRepositories
-#!BuildTag: percona-distribution-postgresql-with-postgis:17.9
-#
+#!BuildVersion: 17.9
+#!BuildTag: percona-distribution-postgresql-with-postgis:<VERSION>-<RELEASE>
+#!BuildTag: percona-distribution-postgresql-with-postgis:<VERSION>
+#!BuildTag: percona-distribution-postgresql-with-postgis:17
 
 FROM percona-ubi9-minimal:latest
 
@@ -27,7 +29,7 @@ RUN dnf -y install \
 
 ARG PPG_REPO=testing
 
-ENV PPG_VERSION 17.9-1
+ENV PPG_VERSION 17.9
 ENV PPG_MAJOR_VERSION 17
 ENV PPG_MINOR_VERSION 9
 ENV OS_VER el9
