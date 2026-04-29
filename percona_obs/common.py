@@ -223,6 +223,7 @@ def build_project_meta(
     debuginfo: "dict[str, bool] | bool | None" = None,
     active_projects: "set[str] | None" = None,
     branch_rootprj: str | None = None,
+    existing_branch_projects: "set[str] | None" = None,
 ) -> str:
     """Build OBS project metadata XML from project.yaml fields.
 
@@ -239,6 +240,15 @@ def build_project_meta(
     the branch counterpart of ``obs_project_name`` itself.  This ensures that
     non-promoted packages (absent from the target project) remain visible as
     build dependencies when building promoted packages in the same project.
+
+    When ``existing_branch_projects`` is provided, every emitted ``<path>``
+    entry that would point at a branch-source project (``branch_rootprj:...``)
+    is gated on membership in this set.  Paths to branch-source projects that
+    do not exist on OBS are silently dropped rather than being emitted (and
+    later causing OBS to reject the meta with ``repository_access_failure``,
+    which would otherwise trigger a strip-and-retry that loses all paths for
+    the repository).  PR-side paths and external (``project:``) paths are
+    unaffected.  Pass ``None`` to disable filtering.
     """
     root = ET.Element("project", name=obs_project_name)
     ET.SubElement(root, "title").text = title
@@ -255,6 +265,12 @@ def build_project_meta(
             self_branch_proj = branch_rootprj
         elif obs_project_name.startswith(rootprj + ":"):
             self_branch_proj = branch_rootprj + obs_project_name[len(rootprj) :]
+        if (
+            self_branch_proj is not None
+            and existing_branch_projects is not None
+            and self_branch_proj not in existing_branch_projects
+        ):
+            self_branch_proj = None
     for repo in repositories:
         repo_elem = ET.SubElement(root, "repository", name=repo["name"])
         # Each entry may use 'project:' for an absolute OBS project name, or
@@ -290,7 +306,10 @@ def build_project_meta(
                     if proj not in active_projects:
                         # Pass-through project skipped: redirect to branch source.
                         redirected = f"{branch_rootprj}:{path_info['subproject']}"
-                        if not (
+                        if (
+                            existing_branch_projects is None
+                            or redirected in existing_branch_projects
+                        ) and not (
                             redirected == obs_project_name
                             and path_info["repository"] == repo["name"]
                         ):
@@ -303,13 +322,22 @@ def build_project_meta(
                             pr_paths.append((proj, repo_name))
                         # Skip production fallback if it duplicates self_branch_proj
                         # (avoids a redundant path when the subproject reference points
-                        # to the project being configured itself).
-                        if not (
-                            branch_proj == obs_project_name
-                            and repo_name == repo["name"]
-                        ) and not (
-                            branch_proj == self_branch_proj
-                            and repo_name == repo["name"]
+                        # to the project being configured itself), or if the branch
+                        # counterpart project does not exist on OBS yet (e.g. a
+                        # subproject newly added by this PR has no production peer).
+                        if (
+                            (
+                                existing_branch_projects is None
+                                or branch_proj in existing_branch_projects
+                            )
+                            and not (
+                                branch_proj == obs_project_name
+                                and repo_name == repo["name"]
+                            )
+                            and not (
+                                branch_proj == self_branch_proj
+                                and repo_name == repo["name"]
+                            )
                         ):
                             prod_paths.append((branch_proj, repo_name))
                     continue

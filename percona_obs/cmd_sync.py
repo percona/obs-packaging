@@ -352,6 +352,47 @@ def _compute_branch_project(
     return obs_project_name
 
 
+def _collect_existing_branch_projects(
+    branch_apiurl: str,
+    branch_rootprj: str,
+    rootprj: str,
+    projects: "list[tuple[str, Path]]",
+    env_vars: "dict[str, str] | None",
+) -> "set[str]":
+    """Return the subset of branch-source projects that exist on OBS.
+
+    Walks every (obs_project_name, project_path) in *projects* and gathers
+    the candidate branch-source project names that ``build_project_meta``
+    may emit as ``<path>`` entries for those projects: the branch counterpart
+    of each project itself (``self_branch_proj``) plus the branch counterpart
+    of every ``subproject:`` path entry in the project's ``repositories``.
+    Then queries OBS for which of those actually exist and returns that set.
+
+    Callers pass the result to ``_apply_project_config`` so paths referencing
+    nonexistent branch-source projects are filtered out before upload.  This
+    handles the case where a PR adds a brand-new subproject (e.g. ``ubi9``)
+    that has no production counterpart yet, which would otherwise cause OBS
+    to reject the meta with ``repository_access_failure`` and trigger a
+    strip-and-retry that loses *all* paths on the affected repository.
+    """
+    candidates: set[str] = set()
+    for obs_project_name, project_path in projects:
+        candidates.add(
+            _compute_branch_project(obs_project_name, rootprj, branch_rootprj)
+        )
+        cfg = _load_project_config_with_inheritance(project_path, env_vars)
+        for repo in cfg.get("repositories", []) or []:
+            for path_info in repo.get("paths", []) or []:
+                if "subproject" in path_info:
+                    candidates.add(f"{branch_rootprj}:{path_info['subproject']}")
+    if not candidates:
+        return set()
+    logger.info(
+        f"checking {len(candidates)} branch-source project(s) for existence on {branch_apiurl}"
+    )
+    return {n for n in candidates if _obs_project_exists(branch_apiurl, n)}
+
+
 def cmd_sync(args):
     """Sync local packaging files to OBS, creating or updating projects and packages.
 
@@ -834,6 +875,21 @@ def cmd_sync(args):
         # before applying the full configuration.
         if sorted_projs and not dry_run_obs:
             time.sleep(5)
+        # When --branch-from is active, query the branch-source OBS instance
+        # for which referenced branch projects actually exist.  Paths to
+        # nonexistent branch projects (e.g. a subproject added new in this
+        # PR with no production counterpart) are then filtered out by
+        # build_project_meta, so OBS won't reject the meta with
+        # repository_access_failure.
+        existing_branch_projects: set[str] | None = None
+        if branch_rootprj is not None:
+            existing_branch_projects = _collect_existing_branch_projects(
+                branch_apiurl,
+                branch_rootprj,
+                args.rootprj,
+                [(prj_name, proj_path) for _, (prj_name, proj_path) in sorted_projs],
+                env_vars,
+            )
         # Stage 2 pass 1: configure all projects.  Projects whose <path>
         # elements reference sibling/child projects that are still skeletons
         # will have those paths stripped and need a second pass.
@@ -849,6 +905,7 @@ def cmd_sync(args):
                 env_vars=env_vars,
                 active_projects=active_projects,
                 branch_rootprj=branch_rootprj,
+                existing_branch_projects=existing_branch_projects,
             )
             if stripped:
                 needs_reconfig.append((raw_proj, prj_name, proj_path))
@@ -868,6 +925,7 @@ def cmd_sync(args):
                 env_vars=env_vars,
                 active_projects=active_projects,
                 branch_rootprj=branch_rootprj,
+                existing_branch_projects=existing_branch_projects,
             )
 
     if args.project_only:
@@ -916,6 +974,19 @@ def cmd_sync(args):
                     and not dry_run_obs
                 ):
                     time.sleep(5)
+                # Same branch-source existence filter as the full-tree path.
+                chain_existing_branch_projects: set[str] | None = None
+                if branch_rootprj is not None:
+                    chain_existing_branch_projects = _collect_existing_branch_projects(
+                        branch_apiurl,
+                        branch_rootprj,
+                        args.rootprj,
+                        [
+                            (prj_name, proj_path)
+                            for _, (prj_name, proj_path) in sorted_chain
+                        ],
+                        env_vars,
+                    )
                 chain_needs_reconfig: list[tuple[str, str, Path]] = []
                 for raw_proj, (prj_name, proj_path) in sorted_chain:
                     if raw_proj not in seen_projects:
@@ -929,6 +1000,7 @@ def cmd_sync(args):
                             env_vars=env_vars,
                             active_projects=active_projects,
                             branch_rootprj=branch_rootprj,
+                            existing_branch_projects=chain_existing_branch_projects,
                         )
                         if stripped:
                             chain_needs_reconfig.append((raw_proj, prj_name, proj_path))
@@ -944,6 +1016,7 @@ def cmd_sync(args):
                         env_vars=env_vars,
                         active_projects=active_projects,
                         branch_rootprj=branch_rootprj,
+                        existing_branch_projects=chain_existing_branch_projects,
                     )
 
         obs_dir = package_path / "obs"

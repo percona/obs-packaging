@@ -877,6 +877,7 @@ def _apply_project_config(
     env_vars: dict[str, str] | None = None,
     active_projects: "set[str] | None" = None,
     branch_rootprj: str | None = None,
+    existing_branch_projects: "set[str] | None" = None,
 ) -> "tuple[bool, bool]":
     """Create or update OBS project metadata and build config from project.yaml.
 
@@ -903,6 +904,11 @@ def _apply_project_config(
     ``active_projects`` and ``branch_rootprj`` are forwarded to
     ``build_project_meta`` to enable path substitution for skipped pass-through
     projects in ``--branch-from`` syncs.
+
+    ``existing_branch_projects`` is also forwarded so paths referencing
+    branch-source projects that don't exist on OBS are filtered out before
+    upload (avoids ``repository_access_failure`` when a PR adds a brand-new
+    subproject that has no production counterpart yet).
     """
     project_config = _load_project_config_with_inheritance(project_path, env_vars)
     # In --branch-from (PR) context, always enable builds regardless of the
@@ -923,6 +929,7 @@ def _apply_project_config(
         debuginfo=project_config.get("debuginfo"),
         active_projects=active_projects,
         branch_rootprj=branch_rootprj,
+        existing_branch_projects=existing_branch_projects,
     )
 
     # --- project meta ---
