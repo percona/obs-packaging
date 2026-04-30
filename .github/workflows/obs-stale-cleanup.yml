@@ -1,8 +1,12 @@
 name: OBS Stale PR Cleanup
 
-# Runs daily and deletes OBS projects for open PRs that have had no
-# activity for more than 7 days.  The delete is a no-op when a PR never
-# triggered obs-pr-check (i.e. it did not touch root/).
+# Runs daily.  For each open PR, looks at the last commit's date and:
+#   - skips PRs carrying the `keep-pr-build` label (never delete);
+#   - posts a one-day deletion warning when the last commit is >= WARN_DAYS old
+#     (idempotent: a marker in the comment body avoids reposting);
+#   - deletes the PR's OBS project when the last commit is >= DELETE_DAYS old.
+# Staleness is measured from the last commit (not updatedAt) so that posting
+# the warning comment does not reset the deletion countdown.
 # Can also be triggered manually via workflow_dispatch.
 
 on:
@@ -28,27 +32,57 @@ jobs:
           obs-user: ${{ vars.OBS_USER }}
           obs-password: ${{ secrets.OBS_PASSWORD }}
 
-      # List open PRs with no activity in the last 7 days and delete their
-      # OBS projects.  jq's `now` is a Unix timestamp; subtracting 7*86400
-      # seconds and converting with `todate` gives an ISO-8601 string that
-      # compares correctly against GitHub's updatedAt field.
-      - name: Delete OBS projects for stale PRs
+      - name: Warn or delete OBS projects for stale PRs
         env:
           GH_TOKEN: ${{ github.token }}
+          WARN_DAYS: "6"
+          DELETE_DAYS: "7"
+          WARN_MARKER: "<!-- percona-obs-stale-warning -->"
         run: |
+          now_ts=$(date -u +%s)
           gh pr list \
             --state open \
-            --json number,updatedAt \
             --limit 200 \
-            --jq '.[] | select(.updatedAt < ((now - 7*86400) | todate)) | .number' \
-          | while read -r pr_number; do
-            PR_ROOTPRJ="${OBS_PR_ROOTPRJ}:pr-${pr_number}"
-            echo "Stale PR #${pr_number}: deleting ${PR_ROOTPRJ}"
-            venv/bin/python -m percona_obs --verbose \
-              -A "$OBS_APIURL" \
-              -R "$PR_ROOTPRJ" \
-              sync delete \
-              --yes \
-              --recursive \
-              --from-obs
-          done
+            --json number,labels,commits \
+          | jq -c '.[]' \
+          | while read -r pr; do
+              number=$(jq -r '.number' <<<"$pr")
+              has_keep=$(jq -r 'any(.labels[]; .name == "keep-pr-build")' <<<"$pr")
+              last_commit=$(jq -r '.commits | sort_by(.committedDate) | last.committedDate // empty' <<<"$pr")
+
+              if [ "$has_keep" = "true" ]; then
+                echo "PR #${number}: keep-pr-build label present, skipping"
+                continue
+              fi
+              if [ -z "$last_commit" ]; then
+                echo "PR #${number}: no commits found, skipping"
+                continue
+              fi
+
+              last_ts=$(date -u -d "$last_commit" +%s)
+              age_days=$(( (now_ts - last_ts) / 86400 ))
+              PR_ROOTPRJ="${OBS_PR_ROOTPRJ}:pr-${number}"
+
+              if [ "$age_days" -ge "$DELETE_DAYS" ]; then
+                echo "PR #${number}: ${age_days}d stale, deleting ${PR_ROOTPRJ}"
+                venv/bin/python -m percona_obs --verbose \
+                  -A "$OBS_APIURL" \
+                  -R "$PR_ROOTPRJ" \
+                  sync delete \
+                  --yes \
+                  --recursive \
+                  --from-obs
+              elif [ "$age_days" -ge "$WARN_DAYS" ]; then
+                if gh pr view "$number" --json comments --jq '.comments[].body' \
+                     | grep -qF "$WARN_MARKER"; then
+                  echo "PR #${number}: ${age_days}d stale, warning already posted"
+                  continue
+                fi
+                echo "PR #${number}: ${age_days}d stale, posting warning"
+                warn_body=$(printf '%s\n\n:warning: This PR has had no new commits for %d days. Its OBS PR build project (`%s`) will be deleted in 1 day unless:\n\n- new commits are pushed, **or**\n- the `keep-pr-build` label is added.\n' \
+                  "$WARN_MARKER" "$age_days" "$PR_ROOTPRJ")
+                gh pr comment "$number" --body "$warn_body"
+              else
+                echo "PR #${number}: ${age_days}d stale, no action"
+              fi
+            done
