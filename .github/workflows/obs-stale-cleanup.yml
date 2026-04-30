@@ -49,5 +49,6 @@ jobs:
               -R "$PR_ROOTPRJ" \
               sync delete \
               --yes \
-              --recursive
+              --recursive \
+              --from-obs
           done

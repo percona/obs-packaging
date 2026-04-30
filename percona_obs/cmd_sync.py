@@ -1207,26 +1207,46 @@ def cmd_sync_delete(args) -> None:
         _delete_obs_package(apiurl, obs_project_name, args.package, dry_run=False)
     else:
         # ── Project tree ──────────────────────────────────────────────────
-        if args.project:
-            root_path = resolve_project_path(args.project)
-            if not root_path.is_dir() or is_package(root_path):
-                raise SystemExit(f"error: {args.project!r} is not a project directory")
-            root_obs = f"{args.rootprj}:{args.project}"
+        if args.from_obs:
+            if args.project:
+                target = f"{args.rootprj}:{args.project}"
+                obs_names = _fetch_obs_subproject_names(apiurl, target)
+                if _obs_project_exists(apiurl, target):
+                    obs_names.add(target)
+                scope_label = target
+            else:
+                obs_names = _fetch_obs_subproject_names(apiurl, args.rootprj)
+                scope_label = args.rootprj
+            if not obs_names:
+                raise SystemExit(f"error: no OBS projects found under {scope_label!r}")
+            project_names = list(obs_names)
         else:
-            root_path = REPO_ROOT
-            root_obs = args.rootprj
+            if args.project:
+                root_path = resolve_project_path(args.project)
+                if not root_path.is_dir() or is_package(root_path):
+                    raise SystemExit(
+                        f"error: {args.project!r} is not a project directory"
+                    )
+                root_obs = f"{args.rootprj}:{args.project}"
+            else:
+                root_path = REPO_ROOT
+                root_obs = args.rootprj
+            project_names = [
+                obs_name for obs_name, _ in find_projects(root_path, root_obs)
+            ]
 
-        projects = list(find_projects(root_path, root_obs))
         # Delete deepest sub-projects first so parents are empty before deletion.
-        projects_sorted = sorted(projects, key=lambda x: x[0].count(":"), reverse=True)
+        projects_sorted = sorted(
+            project_names, key=lambda n: n.count(":"), reverse=True
+        )
 
         if dry_run:
-            for obs_name, _ in projects_sorted:
+            for obs_name in projects_sorted:
                 _print_remove(f"project  {obs_name}")
             _print_ok("delete done (dry run)")
             return
 
-        for obs_name, _ in projects_sorted:
+        for obs_name in projects_sorted:
             print(f"  {obs_name}")
         n = len(projects_sorted)
         kind = "project" if n == 1 else "projects"
@@ -1237,7 +1257,7 @@ def cmd_sync_delete(args) -> None:
                 raise SystemExit("\nAborted.")
             if answer not in ("y", "yes"):
                 raise SystemExit("Aborted.")
-        for obs_name, _ in projects_sorted:
+        for obs_name in projects_sorted:
             _delete_obs_project(
                 apiurl, obs_name, dry_run=False, recursive=args.recursive
             )

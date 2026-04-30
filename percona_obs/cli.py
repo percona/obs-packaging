@@ -199,6 +199,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         help="Show what would be deleted without making any changes.",
     )
+    sync_delete_parser.add_argument(
+        "--from-obs",
+        action="store_true",
+        default=False,
+        help="List projects to delete by querying OBS for subprojects of rootprj "
+        "(or of the given project) instead of walking the local root/ tree. "
+        "Useful for cleaning up OBS projects whose local definitions were already removed.",
+    )
     sync_delete_parser.set_defaults(func=cmd_sync_delete)
 
     sync_promote_parser = sync_subparsers.add_parser(

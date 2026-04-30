@@ -91,31 +91,5 @@ jobs:
             -P "pr-${PR_NUMBER}" \
             sync delete \
             --yes \
-            --recursive
-
-      # For release PRs, sync delete skips the releases/ tree (find_projects
-      # excludes release directories), so the release projects created by
-      # sync release in the PR namespace are not cleaned up by the step above.
-      # Delete them explicitly by deriving their names from the PR's files.
-      - name: Delete PR release OBS projects (release PRs only)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          RELEASES=$(gh pr view "$PR_NUMBER" \
-            --json files \
-            --jq '.files[] | select(.status == "added") | .path' \
-            | grep -E '^root/.*/releases/.*/release\.yaml$' || true)
-          if [ -z "$RELEASES" ]; then
-            exit 0
-          fi
-          PR_ROOTPRJ="${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}"
-          for release_file in $RELEASES; do
-            rel_dir="${release_file#root/}"
-            rel_dir="${rel_dir%/release.yaml}"
-            rel_project="${rel_dir//\//:}"
-            venv/bin/python -m percona_obs --verbose \
-              -P "pr-${PR_NUMBER}" \
-              sync delete "$rel_project" \
-              --yes \
-              --recursive
-          done
+            --recursive \
+            --from-obs
