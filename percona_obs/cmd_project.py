@@ -25,6 +25,7 @@ from .common import (
     _print_create,
     _print_ok,
     apply_env_substitution,
+    auto_rootprj_env,
     build_project_meta,
     find_packages,
     find_projects,
@@ -634,12 +635,17 @@ def cmd_project_verify(args) -> None:
         scan_root = REPO_ROOT
 
     # Build env_vars from -P profile (if any), then apply -e overrides.
+    # Auto-inject OBS_ROOTPRJ / OBS_ROOTPRJ_SLASHES when rootprj is known so
+    # project.yaml entries that reference them validate without forcing
+    # users to declare them in every profile.
     env_vars: dict[str, str] | None = None
     if args.profile:
         env_vars = _load_profile_env(args.profile)
     if args.env_overrides:
         overrides = parse_env_overrides(args.env_overrides)
         env_vars = {**(env_vars or {}), **overrides}
+    if args.rootprj:
+        env_vars = {**auto_rootprj_env(args.rootprj), **(env_vars or {})}
 
     ref_errors = _validate_subproject_refs(scan_root)
     env_errors = _validate_env_vars(scan_root, env_vars)
@@ -697,6 +703,8 @@ def cmd_project_config(args) -> None:
     if args.env_overrides:
         overrides = parse_env_overrides(args.env_overrides)
         env_vars = {**(env_vars or {}), **overrides}
+    # `cmd_project_config` requires --rootprj (validated above) so always inject.
+    env_vars = {**auto_rootprj_env(args.rootprj), **(env_vars or {})}
 
     # When not in offline mode, initialise osc so we can fetch live project meta.
     apiurl: str | None = None
@@ -819,6 +827,8 @@ def cmd_project_install(args) -> None:
     if args.env_overrides:
         overrides = parse_env_overrides(args.env_overrides)
         env_vars = {**(env_vars or {}), **overrides}
+    if args.rootprj:
+        env_vars = {**auto_rootprj_env(args.rootprj), **(env_vars or {})}
 
     # Resolve scope.
     if args.project:
