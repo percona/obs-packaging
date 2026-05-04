@@ -20,6 +20,13 @@ from .cmd_project import (
     cmd_project_verify,
     cmd_project_versions,
 )
+from .cmd_qa import (
+    cmd_qa_list,
+    cmd_qa_retry,
+    cmd_qa_run,
+    cmd_qa_show,
+    cmd_qa_status,
+)
 from .cmd_sync import (
     cmd_sync,
     cmd_sync_delete,
@@ -346,6 +353,134 @@ def build_parser() -> argparse.ArgumentParser:
     )
     build_dep_parser.set_defaults(func=cmd_build_dependency)
 
+    qa_parser = subparsers.add_parser(
+        "qa",
+        help="Trigger Jenkins QA pipelines declared in project.yaml.",
+    )
+    qa_subparsers = qa_parser.add_subparsers(dest="qa_command", metavar="<subcommand>")
+    qa_subparsers.required = True
+
+    _qa_project_help = (
+        "Project name (colon notation, e.g. ppg:18:containers:ubi9). "
+        "The project's project.yaml must declare a top-level qa: block."
+    )
+
+    qa_run_parser = qa_subparsers.add_parser(
+        "run",
+        help="Trigger Jenkins jobs for one project's qa block (one job per matrix combo).",
+    )
+    qa_run_parser.add_argument("project", help=_qa_project_help)
+    qa_run_parser.add_argument(
+        "--wait",
+        action="store_true",
+        default=False,
+        help="Block until every triggered build reaches a terminal state. "
+        "Without --wait, the command returns once all triggers are submitted.",
+    )
+    qa_run_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        dest="dry_run",
+        help="Print the resolved Jenkins POST bodies without calling Jenkins.",
+    )
+    qa_run_parser.add_argument(
+        "--filter",
+        action="append",
+        default=[],
+        metavar="AXIS=VAL[,VAL...]",
+        help="Restrict the matrix to the given axis values. "
+        "Repeatable: multiple flags AND together; comma-separated values OR.",
+    )
+    qa_run_parser.add_argument(
+        "--param",
+        action="append",
+        default=[],
+        metavar="NAME=VALUE",
+        help="Override a Jenkins parameter at runtime (after YAML / env-var "
+        "substitution). Repeatable.",
+    )
+    qa_run_parser.add_argument(
+        "--report-json",
+        metavar="PATH",
+        default=None,
+        dest="report_json",
+        help="Write per-combo results (label, params, queue/build URLs, result) "
+        "as JSON. Used by CI to post one commit status per combo.",
+    )
+    qa_run_parser.set_defaults(func=cmd_qa_run)
+
+    qa_show_parser = qa_subparsers.add_parser(
+        "show",
+        help="Print a project's resolved qa matrix without triggering anything.",
+    )
+    qa_show_parser.add_argument("project", help=_qa_project_help)
+    qa_show_parser.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Emit the matrix as a JSON array (one entry per combo) — used by "
+        "the obs-pr-qa workflow to drive its GitHub Actions matrix.",
+    )
+    qa_show_parser.set_defaults(func=cmd_qa_show)
+
+    qa_status_parser = qa_subparsers.add_parser(
+        "status",
+        help="Print (and refresh) the recorded state of a previous qa run.",
+    )
+    qa_status_parser.add_argument(
+        "--run-id",
+        required=True,
+        dest="run_id",
+        metavar="ID",
+        help="Run id reported by `qa run` (look it up with `qa list`).",
+    )
+    qa_status_parser.set_defaults(func=cmd_qa_status)
+
+    qa_retry_parser = qa_subparsers.add_parser(
+        "retry",
+        help="Re-trigger only the non-SUCCESS combos of a previous qa run.",
+    )
+    qa_retry_parser.add_argument(
+        "--run-id",
+        required=True,
+        dest="run_id",
+        metavar="ID",
+    )
+    qa_retry_parser.add_argument(
+        "--wait",
+        action="store_true",
+        default=False,
+    )
+    qa_retry_parser.add_argument(
+        "--include-aborted",
+        action="store_true",
+        default=False,
+        dest="include_aborted",
+        help="Also re-trigger combos whose previous attempt result is ABORTED "
+        "(by default these are assumed to have been intentionally cancelled).",
+    )
+    qa_retry_parser.add_argument(
+        "--report-json",
+        metavar="PATH",
+        default=None,
+        dest="report_json",
+    )
+    qa_retry_parser.set_defaults(func=cmd_qa_retry)
+
+    qa_list_parser = qa_subparsers.add_parser(
+        "list",
+        help="List recent qa runs recorded under .percona-obs/qa/.",
+    )
+    qa_list_parser.add_argument(
+        "--running",
+        action="store_true",
+        default=False,
+        help="Only show runs with at least one combo that has not yet "
+        "reached a terminal Jenkins result.",
+    )
+    qa_list_parser.set_defaults(func=cmd_qa_list)
+
     profile_parser = subparsers.add_parser(
         "profile",
         help="Manage connection profiles.",
@@ -528,6 +663,14 @@ def main() -> None:
     if args.command not in _local_only_commands:
         osc.conf.get_config(override_apiurl=args.apiurl)
         socket.setdefaulttimeout(30)
+
+    # Garbage-collect terminal qa runs older than the retention window.
+    # Done at the top of every qa command so finished state files do not
+    # accumulate in .percona-obs/qa/.
+    if args.command == "qa":
+        from .qa_state import gc_old_runs
+
+        gc_old_runs()
 
     try:
         args.func(args)

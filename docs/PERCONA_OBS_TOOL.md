@@ -370,6 +370,81 @@ at the bottom as isolated packages. Scope can be narrowed to a subproject:
 
 ---
 
+## Triggering Jenkins QA pipelines
+
+`qa run` reads a project's `qa:` block from `project.yaml`, expands its matrix
+into one Jenkins job per combination, triggers each via Jenkins'
+`buildWithParameters` REST endpoint, and (with `--wait`) polls every triggered
+build until it reaches a terminal state.
+
+The same machinery powers `.github/workflows/obs-pr-qa.yml`: the workflow
+discovers the QA-enabled subprojects of the PR's OBS root project, calls
+`qa show <project> --json` for each, concatenates the matrices into the GitHub
+Actions matrix, and runs `qa run --wait --report-json ... --filter ...` once
+per combo with one commit status posted per combo on the PR head.
+
+### `qa:` block schema
+
+```yaml
+# project.yaml
+qa:
+  pipeline: <jenkins-job-name>          # required
+  parameters:                           # required
+    SCALAR_PARAM: value                 # passed as-is
+    LIST_PARAM:                         # if NOT in `matrix:` → joined with \n
+      - a                               #   (Jenkins multi-line text param)
+      - b                               # if in `matrix:` → expanded combinatorially
+  matrix:                               # optional, list[str]
+    - LIST_PARAM
+```
+
+`${VAR}` tokens in any value are substituted from the active profile's `env:`
+section, plus auto-injected `OBS_ROOTPRJ` and `OBS_ROOTPRJ_SLASHES` (the root
+project name with `:` replaced by `/`, useful for registry URLs).
+
+### Subcommands
+
+| Command | Purpose |
+|---|---|
+| `qa show <project>` | Print the resolved matrix (humans). `--json` emits one entry per combo with `project`, `pipeline`, `label`, `axis_filters`, `status_context`, `params` — used by CI to drive a GitHub matrix. Empty `[]` when the project has no `qa:` block. |
+| `qa run <project>` | Trigger Jenkins for every matrix combo. Fire-and-forget by default; pass `--wait` to block until terminal results arrive. `--filter AXIS=val[,val…]` narrows the matrix; `--param NAME=VAL` overrides a parameter at runtime; `--dry-run` prints the POST bodies without calling Jenkins; `--report-json PATH` writes the per-combo result table for CI. |
+| `qa status --run-id <id>` | Re-poll non-terminal combos of a previous run and print the current state. |
+| `qa retry --run-id <id>` | Re-trigger only the combos whose latest attempt is non-`SUCCESS`. Re-uses the recorded `params` so retries are reproducible. By default skips `ABORTED` combos; pass `--include-aborted` to retry them too. |
+| `qa list` | Tabulate recent runs (run-id, project, pipeline, summary). |
+
+State files for `qa run` / `qa retry` live at `.percona-obs/qa/<run-id>.json`
+(gitignored). Each combo records every trigger attempt, so the file accumulates
+history across `qa retry` invocations.
+
+### Jenkins credentials
+
+`qa run` resolves Jenkins URL + user from (in order) the env vars
+`JENKINS_URL`, `JENKINS_USER`, then the optional `jenkins:` section of
+`.profile/<name>.yaml`:
+
+```yaml
+# .profile/dev.yaml
+jenkins:
+  url: https://jenkins.example.com
+  user: ricardo
+# token never stored in the profile
+```
+
+`JENKINS_API_TOKEN` is read **only** from the environment, never the profile.
+
+### Re-running failed jobs from the PR UI
+
+Each matrix combo runs as its own GitHub Actions job, so the PR's "Checks" tab
+"Re-run failed jobs" button re-runs only the combos that failed. The detect
+job's matrix output is reused across attempts, so the set of combos stays
+identical between the original run and the re-run.
+
+For local invocations, `qa retry --run-id <id>` does the equivalent — re-triggers
+only the failed combos of the named run, appending a new attempt to each combo's
+history in `.percona-obs/qa/<run-id>.json`.
+
+---
+
 ## Getting repository installation instructions
 
 `project install` prints the shell commands needed to configure the OBS-hosted package

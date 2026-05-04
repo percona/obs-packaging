@@ -1,12 +1,17 @@
 name: OBS PR QA
 
-# Triggered after OBS PR Check succeeds.  Finds the percona-distribution-postgresql
-# container images built in the PR's OBS project, then runs Molecule-based Docker
-# tests via Jenkins in two parallel variants (with and without PostGIS) and reports
-# each result as a separate commit status on the PR.
+# Triggered after OBS PR Check succeeds.  Discovers the QA matrix from each
+# project.yaml `qa:` block in the PR's OBS subprojects, then runs Jenkins
+# pipelines via `percona-obs qa run` and reports one commit status per matrix
+# combo on the PR head.
 #
-# The workflow is a no-op (no status posted) when the PR project contains no
-# percona-distribution-postgresql container images.
+# The workflow is a no-op (no status posted) when the PR project has no
+# QA-enabled subprojects (i.e. no project.yaml under root/ has a `qa:` block
+# whose project was created in the PR's OBS root project).
+#
+# Re-running failed jobs from the PR UI (Checks tab → "Re-run failed jobs")
+# works out of the box: each matrix combo is its own GitHub job, and GitHub
+# reuses the detect job's matrix output across attempts.
 
 on:
   workflow_run:
@@ -15,23 +20,18 @@ on:
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
-  # detect: resolve the PR context and find container images in OBS.
-  # Runs once; its outputs are consumed by both parallel qa matrix jobs.
+  # detect: resolve the PR context, discover QA-enabled OBS subprojects,
+  # and emit the GitHub Actions matrix from their project.yaml `qa:` blocks.
   # ──────────────────────────────────────────────────────────────────────────
   detect:
-    name: Detect container images
+    name: Detect QA matrix
     runs-on: ubuntu-latest
     if: github.event.workflow_run.conclusion == 'success'
 
-    env:
-      OBS_APIURL: ${{ vars.OBS_APIURL }}
-      OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
-
     outputs:
-      has_images: ${{ steps.images.outputs.has_images }}
-      registry_url: ${{ steps.images.outputs.registry_url }}
-      docker_tag: ${{ steps.images.outputs.docker_tag }}
+      has_matrix: ${{ steps.matrix.outputs.has_matrix }}
       head_sha: ${{ steps.pr.outputs.head_sha }}
+      pr_number: ${{ steps.pr.outputs.pr_number }}
       matrix: ${{ steps.matrix.outputs.matrix }}
 
     steps:
@@ -44,8 +44,8 @@ jobs:
           obs-password: ${{ secrets.OBS_PASSWORD }}
 
       # Derive the PR number and head SHA from the workflow_run event.
-      # pull_requests[0].number is available for same-repo PRs; for forks it is
-      # empty so we fall back to searching the GitHub API by head SHA.
+      # pull_requests[0].number is available for same-repo PRs; for forks it
+      # is empty so we fall back to searching the GitHub API by head SHA.
       - name: Resolve PR number and head SHA
         id: pr
         env:
@@ -64,40 +64,54 @@ jobs:
           echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
           echo "head_sha=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
 
-      # Scan all subprojects of the PR project for percona-distribution-postgresql
-      # container images (packages with a Dockerfile #!BuildTag: matching that
-      # pattern).  Outputs: has_images, has_postgis_images, registry_url, docker_tag.
-      - name: Find container images in OBS PR project
-        id: images
+      - name: Write CI profile
         env:
+          OBS_APIURL: ${{ vars.OBS_APIURL }}
+          OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          JENKINS_URL: ${{ vars.JENKINS_URL }}
+          JENKINS_USER: ${{ vars.JENKINS_USER }}
+        run: |
+          mkdir -p .profile
+          cat > .profile/ci.yaml <<EOF
+          apiurl: ${OBS_APIURL}
+          rootprj: ${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}
+          jenkins:
+            url: ${JENKINS_URL}
+            user: ${JENKINS_USER}
+          env:
+            - name: REMOTE_OBS_ORG_INTERCONNECT
+              value: 'openSUSE.org:'
+          EOF
+
+      # Iterate every immediate subproject of the PR's OBS root project, call
+      # `percona-obs qa show <project> --json` for each, and concatenate the
+      # results into a single matrix array (empty for subprojects without a
+      # `qa:` block).
+      - name: Discover QA matrix from OBS PR subprojects
+        id: matrix
+        env:
+          OBS_APIURL: ${{ vars.OBS_APIURL }}
           OBS_PR_PROJECT: ${{ vars.OBS_PR_ROOTPRJ }}:pr-${{ steps.pr.outputs.pr_number }}
           PYTHONPATH: ${{ github.workspace }}
         run: |
-          venv/bin/python .github/scripts/find_obs_container_images.py
-
-      # Build the qa job matrix dynamically: the PostGIS variant is only included
-      # when a percona-distribution-postgresql-with-postgis image was detected.
-      - name: Build QA matrix
-        id: matrix
-        if: steps.images.outputs.has_images == 'true'
-        run: |
-          if [ "${{ steps.images.outputs.has_postgis_images }}" = "true" ]; then
-            MATRIX='[{"with_postgis":"false","status_context":"OBS QA"},{"with_postgis":"true","status_context":"OBS QA / PostGIS"}]'
-          else
-            MATRIX='[{"with_postgis":"false","status_context":"OBS QA"}]'
-          fi
+          venv/bin/python .github/scripts/list_pr_qa_matrix.py > /tmp/qa-matrix.json
+          MATRIX=$(cat /tmp/qa-matrix.json)
           echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+          if [ "$(echo "${MATRIX}" | jq 'length')" -gt 0 ]; then
+            echo "has_matrix=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_matrix=false" >> "$GITHUB_OUTPUT"
+          fi
 
   # ──────────────────────────────────────────────────────────────────────────
-  # qa: trigger and poll Jenkins, once per matrix variant (with/without PostGIS).
-  # Both variants run in parallel after detect completes.
-  # Does not need OBS credentials — only curl and stdlib Python.
+  # qa: trigger and poll Jenkins, once per matrix combo (in parallel).
   # ──────────────────────────────────────────────────────────────────────────
   qa:
-    name: Jenkins QA (${{ matrix.status_context }})
+    name: ${{ matrix.status_context }}
     needs: detect
     runs-on: ubuntu-latest
-    if: needs.detect.outputs.has_images == 'true'
+    if: needs.detect.outputs.has_matrix == 'true'
     permissions:
       # Required to post the commit status on the PR head commit.
       statuses: write
@@ -110,6 +124,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: ./.github/actions/obs-setup
+        with:
+          obs-apiurl: ${{ vars.OBS_APIURL }}
+          obs-user: ${{ vars.OBS_USER }}
+          obs-password: ${{ secrets.OBS_PASSWORD }}
+
+      # Same CI profile as the detect job so `qa run` re-resolves project.yaml
+      # parameters identically (same OBS_ROOTPRJ → same ${OBS_ROOTPRJ_SLASHES}).
+      - name: Write CI profile
+        env:
+          OBS_APIURL: ${{ vars.OBS_APIURL }}
+          OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
+          PR_NUMBER: ${{ needs.detect.outputs.pr_number }}
+          JENKINS_URL: ${{ vars.JENKINS_URL }}
+          JENKINS_USER: ${{ vars.JENKINS_USER }}
+        run: |
+          mkdir -p .profile
+          cat > .profile/ci.yaml <<EOF
+          apiurl: ${OBS_APIURL}
+          rootprj: ${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}
+          jenkins:
+            url: ${JENKINS_URL}
+            user: ${JENKINS_USER}
+          env:
+            - name: REMOTE_OBS_ORG_INTERCONNECT
+              value: 'openSUSE.org:'
+          EOF
+
       - name: Set pending QA status
         env:
           GH_TOKEN: ${{ github.token }}
@@ -119,89 +161,44 @@ jobs:
             -X POST \
             -f "state=pending" \
             -f "context=${{ matrix.status_context }}" \
-            -f "description=Container image QA running..."
+            -f "description=QA running..."
 
-      # POST buildWithParameters to Jenkins.  Captures the queue item URL from
-      # the Location response header and stores it in GITHUB_ENV for the poll step.
-      - name: Trigger Jenkins QA job
-        id: trigger
+      - name: Run qa pipeline
+        id: run
         env:
-          JENKINS_URL: ${{ vars.JENKINS_URL }}
-          JENKINS_USER: ${{ vars.JENKINS_USER }}
-          JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
-          DOCKER_TAG: ${{ needs.detect.outputs.docker_tag }}
-          REGISTRY_URL: ${{ needs.detect.outputs.registry_url }}
-          TESTING_BRANCH: ${{ vars.JENKINS_TESTING_BRANCH }}
-        run: |
-          HTTP_CODE=$(curl -s \
-            -D /tmp/jenkins-trigger-headers.txt \
-            -o /dev/null \
-            -w "%{http_code}" \
-            -u "${JENKINS_USER}:${JENKINS_API_TOKEN}" \
-            -X POST \
-            "${JENKINS_URL}/job/docker-server-parallel-generic/buildWithParameters" \
-            --data-urlencode "DOCKER_TAG=${DOCKER_TAG}" \
-            --data-urlencode "SERVER_VERSION=${DOCKER_TAG}" \
-            --data-urlencode "REPOSITORY=${REGISTRY_URL}" \
-            --data-urlencode "TESTING_BRANCH=${TESTING_BRANCH}" \
-            --data-urlencode "WITH_POSTGIS=${{ matrix.with_postgis }}" \
-            --data-urlencode "DESTROY_ENV=true")
-          if [ "$HTTP_CODE" != "201" ]; then
-            echo "Jenkins returned HTTP ${HTTP_CODE} (expected 201)" >&2
-            cat /tmp/jenkins-trigger-headers.txt >&2
-            exit 1
-          fi
-          QUEUE_URL=$(grep -i '^Location:' /tmp/jenkins-trigger-headers.txt \
-            | awk '{print $2}' | tr -d '\r')
-          if [ -z "$QUEUE_URL" ]; then
-            echo "No Location header in Jenkins response" >&2
-            cat /tmp/jenkins-trigger-headers.txt >&2
-            exit 1
-          fi
-          echo "JENKINS_QUEUE_URL=${QUEUE_URL}" >> "$GITHUB_ENV"
-          echo "Jenkins queue item: ${QUEUE_URL}"
-
-      # Poll the Jenkins queue item until a build starts, then poll the build
-      # until it reaches a terminal state.  Writes BUILD_URL and BUILD_RESULT
-      # to /tmp/jenkins-result.txt for the status step.
-      - name: Poll Jenkins build
-        id: poll
-        if: steps.trigger.outcome == 'success'
-        env:
-          JENKINS_URL: ${{ vars.JENKINS_URL }}
-          JENKINS_USER: ${{ vars.JENKINS_USER }}
           JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
         run: |
-          python3 .github/scripts/poll_jenkins.py | tee /tmp/jenkins-result.txt
+          venv/bin/python -m percona_obs -P ci qa run "${{ matrix.project }}" \
+            --wait \
+            --report-json /tmp/qa-report.json \
+            ${{ matrix.axis_filters }}
 
-      # Always runs (after the pending status was posted) so the final status is
-      # never left as "pending" regardless of which earlier step failed.
+      # Always runs (after the pending status was posted) so the final status
+      # is never left as "pending" regardless of which earlier step failed.
       - name: Post QA commit status
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ needs.detect.outputs.head_sha }}
         run: |
-          BUILD_URL=$(grep '^BUILD_URL=' /tmp/jenkins-result.txt 2>/dev/null \
-            | cut -d= -f2- || true)
-          BUILD_RESULT=$(grep '^BUILD_RESULT=' /tmp/jenkins-result.txt 2>/dev/null \
-            | cut -d= -f2- || true)
+          BUILD_URL=""
+          BUILD_RESULT=""
+          if [ -f /tmp/qa-report.json ]; then
+            BUILD_URL=$(jq -r '.combos[0].build_url // ""' /tmp/qa-report.json)
+            BUILD_RESULT=$(jq -r '.combos[0].result // ""' /tmp/qa-report.json)
+          fi
 
-          POLL_OUTCOME="${{ steps.poll.outcome }}"
-          TRIGGER_OUTCOME="${{ steps.trigger.outcome }}"
+          RUN_OUTCOME="${{ steps.run.outcome }}"
 
-          if [ "$POLL_OUTCOME" = "success" ] && [ "$BUILD_RESULT" = "SUCCESS" ]; then
+          if [ "$RUN_OUTCOME" = "success" ] && [ "$BUILD_RESULT" = "SUCCESS" ]; then
             STATE="success"
-            DESC="Container QA passed"
-          elif [ "$POLL_OUTCOME" = "success" ]; then
+            DESC="QA passed"
+          elif [ -n "$BUILD_RESULT" ]; then
             STATE="failure"
-            DESC="Container QA failed: ${BUILD_RESULT}"
-          elif [ "$TRIGGER_OUTCOME" != "success" ]; then
-            STATE="failure"
-            DESC="Failed to trigger Jenkins job"
+            DESC="QA failed: ${BUILD_RESULT}"
           else
             STATE="failure"
-            DESC="Jenkins polling failed or timed out"
+            DESC="QA failed to run"
           fi
 
           ARGS=(-X POST

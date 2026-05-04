@@ -56,3 +56,16 @@ project-config: |
 
   BuildFlags: sbom:cyclonedx
   %endif
+
+qa:
+  pipeline: docker-server-parallel-generic
+  parameters:
+    DOCKER_TAG: 17
+    SERVER_VERSION: 17.9
+    TESTING_BRANCH: ricardo-work
+    REPOSITORY: registry.opensuse.org/${OBS_ROOTPRJ_SLASHES}/ppg/17/containers/ubi9/images
+    WITH_POSTGIS:
+      - true
+      - false
+  matrix:
+    - WITH_POSTGIS

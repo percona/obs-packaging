@@ -122,3 +122,20 @@ project-config: |
   # by both libjpeg62-turbo-dev and libjpeg-dev; prefer the turbo variant.
   Prefer: libjpeg62-turbo-dev
   %endif
+
+qa:
+  pipeline: ppg-obs
+  parameters:
+    REPO: ${OBS_ROOTPRJ}:ppg:17
+    VERSION: ppg-17.9
+    PLATFORMS:
+      - rocky-9
+      - debian-13
+      - ubuntu-noble
+    TESTING_BRANCH: ricardo-work
+    SCENARIO:
+      - pg-17
+      - pg-17-meta-server
+      - pg-17-meta-ha
+  matrix:
+    - SCENARIO

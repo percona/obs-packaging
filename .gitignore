@@ -7,3 +7,4 @@ virtualenv/
 __pycache__/
 tmp/
 docs/plans/
+.percona-obs/
