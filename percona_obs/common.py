@@ -461,6 +461,20 @@ def _decode_obs_response(raw) -> str:
     return str(raw) if raw else ""
 
 
+def auto_rootprj_env(rootprj: str) -> dict[str, str]:
+    """Auto-injected env vars derived from the OBS root project name.
+
+    Used as the base of every YAML-substitution env dict so that project.yaml
+    files can reference ``${OBS_ROOTPRJ}`` (e.g. for sibling subprojects in
+    _aggregate files) and ``${OBS_ROOTPRJ_SLASHES}`` (e.g. for registry URL
+    paths) consistently across all commands.
+    """
+    return {
+        "OBS_ROOTPRJ": rootprj,
+        "OBS_ROOTPRJ_SLASHES": rootprj.replace(":", "/"),
+    }
+
+
 def parse_env_overrides(entries: list[str]) -> dict[str, str]:
     """Parse a list of ``KEY:VALUE`` strings from ``-e`` flags.
 

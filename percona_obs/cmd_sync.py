@@ -31,6 +31,7 @@ from .common import (
     _print_same,
     _print_update,
     apply_env_substitution,
+    auto_rootprj_env,
     find_projects,
     is_package,
     load_yaml,
@@ -420,11 +421,13 @@ def cmd_sync(args):
     targets = _resolve_targets(args)
 
     # Build env_vars from profile env + -e overrides (already merged by main()).
-    # OBS_ROOTPRJ is always injected automatically so that _aggregate files can
-    # reference sibling subprojects (e.g. ${OBS_ROOTPRJ}:common:deps:runtime).
+    # OBS_ROOTPRJ / OBS_ROOTPRJ_SLASHES are always auto-injected so _aggregate
+    # files can reference sibling subprojects (e.g.
+    # ${OBS_ROOTPRJ}:common:deps:runtime) and project.yaml entries can build
+    # registry URLs (e.g. registry.opensuse.org/${OBS_ROOTPRJ_SLASHES}/...).
     env_vars: dict[str, str] = {
         **(parse_env_overrides(args.env_overrides) if args.env_overrides else {}),
-        "OBS_ROOTPRJ": args.rootprj,
+        **auto_rootprj_env(args.rootprj),
     }
 
     # Collect all _service files with their per-package env vars, then validate
@@ -479,7 +482,7 @@ def cmd_sync(args):
             parse_env_overrides(_branch_env_strings) if _branch_env_strings else {}
         )
         if branch_rootprj:
-            branch_env_vars["OBS_ROOTPRJ"] = branch_rootprj
+            branch_env_vars.update(auto_rootprj_env(branch_rootprj))
     seen_projects: set = set()
     local_project_names: set[str] = set()
     local_packages_by_project: dict[str, set[str]] = {}
@@ -1285,7 +1288,7 @@ def cmd_sync_promote(args) -> None:
 
     env_vars: dict[str, str] = {
         **(parse_env_overrides(args.env_overrides) if args.env_overrides else {}),
-        "OBS_ROOTPRJ": args.rootprj,
+        **auto_rootprj_env(args.rootprj),
     }
 
     for obs_project, package_path in targets:
@@ -1510,7 +1513,7 @@ def cmd_sync_release(args) -> None:
                     if args.env_overrides
                     else {}
                 ),
-                "OBS_ROOTPRJ": args.rootprj,
+                **auto_rootprj_env(args.rootprj),
             },
             source_rootprj=source_rootprj,
             disable_builds=source_rootprj is not None,
@@ -1650,7 +1653,7 @@ def cmd_sync_release(args) -> None:
         release_path,
         env_vars={
             **(parse_env_overrides(args.env_overrides) if args.env_overrides else {}),
-            "OBS_ROOTPRJ": args.rootprj,
+            **auto_rootprj_env(args.rootprj),
         },
         source_rootprj=source_rootprj,
         disable_builds=source_rootprj is not None,

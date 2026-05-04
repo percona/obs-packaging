@@ -26,6 +26,7 @@ from .common import (
     _YELLOW,
     _col,
     _print_pending,
+    auto_rootprj_env,
     load_yaml_with_env,
     parse_env_overrides,
     resolve_project_path,
@@ -61,10 +62,7 @@ def _qa_env_vars(args: argparse.Namespace) -> dict[str, str]:
     Always seeds OBS_ROOTPRJ and OBS_ROOTPRJ_SLASHES from ``args.rootprj``;
     profile env + ``-e`` overrides take precedence.
     """
-    env_vars: dict[str, str] = {
-        "OBS_ROOTPRJ": args.rootprj,
-        "OBS_ROOTPRJ_SLASHES": args.rootprj.replace(":", "/"),
-    }
+    env_vars: dict[str, str] = dict(auto_rootprj_env(args.rootprj))
     if args.env_overrides:
         env_vars.update(parse_env_overrides(args.env_overrides))
     return env_vars
