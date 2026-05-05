@@ -1,41 +1,39 @@
-name: OBS PR QA
+name: OBS Nightly QA
 
-# Triggered after OBS PR Check succeeds.  Discovers the QA matrix from each
-# project.yaml `qa:` block in the PR's OBS subprojects, then runs Jenkins
-# pipelines via `percona-obs qa run` and reports one commit status per matrix
-# combo on the PR head.
-#
-# The workflow is a no-op (no status posted) when the PR project has no
-# QA-enabled subprojects (i.e. no project.yaml under root/ has a `qa:` block
-# whose project was created in the PR's OBS root project).
-#
-# Re-running failed jobs from the PR UI (Checks tab → "Re-run failed jobs")
-# works out of the box: each matrix combo is its own GitHub job, and GitHub
-# reuses the detect job's matrix output across attempts.
+# Runs nightly (and on demand via workflow_dispatch) against `main`.
+# Discovers QA-enabled OBS subprojects beneath ${{ vars.OBS_ROOTPRJ }},
+# triggers Jenkins via `percona-obs qa run` for each matrix combo, posts
+# a per-combo commit status on the main HEAD, and finally aggregates the
+# results into one shields.io endpoint badge per top-level project
+# (qa-badge-ppg-17.json, qa-badge-ppg-18.json, ...) on the `badges` branch.
 
 on:
-  workflow_run:
-    workflows: ["OBS PR Check"]
-    types: [completed]
+  schedule:
+    - cron: '0 2 * * *'      # 02:00 UTC nightly
+  workflow_dispatch: {}
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
-  # detect: resolve the PR context, discover QA-enabled OBS subprojects,
-  # and emit the GitHub Actions matrix from their project.yaml `qa:` blocks.
+  # detect: discover QA-enabled subprojects under OBS_ROOTPRJ and emit the
+  # GitHub Actions matrix.
   # ──────────────────────────────────────────────────────────────────────────
   detect:
     name: Detect QA matrix
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success'
 
     outputs:
       has_matrix: ${{ steps.matrix.outputs.has_matrix }}
-      head_sha: ${{ steps.pr.outputs.head_sha }}
-      pr_number: ${{ steps.pr.outputs.pr_number }}
       matrix: ${{ steps.matrix.outputs.matrix }}
+      head_sha: ${{ steps.sha.outputs.head_sha }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Resolve main HEAD SHA
+        id: sha
+        run: echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - uses: ./.github/actions/obs-setup
         with:
@@ -43,39 +41,17 @@ jobs:
           obs-user: ${{ vars.OBS_USER }}
           obs-password: ${{ secrets.OBS_PASSWORD }}
 
-      # Derive the PR number and head SHA from the workflow_run event.
-      # pull_requests[0].number is available for same-repo PRs; for forks it
-      # is empty so we fall back to searching the GitHub API by head SHA.
-      - name: Resolve PR number and head SHA
-        id: pr
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          HEAD_SHA="${{ github.event.workflow_run.head_sha }}"
-          PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
-          if [ -z "$PR_NUMBER" ]; then
-            PR_NUMBER=$(gh api "repos/${GITHUB_REPOSITORY}/pulls" \
-              --jq ".[] | select(.head.sha == \"${HEAD_SHA}\") | .number" | head -1)
-          fi
-          if [ -z "$PR_NUMBER" ]; then
-            echo "Could not resolve PR number for commit ${HEAD_SHA}" >&2
-            exit 1
-          fi
-          echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
-          echo "head_sha=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
-
       - name: Write CI profile
         env:
           OBS_APIURL: ${{ vars.OBS_APIURL }}
-          OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
-          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
           JENKINS_URL: ${{ vars.JENKINS_URL }}
           JENKINS_USER: ${{ vars.JENKINS_USER }}
         run: |
           mkdir -p .profile
           cat > .profile/ci.yaml <<EOF
           apiurl: ${OBS_APIURL}
-          rootprj: ${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}
+          rootprj: ${OBS_ROOTPRJ}
           jenkins:
             url: ${JENKINS_URL}
             user: ${JENKINS_USER}
@@ -84,15 +60,11 @@ jobs:
               value: 'openSUSE.org:'
           EOF
 
-      # Iterate every immediate subproject of the PR's OBS root project, call
-      # `percona-obs qa show <project> --json` for each, and concatenate the
-      # results into a single matrix array (empty for subprojects without a
-      # `qa:` block).
-      - name: Discover QA matrix from OBS PR subprojects
+      - name: Discover QA matrix
         id: matrix
         env:
           OBS_APIURL: ${{ vars.OBS_APIURL }}
-          OBS_PROJECT: ${{ vars.OBS_PR_ROOTPRJ }}:pr-${{ steps.pr.outputs.pr_number }}
+          OBS_PROJECT: ${{ vars.OBS_ROOTPRJ }}
           PYTHONPATH: ${{ github.workspace }}
         run: |
           venv/bin/python .github/scripts/list_qa_matrix.py > /tmp/qa-matrix.json
@@ -105,7 +77,8 @@ jobs:
           fi
 
   # ──────────────────────────────────────────────────────────────────────────
-  # qa: trigger and poll Jenkins, once per matrix combo (in parallel).
+  # qa: trigger Jenkins for each matrix combo (in parallel), post a commit
+  # status on the main HEAD, upload the per-combo report JSON as artifact.
   # ──────────────────────────────────────────────────────────────────────────
   qa:
     name: ${{ matrix.status_context }}
@@ -113,7 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     if: needs.detect.outputs.has_matrix == 'true'
     permissions:
-      # Required to post the commit status on the PR head commit.
+      # Required to post the commit status on the main HEAD.
       statuses: write
 
     strategy:
@@ -123,6 +96,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: ./.github/actions/obs-setup
         with:
@@ -135,15 +110,14 @@ jobs:
       - name: Write CI profile
         env:
           OBS_APIURL: ${{ vars.OBS_APIURL }}
-          OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
-          PR_NUMBER: ${{ needs.detect.outputs.pr_number }}
+          OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
           JENKINS_URL: ${{ vars.JENKINS_URL }}
           JENKINS_USER: ${{ vars.JENKINS_USER }}
         run: |
           mkdir -p .profile
           cat > .profile/ci.yaml <<EOF
           apiurl: ${OBS_APIURL}
-          rootprj: ${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}
+          rootprj: ${OBS_ROOTPRJ}
           jenkins:
             url: ${JENKINS_URL}
             user: ${JENKINS_USER}
@@ -160,7 +134,7 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
             -X POST \
             -f "state=pending" \
-            -f "context=${{ matrix.status_context }}" \
+            -f "context=Nightly ${{ matrix.status_context }}" \
             -f "description=QA running..."
 
       - name: Run qa pipeline
@@ -203,9 +177,74 @@ jobs:
 
           ARGS=(-X POST
             -f "state=${STATE}"
-            -f "context=${{ matrix.status_context }}"
+            -f "context=Nightly ${{ matrix.status_context }}"
             -f "description=${DESC}")
           if [ -n "$BUILD_URL" ]; then
             ARGS+=(-f "target_url=${BUILD_URL}")
           fi
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" "${ARGS[@]}"
+
+      # Upload the per-combo report so the aggregate job can build the badge.
+      - name: Upload QA report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-report-${{ strategy.job-index }}
+          path: /tmp/qa-report.json
+          if-no-files-found: ignore
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # aggregate: download every per-combo report, compute one shields.io
+  # endpoint badge per top-level project, push them to the orphan `badges`
+  # branch (same pattern as sync-main.yml's "Publish OBS build badge").
+  # ──────────────────────────────────────────────────────────────────────────
+  aggregate:
+    name: Aggregate QA badges
+    needs: [detect, qa]
+    runs-on: ubuntu-latest
+    if: always() && needs.detect.outputs.has_matrix == 'true'
+    permissions:
+      # Required to push qa-badge-*.json to the badges branch.
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/qa-reports
+          pattern: qa-report-*
+
+      - name: Compute QA badges
+        run: |
+          mkdir -p /tmp/qa-badges
+          python3 .github/scripts/aggregate_qa_badges.py /tmp/qa-reports /tmp/qa-badges
+          ls -la /tmp/qa-badges
+
+      - name: Publish QA badges
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          BADGES=(/tmp/qa-badges/qa-badge-*.json)
+          if [ ${#BADGES[@]} -eq 0 ]; then
+            echo "no badges to publish"
+            exit 0
+          fi
+          for f in "${BADGES[@]}"; do
+            NAME=$(basename "$f")
+            BADGE=$(base64 -w0 "$f")
+            FILE_SHA=$(gh api \
+              "repos/$GITHUB_REPOSITORY/contents/$NAME?ref=badges" \
+              --jq '.sha' 2>/dev/null || echo "")
+            ARGS=(-X PUT
+              -f "message=ci: update QA badge ($NAME)"
+              -f "content=$BADGE"
+              -f "branch=badges")
+            if [ -n "$FILE_SHA" ]; then
+              ARGS+=(-f "sha=$FILE_SHA")
+            fi
+            gh api "repos/$GITHUB_REPOSITORY/contents/$NAME" "${ARGS[@]}"
+          done

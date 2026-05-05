@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Discover the QA matrix for the obs-pr-qa GitHub workflow.
+"""Discover the QA matrix for a GitHub workflow.
 
-Lists OBS subprojects beneath ``$OBS_PR_PROJECT``, strips the PR project prefix
+Lists OBS subprojects beneath ``$OBS_PROJECT``, strips that project's prefix
 to yield colon-notation names (e.g. ``ppg:18``), invokes
 ``percona-obs -P ci qa show <project> --json`` for each, and concatenates the
 results into a single JSON array printed to stdout. Subprojects without a
@@ -9,7 +9,8 @@ results into a single JSON array printed to stdout. Subprojects without a
 
 Required env vars:
   OBS_APIURL          OBS API URL (e.g. http://192.168.1.103:3000)
-  OBS_PR_PROJECT      The PR's OBS root project (e.g. home:Admin:percona:pr-42)
+  OBS_PROJECT         The OBS root project to scan (e.g. home:Admin:percona,
+                      or home:Admin:percona:pr-42 for PR workflows)
 
 Optional:
   PERCONA_OBS_PROFILE Profile name to pass via -P (default: ci)
@@ -29,15 +30,15 @@ from percona_obs.obs_api import _fetch_obs_subproject_names
 
 def main() -> None:
     apiurl = os.environ["OBS_APIURL"]
-    pr_project = os.environ["OBS_PR_PROJECT"]
+    obs_project = os.environ["OBS_PROJECT"]
     profile = os.environ.get("PERCONA_OBS_PROFILE", "ci")
 
     osc.conf.get_config(override_apiurl=apiurl)
 
-    prefix = pr_project + ":"
+    prefix = obs_project + ":"
     subs = sorted(
         n
-        for n in _fetch_obs_subproject_names(apiurl, pr_project)
+        for n in _fetch_obs_subproject_names(apiurl, obs_project)
         if n.startswith(prefix)
     )
 
