@@ -30,7 +30,7 @@ jobs:
   # can run in parallel with QA matrix detection.
   # ──────────────────────────────────────────────────────────────────────────
   sync:
-    name: Build packages in OBS
+    name: Sync packages to OBS
     runs-on: ubuntu-latest
     permissions:
       # Required to post/update the PR comment.
