@@ -2,8 +2,8 @@
 
 Stdlib-only (urllib + json + base64) so we do not pull in `requests`.
 Mirrors the wire format of the curl-based trigger and queue/build polling
-that `.github/workflows/obs-pr-qa.yml` and `.github/scripts/poll_jenkins.py`
-used to perform.
+that the `qa` jobs in `.github/workflows/obs-pr-check.yml` and
+`.github/scripts/poll_jenkins.py` used to perform.
 """
 
 from __future__ import annotations

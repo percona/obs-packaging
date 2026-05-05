@@ -420,7 +420,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="Emit the matrix as a JSON array (one entry per combo) — used by "
-        "the obs-pr-qa workflow to drive its GitHub Actions matrix.",
+        "the obs-pr-check workflow to drive its GitHub Actions QA matrix.",
     )
     qa_show_parser.set_defaults(func=cmd_qa_show)
 

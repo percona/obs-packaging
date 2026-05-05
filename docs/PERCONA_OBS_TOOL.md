@@ -377,11 +377,12 @@ into one Jenkins job per combination, triggers each via Jenkins'
 `buildWithParameters` REST endpoint, and (with `--wait`) polls every triggered
 build until it reaches a terminal state.
 
-The same machinery powers `.github/workflows/obs-pr-qa.yml`: the workflow
-discovers the QA-enabled subprojects of the PR's OBS root project, calls
-`qa show <project> --json` for each, concatenates the matrices into the GitHub
-Actions matrix, and runs `qa run --wait --report-json ... --filter ...` once
-per combo with one commit status posted per combo on the PR head.
+The same machinery powers the QA jobs in `.github/workflows/obs-pr-check.yml`:
+the `detect-qa-matrix` job discovers the QA-enabled subprojects of the PR's
+OBS root project, calls `qa show <project> --json` for each, concatenates the
+matrices into the GitHub Actions matrix, and the `qa` job runs
+`qa run --wait --report-json ... --filter ...` once per combo with one commit
+status posted per combo on the PR head.
 
 ### `qa:` block schema
 

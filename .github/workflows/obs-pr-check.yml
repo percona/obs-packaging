@@ -4,6 +4,18 @@ name: OBS PR Check
 # packages there.  Unchanged packages are aggregated (binary reuse) from the
 # main branch's OBS project; only packages changed in this PR are built from
 # source.  Posts (or updates) a comment on the PR with the OBS project URL.
+#
+# Job DAG:
+#
+#   sync ──┬──> build ─────────────────────────┐
+#          │                                    │
+#          ├──> detect-qa-matrix ───────────────┴──> qa  (matrix)
+#          │                       │
+#          └──> (qa-cleanup) <─────┘  on build failure only
+#
+# `detect-qa-matrix` runs in parallel with `build` and posts pending QA
+# commit statuses as soon as the matrix is known, so the PR shows the
+# upcoming QA jobs while OBS is still building packages.
 
 on:
   pull_request:
@@ -12,14 +24,25 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # sync: push the PR contents to OBS and (for release-only PRs) test the
+  # release flow.  Does NOT poll OBS builds — that is done in `build` so it
+  # can run in parallel with QA matrix detection.
+  # ──────────────────────────────────────────────────────────────────────────
   sync:
     name: Build packages in OBS
     runs-on: ubuntu-latest
     permissions:
       # Required to post/update the PR comment.
       pull-requests: write
-      # Required to post the "OBS Build" commit status on the PR head commit.
+      # Required to post the "OBS Build" commit status on the PR head commit
+      # (release-only PR path).
       statuses: write
+
+    outputs:
+      is_release_pr: ${{ steps.detect.outputs.is_release_pr }}
+      sync_outcome: ${{ steps.sync.outcome }}
+      release_outcome: ${{ steps.release.outcome }}
 
     env:
       PR_NUMBER: ${{ github.event.number }}
@@ -177,12 +200,71 @@ jobs:
             -f "context=OBS Build" \
             -f "description=${DESC}"
 
+      # The full build-status comment is posted by the `build` job (which has
+      # the poll details).  This step only fires for the two terminal-in-sync
+      # cases: release-only PRs and sync failures.  For successful non-release
+      # PRs it is skipped — `build` will post the real comment.
+      - name: Post OBS project comment (sync-side)
+        if: always() && (steps.detect.outputs.is_release_pr == 'true' || steps.sync.outcome != 'success')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IS_RELEASE_PR: ${{ steps.detect.outputs.is_release_pr }}
+          SYNC_OUTCOME: ${{ steps.sync.outcome }}
+          RELEASE_OUTCOME: ${{ steps.release.outcome }}
+          POLL_OUTCOME: ''
+          WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
+        run: python .github/scripts/post_pr_comment.py
+
+      # Upload the sync output so the `build` job can read it for the comment.
+      # Only meaningful when the sync step actually ran and succeeded.
+      - name: Upload sync output
+        if: steps.sync.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-output
+          path: /tmp/sync-output.txt
+          retention-days: 1
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # build: poll OBS for build completion and post the build-status PR
+  # comment.  Runs in parallel with `detect-qa-matrix`.
+  # ──────────────────────────────────────────────────────────────────────────
+  build:
+    name: Wait for OBS builds
+    needs: sync
+    if: needs.sync.outputs.is_release_pr != 'true' && needs.sync.outputs.sync_outcome == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      statuses: write
+
+    env:
+      PR_NUMBER: ${{ github.event.number }}
+      OBS_APIURL: ${{ vars.OBS_APIURL }}
+      OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
+      OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/obs-setup
+        with:
+          obs-apiurl: ${{ vars.OBS_APIURL }}
+          obs-user: ${{ vars.OBS_USER }}
+          obs-password: ${{ secrets.OBS_PASSWORD }}
+
+      - name: Download sync output
+        uses: actions/download-artifact@v4
+        with:
+          name: sync-output
+          path: /tmp
+
       # Poll OBS until all builds in the PR project reach a terminal state.
       # Fails the job (and PR check) if any build fails, is broken, or is
-      # unresolvable.  Skipped when the sync step did not succeed.
+      # unresolvable.  Posts the "OBS Build" commit status itself.
       - name: Poll OBS build status
         id: poll
-        if: steps.sync.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           OBS_APIURL: ${{ vars.OBS_APIURL }}
@@ -191,174 +273,239 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/poll_obs_builds.py
 
-      # Always runs so the comment is updated even when sync or poll fails.
-      # Uses shell: python to avoid heredoc/quoting complexity in YAML.
+      # Always runs so the comment is updated even when poll fails.
       - name: Post OBS project comment
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-          IS_RELEASE_PR: ${{ steps.detect.outputs.is_release_pr }}
-          SYNC_OUTCOME: ${{ steps.sync.outcome }}
-          RELEASE_OUTCOME: ${{ steps.release.outcome }}
+          IS_RELEASE_PR: 'false'
+          SYNC_OUTCOME: 'success'
+          RELEASE_OUTCOME: ''
           POLL_OUTCOME: ${{ steps.poll.outcome }}
           WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
-        shell: python
+        run: python .github/scripts/post_pr_comment.py
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # detect-qa-matrix: discover QA-enabled OBS subprojects and post pending
+  # commit statuses for each combo.  Runs in parallel with `build` so the
+  # PR shows upcoming QA checks while packages are still building.
+  # ──────────────────────────────────────────────────────────────────────────
+  detect-qa-matrix:
+    name: Detect QA matrix
+    needs: sync
+    if: needs.sync.outputs.is_release_pr != 'true' && needs.sync.outputs.sync_outcome == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+
+    outputs:
+      has_matrix: ${{ steps.matrix.outputs.has_matrix }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/obs-setup
+        with:
+          obs-apiurl: ${{ vars.OBS_APIURL }}
+          obs-user: ${{ vars.OBS_USER }}
+          obs-password: ${{ secrets.OBS_PASSWORD }}
+
+      - name: Write CI profile
+        env:
+          OBS_APIURL: ${{ vars.OBS_APIURL }}
+          OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
+          PR_NUMBER: ${{ github.event.number }}
+          JENKINS_URL: ${{ vars.JENKINS_URL }}
+          JENKINS_USER: ${{ vars.JENKINS_USER }}
         run: |
-          import json, os, re, datetime, subprocess
+          mkdir -p .profile
+          cat > .profile/ci.yaml <<EOF
+          apiurl: ${OBS_APIURL}
+          rootprj: ${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}
+          jenkins:
+            url: ${JENKINS_URL}
+            user: ${JENKINS_USER}
+          env:
+            - name: REMOTE_OBS_ORG_INTERCONNECT
+              value: 'openSUSE.org:'
+          EOF
 
-          pr_number        = os.environ['PR_NUMBER']
-          repo             = os.environ['GITHUB_REPOSITORY']
-          obs_web_url      = os.environ['OBS_WEB_URL'].rstrip('/')
-          obs_pr_rootprj   = os.environ['OBS_PR_ROOTPRJ']
-          is_release_pr    = os.environ.get('IS_RELEASE_PR') == 'true'
-          sync_ok          = os.environ['SYNC_OUTCOME'] == 'success'
-          release_outcome  = os.environ.get('RELEASE_OUTCOME', '')
-          poll_outcome     = os.environ.get('POLL_OUTCOME', '')
-          workflow_run_url = os.environ['WORKFLOW_RUN_URL']
-          timestamp        = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')
+      # Iterate every immediate subproject of the PR's OBS root project, call
+      # `percona-obs qa show <project> --json` for each, and concatenate the
+      # results into a single matrix array (empty for subprojects without a
+      # `qa:` block).
+      - name: Discover QA matrix from OBS PR subprojects
+        id: matrix
+        env:
+          OBS_APIURL: ${{ vars.OBS_APIURL }}
+          OBS_PROJECT: ${{ vars.OBS_PR_ROOTPRJ }}:pr-${{ github.event.number }}
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          venv/bin/python .github/scripts/list_qa_matrix.py > /tmp/qa-matrix.json
+          MATRIX=$(cat /tmp/qa-matrix.json)
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+          if [ "$(echo "${MATRIX}" | jq 'length')" -gt 0 ]; then
+            echo "has_matrix=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_matrix=false" >> "$GITHUB_OUTPUT"
+          fi
 
-          pr_rootprj  = f"{obs_pr_rootprj}:pr-{pr_number}"
-          project_url = f"{obs_web_url}/project/show/{pr_rootprj}"
+      # Post a pending commit status for every matrix combo so the PR's
+      # check list shows the upcoming QA jobs while OBS is still building.
+      # Each entry is updated later by the matching `qa` matrix job.
+      - name: Post pending QA commit statuses
+        if: steps.matrix.outputs.has_matrix == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          jq -r '.[] | .status_context' /tmp/qa-matrix.json \
+            | while IFS= read -r ctx; do
+                [ -z "$ctx" ] && continue
+                gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
+                  -X POST \
+                  -f "state=pending" \
+                  -f "context=${ctx}" \
+                  -f "description=Waiting for OBS builds to complete"
+              done
 
-          # Read per-repo details JSON written by poll_obs_builds.py (if it ran).
-          details: dict = {}
-          try:
-              details = json.load(open('/tmp/obs-build-details.json'))
-          except (OSError, json.JSONDecodeError):
-              pass
+  # ──────────────────────────────────────────────────────────────────────────
+  # qa: trigger and poll Jenkins, once per matrix combo (in parallel).
+  # ──────────────────────────────────────────────────────────────────────────
+  qa:
+    name: ${{ matrix.status_context }}
+    needs: [build, detect-qa-matrix]
+    if: needs.detect-qa-matrix.outputs.has_matrix == 'true' && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      # Required to post the commit status on the PR head commit.
+      statuses: write
 
-          if is_release_pr:
-              if release_outcome == 'success':
-                  heading = '## OBS Release Check — ✅ Release dry-run passed'
-              elif release_outcome == 'failure':
-                  heading = '## OBS Release Check — ❌ Release dry-run failed'
-              elif release_outcome == 'skipped':
-                  heading = '## OBS Release Check — ⏭️ Release test skipped'
-              else:
-                  heading = '## OBS Release Check'
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.detect-qa-matrix.outputs.matrix) }}
+      fail-fast: false
 
-              # Derive the per-release OBS project links from the added release.yaml files.
-              added = subprocess.run(
-                  ['git', 'diff', '--name-only', '--diff-filter=A',
-                   'origin/main...HEAD', '--', 'root/*/releases/*/release.yaml'],
-                  capture_output=True, text=True,
-              ).stdout.strip().splitlines()
-              release_links = []
-              for rf in added:
-                  rel_dir = rf.removeprefix('root/').removesuffix('/release.yaml')
-                  rel_project = rel_dir.replace('/', ':')
-                  obs_proj = f"{pr_rootprj}:{rel_project}"
-                  release_links.append(f'**[{obs_proj}]({obs_web_url}/project/show/{obs_proj})**')
-              projects_str = ', '.join(release_links) if release_links else f'**{pr_rootprj}**'
+    steps:
+      - uses: actions/checkout@v4
 
-              lines = [
-                  '<!-- obs-pr-check -->',
-                  heading,
-                  '',
-                  'This PR adds a release record. No packages are built in OBS.',
-                  f'The release dry-run created {projects_str} on OBS.',
-                  '',
-                  f'> _Updated: {timestamp}_',
-              ]
-          elif sync_ok:
-              try:
-                  output = open('/tmp/sync-output.txt').read()
-              except OSError:
-                  output = ''
+      - uses: ./.github/actions/obs-setup
+        with:
+          obs-apiurl: ${{ vars.OBS_APIURL }}
+          obs-user: ${{ vars.OBS_USER }}
+          obs-password: ${{ secrets.OBS_PASSWORD }}
 
-              # Aggregated packages produce '  @ <project>/<pkg>  → ...' lines.
-              aggregated = len(re.findall(r'^  @ ', output, re.MULTILINE))
-              # Promoted packages produce '  ~ N files ...' or '  + N files ...' lines.
-              promoted = len(re.findall(r'^  [~+] \d+ files ', output, re.MULTILINE))
+      # Same CI profile as the detect job so `qa run` re-resolves project.yaml
+      # parameters identically (same OBS_ROOTPRJ → same ${OBS_ROOTPRJ_SLASHES}).
+      - name: Write CI profile
+        env:
+          OBS_APIURL: ${{ vars.OBS_APIURL }}
+          OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
+          PR_NUMBER: ${{ github.event.number }}
+          JENKINS_URL: ${{ vars.JENKINS_URL }}
+          JENKINS_USER: ${{ vars.JENKINS_USER }}
+        run: |
+          mkdir -p .profile
+          cat > .profile/ci.yaml <<EOF
+          apiurl: ${OBS_APIURL}
+          rootprj: ${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}
+          jenkins:
+            url: ${JENKINS_URL}
+            user: ${JENKINS_USER}
+          env:
+            - name: REMOTE_OBS_ORG_INTERCONNECT
+              value: 'openSUSE.org:'
+          EOF
 
-              # Determine heading based on poll outcome.
-              if poll_outcome == 'success':
-                  heading = '## OBS Build Check \u2014 \u2705 Builds passed'
-              elif poll_outcome == 'failure':
-                  heading = '## OBS Build Check \u2014 \u274c Builds failed'
-              elif poll_outcome == 'cancelled':
-                  heading = '## OBS Build Check \u2014 \u23f1\ufe0f Build polling cancelled'
-              else:
-                  heading = '## OBS Build Check'
+      - name: Set pending QA status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
+            -X POST \
+            -f "state=pending" \
+            -f "context=${{ matrix.status_context }}" \
+            -f "description=QA running..."
 
-              lines = [
-                  '<!-- obs-pr-check -->',
-                  heading,
-                  '',
-                  f'Packages for this PR are being built at **[{pr_rootprj}]({project_url})**.',
-                  '',
-                  '| | Packages |',
-                  '|---|---|',
-                  f'| Built from PR sources | {promoted} |',
-                  f'| Reused from `main` binaries | {aggregated} |',
-              ]
+      - name: Run qa pipeline
+        id: run
+        env:
+          JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
+        run: |
+          venv/bin/python -m percona_obs -P ci qa run "${{ matrix.project }}" \
+            --wait \
+            --report-json /tmp/qa-report.json \
+            ${{ matrix.axis_filters }}
 
-              if details:
-                  repos = details.get('repos', {})
-                  total = details.get('total', {})
-                  lines += [
-                      '',
-                      '| Repository | \u2714 Succeeded | \u2717 Failed | \u26d4 Broken | \u26a0 Unresolvable | \u2014 Excluded |',
-                      '|---|---|---|---|---|---|',
-                  ]
-                  for obs_repo, counts in sorted(repos.items()):
-                      lines.append(
-                          f'| {obs_repo} '
-                          f'| {counts.get("succeeded", 0)} '
-                          f'| {counts.get("failed", 0)} '
-                          f'| {counts.get("broken", 0)} '
-                          f'| {counts.get("unresolvable", 0)} '
-                          f'| {counts.get("excluded", 0)} |'
-                      )
-                  lines.append(
-                      f'| **Total** '
-                      f'| **{total.get("succeeded", 0)}** '
-                      f'| **{total.get("failed", 0)}** '
-                      f'| **{total.get("broken", 0)}** '
-                      f'| **{total.get("unresolvable", 0)}** '
-                      f'| **{total.get("excluded", 0)}** |'
-                  )
+      # Always runs (after the pending status was posted) so the final status
+      # is never left as "pending" regardless of which earlier step failed.
+      - name: Post QA commit status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          BUILD_URL=""
+          BUILD_RESULT=""
+          if [ -f /tmp/qa-report.json ]; then
+            BUILD_URL=$(jq -r '.combos[0].build_url // ""' /tmp/qa-report.json)
+            BUILD_RESULT=$(jq -r '.combos[0].result // ""' /tmp/qa-report.json)
+          fi
 
-              lines += ['', f'> _Updated: {timestamp}_']
-          else:
-              lines = [
-                  '<!-- obs-pr-check -->',
-                  '## OBS Build Check \u2014 \u274c Sync failed',
-                  '',
-                  f'The OBS sync step failed. See the [workflow run]({workflow_run_url}) for details.',
-                  '',
-                  f'> _Updated: {timestamp}_',
-              ]
+          RUN_OUTCOME="${{ steps.run.outcome }}"
 
-          body = '\n'.join(lines)
-          with open('/tmp/pr-comment.md', 'w') as f:
-              f.write(body)
+          if [ "$RUN_OUTCOME" = "success" ] && [ "$BUILD_RESULT" = "SUCCESS" ]; then
+            STATE="success"
+            DESC="QA passed"
+          elif [ -n "$BUILD_RESULT" ]; then
+            STATE="failure"
+            DESC="QA failed: ${BUILD_RESULT}"
+          else
+            STATE="failure"
+            DESC="QA failed to run"
+          fi
 
-          # Find an existing obs-pr-check comment to update; otherwise create one.
-          # --paginate fetches all pages so the search works even when the PR
-          # has more than 30 comments (GitHub API's default page size).
-          result = subprocess.run(
-              [
-                  'gh', 'api',
-                  '--paginate',
-                  f'repos/{repo}/issues/{pr_number}/comments',
-                  '--jq',
-                  '[.[] | select(.body | contains("<!-- obs-pr-check -->"))] | last | .id // empty',
-              ],
-              capture_output=True, text=True,
-          )
-          comment_id = result.stdout.strip()
+          ARGS=(-X POST
+            -f "state=${STATE}"
+            -f "context=${{ matrix.status_context }}"
+            -f "description=${DESC}")
+          if [ -n "$BUILD_URL" ]; then
+            ARGS+=(-f "target_url=${BUILD_URL}")
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" "${ARGS[@]}"
 
-          if comment_id:
-              subprocess.run(
-                  ['gh', 'api', f'repos/{repo}/issues/comments/{comment_id}',
-                   '-X', 'PATCH', '-F', 'body=@/tmp/pr-comment.md'],
-                  check=True,
-              )
-          else:
-              subprocess.run(
-                  ['gh', 'api', f'repos/{repo}/issues/{pr_number}/comments',
-                   '-X', 'POST', '-F', 'body=@/tmp/pr-comment.md'],
-                  check=True,
-              )
+  # ──────────────────────────────────────────────────────────────────────────
+  # qa-cleanup: when `build` fails, the pending QA statuses posted by
+  # `detect-qa-matrix` would otherwise sit as "pending" forever (because
+  # `qa` is skipped on build failure).  Flip them to "failure".
+  # ──────────────────────────────────────────────────────────────────────────
+  qa-cleanup:
+    name: QA cleanup (${{ matrix.status_context }})
+    needs: [build, detect-qa-matrix]
+    # `failure()` opts into running when an upstream `needs` has failed —
+    # without it GitHub Actions implicitly adds `success() &&` and the job
+    # would be skipped instead of running on a build failure.
+    if: ${{ failure() && needs.build.result == 'failure' && needs.detect-qa-matrix.outputs.has_matrix == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.detect-qa-matrix.outputs.matrix) }}
+      fail-fast: false
+
+    steps:
+      - name: Mark QA as failed (OBS builds failed)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
+            -X POST \
+            -f "state=failure" \
+            -f "context=${{ matrix.status_context }}" \
+            -f "description=Skipped: OBS builds failed"
