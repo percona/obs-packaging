@@ -43,12 +43,12 @@
 | python3-six | ppg:18 | 1.17.0-1.3 |
 | python3-wcwidth | ppg:18 | 0.2.13-1.3 |
 | python3-zstandard | ppg:18 | 0.23.0-1.3 |
-| sfcgal | ppg:18 | 2.2.0-1.3 |
+| sfcgal | ppg:18 | 2.2.0-1.4 |
 | ydiff | ppg:18 | 1.4.2-1+1.1 |
 
 ## Container Images
 
 | Package | Project | Image | Version | Tags |
 | ------- | ------- | ----- | ------- | ---- |
-| percona-distribution-postgresql | ppg:18:containers:ubi9 | percona-distribution-postgresql | 18.3 | `18.3-1.2` `18.3` `18` |
-| percona-distribution-postgresql-with-postgis | ppg:18:containers:ubi9 | percona-distribution-postgresql-with-postgis | 18.3 | `18.3-1.3` `18.3` `18` |
+| percona-distribution-postgresql | ppg:18:containers:ubi9 | percona-distribution-postgresql | 18.3 | `18.3-1.5` `18.3` `18` |
+| percona-distribution-postgresql-with-postgis | ppg:18:containers:ubi9 | percona-distribution-postgresql-with-postgis | 18.3 | `18.3-1.11` `18.3` `18` |
