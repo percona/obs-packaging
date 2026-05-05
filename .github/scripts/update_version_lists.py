@@ -89,7 +89,7 @@ def map_files_to_distribution_projects(
     for path in changed_files:
         if not path.startswith("root/"):
             continue
-        parts = path[len("root/"):].split("/")
+        parts = path[len("root/") :].split("/")
         if len(parts) < 2:
             continue
         product = parts[0]
@@ -155,7 +155,7 @@ def update_readme(all_version_files: list[Path]) -> None:
 
     if include_obs_link:
         header = "| Distribution | OBS Project | Version List |"
-        sep    = "|---|---|---|"
+        sep = "|---|---|---|"
         rows = "\n".join(
             (
                 f"| `{file_to_project_id(f)}` "
@@ -167,7 +167,7 @@ def update_readme(all_version_files: list[Path]) -> None:
         )
     else:
         header = "| Distribution | Version List |"
-        sep    = "|---|---|"
+        sep = "|---|---|"
         rows = "\n".join(
             f"| `{file_to_project_id(f)}` | [{f.relative_to(REPO_ROOT)}]({f.relative_to(REPO_ROOT)}) |"
             for f in all_version_files
@@ -185,7 +185,9 @@ def update_readme(all_version_files: list[Path]) -> None:
     # Insert before "## Documentation" so the section appears right after the
     # repository introduction, not at the end of the file.
     if "\n## Documentation\n" in content:
-        content = content.replace("\n## Documentation\n", section + "\n## Documentation\n", 1)
+        content = content.replace(
+            "\n## Documentation\n", section + "\n## Documentation\n", 1
+        )
     else:
         content += section
 
@@ -206,13 +208,17 @@ def main() -> None:
     head = os.environ.get("GITHUB_SHA", "HEAD")
 
     if before == ZERO_SHA:
-        print("GITHUB_EVENT_BEFORE is zero SHA — regenerating all distribution projects.")
+        print(
+            "GITHUB_EVENT_BEFORE is zero SHA — regenerating all distribution projects."
+        )
         projects = find_all_distribution_projects()
     else:
         changed = subprocess.check_output(
             ["git", "diff", "--name-only", before, head], text=True
         ).splitlines()
-        print(f"Changed files ({len(changed)}): {changed[:10]}{'...' if len(changed) > 10 else ''}")
+        print(
+            f"Changed files ({len(changed)}): {changed[:10]}{'...' if len(changed) > 10 else ''}"
+        )
         projects = map_files_to_distribution_projects(changed)
 
     if not projects:
@@ -223,7 +229,10 @@ def main() -> None:
 
     # Configure git and pull before writing any files so there are no unstaged
     # changes when rebase runs.
-    run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=REPO_ROOT)
+    run(
+        ["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"],
+        cwd=REPO_ROOT,
+    )
     run(["git", "config", "user.name", "github-actions[bot]"], cwd=REPO_ROOT)
     run(["git", "pull", "--rebase"], cwd=REPO_ROOT)
 
@@ -233,10 +242,17 @@ def main() -> None:
         print(f"  Generating {outfile.relative_to(REPO_ROOT)} for {project_id} ...")
         md = subprocess.check_output(
             [
-                "venv/bin/python", "-m", "percona_obs",
-                "-P", "main",
-                "project", "versions", project_id,
-                "--recursive", "--online", "--markdown",
+                "venv/bin/python",
+                "-m",
+                "percona_obs",
+                "-P",
+                "main",
+                "project",
+                "versions",
+                project_id,
+                "--recursive",
+                "--online",
+                "--markdown",
             ],
             text=True,
             cwd=REPO_ROOT,
@@ -251,9 +267,7 @@ def main() -> None:
     # Commit and push only when something actually changed.
     run(["git", "add", str(VERSIONS_DIR), str(README)], cwd=REPO_ROOT)
 
-    result = subprocess.run(
-        ["git", "diff", "--staged", "--quiet"], cwd=REPO_ROOT
-    )
+    result = subprocess.run(["git", "diff", "--staged", "--quiet"], cwd=REPO_ROOT)
     if result.returncode != 0:
         run(
             ["git", "commit", "-m", "ci: update version lists [skip ci]"],
