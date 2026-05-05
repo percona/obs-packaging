@@ -421,10 +421,10 @@ def cmd_sync(args):
     targets = _resolve_targets(args)
 
     # Build env_vars from profile env + -e overrides (already merged by main()).
-    # OBS_ROOTPRJ / OBS_ROOTPRJ_SLASHES are always auto-injected so _aggregate
+    # OBS_ROOTPRJ / OBS_CONTAINER_REGISTRY_ROOTPRJ are always auto-injected so _aggregate
     # files can reference sibling subprojects (e.g.
     # ${OBS_ROOTPRJ}:common:deps:runtime) and project.yaml entries can build
-    # registry URLs (e.g. registry.opensuse.org/${OBS_ROOTPRJ_SLASHES}/...).
+    # registry URLs (e.g. registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/...).
     env_vars: dict[str, str] = {
         **(parse_env_overrides(args.env_overrides) if args.env_overrides else {}),
         **auto_rootprj_env(args.rootprj),

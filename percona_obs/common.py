@@ -466,12 +466,12 @@ def auto_rootprj_env(rootprj: str) -> dict[str, str]:
 
     Used as the base of every YAML-substitution env dict so that project.yaml
     files can reference ``${OBS_ROOTPRJ}`` (e.g. for sibling subprojects in
-    _aggregate files) and ``${OBS_ROOTPRJ_SLASHES}`` (e.g. for registry URL
+    _aggregate files) and ``${OBS_CONTAINER_REGISTRY_ROOTPRJ}`` (e.g. for registry URL
     paths) consistently across all commands.
     """
     return {
         "OBS_ROOTPRJ": rootprj,
-        "OBS_ROOTPRJ_SLASHES": rootprj.replace(":", "/"),
+        "OBS_CONTAINER_REGISTRY_ROOTPRJ": rootprj.replace(":", "/").lower(),
     }
 
 

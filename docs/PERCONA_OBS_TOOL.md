@@ -399,7 +399,7 @@ qa:
 ```
 
 `${VAR}` tokens in any value are substituted from the active profile's `env:`
-section, plus auto-injected `OBS_ROOTPRJ` and `OBS_ROOTPRJ_SLASHES` (the root
+section, plus auto-injected `OBS_ROOTPRJ` and `OBS_CONTAINER_REGISTRY_ROOTPRJ` (the root
 project name with `:` replaced by `/`, useful for registry URLs).
 
 ### Subcommands

@@ -63,7 +63,7 @@ qa:
     DOCKER_TAG: 18
     SERVER_VERSION: 18.3
     TESTING_BRANCH: ricardo-work
-    REPOSITORY: registry.opensuse.org/${OBS_ROOTPRJ_SLASHES}/ppg/18/containers/ubi9/images
+    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/18/containers/ubi9/images
     WITH_POSTGIS:
       - true
       - false

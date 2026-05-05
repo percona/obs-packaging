@@ -59,7 +59,7 @@ from .qa_state import (
 def _qa_env_vars(args: argparse.Namespace) -> dict[str, str]:
     """Build the env dict used for ``${VAR}`` substitution in project.yaml.
 
-    Always seeds OBS_ROOTPRJ and OBS_ROOTPRJ_SLASHES from ``args.rootprj``;
+    Always seeds OBS_ROOTPRJ and OBS_CONTAINER_REGISTRY_ROOTPRJ from ``args.rootprj``;
     profile env + ``-e`` overrides take precedence.
     """
     env_vars: dict[str, str] = dict(auto_rootprj_env(args.rootprj))

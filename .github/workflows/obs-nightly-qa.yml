@@ -106,7 +106,7 @@ jobs:
           obs-password: ${{ secrets.OBS_PASSWORD }}
 
       # Same CI profile as the detect job so `qa run` re-resolves project.yaml
-      # parameters identically (same OBS_ROOTPRJ → same ${OBS_ROOTPRJ_SLASHES}).
+      # parameters identically (same OBS_ROOTPRJ → same ${OBS_CONTAINER_REGISTRY_ROOTPRJ}).
       - name: Write CI profile
         env:
           OBS_APIURL: ${{ vars.OBS_APIURL }}

@@ -635,7 +635,7 @@ def cmd_project_verify(args) -> None:
         scan_root = REPO_ROOT
 
     # Build env_vars from -P profile (if any), then apply -e overrides.
-    # Auto-inject OBS_ROOTPRJ / OBS_ROOTPRJ_SLASHES when rootprj is known so
+    # Auto-inject OBS_ROOTPRJ / OBS_CONTAINER_REGISTRY_ROOTPRJ when rootprj is known so
     # project.yaml entries that reference them validate without forcing
     # users to declare them in every profile.
     env_vars: dict[str, str] | None = None
