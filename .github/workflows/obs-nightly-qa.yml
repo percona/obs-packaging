@@ -2,9 +2,9 @@ name: OBS Nightly QA
 
 # Runs nightly (and on demand via workflow_dispatch) against `main`.
 # Discovers QA-enabled OBS subprojects beneath ${{ vars.OBS_ROOTPRJ }},
-# triggers Jenkins via `percona-obs qa run` for each matrix combo, posts
-# a per-combo commit status on the main HEAD, and finally aggregates the
-# results into one shields.io endpoint badge per top-level project
+# triggers Jenkins via `percona-obs qa run` for each matrix combo (each is
+# its own GitHub Actions check run on the main HEAD), and finally aggregates
+# the results into one shields.io endpoint badge per top-level project
 # (qa-badge-ppg-17.json, qa-badge-ppg-18.json, ...) on the `badges` branch.
 
 on:
@@ -24,16 +24,11 @@ jobs:
     outputs:
       has_matrix: ${{ steps.matrix.outputs.has_matrix }}
       matrix: ${{ steps.matrix.outputs.matrix }}
-      head_sha: ${{ steps.sha.outputs.head_sha }}
 
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
-
-      - name: Resolve main HEAD SHA
-        id: sha
-        run: echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - uses: ./.github/actions/obs-setup
         with:
@@ -77,17 +72,14 @@ jobs:
           fi
 
   # ──────────────────────────────────────────────────────────────────────────
-  # qa: trigger Jenkins for each matrix combo (in parallel), post a commit
-  # status on the main HEAD, upload the per-combo report JSON as artifact.
+  # qa: trigger Jenkins for each matrix combo (in parallel) and upload the
+  # per-combo report JSON as an artifact for the aggregate job.
   # ──────────────────────────────────────────────────────────────────────────
   qa:
     name: ${{ matrix.status_context }}
     needs: detect
     runs-on: ubuntu-latest
     if: needs.detect.outputs.has_matrix == 'true'
-    permissions:
-      # Required to post the commit status on the main HEAD.
-      statuses: write
 
     strategy:
       matrix:
@@ -126,19 +118,7 @@ jobs:
               value: 'openSUSE.org:'
           EOF
 
-      - name: Set pending QA status
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ needs.detect.outputs.head_sha }}
-        run: |
-          gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
-            -X POST \
-            -f "state=pending" \
-            -f "context=Nightly ${{ matrix.status_context }}" \
-            -f "description=QA running..."
-
       - name: Run qa pipeline
-        id: run
         env:
           JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
         run: |
@@ -146,43 +126,6 @@ jobs:
             --wait \
             --report-json /tmp/qa-report.json \
             ${{ matrix.axis_filters }}
-
-      # Always runs (after the pending status was posted) so the final status
-      # is never left as "pending" regardless of which earlier step failed.
-      - name: Post QA commit status
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ needs.detect.outputs.head_sha }}
-        run: |
-          BUILD_URL=""
-          BUILD_RESULT=""
-          if [ -f /tmp/qa-report.json ]; then
-            BUILD_URL=$(jq -r '.combos[0].build_url // ""' /tmp/qa-report.json)
-            BUILD_RESULT=$(jq -r '.combos[0].result // ""' /tmp/qa-report.json)
-          fi
-
-          RUN_OUTCOME="${{ steps.run.outcome }}"
-
-          if [ "$RUN_OUTCOME" = "success" ] && [ "$BUILD_RESULT" = "SUCCESS" ]; then
-            STATE="success"
-            DESC="QA passed"
-          elif [ -n "$BUILD_RESULT" ]; then
-            STATE="failure"
-            DESC="QA failed: ${BUILD_RESULT}"
-          else
-            STATE="failure"
-            DESC="QA failed to run"
-          fi
-
-          ARGS=(-X POST
-            -f "state=${STATE}"
-            -f "context=Nightly ${{ matrix.status_context }}"
-            -f "description=${DESC}")
-          if [ -n "$BUILD_URL" ]; then
-            ARGS+=(-f "target_url=${BUILD_URL}")
-          fi
-          gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" "${ARGS[@]}"
 
       # Upload the per-combo report so the aggregate job can build the badge.
       - name: Upload QA report artifact

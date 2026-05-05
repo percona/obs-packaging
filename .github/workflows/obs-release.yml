@@ -16,7 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      statuses: write
 
     env:
       OBS_APIURL: ${{ vars.OBS_APIURL }}
@@ -68,10 +67,8 @@ jobs:
       - name: Poll OBS build status
         id: poll
         env:
-          GH_TOKEN: ${{ github.token }}
           OBS_APIURL: ${{ vars.OBS_APIURL }}
           OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
-          OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/poll_obs_builds.py
 

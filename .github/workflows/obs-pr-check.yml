@@ -9,13 +9,11 @@ name: OBS PR Check
 #
 #   sync ──┬──> build ─────────────────────────┐
 #          │                                    │
-#          ├──> detect-qa-matrix ───────────────┴──> qa  (matrix)
-#          │                       │
-#          └──> (qa-cleanup) <─────┘  on build failure only
+#          └──> detect-qa-matrix ───────────────┴──> qa  (matrix)
 #
-# `detect-qa-matrix` runs in parallel with `build` and posts pending QA
-# commit statuses as soon as the matrix is known, so the PR shows the
-# upcoming QA jobs while OBS is still building packages.
+# `detect-qa-matrix` runs in parallel with `build`; the `qa` matrix combos
+# show up in the PR's check list as queued check runs as soon as detect
+# finishes, so the upcoming QA work is visible while OBS is still building.
 
 on:
   pull_request:
@@ -35,9 +33,6 @@ jobs:
     permissions:
       # Required to post/update the PR comment.
       pull-requests: write
-      # Required to post the "OBS Build" commit status on the PR head commit
-      # (release-only PR path).
-      statuses: write
 
     outputs:
       is_release_pr: ${{ steps.detect.outputs.is_release_pr }}
@@ -179,27 +174,6 @@ jobs:
               "$rel_project"
           done
 
-      # For release-only PRs there are no package builds to poll.  Report the
-      # commit status immediately based on the release dry-run outcome so the
-      # "OBS Build" check does not stay pending indefinitely.
-      - name: Report release PR commit status
-        if: steps.detect.outputs.is_release_pr == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ "${{ steps.release.outcome }}" = "success" ]; then
-            STATE="success"
-            DESC="Release dry-run passed"
-          else
-            STATE="failure"
-            DESC="Release dry-run failed"
-          fi
-          gh api "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -X POST \
-            -f "state=${STATE}" \
-            -f "context=OBS Build" \
-            -f "description=${DESC}"
-
       # The full build-status comment is posted by the `build` job (which has
       # the poll details).  This step only fires for the two terminal-in-sync
       # cases: release-only PRs and sync failures.  For successful non-release
@@ -237,7 +211,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
-      statuses: write
 
     env:
       PR_NUMBER: ${{ github.event.number }}
@@ -262,14 +235,12 @@ jobs:
 
       # Poll OBS until all builds in the PR project reach a terminal state.
       # Fails the job (and PR check) if any build fails, is broken, or is
-      # unresolvable.  Posts the "OBS Build" commit status itself.
+      # unresolvable.
       - name: Poll OBS build status
         id: poll
         env:
-          GH_TOKEN: ${{ github.token }}
           OBS_APIURL: ${{ vars.OBS_APIURL }}
           OBS_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}:pr-${{ github.event.number }}
-          OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/poll_obs_builds.py
 
@@ -287,17 +258,15 @@ jobs:
         run: python .github/scripts/post_pr_comment.py
 
   # ──────────────────────────────────────────────────────────────────────────
-  # detect-qa-matrix: discover QA-enabled OBS subprojects and post pending
-  # commit statuses for each combo.  Runs in parallel with `build` so the
-  # PR shows upcoming QA checks while packages are still building.
+  # detect-qa-matrix: discover QA-enabled OBS subprojects.  Runs in parallel
+  # with `build`; once it finishes, the `qa` matrix job's check runs appear in
+  # the PR's check list as queued, signalling the upcoming QA work.
   # ──────────────────────────────────────────────────────────────────────────
   detect-qa-matrix:
     name: Detect QA matrix
     needs: sync
     if: needs.sync.outputs.is_release_pr != 'true' && needs.sync.outputs.sync_outcome == 'success'
     runs-on: ubuntu-latest
-    permissions:
-      statuses: write
 
     outputs:
       has_matrix: ${{ steps.matrix.outputs.has_matrix }}
@@ -352,25 +321,6 @@ jobs:
             echo "has_matrix=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Post a pending commit status for every matrix combo so the PR's
-      # check list shows the upcoming QA jobs while OBS is still building.
-      # Each entry is updated later by the matching `qa` matrix job.
-      - name: Post pending QA commit statuses
-        if: steps.matrix.outputs.has_matrix == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          jq -r '.[] | .status_context' /tmp/qa-matrix.json \
-            | while IFS= read -r ctx; do
-                [ -z "$ctx" ] && continue
-                gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
-                  -X POST \
-                  -f "state=pending" \
-                  -f "context=${ctx}" \
-                  -f "description=Waiting for OBS builds to complete"
-              done
-
   # ──────────────────────────────────────────────────────────────────────────
   # qa: trigger and poll Jenkins, once per matrix combo (in parallel).
   # ──────────────────────────────────────────────────────────────────────────
@@ -379,9 +329,6 @@ jobs:
     needs: [build, detect-qa-matrix]
     if: needs.detect-qa-matrix.outputs.has_matrix == 'true' && needs.build.result == 'success'
     runs-on: ubuntu-latest
-    permissions:
-      # Required to post the commit status on the PR head commit.
-      statuses: write
 
     strategy:
       matrix:
@@ -419,19 +366,7 @@ jobs:
               value: 'openSUSE.org:'
           EOF
 
-      - name: Set pending QA status
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
-            -X POST \
-            -f "state=pending" \
-            -f "context=${{ matrix.status_context }}" \
-            -f "description=QA running..."
-
       - name: Run qa pipeline
-        id: run
         env:
           JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
         run: |
@@ -439,73 +374,3 @@ jobs:
             --wait \
             --report-json /tmp/qa-report.json \
             ${{ matrix.axis_filters }}
-
-      # Always runs (after the pending status was posted) so the final status
-      # is never left as "pending" regardless of which earlier step failed.
-      - name: Post QA commit status
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          BUILD_URL=""
-          BUILD_RESULT=""
-          if [ -f /tmp/qa-report.json ]; then
-            BUILD_URL=$(jq -r '.combos[0].build_url // ""' /tmp/qa-report.json)
-            BUILD_RESULT=$(jq -r '.combos[0].result // ""' /tmp/qa-report.json)
-          fi
-
-          RUN_OUTCOME="${{ steps.run.outcome }}"
-
-          if [ "$RUN_OUTCOME" = "success" ] && [ "$BUILD_RESULT" = "SUCCESS" ]; then
-            STATE="success"
-            DESC="QA passed"
-          elif [ -n "$BUILD_RESULT" ]; then
-            STATE="failure"
-            DESC="QA failed: ${BUILD_RESULT}"
-          else
-            STATE="failure"
-            DESC="QA failed to run"
-          fi
-
-          ARGS=(-X POST
-            -f "state=${STATE}"
-            -f "context=${{ matrix.status_context }}"
-            -f "description=${DESC}")
-          if [ -n "$BUILD_URL" ]; then
-            ARGS+=(-f "target_url=${BUILD_URL}")
-          fi
-          gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" "${ARGS[@]}"
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # qa-cleanup: when `build` fails, the pending QA statuses posted by
-  # `detect-qa-matrix` would otherwise sit as "pending" forever (because
-  # `qa` is skipped on build failure).  Flip them to "failure".
-  # ──────────────────────────────────────────────────────────────────────────
-  qa-cleanup:
-    name: QA cleanup (${{ matrix.status_context }})
-    needs: [build, detect-qa-matrix]
-    # `failure()` opts into running when an upstream `needs` has failed —
-    # without it GitHub Actions implicitly adds `success() &&` and the job
-    # would be skipped instead of running on a build failure.
-    if: ${{ failure() && needs.build.result == 'failure' && needs.detect-qa-matrix.outputs.has_matrix == 'true' }}
-    runs-on: ubuntu-latest
-    permissions:
-      statuses: write
-
-    strategy:
-      matrix:
-        include: ${{ fromJSON(needs.detect-qa-matrix.outputs.matrix) }}
-      fail-fast: false
-
-    steps:
-      - name: Mark QA as failed (OBS builds failed)
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
-            -X POST \
-            -f "state=failure" \
-            -f "context=${{ matrix.status_context }}" \
-            -f "description=Skipped: OBS builds failed"

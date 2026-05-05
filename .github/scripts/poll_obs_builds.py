@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
-"""Poll OBS build results until all builds reach a terminal state, then report
-the outcome as a GitHub commit status.
+"""Poll OBS build results until all builds reach a terminal state.
+
+Exits 0 when every build succeeded (or was excluded), and 1 when any build
+failed, was broken, or was unresolvable — so the calling GitHub Actions job
+fails when OBS reports a build problem.
+
+Also writes two artefacts for downstream consumers:
+
+  /tmp/obs-build-badge.json    shields.io endpoint JSON for the README badge
+  /tmp/obs-build-details.json  per-repo and per-state counts for the PR comment
 
 Required environment variables
 -------------------------------
 OBS_APIURL          OBS API URL (e.g. http://my-obs:3000)
 OBS_ROOTPRJ         Root OBS project (e.g. home:Admin:percona)
-GH_TOKEN            GitHub token — needs statuses:write on the repo
-GITHUB_REPOSITORY   owner/repo  (set automatically by GitHub Actions)
-GITHUB_SHA          Commit SHA to report on (set automatically)
 
 Optional environment variables
 -------------------------------
-OBS_WEB_URL         OBS web-UI base URL; used as the status target_url.
-                    Defaults to OBS_APIURL.
 OBS_POLL_INTERVAL   Seconds between polls (default: 30)
 OBS_INITIAL_WAIT    Seconds to wait before the first poll so OBS has time to
                     schedule builds after a fresh service upload (default: 30)
@@ -21,7 +24,6 @@ OBS_INITIAL_WAIT    Seconds to wait before the first poll so OBS has time to
 
 import json
 import os
-import subprocess
 import sys
 import time
 
@@ -35,10 +37,6 @@ from percona_obs.common import REPO_ROOT, find_packages, load_yaml
 # ---------------------------------------------------------------------------
 apiurl = os.environ["OBS_APIURL"]
 rootprj = os.environ["OBS_ROOTPRJ"]
-obs_web_url = os.environ.get("OBS_WEB_URL", apiurl).rstrip("/")
-gh_token = os.environ.get("GH_TOKEN", "")
-gh_repo = os.environ.get("GITHUB_REPOSITORY", "")
-gh_sha = os.environ.get("GITHUB_SHA", "")
 
 poll_interval = int(os.environ.get("OBS_POLL_INTERVAL", "30"))
 initial_wait = int(os.environ.get("OBS_INITIAL_WAIT", "30"))
@@ -65,29 +63,9 @@ for obs_project, package_path in find_packages(REPO_ROOT, root_obs):
         obs_name = rootprj + obs_name[len(root_obs) :]
     obs_projects.add(obs_name)
 
-print(f"Monitoring {len(obs_projects)} OBS project(s): {', '.join(sorted(obs_projects))}")
-
-# ---------------------------------------------------------------------------
-# GitHub commit status helper
-# ---------------------------------------------------------------------------
-_STATUS_CONTEXT = "OBS Build"
-
-
-def set_commit_status(state: str, description: str) -> None:
-    """Post a GitHub commit status.  No-op when credentials are absent."""
-    if not (gh_token and gh_repo and gh_sha):
-        return
-    cmd = [
-        "gh", "api",
-        f"repos/{gh_repo}/statuses/{gh_sha}",
-        "-X", "POST",
-        "-f", f"state={state}",
-        "-f", f"context={_STATUS_CONTEXT}",
-        "-f", f"description={description}",
-        "-f", f"target_url={obs_web_url}/project/show/{rootprj}",
-    ]
-    subprocess.run(cmd, env={**os.environ, "GH_TOKEN": gh_token}, check=False)
-
+print(
+    f"Monitoring {len(obs_projects)} OBS project(s): {', '.join(sorted(obs_projects))}"
+)
 
 # ---------------------------------------------------------------------------
 # Build-state classification
@@ -159,9 +137,8 @@ def write_details(
 
 
 # ---------------------------------------------------------------------------
-# Set pending status and wait for OBS to schedule the builds
+# Wait for OBS to schedule the builds, then poll
 # ---------------------------------------------------------------------------
-set_commit_status("pending", "Waiting for OBS to schedule builds…")
 print(f"Waiting {initial_wait}s for OBS to schedule builds…", flush=True)
 time.sleep(initial_wait)
 
@@ -211,10 +188,8 @@ if failed or broken or unresolvable:
         parts.append(f"{unresolvable} unresolvable")
     msg = ", ".join(parts)
     print(f"FAIL: {msg}", file=sys.stderr)
-    set_commit_status("failure", msg)
     sys.exit(1)
 
 msg = f"{succeeded} build(s) succeeded"
 print(f"OK: {msg}")
-set_commit_status("success", msg)
 sys.exit(0)

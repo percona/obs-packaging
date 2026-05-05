@@ -22,8 +22,6 @@ jobs:
     permissions:
       # Required to push the badge JSON to the badges branch.
       contents: write
-      # Required to post the "OBS Build" commit status.
-      statuses: write
       # Required to list/watch sibling workflow runs (gh run list/watch).
       actions: read
 
@@ -91,16 +89,14 @@ jobs:
         if: steps.release-guard.outputs.detected != 'true'
         run: venv/bin/python -m percona_obs --verbose -P main sync push --no-scm-validate
 
-      # Poll OBS until all builds reach a terminal state, then set a dedicated
-      # "OBS Build" commit status (success / failure).
+      # Poll OBS until all builds reach a terminal state.  Fails the job if
+      # any build fails, is broken, or is unresolvable.
       - name: Poll OBS build status
         id: poll
         if: steps.release-guard.outputs.detected != 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
           OBS_APIURL: ${{ vars.OBS_APIURL }}
           OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
-          OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/poll_obs_builds.py
 

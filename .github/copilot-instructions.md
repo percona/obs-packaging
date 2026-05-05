@@ -912,10 +912,10 @@ Reusable setup steps called by every workflow:
 2. Runs `obs-setup`.
 3. Creates a `percona-obs` profile named `main` pointing at `OBS_ROOTPRJ` with env vars `PERCONA_OBS_PACKAGING_BRANCH=main`, `PERCONA_OBS_PACKAGING_REPO=<repo-url>`, and `REMOTE_OBS_ORG_INTERCONNECT=` (empty — no interconnect in the self-hosted setup).
 4. Runs `percona-obs -P main sync push` to create/update OBS projects and packages, and delete any OBS packages whose local directories were removed.
-5. Runs `.github/scripts/poll_obs_builds.py` to poll `build status` until all packages reach a terminal state (`succeeded`/`failed`/`unresolvable`/`disabled`), then sets a dedicated **"OBS Build"** commit status on the HEAD SHA (green/red) via the GitHub Statuses API.
+5. Runs `.github/scripts/poll_obs_builds.py` to poll `build status` until all packages reach a terminal state (`succeeded`/`failed`/`unresolvable`/`disabled`). The script exits non-zero when any build failed/broke/was unresolvable, which fails the job's GitHub Actions check run — that check run is the merge-gating signal, no separate commit status is posted.
 
 **Required repository config**: `OBS_APIURL`, `OBS_WEB_URL`, `OBS_ROOTPRJ`, `OBS_USER` (vars); `OBS_PASSWORD` (secret).
-Permissions: `contents: write`, `statuses: write`.
+Permissions: `contents: write` (for badge publishing).
 
 ### Workflow 2 — `obs-pr-check.yml` (PR build check)
 
@@ -932,7 +932,7 @@ Permissions: `contents: write`, `statuses: write`.
 5. Posts (or updates) a PR comment with the OBS project URL and a table showing how many packages were built from source vs. aggregated from main. The comment is identified by an HTML marker `<!-- obs-pr-check -->` so it is updated in place on subsequent pushes to the PR. If the sync step failed, the comment is updated with an error notice instead.
 
 **Required repository config**: `OBS_APIURL`, `OBS_WEB_URL`, `OBS_ROOTPRJ`, `OBS_PR_ROOTPRJ`, `OBS_USER` (vars); `OBS_PASSWORD` (secret).
-Permissions: `contents: read`, `pull-requests: write`, `statuses: write`.
+Permissions: `contents: read`, `pull-requests: write`.
 
 `OBS_PR_ROOTPRJ` is the base prefix for PR-specific projects, e.g. `home:Admin:percona:pr`. The full PR project becomes `home:Admin:percona:pr:pr-42`. It is intentionally separate from `OBS_ROOTPRJ` so PR projects live in a distinct namespace and are never confused with the main project tree.
 
