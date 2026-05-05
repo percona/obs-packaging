@@ -54,7 +54,9 @@ project-config: |
 
   Prefer: glibc-minimal-langpack
 
+  BuildFlags: sbom:spdx
   BuildFlags: sbom:cyclonedx
+  PublishFlags: withsbom
   %endif
 
 qa:
