@@ -9,17 +9,70 @@ name: OBS Nightly QA
 
 on:
   schedule:
-    - cron: '0 2 * * *'      # 02:00 UTC nightly
+    - cron: '0 23 * * *'     # 23:00 UTC nightly
   workflow_dispatch: {}
 
 jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # changes: skip the rest of the workflow when nothing under root/ has
+  # changed since the last successful nightly QA run. workflow_dispatch
+  # always bypasses this check so manual runs are never suppressed.
+  # ──────────────────────────────────────────────────────────────────────────
+  changes:
+    name: Check root/ changes since last QA run
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      has_root_changes: ${{ steps.check.outputs.has_root_changes }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Check for root/ changes since last successful QA run
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Triggered manually — skipping change check."
+            echo "has_root_changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          LAST_SHA=$(gh run list \
+            --workflow obs-nightly-qa.yml \
+            --status success \
+            --limit 1 \
+            --json headSha \
+            --jq '.[0].headSha // empty' 2>/dev/null || true)
+          if [ -z "$LAST_SHA" ]; then
+            echo "No previous successful run found — running QA."
+            echo "has_root_changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Last successful QA run: $LAST_SHA"
+          CHANGES=$(git log --oneline "$LAST_SHA"..HEAD -- root/)
+          if [ -n "$CHANGES" ]; then
+            echo "Changes found in root/ since $LAST_SHA — running QA."
+            echo "has_root_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No changes in root/ since last QA run ($LAST_SHA) — skipping."
+            echo "has_root_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # ──────────────────────────────────────────────────────────────────────────
   # detect: discover QA-enabled subprojects under OBS_ROOTPRJ and emit the
   # GitHub Actions matrix.
   # ──────────────────────────────────────────────────────────────────────────
   detect:
     name: Detect QA matrix
+    needs: changes
     runs-on: ubuntu-latest
+    if: needs.changes.outputs.has_root_changes == 'true'
 
     outputs:
       has_matrix: ${{ steps.matrix.outputs.has_matrix }}
