@@ -154,6 +154,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
+          # Full history + GH_PAT so the README QA-badge update step can
+          # rebase and push back to main alongside the badges-branch push.
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
 
       - uses: actions/download-artifact@v4
         with:
@@ -191,3 +195,10 @@ jobs:
             fi
             gh api "repos/$GITHUB_REPOSITORY/contents/$NAME" "${ARGS[@]}"
           done
+
+      # Rewrite the QA Status column in README.md so each top-level
+      # distribution row links to its just-published shields.io badge.
+      # Idempotent and rebases against main, so it converges with concurrent
+      # sync-main pushes.
+      - name: Update README QA badges
+        run: python3 .github/scripts/update_qa_badges.py /tmp/qa-badges

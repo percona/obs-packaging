@@ -154,14 +154,15 @@ def update_readme(all_version_files: list[Path]) -> None:
         return
 
     if include_obs_link:
-        header = "| Distribution | OBS Project | Version List |"
-        sep = "|---|---|---|"
+        header = "| Distribution | OBS Project | Version List | QA Status |"
+        sep = "|---|---|---|---|"
         rows = "\n".join(
             (
                 f"| `{file_to_project_id(f)}` "
                 f"| [{obs_rootprj}:{file_to_project_id(f)}]"
                 f"({obs_web_url}/project/show/{obs_rootprj}:{file_to_project_id(f)}) "
-                f"| [{f.relative_to(REPO_ROOT)}]({f.relative_to(REPO_ROOT)}) |"
+                f"| [{f.relative_to(REPO_ROOT)}]({f.relative_to(REPO_ROOT)}) "
+                f"| Not Available |"
             )
             for f in all_version_files
         )
