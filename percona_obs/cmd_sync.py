@@ -81,6 +81,11 @@ _SYNC_MSG_RE = re.compile(r"^sync: [^@]+@([0-9a-f]+) \((.+)\)$")
 # Matches a branch aggregate message: branch: <profile> (<obs_project>/<package>)
 # Group 1 = profile name, group 2 = source OBS project.
 _BRANCH_MSG_RE = re.compile(r"^branch: (\S+) \((.+)/[^/]+\)$")
+# Matches <subproj>-images entries in --only-repos (e.g. "ubi9-images").
+_IMAGES_REPO_RE = re.compile(r"^(.+)-images$")
+# Matches leaf container subproject names in OBS project names.
+# e.g. "ppg:17:containers:ubi9" → group 1 = "ubi9"
+_CONTAINER_SUBPROJ_RE = re.compile(r":containers:([^:]+)$")
 
 
 _OBS_SUBSTITUTABLE = {"_service", "_aggregate", "_link"}
@@ -484,6 +489,26 @@ def cmd_sync(args):
         if branch_rootprj:
             branch_env_vars.update(auto_rootprj_env(branch_rootprj))
     only_repos: set[str] | None = getattr(args, "only_repos", None)
+    effective_only_repos: set[str] | None = None
+    container_subprojs: set[str] | None = None
+    if only_repos is not None:
+        effective_only_repos = set()
+        for _entry in only_repos:
+            _m = _IMAGES_REPO_RE.match(_entry)
+            if _m:
+                if container_subprojs is None:
+                    container_subprojs = set()
+                container_subprojs.add(_m.group(1))
+                effective_only_repos.add("images")
+            else:
+                effective_only_repos.add(_entry)
+    if container_subprojs is not None:
+        targets = [
+            (op, pp)
+            for op, pp in targets
+            if not (_csm := _CONTAINER_SUBPROJ_RE.search(op))
+            or _csm.group(1) in container_subprojs
+        ]
     seen_projects: set = set()
     local_project_names: set[str] = set()
     local_packages_by_project: dict[str, set[str]] = {}
@@ -574,8 +599,8 @@ def cmd_sync(args):
                     }
                 target_repos = _target_repos_cache[proj_path]
                 effective_repos = (
-                    target_repos & only_repos
-                    if only_repos is not None
+                    target_repos & effective_only_repos
+                    if effective_only_repos is not None
                     else target_repos
                 )
                 missing_repos = effective_repos - branch_repos
@@ -942,7 +967,7 @@ def cmd_sync(args):
                 active_projects=active_projects,
                 branch_rootprj=branch_rootprj,
                 existing_branch_projects=existing_branch_projects,
-                only_repos=only_repos,
+                only_repos=effective_only_repos,
             )
             if stripped:
                 needs_reconfig.append((raw_proj, prj_name, proj_path))
@@ -963,7 +988,7 @@ def cmd_sync(args):
                 active_projects=active_projects,
                 branch_rootprj=branch_rootprj,
                 existing_branch_projects=existing_branch_projects,
-                only_repos=only_repos,
+                only_repos=effective_only_repos,
             )
 
     if args.project_only:
@@ -1039,7 +1064,7 @@ def cmd_sync(args):
                             active_projects=active_projects,
                             branch_rootprj=branch_rootprj,
                             existing_branch_projects=chain_existing_branch_projects,
-                            only_repos=only_repos,
+                            only_repos=effective_only_repos,
                         )
                         if stripped:
                             chain_needs_reconfig.append((raw_proj, prj_name, proj_path))
@@ -1056,7 +1081,7 @@ def cmd_sync(args):
                         active_projects=active_projects,
                         branch_rootprj=branch_rootprj,
                         existing_branch_projects=chain_existing_branch_projects,
-                        only_repos=only_repos,
+                        only_repos=effective_only_repos,
                     )
 
         obs_dir = package_path / "obs"
