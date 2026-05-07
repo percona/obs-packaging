@@ -16,6 +16,8 @@ repositories:
         repository: RockyLinux_9
       - subproject: ppg:18
         repository: RockyLinux_9
+      - subproject: ppg:17
+        repository: RockyLinux_9
       - subproject: common:containers:ubi9
         repository: images
       - subproject: common:containers:ubi9
