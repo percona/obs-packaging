@@ -1,5 +1,9 @@
 %global pgmajor 18
 
+%if 0%{?rhel} >= 9
+%global gts_version 14
+%endif
+
 %define pgmajorversion %{pgmajor}
 %define pginstdir /usr/pgsql-%{pgmajorversion}/
 %global sname percona-pg_cron_%{pgmajorversion}
@@ -22,6 +26,9 @@ License:	AGPLv3
 Source0:	%{sname}-%{version}.tar.gz
 URL:		https://github.com/citusdata/pg_cron
 BuildRequires:	percona-postgresql%{pgmajorversion}-devel libxml2-devel
+%if 0%{?gts_version}
+BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
+%endif
 Requires:	postgresql%{pgmajorversion}-server
 Requires(post):	%{_sbindir}/update-alternatives
 Requires(postun):	%{_sbindir}/update-alternatives
@@ -88,6 +95,12 @@ This packages provides JIT support for pg_cron
 %setup -q -n %{sname}-%{version}
 
 %build
+%if 0%{?gts_version}
+export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
+rpmlibdir=$(rpm --eval "%{_libdir}")
+export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+%endif
 PATH=%{pginstdir}/bin/:$PATH %{__make} %{?_smp_mflags}
 
 %install

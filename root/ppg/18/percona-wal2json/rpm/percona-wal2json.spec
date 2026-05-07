@@ -1,4 +1,9 @@
 %global pgmajor 18
+
+%if 0%{?rhel} >= 9
+%global gts_version 14
+%endif
+
 %define pginstdir /usr/pgsql-%{pgmajorversion}
 
 %global sname wal2json
@@ -16,6 +21,9 @@ Patch0:		%{sname}-pg%{pgmajorversion}-makefile-pgxs.patch
 URL:		https://github.com/eulerto/wal2json
 BuildRequires:	percona-postgresql%{pgmajorversion}-devel
 BuildRequires:	krb5-devel
+%if 0%{?gts_version}
+BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
+%endif
 %if 0%{?suse_version} >= 1600
 BuildRequires:	clang19 llvm19
 %endif
@@ -47,6 +55,12 @@ schema-qualified, data types, and transaction ids.
 %patch  -P 0 -p0
 
 %build
+%if 0%{?gts_version}
+export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
+rpmlibdir=$(rpm --eval "%{_libdir}")
+export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+%endif
 %{__make} %{?_smp_mflags}
 
 %install

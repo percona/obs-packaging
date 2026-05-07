@@ -1,4 +1,9 @@
 %global pgmajor 18
+
+%if 0%{?rhel} >= 9
+%global gts_version 14
+%endif
+
 %global debug_package %{nil}
 %global __strip /bin/true
 %define _enable_debug_packages 0
@@ -18,8 +23,8 @@ License:        Apache-2.0
 URL:            https://github.com/Percona-Lab/pg_oidc_validator
 Source0:        %{name}-%{version}.tar.gz
 
-%if 0%{?rhel} && 0%{?rhel} <= 9
-BuildRequires:  gcc-toolset-14
+%if 0%{?gts_version}
+BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
 %endif
 
 BuildRequires:  percona-postgresql%{pgmajorversion}-devel
@@ -41,17 +46,21 @@ authentication for PostgreSQL connections.
 %setup -q
 
 %build
-%if 0%{?rhel} && 0%{?rhel} <= 9
-source /opt/rh/gcc-toolset-14/enable
+%if 0%{?gts_version}
+export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
+rpmlibdir=$(rpm --eval "%{_libdir}")
+export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
 %endif
 export PG_CONFIG=%{pginstdir}/bin/pg_config
 make USE_PGXS=1 %{?_smp_mflags} with_llvm=no COMPILER='g++ $(CXXFLAGS)'
 
 %install
-%if 0%{?rhel} && 0%{?rhel} <= 9
-source /opt/rh/gcc-toolset-14/enable
-#%else
-#source /opt/rh/gcc-toolset-15/enable
+%if 0%{?gts_version}
+export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
+rpmlibdir=$(rpm --eval "%{_libdir}")
+export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
 %endif
 export PG_CONFIG=%{pginstdir}/bin/pg_config
 make USE_PGXS=1 install DESTDIR=%{buildroot} with_llvm=no COMPILER='g++ $(CXXFLAGS)'

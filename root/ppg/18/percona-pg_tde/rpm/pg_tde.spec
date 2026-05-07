@@ -1,5 +1,8 @@
 %global pgmajor 18
 
+%if 0%{?rhel} >= 9
+%global gts_version 14
+%endif
 
 %define pgmajorversion %{pgmajor}
 %define pginstdir /usr/pgsql-%{pgmajorversion}/
@@ -25,6 +28,9 @@ URL:		https://github.com/%{sname}/%{sname}/
 Source0:	%{name}-%{version}.tar.gz
 
 BuildRequires:	percona-postgresql%{pgmajorversion}-devel chrpath openssl-devel libcurl-devel zlib-devel libxml2-devel libxslt-devel libselinux-devel pam-devel krb5-devel readline-devel
+%if 0%{?gts_version}
+BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
+%endif
 %if 0%{?fedora} || 0%{?rhel}
 BuildRequires:	json-c-devel lz4-devel libzstd-devel numactl-devel
 %endif
@@ -59,6 +65,12 @@ This packages provides JIT support for pg_tde
 %setup -q -n %{sname}-%{version}
 
 %build
+%if 0%{?gts_version}
+export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
+rpmlibdir=$(rpm --eval "%{_libdir}")
+export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+%endif
 sed -i 's:PG_CONFIG = pg_config:PG_CONFIG = /usr/pgsql-%{pgmajorversion}/bin/pg_config:' Makefile
 USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make}
 

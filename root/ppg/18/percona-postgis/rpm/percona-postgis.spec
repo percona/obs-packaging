@@ -3,6 +3,10 @@
 %global postgisminorversion 5
 %global postgissomajorversion 3
 %define pgmajorversion 18
+
+%if 0%{?rhel} >= 9
+%global gts_version 14
+%endif
 %global postgiscurrmajorversion %(echo %{postgismajorversion}|tr -d '.')
 %global sname	postgis
 
@@ -124,6 +128,9 @@ Source4:	%{sname}%{postgissomajorversion}-filter-requires-perl-Pg.sh
 URL:		https://www.postgis.net/
 
 BuildRequires:	percona-postgresql%{pgmajorversion}-devel libxml2 libxslt autoconf automake libtool gmp-devel pcre2-devel gcc gcc-c++
+%if 0%{?gts_version}
+BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
+%endif
 %if 0%{?rhel} && 0%{?rhel} == 9
 BuildRequires:	geos-devel libgeotiff-devel
 %else
@@ -321,6 +328,12 @@ This packages provides JIT support for postgis35
 %{__mv} postgis.pdf %{sname}-%{version}.pdf
 
 %build
+%if 0%{?gts_version}
+export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
+rpmlibdir=$(rpm --eval "%{_libdir}")
+export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+%endif
 LDFLAGS="-Wl,-rpath,%{geosinstdir}/lib64 ${LDFLAGS}" ; export LDFLAGS
 LDFLAGS="-Wl,-rpath,%{projinstdir}/lib64 ${LDFLAGS}" ; export LDFLAGS
 LDFLAGS="-Wl,-rpath,%{libspatialiteinstdir}/lib ${LDFLAGS}" ; export LDFLAGS

@@ -1,5 +1,9 @@
 %global sname percona-pg_stat_monitor
 %global pgrel 18
+
+%if 0%{?rhel} >= 9
+%global gts_version 14
+%endif
 %global rpm_release 1
 %global pginstdir /usr/pgsql-18/
 
@@ -12,6 +16,9 @@ Source0:        percona-pg-stat-monitor%{pgrel}-%{version}.tar.gz
 URL:            https://github.com/Percona-Lab/pg_stat_monitor
 BuildRequires:  percona-postgresql%{pgrel}-devel
 BuildRequires:  krb5-devel
+%if 0%{?gts_version}
+BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
+%endif
 %if 0%{?suse_version} >= 1600
 BuildRequires:  clang19 llvm19
 %endif
@@ -43,6 +50,12 @@ It provides all the features of pg_stat_statment plus its own feature set.
 
 
 %build
+%if 0%{?gts_version}
+export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
+rpmlibdir=$(rpm --eval "%{_libdir}")
+export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+%endif
 sed -i 's:PG_CONFIG ?= pg_config:PG_CONFIG = /usr/pgsql-%{pgrel}/bin/pg_config:' Makefile
 %{__make} USE_PGXS=1 %{?_smp_mflags}
 
