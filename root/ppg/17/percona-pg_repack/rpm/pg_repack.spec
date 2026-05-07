@@ -1,5 +1,10 @@
 %define pg_version 17
 %define pg_name percona-postgresql%{pg_version}
+
+%if 0%{?rhel} >= 9
+%global gts_version 14
+%endif
+
 %global _default_patch_fuzz 2
 %global sname   percona-pg_repack
 %global pgmajorversion %{pg_version}
@@ -26,6 +31,9 @@ Packager:       Percona Development Team <https://jira.percona.com>
 Vendor:         Percona, LLC
 
 BuildRequires:  %{pg_name}-devel, %{pg_name}
+%if 0%{?gts_version}
+BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
+%endif
 
 BuildRequires:        readline-devel zlib-devel
 # lz4 dependency
@@ -93,6 +101,12 @@ This package provides JIT support for pg_repack
 %patch -P 0 -p0
 
 %build
+%if 0%{?gts_version}
+export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
+rpmlibdir=$(rpm --eval "%{_libdir}")
+export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+%endif
 USE_PGXS=1 PATH=%{pginstdir}/bin/:$PATH %{__make} %{?_smp_mflags}
 
 %install

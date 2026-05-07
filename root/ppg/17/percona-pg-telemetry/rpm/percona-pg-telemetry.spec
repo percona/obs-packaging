@@ -1,6 +1,10 @@
 %define pg_version 17
 %define pg_name percona-postgresql%{pg_version}
 
+%if 0%{?rhel} >= 9
+%global gts_version 14
+%endif
+
 %global sname percona-pg-telemetry
 %global pgrel %{pg_version}
 %global pginstdir /usr/pgsql-%{pg_version}/
@@ -21,6 +25,9 @@ Name:           %{sname}
 BuildRequires: %{pg_name}-devel
 BuildRequires: clang
 BuildRequires: llvm
+%if 0%{?gts_version}
+BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
+%endif
 %if 0%{?suse_version}
 BuildRequires: chrpath
 %endif
@@ -40,6 +47,12 @@ The percona_pg_telemetry is an extension for Percona telemetry data collection f
 
 
 %build
+%if 0%{?gts_version}
+export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
+rpmlibdir=$(rpm --eval "%{_libdir}")
+export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+%endif
 sed -i 's:PG_CONFIG = pg_config:PG_CONFIG = /usr/pgsql-%{pgrel}/bin/pg_config:' Makefile
 %{__make} USE_PGXS=1 %{?_smp_mflags}
 

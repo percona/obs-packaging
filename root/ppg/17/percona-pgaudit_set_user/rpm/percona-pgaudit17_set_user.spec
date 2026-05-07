@@ -1,4 +1,9 @@
 %define pgmajorversion 17
+
+%if 0%{?rhel} >= 9
+%global gts_version 14
+%endif
+
 %global  sname pgaudit%{pgmajorversion}_set_user
 %define pginstdir /usr/pgsql-%{pgmajorversion}/
 
@@ -16,6 +21,9 @@ Packager:       Percona Development Team <https://jira.percona.com>
 Vendor:         Percona, LLC
 
 BuildRequires:	percona-postgresql%{pgmajorversion}-devel
+%if 0%{?gts_version}
+BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
+%endif
 %if 0%{?rhel} || 0%{?fedora}
 BuildRequires:	clang llvm
 %endif
@@ -37,6 +45,12 @@ The set_user part of that extension allows for extra logging with regard
 %setup -q -n %{name}-%{version}
 
 %build
+%if 0%{?gts_version}
+export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
+rpmlibdir=$(rpm --eval "%{_libdir}")
+export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+%endif
 sed -i 's:PG_CONFIG = pg_config:PG_CONFIG = /usr/pgsql-%{pgmajorversion}/bin/pg_config:' Makefile
 %{__make} USE_PGXS=1 %{?_smp_mflags}
 

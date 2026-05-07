@@ -1,5 +1,9 @@
 %define pg_version 17
 %define pg_name percona-postgresql%{pg_version}
+
+%if 0%{?rhel} >= 9
+%global gts_version 14
+%endif
 %define pgmajorversion %{pg_version}
 %define pginstdir /usr/pgsql-%{pgmajorversion}/
 %global pname pg_tde
@@ -30,6 +34,9 @@ URL:            https://github.com/percona/pg_tde
 Source0:        %{sname}-%{version}.tar.gz
 
 BuildRequires:  %{pg_name}-devel chrpath openssl-devel libcurl-devel zlib-devel libzstd-devel libxml2-devel libxslt-devel libselinux-devel pam-devel krb5-devel readline-devel
+%if 0%{?gts_version}
+BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
+%endif
 %if 0%{?suse_version} >= 1500
 BuildRequires:  libjson-c-devel liblz4-devel
 %else
@@ -83,6 +90,12 @@ Development and testing support files for pg_tde, including Perl test modules.
 %setup -q -n %{sname}-%{version}
 
 %build
+%if 0%{?gts_version}
+export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
+rpmlibdir=$(rpm --eval "%{_libdir}")
+export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+%endif
 sed -i 's:PG_CONFIG = pg_config:PG_CONFIG = /usr/pgsql-%{pgmajorversion}/bin/pg_config:' Makefile
 USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make}
 
