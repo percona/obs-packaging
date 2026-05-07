@@ -19,7 +19,7 @@ on:
   pull_request:
     branches: [main]
     paths: ['root/**']
-    types: [opened, synchronize, reopened]
+    types: [labeled, synchronize, reopened]
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
@@ -30,6 +30,9 @@ jobs:
   sync:
     name: Sync packages to OBS
     runs-on: ubuntu-latest
+    if: |
+      (github.event.action == 'labeled' && (github.event.label.name == 'obs-sync' || github.event.label.name == 'obs-sync-and-qa')) ||
+      (github.event.action != 'labeled' && (contains(github.event.pull_request.labels.*.name, 'obs-sync') || contains(github.event.pull_request.labels.*.name, 'obs-sync-and-qa')))
     permissions:
       # Required to post/update the PR comment.
       pull-requests: write
@@ -265,7 +268,7 @@ jobs:
   detect-qa-matrix:
     name: Detect QA matrix
     needs: sync
-    if: needs.sync.outputs.is_release_pr != 'true' && needs.sync.outputs.sync_outcome == 'success'
+    if: needs.sync.outputs.is_release_pr != 'true' && needs.sync.outputs.sync_outcome == 'success' && contains(github.event.pull_request.labels.*.name, 'obs-sync-and-qa')
     runs-on: ubuntu-latest
 
     outputs:
