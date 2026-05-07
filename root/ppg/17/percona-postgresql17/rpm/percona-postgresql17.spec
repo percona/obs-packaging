@@ -13,6 +13,10 @@
 %global beta 0
 %{?beta:%global __os_install_post /usr/lib/rpm/brp-compress}
 
+%if 0%{?rhel} >= 9
+%global gts_version 14
+%endif
+
 # Macros that define the configure parameters:
 %{!?kerbdir:%global kerbdir "/usr"}
 %{!?disablepgfts:%global disablepgfts 0}
@@ -105,6 +109,9 @@ Patch7:         llvm_static_linking.patch
 
 BuildRequires:  perl glibc-devel bison flex >= 2.5.31
 BuildRequires:  gcc-c++
+%if 0%{?gts_version}
+BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
+%endif
 BuildRequires:  perl(ExtUtils::MakeMaker)
 BuildRequires:  readline-devel zlib-devel >= 1.0.4
 BuildRequires:  libxml2-devel libxslt-devel
@@ -616,6 +623,16 @@ LDFLAGS="-Wl,--as-needed"; export LDFLAGS
 %endif
 
 export CFLAGS
+
+%if 0%{?gts_version}
+# Replicate /opt/rh/gcc-toolset-%%{gts_version}/enable so the toolset compiler
+# is first in PATH and its libraries/plugins (including annobin) are found.
+# This lets the -specs= entries in CFLAGS resolve correctly against GTS gcc.
+export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
+rpmlibdir=$(rpm --eval "%{_libdir}")
+export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+%endif
 
 %if 0%{?rhel} && 0%{?rhel} == 7
 %ifarch aarch64
