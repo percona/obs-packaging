@@ -169,6 +169,15 @@ def build_parser() -> argparse.ArgumentParser:
         "instead of uploading sources. Both profiles must share the same OBS instance.",
     )
     sync_push_parser.add_argument(
+        "--no-dep-cascade",
+        action="store_true",
+        default=False,
+        dest="no_dep_cascade",
+        help="With --branch-from: skip dependency-triggered promotion. Only packages "
+        "whose own files changed are promoted; packages that merely depend on them "
+        "stay aggregated. Container image packages are always promoted regardless.",
+    )
+    sync_push_parser.add_argument(
         "--only-repos",
         metavar="REPO[,REPO...]",
         type=lambda s: set(s.split(",")),

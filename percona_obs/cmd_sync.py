@@ -472,6 +472,10 @@ def cmd_sync(args):
             print(f"error: {rel}: {msg}", file=sys.stderr)
         sys.exit(1)
 
+    if getattr(args, "no_dep_cascade", False) and not args.branch_from:
+        print("error: --no-dep-cascade requires --branch-from", file=sys.stderr)
+        sys.exit(1)
+
     # Resolve --branch-from profile.
     branch_apiurl: str = apiurl  # defaults to the target OBS instance
     branch_rootprj: str | None = None
@@ -509,6 +513,15 @@ def cmd_sync(args):
             if not (_csm := _CONTAINER_SUBPROJ_RE.search(op))
             or _csm.group(1) in container_subprojs
         ]
+    # Precompute which decision keys correspond to container image packages so
+    # --no-dep-cascade can exempt them from the cascade-skip.
+    container_keys: set[tuple[str, str]] = set()
+    if getattr(args, "no_dep_cascade", False):
+        for _ck_proj, _ck_path in targets:
+            if is_dockerfile_image(_ck_path):
+                _ck_cfg = load_yaml(_ck_path.parent / "project.yaml")
+                _ck_name = _ck_cfg.get("name") or _ck_proj
+                container_keys.add((_ck_name, _ck_path.name))
     seen_projects: set = set()
     local_project_names: set[str] = set()
     local_packages_by_project: dict[str, set[str]] = {}
@@ -793,6 +806,11 @@ def cmd_sync(args):
                             "skip_branch",
                             "skip",
                         ):
+                            if (
+                                getattr(args, "no_dep_cascade", False)
+                                and dep_key not in container_keys
+                            ):
+                                continue
                             _print_action(
                                 f"dep-promote: {dep_key[0]}/{dep_key[1]}"
                                 f"  (depends on promoted {key[0]}/{key[1]})"
