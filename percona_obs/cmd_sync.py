@@ -483,6 +483,7 @@ def cmd_sync(args):
         )
         if branch_rootprj:
             branch_env_vars.update(auto_rootprj_env(branch_rootprj))
+    only_repos: set[str] | None = getattr(args, "only_repos", None)
     seen_projects: set = set()
     local_project_names: set[str] = set()
     local_packages_by_project: dict[str, set[str]] = {}
@@ -572,7 +573,12 @@ def cmd_sync(args):
                         if r.get("name")
                     }
                 target_repos = _target_repos_cache[proj_path]
-                missing_repos = target_repos - branch_repos
+                effective_repos = (
+                    target_repos & only_repos
+                    if only_repos is not None
+                    else target_repos
+                )
+                missing_repos = effective_repos - branch_repos
                 if missing_repos:
                     logger.debug(
                         f"branch decision: promote  {obs_project_name}/{package_path.name}"
@@ -936,6 +942,7 @@ def cmd_sync(args):
                 active_projects=active_projects,
                 branch_rootprj=branch_rootprj,
                 existing_branch_projects=existing_branch_projects,
+                only_repos=only_repos,
             )
             if stripped:
                 needs_reconfig.append((raw_proj, prj_name, proj_path))
@@ -956,6 +963,7 @@ def cmd_sync(args):
                 active_projects=active_projects,
                 branch_rootprj=branch_rootprj,
                 existing_branch_projects=existing_branch_projects,
+                only_repos=only_repos,
             )
 
     if args.project_only:
@@ -1031,6 +1039,7 @@ def cmd_sync(args):
                             active_projects=active_projects,
                             branch_rootprj=branch_rootprj,
                             existing_branch_projects=chain_existing_branch_projects,
+                            only_repos=only_repos,
                         )
                         if stripped:
                             chain_needs_reconfig.append((raw_proj, prj_name, proj_path))
@@ -1047,6 +1056,7 @@ def cmd_sync(args):
                         active_projects=active_projects,
                         branch_rootprj=branch_rootprj,
                         existing_branch_projects=chain_existing_branch_projects,
+                        only_repos=only_repos,
                     )
 
         obs_dir = package_path / "obs"

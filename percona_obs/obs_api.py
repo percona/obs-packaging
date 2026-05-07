@@ -909,6 +909,7 @@ def _apply_project_config(
     active_projects: "set[str] | None" = None,
     branch_rootprj: str | None = None,
     existing_branch_projects: "set[str] | None" = None,
+    only_repos: "set[str] | None" = None,
 ) -> "tuple[bool, bool]":
     """Create or update OBS project metadata and build config from project.yaml.
 
@@ -949,11 +950,14 @@ def _apply_project_config(
     build = project_config.get("build")
     if branch_rootprj is not None:
         build = None
+    repos = project_config.get("repositories", [])
+    if only_repos is not None:
+        repos = [r for r in repos if r.get("name") in only_repos]
     meta = build_project_meta(
         obs_project_name,
         project_config.get("title", ""),
         project_config.get("description", ""),
-        project_config.get("repositories", []),
+        repos,
         rootprj,
         publish=project_config.get("publish"),
         build=build,

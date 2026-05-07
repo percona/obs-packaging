@@ -168,6 +168,16 @@ def build_parser() -> argparse.ArgumentParser:
         "_aggregate that reuses pre-built binaries from that profile's OBS project "
         "instead of uploading sources. Both profiles must share the same OBS instance.",
     )
+    sync_push_parser.add_argument(
+        "--only-repos",
+        metavar="REPO[,REPO...]",
+        type=lambda s: set(s.split(",")),
+        default=None,
+        dest="only_repos",
+        help="Restrict OBS project meta to these repositories (comma-separated). "
+        "Packages are still synced normally; only the repository list in "
+        "the project meta is filtered.",
+    )
     sync_push_parser.set_defaults(func=cmd_sync)
 
     sync_delete_parser = sync_subparsers.add_parser(
