@@ -15,10 +15,10 @@ OBS services declared in each package's `obs/_service` file.
 
 Per-distribution package version lists, updated automatically after every successful OBS build. Each file lists all packages and container images with the version and release number last successfully built on OBS.
 
-| Distribution | OBS Project | Version List |
-|---|---|---|
-| `ppg:17` | [isv:percona:ppg:17](https://build.opensuse.org/project/show/isv:percona:ppg:17) | [docs/versions/ppg-17.md](docs/versions/ppg-17.md) |
-| `ppg:18` | [isv:percona:ppg:18](https://build.opensuse.org/project/show/isv:percona:ppg:18) | [docs/versions/ppg-18.md](docs/versions/ppg-18.md) |
+| Distribution | OBS Project | Version List | QA Status |
+|---|---|---|---|
+| `ppg:17` | [isv:percona:ppg:17](https://build.opensuse.org/project/show/isv:percona:ppg:17) | [docs/versions/ppg-17.md](docs/versions/ppg-17.md) | Not Available |
+| `ppg:18` | [isv:percona:ppg:18](https://build.opensuse.org/project/show/isv:percona:ppg:18) | [docs/versions/ppg-18.md](docs/versions/ppg-18.md) | Not Available |
 
 ## Documentation
 
