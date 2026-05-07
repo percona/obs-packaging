@@ -130,13 +130,18 @@ jobs:
       # Build --only-repos from any PR labels that are not control labels.
       # If repo labels like RockyLinux_9 or Debian_13 are present, sync push
       # will restrict OBS project meta to those repositories only.
+      # Also emits --no-dep-cascade when the no-dep-cascade label is set.
       - name: Resolve repo label filter
         id: repo-filter
         run: |
-          REPO_LABELS=$(echo '${{ toJSON(github.event.pull_request.labels.*.name) }}' \
-            | jq -r '[.[] | select(. != "obs-sync" and . != "obs-sync-and-qa")] | join(",")')
+          LABELS='${{ toJSON(github.event.pull_request.labels.*.name) }}'
+          CONTROL='. != "obs-sync" and . != "obs-sync-and-qa" and . != "no-dep-cascade"'
+          REPO_LABELS=$(echo "$LABELS" | jq -r "[.[] | select(${CONTROL})] | join(\",\")")
           if [ -n "$REPO_LABELS" ]; then
             echo "only_repos_arg=--only-repos ${REPO_LABELS}" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$LABELS" | jq -e '[.[] | select(. == "no-dep-cascade")] | length > 0' > /dev/null; then
+            echo "no_dep_cascade_arg=--no-dep-cascade" >> "$GITHUB_OUTPUT"
           fi
 
       # Dry run: shows the sync plan (which packages will be promoted vs
@@ -150,7 +155,8 @@ jobs:
             --dry-run \
             --branch-from main \
             --no-scm-validate \
-            ${{ steps.repo-filter.outputs.only_repos_arg }}
+            ${{ steps.repo-filter.outputs.only_repos_arg }} \
+            ${{ steps.repo-filter.outputs.no_dep_cascade_arg }}
 
       # -u disables Python stdout buffering so progress lines appear
       # immediately even though output is piped through tee.
@@ -164,6 +170,7 @@ jobs:
             --branch-from main \
             --no-scm-validate \
             ${{ steps.repo-filter.outputs.only_repos_arg }} \
+            ${{ steps.repo-filter.outputs.no_dep_cascade_arg }} \
             | tee /tmp/sync-output.txt
 
       # If the PR adds release.yaml files, test the release flow by running
