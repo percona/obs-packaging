@@ -32,6 +32,8 @@ def main() -> None:
     apiurl = os.environ["OBS_APIURL"]
     obs_project = os.environ["OBS_PROJECT"]
     profile = os.environ.get("PERCONA_OBS_PROFILE", "ci")
+    qa_types_raw = os.environ.get("QA_TYPES", "")
+    qa_types = {t.strip() for t in qa_types_raw.split(",") if t.strip()}
 
     osc.conf.get_config(override_apiurl=apiurl)
 
@@ -45,6 +47,9 @@ def main() -> None:
     matrix: list = []
     for full_name in subs:
         project = full_name[len(prefix) :]
+        proj_type = "containers" if ":containers:" in full_name else "packages"
+        if qa_types and proj_type not in qa_types:
+            continue
         result = subprocess.run(
             [
                 "venv/bin/python",
