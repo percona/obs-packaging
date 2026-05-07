@@ -31,8 +31,8 @@ jobs:
     name: Sync packages to OBS
     runs-on: ubuntu-latest
     if: |
-      (github.event.action == 'labeled' && (github.event.label.name == 'obs-sync' || github.event.label.name == 'obs-sync-and-qa')) ||
-      (github.event.action != 'labeled' && (contains(github.event.pull_request.labels.*.name, 'obs-sync') || contains(github.event.pull_request.labels.*.name, 'obs-sync-and-qa')))
+      (github.event.action == 'labeled' && (github.event.label.name == 'obs-sync' || github.event.label.name == 'qa-packages' || github.event.label.name == 'qa-containers')) ||
+      (github.event.action != 'labeled' && (contains(github.event.pull_request.labels.*.name, 'obs-sync') || contains(github.event.pull_request.labels.*.name, 'qa-packages') || contains(github.event.pull_request.labels.*.name, 'qa-containers')))
     permissions:
       # Required to post/update the PR comment.
       pull-requests: write
@@ -135,7 +135,7 @@ jobs:
         id: repo-filter
         run: |
           LABELS='${{ toJSON(github.event.pull_request.labels.*.name) }}'
-          CONTROL='. != "obs-sync" and . != "obs-sync-and-qa" and . != "no-dep-cascade"'
+          CONTROL='. != "obs-sync" and . != "qa-packages" and . != "qa-containers" and . != "no-dep-cascade"'
           REPO_LABELS=$(echo "$LABELS" | jq -r "[.[] | select(${CONTROL})] | join(\",\")")
           if [ -n "$REPO_LABELS" ]; then
             echo "only_repos_arg=--only-repos ${REPO_LABELS}" >> "$GITHUB_OUTPUT"
@@ -289,7 +289,9 @@ jobs:
   detect-qa-matrix:
     name: Detect QA matrix
     needs: sync
-    if: needs.sync.outputs.is_release_pr != 'true' && needs.sync.outputs.sync_outcome == 'success' && contains(github.event.pull_request.labels.*.name, 'obs-sync-and-qa')
+    if: |
+      needs.sync.outputs.is_release_pr != 'true' && needs.sync.outputs.sync_outcome == 'success' &&
+      (contains(github.event.pull_request.labels.*.name, 'qa-packages') || contains(github.event.pull_request.labels.*.name, 'qa-containers'))
     runs-on: ubuntu-latest
 
     outputs:
@@ -325,6 +327,21 @@ jobs:
               value: 'openSUSE.org:'
           EOF
 
+      # Build QA_TYPES from qa-packages / qa-containers labels.
+      # Passed to list_qa_matrix.py to restrict which subproject types are scanned.
+      - name: Resolve QA type filter
+        id: qa-types
+        run: |
+          LABELS='${{ toJSON(github.event.pull_request.labels.*.name) }}'
+          TYPES=""
+          if echo "$LABELS" | jq -e '[.[] | select(. == "qa-packages")] | length > 0' > /dev/null; then
+            TYPES="packages"
+          fi
+          if echo "$LABELS" | jq -e '[.[] | select(. == "qa-containers")] | length > 0' > /dev/null; then
+            TYPES="${TYPES:+$TYPES,}containers"
+          fi
+          echo "qa_types=${TYPES}" >> "$GITHUB_OUTPUT"
+
       # Iterate every immediate subproject of the PR's OBS root project, call
       # `percona-obs qa show <project> --json` for each, and concatenate the
       # results into a single matrix array (empty for subprojects without a
@@ -335,6 +352,7 @@ jobs:
           OBS_APIURL: ${{ vars.OBS_APIURL }}
           OBS_PROJECT: ${{ vars.OBS_PR_ROOTPRJ }}:pr-${{ github.event.number }}
           PYTHONPATH: ${{ github.workspace }}
+          QA_TYPES: ${{ steps.qa-types.outputs.qa_types }}
         run: |
           venv/bin/python .github/scripts/list_qa_matrix.py > /tmp/qa-matrix.json
           MATRIX=$(cat /tmp/qa-matrix.json)
