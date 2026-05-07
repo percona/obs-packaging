@@ -127,6 +127,18 @@ jobs:
             echo "is_release_pr=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Build --only-repos from any PR labels that are not control labels.
+      # If repo labels like RockyLinux_9 or Debian_13 are present, sync push
+      # will restrict OBS project meta to those repositories only.
+      - name: Resolve repo label filter
+        id: repo-filter
+        run: |
+          REPO_LABELS=$(echo '${{ toJSON(github.event.pull_request.labels.*.name) }}' \
+            | jq -r '[.[] | select(. != "obs-sync" and . != "obs-sync-and-qa")] | join(",")')
+          if [ -n "$REPO_LABELS" ]; then
+            echo "only_repos_arg=--only-repos ${REPO_LABELS}" >> "$GITHUB_OUTPUT"
+          fi
+
       # Dry run: shows the sync plan (which packages will be promoted vs
       # aggregated) before the real sync starts, making progress visible early.
       # A failure here aborts the workflow before the real sync runs.
@@ -137,7 +149,8 @@ jobs:
             -P "pr-${PR_NUMBER}" sync push \
             --dry-run \
             --branch-from main \
-            --no-scm-validate
+            --no-scm-validate \
+            ${{ steps.repo-filter.outputs.only_repos_arg }}
 
       # -u disables Python stdout buffering so progress lines appear
       # immediately even though output is piped through tee.
@@ -150,6 +163,7 @@ jobs:
             -P "pr-${PR_NUMBER}" sync push \
             --branch-from main \
             --no-scm-validate \
+            ${{ steps.repo-filter.outputs.only_repos_arg }} \
             | tee /tmp/sync-output.txt
 
       # If the PR adds release.yaml files, test the release flow by running
