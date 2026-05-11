@@ -89,7 +89,9 @@ jobs:
           OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
           OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
           PYTHONPATH: ${{ github.workspace }}
-        run: venv/bin/python .github/scripts/update_version_lists.py
+        run: |
+          git checkout main
+          venv/bin/python .github/scripts/update_version_lists.py
 
       # Create a GitHub release with the CHANGELOG section for this release-id.
       # Idempotent: if the release already exists (re-run), update its notes.
