@@ -204,9 +204,14 @@ def _emit_flag_section(
     """
     if flags is None:
         return
+    # Normalise {disable: true} / {enable: false} shorthand to a plain bool.
+    if isinstance(flags, dict) and set(flags.keys()) <= {"disable", "enable"}:
+        flags = not flags.get("disable", False)
     sec = ET.SubElement(parent, tag)
     if flags is False:
         ET.SubElement(sec, "disable")
+    elif flags is True:
+        ET.SubElement(sec, "enable")
     elif isinstance(flags, dict):
         for repo, enabled in flags.items():
             ET.SubElement(sec, "enable" if enabled else "disable", repository=repo)

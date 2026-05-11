@@ -1468,7 +1468,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
                     f"{subproject_name.capitalize()} subproject for {release_project}.\n"
                     "Builds are disabled; binaries are copied via osc release.\n"
                 ),
-                "build": {"disable": True},
+                "build": False,
                 "repositories": rewritten_repos,
             }
             for key in ("debuginfo", "publish", "project-config"):
