@@ -66,6 +66,9 @@ jobs:
           venv/bin/python -m percona_obs -P main \
             sync release "${{ steps.release-info.outputs.release_project }}"
 
+      - name: Wait for OBS to process the release
+        run: sleep 60
+
       # Update docs/versions/<dist>.md for all distribution projects and
       # refresh the README "## Version Lists" section.  GITHUB_EVENT_BEFORE is
       # omitted so the script regenerates all version lists (appropriate for a
