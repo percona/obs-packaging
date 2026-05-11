@@ -1380,7 +1380,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             "Binaries are populated by osc release and builds are disabled.\n"
             "This project is read-only — do not add or edit packages directly.\n"
         ),
-        "build": {"disable": True},
+        "build": False,
         "repositories": source_repos,
     }
     if source_debuginfo:
