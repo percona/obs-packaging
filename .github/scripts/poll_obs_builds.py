@@ -40,6 +40,9 @@ rootprj = os.environ["OBS_ROOTPRJ"]
 
 poll_interval = int(os.environ.get("OBS_POLL_INTERVAL", "30"))
 initial_wait = int(os.environ.get("OBS_INITIAL_WAIT", "30"))
+# When set, restrict monitoring to packages under this project subtree
+# (colon-notation relative to rootprj, e.g. "ppg:releases:17").
+scope_project = os.environ.get("OBS_SCOPE_PROJECT", "")
 
 # ---------------------------------------------------------------------------
 # Initialise osc (reads credentials from ~/.config/osc/oscrc)
@@ -49,11 +52,20 @@ osc.conf.get_config(override_apiurl=apiurl)
 # ---------------------------------------------------------------------------
 # Discover OBS projects from the local repo tree
 # ---------------------------------------------------------------------------
+from percona_obs.common import resolve_project_path
+
 root_config = load_yaml(REPO_ROOT / "project.yaml")
 root_obs = root_config.get("name") or rootprj
 
+if scope_project:
+    scope_path = resolve_project_path(scope_project)
+    scope_obs = f"{root_obs}:{scope_project}"
+else:
+    scope_path = REPO_ROOT
+    scope_obs = root_obs
+
 obs_projects: set[str] = set()
-for obs_project, package_path in find_packages(REPO_ROOT, root_obs):
+for obs_project, package_path in find_packages(scope_path, scope_obs):
     project_config = load_yaml(package_path.parent / "project.yaml")
     obs_name = project_config.get("name") or obs_project
     # When rootprj differs from root_obs (e.g. a PR-specific project like

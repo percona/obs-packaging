@@ -75,6 +75,7 @@ jobs:
         env:
           OBS_APIURL: ${{ vars.OBS_APIURL }}
           OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
+          OBS_SCOPE_PROJECT: ${{ steps.release-info.outputs.release_project }}
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/poll_obs_builds.py
 
