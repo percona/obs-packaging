@@ -1,5 +1,6 @@
 import argparse
 import concurrent.futures
+import datetime
 import re
 import subprocess
 import sys
@@ -24,6 +25,7 @@ from .common import (
     _load_project_config_with_inheritance,
     _print_create,
     _print_ok,
+    _print_pending,
     apply_env_substitution,
     auto_rootprj_env,
     build_project_meta,
@@ -48,6 +50,7 @@ from .obs_api import (
     _inject_obs_managed_elements,
     _obs_meta_to_yaml_debuginfo,
     _obs_meta_to_yaml_repos,
+    _obs_project_exists,
     _read_project_release_source,
 )
 from .cmd_build import (
@@ -1113,9 +1116,7 @@ def _rewrite_subproject_paths(
     """Rewrite subproject: path entries for a release subproject yaml.
 
     Rules applied to each path entry:
-      subproject == source_project_id             →  two entries:
-                                                       release_project_id:updates  (updated pkgs)
-                                                       release_project_id          (base release)
+      subproject == source_project_id             →  single entry: release_project_id
       subproject starts with source_project_id:   →  replace prefix with release_project_id;
                                                        skip if the result equals skip_subproject
       everything else (project:, external)        →  unchanged
@@ -1131,15 +1132,7 @@ def _rewrite_subproject_paths(
             subprj = path_entry.get("subproject")
             if subprj is not None:
                 if subprj == source_project_id:
-                    # Insert updates first so updated packages shadow the base release,
-                    # then the base release as fallback for packages not yet updated.
                     repo_name = path_entry.get("repository")
-                    new_paths.append(
-                        {
-                            "subproject": f"{release_project_id}:updates",
-                            "repository": repo_name,
-                        }
-                    )
                     new_paths.append(
                         {"subproject": release_project_id, "repository": repo_name}
                     )
@@ -1155,32 +1148,143 @@ def _rewrite_subproject_paths(
     return result
 
 
-def cmd_project_release(args: argparse.Namespace) -> None:
-    """Cut a release: create release.yaml, project.yaml, Updates/project.yaml, commit, and tag."""
-    product = args.project.split(":")[0]
+def _extract_upstream_info_from_service(
+    service_file: Path,
+) -> "tuple[str, str] | None":
+    """Return (url, revision) from the upstream obs_scm in an _service file, or None."""
+    try:
+        text = service_file.read_text("utf-8")
+        root_el = ET.fromstring(text)
+    except (ET.ParseError, OSError):
+        return None
+    for svc in root_el.findall("service"):
+        if svc.get("name") != "obs_scm":
+            continue
+        params = {p.get("name"): (p.text or "").strip() for p in svc.findall("param")}
+        if params.get("filename") in ("debian", "rpm"):
+            continue
+        if params.get("subdir") in ("debian", "rpm"):
+            continue
+        url = params.get("url", "")
+        revision = params.get("revision", "")
+        if url:
+            return url, revision
+    return None
 
-    # Validate the source project directory exists.
+
+def _build_upstream_release_url(
+    url: str, revision: str, pkg_version: str
+) -> "str | None":
+    """Build an upstream release URL from obs_scm url/revision."""
+    if not url:
+        return None
+    if "github.com" in url:
+        clean = url.rstrip("/")
+        if clean.endswith(".git"):
+            clean = clean[:-4]
+        if revision:
+            return f"{clean}/releases/tag/{revision}"
+        return clean
+    if "git.postgresql.org" in url:
+        parts = pkg_version.split(".")
+        if len(parts) >= 2:
+            return f"https://www.postgresql.org/docs/release/{parts[0]}.{parts[1]}/"
+    return url
+
+
+def _fetch_project_pkg_versions(apiurl: str, obs_project: str) -> "dict[str, str]":
+    """Return {pkg_name: versrel} for all packages in obs_project."""
+    pkg_names = sorted(_fetch_obs_package_names(apiurl, obs_project))
+    if not pkg_names:
+        return {}
+    pkg_archs = _fetch_all_pkg_archs(apiurl, obs_project)
+    result: dict[str, str] = {}
+    for pkg in pkg_names:
+        repo_arch = pkg_archs.get(pkg)
+        if not repo_arch:
+            continue
+        repo, arch = repo_arch
+        versrel = _fetch_pkg_versrel(apiurl, obs_project, repo, arch, pkg)
+        if versrel:
+            result[pkg] = versrel
+    return result
+
+
+def _build_changelog_section(
+    release_id: str,
+    source_versions: "dict[str, str]",
+    release_versions: "dict[str, str] | None",
+    source_path: Path,
+) -> str:
+    """Build a keep-a-changelog section for a release."""
+    today = datetime.date.today().isoformat()
+    added: list[str] = []
+    changed: list[str] = []
+    removed: list[str] = []
+
+    all_pkgs = set(source_versions.keys())
+    if release_versions:
+        all_pkgs |= set(release_versions.keys())
+
+    for pkg in sorted(all_pkgs):
+        src_ver = source_versions.get(pkg)
+        rel_ver = release_versions.get(pkg) if release_versions else None
+
+        if src_ver is None:
+            ver = rel_ver.split("-")[0] if rel_ver else "?"
+            removed.append(f"- {pkg}: removed (was {ver})")
+            continue
+
+        pkg_version = src_ver.split("-")[0]
+
+        url_str = ""
+        service_file = source_path / pkg / "obs" / "_service"
+        if service_file.is_file():
+            info = _extract_upstream_info_from_service(service_file)
+            if info:
+                upstream_url, revision = info
+                release_url = _build_upstream_release_url(
+                    upstream_url, revision, pkg_version
+                )
+                if release_url:
+                    url_str = f" ({release_url})"
+
+        if release_versions is None or rel_ver is None:
+            added.append(f"- {pkg}: add upstream version {pkg_version}{url_str}")
+        elif src_ver.split("-")[0] != rel_ver.split("-")[0]:
+            changed.append(f"- {pkg}: update upstream version {pkg_version}{url_str}")
+
+    if not source_versions:
+        todo = "<!-- TODO: fill in manually -->"
+        added = [todo]
+        changed = [todo]
+
+    lines: list[str] = [f"## [{release_id}] - {today}", ""]
+    lines += ["### Added"] + added + [""]
+    lines += ["### Changed"] + changed + [""]
+    lines += ["### Fixed", ""]
+
+    return "\n".join(lines)
+
+
+_CHANGELOG_HEADER = (
+    "# Changelog\n\n"
+    "All notable changes to this project will be documented in this file.\n\n"
+    "The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).\n\n"
+)
+
+
+def cmd_project_release(args: argparse.Namespace) -> None:
+    """Create or update a release: release.yaml, CHANGELOG.md, project.yaml, commit, and open a PR."""
+    product = args.project.split(":")[0]
+    major = args.project.split(":")[-1]
+
     source_path = resolve_project_path(args.project)
     if not source_path.is_dir():
         raise SystemExit(
             f"error: source project directory does not exist: {source_path}"
         )
 
-    release_dir = REPO_ROOT / product / "releases" / args.release_name
-    release_file = release_dir / "release.yaml"
-
-    if release_file.exists():
-        raise SystemExit(
-            f"error: release already exists: {release_file.relative_to(_REPO_DIR)}"
-        )
-
-    release_project = f"{product}:releases:{args.release_name}"
-    commit_msg = f"Release {release_project} from {args.project}"
-
-    # Fetch the source project's repository config and prjconf from OBS so
-    # the generated yaml files include complete build topology (repos, paths,
-    # archs, debuginfo, prjconf).  This lets _apply_project_config() manage
-    # the release and Updates OBS projects without special-casing empty repos.
     if not args.rootprj:
         raise SystemExit(
             "error: rootprj is required for 'project release': "
@@ -1188,9 +1292,54 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         )
     osc.conf.get_config(override_apiurl=args.apiurl)
     apiurl: str = osc.conf.config["apiurl"]
+
+    release_name: str = args.release_name or major
+    release_dir = REPO_ROOT / product / "releases" / release_name
+    release_project = f"{product}:releases:{release_name}"
     source_obs_project = f"{args.rootprj}:{args.project}"
     release_obs_project = f"{args.rootprj}:{release_project}"
 
+    is_first_release = not release_dir.is_dir()
+
+    # Load existing release list if updating.
+    existing_releases: list[str] = []
+    if not is_first_release:
+        existing_data = load_yaml(release_dir / "release.yaml")
+        raw = existing_data.get("releases")
+        if isinstance(raw, list):
+            existing_releases = [str(r) for r in raw]
+        elif existing_data.get("revision"):
+            existing_releases = [str(existing_data["revision"])]
+
+    # Auto-derive release-id from OBS if not provided.
+    release_id: str = args.release_id or ""
+    if not release_id:
+        pg_pkg = f"percona-postgresql{major}"
+        pkg_archs = _fetch_all_pkg_archs(apiurl, source_obs_project)
+        repo_arch = pkg_archs.get(pg_pkg)
+        if not repo_arch:
+            raise SystemExit(
+                f"error: package {pg_pkg} not found in {source_obs_project}; "
+                "use --release-id to specify manually"
+            )
+        repo, arch = repo_arch
+        versrel = _fetch_pkg_versrel(apiurl, source_obs_project, repo, arch, pg_pkg)
+        if not versrel:
+            raise SystemExit(
+                f"error: could not get built version of {pg_pkg} from {source_obs_project}; "
+                "use --release-id to specify manually"
+            )
+        ver_parts = versrel.split("-")[0].split(".")
+        major_minor = ".".join(ver_parts[:2])
+        matching_count = sum(1 for t in existing_releases if f"/{major_minor}-" in t)
+        release_id = f"{major_minor}-{matching_count + 1}"
+
+    tag = f"{product}/{release_id}"
+
+    if tag in existing_releases:
+        raise SystemExit(f"error: release tag {tag} is already present in release.yaml")
+
+    # Fetch source project topology from OBS.
     raw_meta = _decode_obs_response(
         osc.core.show_project_meta(apiurl, source_obs_project)
     )
@@ -1205,36 +1354,29 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     except urllib.error.HTTPError:
         source_prjconf = ""
 
-    # Build Updates repos: same repos as source but with the base release
-    # project prepended as the first <path> for each repository.
-    updates_repos = []
-    for repo in source_repos:
-        updates_repos.append(
-            {
-                "name": repo["name"],
-                "paths": [
-                    {"subproject": release_project, "repository": repo["name"]},
-                    *repo["paths"],
-                ],
-                "archs": repo["archs"],
-            }
-        )
+    # Build CHANGELOG section by diffing source vs release OBS package versions.
+    _print_pending("fetching package versions for CHANGELOG")
+    source_versions = _fetch_project_pkg_versions(apiurl, source_obs_project)
+    release_versions: dict[str, str] | None = None
+    if not is_first_release and _obs_project_exists(apiurl, release_obs_project):
+        release_versions = _fetch_project_pkg_versions(apiurl, release_obs_project)
+    changelog_section = _build_changelog_section(
+        release_id, source_versions, release_versions, source_path
+    )
 
     # Build release.yaml content.
-    revision = f"{product}/{args.release_name}"
-    release_data = {
+    new_releases_list = existing_releases + [tag]
+    release_data: dict = {
         "repository": "${PERCONA_OBS_PACKAGING_REPO}",
-        "revision": revision,
         "project": args.project,
+        "releases": new_releases_list,
     }
-    release_yaml = yaml.dump(release_data, default_flow_style=False, allow_unicode=True)
 
-    # Build project.yaml for the base release directory — complete snapshot of
-    # the source project's build topology with builds globally disabled.
+    # Build project.yaml for the release directory.
     project_data: dict = {
-        "title": f"{product} releases {args.release_name}",
+        "title": f"{product} releases {release_name}",
         "description": (
-            f"Release snapshot of {args.project} (release {release_project}).\n"
+            f"Release project for {args.project} (OBS project {release_project}).\n"
             "Binaries are populated by osc release and builds are disabled.\n"
             "This project is read-only — do not add or edit packages directly.\n"
         ),
@@ -1245,115 +1387,136 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         project_data["debuginfo"] = source_debuginfo
     if source_prjconf:
         project_data["project-config"] = source_prjconf
-    project_yaml = yaml.dump(project_data, default_flow_style=False, allow_unicode=True)
 
-    # Build project.yaml for the Updates subproject — same topology with the
-    # base release project as the first path, builds globally disabled.
-    updates_data: dict = {
-        "title": f"{product} releases {args.release_name} — Updates",
-        "description": (
-            f"Updates subproject for {release_project}.\n"
-            f"Contains update packages for {args.project} that have passed QA validation.\n"
-            f"Packages build against the base release ({release_project}).\n"
-        ),
-        "build": {"disable": True},
-        "repositories": updates_repos,
-    }
-    if source_prjconf:
-        updates_data["project-config"] = source_prjconf
-    updates_yaml = yaml.dump(updates_data, default_flow_style=False, allow_unicode=True)
+    if is_first_release:
+        commit_msg = f"Release {release_project} ({release_id})"
+    else:
+        commit_msg = f"Update release {release_project} ({release_id})"
 
-    # Show what will be created and ask for confirmation.
-    print(f"Release directory: {release_dir.relative_to(_REPO_DIR)}/")
+    # Preview and confirm.
+    print(f"{'First' if is_first_release else 'Update'} release: {release_project}")
+    print(f"  Tag:         {tag}")
+    print(f"  Directory:   {release_dir.relative_to(_REPO_DIR)}/")
     print()
-    print(f"  release.yaml:")
-    for line in release_yaml.splitlines():
+    print("  CHANGELOG section preview:")
+    for line in changelog_section.splitlines()[:10]:
         print(f"    {line}")
+    if changelog_section.count("\n") > 10:
+        print("    ...")
     print()
     print(f"  Commit message: {commit_msg}")
     print()
 
     try:
-        answer = input("Create release? [y/N] ").strip().lower()
+        answer = (
+            input(
+                "Create release? [y/N] "
+                if is_first_release
+                else "Update release? [y/N] "
+            )
+            .strip()
+            .lower()
+        )
     except (EOFError, KeyboardInterrupt):
         print()
         raise SystemExit("Aborted.")
     if answer not in ("y", "yes"):
         raise SystemExit("Aborted.")
 
-    # Write all files.
-    release_dir.mkdir(parents=True, exist_ok=True)
-    with release_file.open("w") as f:
-        yaml.dump(release_data, f, default_flow_style=False, allow_unicode=True)
-    _print_create(str(release_file.relative_to(_REPO_DIR)))
+    # Write files.
+    committed_paths: list[str] = []
 
-    project_file = release_dir / "project.yaml"
-    with project_file.open("w") as f:
-        yaml.dump(project_data, f, default_flow_style=False, allow_unicode=True)
-    _print_create(str(project_file.relative_to(_REPO_DIR)))
+    if is_first_release:
+        release_dir.mkdir(parents=True, exist_ok=True)
 
-    updates_dir = release_dir / "updates"
-    updates_dir.mkdir(exist_ok=True)
-    updates_file = updates_dir / "project.yaml"
-    with updates_file.open("w") as f:
-        yaml.dump(updates_data, f, default_flow_style=False, allow_unicode=True)
-    _print_create(str(updates_file.relative_to(_REPO_DIR)))
+        release_file = release_dir / "release.yaml"
+        with release_file.open("w") as f:
+            yaml.dump(release_data, f, default_flow_style=False, allow_unicode=True)
+        _print_create(str(release_file.relative_to(_REPO_DIR)))
+        committed_paths.append(str(release_file.relative_to(_REPO_DIR)))
 
-    # Walk source project subprojects (e.g. containers/) and generate a
-    # corresponding release subproject yaml for each with path substitutions:
-    # references to the source project become references to the Updates subproject
-    # so container images rebuild automatically when packages are updated.
-    # Builds are intentionally left enabled (no build:{disable}) for these subprojects.
-    source_dir = resolve_project_path(args.project)
-    sub_files: list[Path] = []
-    for sub_obs_id, sub_path in find_projects(source_dir, args.project):
-        if sub_obs_id == args.project:
-            continue  # skip the source project itself
-        subproject_name = sub_obs_id[len(args.project) + 1 :]  # e.g. "containers"
-        source_sub_config = load_yaml(sub_path / "project.yaml")
+        project_file = release_dir / "project.yaml"
+        with project_file.open("w") as f:
+            yaml.dump(project_data, f, default_flow_style=False, allow_unicode=True)
+        _print_create(str(project_file.relative_to(_REPO_DIR)))
+        committed_paths.append(str(project_file.relative_to(_REPO_DIR)))
 
-        rewritten_repos = _rewrite_subproject_paths(
-            source_sub_config.get("repositories", []),
-            args.project,
-            release_project,
-            skip_subproject=f"{release_project}:{subproject_name}",
+        changelog_file = release_dir / "CHANGELOG.md"
+        changelog_file.write_text(
+            _CHANGELOG_HEADER + changelog_section + "\n", encoding="utf-8"
         )
-        sub_data: dict = {
-            "title": f"{product} releases {args.release_name} — {subproject_name}",
-            "description": (
-                f"{subproject_name.capitalize()} subproject for {release_project}.\n"
-                f"Rebuilds against {release_project}:updates when packages are updated.\n"
-            ),
-            "repositories": rewritten_repos,
-        }
-        for key in ("debuginfo", "publish", "project-config"):
-            if key in source_sub_config:
-                sub_data[key] = source_sub_config[key]
+        _print_create(str(changelog_file.relative_to(_REPO_DIR)))
+        committed_paths.append(str(changelog_file.relative_to(_REPO_DIR)))
 
-        release_sub_dir = release_dir / subproject_name
-        release_sub_dir.mkdir(exist_ok=True)
-        release_sub_file = release_sub_dir / "project.yaml"
-        with release_sub_file.open("w") as f:
-            yaml.dump(sub_data, f, default_flow_style=False, allow_unicode=True)
-        _print_create(str(release_sub_file.relative_to(_REPO_DIR)))
-        sub_files.append(release_sub_file)
+        # Walk source subprojects and generate release subproject project.yaml files.
+        for sub_obs_id, sub_path in find_projects(source_path, args.project):
+            if sub_obs_id == args.project:
+                continue
+            if not (sub_path / "project.yaml").is_file():
+                continue  # intermediate directory, not a real OBS project
+            subproject_name = sub_obs_id[len(args.project) + 1 :]
+            source_sub_config = load_yaml(sub_path / "project.yaml")
+            rewritten_repos = _rewrite_subproject_paths(
+                source_sub_config.get("repositories", []),
+                args.project,
+                release_project,
+                skip_subproject=f"{release_project}:{subproject_name}",
+            )
+            sub_data: dict = {
+                "title": f"{product} releases {release_name} — {subproject_name}",
+                "description": (
+                    f"{subproject_name.capitalize()} subproject for {release_project}.\n"
+                    "Builds are disabled; binaries are copied via osc release.\n"
+                ),
+                "build": {"disable": True},
+                "repositories": rewritten_repos,
+            }
+            for key in ("debuginfo", "publish", "project-config"):
+                if key in source_sub_config:
+                    sub_data[key] = source_sub_config[key]
+            release_sub_dir = release_dir / Path(*subproject_name.split(":"))
+            release_sub_dir.mkdir(parents=True, exist_ok=True)
+            release_sub_file = release_sub_dir / "project.yaml"
+            with release_sub_file.open("w") as f:
+                yaml.dump(sub_data, f, default_flow_style=False, allow_unicode=True)
+            _print_create(str(release_sub_file.relative_to(_REPO_DIR)))
+            committed_paths.append(str(release_sub_file.relative_to(_REPO_DIR)))
 
-    # Git add all files and commit -s.  The release tag is created
-    # automatically by obs-pr-cleanup.yml when the PR is merged.
-    paths = [
-        str(release_file.relative_to(_REPO_DIR)),
-        str(project_file.relative_to(_REPO_DIR)),
-        str(updates_file.relative_to(_REPO_DIR)),
-        *[str(f.relative_to(_REPO_DIR)) for f in sub_files],
-    ]
-    subprocess.run(["git", "add", *paths], cwd=_REPO_DIR, check=True)
+    else:
+        # Update path: append tag to releases list and prepend changelog section.
+        release_file = release_dir / "release.yaml"
+        with release_file.open("w") as f:
+            yaml.dump(release_data, f, default_flow_style=False, allow_unicode=True)
+        _print_create(str(release_file.relative_to(_REPO_DIR)))
+        committed_paths.append(str(release_file.relative_to(_REPO_DIR)))
+
+        changelog_file = release_dir / "CHANGELOG.md"
+        if changelog_file.is_file():
+            existing_changelog = changelog_file.read_text("utf-8")
+            m = re.search(r"\n(## \[)", existing_changelog)
+            if m:
+                insert_pos = m.start() + 1
+                new_content = (
+                    existing_changelog[:insert_pos]
+                    + changelog_section
+                    + "\n"
+                    + existing_changelog[insert_pos:]
+                )
+            else:
+                new_content = (
+                    existing_changelog.rstrip() + "\n\n" + changelog_section + "\n"
+                )
+        else:
+            new_content = _CHANGELOG_HEADER + changelog_section + "\n"
+        changelog_file.write_text(new_content, encoding="utf-8")
+        _print_create(str(changelog_file.relative_to(_REPO_DIR)))
+        committed_paths.append(str(changelog_file.relative_to(_REPO_DIR)))
+
+    # Commit.
+    subprocess.run(["git", "add", "--", *committed_paths], cwd=_REPO_DIR, check=True)
     subprocess.run(
-        ["git", "commit", "-s", "-m", commit_msg, "--", *paths],
+        ["git", "commit", "-s", "-m", commit_msg, "--", *committed_paths],
         cwd=_REPO_DIR,
         check=True,
     )
-
     _print_ok(commit_msg)
-    print()
-    print("  Open a pull request — the release tag is created automatically on merge.")
-    print("    git push -u origin HEAD")

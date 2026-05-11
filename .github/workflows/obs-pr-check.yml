@@ -40,7 +40,6 @@ jobs:
     outputs:
       is_release_pr: ${{ steps.detect.outputs.is_release_pr }}
       sync_outcome: ${{ steps.sync.outcome }}
-      release_outcome: ${{ steps.release.outcome }}
 
     env:
       PR_NUMBER: ${{ github.event.number }}
@@ -173,31 +172,6 @@ jobs:
             ${{ steps.repo-filter.outputs.no_dep_cascade_arg }} \
             | tee /tmp/sync-output.txt
 
-      # If the PR adds release.yaml files, test the release flow by running
-      # sync release against the PR's OBS project.  The source project lives
-      # in the production namespace (OBS_ROOTPRJ) — not in the PR namespace —
-      # so --source-rootprj is used to read its topology from there while the
-      # release target is still created under the PR project.
-      - name: Test release (if PR adds release.yaml)
-        id: release
-        if: steps.detect.outputs.is_release_pr == 'true' || steps.sync.outcome == 'success'
-        run: |
-          RELEASES=$(git diff --name-only --diff-filter=A origin/main...HEAD -- 'root/*/releases/*/release.yaml')
-          if [ -z "$RELEASES" ]; then
-            echo "No release commits in this PR"
-            exit 0
-          fi
-          for release_file in $RELEASES; do
-            rel_path="${release_file#root/}"
-            rel_dir="${rel_path%/release.yaml}"
-            rel_project="${rel_dir//\//:}"
-            echo "Releasing: $rel_project"
-            venv/bin/python -m percona_obs -P "pr-${PR_NUMBER}" \
-              sync release --force \
-              --source-rootprj "$OBS_ROOTPRJ" \
-              "$rel_project"
-          done
-
       # The full build-status comment is posted by the `build` job (which has
       # the poll details).  This step only fires for the two terminal-in-sync
       # cases: release-only PRs and sync failures.  For successful non-release
@@ -208,7 +182,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           IS_RELEASE_PR: ${{ steps.detect.outputs.is_release_pr }}
           SYNC_OUTCOME: ${{ steps.sync.outcome }}
-          RELEASE_OUTCOME: ${{ steps.release.outcome }}
+          RELEASE_OUTCOME: ''
           POLL_OUTCOME: ''
           WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}

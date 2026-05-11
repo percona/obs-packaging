@@ -1536,52 +1536,6 @@ def _copy_project_conf(
     _print_create(f"project config  {target_obs_project}")
 
 
-def _create_update_subproject(
-    apiurl: str,
-    sub_obs_project: str,
-    base_release_project: str,
-    source_repo_elems: list[ET.Element],
-    dry_run: bool = False,
-) -> None:
-    """Create an Updates subproject on OBS with builds globally disabled.
-
-    Each repository is built from the corresponding source repository:
-    a <path> pointing at the base release project is prepended, followed
-    by the source's original <path> entries, then the source's <arch>
-    entries.  Builds are globally disabled so that packages are only
-    built when explicitly re-enabled.
-    """
-    root = ET.Element("project", name=sub_obs_project)
-    ET.SubElement(root, "title").text = sub_obs_project
-    ET.SubElement(root, "description").text = (
-        f"Updates subproject for {sub_obs_project}.\n"
-        "Contains update packages that have passed QA validation.\n"
-        "Packages build against the base release project."
-    )
-    build_elem = ET.SubElement(root, "build")
-    ET.SubElement(build_elem, "disable")
-
-    for source_repo in source_repo_elems:
-        repo_name = source_repo.get("name", "")
-        if not repo_name:
-            continue
-        repo_elem = ET.SubElement(root, "repository", name=repo_name)
-        ET.SubElement(
-            repo_elem, "path", project=base_release_project, repository=repo_name
-        )
-        for path in source_repo.findall("path"):
-            repo_elem.append(copy.deepcopy(path))
-        for arch in source_repo.findall("arch"):
-            repo_elem.append(copy.deepcopy(arch))
-
-    ET.indent(root, space="  ")
-    meta = ET.tostring(root, encoding="unicode")
-
-    _print_create(sub_obs_project)
-    if not dry_run:
-        _edit_project_meta(apiurl, sub_obs_project, meta, force=False)
-
-
 def _add_release_targets(
     apiurl: str,
     source_obs_project: str,

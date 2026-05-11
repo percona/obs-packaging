@@ -44,16 +44,22 @@ jobs:
             profile create main
 
       # Derive the release project from the tag name.
-      # Tag ppg/17.9 → release project ppg:releases:17.9
+      # Tag ppg/17.9-1 → product=ppg, version=17.9-1, major=17
+      # → release project ppg:releases:17
       - name: Derive release project
         id: release-info
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
           PRODUCT="${TAG%%/*}"
           VERSION="${TAG#*/}"
-          RELEASE_PROJECT="${PRODUCT}:releases:${VERSION}"
+          MAJOR_VERSION="${VERSION%%.*}"
+          RELEASE_PROJECT="${PRODUCT}:releases:${MAJOR_VERSION}"
+          RELEASE_ID="${VERSION}"
           echo "release_project=$RELEASE_PROJECT" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "product=$PRODUCT" >> "$GITHUB_OUTPUT"
+          echo "major_version=$MAJOR_VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
 
       - name: Release to OBS
         run: |
@@ -84,3 +90,22 @@ jobs:
           OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/update_version_lists.py
+
+      # Create a GitHub release with the CHANGELOG section for this release-id.
+      # Idempotent: if the release already exists (re-run), update its notes.
+      - name: Create GitHub release
+        if: steps.poll.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          TAG="${{ steps.release-info.outputs.tag }}"
+          RELEASE_ID="${{ steps.release-info.outputs.release_id }}"
+          CHANGELOG="root/${{ steps.release-info.outputs.product }}/releases/${{ steps.release-info.outputs.major_version }}/CHANGELOG.md"
+          BODY=$(venv/bin/python3 -c \
+            "import re,sys; content=open(sys.argv[2]).read(); m=re.search(r'(## \['+re.escape(sys.argv[1])+r'\].*?)(?=\n## \[|\Z)',content,re.DOTALL); print(m.group(1).strip() if m else '')" \
+            "$RELEASE_ID" "$CHANGELOG" 2>/dev/null || true)
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "${BODY:-No changelog available.}" \
+          || gh release edit "$TAG" \
+            --notes "${BODY:-No changelog available.}"

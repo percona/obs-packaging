@@ -26,6 +26,11 @@ runs:
       run: |
         python -m venv venv
         venv/bin/pip install --quiet -r requirements.txt
+        # Prevent osc's git_version.py from finding this repo's git tags when
+        # run from inside venv/. Without this, `git describe` returns our
+        # release tags (e.g. ppg/17.9-1) which osc cannot parse as its own
+        # version string, crashing at import time.
+        echo "GIT_CEILING_DIRECTORIES=$GITHUB_WORKSPACE/venv" >> "$GITHUB_ENV"
 
     # Install OBS service binaries required by percona-obs sync push when
     # packages have local services (obs_scm, go_modules, …).

@@ -501,139 +501,166 @@ are silently excluded from the output.
 
 ## Releasing packages
 
-A release captures a specific point-in-time snapshot of a source OBS project —
-copying its built binaries into a separate, immutable release project.
+A release captures a point-in-time snapshot of a source OBS project by copying
+its built binaries into a dedicated release project. Release IDs include the PG
+minor version and a counter (e.g. `17.9-1`, `17.9-2`, `17.10-1`). A single OBS
+release project (`ppg:releases:17`) covers all minor versions for a PG major.
 
 The process is PR-based:
 
-1. **`project release`** — records the intent locally: creates `release.yaml` and all
-   supporting `project.yaml` files, commits them, and asks you to open a pull request.
-2. **CI on PR merge** — `obs-pr-cleanup.yml` creates the git tag automatically.
-3. **`obs-release.yml`** — triggered by the tag, runs `sync release` in CI.
+1. **`project release`** — auto-derives the release ID from OBS, creates or updates
+   `release.yaml` and `CHANGELOG.md`, commits, pushes a branch, and opens a review PR.
+2. **PR review** — the PR is review-only (no OBS build). Check `CHANGELOG.md` and merge.
+3. **`sync-main.yml`** — after the merge commit lands, detects the changed `release.yaml`
+   and creates the git tag (e.g. `ppg/17.9-1`).
+4. **`obs-release.yml`** — triggered by the tag, runs `sync release` in CI, then creates
+   a GitHub release with the changelog contents.
 
-### Step 1 — Cut a release record
-
-```sh
-./percona-obs -P local project release ppg:17 17.9
-```
-
-`project release <source-project> <release-name>` does the following:
-
-1. Shows a preview of what will be created and asks for confirmation.
-2. Fetches the source project's repository topology from OBS.
-3. Creates files under `root/<product>/releases/<release-name>/`:
-   - `release.yaml` — records the git revision and source OBS project.
-   - `project.yaml` — base release project (builds disabled, mirrors source repos).
-   - `Updates/project.yaml` — Updates subproject (builds disabled, paths to base release).
-   - `<subproject>/project.yaml` for each source subproject (e.g. `containers/`) — builds
-     enabled, paths rewritten to reference `Updates` and the base release project so
-     container images rebuild automatically when packages are updated.
-4. Commits all files with `git commit -s -m "Release <release-project> from <source-project>"`.
-
-After the command completes, push the branch and open a pull request:
+### Step 1 — Create or update a release
 
 ```sh
-git push -u origin HEAD
+# Fully automatic — both release-name and release-id derived from OBS
+./percona-obs -P local project release ppg:17
+
+# Override release-name only
+./percona-obs -P local project release ppg:17 --release-name 17
+
+# Override both
+./percona-obs -P local project release ppg:17 --release-name 17 --release-id 17.9-1
 ```
 
-> The release tag (`ppg/17.9`) is created automatically by CI when the PR is merged.
-> That tag then triggers the `obs-release.yml` workflow, which runs `sync release`.
+`project release <source-project>` does the following:
 
-### Step 2 — CI validates and ships the release
+1. **Auto-derives `release-id`** (if not given with `--release-id`):
+   - Queries OBS for the built version of `percona-postgresql<major>` in the source project.
+   - Extracts `MAJOR.MINOR` (e.g. `17.9` from `17.9.0-1.1`).
+   - Counts existing entries in `release.yaml` whose tag matches `/<MAJOR.MINOR>-*`
+     and appends the next counter (e.g. `17.9-1`, or `17.9-2` if `17.9-1` already exists).
+2. **Fetches** the source project's repository topology from OBS.
+3. **Builds `CHANGELOG.md`** — compares built package versions in the source OBS project
+   against the release OBS project (for updates) and generates entries with upstream URLs.
+4. **First release** (`root/<product>/releases/<release-name>/` does not exist):
+   - Creates `release.yaml`, `project.yaml`, `CHANGELOG.md`.
+   - Creates `<subproject>/project.yaml` for each source subproject (e.g. `containers:ubi9/`)
+     with builds disabled and paths rewritten to point directly at the release project.
+5. **Update release** (directory already exists):
+   - Appends the new tag to `release.yaml`'s `releases:` list.
+   - Prepends a new section to `CHANGELOG.md`.
+6. **Commits** the generated files locally. Push the branch and open a PR manually.
 
-When the release PR is open, the `obs-pr-check.yml` workflow runs
-`sync release --force` against a staging OBS project to validate that the release
-can be performed cleanly.
+The git tag (e.g. `ppg/17.9-1`) is created automatically by `sync-main.yml` when
+the merge commit lands on `main`. That tag then triggers `obs-release.yml`.
 
-On merge:
+### `release.yaml` format
 
-1. `obs-pr-cleanup.yml` detects the added `release.yaml` and creates the git tag
-   `<product>/<release-name>` (e.g. `ppg/17.9`).
-2. The tag triggers `obs-release.yml`, which runs `sync release` against production OBS.
-3. After `sync release` finishes, `obs-release.yml` polls OBS until all builds reach a
-   terminal state, then updates the version list documentation.
+```yaml
+repository: ${PERCONA_OBS_PACKAGING_REPO}
+project: ppg:17
+releases:
+  - ppg/17.9-1          # first release
+  - ppg/17.9-2          # update release
+  - ppg/17.10-1         # minor version bump
+```
+
+`sync release` always uses the **last** entry as the current tag. Old entries are
+kept for history. The backward-compat `revision:` field (plain string) is still
+accepted and treated as a single-element list.
+
+### CHANGELOG.md format
+
+Each release creates a section following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+New sections are prepended above previous ones. Package entries are auto-populated:
+
+```markdown
+## [17.9-1] - 2025-03-01
+
+### Added
+- percona-pg_tde: updated to upstream version 2.0.0 (https://github.com/percona/pg_tde/releases/tag/2.0.0)
+- percona-postgresql17: updated to upstream version 17.9.0 (https://www.postgresql.org/docs/release/17.9/)
+
+### Changed
+
+### Fixed
+```
+
+For **update releases**, only packages whose version changed appear (under `### Changed`):
+
+```markdown
+## [17.9-2] - 2025-04-10
+
+### Added
+
+### Changed
+- percona-postgresql17: updated to upstream version 17.9.1 (https://www.postgresql.org/docs/release/17.9/)
+
+### Fixed
+```
+
+Upstream URLs are derived from the package's `obs/_service` upstream `obs_scm` entry:
+- **GitHub** (`https://github.com/…`): appends `/releases/tag/<revision>`.
+- **PostgreSQL** (`git.postgresql.org`): maps to `https://www.postgresql.org/docs/release/<MAJOR.MINOR>/`.
+- **Other**: uses the bare `url` value.
+
+### Step 2 — CI ships the release
+
+Release PRs are review-only — `obs-pr-check.yml` detects them and posts a comment
+instead of running an OBS build. On merge:
+
+1. `sync-main.yml` runs `sync push` normally (releases/ directories are excluded from
+   traversal), then creates the git tag from the last entry in `release.yaml`.
+2. The tag triggers `obs-release.yml`, which derives the OBS release project name
+   (e.g. `ppg/17.9-1` → `ppg:releases:17`) and runs `sync release`.
+3. After `sync release` finishes, `obs-release.yml` polls OBS (resolves immediately
+   since all builds are disabled), updates version list docs, and creates a GitHub
+   release with the `CHANGELOG.md` section for that release ID.
 
 ### Running `sync release` manually
 
-For local testing or recovery from a partial run:
+For local testing or recovery from a failed CI run:
 
 ```sh
-./percona-obs -P local sync release ppg:releases:17.9 --skip-tag-check
+./percona-obs -P local sync release ppg:releases:17 --skip-tag-check
 ```
 
 `sync release <release-project>` reads `release.yaml` and performs:
 
-1. **Idempotency check** — if the release project already exists on OBS, any
-   stale `<releasetarget>` configuration from a partial previous run is cleaned up
-   and the command exits early.
-2. **Divergence validation** (skipped with `--force`):
+1. **Divergence check** (skipped with `--force`):
    - Checks that no files under the source project have changed since the release tag
-     (`git diff <tag>..HEAD`). Pass `--skip-tag-check` to skip this check when the
-     tag has not been created locally yet.
-   - Runs `sync push --dry-run` against the source project to confirm OBS is
-     up-to-date with the local tree.
-3. **Creates the release project on OBS** with the same repository names and
-   architectures as the source project, but with builds globally disabled.
-4. **Adds `<releasetarget>` entries** to each repository of the source project,
-   pointing to the new release project with `trigger="manual"`.
-5. **Runs `osc release <source-project> --no-delay`** to copy the built binaries.
-6. **Restores the source project** by removing the `<releasetarget>` entries,
-   so it is ready for the next release.
-7. **Creates the `Updates` subproject** (`<release-project>:Updates`) with the same
-   repositories and architectures as the release project, builds globally disabled,
-   and `<path>` entries pointing to the base release project.
-8. **Creates each release subproject** (e.g. `<release-project>:containers`) — applies
-   the subproject's `project.yaml`, runs `osc release` for the source subproject, then
-   blanket-disables builds for all non-container-image packages (packages without a
-   `Dockerfile` in their `obs/` directory) so only image builds run.
+     (`git diff <tag>..HEAD`). Pass `--skip-tag-check` when the tag doesn't exist locally.
+   - Runs `sync push --dry-run` to confirm OBS is up-to-date (first release only).
+2. **If the OBS release project does NOT exist** (first release):
+   - Creates the release project with builds globally disabled.
+   - Copies the source project's `prjconf`.
+   - Runs `osc release <source-project> --no-delay` to copy binaries.
+   - Creates each release subproject (e.g. `containers:ubi9`) with builds disabled.
+3. **If the OBS release project already exists** (update release or re-run):
+   - Runs `osc release` again to copy updated binaries in place.
+   - Re-releases each subproject.
+   - Re-runs are safe — `osc release` is idempotent.
 
-Skip all divergence checks (used by CI):
+Skip all divergence checks:
 
 ```sh
-./percona-obs -P local sync release ppg:releases:17.9 --force
+./percona-obs -P local sync release ppg:releases:17 --force
 ```
 
-#### `--source-rootprj ROOTPRJ`
-
-Override the root project used to resolve the **source** OBS project.  By
-default `sync release` prefixes `source_project_id` (read from `release.yaml`)
-with the active profile's root project.  `--source-rootprj` substitutes a
-different root project for that lookup only; the release target project is
-still created under the active profile's root project.
-
-> **This flag is only intended for testing release PRs in CI.**  The PR check
-> workflow (`obs-pr-check.yml`) runs `sync release --force --source-rootprj
-> "$OBS_ROOTPRJ"` so it can read the source project topology from the
-> production namespace while writing the release target into the PR-specific
-> namespace.  Do not use it in normal local or production release runs.
-
 ### Release directory layout
-
-Release records live under `root/<product>/releases/`:
 
 ```
 root/
 └── ppg/
     └── releases/
-        └── 17.9/
-            ├── release.yaml
-            ├── project.yaml
-            ├── Updates/
-            │   └── project.yaml
-            └── containers/
-                └── project.yaml
+        └── 17/                     # one directory per PG major version
+            ├── release.yaml        # releases: list of tags
+            ├── project.yaml        # ppg:releases:17 (builds disabled)
+            ├── CHANGELOG.md        # keep-a-changelog, all releases
+            └── containers:ubi9/    # colon-named, mirrors source subproject
+                └── project.yaml    # builds disabled, paths → release project
 ```
 
-The `releases/` directory is excluded from normal `sync push` traversal — it is
-never synced to OBS as a source project.  However, **targeted syncs into Updates
-are supported**:
-
-```sh
-./percona-obs -P local sync push ppg:releases:17.9:Updates my-update-package
-```
-
-This syncs packages directly into the `<rootprj>:ppg:releases:17.9:Updates` OBS
-project without touching the base release project's configuration.
+The `releases/` directory is excluded from `sync push` traversal — release
+directories (identified by `release.yaml`) are never synced to OBS as source
+projects.
 
 ### Non-release PR: copying binaries to production on merge
 

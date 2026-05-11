@@ -1,18 +1,16 @@
 name: Sync to OBS (main)
 
 # Runs whenever a push to main touches any file under root/.
-# Syncs the full package tree to OBS, creating or updating projects and
-# packages as needed, and removing any OBS packages that were deleted locally.
-#
-# Skipped when the push adds release.yaml files (release commits) — those
-# are handled by obs-release.yml after obs-pr-cleanup.yml pushes the tag.
-# Running sync push for release commits would race with obs-release.yml and
-# pre-create the release OBS project structure before binaries are populated.
+# Syncs the full package tree to OBS (releases/ directories are excluded from
+# sync push traversal), then creates git tags from any release.yaml files
+# that changed in this push to trigger obs-release.yml.
 
 on:
   push:
     branches: [main]
-    paths: ['root/**']
+    paths:
+      - 'root/**'
+      - '!root/README.md'
   workflow_dispatch: {}
 
 jobs:
@@ -33,22 +31,6 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
 
-      # Detect whether this push adds release.yaml files.  If so, skip all
-      # OBS steps — obs-release.yml will handle the release project creation
-      # after obs-pr-cleanup.yml pushes the tag.
-      - name: Detect release commits
-        id: release-guard
-        run: |
-          RELEASES=$(git diff --name-only --diff-filter=A \
-            "${{ github.event.before }}" HEAD \
-            -- 'root/*/releases/*/release.yaml')
-          if [ -n "$RELEASES" ]; then
-            echo "detected=true" >> "$GITHUB_OUTPUT"
-            echo "Release files added — sync push will be skipped"
-          else
-            echo "detected=false" >> "$GITHUB_OUTPUT"
-          fi
-
       # Persists the content-addressed .cache/ tree (Phase 1 obs_scm outputs
       # and Phase 2 manual-service outputs such as go_modules vendor tarballs)
       # across runs.  Without this, every main sync regenerates vendor
@@ -56,7 +38,6 @@ jobs:
       # Entries are content-addressed so a partial hit via restore-keys is
       # always safe: unused SHA-keyed subdirs are ignored.
       - name: Restore percona-obs cache
-        if: steps.release-guard.outputs.detected != 'true'
         uses: actions/cache@v4
         with:
           path: .cache
@@ -65,14 +46,12 @@ jobs:
             percona-obs-${{ runner.os }}-
 
       - uses: ./.github/actions/obs-setup
-        if: steps.release-guard.outputs.detected != 'true'
         with:
           obs-apiurl: ${{ vars.OBS_APIURL }}
           obs-user: ${{ vars.OBS_USER }}
           obs-password: ${{ secrets.OBS_PASSWORD }}
 
       - name: Create percona-obs profile
-        if: steps.release-guard.outputs.detected != 'true'
         env:
           OBS_APIURL: ${{ vars.OBS_APIURL }}
           OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
@@ -85,15 +64,17 @@ jobs:
             -e "PERCONA_OBS_PACKAGING_REPO:${{ github.server_url }}/${{ github.repository }}.git" \
             profile create main
 
+      # releases/ directories are excluded from sync push traversal (each
+      # root/*/releases/<name>/ contains a release.yaml marker that prevents
+      # find_projects/find_packages from descending), so release commits are
+      # synced normally but produce no OBS changes.
       - name: Sync to OBS
-        if: steps.release-guard.outputs.detected != 'true'
         run: venv/bin/python -m percona_obs --verbose -P main sync push --no-scm-validate
 
       # Poll OBS until all builds reach a terminal state.  Fails the job if
       # any build fails, is broken, or is unresolvable.
       - name: Poll OBS build status
         id: poll
-        if: steps.release-guard.outputs.detected != 'true'
         env:
           OBS_APIURL: ${{ vars.OBS_APIURL }}
           OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
@@ -104,13 +85,36 @@ jobs:
       # by this push, and refresh the README "## Version Lists" section.
       # Only runs when OBS builds all succeed.
       - name: Update version lists
-        if: steps.release-guard.outputs.detected != 'true' && steps.poll.outcome == 'success'
+        if: steps.poll.outcome == 'success'
         env:
           GITHUB_EVENT_BEFORE: ${{ github.event.before }}
           OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
           OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/update_version_lists.py
+
+      # After sync completes, detect any release.yaml files changed in this
+      # push and create git tags from their latest releases: entries.
+      # The tag (e.g. ppg/17.9-1) triggers obs-release.yml.
+      - name: Create release tags
+        if: steps.poll.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          CHANGED=$(git diff --name-only "${{ github.event.before }}" "$GITHUB_SHA" \
+            -- 'root/*/releases/*/release.yaml' 2>/dev/null || true)
+          for release_file in $CHANGED; do
+            [ -f "$release_file" ] || continue
+            TAG=$(venv/bin/python3 -c \
+              "import yaml,sys; d=yaml.safe_load(open(sys.argv[1])); r=d.get('releases',[]); print(r[-1] if r else d.get('revision',''))" \
+              "$release_file" 2>/dev/null)
+            [ -z "$TAG" ] && continue
+            echo "Creating tag ${TAG} → $GITHUB_SHA"
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+              -X POST \
+              -f "ref=refs/tags/${TAG}" \
+              -f "sha=$GITHUB_SHA" || echo "Tag ${TAG} already exists, skipping"
+          done
 
       # Push the badge JSON to the orphan `badges` branch so it can be
       # embedded in README.md via a shields.io endpoint badge.

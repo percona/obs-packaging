@@ -297,18 +297,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--skip-tag-check",
         action="store_true",
         default=False,
-        help="Skip the git tag divergence check (Check 1). "
+        help="Skip the git tag divergence check. "
         "Use when the release tag has not been created locally yet.",
-    )
-    sync_release_parser.add_argument(
-        "--source-rootprj",
-        default=None,
-        metavar="ROOTPRJ",
-        help="Root project to use when resolving the source OBS project. "
-        "Defaults to the active profile's root project. "
-        "Only intended for testing release PRs in CI, where the source "
-        "project lives in the production namespace but the release target "
-        "is created in a PR-specific namespace.",
     )
     sync_release_parser.set_defaults(func=cmd_sync_release)
 
@@ -634,16 +624,28 @@ def build_parser() -> argparse.ArgumentParser:
 
     project_release_parser = project_subparsers.add_parser(
         "release",
-        help="Cut a release: create release.yaml, commit, and tag.",
+        help="Cut or update a release: create/update release.yaml, CHANGELOG.md, commit, and open a PR.",
     )
     project_release_parser.add_argument(
         "project",
         help="Source project to release from (colon notation, e.g. ppg:17).",
     )
     project_release_parser.add_argument(
-        "release_name",
-        metavar="release-name",
-        help="Release name (e.g. 17.9). Used as the subdirectory under releases/.",
+        "--release-name",
+        metavar="NAME",
+        default=None,
+        dest="release_name",
+        help="Release name (e.g. 17). Directory under releases/ and suffix of the OBS release project. "
+        "Defaults to the last component of the source project (e.g. ppg:17 → 17).",
+    )
+    project_release_parser.add_argument(
+        "--release-id",
+        metavar="ID",
+        default=None,
+        dest="release_id",
+        help="Release ID (e.g. 17.9-1). Determines the git tag suffix. "
+        "Defaults to auto-derived from OBS: MAJOR.MINOR-N where N counts "
+        "existing releases of the same minor version.",
     )
     project_release_parser.set_defaults(func=cmd_project_release)
 

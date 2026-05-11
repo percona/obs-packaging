@@ -4,9 +4,8 @@ name: OBS PR Cleanup
 # project that was created by obs-pr-check.yml.  The delete is a no-op if
 # the project never existed (e.g. the PR was closed before the check ran).
 #
-# On merge, for release PRs (ones that add release.yaml files): a git tag is
-# pushed to trigger obs-release.yml, which runs sync release on the production
-# OBS project.
+# Release-only PRs (all changed root/** files under root/*/releases/) never
+# create a PR OBS project, so only the delete step runs (as a no-op).
 
 on:
   pull_request:
@@ -50,35 +49,25 @@ jobs:
             -e "PERCONA_OBS_PACKAGING_REPO:${{ github.event.pull_request.head.repo.clone_url }}" \
             profile create "pr-${PR_NUMBER}"
 
-      # For release PRs (ones that add release.yaml files): push a git tag so
-      # obs-release.yml fires and runs sync release on the production OBS project.
-      # The tag name is derived from the release path:
-      #   root/ppg/releases/17.9/release.yaml  →  ppg/17.9
-      - name: Create release tag (merged release PRs only)
-        if: github.event.pull_request.merged == true
+      # Detect whether this is a release-only PR (all changed root/** files are
+      # under root/*/releases/).  Release-only PRs never create a PR OBS project
+      # so sync delete runs as a no-op.
+      - name: Detect release-only PR
+        id: detect
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          RELEASES=$(gh pr view "$PR_NUMBER" \
+          ALL_ROOT=$(gh pr view "$PR_NUMBER" \
             --json files \
-            --jq '.files[] | select(.status == "added") | .path' \
-            | grep -E '^root/.*/releases/.*/release\.yaml$' || true)
-          if [ -z "$RELEASES" ]; then
-            echo "No release files added — skipping tag creation"
-            exit 0
+            --jq '[.files[] | select(.path | startswith("root/")) | .path] | length')
+          REL_ROOT=$(gh pr view "$PR_NUMBER" \
+            --json files \
+            --jq '[.files[] | select(.path | test("^root/[^/]+/releases/")) | .path] | length')
+          if [ "$ALL_ROOT" -gt 0 ] && [ "$ALL_ROOT" -eq "$REL_ROOT" ]; then
+            echo "is_release_pr=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_release_pr=false" >> "$GITHUB_OUTPUT"
           fi
-          for release_file in $RELEASES; do
-            rel_dir="${release_file#root/}"
-            rel_dir="${rel_dir%/release.yaml}"
-            product="${rel_dir%%/*}"
-            version="${rel_dir#*/releases/}"
-            tag_name="${product}/${version}"
-            echo "Creating tag ${tag_name} → ${{ github.sha }}"
-            gh api "repos/$GITHUB_REPOSITORY/git/refs" \
-              -X POST \
-              -f "ref=refs/tags/${tag_name}" \
-              -f "sha=${{ github.sha }}"
-          done
 
       # Delete the PR's root project and all its sub-projects.
       # --yes skips the confirmation prompt.

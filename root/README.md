@@ -47,52 +47,60 @@ Each product directory contains:
 
 ### `releases/`
 
-Release definitions. Each subdirectory represents one released version and contains a `release.yaml`
-plus the `project.yaml` files that define the OBS release project topology.
+Release definitions. One subdirectory per PG major version contains `release.yaml`,
+`project.yaml`, `CHANGELOG.md`, and a subproject directory per source subproject.
 
 ```
 releases/
-└── <name>/                    # one subdirectory per release, e.g. 17.9/
-    ├── release.yaml           # release pointer
-    ├── project.yaml           # base release project (builds disabled)
-    ├── Updates/
-    │   └── project.yaml       # Updates subproject (builds disabled)
-    └── <subproject>/          # one per source subproject, e.g. containers/
-        └── project.yaml       # release subproject (builds enabled for images)
+└── 17/                         # one directory per PG major version
+    ├── release.yaml            # list of release tags
+    ├── project.yaml            # ppg:releases:17 OBS project (builds disabled)
+    ├── CHANGELOG.md            # keep-a-changelog, all releases for this major
+    └── containers:ubi9/        # one per source subproject (colon-named)
+        └── project.yaml        # builds disabled; binaries copied via osc release
 ```
-
-Each subdirectory name identifies a release. The convention is to use the product minor version
-(e.g. `17.9`), but any descriptive name works.
 
 The `release.yaml` format:
 
 ```yaml
 repository: ${PERCONA_OBS_PACKAGING_REPO}
-revision: <percona-product>/17.9    # e.g. ppg/17.9 — the git tag
-project: <percona-product>:17       # e.g. ppg:17 — OBS source project
+project: ppg:17                 # OBS source project (relative to rootprj)
+releases:
+  - ppg/17.9-1                  # first release
+  - ppg/17.9-2                  # update release
+  - ppg/17.10-1                 # minor version bump (counter resets to 1)
 ```
 
 | Field | Description |
 |---|---|
 | `repository` | URL of this git repository. Use `${PERCONA_OBS_PACKAGING_REPO}` to inherit from the CI environment. |
-| `revision` | Git tag in `repository` whose packaging sources were used for this release. Convention: `<product>/<MAJOR.MINOR>` (e.g. `ppg/17.9`). |
 | `project` | OBS source project to release from (relative to `rootprj`). |
+| `releases` | List of git tags, one per release event. The last entry is always current. |
+
+Release IDs follow the pattern `MAJOR.MINOR-N` where `N` is the release counter
+for that minor version (resets to 1 when the minor version changes).
 
 #### Cutting a release
 
-Use the `project release` command — it generates all required files, commits them, and
-prompts you to open a pull request:
+Use the `project release` command — it auto-derives the release ID from OBS,
+creates or updates all required files, commits them, pushes a branch, and opens
+a review PR:
 
 ```sh
-./percona-obs -P <profile> project release ppg:17 17.9
+# Fully automatic
+./percona-obs -P <profile> project release ppg:17
+
+# Override release ID explicitly
+./percona-obs -P <profile> project release ppg:17 --release-id 17.9-1
 ```
 
-The command fetches the source project's build topology from OBS, creates the release
-directory with all `project.yaml` and `release.yaml` files, and commits everything.
-See `docs/PERCONA_OBS_TOOL.md` for the full workflow description.
+The command fetches the source project's build topology from OBS, diffs package
+versions against the previous release to generate `CHANGELOG.md`, and commits
+everything. See `docs/PERCONA_OBS_TOOL.md` for the full workflow.
 
-The release tag (`ppg/17.9`) and the OBS release project are created automatically
-by CI when the pull request is merged — do not create the tag manually.
+The git tag (e.g. `ppg/17.9-1`) is created automatically by `sync-main.yml`
+when the merge commit lands on `main`. That tag triggers `obs-release.yml`,
+which copies binaries to the OBS release project and creates a GitHub release.
 
 ### `<major-version>/`
 
