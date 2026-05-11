@@ -19,7 +19,7 @@ on:
   pull_request:
     branches: [main]
     paths: ['root/**']
-    types: [labeled, synchronize, reopened]
+    types: [opened, labeled, synchronize, reopened]
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
