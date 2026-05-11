@@ -1,0 +1,193 @@
+build: false
+debuginfo:
+  RockyLinux_9: true
+  openSUSE_Leap_16: true
+  openSUSE_Tumbleweed: true
+description: 'Release project for ppg:17 (OBS project ppg:releases:17).
+
+  Binaries are populated by osc release and builds are disabled.
+
+  This project is read-only — do not add or edit packages directly.
+
+  '
+project-config: '%if "%_repository" == "RockyLinux_8" || "%_repository" == "RHEL-8"  ||
+  "%_repository" == "RedHat_RHEL-8"
+
+  ExpandFlags: module:llvm-toolset-rhel8
+
+  # so that we get perl-IO-Socket-SSL
+
+  ExpandFlags: module:perl-5.26
+
+  ExpandFlags: module:perl-IO-Socket-SSL-2.066
+
+  ExpandFlags: module:python36-3.6
+
+  Prefer: selinux-policy-targeted
+
+  %endif
+
+
+  %if "%_repository" == "RockyLinux_9"
+
+  ExpandFlags: module:llvm-toolset-rhel9
+
+  # hdf-libs (EPEL split package) and hdf both provide libdf.so.0 and libmfhdf.so.0
+
+  Prefer: hdf-libs
+
+  %endif
+
+
+  %if "%_repository" == "openSUSE_Tumbleweed"
+
+  # percona-postgresql17-server conflicts with postgresql18-server and the
+
+  # postgresql-server-18 meta-package (both own /var/lib/pgsql). The DNF stack
+
+  # (pulled in by percona-telemetry-agent -> yum-utils) recommends postgresql18-server
+
+  # on Tumbleweed. Suppress those packages entirely so that postgresql-server
+
+  # requirements resolve to percona-postgresql17-server via its Provides. Also
+
+  # suppress the ppg:18 system package (postgresql18-server) so that this project
+
+  # does not pick it up when both majors are present in the interconnect.
+
+  Prefer: percona-postgresql17-server
+
+  # Our python3-dateutil and python3-six packages shadow the SUSE system packages
+
+  # (python313-python-dateutil, python313-six). Prefer system packages so that
+
+  # build deps like python3-dnf-plugins-core and python3-libmodulemd resolve correctly.
+
+  Prefer: python313-python-dateutil
+
+  Prefer: python313-six
+
+  Ignore: postgresql18-server
+
+  Ignore: postgresql-server
+
+  Ignore: postgresql
+
+  %endif
+
+
+  %if "%_repository" == "openSUSE_Leap_16"
+
+  # Same conflict as Tumbleweed: the system PostgreSQL packages conflict with
+
+  # percona-postgresql17-server. Suppress them so dependencies resolve correctly.
+
+  Prefer: percona-postgresql17-server
+
+  # Our python3-dateutil and python3-six packages shadow the SUSE system packages
+
+  # (python313-python-dateutil, python313-six). Prefer system packages so that
+
+  # build deps like python3-dnf-plugins-core and python3-libmodulemd resolve correctly.
+
+  Prefer: python313-python-dateutil
+
+  Prefer: python313-six
+
+  Ignore: postgresql18-server
+
+  Ignore: postgresql-server
+
+  Ignore: postgresql
+
+  %endif
+
+
+  %if "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04" || "%_repository"
+  == "Ubuntu_26.04"
+
+  # libgdal-dev transitively requires both libcurl4-openssl-dev and
+
+  # libcurl4-gnutls-dev which conflict; ignore the gnutls variant so
+
+  # the openssl variant is used consistently.
+
+  Ignore: libcurl4-gnutls-dev
+
+  # libgdal-dev and several of its deps use libjpeg-dev which is provided
+
+  # by both libjpeg62-turbo-dev and libjpeg-dev; prefer the turbo variant.
+
+  Prefer: libjpeg62-turbo-dev
+
+  %endif'
+repositories:
+- archs:
+  - x86_64
+  - aarch64
+  name: openSUSE_Tumbleweed
+  paths:
+  - repository: openSUSE_Tumbleweed
+    subproject: ppg:common:deps
+  - repository: openSUSE_Tumbleweed
+    subproject: common:deps:build
+  - project: openSUSE:Tumbleweed
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: openSUSE_Leap_16
+  paths:
+  - repository: openSUSE_Leap_16
+    subproject: ppg:common:deps
+  - repository: openSUSE_Leap_16
+    subproject: common:deps:build
+  - project: openSUSE:Leap:16.0
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: Ubuntu_26.04
+  paths:
+  - repository: Ubuntu_26.04
+    subproject: ppg:common:deps
+  - repository: Ubuntu_26.04
+    subproject: common:deps:build
+  - project: Ubuntu:26.04
+    repository: universe
+- archs:
+  - x86_64
+  - aarch64
+  name: Ubuntu_24.04
+  paths:
+  - repository: Ubuntu_24.04
+    subproject: ppg:common:deps
+  - repository: Ubuntu_24.04
+    subproject: common:deps:build
+  - project: Ubuntu:24.04
+    repository: universe
+- archs:
+  - x86_64
+  - aarch64
+  name: RockyLinux_9
+  paths:
+  - repository: RockyLinux_9
+    subproject: ppg:common:deps
+  - repository: RockyLinux_9
+    subproject: common:deps:build
+  - project: Fedora:EPEL:9
+    repository: standard
+  - project: RockyLinux:9
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: Debian_13
+  paths:
+  - repository: Debian_13
+    subproject: ppg:common:deps
+  - repository: Debian_13
+    subproject: common:deps:build
+  - project: Debian:13
+    repository: standard
+title: ppg releases 17
