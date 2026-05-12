@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: patroni
-Source: https://github.com/zalando/patroni/
+Source: https://github.com/patroni/patroni
 
 Files: *
 Copyright: 2015 Compose, Zalando SE

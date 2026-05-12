@@ -1,8 +1,8 @@
-etcd (3.3.11-1) unstable; urgency=medium
+etcd (3.5.29-1) unstable; urgency=low
 
-  * Build etcd
+  * Update to upstream version 3.5.29, per changes described at: https://github.com/etcd-io/etcd/blob/main/CHANGELOG/CHANGELOG-3.5.md#v3529-2026-04-01
 
- -- Vagrant Default User <vagrant@stretch.localdomain>  Tue, 22 Jun 2021 13:33:21 +0000
+ -- Percona Development Team <info@percona.com>  Tue, 12 May 2026 00:00:00 +0000
 
 etcd (3.3.11-1) unstable; urgency=low
   * Initial Release.
