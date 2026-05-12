@@ -1,0 +1,77 @@
+build: false
+description: 'Containers:ubi9 subproject for ppg:releases:18.
+
+  Builds are disabled; binaries are copied via osc release.
+
+  '
+project-config: '%if "%_repository" == "RockyLinux_9"
+
+  Type: spec
+
+  Ignore: kbd-legacy < 2.4.0-11
+
+  %endif
+
+
+  %if "%_repository" == "images"
+
+  Type: docker
+
+  BuildEngine: podman
+
+
+  ExpandFlags: filterbasecontainerpkgs
+
+  Prefer: redhat-release
+
+  Prefer: glibc-minimal-langpack
+
+  Prefer: gpgme
+
+  Prefer: iptables-nft
+
+  Ignore: rocky-release
+
+
+  Prefer: glibc-minimal-langpack
+
+
+  BuildFlags: sbom:cyclonedx
+
+  %endif
+
+  '
+publish:
+  RockyLinux_9: false
+repositories:
+- archs:
+  - x86_64
+  - aarch64
+  name: RockyLinux_9
+  paths:
+  - repository: RockyLinux_9
+    subproject: common:deps:build
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: images
+  paths:
+  - repository: RockyLinux_9
+    subproject: ppg:releases:18
+  - repository: images
+    subproject: common:containers:ubi9
+  - repository: RockyLinux_9
+    subproject: common:containers:ubi9
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+    repository: standard
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+    repository: appstream
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+    repository: appstream
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+    repository: baseos
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+    repository: baseos
+title: ppg releases 18 — containers:ubi9

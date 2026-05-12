@@ -1,0 +1,4 @@
+project: ppg:18
+releases:
+- ppg/18.3-1
+repository: ${PERCONA_OBS_PACKAGING_REPO}
