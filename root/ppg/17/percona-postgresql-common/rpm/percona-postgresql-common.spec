@@ -172,6 +172,9 @@ update-alternatives --install /usr/bin/ecpg pgsql-ecpg /usr/share/postgresql-com
 update-alternatives --remove pgsql-ecpg /usr/share/postgresql-common/pg_wrapper
 
 %changelog
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{POSTGRESQL_COMMON_VERSION}-1
+- Update to upstream version %!{POSTGRESQL_COMMON_VERSION}.
+
 * Tue Sep 29 2020 Christoph Berg <myon@debian.org> 217-1
 - Drop postgresql-server-dev-all package, it's debian-specific only.
 * Fri Dec 09 2016 Bernd Helmle <bernd.helmle@credativ.de> 177-1
