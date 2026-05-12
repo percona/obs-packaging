@@ -13,6 +13,10 @@ on:
       - '!root/README.md'
   workflow_dispatch: {}
 
+concurrency:
+  group: sync-main
+  cancel-in-progress: false
+
 jobs:
   sync:
     name: percona-obs sync push
