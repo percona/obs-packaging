@@ -28,5 +28,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh workflow run obs-pr-check.yml \
+            --repo ${{ github.repository }} \
             --ref ${{ github.event.pull_request.head.ref }} \
             -f pr_number=${{ github.event.number }}
