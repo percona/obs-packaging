@@ -70,7 +70,7 @@ jobs:
         run: sleep 60
 
       # Update docs/versions/<dist>.md for all distribution projects and
-      # refresh the README "## Version Lists" section.  GITHUB_EVENT_BEFORE is
+      # refresh the README "## Development Projects" section.  GITHUB_EVENT_BEFORE is
       # omitted so the script regenerates all version lists (appropriate for a
       # tag-triggered run where there is no meaningful "before" SHA).
       - name: Update version lists
@@ -80,7 +80,8 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
         run: |
           git checkout main
-          venv/bin/python .github/scripts/update_version_lists.py
+          venv/bin/python .github/scripts/update_version_lists.py \
+            --project "${{ steps.release-info.outputs.release_project }}"
 
       # Create a GitHub release with the CHANGELOG section for this release-id.
       # Idempotent: if the release already exists (re-run), update its notes.

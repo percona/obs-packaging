@@ -4,7 +4,7 @@ name: Update version lists
 # files without waiting for a full sync-main run.
 #
 # Regenerates docs/versions/<dist>.md for every distribution project found
-# under root/ and updates the "## Version Lists" section of README.md.
+# under root/ and updates the "## Development Projects" section of README.md.
 # Commits and pushes the result to main.
 
 on:

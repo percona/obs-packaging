@@ -1,21 +1,28 @@
 #!/usr/bin/env python3
 """Regenerate docs/versions/<dist>.md version-list files and update README.md.
 
-Called from the "Update version lists" step in sync-main.yml and from the
-standalone update-version-lists.yml workflow.
+Called from the "Update version lists" step in sync-main.yml, from the
+standalone update-version-lists.yml workflow, and from obs-release.yml.
 
 Environment variables
 ---------------------
 GITHUB_EVENT_BEFORE
     The "before" SHA from the GitHub push event.  Set to the all-zeros SHA
-    (or omit) to regenerate *all* distribution projects instead of only those
-    touched by the current push.
+    (or omit) to regenerate *all* dev distribution projects instead of only
+    those touched by the current push.
 GITHUB_SHA
     The current HEAD commit SHA (always set by GitHub Actions).
+
+CLI arguments
+-------------
+--project <project_id>
+    When given, regenerate only this one project (used by obs-release.yml to
+    update a specific release project).  Skips the git-diff detection logic.
 """
 
 from __future__ import annotations
 
+import argparse
 import os
 import re
 import subprocess
@@ -28,6 +35,8 @@ VERSIONS_DIR = REPO_ROOT / "docs" / "versions"
 README = REPO_ROOT / "README.md"
 
 ZERO_SHA = "0" * 40
+
+_ROW_PID_RE = re.compile(r"^\| `([^`]+)`")
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +121,35 @@ def map_files_to_distribution_projects(
     return sorted(results)
 
 
+def is_release_project(project_id: str) -> bool:
+    return ":releases:" in project_id
+
+
+def get_latest_release_id(project_id: str) -> str:
+    """Return the latest release-id from release.yaml for a release project.
+
+    Reads root/<product>/releases/<major>/release.yaml, takes the last entry
+    in the ``releases`` list (e.g. ``ppg/17.9-1``), and strips the
+    ``<product>/`` prefix to return just the release-id (e.g. ``17.9-1``).
+    Returns ``—`` if the file is absent or the list is empty.
+    """
+    import yaml
+
+    parts = project_id.split(":")  # ["ppg", "releases", "17"]
+    if len(parts) < 3 or parts[1] != "releases":
+        return "—"
+    product, major = parts[0], parts[2]
+    release_yaml = ROOT_DIR / product / "releases" / major / "release.yaml"
+    if not release_yaml.exists():
+        return "—"
+    data = yaml.safe_load(release_yaml.read_text(encoding="utf-8"))
+    releases = data.get("releases") or []
+    if not releases:
+        return "—"
+    last = releases[-1]  # e.g. "ppg/17.9-1"
+    return last.split("/", 1)[1] if "/" in last else last
+
+
 # ---------------------------------------------------------------------------
 # README helpers
 # ---------------------------------------------------------------------------
@@ -137,60 +175,259 @@ _VERSION_LISTS_DESCRIPTION = (
     "the version and release number last successfully built on OBS."
 )
 
+_CURRENT_RELEASES_DESCRIPTION = (
+    "Released package versions, published to the release OBS projects after "
+    "each successful release tag."
+)
 
-def update_readme(all_version_files: list[Path]) -> None:
-    obs_web_url = os.environ.get("OBS_WEB_URL", "").rstrip("/")
-    obs_rootprj = os.environ.get("OBS_ROOTPRJ", "")
-    include_obs_link = bool(obs_web_url and obs_rootprj)
 
-    content = README.read_text(encoding="utf-8")
-
-    # Remove any existing "## Version Lists" section (up to the next ## heading
-    # or end of file) so it can be regenerated in the correct position.
-    content = re.sub(r"\n## Version Lists\n[\s\S]*?(?=\n## |\Z)", "", content)
-
-    if not all_version_files:
-        README.write_text(content, encoding="utf-8")
-        return
-
+def _make_row(
+    f: Path,
+    include_qa: bool,
+    include_obs_link: bool,
+    obs_web_url: str,
+    obs_rootprj: str,
+    version: str = "",
+) -> str:
+    """Build a single markdown table row for a version file."""
+    pid = file_to_project_id(f)
+    rel = f.relative_to(REPO_ROOT)
     if include_obs_link:
-        header = "| Distribution | OBS Project | Version List | QA Status |"
-        sep = "|---|---|---|---|"
-        rows = "\n".join(
-            (
-                f"| `{file_to_project_id(f)}` "
-                f"| [{obs_rootprj}:{file_to_project_id(f)}]"
-                f"({obs_web_url}/project/show/{obs_rootprj}:{file_to_project_id(f)}) "
-                f"| [{f.relative_to(REPO_ROOT)}]({f.relative_to(REPO_ROOT)}) "
-                f"| Not Available |"
-            )
-            for f in all_version_files
+        obs_col = (
+            f"[{obs_rootprj}:{pid}]" f"({obs_web_url}/project/show/{obs_rootprj}:{pid})"
         )
+        vl_col = f"[{rel}]({rel})"
+        if include_qa:
+            return f"| `{pid}` | {obs_col} | {vl_col} | Not Available |"
+        else:
+            return f"| `{pid}` | {obs_col} | {vl_col} | {version} |"
     else:
-        header = "| Distribution | Version List |"
-        sep = "|---|---|"
-        rows = "\n".join(
-            f"| `{file_to_project_id(f)}` | [{f.relative_to(REPO_ROOT)}]({f.relative_to(REPO_ROOT)}) |"
-            for f in all_version_files
-        )
+        if include_qa:
+            return f"| `{pid}` | [{rel}]({rel}) |"
+        else:
+            return f"| `{pid}` | [{rel}]({rel}) | {version} |"
 
-    section = (
-        "\n## Version Lists\n"
-        f"\n{_VERSION_LISTS_DESCRIPTION}\n"
+
+def _build_section(
+    heading: str,
+    description: str,
+    files: list[Path],
+    include_qa: bool,
+    include_obs_link: bool,
+    obs_web_url: str,
+    obs_rootprj: str,
+) -> str:
+    """Return the full markdown text for a new section."""
+    if include_obs_link:
+        if include_qa:
+            header = "| Distribution | OBS Project | Package List | QA Status |"
+            sep = "|---|---|---|---|"
+        else:
+            header = "| Distribution | OBS Project | Package List | Version |"
+            sep = "|---|---|---|---|"
+    else:
+        if include_qa:
+            header = "| Distribution | Package List |"
+            sep = "|---|---|"
+        else:
+            header = "| Distribution | Package List | Version |"
+            sep = "|---|---|---|"
+    rows = "\n".join(
+        _make_row(
+            f,
+            include_qa,
+            include_obs_link,
+            obs_web_url,
+            obs_rootprj,
+            version=(
+                get_latest_release_id(file_to_project_id(f)) if not include_qa else ""
+            ),
+        )
+        for f in files
+    )
+    return (
+        f"\n## {heading}\n"
+        f"\n{description}\n"
         "\n"
         f"{header}\n"
         f"{sep}\n"
         f"{rows}\n"
     )
 
-    # Insert before "## Documentation" so the section appears right after the
-    # repository introduction, not at the end of the file.
-    if "\n## Documentation\n" in content:
-        content = content.replace(
-            "\n## Documentation\n", section + "\n## Documentation\n", 1
+
+def _upsert_section(
+    content: str,
+    heading: str,
+    description: str,
+    updated_files: list[Path],
+    all_section_files: list[Path],
+    include_qa: bool,
+    include_obs_link: bool,
+    obs_web_url: str,
+    obs_rootprj: str,
+) -> str:
+    """Ensure the section exists and its rows are up to date.
+
+    - If the section is absent: create it from scratch with all_section_files.
+    - If it exists:
+        - Rows for updated_files are rewritten (QA Status reset to Not Available).
+        - Rows for files in all_section_files with no existing row are appended.
+        - All other rows are left intact (preserving any QA badges).
+    """
+    section_heading_line = f"## {heading}"
+
+    if f"\n{section_heading_line}\n" not in content:
+        if not all_section_files:
+            return content
+        section = _build_section(
+            heading,
+            description,
+            all_section_files,
+            include_qa,
+            include_obs_link,
+            obs_web_url,
+            obs_rootprj,
         )
+        if "\n## Documentation\n" in content:
+            return content.replace(
+                "\n## Documentation\n", section + "\n## Documentation\n", 1
+            )
+        return content + section
+
+    # Section exists: row-level updates.
+    lines = content.splitlines(keepends=True)
+
+    # Locate section boundaries.
+    section_start: int | None = None
+    section_end = len(lines)
+    for i, line in enumerate(lines):
+        stripped = line.rstrip("\r\n")
+        if stripped == section_heading_line:
+            section_start = i
+        elif (
+            section_start is not None
+            and re.match(r"^## ", stripped)
+            and stripped != section_heading_line
+        ):
+            section_end = i
+            break
+
+    if section_start is None:
+        return content
+
+    # Build a map of existing project_id → line index.
+    existing: dict[str, int] = {}
+    for i in range(section_start, section_end):
+        m = _ROW_PID_RE.match(lines[i])
+        if m:
+            existing[m.group(1)] = i
+
+    # Remove rows for project_ids that no longer belong in this section
+    # (e.g. a release row that used to live in "## Development Projects").
+    valid_pids = {file_to_project_id(f) for f in all_section_files}
+    stale = [idx for pid, idx in existing.items() if pid not in valid_pids]
+    for idx in stale:
+        lines[idx] = ""
+    # Rebuild existing map after removals.
+    existing = {pid: idx for pid, idx in existing.items() if pid in valid_pids}
+
+    # Replace rows for files updated in this run.
+    for f in updated_files:
+        pid = file_to_project_id(f)
+        if pid in existing:
+            version = get_latest_release_id(pid) if not include_qa else ""
+            lines[existing[pid]] = (
+                _make_row(
+                    f,
+                    include_qa,
+                    include_obs_link,
+                    obs_web_url,
+                    obs_rootprj,
+                    version=version,
+                )
+                + "\n"
+            )
+
+    # Find where to append new rows: after the last data row, or after the
+    # separator line if there are no data rows yet.
+    last_data_idx: int | None = None
+    sep_idx: int | None = None
+    for i in range(section_start, section_end):
+        if _ROW_PID_RE.match(lines[i]):
+            last_data_idx = i
+        elif re.match(r"^\|---", lines[i]):
+            sep_idx = i
+
+    if last_data_idx is not None:
+        insert_at = last_data_idx + 1
+    elif sep_idx is not None:
+        insert_at = sep_idx + 1
     else:
-        content += section
+        insert_at = section_end
+
+    new_rows = [
+        _make_row(
+            f,
+            include_qa,
+            include_obs_link,
+            obs_web_url,
+            obs_rootprj,
+            version=(
+                get_latest_release_id(file_to_project_id(f)) if not include_qa else ""
+            ),
+        )
+        + "\n"
+        for f in all_section_files
+        if file_to_project_id(f) not in existing
+    ]
+    if new_rows:
+        lines[insert_at:insert_at] = new_rows
+
+    return "".join(lines)
+
+
+def update_readme(updated_files: list[Path], all_version_files: list[Path]) -> None:
+    obs_web_url = os.environ.get("OBS_WEB_URL", "").rstrip("/")
+    obs_rootprj = os.environ.get("OBS_ROOTPRJ", "")
+    include_obs_link = bool(obs_web_url and obs_rootprj)
+
+    dev_updated = [
+        f for f in updated_files if not is_release_project(file_to_project_id(f))
+    ]
+    rel_updated = [
+        f for f in updated_files if is_release_project(file_to_project_id(f))
+    ]
+    dev_all = [
+        f for f in all_version_files if not is_release_project(file_to_project_id(f))
+    ]
+    rel_all = [
+        f for f in all_version_files if is_release_project(file_to_project_id(f))
+    ]
+
+    content = README.read_text(encoding="utf-8")
+
+    content = _upsert_section(
+        content,
+        "Development Projects",
+        _VERSION_LISTS_DESCRIPTION,
+        dev_updated,
+        dev_all,
+        include_qa=True,
+        include_obs_link=include_obs_link,
+        obs_web_url=obs_web_url,
+        obs_rootprj=obs_rootprj,
+    )
+    content = _upsert_section(
+        content,
+        "Current Releases",
+        _CURRENT_RELEASES_DESCRIPTION,
+        rel_updated,
+        rel_all,
+        include_qa=False,
+        include_obs_link=include_obs_link,
+        obs_web_url=obs_web_url,
+        obs_rootprj=obs_rootprj,
+    )
 
     README.write_text(content, encoding="utf-8")
 
@@ -205,14 +442,38 @@ def run(cmd: list[str], **kwargs) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Regenerate version list files and update README.md."
+    )
+    parser.add_argument(
+        "--project",
+        default="",
+        metavar="PROJECT_ID",
+        help=(
+            "Regenerate only this project (e.g. ppg:releases:17). "
+            "Used by obs-release.yml to update a single release project."
+        ),
+    )
+    args = parser.parse_args()
+
     before = os.environ.get("GITHUB_EVENT_BEFORE", ZERO_SHA)
     head = os.environ.get("GITHUB_SHA", "HEAD")
 
-    if before == ZERO_SHA:
+    if args.project:
+        all_known = find_all_distribution_projects()
+        projects = [(pid, outfile) for pid, outfile in all_known if pid == args.project]
+        if not projects:
+            print(f"Project {args.project!r} not found under root/", file=sys.stderr)
+            sys.exit(1)
+        print(f"Updating single project: {args.project}")
+    elif before == ZERO_SHA:
         print(
-            "GITHUB_EVENT_BEFORE is zero SHA — regenerating all distribution projects."
+            "GITHUB_EVENT_BEFORE is zero SHA — regenerating all dev distribution projects."
         )
-        projects = find_all_distribution_projects()
+        all_known = find_all_distribution_projects()
+        projects = [
+            (pid, outfile) for pid, outfile in all_known if not is_release_project(pid)
+        ]
     else:
         changed = subprocess.check_output(
             ["git", "diff", "--name-only", before, head], text=True
@@ -220,7 +481,13 @@ def main() -> None:
         print(
             f"Changed files ({len(changed)}): {changed[:10]}{'...' if len(changed) > 10 else ''}"
         )
-        projects = map_files_to_distribution_projects(changed)
+        all_changed = map_files_to_distribution_projects(changed)
+        # Release projects have their own trigger (obs-release.yml); skip them here.
+        projects = [
+            (pid, outfile)
+            for pid, outfile in all_changed
+            if not is_release_project(pid)
+        ]
 
     if not projects:
         print("No distribution projects to update.")
@@ -260,12 +527,10 @@ def main() -> None:
         )
         outfile.write_text(md, encoding="utf-8")
 
-    # Rebuild README section from ALL existing version files (not just those
-    # updated this run) so partial runs keep the table consistent.
+    updated_files = [outfile for _, outfile in projects]
     all_version_files = sorted(VERSIONS_DIR.glob("*.md"))
-    update_readme(all_version_files)
+    update_readme(updated_files, all_version_files)
 
-    # Commit and push only when something actually changed.
     run(["git", "add", str(VERSIONS_DIR), str(README)], cwd=REPO_ROOT)
 
     result = subprocess.run(["git", "diff", "--staged", "--quiet"], cwd=REPO_ROOT)

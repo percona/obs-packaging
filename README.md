@@ -11,15 +11,22 @@ OBS services declared in each package's `obs/_service` file.
 
 ---
 
-## Version Lists
+## Development Projects
 
 Per-distribution package version lists, updated automatically after every successful OBS build. Each file lists all packages and container images with the version and release number last successfully built on OBS.
 
-| Distribution | OBS Project | Version List | QA Status |
+| Distribution | OBS Project | Package List | QA Status |
 |---|---|---|---|
 | `ppg:17` | [isv:percona:ppg:17](https://build.opensuse.org/project/show/isv:percona:ppg:17) | [docs/versions/ppg-17.md](docs/versions/ppg-17.md) | [![QA ppg:17](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/rjd15372/percona-obs-packaging/badges/qa-badge-ppg-17.json)](https://github.com/rjd15372/percona-obs-packaging/actions/workflows/obs-nightly-qa.yml) |
 | `ppg:18` | [isv:percona:ppg:18](https://build.opensuse.org/project/show/isv:percona:ppg:18) | [docs/versions/ppg-18.md](docs/versions/ppg-18.md) | [![QA ppg:18](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/rjd15372/percona-obs-packaging/badges/qa-badge-ppg-18.json)](https://github.com/rjd15372/percona-obs-packaging/actions/workflows/obs-nightly-qa.yml) |
-| `ppg:releases:17` | [isv:percona:ppg:releases:17](https://build.opensuse.org/project/show/isv:percona:ppg:releases:17) | [docs/versions/ppg-releases-17.md](docs/versions/ppg-releases-17.md) | Not Available |
+
+## Current Releases
+
+Released package versions, published to the release OBS projects after each successful release tag.
+
+| Distribution | OBS Project | Package List | Version |
+|---|---|---|---|
+| `ppg:releases:17` | [isv:percona:ppg:releases:17](https://build.opensuse.org/project/show/isv:percona:ppg:releases:17) | [docs/versions/ppg-releases-17.md](docs/versions/ppg-releases-17.md) | 17.9-1 |
 
 ## Documentation
 

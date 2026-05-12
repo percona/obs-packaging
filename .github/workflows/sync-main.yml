@@ -82,7 +82,7 @@ jobs:
         run: venv/bin/python .github/scripts/poll_obs_builds.py
 
       # Update docs/versions/<dist>.md for each distribution project touched
-      # by this push, and refresh the README "## Version Lists" section.
+      # by this push, and refresh the README "## Development Projects" section.
       # Only runs when OBS builds all succeed.
       - name: Update version lists
         if: steps.poll.outcome == 'success'
