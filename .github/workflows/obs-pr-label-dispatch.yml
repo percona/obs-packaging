@@ -1,0 +1,32 @@
+name: OBS PR Label Dispatcher
+
+# Listens for pull_request labeled events and fires obs-pr-check.yml via
+# workflow_dispatch only when the added label is a trigger label (obs-sync,
+# qa-packages, qa-containers).  Control-only labels such as no-dep-cascade
+# are ignored here and never reach obs-pr-check.yml, preventing spurious
+# skipped check runs in the PR.
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['root/**']
+    types: [labeled]
+
+jobs:
+  dispatch:
+    name: Dispatch OBS PR Check
+    runs-on: ubuntu-latest
+    if: |
+      github.event.label.name == 'obs-sync' ||
+      github.event.label.name == 'qa-packages' ||
+      github.event.label.name == 'qa-containers'
+    permissions:
+      actions: write
+    steps:
+      - name: Trigger OBS PR Check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run obs-pr-check.yml \
+            --ref ${{ github.event.pull_request.head.ref }} \
+            -f pr_number=${{ github.event.number }}

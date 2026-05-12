@@ -7,10 +7,13 @@ name: OBS PR Check
 #
 # Job DAG:
 #
-#   sync ──┬──> build ─────────────────────────┐
-#          │                                    │
-#          └──> detect-qa-matrix ───────────────┴──> qa  (matrix)
+#   resolve ──> sync ──┬──> build ─────────────────────────┐
+#                      │                                    │
+#                      └──> detect-qa-matrix ───────────────┴──> qa  (matrix)
 #
+# `resolve` fetches PR context from the GitHub API (needed for workflow_dispatch
+# runs where github.event.pull_request.* is absent) and gates the DAG on the
+# presence of a trigger label so that non-trigger events produce no check runs.
 # `detect-qa-matrix` runs in parallel with `build`; the `qa` matrix combos
 # show up in the PR's check list as queued check runs as soon as detect
 # finishes, so the upcoming QA work is visible while OBS is still building.
@@ -19,9 +22,57 @@ on:
   pull_request:
     branches: [main]
     paths: ['root/**']
-    types: [opened, labeled, synchronize, reopened]
+    types: [opened, synchronize, reopened]
+  # `labeled` is intentionally absent: obs-pr-label-dispatch.yml listens for
+  # label events and fires this workflow via workflow_dispatch only for the
+  # trigger labels (obs-sync, qa-packages, qa-containers).  This prevents
+  # control-only labels (e.g. no-dep-cascade) from creating spurious check runs.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number (set by obs-pr-label-dispatch)'
+        required: true
+        type: string
 
 jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # resolve: fetch PR context from the GitHub API.  For pull_request events the
+  # data is read directly from github.event; for workflow_dispatch runs (fired
+  # by obs-pr-label-dispatch.yml) it is fetched via the API using the
+  # pr_number input.  Also checks for a trigger label so downstream jobs can
+  # gate on has_trigger_label instead of repeating the label condition.
+  # ──────────────────────────────────────────────────────────────────────────
+  resolve:
+    name: Resolve PR context
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      pr_number:        ${{ steps.ctx.outputs.pr_number }}
+      head_sha:         ${{ steps.ctx.outputs.head_sha }}
+      clone_url:        ${{ steps.ctx.outputs.clone_url }}
+      labels_json:      ${{ steps.ctx.outputs.labels_json }}
+      has_trigger_label: ${{ steps.ctx.outputs.has_trigger_label }}
+    steps:
+      - name: Fetch PR context
+        id: ctx
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR="${{ inputs.pr_number || github.event.number }}"
+          DATA=$(gh api repos/${{ github.repository }}/pulls/${PR})
+          HEAD_SHA=$(echo "$DATA" | jq -r '.head.sha')
+          CLONE_URL=$(echo "$DATA" | jq -r '.head.repo.clone_url')
+          LABELS=$(echo "$DATA" | jq -c '[.labels[].name]')
+          HAS_TRIGGER=$(echo "$LABELS" | jq '[.[] | select(. == "obs-sync" or . == "qa-packages" or . == "qa-containers")] | length > 0')
+          {
+            echo "pr_number=${PR}"
+            echo "head_sha=${HEAD_SHA}"
+            echo "clone_url=${CLONE_URL}"
+            printf 'labels_json=%s\n' "${LABELS}"
+            echo "has_trigger_label=${HAS_TRIGGER}"
+          } >> "$GITHUB_OUTPUT"
+
   # ──────────────────────────────────────────────────────────────────────────
   # sync: push the PR contents to OBS and (for release-only PRs) test the
   # release flow.  Does NOT poll OBS builds — that is done in `build` so it
@@ -29,10 +80,9 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   sync:
     name: Sync packages to OBS
+    needs: [resolve]
     runs-on: ubuntu-latest
-    if: |
-      (github.event.action == 'labeled' && (github.event.label.name == 'obs-sync' || github.event.label.name == 'qa-packages' || github.event.label.name == 'qa-containers')) ||
-      (github.event.action != 'labeled' && (contains(github.event.pull_request.labels.*.name, 'obs-sync') || contains(github.event.pull_request.labels.*.name, 'qa-packages') || contains(github.event.pull_request.labels.*.name, 'qa-containers')))
+    if: needs.resolve.outputs.has_trigger_label == 'true'
     permissions:
       # Required to post/update the PR comment.
       pull-requests: write
@@ -42,7 +92,7 @@ jobs:
       sync_outcome: ${{ steps.sync.outcome }}
 
     env:
-      PR_NUMBER: ${{ github.event.number }}
+      PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
       OBS_APIURL: ${{ vars.OBS_APIURL }}
       OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
       OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
@@ -67,7 +117,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache
-          key: percona-obs-${{ runner.os }}-${{ github.event.pull_request.head.sha }}
+          key: percona-obs-${{ runner.os }}-${{ needs.resolve.outputs.head_sha }}
           restore-keys: |
             percona-obs-${{ runner.os }}-
 
@@ -108,7 +158,7 @@ jobs:
             -R "$PR_ROOTPRJ" \
             -e "REMOTE_OBS_ORG_INTERCONNECT:" \
             -e "PERCONA_OBS_PACKAGING_BRANCH:refs/pull/${PR_NUMBER}/head" \
-            -e "PERCONA_OBS_PACKAGING_REPO:${{ github.event.pull_request.head.repo.clone_url }}" \
+            -e "PERCONA_OBS_PACKAGING_REPO:${{ needs.resolve.outputs.clone_url }}" \
             profile create "pr-${PR_NUMBER}"
 
       # Detect whether this is a release-only PR (all changed files under
@@ -133,7 +183,7 @@ jobs:
       - name: Resolve repo label filter
         id: repo-filter
         run: |
-          LABELS='${{ toJSON(github.event.pull_request.labels.*.name) }}'
+          LABELS='${{ needs.resolve.outputs.labels_json }}'
           CONTROL='. != "obs-sync" and . != "qa-packages" and . != "qa-containers" and . != "no-dep-cascade"'
           REPO_LABELS=$(echo "$LABELS" | jq -r "[.[] | select(${CONTROL})] | join(\",\")")
           if [ -n "$REPO_LABELS" ]; then
@@ -204,14 +254,14 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   build:
     name: Wait for OBS builds
-    needs: sync
+    needs: [resolve, sync]
     if: needs.sync.outputs.is_release_pr != 'true' && needs.sync.outputs.sync_outcome == 'success'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
 
     env:
-      PR_NUMBER: ${{ github.event.number }}
+      PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
       OBS_APIURL: ${{ vars.OBS_APIURL }}
       OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
       OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
@@ -238,7 +288,7 @@ jobs:
         id: poll
         env:
           OBS_APIURL: ${{ vars.OBS_APIURL }}
-          OBS_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}:pr-${{ github.event.number }}
+          OBS_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}:pr-${{ needs.resolve.outputs.pr_number }}
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/poll_obs_builds.py
 
@@ -262,10 +312,10 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   detect-qa-matrix:
     name: Detect QA matrix
-    needs: sync
+    needs: [resolve, sync]
     if: |
       needs.sync.outputs.is_release_pr != 'true' && needs.sync.outputs.sync_outcome == 'success' &&
-      (contains(github.event.pull_request.labels.*.name, 'qa-packages') || contains(github.event.pull_request.labels.*.name, 'qa-containers'))
+      (contains(fromJSON(needs.resolve.outputs.labels_json), 'qa-packages') || contains(fromJSON(needs.resolve.outputs.labels_json), 'qa-containers'))
     runs-on: ubuntu-latest
 
     outputs:
@@ -285,7 +335,7 @@ jobs:
         env:
           OBS_APIURL: ${{ vars.OBS_APIURL }}
           OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
-          PR_NUMBER: ${{ github.event.number }}
+          PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
           JENKINS_URL: ${{ vars.JENKINS_URL }}
           JENKINS_USER: ${{ vars.JENKINS_USER }}
         run: |
@@ -306,7 +356,7 @@ jobs:
       - name: Resolve QA type filter
         id: qa-types
         run: |
-          LABELS='${{ toJSON(github.event.pull_request.labels.*.name) }}'
+          LABELS='${{ needs.resolve.outputs.labels_json }}'
           TYPES=""
           if echo "$LABELS" | jq -e '[.[] | select(. == "qa-packages")] | length > 0' > /dev/null; then
             TYPES="packages"
@@ -324,7 +374,7 @@ jobs:
         id: matrix
         env:
           OBS_APIURL: ${{ vars.OBS_APIURL }}
-          OBS_PROJECT: ${{ vars.OBS_PR_ROOTPRJ }}:pr-${{ github.event.number }}
+          OBS_PROJECT: ${{ vars.OBS_PR_ROOTPRJ }}:pr-${{ needs.resolve.outputs.pr_number }}
           PYTHONPATH: ${{ github.workspace }}
           QA_TYPES: ${{ steps.qa-types.outputs.qa_types }}
         run: |
@@ -342,7 +392,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   qa:
     name: ${{ matrix.status_context }}
-    needs: [build, detect-qa-matrix]
+    needs: [resolve, build, detect-qa-matrix]
     if: needs.detect-qa-matrix.outputs.has_matrix == 'true' && needs.build.result == 'success'
     runs-on: ubuntu-latest
 
@@ -366,7 +416,7 @@ jobs:
         env:
           OBS_APIURL: ${{ vars.OBS_APIURL }}
           OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
-          PR_NUMBER: ${{ github.event.number }}
+          PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
           JENKINS_URL: ${{ vars.JENKINS_URL }}
           JENKINS_USER: ${{ vars.JENKINS_USER }}
         run: |
