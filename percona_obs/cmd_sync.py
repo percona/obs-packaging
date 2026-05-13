@@ -109,6 +109,18 @@ def _is_pr_managed_project(obs_project: str, rootprj: str) -> bool:
     return obs_project == pr_root or obs_project.startswith(pr_root + ":")
 
 
+def _is_release_managed_project(obs_project: str, rootprj: str) -> bool:
+    """Return True if obs_project is a release project or any child of it.
+
+    Release projects (e.g. isv:percona:ppg:releases:17) are created by
+    obs-release.yml and are intentionally absent from the local sync tree
+    (excluded by release.yaml markers).  They must never be treated as orphans
+    by the sync push cleanup logic.
+    """
+    suffix = obs_project[len(rootprj) :]  # e.g. ":ppg:releases:17"
+    return ":releases:" in suffix
+
+
 def _copy_with_env_subst(
     src: Path, dst_dir: Path, env_vars: dict[str, str] | None
 ) -> None:
@@ -1220,6 +1232,7 @@ def cmd_sync(args):
             p
             for p in obs_subprojects - local_project_names
             if not _is_pr_managed_project(p, args.rootprj)
+            and not _is_release_managed_project(p, args.rootprj)
         }
         for orphan_proj in sorted(orphan_projects, key=lambda x: -x.count(":")):
             _delete_obs_project(apiurl, orphan_proj, dry_run_obs, recursive=True)
