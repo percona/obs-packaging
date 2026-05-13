@@ -286,16 +286,10 @@ def _fill_release_online_records(
     _collect(args.project or "", scope_path)
 
     if getattr(args, "recursive", True):
-        for child in sorted(scope_path.iterdir()):
-            if not child.is_dir():
-                continue
-            if not (child / "project.yaml").is_file():
-                continue
-            if (child / "release.yaml").is_file():
-                continue
-            base_id = args.project or ""
-            sub_proj_id = f"{base_id}:{child.name}" if base_id else child.name
-            _collect(sub_proj_id, child)
+        for sub_obs_id, sub_path in find_projects(scope_path, args.project or ""):
+            if sub_path == scope_path:
+                continue  # root already processed above
+            _collect(sub_obs_id, sub_path)
 
 
 def _detect_container_info(
