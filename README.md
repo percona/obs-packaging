@@ -29,6 +29,17 @@ Released package versions, published to the release OBS projects after each succ
 | `ppg:releases:17` | [isv:percona:ppg:releases:17](https://build.opensuse.org/project/show/isv:percona:ppg:releases:17) | [docs/versions/ppg-releases-17.md](docs/versions/ppg-releases-17.md) | 17.9-1 |
 | `ppg:releases:18` | [isv:percona:ppg:releases:18](https://build.opensuse.org/project/show/isv:percona:ppg:releases:18) | [docs/versions/ppg-releases-18.md](docs/versions/ppg-releases-18.md) | 18.3-1 |
 
+## Version Lists
+
+Per-distribution package version lists, updated automatically after every successful OBS build. Each file lists all packages and container images with the version and release number last successfully built on OBS.
+
+| Distribution | OBS Project | Version List | QA Status |
+|---|---|---|---|
+| `ppg:17` | [isv:percona:ppg:17](https://build.opensuse.org/project/show/isv:percona:ppg:17) | [docs/versions/ppg-17.md](docs/versions/ppg-17.md) | Not Available |
+| `ppg:18` | [isv:percona:ppg:18](https://build.opensuse.org/project/show/isv:percona:ppg:18) | [docs/versions/ppg-18.md](docs/versions/ppg-18.md) | Not Available |
+| `ppg:releases:17` | [isv:percona:ppg:releases:17](https://build.opensuse.org/project/show/isv:percona:ppg:releases:17) | [docs/versions/ppg-releases-17.md](docs/versions/ppg-releases-17.md) | Not Available |
+| `ppg:releases:18` | [isv:percona:ppg:releases:18](https://build.opensuse.org/project/show/isv:percona:ppg:releases:18) | [docs/versions/ppg-releases-18.md](docs/versions/ppg-releases-18.md) | Not Available |
+
 ## Documentation
 
 | Document | Description |
