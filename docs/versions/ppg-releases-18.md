@@ -2,9 +2,9 @@
 
 | Package | Project | Version |
 | ------- | ------- | ------- |
-| etcd | ppg:releases:18 | 3.5.26-2.1 |
+| etcd | ppg:releases:18 | 3.5.26-3.1 |
 | percona-haproxy | ppg:releases:18 | 2.8.18-1.3 |
-| percona-patroni | ppg:releases:18 | 4.1.0-2.1 |
+| percona-patroni | ppg:releases:18 | 4.1.0-3.1 |
 | percona-pg_cron | ppg:releases:18 | 1.6.7-2.1 |
 | percona-pg_gather | ppg:releases:18 | 32-1.1 |
 | percona-pg_oidc_validator | ppg:releases:18 | 1.0-2.1 |
@@ -16,11 +16,11 @@
 | percona-pgbackrest | ppg:releases:18 | 2.58.0-2.1 |
 | percona-pgbadger | ppg:releases:18 | 13.2-1.3 |
 | percona-pgbouncer | ppg:releases:18 | 1.25.1-2.1 |
-| percona-pgpool-II | ppg:releases:18 | 4.7.0-2.2 |
-| percona-pgvector | ppg:releases:18 | 0.8.2-2.2 |
-| percona-postgis | ppg:releases:18 | 3.5.5-2.6 |
+| percona-pgpool-II | ppg:releases:18 | 4.7.0-2.3 |
+| percona-pgvector | ppg:releases:18 | 0.8.2-2.3 |
+| percona-postgis | ppg:releases:18 | 3.5.5-2.7 |
 | percona-postgresql-common | ppg:releases:18 | 289-2.1 |
-| percona-postgresql18 | ppg:releases:18 | 18.3-4.7 |
+| percona-postgresql18 | ppg:releases:18 | 18.3-4.8 |
 | percona-ppg-server-18 | ppg:releases:18 | 18.3-1.1 |
 | percona-ppg-server-ha-18 | ppg:releases:18 | 18.3-1.1 |
 | percona-wal2json | ppg:releases:18 | 2.6-3.1 |
