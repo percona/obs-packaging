@@ -44,6 +44,7 @@ from .obs_api import (
     _extract_obs_managed_elements,
     _fetch_all_pkg_archs,
     _fetch_build_containerinfo,
+    _fetch_obs_container_images,
     _fetch_obs_download_url,
     _fetch_obs_package_names,
     _fetch_root_project_managed_elements,
@@ -784,12 +785,63 @@ _ZYPPER_REPO_PREFIXES = ("openSUSE_", "SLE_", "SLES_")
 
 
 def _repo_pkg_manager(repo_name: str) -> str:
-    """Return 'deb', 'zypper', or 'dnf' based on the OBS repository name."""
+    """Return 'deb', 'zypper', 'dnf', or 'container' based on the OBS repository name."""
+    if repo_name == "images":
+        return "container"
     if any(repo_name.startswith(p) for p in _DEB_REPO_PREFIXES):
         return "deb"
     if any(repo_name.startswith(p) for p in _ZYPPER_REPO_PREFIXES):
         return "zypper"
     return "dnf"
+
+
+def _container_registry_prefix(
+    obs_project: str, rootprj: str, env_vars: "dict[str, str] | None"
+) -> str:
+    """Return the container registry base URL for an OBS project's images repo.
+
+    Example: isv:percona:ppg:releases:18:containers:ubi9 →
+      registry.opensuse.org/isv/percona/ppg/releases/18/containers/ubi9/images
+    """
+    registry_rootprj = (env_vars or {}).get(
+        "OBS_CONTAINER_REGISTRY_ROOTPRJ",
+        rootprj.replace(":", "/").lower(),
+    )
+    rel = (
+        obs_project[len(rootprj) + 1 :]
+        if obs_project.startswith(rootprj + ":")
+        else obs_project
+    )
+    return f"registry.opensuse.org/{registry_rootprj}/{rel.replace(':', '/')}/images"
+
+
+def _local_container_images(project_path: Path) -> "list[tuple[str, list[str]]]":
+    """Return [(image_name, [stable_tags]), ...] from Dockerfiles in direct-child packages.
+
+    Stable tags are #!BuildTag: values with no template variables (< or >).
+    """
+    results: list[tuple[str, list[str]]] = []
+    for child in sorted(project_path.iterdir()):
+        dockerfile = child / "obs" / "Dockerfile"
+        if not child.is_dir() or not dockerfile.is_file():
+            continue
+        image_name: str | None = None
+        stable_tags: list[str] = []
+        for line in dockerfile.read_text("utf-8").splitlines():
+            line = line.strip()
+            if not line.startswith("#!BuildTag:"):
+                continue
+            tag_value = line[len("#!BuildTag:") :].strip()
+            if ":" in tag_value:
+                img, tag = tag_value.rsplit(":", 1)
+                image_name = img.strip()
+                if "<" not in tag and ">" not in tag:
+                    stable_tags.append(tag.strip())
+            elif not image_name:
+                image_name = tag_value
+        if image_name and stable_tags:
+            results.append((image_name, stable_tags))
+    return results
 
 
 def _obs_project_url_path(obs_project: str) -> str:
@@ -866,9 +918,11 @@ def cmd_project_install(args) -> None:
     if not projects:
         raise SystemExit("error: no installable projects found in scope")
 
-    # Build repo_name -> [obs_project_name, ...] mapping.
+    # Build repo_name -> [obs_project_name, ...] mapping and a path lookup.
     repo_entries: dict[str, list[str]] = {}
+    obs_name_to_path: dict[str, Path] = {}
     for obs_project_name, project_path in projects:
+        obs_name_to_path[obs_project_name] = project_path
         config = _load_project_config_with_inheritance(project_path, env_vars)
         for repo in config.get("repositories", []):
             repo_name = repo.get("name", "")
@@ -894,36 +948,53 @@ def cmd_project_install(args) -> None:
         proj_list = repo_entries[repo_name]
 
         for obs_project in proj_list:
-            url_path = _obs_project_url_path(obs_project)
-            repo_url = f"{download_url}/{url_path}/{repo_name}/"
             print(f"# {obs_project}")
 
-            if pkg_mgr == "deb":
-                list_file = f"{obs_project}.list"
-                gpg_file = re.sub(r"[:.]+", "_", obs_project) + ".gpg"
-                print(
-                    f"echo 'deb {repo_url} /' \\\n"
-                    f"  | tee /etc/apt/sources.list.d/{list_file}"
+            if pkg_mgr == "container":
+                registry_prefix = _container_registry_prefix(
+                    obs_project, args.rootprj, env_vars
                 )
-                print(
-                    f"curl -fsSL {repo_url}Release.key \\\n"
-                    f"  | gpg --dearmor"
-                    f" | tee /etc/apt/trusted.gpg.d/{gpg_file} > /dev/null"
-                )
-            elif pkg_mgr == "zypper":
-                print(f"zypper addrepo \\\n" f"  {repo_url} \\\n" f"  {obs_project}")
-            else:  # dnf
-                repo_file = re.sub(r"[:.]+", "_", obs_project)
-                print(f"rpm --import {repo_url}repodata/repomd.xml.key")
-                print(
-                    f"tee /etc/yum.repos.d/{repo_file}.repo << 'EOF'\n"
-                    f"[{obs_project}]\n"
-                    f"name={obs_project} - {repo_name}\n"
-                    f"baseurl={repo_url}\n"
-                    f"enabled=1\n"
-                    f"gpgcheck=0\n"
-                    f"EOF"
-                )
+                proj_path = obs_name_to_path.get(obs_project)
+                images = _local_container_images(proj_path) if proj_path else []
+                if not images:
+                    images = _fetch_obs_container_images(apiurl, obs_project)
+                for image_name, stable_tags in images:
+                    for tag in stable_tags:
+                        print(f"docker pull {registry_prefix}/{image_name}:{tag}")
+                if not images:
+                    print(f"docker pull {registry_prefix}/<image>:<tag>")
+            else:
+                url_path = _obs_project_url_path(obs_project)
+                repo_url = f"{download_url}/{url_path}/{repo_name}/"
+
+                if pkg_mgr == "deb":
+                    list_file = f"{obs_project}.list"
+                    gpg_file = re.sub(r"[:.]+", "_", obs_project) + ".gpg"
+                    print(
+                        f"echo 'deb {repo_url} /' \\\n"
+                        f"  | tee /etc/apt/sources.list.d/{list_file}"
+                    )
+                    print(
+                        f"curl -fsSL {repo_url}Release.key \\\n"
+                        f"  | gpg --dearmor"
+                        f" | tee /etc/apt/trusted.gpg.d/{gpg_file} > /dev/null"
+                    )
+                elif pkg_mgr == "zypper":
+                    print(
+                        f"zypper addrepo \\\n" f"  {repo_url} \\\n" f"  {obs_project}"
+                    )
+                else:  # dnf
+                    repo_file = re.sub(r"[:.]+", "_", obs_project)
+                    print(f"rpm --import {repo_url}repodata/repomd.xml.key")
+                    print(
+                        f"tee /etc/yum.repos.d/{repo_file}.repo << 'EOF'\n"
+                        f"[{obs_project}]\n"
+                        f"name={obs_project} - {repo_name}\n"
+                        f"baseurl={repo_url}\n"
+                        f"enabled=1\n"
+                        f"gpgcheck=0\n"
+                        f"EOF"
+                    )
             print()
 
         if pkg_mgr == "deb":

@@ -227,6 +227,44 @@ def _detect_obs_container_info(
     return None
 
 
+def _fetch_obs_container_images(
+    apiurl: str, obs_project: str
+) -> "list[tuple[str, list[str]]]":
+    """Return [(image_name, [stable_tags]), ...] for all container packages in obs_project.
+
+    Fetches each package's Dockerfile from OBS source and collects #!BuildTag: lines
+    whose tag value contains no template variables (< or >).  Used as a fallback for
+    release projects that have no local Dockerfiles.
+    """
+    results: list[tuple[str, list[str]]] = []
+    for pkg in sorted(_fetch_obs_package_names(apiurl, obs_project)):
+        file_md5s = _fetch_obs_file_md5s(apiurl, obs_project, pkg, expanded=True)
+        if "Dockerfile" not in file_md5s:
+            continue
+        content = _fetch_obs_file_content(
+            apiurl, obs_project, pkg, "Dockerfile", expanded=True
+        )
+        if not content:
+            continue
+        image_name: str | None = None
+        stable_tags: list[str] = []
+        for line in content.decode("utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if not line.startswith("#!BuildTag:"):
+                continue
+            tag_value = line[len("#!BuildTag:") :].strip()
+            if ":" in tag_value:
+                img, tag = tag_value.rsplit(":", 1)
+                image_name = img.strip()
+                if "<" not in tag and ">" not in tag:
+                    stable_tags.append(tag.strip())
+            elif not image_name:
+                image_name = tag_value
+        if image_name and stable_tags:
+            results.append((image_name, stable_tags))
+    return results
+
+
 def _fetch_build_containerinfo(
     apiurl: str,
     obs_project: str,
