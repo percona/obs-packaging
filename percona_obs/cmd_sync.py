@@ -1271,6 +1271,8 @@ def cmd_sync_delete(args) -> None:
                 scope_label = target
             else:
                 obs_names = _fetch_obs_subproject_names(apiurl, args.rootprj)
+                if _obs_project_exists(apiurl, args.rootprj):
+                    obs_names.add(args.rootprj)
                 scope_label = args.rootprj
             if not obs_names:
                 print(
