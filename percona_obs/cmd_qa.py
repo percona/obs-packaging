@@ -68,10 +68,14 @@ def _qa_env_vars(args: argparse.Namespace) -> dict[str, str]:
     return env_vars
 
 
-def _load_qa_block(project: str, env_vars: dict[str, str]) -> dict[str, Any] | None:
+def _load_qa_block(
+    project: str, env_vars: dict[str, str]
+) -> list[dict[str, Any]] | None:
     """Load and validate the ``qa:`` block of a project's project.yaml.
 
-    Returns the validated dict, or ``None`` if the project has no ``qa:`` block.
+    Returns a list of validated pipeline entry dicts, or ``None`` if the
+    project has no ``qa:`` block.  A single-dict ``qa:`` is normalised to a
+    one-element list so callers can always iterate.
     """
     project_path = resolve_project_path(project)
     if not project_path.is_dir():
@@ -80,13 +84,20 @@ def _load_qa_block(project: str, env_vars: dict[str, str]) -> dict[str, Any] | N
     qa = cfg.get("qa")
     if qa is None:
         return None
-    _validate_qa(qa, project)
-    return qa
+    if isinstance(qa, dict):
+        entries: list[Any] = [qa]
+    elif isinstance(qa, list):
+        entries = qa
+    else:
+        raise SystemExit(f"error: {project}: qa block must be a mapping or a list")
+    for entry in entries:
+        _validate_qa(entry, project)
+    return entries
 
 
 def _validate_qa(qa: Any, project: str) -> None:
     if not isinstance(qa, dict):
-        raise SystemExit(f"error: {project}: qa block must be a mapping")
+        raise SystemExit(f"error: {project}: qa entry must be a mapping")
     pipeline = qa.get("pipeline")
     if not isinstance(pipeline, str) or not pipeline:
         raise SystemExit(f"error: {project}: qa.pipeline must be a non-empty string")
@@ -270,49 +281,55 @@ def _summarize(state: RunState) -> bool:
 
 def cmd_qa_show(args: argparse.Namespace) -> None:
     env_vars = _qa_env_vars(args)
-    qa = _load_qa_block(args.project, env_vars)
+    entries = _load_qa_block(args.project, env_vars)
     json_mode: bool = bool(getattr(args, "json", False))
 
-    if qa is None:
+    if entries is None:
         if json_mode:
             print("[]")
         return
 
-    combos = _expand_matrix(qa)
-    matrix_axes = list(qa.get("matrix") or [])
-
     if json_mode:
         out: list[dict[str, Any]] = []
-        for label, params in combos:
-            entry_label = label or "default"
-            axis_filters = " ".join(
-                f"--filter {axis}={params[axis]}" for axis in matrix_axes
-            )
-            status_context = (
-                f"OBS QA / {args.project} / {entry_label}"
-                if matrix_axes
-                else f"OBS QA / {args.project}"
-            )
-            out.append(
-                {
-                    "project": args.project,
-                    "pipeline": qa["pipeline"],
-                    "label": entry_label,
-                    "axis_filters": axis_filters,
-                    "status_context": status_context,
-                    "params": params,
-                }
-            )
+        for entry in entries:
+            pipeline = entry["pipeline"]
+            combos = _expand_matrix(entry)
+            matrix_axes = list(entry.get("matrix") or [])
+            for label, params in combos:
+                entry_label = label or "default"
+                axis_filters = " ".join(
+                    f"--filter {axis}={params[axis]}" for axis in matrix_axes
+                )
+                status_context = (
+                    f"OBS QA / {args.project} / {entry_label}"
+                    if matrix_axes
+                    else f"OBS QA / {args.project}"
+                )
+                out.append(
+                    {
+                        "project": args.project,
+                        "pipeline": pipeline,
+                        "label": entry_label,
+                        "axis_filters": axis_filters,
+                        "status_context": status_context,
+                        "params": params,
+                    }
+                )
         print(json.dumps(out, indent=2))
         return
 
-    print(_col(_BOLD, f"{args.project}  →  pipeline: {qa['pipeline']}"))
-    print(f"{_col(_DIM, 'matrix:')} {', '.join(matrix_axes) or '(none)'}")
-    print(f"{_col(_DIM, 'combos:')} {len(combos)}")
-    for label, params in combos:
+    for entry in entries:
+        pipeline = entry["pipeline"]
+        combos = _expand_matrix(entry)
+        matrix_axes = list(entry.get("matrix") or [])
+        print(_col(_BOLD, f"{args.project}  →  pipeline: {pipeline}"))
+        print(f"{_col(_DIM, 'matrix:')} {', '.join(matrix_axes) or '(none)'}")
+        print(f"{_col(_DIM, 'combos:')} {len(combos)}")
+        for label, params in combos:
+            print()
+            print(_col(_CYAN, f"• {label or '(no matrix)'}"))
+            _print_params(params)
         print()
-        print(_col(_CYAN, f"• {label or '(no matrix)'}"))
-        _print_params(params)
 
 
 # ---------------------------------------------------------------------------
@@ -441,50 +458,70 @@ def _wait_and_record(
 
 def cmd_qa_run(args: argparse.Namespace) -> None:
     env_vars = _qa_env_vars(args)
-    qa = _load_qa_block(args.project, env_vars)
-    if qa is None:
+    entries = _load_qa_block(args.project, env_vars)
+    if entries is None:
         raise SystemExit(f"error: {args.project} has no qa: block in its project.yaml")
 
-    combos = _expand_matrix(qa)
-    combos = _apply_filters(combos, _parse_filter(args.filter or []))
-    combos = _apply_param_overrides(combos, _parse_param_overrides(args.param or []))
+    filters = _parse_filter(args.filter or [])
+    overrides = _parse_param_overrides(args.param or [])
 
-    if not combos:
+    # Pre-expand all entries so we can detect the no-match case before triggering.
+    active: list[tuple[str, list[tuple[str, dict[str, str]]]]] = []
+    for entry in entries:
+        pipeline = entry["pipeline"]
+        combos = _expand_matrix(entry)
+        combos = _apply_filters(combos, filters)
+        combos = _apply_param_overrides(combos, overrides)
+        if combos:
+            active.append((pipeline, combos))
+
+    if not active:
         raise SystemExit("error: no matrix combinations match the given --filter")
 
-    pipeline = qa["pipeline"]
-
     if args.dry_run:
-        print(_col(_BOLD, f"DRY RUN: would trigger pipeline {pipeline!r}"))
-        print(f"  project: {args.project}")
-        print(f"  combos:  {len(combos)}")
-        for label, params in combos:
+        for pipeline, combos in active:
+            print(_col(_BOLD, f"DRY RUN: would trigger pipeline {pipeline!r}"))
+            print(f"  project: {args.project}")
+            print(f"  combos:  {len(combos)}")
+            for label, params in combos:
+                print()
+                print(_col(_CYAN, f"• {label or '(no matrix)'}"))
+                _print_params(params)
             print()
-            print(_col(_CYAN, f"• {label or '(no matrix)'}"))
-            _print_params(params)
         return
 
     cfg = load_jenkins_config(args.profile)
 
-    state = RunState(
-        run_id=new_run_id(),
-        project=args.project,
-        pipeline=pipeline,
-        created_at=_utcnow_iso(),
-        combos=[],
-    )
-    print(_col(_BOLD, f"qa run {args.project}  (run-id: {state.run_id})"))
-    queue_urls = _trigger_combos(cfg, pipeline, combos, state, record_new_combo=True)
-    save_state(state)
+    any_failed = False
+    for pipeline, combos in active:
+        state = RunState(
+            run_id=new_run_id(),
+            project=args.project,
+            pipeline=pipeline,
+            created_at=_utcnow_iso(),
+            combos=[],
+        )
+        print(
+            _col(
+                _BOLD,
+                f"qa run {args.project}  pipeline: {pipeline}  (run-id: {state.run_id})",
+            )
+        )
+        queue_urls = _trigger_combos(
+            cfg, pipeline, combos, state, record_new_combo=True
+        )
+        save_state(state)
 
-    if args.wait and queue_urls:
-        _wait_and_record(cfg, state, queue_urls)
+        if args.wait and queue_urls:
+            _wait_and_record(cfg, state, queue_urls)
 
-    if args.report_json:
-        write_report_json(state, Path(args.report_json))
+        if args.report_json:
+            write_report_json(state, Path(args.report_json))
 
-    failed = _summarize(state) if args.wait else False
-    if args.wait and failed:
+        if args.wait and _summarize(state):
+            any_failed = True
+
+    if args.wait and any_failed:
         sys.exit(1)
 
 
