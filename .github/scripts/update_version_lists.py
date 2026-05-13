@@ -525,6 +525,25 @@ def main() -> None:
             text=True,
             cwd=REPO_ROOT,
         )
+        print(f"    Adding install instructions for {project_id} ...")
+        install = subprocess.run(
+            [
+                "venv/bin/python",
+                "-m",
+                "percona_obs",
+                "-P",
+                "main",
+                "project",
+                "install",
+                project_id,
+                "--markdown",
+            ],
+            text=True,
+            capture_output=True,
+            cwd=REPO_ROOT,
+        )
+        if install.returncode == 0 and install.stdout.strip():
+            md = md + "\n" + install.stdout
         outfile.write_text(md, encoding="utf-8")
 
     updated_files = [outfile for _, outfile in projects]
