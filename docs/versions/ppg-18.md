@@ -3,9 +3,9 @@
 | Package | Project | Version |
 | ------- | ------- | ------- |
 | gosu | ppg:18:containers:ubi9 | 1.19-2.5 |
-| etcd | ppg:18 | 3.5.29-1+3.1 |
+| etcd | ppg:18 | 3.5.29-1+5.1 |
 | percona-haproxy | ppg:18 | 2.8.18-1+1.1 |
-| percona-patroni | ppg:18 | 4.1.1-1+4.1 |
+| percona-patroni | ppg:18 | 4.1.1-1+5.1 |
 | percona-pg_cron | ppg:18 | 1.6.7-0+2.1 |
 | percona-pg_gather | ppg:18 | 32-0+1.1 |
 | percona-pg_oidc_validator | ppg:18 | 1.0-0+2.1 |
@@ -50,5 +50,104 @@
 
 | Package | Project | Image | Version | Tags |
 | ------- | ------- | ----- | ------- | ---- |
-| percona-distribution-postgresql | ppg:18:containers:ubi9 | percona-distribution-postgresql | 18.3 | `18.3-1.26` `18.3` `18` |
-| percona-distribution-postgresql-with-postgis | ppg:18:containers:ubi9 | percona-distribution-postgresql-with-postgis | 18.3 | `18.3-1.40` `18.3` `18` |
+| percona-distribution-postgresql | ppg:18:containers:ubi9 | percona-distribution-postgresql | 18.3 | `18.3-2.1` `18.3` `18` |
+| percona-distribution-postgresql-with-postgis | ppg:18:containers:ubi9 | percona-distribution-postgresql-with-postgis | 18.3 | `18.3-2.1` `18.3` `18` |
+
+# Repository Installation Instructions
+
+
+### Debian_13
+
+**`isv:percona:ppg:18`**
+
+```bash
+echo 'deb https://download.opensuse.org/repositories/isv:/percona:/ppg:/18/Debian_13/ /' \
+  | tee /etc/apt/sources.list.d/isv:percona:ppg:18.list
+curl -fsSL https://download.opensuse.org/repositories/isv:/percona:/ppg:/18/Debian_13/Release.key \
+  | gpg --dearmor | tee /etc/apt/trusted.gpg.d/isv_percona_ppg_18.gpg > /dev/null
+apt update
+```
+
+
+### RockyLinux_9
+
+**`isv:percona:ppg:18`**
+
+```bash
+rpm --import https://download.opensuse.org/repositories/isv:/percona:/ppg:/18/RockyLinux_9/repodata/repomd.xml.key
+tee /etc/yum.repos.d/isv_percona_ppg_18.repo << 'EOF'
+[isv:percona:ppg:18]
+name=isv:percona:ppg:18 - RockyLinux_9
+baseurl=https://download.opensuse.org/repositories/isv:/percona:/ppg:/18/RockyLinux_9/
+enabled=1
+gpgcheck=0
+EOF
+```
+
+
+### Ubuntu_24.04
+
+**`isv:percona:ppg:18`**
+
+```bash
+echo 'deb https://download.opensuse.org/repositories/isv:/percona:/ppg:/18/Ubuntu_24.04/ /' \
+  | tee /etc/apt/sources.list.d/isv:percona:ppg:18.list
+curl -fsSL https://download.opensuse.org/repositories/isv:/percona:/ppg:/18/Ubuntu_24.04/Release.key \
+  | gpg --dearmor | tee /etc/apt/trusted.gpg.d/isv_percona_ppg_18.gpg > /dev/null
+apt update
+```
+
+
+### Ubuntu_26.04
+
+**`isv:percona:ppg:18`**
+
+```bash
+echo 'deb https://download.opensuse.org/repositories/isv:/percona:/ppg:/18/Ubuntu_26.04/ /' \
+  | tee /etc/apt/sources.list.d/isv:percona:ppg:18.list
+curl -fsSL https://download.opensuse.org/repositories/isv:/percona:/ppg:/18/Ubuntu_26.04/Release.key \
+  | gpg --dearmor | tee /etc/apt/trusted.gpg.d/isv_percona_ppg_18.gpg > /dev/null
+apt update
+```
+
+
+### openSUSE_Leap_16
+
+**`isv:percona:ppg:18`**
+
+```bash
+zypper addrepo \
+  https://download.opensuse.org/repositories/isv:/percona:/ppg:/18/openSUSE_Leap_16/ \
+  isv:percona:ppg:18
+zypper --gpg-auto-import-keys refresh
+```
+
+
+### openSUSE_Tumbleweed
+
+**`isv:percona:ppg:18`**
+
+```bash
+zypper addrepo \
+  https://download.opensuse.org/repositories/isv:/percona:/ppg:/18/openSUSE_Tumbleweed/ \
+  isv:percona:ppg:18
+zypper --gpg-auto-import-keys refresh
+```
+
+
+### Container Images
+
+**`isv:percona:ppg:18:containers:ubi9`**
+
+**`percona-distribution-postgresql`**
+
+```bash
+docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql:18
+```
+
+**`percona-distribution-postgresql-with-postgis`**
+
+```bash
+docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-with-postgis:18
+```
+
