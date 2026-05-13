@@ -3,9 +3,9 @@
 | Package | Project | Version |
 | ------- | ------- | ------- |
 | gosu | ppg:18:containers:ubi9 | 1.19-2.5 |
-| etcd | ppg:18 | 3.5.26-1+3.1 |
+| etcd | ppg:18 | 3.5.29-1+3.1 |
 | percona-haproxy | ppg:18 | 2.8.18-1+1.1 |
-| percona-patroni | ppg:18 | 4.1.0-1+3.1 |
+| percona-patroni | ppg:18 | 4.1.1-1+4.1 |
 | percona-pg_cron | ppg:18 | 1.6.7-0+2.1 |
 | percona-pg_gather | ppg:18 | 32-0+1.1 |
 | percona-pg_oidc_validator | ppg:18 | 1.0-0+2.1 |
@@ -50,5 +50,5 @@
 
 | Package | Project | Image | Version | Tags |
 | ------- | ------- | ----- | ------- | ---- |
-| percona-distribution-postgresql | ppg:18:containers:ubi9 | percona-distribution-postgresql | 18.3 | `18.3-1.25` `18.3` `18` |
-| percona-distribution-postgresql-with-postgis | ppg:18:containers:ubi9 | percona-distribution-postgresql-with-postgis | 18.3 | `18.3-1.39` `18.3` `18` |
+| percona-distribution-postgresql | ppg:18:containers:ubi9 | percona-distribution-postgresql | 18.3 | `18.3-1.26` `18.3` `18` |
+| percona-distribution-postgresql-with-postgis | ppg:18:containers:ubi9 | percona-distribution-postgresql-with-postgis | 18.3 | `18.3-1.40` `18.3` `18` |
