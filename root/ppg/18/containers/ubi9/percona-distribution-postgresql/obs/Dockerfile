@@ -66,11 +66,12 @@ RUN set -ex; \
         percona-pgaudit${PPG_MAJOR_VERSION}_set_user \
         percona-pg_oidc_validator${PPG_MAJOR_VERSION} \
         percona-pgbackrest \
-	percona-pgvector_${PPG_MAJOR_VERSION} \
-	percona-postgresql${PPG_MAJOR_VERSION}-llvmjit \
-	percona-pgvector_${PPG_MAJOR_VERSION}-llvmjit \
-	python3-etcd \
-        percona-wal2json${PPG_MAJOR_VERSION}; \
+        percona-pgvector_${PPG_MAJOR_VERSION} \
+        percona-postgresql${PPG_MAJOR_VERSION}-llvmjit \
+        percona-pgvector_${PPG_MAJOR_VERSION}-llvmjit \
+        python3-etcd \
+        percona-wal2json${PPG_MAJOR_VERSION} \
+        percona-pg_cron_${PPG_MAJOR_VERSION}; \
     dnf clean all; \
     rm -rf /var/cache/dnf /var/cache/yum $PGDATA && mkdir -p $PGDATA /docker-entrypoint-initdb.d; \
     chown -R postgres:postgres $PGDATA docker-entrypoint-initdb.d
