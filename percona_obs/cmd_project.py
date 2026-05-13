@@ -844,8 +844,11 @@ def cmd_project_install(args) -> None:
         scope_obs_name = root_config.get("name") or args.rootprj
 
     all_projects = list(find_projects(scope_path, scope_obs_name))
+    is_release = _is_under_release_project(scope_path)
 
     # Filter: skip opt-out projects and projects with no direct packages.
+    # Release projects have no local packages (binaries live on OBS), so skip
+    # the _has_direct_packages check for them.
     def _has_direct_packages(project_path: Path) -> bool:
         return any(c.is_dir() and is_package(c) for c in project_path.iterdir())
 
@@ -853,7 +856,11 @@ def cmd_project_install(args) -> None:
         (obs_name, proj_path)
         for obs_name, proj_path in all_projects
         if load_yaml(proj_path / "project.yaml").get("publish") is not False
-        and _has_direct_packages(proj_path)
+        and (
+            (proj_path / "project.yaml").is_file()
+            if is_release
+            else _has_direct_packages(proj_path)
+        )
     ]
 
     if not projects:
