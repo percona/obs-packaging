@@ -34,6 +34,14 @@ on:
         required: true
         type: string
 
+# One run per PR at a time.  When a push and label additions fire near-
+# simultaneously, or when two trigger labels are added together, the earlier
+# runs are cancelled and only the last one proceeds (which sees the full label
+# set via the API in the resolve job).
+concurrency:
+  group: obs-pr-check-pr-${{ inputs.pr_number || github.event.number }}
+  cancel-in-progress: true
+
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
   # resolve: fetch PR context from the GitHub API.  For pull_request events the
