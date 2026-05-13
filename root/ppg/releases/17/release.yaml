@@ -1,4 +1,5 @@
 project: ppg:17
 releases:
 - ppg/17.9-1
+- ppg/17.9-2
 repository: ${PERCONA_OBS_PACKAGING_REPO}

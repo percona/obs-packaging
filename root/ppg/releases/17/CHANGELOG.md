@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [17.9-2] - 2026-05-13
+
+### Added
+
+### Changed
+- etcd: update upstream version 3.5.29 (https://github.com/etcd-io/etcd/releases/tag/v3.5.29)
+- percona-patroni: update upstream version 4.1.1 (https://github.com/zalando/patroni/releases/tag/v4.1.1)
+
+### Fixed
+
 ## [17.9-1] - 2026-05-11
 
 ### Added
