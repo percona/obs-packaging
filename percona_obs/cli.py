@@ -560,6 +560,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Filter output to a specific repository name (e.g. Debian_13).",
     )
+    project_install_parser.add_argument(
+        "--markdown",
+        action="store_true",
+        default=False,
+        help="Output installation instructions as Markdown with fenced code blocks.",
+    )
     project_install_parser.set_defaults(func=cmd_project_install)
 
     project_config_parser = project_subparsers.add_parser(

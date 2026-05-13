@@ -924,11 +924,17 @@ def cmd_project_install(args) -> None:
     for obs_project_name, project_path in projects:
         obs_name_to_path[obs_project_name] = project_path
         config = _load_project_config_with_inheritance(project_path, env_vars)
+        publish_config = config.get("publish")
         for repo in config.get("repositories", []):
             repo_name = repo.get("name", "")
             if not repo_name:
                 continue
             if args.repo and repo_name != args.repo:
+                continue
+            if (
+                isinstance(publish_config, dict)
+                and publish_config.get(repo_name) is False
+            ):
                 continue
             repo_entries.setdefault(repo_name, [])
             if obs_project_name not in repo_entries[repo_name]:
@@ -939,16 +945,32 @@ def cmd_project_install(args) -> None:
             raise SystemExit(f"error: repository '{args.repo}' not found in scope")
         raise SystemExit("error: no repositories found in scope")
 
+    markdown = getattr(args, "markdown", False)
+    if markdown:
+        print("# Repository Installation Instructions\n")
+
     sep = _col(_DIM, "─" * 72)
-    for repo_name in sorted(repo_entries):
-        print(sep)
-        print(_col(_BOLD, repo_name))
-        print()
+    ordered_repos = sorted(
+        repo_entries, key=lambda r: (1 if _repo_pkg_manager(r) == "container" else 0, r)
+    )
+    for repo_name in ordered_repos:
+        if markdown:
+            heading = "Container Images" if repo_name == "images" else repo_name
+            print(f"\n### {heading}\n")
+        else:
+            print(sep)
+            print(_col(_BOLD, repo_name))
+            print()
         pkg_mgr = _repo_pkg_manager(repo_name)
         proj_list = repo_entries[repo_name]
 
-        for obs_project in proj_list:
-            print(f"# {obs_project}")
+        for i, obs_project in enumerate(proj_list):
+            is_last = i == len(proj_list) - 1
+
+            if markdown:
+                print(f"**`{obs_project}`**\n")
+            else:
+                print(f"# {obs_project}")
 
             if pkg_mgr == "container":
                 registry_prefix = _container_registry_prefix(
@@ -958,14 +980,29 @@ def cmd_project_install(args) -> None:
                 images = _local_container_images(proj_path) if proj_path else []
                 if not images:
                     images = _fetch_obs_container_images(apiurl, obs_project)
-                for image_name, stable_tags in images:
-                    for tag in stable_tags:
-                        print(f"docker pull {registry_prefix}/{image_name}:{tag}")
-                if not images:
-                    print(f"docker pull {registry_prefix}/<image>:<tag>")
+                if markdown:
+                    for image_name, stable_tags in images:
+                        print(f"**`{image_name}`**\n\n```bash")
+                        for tag in stable_tags:
+                            print(f"docker pull {registry_prefix}/{image_name}:{tag}")
+                        print("```\n")
+                    if not images:
+                        print(
+                            f"```bash\ndocker pull {registry_prefix}/<image>:<tag>\n```\n"
+                        )
+                else:
+                    for image_name, stable_tags in images:
+                        for tag in stable_tags:
+                            print(f"docker pull {registry_prefix}/{image_name}:{tag}")
+                    if not images:
+                        print(f"docker pull {registry_prefix}/<image>:<tag>")
+                    print()
             else:
                 url_path = _obs_project_url_path(obs_project)
                 repo_url = f"{download_url}/{url_path}/{repo_name}/"
+
+                if markdown:
+                    print("```bash")
 
                 if pkg_mgr == "deb":
                     list_file = f"{obs_project}.list"
@@ -995,14 +1032,25 @@ def cmd_project_install(args) -> None:
                         f"gpgcheck=0\n"
                         f"EOF"
                     )
-            print()
 
-        if pkg_mgr == "deb":
-            print("apt update")
-            print()
-        elif pkg_mgr == "zypper":
-            print("zypper --gpg-auto-import-keys refresh")
-            print()
+                if markdown and is_last:
+                    if pkg_mgr == "deb":
+                        print("apt update")
+                    elif pkg_mgr == "zypper":
+                        print("zypper --gpg-auto-import-keys refresh")
+
+                if markdown:
+                    print("```\n")
+                else:
+                    print()
+
+        if not markdown:
+            if pkg_mgr == "deb":
+                print("apt update")
+                print()
+            elif pkg_mgr == "zypper":
+                print("zypper --gpg-auto-import-keys refresh")
+                print()
 
 
 def cmd_project_versions(args) -> None:
