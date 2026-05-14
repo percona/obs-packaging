@@ -93,7 +93,7 @@ jobs:
       - name: Update version lists
         if: steps.poll.outcome == 'success'
         env:
-          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+          GITHUB_EVENT_BEFORE: ${{ github.event.before || '0000000000000000000000000000000000000000' }}
           OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
           OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
           PYTHONPATH: ${{ github.workspace }}
