@@ -73,16 +73,17 @@ RUN set -ex; \
         percona-pgaudit${PPG_MAJOR_VERSION} \
         percona-pgaudit${PPG_MAJOR_VERSION}_set_user \
         percona-pgbackrest \
-	percona-pgvector_${PPG_MAJOR_VERSION} \
-	percona-postgresql${PPG_MAJOR_VERSION}-llvmjit \
-	percona-pgvector_${PPG_MAJOR_VERSION}-llvmjit \
-	python3-etcd \
+        percona-pgvector_${PPG_MAJOR_VERSION} \
+        percona-postgresql${PPG_MAJOR_VERSION}-llvmjit \
+        percona-pgvector_${PPG_MAJOR_VERSION}-llvmjit \
+        python3-etcd \
         percona-postgis35_${PPG_MAJOR_VERSION} \
         percona-postgis35_${PPG_MAJOR_VERSION}-client \
         percona-postgis35_${PPG_MAJOR_VERSION}-gui \
         percona-postgis35_${PPG_MAJOR_VERSION}-llvmjit \
         percona-postgis35_${PPG_MAJOR_VERSION}-utils \
-        percona-wal2json${PPG_MAJOR_VERSION}; \
+        percona-wal2json${PPG_MAJOR_VERSION} \
+        percona-pg_cron_${PPG_MAJOR_VERSION}; \
     dnf clean all; \
     rm -rf /var/cache/dnf /var/cache/yum $PGDATA && mkdir -p $PGDATA /docker-entrypoint-initdb.d; \
     chown -R postgres:postgres $PGDATA docker-entrypoint-initdb.d
