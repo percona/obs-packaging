@@ -2,8 +2,8 @@
   <service name="obs_scm">
     <param name="url">https://github.com/percona/pg_tde.git</param>
     <param name="scm">git</param>
-    <param name="revision">2.1.2</param>
-    <param name="version">2.1.2</param>
+    <param name="revision">%!{PG_TDE_VERSION}</param>
+    <param name="version">%!{PG_TDE_VERSION}</param>
     <param name="filename">percona-pg_tde17</param>
   </service>
   <service mode="buildtime" name="tar" />

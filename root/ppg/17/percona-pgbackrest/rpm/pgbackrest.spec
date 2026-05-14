@@ -1,4 +1,4 @@
-%define pgmajorversion 17
+%define pgmajorversion %!{PG_MAJOR_VERSION}
 %global pginstdir /usr/pgsql-%{pgmajorversion}
 
 Summary:        Reliable PostgreSQL Backup & Restore

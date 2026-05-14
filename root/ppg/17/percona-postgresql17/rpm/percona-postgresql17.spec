@@ -1,6 +1,6 @@
 %undefine _package_note_file
 
-%global pgmajorversion 17
+%global pgmajorversion %!{PG_MAJOR_VERSION}
 
 # These are macros to be used with find_lang and other stuff
 %global packageversion 170

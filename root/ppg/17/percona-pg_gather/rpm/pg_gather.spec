@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 %global sname   percona-pg_gather
 %global version %{version}
-%global pgmajorversion 17
+%global pgmajorversion %!{PG_MAJOR_VERSION}
 %global pginstdir /usr/pgsql-%{pgmajorversion}
 
 Summary:        sql-only script to gather performance and configuration data from PostgreSQL databases

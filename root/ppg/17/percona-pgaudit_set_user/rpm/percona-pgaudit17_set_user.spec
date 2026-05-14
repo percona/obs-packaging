@@ -1,4 +1,4 @@
-%define pgmajorversion 17
+%define pgmajorversion %!{PG_MAJOR_VERSION}
 
 %if 0%{?rhel} >= 9
 %global gts_version 14

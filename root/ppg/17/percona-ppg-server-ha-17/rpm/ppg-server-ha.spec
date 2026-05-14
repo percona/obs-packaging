@@ -1,5 +1,5 @@
-%global pgmajor 17
-%global pgminorversion 9
+%global pgmajor %!{PG_MAJOR_VERSION}
+%global pgminorversion %!{PG_MINOR_VERSION}
 
 Summary:        Percona selection of PostgreSQL %{pgmajor} HA components
 Name:           percona-ppg-server-ha%{pgmajor}

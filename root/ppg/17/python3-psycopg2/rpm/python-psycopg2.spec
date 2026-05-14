@@ -26,7 +26,7 @@ Epoch:          1
 License:        LGPLv3+ with exceptions
 URL:            http://initd.org/psycopg/
 Source0:        psycopg2-%{version}.tar.gz
-BuildRequires:  percona-postgresql17-devel
+BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-devel
 BuildRequires:  gcc
 Packager:       Percona Development Team <https://jira.percona.com>
 Vendor:         Percona, LLC
@@ -68,7 +68,7 @@ sed -i 's/_PyInterpreterState_Get()/PyInterpreterState_Get()/g' psycopg/utils.c
 
 %build
 export CFLAGS=${RPM_OPT_FLAGS} LDFLAGS=${RPM_LD_FLAGS}
-%{__ospython} setup.py build_ext --pg-config /usr/pgsql-17/bin/pg_config build
+%{__ospython} setup.py build_ext --pg-config /usr/pgsql-%!{PG_MAJOR_VERSION}/bin/pg_config build
 
 # Fix for wrong-file-end-of-line-encoding problem; upstream also must fix this.
 for i in `find doc -iname "*.html"`; do sed -i 's/\r//' $i; done
@@ -80,7 +80,7 @@ for i in `find doc -iname "*.css"`; do sed -i 's/\r//' $i; done
 
 %install
 export CFLAGS=${RPM_OPT_FLAGS} LDFLAGS=${RPM_LD_FLAGS}
-%{__ospython} setup.py build_ext --pg-config /usr/pgsql-17/bin/pg_config install --no-compile --root %{buildroot}
+%{__ospython} setup.py build_ext --pg-config /usr/pgsql-%!{PG_MAJOR_VERSION}/bin/pg_config install --no-compile --root %{buildroot}
 %if !0%{?suse_version}
 cp -r tests/ %{buildroot}%{python3_sitearch}/%{srcname}/tests/
 for i in `find %{buildroot}%{python3_sitearch}/%{srcname}/tests/ -iname "*.py"`; do

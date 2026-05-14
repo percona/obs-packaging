@@ -2,7 +2,7 @@
   <service name="obs_scm">
     <param name="url">https://github.com/pgvector/pgvector.git</param>
     <param name="scm">git</param>
-    <param name="revision">v0.8.2</param>
+    <param name="revision">v%!{PGVECTOR_VERSION}</param>
     <param name="versionformat">@PARENT_TAG@</param>
     <param name="versionrewrite-pattern">v(.*)</param>
     <param name="filename">percona-pgvector_17</param>

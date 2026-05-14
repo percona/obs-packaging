@@ -1,5 +1,5 @@
-%global pgmajor 17
-%global pgminorversion 9
+%global pgmajor %!{PG_MAJOR_VERSION}
+%global pgminorversion %!{PG_MINOR_VERSION}
 
 Summary:        Percona base selection of PostgreSQL %{pgmajor} components
 Name:           percona-ppg-server%{pgmajor}

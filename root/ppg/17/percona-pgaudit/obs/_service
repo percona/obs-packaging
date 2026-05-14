@@ -2,8 +2,8 @@
   <service name="obs_scm">
     <param name="url">https://github.com/pgaudit/pgaudit.git</param>
     <param name="scm">git</param>
-    <param name="revision">17.1</param>
-    <param name="version">17.1</param>
+    <param name="revision">%!{PGAUDIT_VERSION}</param>
+    <param name="version">%!{PGAUDIT_VERSION}</param>
     <param name="filename">percona-pgaudit</param>
   </service>
   <service mode="buildtime" name="tar" />

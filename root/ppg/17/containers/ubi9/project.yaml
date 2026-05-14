@@ -1,6 +1,6 @@
-title: Percona UBI-9 Container Images for PostgreSQL 17
+title: Percona UBI-9 Container Images for PostgreSQL %!{PG_MAJOR_VERSION}
 description: |
-  This project contains UBI-9 based container images for Percona Software for PostgreSQL 17.
+  This project contains UBI-9 based container images for Percona Software for PostgreSQL %!{PG_MAJOR_VERSION}.
 
 repositories:
   - name: RockyLinux_9
@@ -12,9 +12,9 @@ repositories:
     archs: [x86_64, aarch64]
   - name: images
     paths:
-      - subproject: ppg:17:containers:ubi9
+      - subproject: ppg:%!{PG_MAJOR_VERSION}:containers:ubi9
         repository: RockyLinux_9
-      - subproject: ppg:17
+      - subproject: ppg:%!{PG_MAJOR_VERSION}
         repository: RockyLinux_9
       - subproject: common:containers:ubi9
         repository: images
@@ -62,8 +62,8 @@ project-config: |
 qa:
   pipeline: docker-server-parallel-generic
   parameters:
-    DOCKER_TAG: 17
-    SERVER_VERSION: 17.9
+    DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
+    SERVER_VERSION: "%!{PG_VERSION}"
     TESTING_BRANCH: ricardo-work
     REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/17/containers/ubi9/images
     WITH_POSTGIS:

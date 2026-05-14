@@ -1,6 +1,6 @@
-title: Percona Distribution for PostgreSQL 17
+title: Percona Distribution for PostgreSQL %!{PG_MAJOR_VERSION}
 description: |
-  Packages for Percona Distribution for PostgreSQL 17 — the server, extensions,
+  Packages for Percona Distribution for PostgreSQL %!{PG_MAJOR_VERSION} — the server, extensions,
   HA components (Patroni, etcd, HAProxy, pgBouncer, pgPool-II), and companion tools.
 debuginfo:
   RockyLinux_9: true
@@ -88,7 +88,7 @@ project-config: |
   # requirements resolve to percona-postgresql17-server via its Provides. Also
   # suppress the ppg:18 system package (postgresql18-server) so that this project
   # does not pick it up when both majors are present in the interconnect.
-  Prefer: percona-postgresql17-server
+  Prefer: percona-postgresql%!{PG_MAJOR_VERSION}-server
   # Our python3-dateutil and python3-six packages shadow the SUSE system packages
   # (python313-python-dateutil, python313-six). Prefer system packages so that
   # build deps like python3-dnf-plugins-core and python3-libmodulemd resolve correctly.
@@ -102,7 +102,7 @@ project-config: |
   %if "%_repository" == "openSUSE_Leap_16"
   # Same conflict as Tumbleweed: the system PostgreSQL packages conflict with
   # percona-postgresql17-server. Suppress them so dependencies resolve correctly.
-  Prefer: percona-postgresql17-server
+  Prefer: percona-postgresql%!{PG_MAJOR_VERSION}-server
   # Our python3-dateutil and python3-six packages shadow the SUSE system packages
   # (python313-python-dateutil, python313-six). Prefer system packages so that
   # build deps like python3-dnf-plugins-core and python3-libmodulemd resolve correctly.
@@ -127,15 +127,15 @@ qa:
   pipeline: ppg-obs
   parameters:
     REPO: ${OBS_ROOTPRJ}:ppg:17
-    VERSION: ppg-17.9
+    VERSION: ppg-%!{PG_VERSION}
     PLATFORMS:
       - rocky-9
       - debian-13
       - ubuntu-noble
     TESTING_BRANCH: ricardo-work
     SCENARIO:
-      - pg-17
-      - pg-17-meta-server
-      - pg-17-meta-ha
+      - pg-%!{PG_MAJOR_VERSION}
+      - pg-%!{PG_MAJOR_VERSION}-meta-server
+      - pg-%!{PG_MAJOR_VERSION}-meta-ha
   matrix:
     - SCENARIO
