@@ -138,7 +138,11 @@ def _copy_with_env_subst(
     apply_macros = bool(macros)
     apply_env = bool(env_vars) and src.name in _OBS_SUBSTITUTABLE
     if apply_macros or apply_env:
-        text = src.read_text("utf-8")
+        try:
+            text = src.read_text("utf-8")
+        except UnicodeDecodeError:
+            shutil.copy2(src, dst_dir / src.name)
+            return
         if apply_macros:
             assert macros is not None
             text = apply_macro_substitution(text, macros, source=src)
