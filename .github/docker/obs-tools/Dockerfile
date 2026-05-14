@@ -58,3 +58,9 @@ RUN python3 -m venv /opt/obs-tools/venv && \
 # Put venv bin first so `python3`, `python`, `pip` in any step resolve here.
 # go_modules' shebang (#!/usr/bin/env python3) picks up the venv Python too.
 ENV PATH="/opt/obs-tools/venv/bin:${PATH}"
+
+# actions/checkout (a JS action) runs on the host runner, so its safe.directory
+# setting goes into the host's git config, not the container's.  Without this,
+# git refuses to operate in the mounted workspace and commands like
+# `git diff origin/main...HEAD` fail with "Could not access ...".
+RUN git config --system --add safe.directory '*'
