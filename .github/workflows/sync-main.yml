@@ -21,11 +21,13 @@ jobs:
   sync:
     name: percona-obs sync push
     runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     permissions:
       # Required to push the badge JSON to the badges branch.
       contents: write
       # Required to list/watch sibling workflow runs (gh run list/watch).
       actions: read
+      packages: read
 
     steps:
       - uses: actions/checkout@v4

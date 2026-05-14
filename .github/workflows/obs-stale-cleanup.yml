@@ -18,6 +18,9 @@ jobs:
   cleanup:
     name: Clean up OBS projects for stale PRs
     runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    permissions:
+      packages: read
 
     env:
       OBS_APIURL: ${{ vars.OBS_APIURL }}

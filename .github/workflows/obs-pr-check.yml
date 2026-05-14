@@ -90,10 +90,12 @@ jobs:
     name: Sync packages to OBS
     needs: [resolve]
     runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     if: needs.resolve.outputs.has_trigger_label == 'true'
     permissions:
       # Required to post/update the PR comment.
       pull-requests: write
+      packages: read
 
     outputs:
       is_release_pr: ${{ steps.detect.outputs.is_release_pr }}
@@ -265,8 +267,10 @@ jobs:
     needs: [resolve, sync]
     if: needs.sync.outputs.is_release_pr != 'true' && needs.sync.outputs.sync_outcome == 'success'
     runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     permissions:
       pull-requests: write
+      packages: read
 
     env:
       PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
@@ -325,6 +329,9 @@ jobs:
       needs.sync.outputs.is_release_pr != 'true' && needs.sync.outputs.sync_outcome == 'success' &&
       (contains(fromJSON(needs.resolve.outputs.labels_json), 'qa-packages') || contains(fromJSON(needs.resolve.outputs.labels_json), 'qa-containers'))
     runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    permissions:
+      packages: read
 
     outputs:
       has_matrix: ${{ steps.matrix.outputs.has_matrix }}
@@ -403,6 +410,9 @@ jobs:
     needs: [resolve, build, detect-qa-matrix]
     if: needs.detect-qa-matrix.outputs.has_matrix == 'true' && needs.build.result == 'success'
     runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    permissions:
+      packages: read
 
     strategy:
       matrix:

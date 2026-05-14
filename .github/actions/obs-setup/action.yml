@@ -1,7 +1,8 @@
 name: 'OBS Tooling Setup'
 description: >
-  Install percona-obs Python dependencies and write osc credentials.
-  Must run after actions/checkout so requirements.txt is available.
+  Link the pre-built venv from the obs-tools container and write osc credentials.
+  Must run after actions/checkout so the workspace path is available.
+  Requires the job to run inside ghcr.io/<owner>/obs-tools (container:).
 
 inputs:
   obs-apiurl:
@@ -17,49 +18,15 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-
-    - name: Install percona-obs
+    - name: Link pre-built venv
       shell: bash
       run: |
-        python -m venv venv
-        venv/bin/pip install --quiet -r requirements.txt
+        ln -s /opt/obs-tools/venv "$GITHUB_WORKSPACE/venv"
         # Prevent osc's git_version.py from finding this repo's git tags when
         # run from inside venv/. Without this, `git describe` returns our
         # release tags (e.g. ppg/17.9-1) which osc cannot parse as its own
         # version string, crashing at import time.
         echo "GIT_CEILING_DIRECTORIES=$GITHUB_WORKSPACE/venv" >> "$GITHUB_ENV"
-
-    # Install OBS service binaries required by percona-obs sync push when
-    # packages have local services (obs_scm, go_modules, …).
-    # obs-service-tar-scm (provides obs_scm) is available via the
-    # openSUSE:Tools apt repo.  obs-service-go-modules is not packaged for
-    # Ubuntu, so it is installed directly from its upstream source repo.
-    - name: Install OBS service binaries
-      shell: bash
-      run: |
-        . /etc/os-release
-        REPO_URL="https://download.opensuse.org/repositories/openSUSE:/Tools/xUbuntu_${VERSION_ID}"
-        curl -fsSL "${REPO_URL}/Release.key" \
-          | gpg --dearmor \
-          | sudo tee /usr/share/keyrings/obs-tools.gpg > /dev/null
-        echo "deb [signed-by=/usr/share/keyrings/obs-tools.gpg] ${REPO_URL}/ ./" \
-          | sudo tee /etc/apt/sources.list.d/obs-tools.list > /dev/null
-        sudo apt-get update -qq
-        sudo apt-get install -y obs-service-tar-scm obs-service-recompress obs-service-set-version obs-service-download-url
-
-        # obs-service-go-modules is a shell script; install from source.
-        TMP=$(mktemp -d)
-        git clone --depth=1 https://github.com/openSUSE/obs-service-go_modules.git "$TMP"
-        sudo install -m 755 "$TMP/go_modules" /usr/lib/obs/service/go_modules
-        rm -rf "$TMP"
-
-        # go_modules uses '#!/usr/bin/env python3' so it picks up the Python
-        # set by actions/setup-python (3.11), not the system Python.
-        # Install libarchive-c for that same Python via pip.
-        pip install libarchive-c
 
     # Write ~/.config/osc/oscrc via Python so special characters in the
     # password are handled correctly without any shell quoting concerns.

@@ -14,8 +14,10 @@ jobs:
   release:
     name: Release packages in OBS
     runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     permissions:
       contents: write
+      packages: read
 
     env:
       OBS_APIURL: ${{ vars.OBS_APIURL }}

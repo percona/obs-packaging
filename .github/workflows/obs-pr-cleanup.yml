@@ -17,9 +17,11 @@ jobs:
   cleanup:
     name: percona-obs sync delete pr-${{ github.event.number }}
     runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     permissions:
       # Required to push release tags via the GitHub API.
       contents: write
+      packages: read
 
     env:
       PR_NUMBER: ${{ github.event.number }}

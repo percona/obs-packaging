@@ -72,7 +72,10 @@ jobs:
     name: Detect QA matrix
     needs: changes
     runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     if: needs.changes.outputs.has_root_changes == 'true'
+    permissions:
+      packages: read
 
     outputs:
       has_matrix: ${{ steps.matrix.outputs.has_matrix }}
@@ -132,7 +135,10 @@ jobs:
     name: ${{ matrix.status_context }}
     needs: detect
     runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     if: needs.detect.outputs.has_matrix == 'true'
+    permissions:
+      packages: read
 
     strategy:
       matrix:
