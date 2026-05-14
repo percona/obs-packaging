@@ -10,7 +10,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg git jq sudo \
-        python3.11 python3.11-venv python3-pip \
+        python3 python3-venv python3-pip \
         golang-go libarchive13t64 build-essential perl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -49,7 +49,7 @@ RUN TMP=$(mktemp -d) && \
 # Baked at /opt/obs-tools/venv; obs-setup symlinks $GITHUB_WORKSPACE/venv here
 # so all existing `venv/bin/python -m percona_obs ...` calls work unchanged.
 COPY requirements.txt /tmp/obs-tools-requirements.txt
-RUN python3.11 -m venv /opt/obs-tools/venv && \
+RUN python3 -m venv /opt/obs-tools/venv && \
     /opt/obs-tools/venv/bin/pip install --quiet --upgrade pip && \
     /opt/obs-tools/venv/bin/pip install --quiet -r /tmp/obs-tools-requirements.txt && \
     /opt/obs-tools/venv/bin/pip install --quiet libarchive-c && \
