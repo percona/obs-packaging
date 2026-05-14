@@ -445,6 +445,7 @@ jobs:
           JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
         run: |
           venv/bin/python -m percona_obs -P ci qa run "${{ matrix.project }}" \
+            --pipeline "${{ matrix.pipeline }}" \
             --wait \
             --report-json /tmp/qa-report.json \
             ${{ matrix.axis_filters }}

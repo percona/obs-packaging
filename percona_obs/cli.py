@@ -410,6 +410,13 @@ def build_parser() -> argparse.ArgumentParser:
         "substitution). Repeatable.",
     )
     qa_run_parser.add_argument(
+        "--pipeline",
+        metavar="NAME",
+        default=None,
+        help="Restrict execution to the pipeline entry with this name. "
+        "Use when the project has multiple qa: entries to run exactly one.",
+    )
+    qa_run_parser.add_argument(
         "--report-json",
         metavar="PATH",
         default=None,

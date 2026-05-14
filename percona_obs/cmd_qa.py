@@ -291,6 +291,7 @@ def cmd_qa_show(args: argparse.Namespace) -> None:
 
     if json_mode:
         out: list[dict[str, Any]] = []
+        multi_pipeline = len(entries) > 1
         for entry in entries:
             pipeline = entry["pipeline"]
             combos = _expand_matrix(entry)
@@ -300,11 +301,18 @@ def cmd_qa_show(args: argparse.Namespace) -> None:
                 axis_filters = " ".join(
                     f"--filter {axis}={params[axis]}" for axis in matrix_axes
                 )
-                status_context = (
-                    f"OBS QA / {args.project} / {entry_label}"
-                    if matrix_axes
-                    else f"OBS QA / {args.project}"
-                )
+                if multi_pipeline:
+                    status_context = (
+                        f"OBS QA / {args.project} / {pipeline} / {entry_label}"
+                        if matrix_axes
+                        else f"OBS QA / {args.project} / {pipeline}"
+                    )
+                else:
+                    status_context = (
+                        f"OBS QA / {args.project} / {entry_label}"
+                        if matrix_axes
+                        else f"OBS QA / {args.project}"
+                    )
                 out.append(
                     {
                         "project": args.project,
@@ -461,6 +469,13 @@ def cmd_qa_run(args: argparse.Namespace) -> None:
     entries = _load_qa_block(args.project, env_vars)
     if entries is None:
         raise SystemExit(f"error: {args.project} has no qa: block in its project.yaml")
+
+    if args.pipeline:
+        entries = [e for e in entries if e["pipeline"] == args.pipeline]
+        if not entries:
+            raise SystemExit(
+                f"error: {args.project}: no qa entry with pipeline {args.pipeline!r}"
+            )
 
     filters = _parse_filter(args.filter or [])
     overrides = _parse_param_overrides(args.param or [])
