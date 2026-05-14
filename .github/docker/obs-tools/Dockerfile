@@ -11,7 +11,7 @@ RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg git jq sudo \
         python3 python3-venv python3-pip \
-        golang-go libarchive13t64 build-essential perl \
+        golang-go libarchive13t64 build-essential perl wget \
     && rm -rf /var/lib/apt/lists/*
 
 # GitHub CLI — used in sync-main (create tags, push badge), obs-release
