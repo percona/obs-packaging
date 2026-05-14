@@ -1513,10 +1513,23 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     else:
         commit_msg = f"Update release {release_project} ({release_id})"
 
+    release_counter = release_id.rsplit("-", 1)[-1]
+
+    macros_file = source_path / "macros.yaml"
+    _macros_text = ""
+    _ppg_release_in_macros = False
+    if macros_file.is_file():
+        _macros_text = macros_file.read_text("utf-8")
+        _ppg_release_in_macros = bool(
+            re.search(r"^- PPG_RELEASE:\s*\S+", _macros_text, re.MULTILINE)
+        )
+
     # Preview and confirm.
     print(f"{'First' if is_first_release else 'Update'} release: {release_project}")
     print(f"  Tag:         {tag}")
     print(f"  Directory:   {release_dir.relative_to(_REPO_DIR)}/")
+    if _ppg_release_in_macros:
+        print(f"  macros.yaml: PPG_RELEASE → {release_counter}")
     print()
     print("  CHANGELOG section preview:")
     for line in changelog_section.splitlines()[:10]:
@@ -1545,6 +1558,18 @@ def cmd_project_release(args: argparse.Namespace) -> None:
 
     # Write files.
     committed_paths: list[str] = []
+
+    if _ppg_release_in_macros:
+        new_text, _ = re.subn(
+            r"^(- PPG_RELEASE:)\s*\S+",
+            rf"\g<1> {release_counter}",
+            _macros_text,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        macros_file.write_text(new_text, "utf-8")
+        _print_create(str(macros_file.relative_to(_REPO_DIR)))
+        committed_paths.append(str(macros_file.relative_to(_REPO_DIR)))
 
     if is_first_release:
         release_dir.mkdir(parents=True, exist_ok=True)
