@@ -2,8 +2,8 @@
   <service name="obs_scm">
     <param name="url">https://github.com/pgaudit/set_user.git</param>
     <param name="scm">git</param>
-    <param name="revision">REL4_2_0</param>
-    <param name="version">4.2.0</param>
+    <param name="revision">%!{PGAUDIT_SET_USER_TAG}</param>
+    <param name="version">%!{PGAUDIT_SET_USER_VERSION}</param>
     <param name="filename">percona-pgaudit18_set_user</param>
     <param name="versionrewrite-pattern">REL(.*)</param>
     <param name="versionrewrite-replacement">\1</param>

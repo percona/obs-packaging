@@ -2,8 +2,8 @@
   <service name="obs_scm">
     <param name="url">https://github.com/pgbackrest/pgbackrest.git</param>
     <param name="scm">git</param>
-    <param name="revision">release/2.58.0</param>
-    <param name="version">2.58.0</param>
+    <param name="revision">release/%!{PGBACKREST_VERSION}</param>
+    <param name="version">%!{PGBACKREST_VERSION}</param>
     <param name="filename">percona-pgbackrest</param>
     <param name="versionrewrite-pattern">release/(.*)</param>
     <param name="versionrewrite-replacement">\1</param>

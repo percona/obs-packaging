@@ -2,8 +2,8 @@
   <service name="obs_scm">
     <param name="url">https://github.com/psycopg/psycopg2.git</param>
     <param name="scm">git</param>
-    <param name="revision">2.9.10</param>
-    <param name="version">2.9.10</param>
+    <param name="revision">%!{PSYCOPG2_VERSION}</param>
+    <param name="version">%!{PSYCOPG2_VERSION}</param>
     <param name="filename">psycopg2</param>
   </service>
   <service mode="buildtime" name="tar" />

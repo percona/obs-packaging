@@ -1,4 +1,4 @@
-%global pgmajor 18
+%global pgmajor %!{PG_MAJOR_VERSION}
 
 %if 0%{?rhel} >= 9
 %global gts_version 14

@@ -2,8 +2,8 @@
   <service name="obs_scm">
     <param name="url">https://github.com/pgvector/pgvector.git</param>
     <param name="scm">git</param>
-    <param name="revision">v0.8.2</param>
-    <param name="version">0.8.2</param>
+    <param name="revision">v%!{PGVECTOR_VERSION}</param>
+    <param name="version">%!{PGVECTOR_VERSION}</param>
     <param name="filename">percona-pgvector</param>
     <param name="versionrewrite-pattern">v(.*)</param>
   </service>

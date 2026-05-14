@@ -1,19 +1,20 @@
 #!UseOBSRepositories
-#!BuildVersion: 18.3
+#!BuildVersion: %!{PG_VERSION}-%!{PPG_RELEASE}
 #!BuildTag: percona-distribution-postgresql:<VERSION>-<RELEASE>
 #!BuildTag: percona-distribution-postgresql:<VERSION>
-#!BuildTag: percona-distribution-postgresql:18
+#!BuildTag: percona-distribution-postgresql:%!{PG_VERSION}
+#!BuildTag: percona-distribution-postgresql:%!{PG_MAJOR_VERSION}
 
 FROM percona-ubi9-minimal:latest
 
 LABEL name="Percona Distribution for PostgreSQL" \
-      description="Essential / key PostgreSQL18 components. Percona Distribution for PostgreSQL features core components, tools and add-ons from the community, tested to work together in demanding enterprise environments." \
+      description="Essential / key PostgreSQL%!{PG_MAJOR_VERSION} components. Percona Distribution for PostgreSQL features core components, tools and add-ons from the community, tested to work together in demanding enterprise environments." \
       vendor="Percona" \
-      summary="Percona base selection of PostgreSQL18 components" \
+      summary="Percona base selection of PostgreSQL%!{PG_MAJOR_VERSION} components" \
       maintainer="Percona Development <info@percona.com>" \
       org.opencontainers.image.authors="info@percona.com"
-LABEL version="18.3"
-LABEL release="1"
+LABEL version="<VERSION>"
+LABEL release="<RELEASE>"
 
 # openssl-fips-provider-so is not properly obsoleted by the newer openssl-fips-provider
 # (el9_7+), causing a file conflict on /usr/lib64/ossl-modules/fips.so during dnf update.
@@ -24,9 +25,9 @@ RUN dnf -y install glibc-langpack-en systemd-rpm-macros file pkgconfig
 
 ARG PPG_REPO=testing
 
-ENV PPG_VERSION 18.3
-ENV PPG_MAJOR_VERSION 18
-ENV PPG_MINOR_VERSION 3
+ENV PPG_VERSION <VERSION>
+ENV PPG_MAJOR_VERSION %!{PG_MAJOR_VERSION}
+ENV PPG_MINOR_VERSION %!{PG_MINOR_VERSION}
 ENV OS_VER el9
 ENV FULL_PERCONA_VERSION "${PPG_VERSION}.${OS_VER}"
 ENV PPG_REPO ${PPG_REPO}

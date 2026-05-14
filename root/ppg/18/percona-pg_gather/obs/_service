@@ -2,8 +2,8 @@
   <service name="obs_scm">
     <param name="url">https://github.com/jobinau/pg_gather.git</param>
     <param name="scm">git</param>
-    <param name="revision">v32</param>
-    <param name="version">32</param>
+    <param name="revision">v%!{PG_GATHER_VERSION}</param>
+    <param name="version">%!{PG_GATHER_VERSION}</param>
     <param name="filename">percona-pg_gather</param>
     <param name="versionrewrite-pattern">v(.*)</param>
     <param name="versionrewrite-replacement">\1</param>

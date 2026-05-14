@@ -2,7 +2,7 @@
   <service name="obs_scm">
     <param name="url">https://salsa.debian.org/postgresql/postgresql-common.git</param>
     <param name="scm">git</param>
-    <param name="revision">debian/289</param>
+    <param name="revision">debian/%!{POSTGRESQL_COMMON_VERSION}</param>
     <param name="versionformat">@PARENT_TAG@</param>
     <param name="versionrewrite-pattern">debian/(.*)</param>
     <param name="filename">percona-postgresql-common</param>

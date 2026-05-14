@@ -1,11 +1,11 @@
 %global sname percona-pg_stat_monitor
-%global pgrel 18
+%global pgrel %!{PG_MAJOR_VERSION}
 
 %if 0%{?rhel} >= 9
 %global gts_version 14
 %endif
 %global rpm_release 1
-%global pginstdir /usr/pgsql-18/
+%global pginstdir /usr/pgsql-%{pgrel}/
 
 Summary:        Statistics collector for PostgreSQL
 Name:           %{sname}%{pgrel}

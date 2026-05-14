@@ -2,8 +2,8 @@
   <service name="obs_scm">
     <param name="url">https://github.com/pgbouncer/pgbouncer.git</param>
     <param name="scm">git</param>
-    <param name="revision">pgbouncer_1_25_1</param>
-    <param name="version">1.25.1</param>
+    <param name="revision">%!{PGBOUNCER_TAG}</param>
+    <param name="version">%!{PGBOUNCER_VERSION}</param>
     <param name="filename">percona-pgbouncer</param>
   </service>
   <service mode="buildtime" name="tar" />

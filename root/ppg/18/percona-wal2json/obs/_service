@@ -2,8 +2,8 @@
   <service name="obs_scm">
     <param name="url">https://github.com/eulerto/wal2json.git</param>
     <param name="scm">git</param>
-    <param name="revision">wal2json_2_6</param>
-    <param name="version">2.6</param>
+    <param name="revision">%!{WAL2JSON_TAG}</param>
+    <param name="version">%!{WAL2JSON_VERSION}</param>
     <param name="filename">percona-wal2json</param>
     <param name="versionrewrite-pattern">wal2json_(.*)</param>
     <param name="versionrewrite-replacement">\1</param>

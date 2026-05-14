@@ -1,4 +1,4 @@
-%global pgmajorversion 18
+%global pgmajorversion %!{PG_MAJOR_VERSION}
 
 %undefine _package_note_file
 

@@ -2,7 +2,7 @@
 %global postgismajorversion 3.5
 %global postgisminorversion 5
 %global postgissomajorversion 3
-%define pgmajorversion 18
+%define pgmajorversion %!{PG_MAJOR_VERSION}
 
 %if 0%{?rhel} >= 9
 %global gts_version 14

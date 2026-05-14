@@ -1,6 +1,6 @@
-title: Percona UBI-9 Container Images for PostgreSQL 18
+title: Percona UBI-9 Container Images for PostgreSQL %!{PG_MAJOR_VERSION}
 description: |
-  This project contains UBI-9 based container images for Percona Software for PostgreSQL 18.
+  This project contains UBI-9 based container images for Percona Software for PostgreSQL %!{PG_MAJOR_VERSION}.
 
 repositories:
   - name: RockyLinux_9
@@ -12,9 +12,9 @@ repositories:
     archs: [x86_64, aarch64]
   - name: images
     paths:
-      - subproject: ppg:18:containers:ubi9
+      - subproject: ppg:%!{PG_MAJOR_VERSION}:containers:ubi9
         repository: RockyLinux_9
-      - subproject: ppg:18
+      - subproject: ppg:%!{PG_MAJOR_VERSION}
         repository: RockyLinux_9
       - subproject: ppg:17
         repository: RockyLinux_9
@@ -64,8 +64,8 @@ project-config: |
 qa:
   - pipeline: docker-server-parallel-generic
     parameters:
-      DOCKER_TAG: 18
-      SERVER_VERSION: 18.3
+      DOCKER_TAG: %!{PG_MAJOR_VERSION}
+      SERVER_VERSION: %!{PG_VERSION}
       TESTING_BRANCH: ricardo-work
       REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/18/containers/ubi9/images
       WITH_POSTGIS:
@@ -78,7 +78,7 @@ qa:
     parameters:
       REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/18/containers/ubi9/images
       OLD_SERVER_VERSION: 17.9
-      NEW_SERVER_VERSION: 18.3
-      UPGRADE_DOCKER_TAG: 18-17
+      NEW_SERVER_VERSION: %!{PG_VERSION}
+      UPGRADE_DOCKER_TAG: %!{PG_MAJOR_VERSION}-17
       OLD_DOCKER_REPOSITORY: registry.opensuse.org/isv/percona/ppg/17/containers/ubi9/images
       TESTING_BRANCH: ricardo-work

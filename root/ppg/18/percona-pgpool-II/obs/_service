@@ -2,8 +2,8 @@
   <service name="obs_scm">
     <param name="url">https://github.com/pgpool/pgpool2.git</param>
     <param name="scm">git</param>
-    <param name="revision">V4_7_0</param>
-    <param name="version">4.7.0</param>
+    <param name="revision">%!{PGPOOL_TAG}</param>
+    <param name="version">%!{PGPOOL_VERSION}</param>
     <param name="filename">pgpool2</param>
   </service>
   <service mode="buildtime" name="tar" />

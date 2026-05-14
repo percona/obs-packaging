@@ -1,4 +1,4 @@
-%global pgmajor 18
+%global pgmajor %!{PG_MAJOR_VERSION}
 
 %global debug_package %{nil}
 %global __strip /bin/true

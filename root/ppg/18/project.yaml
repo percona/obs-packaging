@@ -1,6 +1,6 @@
-title: Percona Distribution for PostgreSQL 18
+title: Percona Distribution for PostgreSQL %!{PG_MAJOR_VERSION}
 description: |
-  Packages for Percona Distribution for PostgreSQL 18 — the server, extensions,
+  Packages for Percona Distribution for PostgreSQL %!{PG_MAJOR_VERSION} — the server, extensions,
   HA components (Patroni, etcd, HAProxy, pgBouncer, pgPool-II), and companion tools.
 debuginfo:
   RockyLinux_9: true
@@ -126,8 +126,8 @@ project-config: |
 qa:
   pipeline: ppg-obs
   parameters:
-    REPO: ${OBS_ROOTPRJ}:ppg:18
-    VERSION: ppg-18.3
+    REPO: ${OBS_ROOTPRJ}:ppg:%!{PG_MAJOR_VERSION}
+    VERSION: ppg-%!{PG_VERSION}
     PLATFORMS:
       - rocky-9
       - debian-13
@@ -138,9 +138,9 @@ qa:
       - sync
       - io_uring
     SCENARIO:
-      - pg-18
-      - pg-18-meta-server
-      - pg-18-meta-ha
+      - pg-%!{PG_MAJOR_VERSION}
+      - pg-%!{PG_MAJOR_VERSION}-meta-server
+      - pg-%!{PG_MAJOR_VERSION}-meta-ha
   matrix:
     - IO_METHOD
     - SCENARIO

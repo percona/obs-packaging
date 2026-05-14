@@ -2,8 +2,8 @@
   <service name="obs_scm">
     <param name="url">https://github.com/reorg/pg_repack.git</param>
     <param name="scm">git</param>
-    <param name="revision">ver_1.5.3</param>
-    <param name="version">1.5.3</param>
+    <param name="revision">%!{PG_REPACK_TAG}</param>
+    <param name="version">%!{PG_REPACK_VERSION}</param>
     <param name="filename">percona-pg_repack</param>
     <param name="versionrewrite-pattern">ver_(.*)</param>
   </service>
