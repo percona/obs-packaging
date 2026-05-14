@@ -144,6 +144,78 @@ def find_packages(project_path: Path, obs_project: str, recursive: bool = True):
 
 
 _ENV_VAR_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+_MACRO_RE = re.compile(r"%!\{([A-Za-z_][A-Za-z0-9_]*)\}")
+# Matches a single entry line in macros.yaml: "- KEY: value"
+# Values may contain %!{...} references which PyYAML cannot parse unquoted.
+_MACROS_ENTRY_RE = re.compile(r"^-\s+([A-Za-z_][A-Za-z0-9_]*):\s*(.*?)\s*$")
+
+
+def apply_macro_substitution(
+    text: str, macros: dict[str, str], source: Path | None = None
+) -> str:
+    """Replace every ``%!{VAR}`` token in *text* with the value from *macros*.
+
+    Raises ``SystemExit`` if any token has no corresponding entry in *macros*.
+    *source* is used only for the error message.
+    """
+
+    def _replace(m: re.Match) -> str:
+        var = m.group(1)
+        if var not in macros:
+            loc = f"{source}: " if source else ""
+            raise SystemExit(
+                f"error: {loc}undefined macro %!{{{var}}} — " "define it in macros.yaml"
+            )
+        return macros[var]
+
+    return _MACRO_RE.sub(_replace, text)
+
+
+def load_macros(project_path: Path) -> dict[str, str]:
+    """Load and resolve macros from macros.yaml files in the directory hierarchy.
+
+    Walks from REPO_ROOT down to *project_path*, collecting macros.yaml files.
+    Entries are processed in declaration order; inner directories override outer
+    ones by redefining the same key.  ``%!{VAR}`` references in values are
+    resolved against previously-declared macros so forward references within a
+    single file work as long as the referenced macro was declared earlier.
+    """
+    chain: list[Path] = []
+    p = project_path
+    while True:
+        chain.append(p)
+        if p == REPO_ROOT or not p.is_relative_to(REPO_ROOT):
+            break
+        p = p.parent
+    chain.reverse()  # outermost (REPO_ROOT) first
+
+    entries: list[tuple[str, str, Path]] = []
+    for path in chain:
+        macro_file = path / "macros.yaml"
+        if not macro_file.exists():
+            continue
+        # Parse with a simple line scanner instead of yaml.safe_load because
+        # values may contain %!{...} references and PyYAML rejects bare % at
+        # the start of a scalar (it is reserved for YAML directives).
+        for lineno, line in enumerate(
+            macro_file.read_text("utf-8").splitlines(), start=1
+        ):
+            line = line.rstrip()
+            if not line or line.lstrip().startswith("#"):
+                continue
+            m = _MACROS_ENTRY_RE.match(line)
+            if not m:
+                raise SystemExit(
+                    f"error: {macro_file}:{lineno}: expected '- KEY: value', got: {line!r}"
+                )
+            entries.append((m.group(1), m.group(2), macro_file))
+
+    resolved: dict[str, str] = {}
+    for key, raw_value, source_file in entries:
+        resolved[key] = apply_macro_substitution(
+            raw_value, resolved, source=source_file
+        )
+    return resolved
 
 
 def load_yaml(path: Path) -> dict:
@@ -154,16 +226,24 @@ def load_yaml(path: Path) -> dict:
         return yaml.safe_load(f) or {}
 
 
-def load_yaml_with_env(path: Path, env_vars: dict[str, str] | None) -> dict:
-    """Load a YAML file with optional ${VAR} substitution before parsing.
+def load_yaml_with_env(
+    path: Path,
+    env_vars: dict[str, str] | None,
+    macros: dict[str, str] | None = None,
+) -> dict:
+    """Load a YAML file with optional macro and ${VAR} substitution before parsing.
 
-    If ``env_vars`` is None or empty, behaves identically to ``load_yaml``.
-    Raises ``SystemExit`` if the file contains an unresolvable ``${VAR}`` token.
+    Macros (``%!{VAR}``) are resolved first, then environment variables
+    (``${VAR}``).  Either or both substitution passes may be skipped by passing
+    ``None`` for the corresponding argument.
+    Raises ``SystemExit`` if the file contains an unresolvable token.
     """
     if not path.exists():
         return {}
     with path.open(encoding="utf-8") as f:
         text = f.read()
+    if macros:
+        text = apply_macro_substitution(text, macros, source=path)
     if env_vars:
         text = apply_env_substitution(text, env_vars, source=path)
     return yaml.safe_load(text) or {}
@@ -431,16 +511,20 @@ def _load_project_config_with_inheritance(
 
     'title', 'description', and 'name' are never inherited.
 
-    If *env_vars* is provided, ``${VAR}`` tokens in every loaded file are
-    substituted before YAML parsing.
+    ``%!{VAR}`` macro tokens (from macros.yaml in the hierarchy) are resolved
+    first, then ``${VAR}`` env-var tokens are substituted.
     """
-    config = load_yaml_with_env(project_path / "project.yaml", env_vars)
+    macros = load_macros(project_path)
+    config = load_yaml_with_env(project_path / "project.yaml", env_vars, macros)
 
     # Collect ancestor configs from nearest parent up to (and including) REPO_ROOT
     ancestor_configs: list[dict] = []
     path = project_path.parent
     while True:
-        ancestor_configs.append(load_yaml_with_env(path / "project.yaml", env_vars))
+        ancestor_macros = load_macros(path)
+        ancestor_configs.append(
+            load_yaml_with_env(path / "project.yaml", env_vars, ancestor_macros)
+        )
         if path == REPO_ROOT:
             break
         if not path.is_relative_to(REPO_ROOT):

@@ -31,9 +31,11 @@ from .common import (
     _print_same,
     _print_update,
     apply_env_substitution,
+    apply_macro_substitution,
     auto_rootprj_env,
     find_projects,
     is_package,
+    load_macros,
     load_yaml,
     load_yaml_with_env,
     logger,
@@ -122,11 +124,18 @@ def _is_release_managed_project(obs_project: str, rootprj: str) -> bool:
 
 
 def _copy_with_env_subst(
-    src: Path, dst_dir: Path, env_vars: dict[str, str] | None
+    src: Path,
+    dst_dir: Path,
+    env_vars: dict[str, str] | None,
+    macros: dict[str, str] | None = None,
 ) -> None:
-    """Copy src into dst_dir, substituting ${VAR} tokens for substitutable obs files."""
-    if env_vars and src.name in _OBS_SUBSTITUTABLE:
-        text = apply_env_substitution(src.read_text("utf-8"), env_vars, source=src)
+    """Copy src into dst_dir, substituting macro and ${VAR} tokens for substitutable obs files."""
+    if src.name in _OBS_SUBSTITUTABLE and (macros or env_vars):
+        text = src.read_text("utf-8")
+        if macros:
+            text = apply_macro_substitution(text, macros, source=src)
+        if env_vars:
+            text = apply_env_substitution(text, env_vars, source=src)
         (dst_dir / src.name).write_text(text, "utf-8")
     else:
         shutil.copy2(src, dst_dir / src.name)
@@ -225,6 +234,7 @@ def _content_matches_branch(
         return False
 
     check_vars = branch_env_vars if branch_env_vars is not None else env_vars
+    pkg_macros = load_macros(obs_dir.parent)
     service_file = obs_dir / "_service"
     run_services = service_file.is_file() and _has_runnable_services(service_file)
 
@@ -238,6 +248,7 @@ def _content_matches_branch(
                     pkg_label=f"{branch_project}/{package_name}",
                     cache=True,
                     env_vars=check_vars,
+                    macros=pkg_macros,
                 )
             except SystemExit:
                 logger.debug(
@@ -247,7 +258,7 @@ def _content_matches_branch(
             if obs_dir.is_dir():
                 for f in obs_dir.iterdir():
                     if f.is_file() and f.name != "_service":
-                        _copy_with_env_subst(f, combined, check_vars)
+                        _copy_with_env_subst(f, combined, check_vars, pkg_macros)
             for f in workdir.iterdir():
                 if f.is_file():
                     shutil.copy2(f, combined / f.name)
@@ -255,11 +266,12 @@ def _content_matches_branch(
             if obs_dir.is_dir():
                 for f in obs_dir.iterdir():
                     if f.is_file():
-                        _copy_with_env_subst(f, combined, check_vars)
+                        _copy_with_env_subst(f, combined, check_vars, pkg_macros)
             _copy_local_packaging(
                 obs_dir,
                 combined,
                 pkg_label=f"{branch_project}/{package_name}",
+                macros=pkg_macros,
             )
 
         local_md5s: dict[str, str] = {}
@@ -1134,6 +1146,7 @@ def cmd_sync(args):
         )
 
         pkg_vars = {**env_vars, **_pkg_env_vars(package_path)}
+        pkg_macros = load_macros(package_path)
         message = args.message or _generate_sync_message()
         service_file = obs_dir / "_service"
         run_services = (
@@ -1148,6 +1161,7 @@ def cmd_sync(args):
                 pkg_label=f"{obs_project_name}/{package_path.name}",
                 cache=not args.no_cache,
                 env_vars=pkg_vars,
+                macros=pkg_macros,
             )
             try:
                 combined = Path(tempfile.mkdtemp(prefix="percona-obs-upload-"))
@@ -1155,7 +1169,7 @@ def cmd_sync(args):
                     # Copy obs/ files excluding _service.
                     for f in obs_dir.iterdir():
                         if f.is_file() and f.name != "_service":
-                            _copy_with_env_subst(f, combined, pkg_vars)
+                            _copy_with_env_subst(f, combined, pkg_vars, pkg_macros)
                     # Copy all service artifacts (cleanup already done).
                     for f in workdir.iterdir():
                         if f.is_file():
@@ -1182,13 +1196,14 @@ def cmd_sync(args):
                 if obs_dir.is_dir():
                     for f in obs_dir.iterdir():
                         if f.is_file():
-                            _copy_with_env_subst(f, sub_dir, pkg_vars)
+                            _copy_with_env_subst(f, sub_dir, pkg_vars, pkg_macros)
                 # Copy local debian/ and rpm/ packaging for service-less
                 # packages (e.g. metapackages with hardcoded versions).
                 _copy_local_packaging(
                     obs_dir,
                     sub_dir,
                     pkg_label=f"{obs_project_name}/{package_path.name}",
+                    macros=pkg_macros,
                 )
                 if branch_rootprj:
                     _rewrite_aggregates_in_dir(
@@ -1372,6 +1387,7 @@ def cmd_sync_promote(args) -> None:
             continue
 
         pkg_vars = {**env_vars, **_pkg_env_vars(package_path)}
+        pkg_macros = load_macros(package_path)
 
         # Check if the OBS package is currently a branch aggregate.
         latest_comment = _fetch_obs_package_latest_comment(
@@ -1396,13 +1412,14 @@ def cmd_sync_promote(args) -> None:
                 pkg_label=f"{obs_project_name}/{package_path.name}",
                 cache=not args.no_cache,
                 env_vars=pkg_vars,
+                macros=pkg_macros,
             )
             try:
                 combined = Path(tempfile.mkdtemp(prefix="percona-obs-upload-"))
                 try:
                     for f in obs_dir.iterdir():
                         if f.is_file() and f.name != "_service":
-                            _copy_with_env_subst(f, combined, pkg_vars)
+                            _copy_with_env_subst(f, combined, pkg_vars, pkg_macros)
                     for f in workdir.iterdir():
                         if f.is_file():
                             shutil.copy2(f, combined / f.name)
@@ -1423,7 +1440,7 @@ def cmd_sync_promote(args) -> None:
             try:
                 for f in obs_dir.iterdir():
                     if f.is_file():
-                        _copy_with_env_subst(f, sub_dir, pkg_vars)
+                        _copy_with_env_subst(f, sub_dir, pkg_vars, pkg_macros)
                 _upload_obs_files(
                     apiurl,
                     obs_project_name,

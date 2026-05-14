@@ -9,6 +9,7 @@ from pathlib import Path
 from .common import (
     _REPO_DIR,
     apply_env_substitution,
+    apply_macro_substitution,
     _print_ok,
     _print_pending,
     _print_same,
@@ -483,12 +484,34 @@ def _obs_scm_store(
         raise
 
 
-def _copy_local_packaging(obs_dir: Path, workdir: Path, pkg_label: str) -> None:
+def _copy_file_with_macros(src: Path, dst: Path, macros: dict[str, str]) -> None:
+    """Copy *src* to *dst*, applying macro substitution to UTF-8 text files.
+
+    Binary files (those that cannot be decoded as UTF-8) are copied verbatim.
+    """
+    raw = src.read_bytes()
+    try:
+        text = raw.decode("utf-8")
+        substituted = apply_macro_substitution(text, macros, source=src)
+        dst.write_bytes(substituted.encode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        dst.write_bytes(raw)
+
+
+def _copy_local_packaging(
+    obs_dir: Path,
+    workdir: Path,
+    pkg_label: str,
+    macros: dict[str, str] | None = None,
+) -> None:
     """Copy debian/ and rpm/ packaging files from the local package directory.
 
     RPM: copy all files from ``<pkg>/rpm/`` into *workdir*.
     Debian: copy ``*.dsc`` files and compress the ``debian/`` directory into
     ``debian.tar.gz`` in *workdir*.
+
+    If *macros* is provided, ``%!{VAR}`` tokens are substituted in all UTF-8
+    text files before they are copied or archived.
     """
     pkg_dir = obs_dir.parent
     rpm_dir = pkg_dir / "rpm"
@@ -496,7 +519,10 @@ def _copy_local_packaging(obs_dir: Path, workdir: Path, pkg_label: str) -> None:
     if rpm_dir.is_dir():
         rpm_files = [f for f in sorted(rpm_dir.iterdir()) if f.is_file()]
         for f in rpm_files:
-            shutil.copy2(f, workdir / f.name)
+            if macros:
+                _copy_file_with_macros(f, workdir / f.name, macros)
+            else:
+                shutil.copy2(f, workdir / f.name)
         logger.debug(
             f"copied {len(rpm_files)} file(s) from rpm/: "
             f"{[f.name for f in rpm_files]}"
@@ -505,28 +531,68 @@ def _copy_local_packaging(obs_dir: Path, workdir: Path, pkg_label: str) -> None:
     if deb_dir.is_dir():
         dsc_files = sorted(deb_dir.glob("*.dsc"))
         for f in dsc_files:
-            shutil.copy2(f, workdir / f.name)
+            if macros:
+                _copy_file_with_macros(f, workdir / f.name, macros)
+            else:
+                shutil.copy2(f, workdir / f.name)
         # Build a reproducible tarball: identical source content → identical
         # bytes → identical MD5, so a no-op sync push does not re-upload
         # debian.tar.gz on every run.
-        result = subprocess.run(
-            [
-                "tar",
-                "--sort=name",
-                "--owner=0",
-                "--group=0",
-                "--numeric-owner",
-                "--mtime=@0",
-                "--use-compress-program=gzip -n",
-                "-cf",
-                str(workdir / "debian.tar.gz"),
-                "-C",
-                str(pkg_dir),
-                "debian",
-            ],
-            capture_output=True,
-            text=True,
-        )
+        if macros:
+            # Apply macro substitution in a temp copy of debian/ so the
+            # original source tree is not modified.
+            with tempfile.TemporaryDirectory() as _tmpdir:
+                tmp_deb = Path(_tmpdir) / "debian"
+                shutil.copytree(deb_dir, tmp_deb)
+                for f in sorted(tmp_deb.rglob("*")):
+                    if f.is_file():
+                        raw = f.read_bytes()
+                        try:
+                            text = raw.decode("utf-8")
+                            f.write_bytes(
+                                apply_macro_substitution(text, macros, source=f).encode(
+                                    "utf-8"
+                                )
+                            )
+                        except (UnicodeDecodeError, ValueError):
+                            pass
+                result = subprocess.run(
+                    [
+                        "tar",
+                        "--sort=name",
+                        "--owner=0",
+                        "--group=0",
+                        "--numeric-owner",
+                        "--mtime=@0",
+                        "--use-compress-program=gzip -n",
+                        "-cf",
+                        str(workdir / "debian.tar.gz"),
+                        "-C",
+                        _tmpdir,
+                        "debian",
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
+        else:
+            result = subprocess.run(
+                [
+                    "tar",
+                    "--sort=name",
+                    "--owner=0",
+                    "--group=0",
+                    "--numeric-owner",
+                    "--mtime=@0",
+                    "--use-compress-program=gzip -n",
+                    "-cf",
+                    str(workdir / "debian.tar.gz"),
+                    "-C",
+                    str(pkg_dir),
+                    "debian",
+                ],
+                capture_output=True,
+                text=True,
+            )
         if result.returncode != 0:
             raise SystemExit(
                 f"error: creating debian.tar.gz failed:\n  {result.stderr.strip()}"
@@ -544,6 +610,7 @@ def _run_local_services(
     pkg_label: str = "",
     cache: bool = True,
     env_vars: dict[str, str] | None = None,
+    macros: dict[str, str] | None = None,
 ) -> Path:
     """Run all OBS services locally; return workdir path.
 
@@ -568,8 +635,10 @@ def _run_local_services(
     Each service binary is expected at /usr/lib/obs/service/<name>.  If a
     binary is missing a warning is logged and the service is skipped.
 
-    If *env_vars* is provided, ``${VAR}`` tokens in the ``_service`` file are
-    substituted before parsing and before the file is written into the workdir.
+    If *macros* is provided, ``%!{VAR}`` tokens in the ``_service`` file are
+    substituted first.  If *env_vars* is provided, ``${VAR}`` tokens are then
+    substituted.  Both substitutions happen before parsing and before the file
+    is written into the workdir.
 
     The caller owns cleanup of the returned workdir.
 
@@ -577,6 +646,8 @@ def _run_local_services(
     """
     service_file = obs_dir / "_service"
     svc_text = service_file.read_text("utf-8")
+    if macros:
+        svc_text = apply_macro_substitution(svc_text, macros, source=service_file)
     if env_vars:
         svc_text = apply_env_substitution(svc_text, env_vars, source=service_file)
     svc_root = ET.fromstring(svc_text)
@@ -783,7 +854,7 @@ def _run_local_services(
     # Copy debian/ and rpm/ from the local package directory before
     # Phase 3 so that buildtime services like set_version can find
     # .dsc and .spec files.
-    _copy_local_packaging(obs_dir, workdir, pkg_label)
+    _copy_local_packaging(obs_dir, workdir, pkg_label, macros=macros)
 
     # ── Phase 3: buildtime services (tar, recompress, set_version) ────────
     # Always run — these are fast, deterministic local transforms.
