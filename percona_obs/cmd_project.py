@@ -34,6 +34,7 @@ from .common import (
     is_package,
     is_project,
     load_macros,
+    load_project_yaml,
     load_yaml,
     load_yaml_with_env,
     parse_env_overrides,
@@ -231,7 +232,7 @@ def _fill_release_online_records(
 
     def _repo_arch_pairs_from_yaml(project_path: Path) -> list[tuple[str, str]]:
         """Return [(repo, arch), ...] from a local project.yaml as fallback."""
-        data = load_yaml(project_path / "project.yaml")
+        data = load_project_yaml(project_path / "project.yaml")
         pairs: list[tuple[str, str]] = []
         for repo in data.get("repositories", []):
             name = repo.get("name", "")
@@ -341,9 +342,7 @@ def _validate_subproject_refs(root: Path) -> list[tuple[Path, str]]:
     """
     errors: list[tuple[Path, str]] = []
     for yaml_path in sorted(root.rglob("project.yaml")):
-        config = load_yaml_with_env(
-            yaml_path, None, macros=load_macros(yaml_path.parent)
-        )
+        config = load_project_yaml(yaml_path)
         for repo in config.get("repositories", []):
             for path_info in repo.get("paths", []):
                 subproject = path_info.get("subproject")
@@ -393,9 +392,7 @@ def _validate_project_path_refs(
     # the live OBS instance; everything else is an external interconnect.
     local_obs_project_names: set[str] = set()
     if rootprj:
-        root_config = load_yaml_with_env(
-            REPO_ROOT / "project.yaml", env_vars, macros=load_macros(REPO_ROOT)
-        )
+        root_config = load_project_yaml(REPO_ROOT / "project.yaml", env_vars)
         root_obs_name = root_config.get("name") or rootprj
         for obs_name, _ in find_projects(REPO_ROOT, root_obs_name):
             local_obs_project_names.add(obs_name)
@@ -727,7 +724,7 @@ def cmd_project_config(args) -> None:
 
     # Always resolve the root OBS project name — needed both for the project
     # list and for inheriting person/group into new subprojects.
-    root_config = load_yaml(REPO_ROOT / "project.yaml")
+    root_config = load_project_yaml(REPO_ROOT / "project.yaml")
     root_obs_name = root_config.get("name") or args.rootprj
 
     # Resolve scope: a single project or the whole tree.
@@ -900,7 +897,7 @@ def cmd_project_install(args) -> None:
         scope_obs_name = f"{args.rootprj}:{args.project}"
     else:
         scope_path = REPO_ROOT
-        root_config = load_yaml(REPO_ROOT / "project.yaml")
+        root_config = load_project_yaml(REPO_ROOT / "project.yaml")
         scope_obs_name = root_config.get("name") or args.rootprj
 
     all_projects = list(find_projects(scope_path, scope_obs_name))
@@ -915,7 +912,7 @@ def cmd_project_install(args) -> None:
     projects = [
         (obs_name, proj_path)
         for obs_name, proj_path in all_projects
-        if load_yaml(proj_path / "project.yaml").get("publish") is not False
+        if load_project_yaml(proj_path / "project.yaml").get("publish") is not False
         and (
             (proj_path / "project.yaml").is_file()
             if is_release
@@ -1608,9 +1605,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             if not (sub_path / "project.yaml").is_file():
                 continue  # intermediate directory, not a real OBS project
             subproject_name = sub_obs_id[len(args.project) + 1 :]
-            source_sub_config = load_yaml_with_env(
-                sub_path / "project.yaml", None, macros=load_macros(sub_path)
-            )
+            source_sub_config = load_project_yaml(sub_path / "project.yaml")
             rewritten_repos = _rewrite_subproject_paths(
                 source_sub_config.get("repositories", []),
                 args.project,

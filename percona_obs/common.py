@@ -226,6 +226,19 @@ def load_yaml(path: Path) -> dict:
         return yaml.safe_load(f) or {}
 
 
+def load_project_yaml(
+    path: Path,
+    env_vars: dict[str, str] | None = None,
+) -> dict:
+    """Load a project.yaml with macro substitution resolved from the directory hierarchy.
+
+    Equivalent to ``load_yaml_with_env(path, env_vars, macros=load_macros(path.parent))``.
+    Use this instead of ``load_yaml`` for all ``project.yaml`` files so that
+    ``%!{VAR}`` tokens are expanded before the YAML parser sees them.
+    """
+    return load_yaml_with_env(path, env_vars, macros=load_macros(path.parent))
+
+
 def load_yaml_with_env(
     path: Path,
     env_vars: dict[str, str] | None,
@@ -490,7 +503,7 @@ def find_projects(path: Path, obs_project: str):
     the 'name' field in project.yaml. Only directories that are projects (no obs/)
     are descended into; package directories are skipped.
     """
-    config = load_yaml(path / "project.yaml")
+    config = load_project_yaml(path / "project.yaml")
     obs_project_name = config.get("name") or obs_project
     yield obs_project_name, path
     for child in sorted(path.iterdir()):

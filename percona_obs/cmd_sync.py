@@ -36,6 +36,7 @@ from .common import (
     find_projects,
     is_package,
     load_macros,
+    load_project_yaml,
     load_yaml,
     load_yaml_with_env,
     logger,
@@ -555,7 +556,7 @@ def cmd_sync(args):
     if getattr(args, "no_dep_cascade", False):
         for _ck_proj, _ck_path in targets:
             if is_dockerfile_image(_ck_path):
-                _ck_cfg = load_yaml(_ck_path.parent / "project.yaml")
+                _ck_cfg = load_project_yaml(_ck_path.parent / "project.yaml")
                 _ck_name = _ck_cfg.get("name") or _ck_proj
                 container_keys.add((_ck_name, _ck_path.name))
     seen_projects: set = set()
@@ -599,7 +600,7 @@ def cmd_sync(args):
     ) -> "tuple[tuple[str, str], str, str | None, str | None] | None":
         obs_dir = package_path / "obs"
         project_path = package_path.parent
-        project_config = load_yaml(project_path / "project.yaml")
+        project_config = load_project_yaml(project_path / "project.yaml")
         obs_project_name = project_config.get("name") or obs_project
         key: tuple[str, str] = (obs_project_name, package_path.name)
 
@@ -875,7 +876,7 @@ def cmd_sync(args):
         _unique_proj_paths: dict[str, tuple[str, Path]] = {}
         for _op, _pp in targets:
             _proj_path = _pp.parent
-            _proj_cfg = load_yaml(_proj_path / "project.yaml")
+            _proj_cfg = load_project_yaml(_proj_path / "project.yaml")
             _proj_name = _proj_cfg.get("name") or _op
             if _proj_name not in _unique_proj_paths:
                 _unique_proj_paths[_proj_name] = (_op, _proj_path)
@@ -1056,7 +1057,7 @@ def cmd_sync(args):
 
     for obs_project, package_path in targets:
         project_path = package_path.parent
-        project_config = load_yaml(project_path / "project.yaml")
+        project_config = load_project_yaml(project_path / "project.yaml")
         obs_project_name = project_config.get("name") or obs_project
 
         # With --branch-from on a full-tree sync, skip projects that were not
@@ -1240,7 +1241,7 @@ def cmd_sync(args):
         # Ensure the root project is included even when --non-recursive produces
         # zero local packages (e.g. root/ has no direct-child packages).
         if args.project is None:
-            root_config = load_yaml(REPO_ROOT / "project.yaml")
+            root_config = load_project_yaml(REPO_ROOT / "project.yaml")
             root_obs_name = root_config.get("name") or args.rootprj
             local_packages_by_project.setdefault(root_obs_name, set())
         for proj_name, local_pkgs in local_packages_by_project.items():
@@ -1283,7 +1284,7 @@ def cmd_sync_delete(args) -> None:
     if args.package:
         # ── Single package ────────────────────────────────────────────────
         proj_path = resolve_project_path(args.project)
-        project_config = load_yaml(proj_path / "project.yaml")
+        project_config = load_project_yaml(proj_path / "project.yaml")
         obs_project_name = (
             project_config.get("name") or f"{args.rootprj}:{args.project}"
         )
@@ -1391,7 +1392,7 @@ def cmd_sync_promote(args) -> None:
 
     for obs_project, package_path in targets:
         project_path = package_path.parent
-        project_config = load_yaml(project_path / "project.yaml")
+        project_config = load_project_yaml(project_path / "project.yaml")
         obs_project_name = project_config.get("name") or obs_project
 
         obs_dir = package_path / "obs"

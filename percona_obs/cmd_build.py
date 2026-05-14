@@ -19,6 +19,7 @@ from .common import (
     _print_pending,
     find_packages,
     is_package,
+    load_project_yaml,
     load_yaml,
     logger,
     resolve_project_path,
@@ -244,7 +245,7 @@ def _print_project_tree(
     repo_filter: str | None = None,
 ) -> None:
     """Recursively print the project / package tree with build status lines."""
-    config = load_yaml(path / "project.yaml")
+    config = load_project_yaml(path / "project.yaml")
     obs_name = config.get("name") or obs_project
 
     if is_root:
@@ -264,7 +265,7 @@ def _print_project_tree(
                 items.append(("package", child))
         else:
             child_raw = f"{obs_project}:{child.name}"
-            child_cfg = load_yaml(child / "project.yaml")
+            child_cfg = load_project_yaml(child / "project.yaml")
             child_obs = child_cfg.get("name") or child_raw
             has_targets = any(
                 proj == child_obs or proj.startswith(f"{child_obs}:")
@@ -376,7 +377,7 @@ def cmd_build_dependency(args) -> None:
         scope_obs = f"{args.rootprj}:{args.project}"
         targets = list(find_packages(scope_path, scope_obs))
     else:
-        root_config = load_yaml(REPO_ROOT / "project.yaml")
+        root_config = load_project_yaml(REPO_ROOT / "project.yaml")
         root_obs = root_config.get("name") or args.rootprj
         targets = list(find_packages(REPO_ROOT, root_obs))
 
@@ -387,7 +388,7 @@ def cmd_build_dependency(args) -> None:
     pkg_to_project: dict[str, str] = {}
     pkg_obs_name: list[tuple[str, str]] = []  # (obs_name, pkg_name) for every target
     for obs_project, package_path in targets:
-        project_config = load_yaml(package_path.parent / "project.yaml")
+        project_config = load_project_yaml(package_path.parent / "project.yaml")
         obs_name = project_config.get("name") or obs_project
         pkg_to_project[package_path.name] = obs_name
         pkg_obs_name.append((obs_name, package_path.name))
@@ -510,7 +511,7 @@ def cmd_build_trigger(args):
 
     for obs_project, package_path in targets:
         project_path = package_path.parent
-        project_config = load_yaml(project_path / "project.yaml")
+        project_config = load_project_yaml(project_path / "project.yaml")
         obs_project_name = project_config.get("name") or obs_project
         logger.debug(f"triggering service run: {obs_project_name}/{package_path.name}")
         _print_pending(f"trigger  {obs_project_name}/{package_path.name}")
@@ -536,7 +537,7 @@ def cmd_build_status(args):
     target_set: set[tuple[str, str]] = set()
     unique_obs_projects: set[str] = set()
     for obs_project, package_path in targets:
-        project_config = load_yaml(package_path.parent / "project.yaml")
+        project_config = load_project_yaml(package_path.parent / "project.yaml")
         obs_name = project_config.get("name") or obs_project
         target_set.add((obs_name, package_path.name))
         unique_obs_projects.add(obs_name)

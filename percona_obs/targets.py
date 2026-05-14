@@ -6,6 +6,7 @@ from .common import (
     _is_release_dir,
     find_packages,
     is_package,
+    load_project_yaml,
     load_yaml,
     resolve_project_path,
 )
@@ -89,7 +90,7 @@ def _iter_project_chain(obs_project: str, project_path: Path):
     path = project_path
     proj = obs_project
     while True:
-        config = load_yaml(path / "project.yaml")
+        config = load_project_yaml(path / "project.yaml")
         obs_name = config.get("name") or proj
         chain.append((proj, obs_name, path))
         if path == REPO_ROOT:
