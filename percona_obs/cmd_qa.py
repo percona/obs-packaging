@@ -27,6 +27,7 @@ from .common import (
     _col,
     _print_pending,
     auto_rootprj_env,
+    load_macros,
     load_yaml_with_env,
     parse_env_overrides,
     resolve_project_path,
@@ -80,7 +81,8 @@ def _load_qa_block(
     project_path = resolve_project_path(project)
     if not project_path.is_dir():
         raise SystemExit(f"error: project {project!r} not found at {project_path}")
-    cfg = load_yaml_with_env(project_path / "project.yaml", env_vars)
+    macros = load_macros(project_path)
+    cfg = load_yaml_with_env(project_path / "project.yaml", env_vars, macros=macros)
     qa = cfg.get("qa")
     if qa is None:
         return None

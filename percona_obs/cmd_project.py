@@ -33,7 +33,9 @@ from .common import (
     find_projects,
     is_package,
     is_project,
+    load_macros,
     load_yaml,
+    load_yaml_with_env,
     parse_env_overrides,
     resolve_project_path,
 )
@@ -339,7 +341,9 @@ def _validate_subproject_refs(root: Path) -> list[tuple[Path, str]]:
     """
     errors: list[tuple[Path, str]] = []
     for yaml_path in sorted(root.rglob("project.yaml")):
-        config = load_yaml(yaml_path)
+        config = load_yaml_with_env(
+            yaml_path, None, macros=load_macros(yaml_path.parent)
+        )
         for repo in config.get("repositories", []):
             for path_info in repo.get("paths", []):
                 subproject = path_info.get("subproject")
@@ -389,7 +393,9 @@ def _validate_project_path_refs(
     # the live OBS instance; everything else is an external interconnect.
     local_obs_project_names: set[str] = set()
     if rootprj:
-        root_config = load_yaml(REPO_ROOT / "project.yaml")
+        root_config = load_yaml_with_env(
+            REPO_ROOT / "project.yaml", env_vars, macros=load_macros(REPO_ROOT)
+        )
         root_obs_name = root_config.get("name") or rootprj
         for obs_name, _ in find_projects(REPO_ROOT, root_obs_name):
             local_obs_project_names.add(obs_name)
@@ -397,7 +403,9 @@ def _validate_project_path_refs(
     # Collect (yaml_path, resolved_project, resolved_repository) triples.
     triples: list[tuple[Path, str, str]] = []
     for yaml_path in sorted(root.rglob("project.yaml")):
-        config = load_yaml(yaml_path)
+        config = load_yaml_with_env(
+            yaml_path, env_vars, macros=load_macros(yaml_path.parent)
+        )
         for repo in config.get("repositories", []):
             for path_info in repo.get("paths", []):
                 raw_project = path_info.get("project")
@@ -1600,7 +1608,9 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             if not (sub_path / "project.yaml").is_file():
                 continue  # intermediate directory, not a real OBS project
             subproject_name = sub_obs_id[len(args.project) + 1 :]
-            source_sub_config = load_yaml(sub_path / "project.yaml")
+            source_sub_config = load_yaml_with_env(
+                sub_path / "project.yaml", None, macros=load_macros(sub_path)
+            )
             rewritten_repos = _rewrite_subproject_paths(
                 source_sub_config.get("repositories", []),
                 args.project,
