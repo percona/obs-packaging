@@ -30,7 +30,7 @@ import time
 import osc.conf
 
 from percona_obs.cmd_build import _fetch_build_results
-from percona_obs.common import REPO_ROOT, find_packages, load_yaml
+from percona_obs.common import REPO_ROOT, find_packages, load_project_yaml
 
 # ---------------------------------------------------------------------------
 # Configuration from environment
@@ -54,7 +54,7 @@ osc.conf.get_config(override_apiurl=apiurl)
 # ---------------------------------------------------------------------------
 from percona_obs.common import resolve_project_path
 
-root_config = load_yaml(REPO_ROOT / "project.yaml")
+root_config = load_project_yaml(REPO_ROOT / "project.yaml")
 root_obs = root_config.get("name") or rootprj
 
 if scope_project:
@@ -66,7 +66,7 @@ else:
 
 obs_projects: set[str] = set()
 for obs_project, package_path in find_packages(scope_path, scope_obs):
-    project_config = load_yaml(package_path.parent / "project.yaml")
+    project_config = load_project_yaml(package_path.parent / "project.yaml")
     obs_name = project_config.get("name") or obs_project
     # When rootprj differs from root_obs (e.g. a PR-specific project like
     # home:Admin:percona:pr-1 vs the canonical home:Admin:percona), substitute
