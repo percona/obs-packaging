@@ -129,12 +129,21 @@ def _copy_with_env_subst(
     env_vars: dict[str, str] | None,
     macros: dict[str, str] | None = None,
 ) -> None:
-    """Copy src into dst_dir, substituting macro and ${VAR} tokens for substitutable obs files."""
-    if src.name in _OBS_SUBSTITUTABLE and (macros or env_vars):
+    """Copy src into dst_dir, substituting macro and ${VAR} tokens.
+
+    Macro substitution (``%!{VAR}``) is applied to every file.
+    Environment-variable substitution (``${VAR}``) is restricted to
+    OBS metadata files (``_OBS_SUBSTITUTABLE``) where those tokens are valid.
+    """
+    apply_macros = bool(macros)
+    apply_env = bool(env_vars) and src.name in _OBS_SUBSTITUTABLE
+    if apply_macros or apply_env:
         text = src.read_text("utf-8")
-        if macros:
+        if apply_macros:
+            assert macros is not None
             text = apply_macro_substitution(text, macros, source=src)
-        if env_vars:
+        if apply_env:
+            assert env_vars is not None
             text = apply_env_substitution(text, env_vars, source=src)
         (dst_dir / src.name).write_text(text, "utf-8")
     else:
