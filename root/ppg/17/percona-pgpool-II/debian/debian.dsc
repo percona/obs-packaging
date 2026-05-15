@@ -1,6 +1,6 @@
 Format: 3.0 (quilt)
 Source: percona-pgpool2
-Binary: percona-pgpool2, libpgpool2, libpgpool-dev, postgresql-17-pgpool2
+Binary: percona-pgpool2, libpgpool2, libpgpool-dev, postgresql-%!{PG_MAJOR_VERSION}-pgpool2
 Architecture: any
 Version: 1.0.0
 Maintainer: Percona Development Team <info@percona.com>
@@ -22,7 +22,7 @@ Build-Depends:
  libxml2-utils,
  openjade,
  opensp,
- percona-postgresql-server-dev-17,
+ percona-postgresql-server-dev-%!{PG_MAJOR_VERSION},
  percona-postgresql-server-dev-all,
  percona-postgresql-common,
  xsltproc

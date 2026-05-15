@@ -60,7 +60,7 @@ override_dh_install:
 	mkdir -p debian/tmp/usr/share/pgpool2
 	mv debian/tmp/etc/pgpool2/pgpool.conf.sample debian/tmp/usr/share/pgpool2/pgpool.conf
 	set -e ; for f in pcp.conf pool_hba.conf ; do mv debian/tmp/etc/pgpool2/$$f.sample debian/tmp/etc/pgpool2/$$f ; done
-	rm debian/tmp/usr/lib/libpcp.la # not interested in .la
+	rm -vf debian/tmp/usr/lib/libpgpoolpcp.la # not interested in .la
 	dh_install
 
 override_dh_installchangelogs:

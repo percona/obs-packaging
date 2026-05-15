@@ -32,17 +32,13 @@ Architecture: linux-any
 Pre-Depends:
  ${misc:Pre-Depends},
 Depends:
- libpgpool2 (= ${binary:Version}),
+ libpgpoolpcp3 (= ${binary:Version}),
  postgresql-common,
  ucf,
  ${misc:Depends},
  ${shlibs:Depends},
 Enhances:
  postgresql,
-Conflicts:
- pgpool,
-Replaces:
- pgpool,
 Description: connection pool server and replication proxy for PostgreSQL
  pgpool-II is a middleware that works between PostgreSQL servers and a
  PostgreSQL database client. It provides the following features:
@@ -62,7 +58,7 @@ Description: connection pool server and replication proxy for PostgreSQL
  .
  This is version 3 of pgpool-II, the second generation of pgpool.
 
-Package: libpgpool2
+Package: libpgpoolpcp3
 Architecture: linux-any
 Section: libs
 Depends:
@@ -77,12 +73,9 @@ Package: libpgpool-dev
 Architecture: linux-any
 Section: libdevel
 Depends:
- libpgpool2 (= ${binary:Version}),
+ libpgpoolpcp3 (= ${binary:Version}),
  ${misc:Depends},
  ${shlibs:Depends},
-# We also provide /usr/lib/libpcp.{a,so}
-Conflicts:
- libpcp3-dev,
 Description: pgpool control protocol library - headers
  pgpool-II is a middleware that works between PostgreSQL servers and a
  PostgreSQL database client.  This package contains headers for the pgpool
@@ -91,7 +84,7 @@ Description: pgpool control protocol library - headers
 Package: postgresql-PGVERSION-pgpool2
 Architecture: linux-any
 Depends:
- libpgpool2 (>= ${binary:Version}),
+ libpgpoolpcp3 (>= ${binary:Version}),
  postgresql-PGVERSION | percona-postgresql-PGVERSION,
  ${misc:Depends},
  ${shlibs:Depends},
@@ -103,5 +96,5 @@ Description: connection pool server and replication proxy for PostgreSQL - modul
  the PostgreSQL PGVERSION server:
  .
   * pgpool_adm
-  * pgpool_recovery (PostgreSQL 9.1 and above)
-  * pgpool_regclass (PostgreSQL 9.1 and above)
+  * pgpool_recovery
+  * pgpool_regclass

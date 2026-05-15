@@ -88,10 +88,7 @@ PostgreSQL extensions (pgpool-recovery, pgpool_adm) for use with pgpool-II.
 
 %build
 %if 0%{?gts_version}
-export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
-rpmlibdir=$(rpm --eval "%{_libdir}")
-export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+source /opt/rh/gcc-toolset-%{gts_version}/enable
 %endif
 libtoolize
 autoreconf --force --install
@@ -111,10 +108,7 @@ make %{?_smp_mflags} -C doc
 
 %install
 %if 0%{?gts_version}
-export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
-rpmlibdir=$(rpm --eval "%{_libdir}")
-export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+source /opt/rh/gcc-toolset-%{gts_version}/enable
 %endif
 export PATH=%{pghome}/bin:$PATH
 make %{?_smp_mflags} DESTDIR=%{buildroot} install
@@ -182,7 +176,7 @@ mkdir -p %{buildroot}%{_varlibdir}
 find %{buildroot}%{_mandir} -type f -exec chmod 644 {} \;
 
 # remove static libs
-rm -f %{buildroot}%{_libdir}/libpcp.{a,la}
+rm -f %{buildroot}%{_libdir}/libpgpoolpcp.{a,la}
 
 %pre
 %{?suse_version:%service_add_pre pgpool.service}
@@ -231,7 +225,7 @@ systemd-tmpfiles --create %{_tmpfilesdir}/%{name}.conf 2>/dev/null || :
 %{_mandir}/man1/*.1*
 %{_datadir}/%{short_name}/insert_lock.sql
 %{_datadir}/%{short_name}/pgpool.pam
-%{_libdir}/libpcp.so.*
+%{_libdir}/libpgpoolpcp.so.*
 %{_tmpfilesdir}/%{name}.conf
 %ghost %dir /run/pgpool
 %ghost %dir %{_sysconfdir}/sudoers.d
@@ -259,7 +253,7 @@ systemd-tmpfiles --create %{_tmpfilesdir}/%{name}.conf 2>/dev/null || :
 %{_includedir}/pcp.h
 %{_includedir}/pool_process_reporting.h
 %{_includedir}/pool_type.h
-%{_libdir}/libpcp.so
+%{_libdir}/libpgpoolpcp.so
 
 %files extensions
 %ghost %dir %{pghome}/lib
@@ -299,5 +293,5 @@ systemd-tmpfiles --create %{_tmpfilesdir}/%{name}.conf 2>/dev/null || :
 %{pghome}/lib/bitcode/pgpool_adm/pgpool_adm.bc
 
 %changelog
-* Tue Mar 10 2026 Percona Build/Release Team <eng-build@percona.com> - 4.7.0-1
-- Release 4.7.0-1
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PGPOOL_VERSION}-1
+- Update to upstream version %!{PGPOOL_VERSION}

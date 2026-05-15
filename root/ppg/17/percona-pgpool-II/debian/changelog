@@ -1,5 +1,5 @@
-percona-pgpool2 (4.7.0-1) stable; urgency=medium
+percona-pgpool2 (%!{PGPOOL_VERSION}-1) stable; urgency=medium
 
-  * New upstream version 4.7.0.
+  * Update to upstream version %!{PGPOOL_VERSION}
 
- -- Percona Development Team <info@percona.com>  Mon, 10 Mar 2026 00:00:00 +0000
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}
