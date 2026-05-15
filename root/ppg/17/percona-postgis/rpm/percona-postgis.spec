@@ -137,7 +137,7 @@ BuildRequires:	geos-devel libgeotiff-devel
 BuildRequires:	geos%{geosmajorversion}-devel >= %{geosfullversion}
 BuildRequires:	libgeotiff%{libgeotiffmajorversion}-devel
 %if !0%{?suse_version}
-BuildRequires:	pgdg-srpm-macros >= 1.0.52
+BuildRequires:	pgdg-srpm-macros >= 1.0.53
 %endif
 %endif
 %if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
@@ -338,10 +338,7 @@ CFLAGS="$CFLAGS -I%{gdalinstdir}/include"; export CFLAGS
 export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:%{projinstdir}/lib64/pkgconfig
 export PATH=/usr/bin:$PATH
 %if 0%{?gts_version}
-export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
-rpmlibdir=$(rpm --eval "%{_libdir}")
-export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+source /opt/rh/gcc-toolset-%{gts_version}/enable
 %endif
 export ACLOCAL=aclocal
 export AUTOMAKE=automake
@@ -383,10 +380,7 @@ SHLIB_LINK="$SHLIB_LINK" %{__make} LPATH=`%{pginstdir}/bin/pg_config --pkglibdir
 
 %install
 %if 0%{?gts_version}
-export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
-rpmlibdir=$(rpm --eval "%{_libdir}")
-export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+source /opt/rh/gcc-toolset-%{gts_version}/enable
 %endif
 %{__rm} -rf %{buildroot}
 SHLIB_LINK="$SHLIB_LINK" %{__make} %{?_smp_mflags} install DESTDIR=%{buildroot}
@@ -422,6 +416,7 @@ fi
 %dir %{pginstdir}share/contrib
 %dir %{pginstdir}share/contrib/%{sname}-%{postgismajorversion}
 %dir %{pginstdir}share/extension
+%dir %{_mandir}/%{name}/man1
 %{pginstdir}/bin/postgis
 %{pginstdir}/bin/postgis_restore
 %{pginstdir}/doc/extension/README.address_standardizer
@@ -463,9 +458,12 @@ fi
 %{pginstdir}/lib/postgis_raster-%{postgissomajorversion}.so
 %{pginstdir}/share/extension/%{sname}_raster.control
 %endif
+%{_mandir}/%{name}/man1/postgis.1*
+%{_mandir}/%{name}/man1/postgis_restore.1*
 
 %files client
 %defattr(644,root,root)
+%dir %{_mandir}/%{name}
 %attr(755,root,root) %{pginstdir}/bin/pgsql2shp
 %if %{raster}
 %attr(755,root,root) %{pginstdir}/bin/raster2pgsql
@@ -473,6 +471,9 @@ fi
 %attr(755,root,root) %{pginstdir}/bin/shp2pgsql
 %attr(755,root,root) %{pginstdir}/bin/pgtopo_export
 %attr(755,root,root) %{pginstdir}/bin/pgtopo_import
+%{_mandir}/%{name}/man1/pgsql2shp*
+%{_mandir}/%{name}/man1/pgtopo_*
+%{_mandir}/%{name}/man1/shp2pgsql*
 
 %if %{sfcgal}
 %files devel
@@ -486,14 +487,6 @@ fi
 %files docs
 %defattr(-,root,root)
 %doc %{sname}-%{version}.pdf
-%dir %{_mandir}/%{name}
-%dir %{_mandir}/%{name}/man1
-%{_mandir}/%{name}/man1/pgsql2shp.1.*
-%{_mandir}/%{name}/man1/pgtopo_export.1.*
-%{_mandir}/%{name}/man1/pgtopo_import.1.*
-%{_mandir}/%{name}/man1/postgis.1.*
-%{_mandir}/%{name}/man1/postgis_restore.1.*
-%{_mandir}/%{name}/man1/shp2pgsql.1.*
 
 %if %shp2pgsqlgui
 %files gui
@@ -560,5 +553,5 @@ fi
 %endif
 
 %changelog
-* Tue Mar 10 2026 Percona Development Team <info@percona.com> - 3.5.5-1
-- Update to 3.5.5
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{POSTGIS_VERSION}-1
+- Update to upstream version %!{POSTGIS_VERSION}
