@@ -1,6 +1,6 @@
 Format: 3.0 (quilt)
-Source: percona-pg-tde17
-Binary: percona-pg-tde17, percona-pg-tde17-client
+Source: percona-pg-tde%!{PG_MAJOR_VERSION}
+Binary: percona-pg-tde%!{PG_MAJOR_VERSION}, percona-pg-tde%!{PG_MAJOR_VERSION}-client
 Architecture: any
 Version: 1.0.0
 Maintainer: Percona Development Team <info@percona.com>

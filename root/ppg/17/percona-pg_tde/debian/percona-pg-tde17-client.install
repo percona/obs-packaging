@@ -1,1 +1,1 @@
-usr/lib/postgresql/17/lib/pgxs/src/test/perl/PostgreSQL/Test/TdeCluster.pm
+usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib/pgxs/src/test/perl/PostgreSQL/Test/TdeCluster.pm

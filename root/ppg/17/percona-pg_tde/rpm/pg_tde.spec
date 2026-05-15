@@ -91,12 +91,8 @@ Development and testing support files for pg_tde, including Perl test modules.
 
 %build
 %if 0%{?gts_version}
-export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
-rpmlibdir=$(rpm --eval "%{_libdir}")
-export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+source /opt/rh/gcc-toolset-%{gts_version}/enable
 %endif
-sed -i 's:PG_CONFIG = pg_config:PG_CONFIG = /usr/pgsql-%{pgmajorversion}/bin/pg_config:' Makefile
 USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make}
 
 %install
@@ -137,6 +133,7 @@ install -m 644 ci_scripts/perl/PostgreSQL/Test/TdeCluster.pm %{buildroot}/%{pgin
 %{pginstdir}/bin/pg_tde_resetwal
 %{pginstdir}/bin/pg_tde_rewind
 %{pginstdir}/bin/pg_tde_waldump
+%{pginstdir}/bin/pg_tde_upgrade
 %{pginstdir}/lib/bitcode/pg_tde.index.bc
 %{pginstdir}/lib/bitcode/pg_tde/src/access/pg_tde_tdemap.bc
 %{pginstdir}/lib/bitcode/pg_tde/src/access/pg_tde_xlog.bc
@@ -170,5 +167,5 @@ install -m 644 ci_scripts/perl/PostgreSQL/Test/TdeCluster.pm %{buildroot}/%{pgin
 %{pginstdir}/lib/pgxs/src/test/perl/PostgreSQL/Test/TdeCluster.pm
 
 %changelog
-* Tue Mar 10 2026 Percona Development Team <info@percona.com> - 2.1.2-1
-- Initial OBS packaging for pg_tde 2.1.2
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PG_TDE_VERSION}-1
+- Update to upstream version %!{PG_TDE_VERSION}
