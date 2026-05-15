@@ -3,7 +3,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .common import _REPO_DIR
+_REPO_DIR = Path(__file__).parent.parent
 
 
 def _check_git_clean() -> None:
@@ -165,3 +165,18 @@ def _generate_sync_message() -> str:
         detail = f"local changes on {socket.gethostname()}"
 
     return f"sync: {branch}@{short_sha} ({detail})"
+
+
+def get_file_commit_time(path: Path) -> float | None:
+    """Return the Unix timestamp of the last git commit that touched *path*.
+
+    Returns None if the file has no commits (untracked or new/uncommitted).
+    """
+    result = subprocess.run(
+        ["git", "log", "-1", "--format=%at", "--", str(path)],
+        capture_output=True,
+        text=True,
+        cwd=_REPO_DIR,
+    )
+    ts = result.stdout.strip()
+    return float(ts) if ts else None

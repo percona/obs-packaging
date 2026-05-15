@@ -546,13 +546,14 @@ def _copy_local_packaging(
                 shutil.copytree(deb_dir, tmp_deb)
                 for f in sorted(tmp_deb.rglob("*")):
                     if f.is_file():
+                        original = deb_dir / f.relative_to(tmp_deb)
                         raw = f.read_bytes()
                         try:
                             text = raw.decode("utf-8")
                             f.write_bytes(
-                                apply_macro_substitution(text, macros, source=f).encode(
-                                    "utf-8"
-                                )
+                                apply_macro_substitution(
+                                    text, macros, source=original
+                                ).encode("utf-8")
                             )
                         except (UnicodeDecodeError, ValueError):
                             pass

@@ -178,7 +178,9 @@ def apply_macro_substitution(
                 raise SystemExit(
                     f"error: %!{{{var}}} used in a context with no source file"
                 )
-            mtime = source.stat().st_mtime
+            from percona_obs.git_utils import get_file_commit_time
+
+            mtime = get_file_commit_time(source) or source.stat().st_mtime
             dt = datetime.datetime.fromtimestamp(
                 mtime, tz=datetime.timezone.utc
             ).astimezone()
