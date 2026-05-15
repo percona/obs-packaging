@@ -1,6 +1,0 @@
-percona-postgresql-17 (17.6-1) unstable; urgency=low
-
-  * Percona PostgreSQL based on upstream version 17.6.1.
-
- -- Ricardo Dias <ricardo.dias@percona.com>  Tue, 10 Feb 2026 11:42:39 +0000
-

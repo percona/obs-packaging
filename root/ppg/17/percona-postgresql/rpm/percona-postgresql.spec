@@ -3,11 +3,11 @@
 %global pgmajorversion %!{PG_MAJOR_VERSION}
 
 # These are macros to be used with find_lang and other stuff
-%global packageversion 170
-%global pgpackageversion 17
-%global prevmajorversion 16
+%global packageversion %!{PG_MAJOR_VERSION}0
+%global pgpackageversion %!{PG_MAJOR_VERSION}
+%global prevmajorversion %!{PG_PREV_MAJOR_VERSION}
 %global sname postgresql
-%global vname postgresql17
+%global vname postgresql%!{PG_MAJOR_VERSION}
 %global pgbaseinstdir	/usr/pgsql-%{pgmajorversion}
 
 %global beta 0
@@ -74,7 +74,7 @@
 
 Summary:        PostgreSQL client programs and libraries
 Name:           percona-postgresql%{pgmajorversion}
-Version:        17.0
+Version:        1.0
 Release:        1%{?dist}
 License:        PostgreSQL
 Group:          Productivity/Databases/Tools
@@ -82,29 +82,29 @@ Url:            https://www.postgresql.org/
 Vendor:         Percona, LLC
 
 Source0:        percona-postgresql-%{version}.tar.gz
-Source4:        %{sname}-%{pgmajorversion}-Makefile.regress
-Source5:        %{sname}-%{pgmajorversion}-pg_config.h
-Source6:        %{sname}-%{pgmajorversion}-README-systemd.rpm-dist
-Source7:        %{sname}-%{pgmajorversion}-ecpg_config.h
+Source4:        %{sname}-Makefile.regress
+Source5:        %{sname}-pg_config.h
+Source6:        %{sname}-README-systemd.rpm-dist
+Source7:        %{sname}-ecpg_config.h
 Source9:        %{sname}-%{pgmajorversion}-libs.conf
-Source12:       %{sname}-%{pgpackageversion}-A4.pdf
+Source12:       %{sname}-A4.pdf
 %if 0%{?suse_version}
-Source14:       %{sname}-%{pgmajorversion}.pam.suse
+Source14:       %{sname}.pam.suse
 %else
-Source14:       %{sname}-%{pgmajorversion}.pam
+Source14:       %{sname}.pam
 %endif
-Source17:	%{sname}-%{pgmajorversion}-setup
-Source10:       %{sname}-%{pgmajorversion}-check-db-dir
-Source18:       %{sname}-%{pgmajorversion}.service
-Source19:       %{sname}-%{pgmajorversion}-tmpfiles.d
+Source17:	%{sname}-setup
+Source10:       %{sname}-check-db-dir
+Source18:       %{sname}.service
+Source19:       %{sname}-tmpfiles.d
 Source20:       percona-postgresql-extensions-macros
-Source30:       percona-postgresql%{pgmajorversion}-rpmlintrc
+Source30:       percona-postgresql-rpmlintrc
 Source999:      call-home.sh
 
-Patch1:         %{sname}-%{pgmajorversion}-rpm-pgsql.patch
-Patch3:         %{sname}-%{pgmajorversion}-conf.patch
-Patch5:         %{sname}-%{pgmajorversion}-var-run-socket.patch
-Patch6:         %{sname}-%{pgmajorversion}-perl-rpath.patch
+Patch1:         %{sname}-rpm-pgsql.patch
+Patch3:         %{sname}-conf.patch
+Patch5:         %{sname}-var-run-socket.patch
+Patch6:         %{sname}-perl-rpath.patch
 Patch7:         llvm_static_linking.patch
 
 BuildRequires:  perl glibc-devel bison flex >= 2.5.31
@@ -625,13 +625,7 @@ LDFLAGS="-Wl,--as-needed"; export LDFLAGS
 export CFLAGS
 
 %if 0%{?gts_version}
-# Replicate /opt/rh/gcc-toolset-%%{gts_version}/enable so the toolset compiler
-# is first in PATH and its libraries/plugins (including annobin) are found.
-# This lets the -specs= entries in CFLAGS resolve correctly against GTS gcc.
-export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
-rpmlibdir=$(rpm --eval "%{_libdir}")
-export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+source /opt/rh/gcc-toolset-%{gts_version}/enable
 %endif
 
 %if 0%{?rhel} && 0%{?rhel} == 7
@@ -1441,6 +1435,9 @@ fi
 %endif
 
 %changelog
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PG_VERSION}-1
+- Update to upstream version %!{PG_VERSION}.
+
 * Tue Feb 03 2026 Ricardo Dias <ricardo.dias@percona.com> - 17.5.3
 - Initial spec file for PostgreSQL 17.5.3
 
