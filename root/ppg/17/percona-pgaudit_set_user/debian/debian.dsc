@@ -1,6 +1,6 @@
 Format: 3.0 (quilt)
-Source: percona-pgaudit17-set-user
-Binary: percona-pgaudit17-set-user
+Source: percona-pgaudit%!{PG_MAJOR_VERSION}-set-user
+Binary: percona-pgaudit%!{PG_MAJOR_VERSION}-set-user
 Architecture: any
 Version: 1.0.0
 Maintainer: Percona Development Team <info@percona.com>

@@ -1,5 +1,5 @@
-percona-pgaudit (17.1-2) unstable; urgency=low
+percona-pgaudit (%!{PGAUDIT_VERSION}-1) unstable; urgency=low
 
-  * Initial build.
+  * Update to upstream version %!{PGAUDIT_VERSION}
 
- -- Percona Development Team <info@percona.com>  Tue, 10 Mar 2026 00:00:00 +0000
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}

@@ -4,15 +4,15 @@ Priority: optional
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 10),
- percona-postgresql-server-dev-17,
+ percona-postgresql-server-dev-%!{PG_MAJOR_VERSION},
  libssl-dev
 Standards-Version: 3.9.8
 Homepage: http://pgaudit.org/
 
-Package: percona-postgresql-17-pgaudit
+Package: percona-postgresql-%!{PG_MAJOR_VERSION}-pgaudit
 Architecture: any
-Depends: ${misc:Depends}, ${shlibs:Depends}, percona-postgresql-17 (>= 17) | postgresql-17 (>= 17)
-Provides: pgaudit, postgresql-17-pgaudit
+Depends: ${misc:Depends}, ${shlibs:Depends}, percona-postgresql-%!{PG_MAJOR_VERSION} (>= %!{PG_MAJOR_VERSION}) | postgresql-%!{PG_MAJOR_VERSION} (>= %!{PG_MAJOR_VERSION})
+Provides: pgaudit, postgresql-%!{PG_MAJOR_VERSION}-pgaudit
 Description: PostgreSQL Audit Extension
  The pgAudit extension provides detailed session and/or object audit logging
  via the standard PostgreSQL logging facility.

@@ -95,5 +95,5 @@ sed -i 's:PG_CONFIG = pg_config:PG_CONFIG = /usr/pgsql-%{pgmajorversion}/bin/pg_
 
 
 %changelog
-* Tue Oct 13 2020 Evgeniy Patlan <evgeniy.patlan@percona.com> - 1.6.0-1
-- Initial build
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PGAUDIT_VERSION}-1
+- Update to upstream version %!{PGAUDIT_VERSION}
