@@ -1,6 +1,5 @@
 %global debug_package %{nil}
 %global sname   percona-pg_gather
-%global version %{version}
 %global pgmajorversion %!{PG_MAJOR_VERSION}
 %global pginstdir /usr/pgsql-%{pgmajorversion}
 
@@ -37,5 +36,5 @@ mkdir -p $RPM_BUILD_ROOT/%{_bindir} $RPM_BUILD_ROOT/%{pginstdir}
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
-* Wed Aug 09 2023 Surabhi Bhat <surabhi.bhat@percona.com> - 21-1
-- Initial build
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PG_GATHER_VERSION}-1
+- Update to upstream version %!{PG_GATHER_VERSION}
