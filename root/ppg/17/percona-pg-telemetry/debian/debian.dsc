@@ -1,6 +1,6 @@
 Format: 3.0 (quilt)
 Source: percona-pg-telemetry
-Binary: percona-pg-telemetry17
+Binary: percona-pg-telemetry%!{PG_MAJOR_VERSION}
 Architecture: any
 Version: 1.0.0
 Maintainer: Percona Development Team <info@percona.com>

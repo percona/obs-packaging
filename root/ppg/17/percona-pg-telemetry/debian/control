@@ -6,7 +6,7 @@ Build-Depends:
  debhelper (>= 9),
  percona-postgresql-server-dev-all (>= 153~),
 
-Package: percona-pg-telemetry17
+Package: percona-pg-telemetry%!{PG_MAJOR_VERSION}
 Architecture: any
 Depends:
  percona-telemetry-agent,
