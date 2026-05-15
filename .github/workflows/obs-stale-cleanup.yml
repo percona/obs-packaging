@@ -36,6 +36,7 @@ jobs:
           obs-password: ${{ secrets.OBS_PASSWORD }}
 
       - name: Warn or delete OBS projects for stale PRs
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           WARN_DAYS: "6"
