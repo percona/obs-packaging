@@ -1,5 +1,5 @@
-percona-pgbadger (13.2-1) unstable; urgency=low
+percona-pgbadger (%!{PGBADGER_VERSION}-1) unstable; urgency=low
 
-  * Update to 13.2 version.
+  * Update to upstream version %!{PGBADGER_VERSION}
 
- -- Percona Development Team <info@percona.com>  Tue, 10 Mar 2026 00:00:00 +0000
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}
