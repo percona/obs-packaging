@@ -137,8 +137,8 @@ fi
 %attr(-,postgres,postgres) /var/spool/pgbackrest
 
 %changelog
-* Thu Jan 29 2026  Manika Singhal <manika.singhal@percona.com> - 2.58.0
-- Update pgBackrest to 2.58.0
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PGBACKREST_VERSION}-1
+- Update to upstream version %!{PGBACKREST_VERSION}
 
 * Tue Jul 16 2019  Evgeniy Patlan <evgeniy.patlan@percona.com> - 2.16.1
 - First build of pgbackrest for Percona.
