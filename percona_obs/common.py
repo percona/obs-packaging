@@ -1,4 +1,6 @@
 import contextlib
+import datetime
+import email.utils
 import io
 import logging
 import os
@@ -149,18 +151,40 @@ _MACRO_RE = re.compile(r"%!\{([A-Za-z_][A-Za-z0-9_]*)\}")
 # Values may contain %!{...} references which PyYAML cannot parse unquoted.
 _MACROS_ENTRY_RE = re.compile(r"^-\s+([A-Za-z_][A-Za-z0-9_]*):\s*(.*?)\s*$")
 
+# Built-in macros resolved dynamically from the source file's mtime.
+# FILE_MODIFY_DATE     → "Thu May 15 2026"              (RPM %changelog format)
+# FILE_MODIFY_DATE_RFC5322 → "Thu, 15 May 2026 10:30:00 +0200"  (Debian changelog / date -R)
+_FILE_DATE_BUILTINS = {"FILE_MODIFY_DATE", "FILE_MODIFY_DATE_RFC5322"}
+
 
 def apply_macro_substitution(
     text: str, macros: dict[str, str], source: Path | None = None
 ) -> str:
     """Replace every ``%!{VAR}`` token in *text* with the value from *macros*.
 
-    Raises ``SystemExit`` if any token has no corresponding entry in *macros*.
-    *source* is used only for the error message.
+    Two built-in macros are resolved from *source*'s mtime rather than *macros*:
+    ``%!{FILE_MODIFY_DATE}`` (RPM changelog format) and
+    ``%!{FILE_MODIFY_DATE_RFC5322}`` (RFC 5322 / ``date -R`` format).
+
+    Raises ``SystemExit`` if any token has no corresponding entry in *macros*
+    and is not a built-in.  *source* is used for error messages and mtime
+    lookups; it is required when the text contains a built-in date macro.
     """
 
     def _replace(m: re.Match) -> str:
         var = m.group(1)
+        if var in _FILE_DATE_BUILTINS:
+            if source is None:
+                raise SystemExit(
+                    f"error: %!{{{var}}} used in a context with no source file"
+                )
+            mtime = source.stat().st_mtime
+            dt = datetime.datetime.fromtimestamp(
+                mtime, tz=datetime.timezone.utc
+            ).astimezone()
+            if var == "FILE_MODIFY_DATE_RFC5322":
+                return email.utils.format_datetime(dt)
+            return dt.strftime("%a %b %d %Y")
         if var not in macros:
             loc = f"{source}: " if source else ""
             raise SystemExit(
