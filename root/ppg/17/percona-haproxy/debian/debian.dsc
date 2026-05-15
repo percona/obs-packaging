@@ -1,7 +1,7 @@
 Format: 3.0 (quilt)
 Source: percona-haproxy
 Architecture: any
-Version: 1.0.0
+Version: %!{HAPROXY_VERSION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends: debhelper (>= 9.0.0),
                libpcre2-dev,
