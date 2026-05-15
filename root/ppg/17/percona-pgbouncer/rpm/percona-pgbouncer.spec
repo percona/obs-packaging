@@ -191,5 +191,5 @@ fi
 %attr(755,pgbouncer,pgbouncer) %dir /var/run/%{sname}
 
 %changelog
-* Fri Feb  5 2021 Evgeniy Patlan <evgeniy.patlan@percona.com> - 1.16.1-1
-- Initial build
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PGBOUNCER_VERSION}-1
+- Update to upstream version %!{PGBOUNCER_VERSION}
