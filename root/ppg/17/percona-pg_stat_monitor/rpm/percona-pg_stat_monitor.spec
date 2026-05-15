@@ -4,7 +4,7 @@
 %if 0%{?rhel} >= 9
 %global gts_version 14
 %endif
-%global pginstdir      /usr/pgsql-%{pgmajorversion}/
+%global pginstdir      /usr/pgsql-%{pgmajorversion}
 
 Summary:        Statistics collector for PostgreSQL
 Name:           %{sname}%{pgmajorversion}
@@ -41,18 +41,15 @@ It provides all the features of pg_stat_statment plus its own feature set.
 
 %build
 %if 0%{?gts_version}
-export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
-rpmlibdir=$(rpm --eval "%{_libdir}")
-export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+source /opt/rh/gcc-toolset-%{gts_version}/enable
 %endif
-sed -i 's:PG_CONFIG ?= pg_config:PG_CONFIG = %{pginstdir}bin/pg_config:' Makefile
-%{__make} USE_PGXS=1 %{?_smp_mflags}
+
+USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags}
 
 
 %install
 %{__rm} -rf %{buildroot}
-%{__make} USE_PGXS=1 %{?_smp_mflags} install DESTDIR=%{buildroot}
+USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags} install DESTDIR=%{buildroot}
 %{__install} -d %{buildroot}%{pginstdir}/share/extension
 %{__install} -m 755 README.md %{buildroot}%{pginstdir}/share/extension/README-pg_stat_monitor
 
@@ -84,5 +81,5 @@ sed -i 's:PG_CONFIG ?= pg_config:PG_CONFIG = %{pginstdir}bin/pg_config:' Makefil
 
 
 %changelog
-* Tue Mar 24 2026 Percona Development Team <info@percona.com> - 2.3.2-1
-- Initial packaging
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PG_STAT_MONITOR_VERSION}-1
+- Update to upstream version %!{PG_STAT_MONITOR_VERSION}

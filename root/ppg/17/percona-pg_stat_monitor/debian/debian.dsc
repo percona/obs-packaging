@@ -1,6 +1,6 @@
 Format: 3.0 (quilt)
 Source: percona-pg-stat-monitor
-Binary: percona-pg-stat-monitor17
+Binary: percona-pg-stat-monitor%!{PG_MAJOR_VERSION}
 Architecture: any
 Version: 1.0.0
 Maintainer: Percona Development Team <info@percona.com>

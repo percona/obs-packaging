@@ -8,10 +8,10 @@ Build-Depends:
 Standards-Version: 3.9.8
 Homepage: https://github.com/percona/pg_stat_monitor
 
-Package: percona-pg-stat-monitor17
+Package: percona-pg-stat-monitor%!{PG_MAJOR_VERSION}
 Architecture: any
 Depends:
- postgresql-17,
+ postgresql-%!{PG_MAJOR_VERSION},
  ${misc:Depends},
  ${shlibs:Depends},
 Description: enhancement query planning and execution statistics collector
