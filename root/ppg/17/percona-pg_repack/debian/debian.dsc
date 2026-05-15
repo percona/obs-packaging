@@ -1,6 +1,6 @@
 Format: 3.0 (quilt)
 Source: percona-pg-repack
-Binary: percona-postgresql-17-repack
+Binary: percona-postgresql-%!{PG_MAJOR_VERSION}-repack
 Architecture: any
 Version: 1.0.0
 Maintainer: Percona Development Team <info@percona.com>

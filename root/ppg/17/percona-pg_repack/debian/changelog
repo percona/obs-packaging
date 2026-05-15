@@ -1,5 +1,5 @@
-percona-pg-repack (1.5.3-1) unstable; urgency=low
+percona-pg-repack (%!{PG_REPACK_VERSION}-1) unstable; urgency=low
 
-  * Initial build.
+  * Update to upstream version %!{PG_REPACK_VERSION}
 
- -- Percona Development Team <info@percona.com>  Tue, 10 Mar 2026 00:00:00 +0000
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}
