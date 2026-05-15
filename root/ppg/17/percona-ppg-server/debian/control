@@ -1,4 +1,4 @@
-Source: percona-ppg-server-17
+Source: percona-ppg-server-%!{PG_MAJOR_VERSION}
 Section: database
 Priority: optional
 Maintainer: Percona Development Team <info@percona.com>
@@ -6,17 +6,17 @@ Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.7.2
 Homepage: https://www.percona.com/software/postgresql-distribution
 
-Package: percona-ppg-server-17
+Package: percona-ppg-server-%!{PG_MAJOR_VERSION}
 Architecture: any
 Depends:
- percona-postgresql-17,
+ percona-postgresql-%!{PG_MAJOR_VERSION},
  percona-postgresql-common,
  percona-postgresql-contrib,
- percona-postgresql-17-pgaudit,
- percona-postgresql-17-repack,
- percona-postgresql-17-wal2json,
- percona-pg-stat-monitor17,
+ percona-postgresql-%!{PG_MAJOR_VERSION}-pgaudit,
+ percona-postgresql-%!{PG_MAJOR_VERSION}-repack,
+ percona-postgresql-%!{PG_MAJOR_VERSION}-wal2json,
+ percona-pg-stat-monitor%!{PG_MAJOR_VERSION},
  ${misc:Depends},
-Description: Essential / key PostgreSQL 17 components
+Description: Essential / key PostgreSQL %!{PG_MAJOR_VERSION} components
  Percona Distribution for PostgreSQL features core components, tools and add-ons
  from the community, tested to work together in demanding enterprise environments.
