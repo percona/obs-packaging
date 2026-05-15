@@ -1,5 +1,5 @@
-percona-wal2json (2.6-1) unstable; urgency=low
+percona-wal2json (%!{WAL2JSON_VERSION}-1) unstable; urgency=low
 
-  * Update to 2.6.
+  * Update to upstream version %!{WAL2JSON_VERSION}
 
- -- Percona Development Team <info@percona.com>  Tue, 10 Mar 2026 00:00:00 +0000
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}
