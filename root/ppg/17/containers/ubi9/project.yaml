@@ -50,6 +50,7 @@ project-config: |
   Prefer: glibc-minimal-langpack
   Prefer: gpgme
   Prefer: iptables-nft
+  Prefer: percona-postgresql%!{PG_MAJOR_VERSION}-libs
   Ignore: rocky-release
 
   Prefer: glibc-minimal-langpack
