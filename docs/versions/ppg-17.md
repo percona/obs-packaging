@@ -53,6 +53,7 @@
 | ------- | ------- | ----- | ------- | ---- |
 | percona-distribution-postgresql | ppg:17:containers:ubi9 | percona-distribution-postgresql | 17.10-2 | `17.10-2-1.4` `17.10-2` `17` |
 | percona-distribution-postgresql-with-postgis | ppg:17:containers:ubi9 | percona-distribution-postgresql-with-postgis | 17.10-2 | `17.10-2-1.4` `17.10-2` `17` |
+| percona-pgbackrest | ppg:17:containers:ubi9 | percona-pgbackrest | 2.58.0 | `2.58.0-1.1` `2.58.0` |
 
 # Repository Installation Instructions
 
