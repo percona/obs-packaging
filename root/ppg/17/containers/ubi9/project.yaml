@@ -30,6 +30,8 @@ repositories:
         repository: baseos
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
         repository: baseos
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+        repository: devel
     archs: [x86_64, aarch64]
 
 publish:
