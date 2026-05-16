@@ -54,6 +54,7 @@
 | percona-distribution-postgresql-upgrade | ppg:18:containers:ubi9 | percona-distribution-postgresql-upgrade | 18.3-2 | `18.3-17-2-1.3` `18.3-17-2` `18.3-17` `18-17` |
 | percona-distribution-postgresql-with-postgis | ppg:18:containers:ubi9 | percona-distribution-postgresql-with-postgis | 18.3-2 | `18.3-2-1.3` `18.3-2` `18.3` `18` |
 | percona-pgbackrest | ppg:18:containers:ubi9 | percona-pgbackrest | 2.58.0 | `2.58.0-1.1` `2.58.0` |
+| percona-pgbouncer | ppg:18:containers:ubi9 | percona-pgbouncer | 1.25.1 | `1.25.1-1.1` `1.25.1` |
 
 # Repository Installation Instructions
 
