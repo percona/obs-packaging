@@ -11,47 +11,52 @@ name: OBS PR Check
 #                      │                                    │
 #                      └──> detect-qa-matrix ───────────────┴──> qa  (matrix)
 #
-# `resolve` fetches PR context from the GitHub API (needed for workflow_dispatch
-# runs where github.event.pull_request.* is absent) and gates the DAG on the
+# `resolve` fetches PR context from the GitHub API and gates the DAG on the
 # presence of a trigger label so that non-trigger events produce no check runs.
 # `detect-qa-matrix` runs in parallel with `build`; the `qa` matrix combos
 # show up in the PR's check list as queued check runs as soon as detect
 # finishes, so the upcoming QA work is visible while OBS is still building.
+#
+# For `labeled` events the `resolve` job runs only when the label that was just
+# added is a trigger label (obs-sync, qa-packages, qa-containers).  Control-only
+# labels (e.g. no-dep-cascade) and repo-filter labels (e.g. Ubuntu_26.04) fail
+# the gate so no workflow run is created and no spurious check runs appear on
+# the PR.  Triggering via pull_request (rather than workflow_dispatch) is
+# required for the resulting check runs to show in the PR's statusCheckRollup
+# and be visible to branch protection.
 
 on:
   pull_request:
     branches: [main]
     paths: ['root/**']
-    types: [opened, synchronize, reopened]
-  # `labeled` is intentionally absent: obs-pr-label-dispatch.yml listens for
-  # label events and fires this workflow via workflow_dispatch only for the
-  # trigger labels (obs-sync, qa-packages, qa-containers).  This prevents
-  # control-only labels (e.g. no-dep-cascade) from creating spurious check runs.
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        description: 'PR number (set by obs-pr-label-dispatch)'
-        required: true
-        type: string
+    types: [opened, synchronize, reopened, labeled]
 
 # One run per PR at a time.  When a push and label additions fire near-
 # simultaneously, or when two trigger labels are added together, the earlier
 # runs are cancelled and only the last one proceeds (which sees the full label
 # set via the API in the resolve job).
 concurrency:
-  group: obs-pr-check-pr-${{ inputs.pr_number || github.event.number }}
+  group: obs-pr-check-pr-${{ github.event.number }}
   cancel-in-progress: true
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
-  # resolve: fetch PR context from the GitHub API.  For pull_request events the
-  # data is read directly from github.event; for workflow_dispatch runs (fired
-  # by obs-pr-label-dispatch.yml) it is fetched via the API using the
-  # pr_number input.  Also checks for a trigger label so downstream jobs can
-  # gate on has_trigger_label instead of repeating the label condition.
+  # resolve: fetch PR context from the GitHub API.  Also checks for a trigger
+  # label so downstream jobs can gate on has_trigger_label instead of repeating
+  # the label condition.
+  #
+  # The job-level `if` skips the entire run for `labeled` events on non-trigger
+  # labels (control-only labels, repo-filter labels).  When the condition is
+  # false GitHub does not create the workflow run, so no check runs appear on
+  # the PR for those label additions.
   # ──────────────────────────────────────────────────────────────────────────
   resolve:
     name: Resolve PR context
+    if: |
+      github.event.action != 'labeled' ||
+      github.event.label.name == 'obs-sync' ||
+      github.event.label.name == 'qa-packages' ||
+      github.event.label.name == 'qa-containers'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read
@@ -67,7 +72,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          PR="${{ inputs.pr_number || github.event.number }}"
+          PR="${{ github.event.number }}"
           DATA=$(gh api repos/${{ github.repository }}/pulls/${PR})
           HEAD_SHA=$(echo "$DATA" | jq -r '.head.sha')
           CLONE_URL=$(echo "$DATA" | jq -r '.head.repo.clone_url')
