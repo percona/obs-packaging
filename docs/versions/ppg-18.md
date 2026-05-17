@@ -50,11 +50,11 @@
 
 | Package | Project | Image | Version | Tags |
 | ------- | ------- | ----- | ------- | ---- |
-| percona-distribution-postgresql | ppg:18:containers:ubi9 | percona-distribution-postgresql | 18.3-2 | `18.3-2-1.3` `18.3-2` `18.3` `18` |
-| percona-distribution-postgresql-upgrade | ppg:18:containers:ubi9 | percona-distribution-postgresql-upgrade | 18.3-2 | `18.3-17-2-1.3` `18.3-17-2` `18.3-17` `18-17` |
-| percona-distribution-postgresql-with-postgis | ppg:18:containers:ubi9 | percona-distribution-postgresql-with-postgis | 18.3-2 | `18.3-2-1.3` `18.3-2` `18.3` `18` |
-| percona-pgbackrest | ppg:18:containers:ubi9 | percona-pgbackrest | 2.58.0 | `2.58.0-2.1` `2.58.0` `latest` |
-| percona-pgbouncer | ppg:18:containers:ubi9 | percona-pgbouncer | 1.25.1 | `1.25.1-2.1` `1.25.1` `latest` |
+| percona-distribution-postgresql | ppg:18:containers:ubi9 | percona-distribution-postgresql | 18.3-2 | `18.3-2-2.1` `18.3-2` `18.3` `18` |
+| percona-distribution-postgresql-upgrade | ppg:18:containers:ubi9 | percona-distribution-postgresql-upgrade | 18.3-2 | `18.3-17-2-2.1` `18.3-17-2` `18.3-17` `18-17` |
+| percona-distribution-postgresql-with-postgis | ppg:18:containers:ubi9 | percona-distribution-postgresql-with-postgis | 18.3-2 | `18.3-2-2.1` `18.3-2` `18.3` `18` |
+| percona-pgbackrest | ppg:18:containers:ubi9 | percona-pgbackrest | 2.58.0 | `2.58.0-3.1` `2.58.0` `latest` |
+| percona-pgbouncer | ppg:18:containers:ubi9 | percona-pgbouncer | 1.25.1 | `1.25.1-3.1` `1.25.1` `latest` |
 
 # Repository Installation Instructions
 
@@ -145,23 +145,23 @@ zypper --gpg-auto-import-keys refresh
 **`percona-distribution-postgresql`**
 
 ```bash
-docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql:%!{PG_VERSION}
-docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql:%!{PG_MAJOR_VERSION}
+docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql:18.3
+docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql:18
 ```
 
 **`percona-distribution-postgresql-upgrade`**
 
 ```bash
-docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-upgrade:%!{PG_VERSION}-17-%!{PPG_RELEASE}
-docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-upgrade:%!{PG_VERSION}-17
-docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-upgrade:%!{PG_MAJOR_VERSION}-17
+docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-upgrade:18.3-17-2
+docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-upgrade:18.3-17
+docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-upgrade:18-17
 ```
 
 **`percona-distribution-postgresql-with-postgis`**
 
 ```bash
-docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-with-postgis:%!{PG_VERSION}
-docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-with-postgis:%!{PG_MAJOR_VERSION}
+docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-with-postgis:18.3
+docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-with-postgis:18
 ```
 
 **`percona-pgbackrest`**
