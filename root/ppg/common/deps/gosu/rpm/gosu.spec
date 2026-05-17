@@ -9,7 +9,7 @@ URL:      https://github.com/tianon/gosu
 Source0:  gosu-%{version}.tar.gz
 Source2:  vendor.tar.gz
 
-BuildRequires: golang
+BuildRequires: golang >= 1.26
 
 %description
 gosu is a simple tool that drops privileges to a given user and executes
