@@ -25,19 +25,19 @@ RUN groupadd -g 1001 pgbouncer; \
         -c "Default Application User" pgbouncer
 
 RUN set -ex; \
-    dnf -y update; \
-    dnf -y install \
+    microdnf -y update; \
+    microdnf -y install \
         file \
         perl \
         pkgconfig \
         c-ares
 
 RUN set -ex; \
-    dnf -y update; \
-    dnf -y install \
+    microdnf -y update; \
+    microdnf -y install \
         procps-ng \
         percona-pgbouncer; \
-    dnf clean all; \
+    microdnf clean all; \
     rm -rf /var/cache/dnf /var/cache/yum
 
 COPY LICENSE /licenses/LICENSE.Dockerfile

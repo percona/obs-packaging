@@ -20,8 +20,8 @@ LABEL release="<RELEASE>"
 # (el9_7+), causing a file conflict on /usr/lib64/ossl-modules/fips.so during dnf update.
 # Force-remove it with rpm --nodeps so the subsequent dnf update can install the replacement.
 RUN rpm -e --nodeps openssl-fips-provider-so
-RUN dnf -y update
-RUN dnf -y install \
+RUN microdnf -y update
+RUN microdnf -y install \
            glibc-langpack-en \
            systemd-rpm-macros \
            file \
@@ -40,9 +40,9 @@ ENV PPG_REPO ${PPG_REPO}
 ENV PPG_REPO_VERSION "${PPG_MAJOR_VERSION}.${PPG_MINOR_VERSION}"
 
 RUN set -ex; \
-    dnf -y update;
+    microdnf -y update;
 
-RUN dnf -y install \
+RUN microdnf -y install \
         bind-utils \
         gettext \
         hostname \
@@ -51,21 +51,21 @@ RUN dnf -y install \
         bzip2 \
         lz4 \
         procps-ng
-RUN dnf -y install  \
+RUN microdnf -y install  \
         nss_wrapper \
         shadow-utils \
         libpq \
         libedit
 
-RUN dnf -y reinstall tzdata; \
-    dnf clean all
+RUN microdnf -y reinstall tzdata; \
+    microdnf clean all
 
 ENV PGDATA /data/db
 ENV PGROOT="/usr/pgsql-${PPG_MAJOR_VERSION}"
 ENV PATH="/pgdata:${PGROOT}/bin:${PATH}"
 
 RUN set -ex; \
-    dnf install -y \
+    microdnf install -y \
         percona-postgresql${PPG_MAJOR_VERSION}-server \
         percona-postgresql${PPG_MAJOR_VERSION}-contrib \
         percona-postgresql-common \
@@ -87,15 +87,15 @@ RUN set -ex; \
         percona-postgis35_${PPG_MAJOR_VERSION}-utils \
         percona-wal2json${PPG_MAJOR_VERSION} \
         percona-pg_cron_${PPG_MAJOR_VERSION}; \
-    dnf clean all; \
+    microdnf clean all; \
     rm -rf /var/cache/dnf /var/cache/yum $PGDATA && mkdir -p $PGDATA /docker-entrypoint-initdb.d; \
     chown -R postgres:postgres $PGDATA docker-entrypoint-initdb.d
 
 
 RUN set -ex; \
-    dnf -y update; \
-    dnf install -y python3-click percona-patroni; \
-    dnf clean all
+    microdnf -y update; \
+    microdnf install -y python3-click percona-patroni; \
+    microdnf clean all
 
 RUN set -ex; \
     sed -ri "s!^#?(listen_addresses)\s*=\s*\S+.*!\1 = '*'!" /usr/pgsql-${PPG_MAJOR_VERSION}/share/postgresql.conf.sample; \
@@ -105,8 +105,8 @@ COPY LICENSE /licenses/LICENSE.Dockerfile
 RUN cp /usr/share/doc/percona-postgresql${PPG_MAJOR_VERSION}/COPYRIGHT /licenses/COPYRIGHT.PostgreSQL
 
 RUN set -eux; \
-    dnf install -y gosu; \
-    dnf clean all
+    microdnf install -y gosu; \
+    microdnf clean all
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

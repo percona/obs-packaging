@@ -21,20 +21,20 @@ ARG PG_VERSION=%!{PG_VERSION}
 ENV PG_VERSION=${PG_VERSION}
 
 RUN set -ex; \
-    dnf -y update; \
-    dnf -y install \
+    microdnf -y update; \
+    microdnf -y install \
         file \
         perl \
         pkgconfig
 
 RUN set -ex; \
-    dnf -y update; \
-    dnf -y install \
+    microdnf -y update; \
+    microdnf -y install \
         percona-pgbackrest \
         procps-ng \
         gettext \
         nss_wrapper; \
-    dnf clean all; \
+    microdnf clean all; \
     rm -rf /var/cache/dnf /var/cache/yum
 
 COPY LICENSE /licenses/LICENSE.Dockerfile

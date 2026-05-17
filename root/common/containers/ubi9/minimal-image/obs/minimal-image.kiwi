@@ -21,7 +21,7 @@
     <package name="alternatives"/>
     <package name="bash"/>
     <package name="coreutils-single"/>
-    <package name="dnf"/>
+    <package name="microdnf"/>
     <package name="filesystem"/>
     <package name="glibc-minimal-langpack"/>
     <package name="redhat-release"/>

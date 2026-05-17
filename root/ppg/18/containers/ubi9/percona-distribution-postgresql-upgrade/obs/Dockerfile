@@ -20,8 +20,8 @@ LABEL release="<RELEASE>"
 # (el9_7+), causing a file conflict on /usr/lib64/ossl-modules/fips.so during dnf update.
 # Force-remove it with rpm --nodeps so the subsequent dnf update can install the replacement.
 RUN rpm -e --nodeps openssl-fips-provider-so
-RUN dnf -y update
-RUN dnf -y install \
+RUN microdnf -y update
+RUN microdnf -y install \
     glibc-langpack-en systemd-rpm-macros file \
     mariadb-connector-c-config crypto-policies-scripts pkgconfig
 
@@ -29,7 +29,7 @@ ENV PPG_VERSION <VERSION>
 ENV PPG_MAJOR_VERSION %!{PG_MAJOR_VERSION}
 ENV OS_VER el9
 
-RUN dnf -y install \
+RUN microdnf -y install \
         bind-utils \
         gettext \
         hostname \
@@ -42,14 +42,14 @@ RUN dnf -y install \
         shadow-utils \
         libedit
 
-RUN dnf -y reinstall tzdata; \
-    dnf clean all
+RUN microdnf -y reinstall tzdata; \
+    microdnf clean all
 
 # pg_upgrade ships in percona-postgresqlN-server at /usr/pgsql-N/bin/pg_upgrade
 
 # Install PG${PPG_MAJOR_VERSION} (target version) with all extensions including PostGIS
 RUN set -ex; \
-    dnf install -y \
+    microdnf install -y \
         percona-postgresql${PPG_MAJOR_VERSION}-server \
         percona-postgresql${PPG_MAJOR_VERSION}-contrib \
         percona-postgresql-common \
@@ -69,11 +69,11 @@ RUN set -ex; \
         percona-postgis35_${PPG_MAJOR_VERSION}-llvmjit \
         percona-postgis35_${PPG_MAJOR_VERSION}-utils \
         percona-pg_cron_${PPG_MAJOR_VERSION}; \
-    dnf clean all
+    microdnf clean all
 
 # Install PG17 (source version for upgrade) with all extensions including PostGIS
 RUN set -ex; \
-    dnf install -y \
+    microdnf install -y \
         percona-postgresql17-server \
         percona-postgresql17-contrib \
         percona-pg_tde17 \
@@ -91,7 +91,7 @@ RUN set -ex; \
         percona-postgis35_17-llvmjit \
         percona-postgis35_17-utils \
         percona-pg_cron_17; \
-    dnf clean all; \
+    microdnf clean all; \
     rm -rf /var/cache/dnf /var/cache/yum
 
 COPY LICENSE /licenses/LICENSE.Dockerfile
