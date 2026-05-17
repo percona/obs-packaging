@@ -16,7 +16,7 @@
 | percona-pgaudit_set_user | ppg:17 | 4.2.0-1+5.3 |
 | percona-pgbackrest | ppg:17 | 2.58.0-1+4.6 |
 | percona-pgbadger | ppg:17 | 13.2-1+3.2 |
-| percona-pgbouncer | ppg:17 | 1.25.2-1+1.4 |
+| percona-pgbouncer | ppg:17 | 1.25.2-1+2.1 |
 | percona-pgpool-II | ppg:17 | 4.7.1-1+1.3 |
 | percona-pgvector | ppg:17 | 0.8.2-1+4.3 |
 | percona-postgis | ppg:17 | 3.5.6-1+1.3 |
@@ -54,7 +54,7 @@
 | percona-distribution-postgresql | ppg:17:containers:ubi9 | percona-distribution-postgresql | 17.10-2 | `17.10-2-2.1` `17.10-2` `17` |
 | percona-distribution-postgresql-with-postgis | ppg:17:containers:ubi9 | percona-distribution-postgresql-with-postgis | 17.10-2 | `17.10-2-2.1` `17.10-2` `17` |
 | percona-pgbackrest | ppg:17:containers:ubi9 | percona-pgbackrest | 2.58.0 | `2.58.0-3.1` `2.58.0` `latest` |
-| percona-pgbouncer | ppg:17:containers:ubi9 | percona-pgbouncer | 1.25.2 | `1.25.2-3.1` `1.25.2` `latest` |
+| percona-pgbouncer | ppg:17:containers:ubi9 | percona-pgbouncer | 1.25.2 | `1.25.2-3.2` `1.25.2` `latest` |
 
 # Repository Installation Instructions
 
