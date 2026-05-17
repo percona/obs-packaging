@@ -53,8 +53,8 @@
 | ------- | ------- | ----- | ------- | ---- |
 | percona-distribution-postgresql | ppg:17:containers:ubi9 | percona-distribution-postgresql | 17.10-2 | `17.10-2-1.4` `17.10-2` `17` |
 | percona-distribution-postgresql-with-postgis | ppg:17:containers:ubi9 | percona-distribution-postgresql-with-postgis | 17.10-2 | `17.10-2-1.4` `17.10-2` `17` |
-| percona-pgbackrest | ppg:17:containers:ubi9 | percona-pgbackrest | 2.58.0 | `2.58.0-1.1` `2.58.0` |
-| percona-pgbouncer | ppg:17:containers:ubi9 | percona-pgbouncer | 1.25.2 | `1.25.2-1.1` `1.25.2` |
+| percona-pgbackrest | ppg:17:containers:ubi9 | percona-pgbackrest | 2.58.0 | `2.58.0-2.1` `2.58.0` `latest` |
+| percona-pgbouncer | ppg:17:containers:ubi9 | percona-pgbouncer | 1.25.2 | `1.25.2-2.1` `1.25.2` `latest` |
 
 # Repository Installation Instructions
 
@@ -152,5 +152,17 @@ docker pull registry.opensuse.org/isv/percona/ppg/17/containers/ubi9/images/perc
 
 ```bash
 docker pull registry.opensuse.org/isv/percona/ppg/17/containers/ubi9/images/percona-distribution-postgresql-with-postgis:%!{PG_MAJOR_VERSION}
+```
+
+**`percona-pgbackrest`**
+
+```bash
+docker pull registry.opensuse.org/isv/percona/ppg/17/containers/ubi9/images/percona-pgbackrest:latest
+```
+
+**`percona-pgbouncer`**
+
+```bash
+docker pull registry.opensuse.org/isv/percona/ppg/17/containers/ubi9/images/percona-pgbouncer:latest
 ```
 
