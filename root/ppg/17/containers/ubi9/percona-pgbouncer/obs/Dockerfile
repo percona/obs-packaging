@@ -2,6 +2,7 @@
 #!BuildVersion: %!{PGBOUNCER_VERSION}
 #!BuildTag: percona-pgbouncer:<VERSION>-<RELEASE>
 #!BuildTag: percona-pgbouncer:<VERSION>
+#!BuildTag: percona-pgbouncer:latest
 
 FROM percona-ubi9-minimal:latest
 

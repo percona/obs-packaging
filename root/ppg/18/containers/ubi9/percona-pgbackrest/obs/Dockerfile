@@ -2,6 +2,7 @@
 #!BuildVersion: %!{PGBACKREST_VERSION}
 #!BuildTag: percona-pgbackrest:<VERSION>-<RELEASE>
 #!BuildTag: percona-pgbackrest:<VERSION>
+#!BuildTag: percona-pgbackrest:latest
 
 FROM percona-ubi9-minimal:latest
 
