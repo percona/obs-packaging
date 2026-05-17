@@ -119,9 +119,12 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
         run: |
           venv/bin/python .github/scripts/list_qa_matrix.py > /tmp/qa-matrix.json
-          MATRIX=$(cat /tmp/qa-matrix.json)
-          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
-          if [ "$(echo "${MATRIX}" | jq 'length')" -gt 0 ]; then
+          {
+            echo "matrix<<EOF"
+            cat /tmp/qa-matrix.json
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          if [ "$(jq 'length' /tmp/qa-matrix.json)" -gt 0 ]; then
             echo "has_matrix=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_matrix=false" >> "$GITHUB_OUTPUT"

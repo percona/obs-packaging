@@ -38,7 +38,7 @@ def main() -> None:
     osc.conf.get_config(override_apiurl=apiurl)
 
     prefix = obs_project + ":"
-    pr_prefix = prefix + "pr-"
+    pr_prefix = prefix + "PR:"
     subs = sorted(
         n
         for n in _fetch_obs_subproject_names(apiurl, obs_project)

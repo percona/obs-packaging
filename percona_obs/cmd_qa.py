@@ -323,7 +323,7 @@ def cmd_qa_show(args: argparse.Namespace) -> None:
                         "params": params,
                     }
                 )
-        print(json.dumps(out, indent=2))
+        print(json.dumps(out))
         return
 
     for entry in entries:
