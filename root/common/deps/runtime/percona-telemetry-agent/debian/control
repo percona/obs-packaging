@@ -3,7 +3,9 @@ Section: utils
 Priority: optional
 Homepage: https://percona.com
 Maintainer: Percona Development Team <info@percona.com>
-Build-Depends: debhelper (>= 9)
+Build-Depends:
+    debhelper (>= 9),
+    golang (>= 1.26)
 
 Package: percona-telemetry-agent
 Architecture: any

@@ -1,0 +1,11 @@
+golang-1.26 (1.26.3-1) unstable; urgency=low
+
+  * Package Go 1.26.3 binary distribution for Debian 13 and Ubuntu 24.04.
+
+ -- Percona Development Team <info@percona.com>  Sun, 17 May 2026 21:41:11 +0100
+
+golang-1.25 (1.25.7-1) unstable; urgency=low
+
+  * Package Go 1.25.7 binary distribution for Debian 13 and Ubuntu 24.04.
+
+ -- Admin <admin@obs>  Mon, 03 Mar 2026 00:00:00 +0000

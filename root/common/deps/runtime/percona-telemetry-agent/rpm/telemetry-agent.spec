@@ -11,7 +11,15 @@ URL:  https://github.com/percona/telemetry-agent
 Source: percona-telemetry-agent-%{version}.tar.gz
 Source1: vendor.tar.gz
 
-BuildRequires: golang make git
+%if 0%{?suse_version} >= 1600
+BuildRequires:  go >= 1.26
+%endif
+
+%if 0%{?rhel} == 9
+BuildRequires: golang >= 1.26
+%endif
+
+BuildRequires: make git
 BuildRequires:  systemd
 BuildRequires:  pkgconfig(systemd)
 %if 0%{?suse_version}

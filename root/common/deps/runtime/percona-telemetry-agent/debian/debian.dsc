@@ -8,4 +8,4 @@ Debtransform-Release: 1
 Debtransform-Files-Tar: debian.tar.gz vendor.tar.gz
 Build-Depends:
  debhelper (>= 9),
- golang-1.25
+ golang (>= 1.26)

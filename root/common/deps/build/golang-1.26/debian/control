@@ -1,0 +1,12 @@
+Source: golang-1.26
+Section: devel
+Priority: optional
+Maintainer: Percona Development Team <info@percona.com>
+Build-Depends: debhelper (>= 9)
+
+Package: golang-1.26
+Architecture: any
+Provides: golang-go (= 3:1.26.3), golang (= 3:1.26.3)
+Description: Go programming language toolchain version 1.26
+ The Go programming language toolchain, version 1.26.3,
+ installed from the official binary distribution.

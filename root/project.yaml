@@ -72,3 +72,7 @@ project-config: |
   Prefer: libjpeg62-turbo-dev
   %endif
 
+  %if "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04"
+  Prefer: golang-1.26
+  %endif
+
