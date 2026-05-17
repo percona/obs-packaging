@@ -27,6 +27,7 @@ from .common import (
     _print_ok,
     _print_pending,
     apply_env_substitution,
+    apply_macro_substitution,
     auto_rootprj_env,
     build_project_meta,
     find_packages,
@@ -824,7 +825,9 @@ def _local_container_images(project_path: Path) -> "list[tuple[str, list[str]]]"
     """Return [(image_name, [stable_tags]), ...] from Dockerfiles in direct-child packages.
 
     Stable tags are #!BuildTag: values with no template variables (< or >).
+    %!{VAR} macro tokens are resolved via macros.yaml before the stability check.
     """
+    macros = load_macros(project_path)
     results: list[tuple[str, list[str]]] = []
     for child in sorted(project_path.iterdir()):
         dockerfile = child / "obs" / "Dockerfile"
@@ -837,6 +840,10 @@ def _local_container_images(project_path: Path) -> "list[tuple[str, list[str]]]"
             if not line.startswith("#!BuildTag:"):
                 continue
             tag_value = line[len("#!BuildTag:") :].strip()
+            if "%!{" in tag_value:
+                tag_value = apply_macro_substitution(
+                    tag_value, macros, source=dockerfile
+                )
             if ":" in tag_value:
                 img, tag = tag_value.rsplit(":", 1)
                 image_name = img.strip()
