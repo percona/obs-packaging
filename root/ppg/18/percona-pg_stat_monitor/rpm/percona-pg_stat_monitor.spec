@@ -91,8 +91,5 @@ sed -i 's:PG_CONFIG ?= pg_config:PG_CONFIG = /usr/pgsql-%{pgrel}/bin/pg_config:'
 
 
 %changelog
-* Thu May 26 2022 Kai Wagner <kai.wagner@percona.com> - 1.0.1-1
-- First patch release
-
-* Wed Nov 17 2021 Evgeniy Patlan <evgeniy.patlan@percona.com> - 1.0.0-1
-- Initial build
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PG_STAT_MONITOR_VERSION}-1
+- Update to upstream version %!{PG_STAT_MONITOR_VERSION}
