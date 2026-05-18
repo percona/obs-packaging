@@ -102,6 +102,6 @@ USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags} install DESTDIR
 %endif
 
 %changelog
-* Thu Jun 27 2024 Muhammad Aqeel <muhammad.aqeel@percona.com> - 0.7.2-1
-- Initial build 0.7.2
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PGVECTOR_VERSION}-1
+- Update to upstream version %!{PGVECTOR_VERSION}
 

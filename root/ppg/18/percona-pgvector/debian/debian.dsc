@@ -1,8 +1,8 @@
 Format: 3.0 (quilt)
 Source: percona-pgvector
-Binary: percona-postgresql-18-pgvector
+Binary: percona-postgresql-%!{PG_MAJOR_VERSION}-pgvector
 Architecture: any
-Version: 0.8.2-1
+Version: 1.0.0
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 10),
