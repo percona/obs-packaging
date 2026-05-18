@@ -2,10 +2,10 @@
   <service name="obs_scm">
     <param name="url">https://github.com/percona/pg_tde.git</param>
     <param name="scm">git</param>
-    <param name="revision">%!{PG_TDE_VERSION}</param>
+    <param name="revision">release-%!{PG_TDE_VERSION}</param>
     <param name="version">%!{PG_TDE_VERSION}</param>
     <param name="submodules">enable</param>
-    <param name="filename">percona-pg_tde18</param>
+    <param name="filename">percona-pg_tde%!{PG_MAJOR_VERSION}</param>
   </service>
   <service mode="buildtime" name="tar" />
   <service mode="buildtime" name="recompress">
@@ -13,6 +13,6 @@
     <param name="compression">gz</param>
   </service>
   <service mode="buildtime" name="set_version">
-    <param name="basename">percona-pg_tde18</param>
+    <param name="basename">percona-pg_tde%!{PG_MAJOR_VERSION}</param>
   </service>
 </services>

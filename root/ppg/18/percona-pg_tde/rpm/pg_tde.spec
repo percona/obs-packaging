@@ -20,8 +20,8 @@
 %endif
 
 Name:		%{sname}
-Version:        2.1.2
-Release:        1%{?dist}
+Version:    1.0.0
+Release:    1%{?dist}
 Summary:	PostgreSQL extension for transparent data encryption.
 License:	PostgreSQL
 URL:		https://github.com/%{sname}/%{sname}/
@@ -66,10 +66,7 @@ This packages provides JIT support for pg_tde
 
 %build
 %if 0%{?gts_version}
-export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
-rpmlibdir=$(rpm --eval "%{_libdir}")
-export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+source /opt/rh/gcc-toolset-%{gts_version}/enable
 %endif
 sed -i 's:PG_CONFIG = pg_config:PG_CONFIG = /usr/pgsql-%{pgmajorversion}/bin/pg_config:' Makefile
 USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make}
@@ -115,6 +112,7 @@ Development and testing support files for pg_tde, including Perl test modules.
 %{pginstdir}/bin/pg_tde_resetwal
 %{pginstdir}/bin/pg_tde_rewind
 %{pginstdir}/bin/pg_tde_waldump
+%{pginstdir}/bin/pg_tde_upgrade
 %{pginstdir}/lib/bitcode/pg_tde.index.bc
 %{pginstdir}/lib/bitcode/pg_tde/src/access/pg_tde_tdemap.bc
 %{pginstdir}/lib/bitcode/pg_tde/src/access/pg_tde_xlog.bc
