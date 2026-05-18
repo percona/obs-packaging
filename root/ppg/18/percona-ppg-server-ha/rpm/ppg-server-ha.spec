@@ -27,5 +27,5 @@ from the community, tested to work together in demanding enterprise environments
 %files
 
 %changelog
-* Tue Apr 21 2026 Percona Development Team <info@percona.com> - 18.3-1
-- Initial build for Percona Distribution for PostgreSQL 18 HA bundle
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PG_VERSION}-1
+- Release of Percona Distribution for PostgreSQL %!{PG_MAJOR_VERSION} HA metapackage.
