@@ -172,14 +172,5 @@ update-alternatives --install /usr/bin/ecpg pgsql-ecpg /usr/share/postgresql-com
 update-alternatives --remove pgsql-ecpg /usr/share/postgresql-common/pg_wrapper
 
 %changelog
-* Tue Sep 29 2020 Christoph Berg <myon@debian.org> 217-1
-- Drop postgresql-server-dev-all package, it's debian-specific only.
-* Fri Dec 09 2016 Bernd Helmle <bernd.helmle@credativ.de> 177-1
-- New upstream release 177
-* Fri Jun 03 2016 Bernd Helmle <bernd.helmle@credativ.de> 174-2
-- Fix package dependencies and systemd integration
-* Thu Aug  7 2014 Christoph Berg <christoph.berg@credativ.de> 160-1
-- Omit the LD_PRELOAD logic in pg_wrapper
-* Thu Jun  5 2014 Christoph Berg <christoph.berg@credativ.de> 158-1
-- Initial specfile version
-
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{POSTGRESQL_COMMON_VERSION}-1
+- Update to upstream version %!{POSTGRESQL_COMMON_VERSION}
