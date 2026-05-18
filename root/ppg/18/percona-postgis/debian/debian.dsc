@@ -1,6 +1,6 @@
 Format: 3.0 (quilt)
 Source: percona-postgis
-Binary: percona-postgis percona-postgis-doc percona-postgresql-18-postgis-3 percona-postgresql-18-postgis-3-scripts percona-postgresql-postgis percona-postgresql-postgis-scripts
+Binary: percona-postgis percona-postgis-doc percona-postgresql-%!{PG_MAJOR_VERSION}-postgis-3 percona-postgresql-%!{PG_MAJOR_VERSION}-postgis-3-scripts percona-postgresql-postgis percona-postgresql-postgis-scripts
 Architecture: any all
 Version: 1.0.0
 Maintainer: Percona Development Team <info@percona.com>
@@ -23,7 +23,7 @@ Build-Depends:
  lsb-release,
  pkgconf,
  po-debconf,
- percona-postgresql-18,
+ percona-postgresql-%!{PG_MAJOR_VERSION},
  percona-postgresql-common (>= 148~),
  percona-postgresql-server-dev-all,
  protobuf-c-compiler,

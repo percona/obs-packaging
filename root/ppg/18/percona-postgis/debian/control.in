@@ -100,7 +100,7 @@ Description: Geographic objects support for PostgreSQL PGVERSION -- SQL scripts
  "Simple Features Specification for SQL".
  .
  This package contains the SQL scripts for installing PostGIS in a PostgreSQL
- 18 database, and for upgrading from earlier PostGIS versions.
+ %!{PG_MAJOR_VERSION} database, and for upgrading from earlier PostGIS versions.
 
 Package: percona-postgresql-postgis
 Architecture: any
