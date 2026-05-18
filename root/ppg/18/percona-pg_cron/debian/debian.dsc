@@ -1,8 +1,8 @@
 Format: 3.0 (quilt)
 Source: percona-pg-cron
-Binary: percona-postgresql-18-cron
+Binary: percona-postgresql-%!{PG_MAJOR_VERSION}-cron
 Architecture: any
-Version: 1.6.7-1
+Version: 1.0.0
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper,

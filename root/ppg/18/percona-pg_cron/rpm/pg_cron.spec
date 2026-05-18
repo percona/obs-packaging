@@ -130,6 +130,6 @@ PATH=%{pginstdir}/bin/:$PATH %make_install
 %endif
 
 %changelog
-* Tue Jan 16 2024 Muhammad Aqeel <muhammad.aqeel@percona.com> - 1.6.7-1
-- Initial build of 1.6.7
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PG_CRON_VERSION}-1
+- Update to upstream version %!{PG_CRON_VERSION}
 
