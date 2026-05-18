@@ -20,7 +20,7 @@
 %endif
 
 Name:		%{sname}
-Version:	0.8.2
+Version:	1.0.0
 Release:	1%{?dist}
 Summary:	Open-source vector similarity search for Postgres
 License:	PostgreSQL
@@ -41,13 +41,7 @@ inner product, and cosine distance
 %package llvmjit
 Summary:	Just-in-time compilation support for pgvector
 Requires:	%{name}%{?_isa} = %{version}-%{release}
-#%%if 0%%{?rhel} && 0%%{?rhel} == 7
-#%%ifarch aarch64
-#Requires:	llvm-toolset-7.0-llvm >= 7.0.1
-#%%else
-#Requires:	llvm5.0 >= 5.0
-#%%endif
-#%%endif
+
 %if 0%{?suse_version} == 1500
 BuildRequires:	llvm17-devel clang17-devel clang17 llvm17
 %endif
@@ -67,10 +61,7 @@ This packages provides JIT support for pgvector
 
 %build
 %if 0%{?gts_version}
-export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
-rpmlibdir=$(rpm --eval "%{_libdir}")
-export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+source /opt/rh/gcc-toolset-%{gts_version}/enable
 %endif
 sed -i 's:PG_CONFIG = pg_config:PG_CONFIG = /usr/pgsql-%{pgmajorversion}/bin/pg_config:' Makefile
 USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags}
