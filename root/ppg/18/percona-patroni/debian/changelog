@@ -1,11 +1,5 @@
-percona-patroni (4.1.1-1) unstable; urgency=low
+percona-patroni (%!{PATRONI_VERSION}-1) unstable; urgency=low
 
-  * Update to upstream version 4.1.1, per changes described at: https://github.com/patroni/patroni/blob/master/docs/releases.rst#version-411
+  * Update to upstream version %!{PATRONI_VERSION}
 
- -- Percona Development Team <info@percona.com>  Tue, 12 May 2026 00:00:00 +0000
-
-percona-patroni (4.1.0-1) unstable; urgency=low
-
-  * Update to 4.1.0 version.
-
- -- Percona Development Team <info@percona.com>  Mon, 09 Mar 2026 00:00:00 +0000
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}
