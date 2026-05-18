@@ -49,5 +49,5 @@ compressed file.
 %{_mandir}/man1/%{sname}.1p.gz
 
 %changelog
-* Wed Mar 10 2021 Evgeniy Patlan <evgeniy.patlan@percona.com> 11.5-1
-- Initial build
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PGBADGER_VERSION}-1
+- Update to upstream version %!{PGBADGER_VERSION}
