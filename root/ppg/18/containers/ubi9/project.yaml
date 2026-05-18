@@ -82,6 +82,6 @@ qa:
       REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/18/containers/ubi9/images
       OLD_SERVER_VERSION: "17.10"
       NEW_SERVER_VERSION: %!{PG_VERSION}
-      UPGRADE_DOCKER_TAG: %!{PG_MAJOR_VERSION}-17
-      OLD_DOCKER_REPOSITORY: registry.opensuse.org/isv/percona/ppg/17/containers/ubi9/images
+      UPGRADE_DOCKER_TAG: %!{PG_MAJOR_VERSION}-%!{PG_PREV_MAJOR_VERSION}
+      OLD_DOCKER_REPOSITORY: registry.opensuse.org/isv/percona/ppg/%!{PG_PREV_MAJOR_VERSION}/containers/ubi9/images
       TESTING_BRANCH: ricardo-work

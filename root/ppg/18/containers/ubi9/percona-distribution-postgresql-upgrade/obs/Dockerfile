@@ -71,26 +71,26 @@ RUN set -ex; \
         percona-pg_cron_${PPG_MAJOR_VERSION}; \
     microdnf clean all
 
-# Install PG17 (source version for upgrade) with all extensions including PostGIS
+# Install PG%!{PG_PREV_MAJOR_VERSION} (source version for upgrade) with all extensions including PostGIS
 RUN set -ex; \
     microdnf install -y \
-        percona-postgresql17-server \
-        percona-postgresql17-contrib \
-        percona-pg_tde17 \
-        percona-pg_stat_monitor17 \
-        percona-pg_repack17 \
-        percona-pgaudit17 \
-        percona-pgaudit17_set_user \
-        percona-pgvector_17 \
-        percona-postgresql17-llvmjit \
-        percona-pgvector_17-llvmjit \
-        percona-wal2json17 \
-        percona-postgis35_17 \
-        percona-postgis35_17-client \
-        percona-postgis35_17-gui \
-        percona-postgis35_17-llvmjit \
-        percona-postgis35_17-utils \
-        percona-pg_cron_17; \
+        percona-postgresql%!{PG_PREV_MAJOR_VERSION}-server \
+        percona-postgresql%!{PG_PREV_MAJOR_VERSION}-contrib \
+        percona-pg_tde%!{PG_PREV_MAJOR_VERSION} \
+        percona-pg_stat_monitor%!{PG_PREV_MAJOR_VERSION} \
+        percona-pg_repack%!{PG_PREV_MAJOR_VERSION} \
+        percona-pgaudit%!{PG_PREV_MAJOR_VERSION} \
+        percona-pgaudit%!{PG_PREV_MAJOR_VERSION}_set_user \
+        percona-pgvector_%!{PG_PREV_MAJOR_VERSION} \
+        percona-postgresql%!{PG_PREV_MAJOR_VERSION}-llvmjit \
+        percona-pgvector_%!{PG_PREV_MAJOR_VERSION}-llvmjit \
+        percona-wal2json%!{PG_PREV_MAJOR_VERSION} \
+        percona-postgis35_%!{PG_PREV_MAJOR_VERSION} \
+        percona-postgis35_%!{PG_PREV_MAJOR_VERSION}-client \
+        percona-postgis35_%!{PG_PREV_MAJOR_VERSION}-gui \
+        percona-postgis35_%!{PG_PREV_MAJOR_VERSION}-llvmjit \
+        percona-postgis35_%!{PG_PREV_MAJOR_VERSION}-utils \
+        percona-pg_cron_%!{PG_PREV_MAJOR_VERSION}; \
     microdnf clean all; \
     rm -rf /var/cache/dnf /var/cache/yum
 
