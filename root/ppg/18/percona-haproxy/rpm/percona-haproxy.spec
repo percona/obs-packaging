@@ -165,5 +165,5 @@ exit 0
 %{_mandir}/man1/*
 
 %changelog
-* Fri May 13 2022 Evgeniy Patlan <evgeniy.patlan@percona.com> - 2.5.6-1
-- initial packaging
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{HAPROXY_VERSION}-1
+- Update to upstream version %!{HAPROXY_VERSION}.
