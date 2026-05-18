@@ -7,7 +7,7 @@
 
 Summary:        sql-only script to gather performance and configuration data from PostgreSQL databases
 Name:           percona-pg_gather
-Version:        32
+Version:        1
 Release:        1%{?dist}
 License:        GPLv3
 Group:          Applications/Databases
