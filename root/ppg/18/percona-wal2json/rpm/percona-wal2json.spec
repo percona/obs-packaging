@@ -80,6 +80,6 @@ export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconf
 %{pginstdir}/lib/bitcode/%{sname}/*.bc
 
 %changelog
-* Tue Feb  9 2021 Evgeniy Patlan <evgeniy.patlan@percona.com> 2.3-2
-- Initial build
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{WAL2JSON_VERSION}-1
+- Update to upstream version %!{WAL2JSON_VERSION}
 
