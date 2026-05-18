@@ -1,4 +1,4 @@
-Template: percona-postgresql-18/postrm_purge_data
+Template: percona-postgresql-%!{PG_MAJOR_VERSION}/postrm_purge_data
 Type: boolean
 Default: true
 _Description: Remove PostgreSQL directories when package is purged?

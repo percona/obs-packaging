@@ -1,5 +1,5 @@
 Format: 3.0 (quilt)
-Source: percona-postgresql-18
+Source: percona-postgresql-%!{PG_MAJOR_VERSION}
 Binary: libpq-dev,
         libpq5,
         libpq-oauth,
@@ -7,16 +7,16 @@ Binary: libpq-dev,
         libecpg-dev,
         libecpg-compat3,
         libpgtypes3,
-        percona-postgresql-18,
-        percona-postgresql-client-18,
-        percona-postgresql-server-dev-18,
-        percona-postgresql-doc-18,
-        percona-postgresql-plperl-18,
-        percona-postgresql-plpython3-18,
-        percona-postgresql-pltcl-18,
-        percona-postgresql-18-jit
+        percona-postgresql-%!{PG_MAJOR_VERSION},
+        percona-postgresql-client-%!{PG_MAJOR_VERSION},
+        percona-postgresql-server-dev-%!{PG_MAJOR_VERSION},
+        percona-postgresql-doc-%!{PG_MAJOR_VERSION},
+        percona-postgresql-plperl-%!{PG_MAJOR_VERSION},
+        percona-postgresql-plpython3-%!{PG_MAJOR_VERSION},
+        percona-postgresql-pltcl-%!{PG_MAJOR_VERSION},
+        percona-postgresql-%!{PG_MAJOR_VERSION}-jit
 Architecture: any all
-Version: 18.0.0
+Version: 1.0
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends: autoconf,
                bison,

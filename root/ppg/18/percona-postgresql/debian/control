@@ -1,4 +1,4 @@
-Source: percona-postgresql-18
+Source: percona-postgresql-%!{PG_MAJOR_VERSION}
 Section: database
 Priority: optional
 Maintainer: Percona Development Team <info@percona.com>
@@ -58,7 +58,7 @@ Depends:
  libssl-dev,
  ${misc:Depends},
  ${shlibs:Depends}
-Suggests: percona-postgresql-doc-18
+Suggests: percona-postgresql-doc-%!{PG_MAJOR_VERSION}
 Description: header files for libpq5 (PostgreSQL library)
  Header files and static library for compiling C programs to link
  with the libpq library in order to communicate with a PostgreSQL
@@ -97,7 +97,7 @@ Depends:
  ${shlibs:Depends},
 Pre-Depends:
  ${misc:Pre-Depends},
-Provides: libpq-oauth-18
+Provides: libpq-oauth-%!{PG_MAJOR_VERSION}
 Multi-Arch: same
 Description: PostgreSQL C client library - OAuth flow
  libpq-oauth is an optional module for libpq5 implementing the Device
@@ -163,25 +163,25 @@ Section: libs
 Depends: ${misc:Depends}, ${shlibs:Depends}
 Pre-Depends: ${misc:Pre-Depends}
 Multi-Arch: same
-Description: shared library libpgtypes for PostgreSQL 18
+Description: shared library libpgtypes for PostgreSQL %!{PG_MAJOR_VERSION}
  The libpgtypes shared library is used by programs built with ecpg.
  (Embedded PostgreSQL for C).
  .
  PostgreSQL is an object-relational SQL database management system.
 
-Package: percona-postgresql-18
+Package: percona-postgresql-%!{PG_MAJOR_VERSION}
 Architecture: any
 Depends:
  locales | locales-all,
- percona-postgresql-client-18,
+ percona-postgresql-client-%!{PG_MAJOR_VERSION},
  percona-postgresql-common (>= 275~),
  ssl-cert,
  tzdata,
  curl,
  ${misc:Depends},
  ${shlibs:Depends}
-Provides: percona-postgresql-contrib-18, postgresql-contrib-18 (= ${binary:Version}), postgresql-18 (= ${binary:Version})
-Recommends: percona-postgresql-18-jit, sysstat
+Provides: percona-postgresql-contrib-%!{PG_MAJOR_VERSION}, postgresql-contrib-%!{PG_MAJOR_VERSION} (= ${binary:Version}), postgresql-%!{PG_MAJOR_VERSION} (= ${binary:Version})
+Recommends: percona-postgresql-%!{PG_MAJOR_VERSION}-jit, sysstat
 Breaks:
  dbconfig-common (<< 2.0.22~),
 Description: The World's Most Advanced Open Source Relational Database
@@ -193,10 +193,10 @@ Description: The World's Most Advanced Open Source Relational Database
  a range of workloads, from single machines to data warehouses or Web services
  with many concurrent users.
  .
- This package provides the database server for PostgreSQL 18.
+ This package provides the database server for PostgreSQL %!{PG_MAJOR_VERSION}.
 XB-Postgresql-Catversion: ${postgresql:Catversion}
 
-Package: percona-postgresql-client-18
+Package: percona-postgresql-client-%!{PG_MAJOR_VERSION}
 Architecture: any
 Multi-Arch: foreign
 Depends:
@@ -205,37 +205,37 @@ Depends:
  sensible-utils,
  ${misc:Depends},
  ${shlibs:Depends}
-Suggests: percona-postgresql-18, percona-postgresql-doc-18
-Provides: percona-postgresql-client, postgresql-client (= ${binary:Version}), postgresql-client-18 (= ${binary:Version})
-Conflicts: postgresql-server-dev-18 (<< 18.3-1~)
-Replaces: postgresql-server-dev-18 (<< 18.3-1~)
-Description: front-end programs for PostgreSQL 18
+Suggests: percona-postgresql-%!{PG_MAJOR_VERSION}, percona-postgresql-doc-%!{PG_MAJOR_VERSION}
+Provides: percona-postgresql-client, postgresql-client (= ${binary:Version}), postgresql-client-%!{PG_MAJOR_VERSION} (= ${binary:Version})
+Conflicts: postgresql-server-dev-%!{PG_MAJOR_VERSION} (<< %!{PG_MAJOR_VERSION}.%!{PG_PREV_MINOR_VERSION}-1~)
+Replaces: postgresql-server-dev-%!{PG_MAJOR_VERSION} (<< %!{PG_MAJOR_VERSION}.%!{PG_PREV_MINOR_VERSION}-1~)
+Description: front-end programs for PostgreSQL %!{PG_MAJOR_VERSION}
  This package contains client and administrative programs for
  PostgreSQL: these are the interactive terminal client psql and
  programs for creating and removing users and databases.
  .
- This is the client package for PostgreSQL 18. If you install
- PostgreSQL 18 on a standalone machine, you need the server package
- postgresql-18, too. On a network, you can install this package on
+ This is the client package for PostgreSQL %!{PG_MAJOR_VERSION}. If you install
+ PostgreSQL %!{PG_MAJOR_VERSION} on a standalone machine, you need the server package
+ postgresql-%!{PG_MAJOR_VERSION}, too. On a network, you can install this package on
  many client machines, while the server package may be installed on
  only one machine.
  .
  PostgreSQL is an object-relational SQL database management system.
 
-Package: percona-postgresql-server-dev-18
+Package: percona-postgresql-server-dev-%!{PG_MAJOR_VERSION}
 Architecture: any
 Section: libdevel
 Depends:
  clang [amd64 arm64 mips64el ppc64 ppc64el s390x],
- libpq-dev (>= 18~~),
+ libpq-dev (>= %!{PG_MAJOR_VERSION}~~),
  llvm-dev [amd64 arm64 mips64el ppc64 ppc64el s390x],
- percona-postgresql-client-18, percona-postgresql-common (>= 142~),
+ percona-postgresql-client-%!{PG_MAJOR_VERSION}, percona-postgresql-common (>= 142~),
  ${misc:Depends},
  ${shlibs:Depends}
 Breaks:
- postgresql-server-dev-all (<< 181~)
-Provides: postgresql-server-dev-all, postgresql-server-dev-all-18
-Description: development files for PostgreSQL 18 server-side programming
+ postgresql-server-dev-all (<< %!{PG_MAJOR_VERSION}1~)
+Provides: postgresql-server-dev-all, postgresql-server-dev-all-%!{PG_MAJOR_VERSION}
+Description: development files for PostgreSQL %!{PG_MAJOR_VERSION} server-side programming
  Header files for compiling SSI code to link into PostgreSQL's backend; for
  example, for C functions to be called from SQL.
  .
@@ -245,7 +245,7 @@ Description: development files for PostgreSQL 18 server-side programming
  .
  PostgreSQL is an object-relational SQL database management system.
 
-Package: percona-postgresql-doc-18
+Package: percona-postgresql-doc-%!{PG_MAJOR_VERSION}
 Architecture: all
 Multi-Arch: foreign
 Section: doc
@@ -253,66 +253,66 @@ Depends: ${misc:Depends}
 Breaks: postgresql-common (<< 158~)
 Description: documentation for the PostgreSQL database management system
  This package contains all README files, user manual, and examples for
- PostgreSQL 18. The manual is in HTML format.
+ PostgreSQL %!{PG_MAJOR_VERSION}. The manual is in HTML format.
  .
  PostgreSQL is an object-relational SQL database management system.
 
-Package: percona-postgresql-plperl-18
+Package: percona-postgresql-plperl-%!{PG_MAJOR_VERSION}
 Architecture: any
 Depends:
  perl,
- percona-postgresql-18 (= ${binary:Version}),
+ percona-postgresql-%!{PG_MAJOR_VERSION} (= ${binary:Version}),
  ${misc:Depends},
  ${shlibs:Depends}
-Breaks: percona-postgresql-18 (<< 18~beta1)
-Replaces: percona-postgresql-18 (<< 18~beta1)
-Provides: percona-postgresql-plperl, postgresql-plperl, postgresql-plperl-18
-Description: PL/Perl procedural language for PostgreSQL 18
+Breaks: percona-postgresql-%!{PG_MAJOR_VERSION} (<< %!{PG_MAJOR_VERSION}~beta1)
+Replaces: percona-postgresql-%!{PG_MAJOR_VERSION} (<< %!{PG_MAJOR_VERSION}~beta1)
+Provides: percona-postgresql-plperl, postgresql-plperl, postgresql-plperl-%!{PG_MAJOR_VERSION}
+Description: PL/Perl procedural language for PostgreSQL %!{PG_MAJOR_VERSION}
  PL/Perl enables an SQL developer to write procedural language functions
- for PostgreSQL 18 in Perl.  You need this package if you have any
- PostgreSQL 18 functions that use the languages plperl or plperlu.
+ for PostgreSQL %!{PG_MAJOR_VERSION} in Perl.  You need this package if you have any
+ PostgreSQL %!{PG_MAJOR_VERSION} functions that use the languages plperl or plperlu.
  .
  PostgreSQL is an object-relational SQL database management system.
 
-Package: percona-postgresql-plpython3-18
+Package: percona-postgresql-plpython3-%!{PG_MAJOR_VERSION}
 Architecture: any
 Depends:
- percona-postgresql-18 (= ${binary:Version}),
+ percona-postgresql-%!{PG_MAJOR_VERSION} (= ${binary:Version}),
  ${misc:Depends},
  ${shlibs:Depends}
-Breaks: percona-postgresql-18 (<< 18~beta1)
-Replaces: percona-postgresql-18 (<< 18~beta1)
-Provides: postgresql-plpython3,postgresql-plpython3-18, percona-postgresql-plpython3
-Description: PL/Python 3 procedural language for PostgreSQL 18
+Breaks: percona-postgresql-%!{PG_MAJOR_VERSION} (<< %!{PG_MAJOR_VERSION}~beta1)
+Replaces: percona-postgresql-%!{PG_MAJOR_VERSION} (<< %!{PG_MAJOR_VERSION}~beta1)
+Provides: postgresql-plpython3,postgresql-plpython3-%!{PG_MAJOR_VERSION}, percona-postgresql-plpython3
+Description: PL/Python 3 procedural language for PostgreSQL %!{PG_MAJOR_VERSION}
  PL/Python 3 enables an SQL developer to write procedural language functions
- for PostgreSQL 18 in Python 3.  You need this package if you have any
- PostgreSQL 18 functions that use the languages plpython3 or plpython3u.
+ for PostgreSQL %!{PG_MAJOR_VERSION} in Python 3.  You need this package if you have any
+ PostgreSQL %!{PG_MAJOR_VERSION} functions that use the languages plpython3 or plpython3u.
  .
  PostgreSQL is an object-relational SQL database management system.
 
-Package: percona-postgresql-pltcl-18
+Package: percona-postgresql-pltcl-%!{PG_MAJOR_VERSION}
 Architecture: any
 Depends:
- percona-postgresql-18 (= ${binary:Version}),
+ percona-postgresql-%!{PG_MAJOR_VERSION} (= ${binary:Version}),
  ${misc:Depends},
  ${shlibs:Depends}
-Provides: percona-postgresql-pltcl, postgresql-pltcl, postgresql-18-pltcl
-Description: PL/Tcl procedural language for PostgreSQL 18
+Provides: percona-postgresql-pltcl, postgresql-pltcl, postgresql-%!{PG_MAJOR_VERSION}-pltcl
+Description: PL/Tcl procedural language for PostgreSQL %!{PG_MAJOR_VERSION}
  PL/Tcl enables an SQL developer to write procedural language functions
- for PostgreSQL 18 in Tcl.  You need this package if you have any
- PostgreSQL 18 functions that use the languages pltcl or pltclu.
+ for PostgreSQL %!{PG_MAJOR_VERSION} in Tcl.  You need this package if you have any
+ PostgreSQL %!{PG_MAJOR_VERSION} functions that use the languages pltcl or pltclu.
  .
  PostgreSQL is an object-relational SQL database management system.
 
-Package: percona-postgresql-18-jit
+Package: percona-postgresql-%!{PG_MAJOR_VERSION}-jit
 Architecture: any
 Depends:
- percona-postgresql-18 (= ${binary:Version}),
+ percona-postgresql-%!{PG_MAJOR_VERSION} (= ${binary:Version}),
  ${misc:Depends},
  ${shlibs:Depends},
 Provides:
- percona-postgresql-18-jit-llvm (= ${llvm:Version}),
-Description: LLVM JIT support for PostgreSQL 18
+ percona-postgresql-%!{PG_MAJOR_VERSION}-jit-llvm (= ${llvm:Version}),
+Description: LLVM JIT support for PostgreSQL %!{PG_MAJOR_VERSION}
  PostgreSQL, also known as Postgres, is a free and open-source relational
  database management system (RDBMS) emphasizing extensibility and SQL
  compliance. It features transactions with Atomicity, Consistency, Isolation,
@@ -321,5 +321,5 @@ Description: LLVM JIT support for PostgreSQL 18
  a range of workloads, from single machines to data warehouses or Web services
  with many concurrent users.
  .
- This package provides LLVM-based query JITing for PostgreSQL 18.${cassert}
+ This package provides LLVM-based query JITing for PostgreSQL %!{PG_MAJOR_VERSION}.${cassert}
 

@@ -5,7 +5,7 @@
 # These are macros to be used with find_lang and other stuff
 %global packageversion %{pgmajorversion}0
 %global pgpackageversion %{pgmajorversion}
-%global prevmajorversion 17
+%global prevmajorversion %!{PG_PREV_MAJOR_VERSION}
 %global sname postgresql
 %global vname postgresql%{pgmajorversion}
 %global pgbaseinstdir	/usr/pgsql-%{pgmajorversion}
@@ -56,7 +56,7 @@
 
 Summary:        PostgreSQL client programs and libraries
 Name:           percona-postgresql%{pgmajorversion}
-Version:        18.0
+Version:        1.0
 Release:        1%{?dist}
 License:        PostgreSQL
 Url:            https://www.postgresql.org/
@@ -578,13 +578,7 @@ LDFLAGS="-Wl,--as-needed"; export LDFLAGS
 export CFLAGS
 
 %if 0%{?gts_version}
-# Replicate /opt/rh/gcc-toolset-%%{gts_version}/enable so the toolset compiler
-# is first in PATH and its libraries/plugins (including annobin) are found.
-# This lets the -specs= entries in CFLAGS resolve correctly against GTS gcc.
-export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
-rpmlibdir=$(rpm --eval "%{_libdir}")
-export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+source /opt/rh/gcc-toolset-%{gts_version}/enable
 %endif
 
 # We need to export these even though they are under the standard
@@ -1422,75 +1416,6 @@ fi
 %endif
 
 %changelog
-* Wed Dec 24 2025 Devrim Gündüz <devrim@gunduz.org> - 18.1-5PGDG
-- Add Restart=on-failure to unit file. Per
-  https://github.com/pgdg-packaging/pgdg-rpms/issues/127
-
-* Wed Dec 3 2025 Devrim Gündüz <devrim@gunduz.org> - 18.1-4PGDG
-- Rebuild on RHEL 10 - ppc64le to fix package signing issue
-
-* Thu Nov 20 2025 Devrim Gunduz <devrim@gunduz.org> - 18.1-3PGDG
-- Bump up for RHEL 9.6 and 10.0 builds
-
-* Sat Nov 15 2025 Devrim Gündüz <devrim@gunduz.org> - 18.1-2PGDG
-- Rebuild on RHEL 9 - aarch64 to fix package signing issue
-
-* Tue Nov 11 2025 Devrim Gündüz <devrim@gunduz.org> - 18.1-1PGDG
-- Update to 18.1 per changes described at:
-  https://www.postgresql.org/docs/release/18.1/
-
-* Fri Nov 7 2025 Devrim Gunduz <devrim@gunduz.org> - 18.0-4PGDG
-- Build against OpenSSL 3 on SLES 15.
-
-* Sat Oct 4 2025 Devrim Gunduz <devrim@gunduz.org> - 18.0-3PGDG
-- Add SLES 16 support
-
-* Wed Oct 01 2025 Yogesh Sharma <yogesh.sharma@catprosystems.com> - 18.0-2PGDG
-- Bump release number (missed in previous commit)
-
-* Tue Sep 30 2025 Yogesh Sharma <yogesh.sharma@catprosystems.com>
-- Change => to >= in Requires and BuildRequires
-
-* Tue Sep 23 2025 Devrim Gunduz <devrim@gunduz.org> - 18.0-1PGDG
-- Update to 18.0 Gold!
-- Remove temp Patch 7 (now in upstream)
-
-* Sun Sep 21 2025 Devrim Gunduz <devrim@gunduz.org> - 18.0rc1-2PGDG
-- Add sysusers.d config file to allow rpm to create users/groups automatically
-- Add a temp patch from upstream to fix builds on Fedora 43 (LLVM 21).
-  Will be removed in next minor release set.
-
-* Tue Sep 2 2025 Devrim Gunduz <devrim@gunduz.org> - 18.0rc1-1PGDG
-- Update to 18.0 RC1
-
-* Sat Aug 23 2025 Devrim Gunduz <devrim@gunduz.org> - 18.0beta3-3PGDG
-- Move ecpg binary to ecpg-devel and also rename ecpg package to ecpg-libs.
-  Per discussion with Sandeep.
-
-* Wed Aug 20 2025 Devrim Gunduz <devrim@gunduz.org> - 18.0beta3-2PGDG
-- More fixes after 3faf5edd. Per report from Muralikrishna Bandaru.
-
-* Tue Aug 12 2025 Devrim Gunduz <devrim@gunduz.org> - 18.0beta3-1PGDG
-- Update to PostgreSQL 18 beta3
-
-* Mon Aug 11 2025 Devrim Gunduz <devrim@gunduz.org> - 18.0beta2-2PGDG
-- Fix a few issues mentioned at:
-  https://github.com/pgdg-packaging/pgdg-rpms/issues/69
-
-* Tue Jul 15 2025 Devrim Gunduz <devrim@gunduz.org> - 18.0beta2-1PGDG
-- Update to PostgreSQL 18 beta2
-
-* Wed May 14 2025 Devrim Gündüz <devrim@gunduz.org> - 18.0beta1-3PGDG
-- Rebuild against LLVM 19 on RHEL 8
-
-* Tue May 13 2025 Devrim Gunduz <devrim@gunduz.org> - 18.0beta1-2PGDG
-- Add explicit calls to CLANG and LLVM_CONFIG back to fix extension
-  builds. Per report from Muralikrishna Bandaru and
-  https://www.postgresql.org/message-id/CACMiCkV%2BfQ4yAZqygyWx7ZQ8eWsj1AjoC6CGEUoyxY9jUm7paA%40mail.gmail.com
-
-* Tue May 6 2025 Devrim Gunduz <devrim@gunduz.org> - 18.0beta1-1PGDG
-- Update to PostgreSQL 18 beta1
-
-* Mon Jul 1 2024 Devrim Gunduz <devrim@gunduz.org> - 18.0alpha-1PGDG
-- Initial cut for PostgreSQL 18
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PG_VERSION}-1
+- Update to upstream version %!{PG_VERSION}.
 

@@ -2,4 +2,4 @@
 set -e
 
 cd /usr/share/postgresql-common
-./testsuite -v 18
+./testsuite -v %!{PG_MAJOR_VERSION}
