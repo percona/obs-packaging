@@ -150,8 +150,5 @@ Development and testing support files for pg_tde, including Perl test modules.
 
 
 %changelog
-* Wed Nov 5 2025 Manika Singhal <manika.singhal@percona.com> - 2.1-1
-- Update 2.1
-
-* Tue Apr 2 2024 Muhammad Aqeel <muhammad.aqeel@percona.com> - 1.0.0-1
-- Initial build 1.0.0
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PG_TDE_VERSION}-1
+- Update to upstream version %!{PG_TDE_VERSION}
