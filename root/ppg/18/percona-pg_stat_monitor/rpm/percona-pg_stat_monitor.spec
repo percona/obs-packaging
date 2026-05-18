@@ -4,13 +4,12 @@
 %if 0%{?rhel} >= 9
 %global gts_version 14
 %endif
-%global rpm_release 1
-%global pginstdir /usr/pgsql-%{pgrel}/
+%global pginstdir /usr/pgsql-%{pgrel}
 
 Summary:        Statistics collector for PostgreSQL
 Name:           %{sname}%{pgrel}
 Version:        2.3.2
-Release:        %{rpm_release}%{?dist}
+Release:        1%{?dist}
 License:        PostgreSQL
 Source0:        percona-pg-stat-monitor%{pgrel}-%{version}.tar.gz
 URL:            https://github.com/Percona-Lab/pg_stat_monitor
@@ -51,18 +50,14 @@ It provides all the features of pg_stat_statment plus its own feature set.
 
 %build
 %if 0%{?gts_version}
-export PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/bin${PATH:+:${PATH}}
-rpmlibdir=$(rpm --eval "%{_libdir}")
-export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-%{gts_version}/root${rpmlibdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-%{gts_version}/root/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+source /opt/rh/gcc-toolset-%{gts_version}/enable
 %endif
-sed -i 's:PG_CONFIG ?= pg_config:PG_CONFIG = /usr/pgsql-%{pgrel}/bin/pg_config:' Makefile
-%{__make} USE_PGXS=1 %{?_smp_mflags}
+USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags}
 
 
 %install
 %{__rm} -rf %{buildroot}
-%{__make} USE_PGXS=1 %{?_smp_mflags} install DESTDIR=%{buildroot}
+USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags} install DESTDIR=%{buildroot}
 %{__install} -d %{buildroot}%{pginstdir}/share/extension
 %{__install} -m 755 README.md %{buildroot}%{pginstdir}/share/extension/README-pg_stat_monitor
 
