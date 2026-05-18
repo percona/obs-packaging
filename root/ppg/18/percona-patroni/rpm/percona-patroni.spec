@@ -205,9 +205,5 @@ fi
 %files -n %{name}-zookeeper
 
 %changelog
-* Tue May 12 2026 Percona Development Team <info@percona.com> - 4.1.1-1
-- Update to upstream version 4.4.1, per changes described at:
-  https://github.com/patroni/patroni/blob/master/docs/releases.rst#version-411
-
-* Fri Apr 16 2021 Evgeniy Patlan <evgeniy.patlan@percona.com> - 2.0.2-2
-- Initial build
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PATRONI_VERSION}-1
+- Update to upstream version %!{PATRONI_VERSION}.
