@@ -1,6 +1,6 @@
 Format: 3.0 (quilt)
-Source: percona-pg-oidc-validator18
-Binary: percona-pg-oidc-validator18
+Source: percona-pg-oidc-validator%!{PG_MAJOR_VERSION}
+Binary: percona-pg-oidc-validator%!{PG_MAJOR_VERSION}
 Architecture: any
 Version: 1.0-1
 Maintainer: Percona Development Team <info@percona.com>

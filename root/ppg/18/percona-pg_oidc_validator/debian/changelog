@@ -1,5 +1,5 @@
-percona-pg-oidc-validator18 (1.0-1) unstable; urgency=low
+percona-pg-oidc-validator%!{PG_MAJOR_VERSION} (%!{PG_OIDC_VALIDATOR_VERSION}-1) unstable; urgency=low
 
-  * Initial Percona build of pg_oidc_validator 1.0 for PostgreSQL 18.
+  * Update to upstream version %!{PG_OIDC_VALIDATOR_VERSION}.
 
- -- Percona Development Team <info@percona.com>  Mon, 20 Apr 2026 12:00:00 +0000
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}

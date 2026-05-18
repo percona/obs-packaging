@@ -13,12 +13,12 @@ override_dh_auto_clean:
 
 override_dh_auto_build:
 	make USE_PGXS=1 \
-	PG_CONFIG=/usr/lib/postgresql/18/bin/pg_config \
+	PG_CONFIG=/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_config \
 	with_llvm=no
 
 override_dh_auto_install:
 	make USE_PGXS=1 install DESTDIR=$(CURDIR)/debian/tmp \
-	PG_CONFIG=/usr/lib/postgresql/18/bin/pg_config \
+	PG_CONFIG=/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_config \
 	with_llvm=no
 
 override_dh_auto_test:
