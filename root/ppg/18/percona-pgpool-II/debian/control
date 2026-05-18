@@ -20,7 +20,7 @@ Build-Depends:
  libxml2-utils,
  openjade,
  opensp,
- percona-postgresql-server-dev-18,
+ percona-postgresql-server-dev-%!{PG_MAJOR_VERSION},
  percona-postgresql-server-dev-all,
  postgresql-common,
  xsltproc,
@@ -88,11 +88,11 @@ Description: pgpool control protocol library - headers
  PostgreSQL database client.  This package contains headers for the pgpool
  control protocol library (libpcp).
 
-Package: postgresql-18-pgpool2
+Package: postgresql-%!{PG_MAJOR_VERSION}-pgpool2
 Architecture: linux-any
 Depends:
  libpgpool2 (>= ${binary:Version}),
- postgresql-18 | percona-postgresql-18,
+ postgresql-%!{PG_MAJOR_VERSION} | percona-postgresql-%!{PG_MAJOR_VERSION},
  ${misc:Depends},
  ${shlibs:Depends},
 Breaks:
@@ -100,7 +100,7 @@ Breaks:
 Description: connection pool server and replication proxy for PostgreSQL - modules
  pgpool-II is a middleware that works between PostgreSQL servers and a
  PostgreSQL database client.  This package contains support modules for
- the PostgreSQL 18 server:
+ the PostgreSQL %!{PG_MAJOR_VERSION} server:
  .
   * pgpool_adm
   * pgpool_recovery (PostgreSQL 9.1 and above)

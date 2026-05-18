@@ -299,5 +299,5 @@ systemd-tmpfiles --create %{_tmpfilesdir}/%{name}.conf 2>/dev/null || :
 %{pghome}/lib/bitcode/pgpool_adm/pgpool_adm.bc
 
 %changelog
-* Tue Mar 10 2026 Percona Build/Release Team <eng-build@percona.com> - 4.7.0-1
-- Release 4.7.0-1
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PGPOOL_VERSION}-1
+- Update to upstream version %!{PGPOOL_VERSION}
