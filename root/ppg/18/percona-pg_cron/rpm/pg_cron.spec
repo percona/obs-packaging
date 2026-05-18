@@ -20,7 +20,7 @@
 
 Summary:	Run periodic jobs in PostgreSQL
 Name:		%{sname}
-Version:        1.6.7
+Version:        1.0.0
 Release:        1%{?dist}
 License:	AGPLv3
 Source0:	%{sname}-%{version}.tar.gz
