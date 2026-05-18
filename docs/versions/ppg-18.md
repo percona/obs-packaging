@@ -2,8 +2,8 @@
 
 | Package | Project | Version |
 | ------- | ------- | ------- |
-| gosu | ppg:18:containers:ubi9 | 1.19-2.6 |
-| etcd | ppg:18 | 3.5.30-1+1.3 |
+| gosu | ppg:18:containers:ubi9 | 1.19-3.1 |
+| etcd | ppg:18 | 3.5.30-1+2.1 |
 | percona-haproxy | ppg:18 | 2.8.18-1+1.2 |
 | percona-patroni | ppg:18 | 4.1.1-1+5.2 |
 | percona-pg_cron | ppg:18 | 1.6.7-0+3.2 |
@@ -50,9 +50,9 @@
 
 | Package | Project | Image | Version | Tags |
 | ------- | ------- | ----- | ------- | ---- |
-| percona-distribution-postgresql | ppg:18:containers:ubi9 | percona-distribution-postgresql | 18.3-2 | `18.3-2-2.1` `18.3-2` `18.3` `18` |
-| percona-distribution-postgresql-upgrade | ppg:18:containers:ubi9 | percona-distribution-postgresql-upgrade | 18.3-2 | `18.3-17-2-2.1` `18.3-17-2` `18.3-17` `18-17` |
-| percona-distribution-postgresql-with-postgis | ppg:18:containers:ubi9 | percona-distribution-postgresql-with-postgis | 18.3-2 | `18.3-2-2.1` `18.3-2` `18.3` `18` |
+| percona-distribution-postgresql | ppg:18:containers:ubi9 | percona-distribution-postgresql | 18.3-2 | `18.3-2-2.3` `18.3-2` `18.3` `18` |
+| percona-distribution-postgresql-upgrade | ppg:18:containers:ubi9 | percona-distribution-postgresql-upgrade | 18.3-2 | `18.3-17-2-2.2` `18.3-17-2` `18.3-17` `18-17` |
+| percona-distribution-postgresql-with-postgis | ppg:18:containers:ubi9 | percona-distribution-postgresql-with-postgis | 18.3-2 | `18.3-2-2.3` `18.3-2` `18.3` `18` |
 | percona-pgbackrest | ppg:18:containers:ubi9 | percona-pgbackrest | 2.58.0 | `2.58.0-3.1` `2.58.0` `latest` |
 | percona-pgbouncer | ppg:18:containers:ubi9 | percona-pgbouncer | 1.25.1 | `1.25.1-3.1` `1.25.1` `latest` |
 
