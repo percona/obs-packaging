@@ -1,8 +1,8 @@
 Format: 3.0 (quilt)
-Source: percona-pgaudit18-set-user
-Binary: percona-pgaudit18-set-user
+Source: percona-pgaudit%!{PG_MAJOR_VERSION}-set-user
+Binary: percona-pgaudit%!{PG_MAJOR_VERSION}-set-user
 Architecture: any
-Version: 4.2.0-1
+Version: 1.0.0
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 9),

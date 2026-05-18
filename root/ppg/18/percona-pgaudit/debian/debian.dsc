@@ -1,6 +1,6 @@
 Format: 3.0 (quilt)
 Source: percona-pgaudit
-Binary: percona-postgresql-18-pgaudit
+Binary: percona-postgresql-%!{PG_MAJOR_VERSION}-pgaudit
 Architecture: any
 Version: 1.0.0
 Maintainer: Percona Development Team <info@percona.com>

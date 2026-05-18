@@ -84,5 +84,5 @@ rm -rf ${RPM_BUILD_ROOT}
 %doc README.md
 
 %changelog
-* Mon Feb 15 2021 Evgeniy Patlan <evgeniy.patlan@percona.com> - 2.0.0-1
-- Initial build.
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PGAUDIT_SET_USER_VERSION}-1
+- Update to upstream version %!{PGAUDIT_SET_USER_VERSION}

@@ -1,5 +1,5 @@
-percona-pgaudit18-set-user (4.2.0-1) unstable; urgency=low
+percona-pgaudit%!{PG_MAJOR_VERSION}-set-user (%!{PGAUDIT_SET_USER_VERSION}-1) unstable; urgency=low
 
-  * Initial Percona build of set_user 4.2.0 for PostgreSQL 18.
+  * Update to upstream version %!{PGAUDIT_SET_USER_VERSION}
 
- -- Percona Development Team <info@percona.com>  Mon, 20 Apr 2026 12:00:00 +0000
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}
