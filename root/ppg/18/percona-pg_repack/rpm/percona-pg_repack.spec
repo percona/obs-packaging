@@ -143,5 +143,5 @@ update-alternatives --remove pg_repack %{pginstdir}/bin/pg_repack
 %{__rm} -rf %{buildroot}
 
 %changelog
-* Tue May  5 2020 Evgeniy Patlan <evgeniy.patlan@percona.com> - 1.4.5-2
-- Initial build
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PG_REPACK_VERSION}-1
+- Update to upstream version %!{PG_REPACK_VERSION}
