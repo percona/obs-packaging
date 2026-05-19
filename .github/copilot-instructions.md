@@ -603,6 +603,35 @@ Env resolution for the check (same precedence as all other commands):
 
 Exit code is 0 on success, 1 if any check fails.
 
+## Maintaining Release Changelogs
+
+Release changelogs live at `root/ppg/releases/<major>/CHANGELOG.md` and follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
+
+### Rules for release note URLs
+
+Every changelog entry that references an upstream version **must** include a URL to the official upstream release notes or changelog. When adding or fixing entries:
+
+1. **Always verify the URL exists** — search the internet for the correct upstream release notes page. Do not guess or use a generic repo URL.
+2. **Follow the established URL pattern per package** (see table below). Adapt the pattern to the new version rather than copying a raw git URL or a template artifact.
+3. **Template artifacts** (`%!{VAR}`) are build-time errors left by the changelog generator — always replace them with the resolved URL.
+4. If no established pattern exists for a package, search for its official release notes page and document the pattern in the table below.
+
+### URL patterns by package
+
+| Package | URL pattern | Example |
+|---|---|---|
+| `percona-postgresql` | `https://www.postgresql.org/docs/release/<version>/` | `…/release/17.10/` |
+| `etcd` | `https://github.com/etcd-io/etcd/releases/tag/v<version>` | `…/tag/v3.5.30` |
+| `percona-haproxy` | `https://www.haproxy.org/download/<major.minor>/src/CHANGELOG` | `…/2.8/src/CHANGELOG` |
+| `percona-patroni` | `https://github.com/zalando/patroni/releases/tag/v<version>` | `…/tag/v4.1.3` |
+| `percona-pg_gather` | `https://github.com/jobinau/pg_gather/releases/tag/v<version>` | `…/tag/v33` |
+| `percona-pg_tde` | `https://github.com/percona/pg_tde/releases/tag/<version>` | `…/tag/2.2.0` |
+| `percona-pgbouncer` | `https://github.com/pgbouncer/pgbouncer/releases/tag/pgbouncer_<version_with_underscores>` | `…/pgbouncer_1_25_2` |
+| `percona-pgpool-II` | `https://www.pgpool.net/docs/<major.minor>/en/html/release-<version-with-dashes>.html` | `…/release-4-7-1.html` |
+| `percona-postgis` | `https://github.com/postgis/postgis/blob/<version>/NEWS` | `…/blob/3.5.6/NEWS` |
+| `percona-postgresql-common` | `https://salsa.debian.org/postgresql/postgresql-common/-/tags/debian%2F<version>` | `…/debian%2F290` |
+| `percona-telemetry-agent` | `https://github.com/percona/telemetry-agent/releases/tag/v<version>` | `…/tag/v1.0.13` |
+
 ## Adding a New PostgreSQL Extension
 1. Copy `ppg/17/percona-pg-telemetry/` as a template
 2. Replace all `percona-pg-telemetry` references with the new package name
