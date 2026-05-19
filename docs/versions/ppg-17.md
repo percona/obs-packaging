@@ -2,8 +2,8 @@
 
 | Package | Project | Version |
 | ------- | ------- | ------- |
-| gosu | ppg:17:containers:ubi9 | 1.19-2.6 |
-| etcd | ppg:17 | 3.5.30-1+1.3 |
+| gosu | ppg:17:containers:ubi9 | 1.19-3.1 |
+| etcd | ppg:17 | 3.5.30-1+2.1 |
 | percona-haproxy | ppg:17 | 2.8.23-1+2.1 |
 | percona-patroni | ppg:17 | 4.1.3-1+2.1 |
 | percona-pg-telemetry | ppg:17 | 1.2.0-1+4.5 |
@@ -11,7 +11,7 @@
 | percona-pg_gather | ppg:17 | 33-1+1.2 |
 | percona-pg_repack | ppg:17 | 1.5.3-1+5.3 |
 | percona-pg_stat_monitor | ppg:17 | 2.3.2-1+5.6 |
-| percona-pg_tde | ppg:17 | 2.2.0-1+1.2 |
+| percona-pg_tde | ppg:17 | 2.2.0-1+3.1 |
 | percona-pgaudit | ppg:17 | 17.1-1+5.3 |
 | percona-pgaudit_set_user | ppg:17 | 4.2.0-1+5.3 |
 | percona-pgbackrest | ppg:17 | 2.58.0-1+4.6 |
@@ -19,13 +19,13 @@
 | percona-pgbouncer | ppg:17 | 1.25.2-1+2.1 |
 | percona-pgpool-II | ppg:17 | 4.7.1-1+1.3 |
 | percona-pgvector | ppg:17 | 0.8.2-1+4.3 |
-| percona-postgis | ppg:17 | 3.5.6-1+1.3 |
+| percona-postgis | ppg:17 | 3.5.6-1+1.4 |
 | percona-postgresql | ppg:17 | 17.10-1+1.2 |
 | percona-postgresql-common | ppg:17 | 290-1+1.2 |
 | percona-ppg-server | ppg:17 | 17.10-1 |
 | percona-ppg-server-ha | ppg:17 | 17.10-1 |
-| percona-telemetry-agent | ppg:17 | 1.0.9-1+5.3 |
-| percona-wal2json | ppg:17 | 2.6-1+5.2 |
+| percona-telemetry-agent | ppg:17 | 1.0.13-1+1.1 |
+| percona-wal2json | ppg:17 | 2.6-1+5.3 |
 | python3-attrs | ppg:17 | 22.1.0-1.7 |
 | python3-blessed | ppg:17 | 1.22.0-1.7 |
 | python3-boto3 | ppg:17 | 1.38.19-1.7 |
@@ -51,8 +51,8 @@
 
 | Package | Project | Image | Version | Tags |
 | ------- | ------- | ----- | ------- | ---- |
-| percona-distribution-postgresql | ppg:17:containers:ubi9 | percona-distribution-postgresql | 17.10-2 | `17.10-2-2.1` `17.10-2` `17` |
-| percona-distribution-postgresql-with-postgis | ppg:17:containers:ubi9 | percona-distribution-postgresql-with-postgis | 17.10-2 | `17.10-2-2.1` `17.10-2` `17` |
+| percona-distribution-postgresql | ppg:17:containers:ubi9 | percona-distribution-postgresql | 17.10-2 | `17.10-2-3.1` `17.10-2` `17.10` `17` |
+| percona-distribution-postgresql-with-postgis | ppg:17:containers:ubi9 | percona-distribution-postgresql-with-postgis | 17.10-2 | `17.10-2-3.1` `17.10-2` `17.10` `17` |
 | percona-pgbackrest | ppg:17:containers:ubi9 | percona-pgbackrest | 2.58.0 | `2.58.0-3.1` `2.58.0` `latest` |
 | percona-pgbouncer | ppg:17:containers:ubi9 | percona-pgbouncer | 1.25.2 | `1.25.2-3.2` `1.25.2` `latest` |
 
@@ -145,12 +145,14 @@ zypper --gpg-auto-import-keys refresh
 **`percona-distribution-postgresql`**
 
 ```bash
+docker pull registry.opensuse.org/isv/percona/ppg/17/containers/ubi9/images/percona-distribution-postgresql:17.10
 docker pull registry.opensuse.org/isv/percona/ppg/17/containers/ubi9/images/percona-distribution-postgresql:17
 ```
 
 **`percona-distribution-postgresql-with-postgis`**
 
 ```bash
+docker pull registry.opensuse.org/isv/percona/ppg/17/containers/ubi9/images/percona-distribution-postgresql-with-postgis:17.10
 docker pull registry.opensuse.org/isv/percona/ppg/17/containers/ubi9/images/percona-distribution-postgresql-with-postgis:17
 ```
 
