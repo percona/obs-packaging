@@ -10,6 +10,7 @@ usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_tde_checksums
 usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_tde_resetwal
 usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_tde_rewind
 usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_tde_waldump
+usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_tde_upgrade
 usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib/bitcode/pg_tde.index.bc
 usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib/bitcode/pg_tde/src/access/pg_tde_tdemap.bc
 usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib/bitcode/pg_tde/src/access/pg_tde_xlog.bc
