@@ -4,27 +4,27 @@
 | ------- | ------- | ------- |
 | gosu | ppg:18:containers:ubi9 | 1.19-3.1 |
 | etcd | ppg:18 | 3.5.30-1+2.1 |
-| percona-haproxy | ppg:18 | 2.8.18-1+1.2 |
-| percona-patroni | ppg:18 | 4.1.1-1+5.2 |
-| percona-pg_cron | ppg:18 | 1.6.7-0+3.2 |
-| percona-pg_gather | ppg:18 | 32-0+1.2 |
-| percona-pg_oidc_validator | ppg:18 | 1.0-0+2.2 |
-| percona-pg_repack | ppg:18 | 1.5.3-0+3.2 |
-| percona-pg_stat_monitor | ppg:18 | 2.3.2-0+4.2 |
-| percona-pg_tde | ppg:18 | 2.1.2-0+3.2 |
-| percona-pgaudit | ppg:18 | 18.0-1+3.2 |
-| percona-pgaudit_set_user | ppg:18 | 4.2.0-0+3.2 |
-| percona-pgbackrest | ppg:18 | 2.58.0-0+2.4 |
-| percona-pgbadger | ppg:18 | 13.2-1+1.2 |
-| percona-pgbouncer | ppg:18 | 1.25.1-1+2.4 |
-| percona-pgpool-II | ppg:18 | 4.7.0-1+2.2 |
-| percona-pgvector | ppg:18 | 0.8.2-0+2.2 |
-| percona-postgis | ppg:18 | 3.5.5-1+2.2 |
-| percona-postgresql-common | ppg:18 | 289-1+2.2 |
-| percona-postgresql18 | ppg:18 | 18.3-1+4.2 |
-| percona-ppg-server-18 | ppg:18 | 18.3-1 |
-| percona-ppg-server-ha-18 | ppg:18 | 18.3-1 |
-| percona-wal2json | ppg:18 | 2.6-0+3.2 |
+| percona-haproxy | ppg:18 | 2.8.23-1+1.1 |
+| percona-patroni | ppg:18 | 4.1.3-1+1.2 |
+| percona-pg_cron | ppg:18 | 1.6.7-1+4.1 |
+| percona-pg_gather | ppg:18 | 33-1+1.1 |
+| percona-pg_oidc_validator | ppg:18 | 1.0-0+3.1 |
+| percona-pg_repack | ppg:18 | 1.5.3-1+4.1 |
+| percona-pg_stat_monitor | ppg:18 | 2.3.2-1+5.1 |
+| percona-pg_tde | ppg:18 | 2.2.0-1+1.1 |
+| percona-pgaudit | ppg:18 | 18.0-1+4.1 |
+| percona-pgaudit_set_user | ppg:18 | 4.2.0-1+4.1 |
+| percona-pgbackrest | ppg:18 | 2.58.0-0+3.2 |
+| percona-pgbadger | ppg:18 | 13.2-1+2.1 |
+| percona-pgbouncer | ppg:18 | 1.25.2-1+1.2 |
+| percona-pgpool-II | ppg:18 | 4.7.1-1+1.1 |
+| percona-pgvector | ppg:18 | 0.8.2-1+3.1 |
+| percona-postgis | ppg:18 | 3.5.6-1+1.1 |
+| percona-postgresql | ppg:18 | 18.4-1+1.1 |
+| percona-postgresql-common | ppg:18 | 290-1+1.1 |
+| percona-ppg-server | ppg:18 | 18.4-1 |
+| percona-ppg-server-ha | ppg:18 | 18.4-1 |
+| percona-wal2json | ppg:18 | 2.6-1+4.1 |
 | python3-attrs | ppg:18 | 22.1.0-1.7 |
 | python3-blessed | ppg:18 | 1.22.0-1.7 |
 | python3-boto3 | ppg:18 | 1.38.19-1.7 |
@@ -37,7 +37,7 @@
 | python3-lz4 | ppg:18 | 4.3.3-1.7 |
 | python3-prettytable | ppg:18 | 3.4.0-1.7 |
 | python3-psutil | ppg:18 | 6.1.1-1.7 |
-| python3-psycopg2 | ppg:18 | 2.9.10-1.10 |
+| python3-psycopg2 | ppg:18 | 2.9.10-1.11 |
 | python3-py-consul | ppg:18 | 1.6.0-1.6 |
 | python3-pysyncobj | ppg:18 | 0.3.10-1+1.2 |
 | python3-six | ppg:18 | 1.17.0-1.7 |
@@ -50,11 +50,11 @@
 
 | Package | Project | Image | Version | Tags |
 | ------- | ------- | ----- | ------- | ---- |
-| percona-distribution-postgresql | ppg:18:containers:ubi9 | percona-distribution-postgresql | 18.3-2 | `18.3-2-2.3` `18.3-2` `18.3` `18` |
-| percona-distribution-postgresql-upgrade | ppg:18:containers:ubi9 | percona-distribution-postgresql-upgrade | 18.3-2 | `18.3-17-2-2.2` `18.3-17-2` `18.3-17` `18-17` |
-| percona-distribution-postgresql-with-postgis | ppg:18:containers:ubi9 | percona-distribution-postgresql-with-postgis | 18.3-2 | `18.3-2-2.3` `18.3-2` `18.3` `18` |
-| percona-pgbackrest | ppg:18:containers:ubi9 | percona-pgbackrest | 2.58.0 | `2.58.0-3.1` `2.58.0` `latest` |
-| percona-pgbouncer | ppg:18:containers:ubi9 | percona-pgbouncer | 1.25.1 | `1.25.1-3.1` `1.25.1` `latest` |
+| percona-distribution-postgresql | ppg:18:containers:ubi9 | percona-distribution-postgresql | 18.4-2 | `18.4-2-1.3` `18.4-2` `18.4` `18` |
+| percona-distribution-postgresql-upgrade | ppg:18:containers:ubi9 | percona-distribution-postgresql-upgrade | 18.4-2 | `18.4-17-2-1.2` `18.4-17-2` `18.4-17` `18-17` |
+| percona-distribution-postgresql-with-postgis | ppg:18:containers:ubi9 | percona-distribution-postgresql-with-postgis | 18.4-2 | `18.4-2-1.3` `18.4-2` `18.4` `18` |
+| percona-pgbackrest | ppg:18:containers:ubi9 | percona-pgbackrest | 2.58.0 | `2.58.0-4.3` `2.58.0` `latest` |
+| percona-pgbouncer | ppg:18:containers:ubi9 | percona-pgbouncer | 1.25.2 | `1.25.2-1.2` `1.25.2` `latest` |
 
 # Repository Installation Instructions
 
@@ -145,22 +145,22 @@ zypper --gpg-auto-import-keys refresh
 **`percona-distribution-postgresql`**
 
 ```bash
-docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql:18.3
+docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql:18.4
 docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql:18
 ```
 
 **`percona-distribution-postgresql-upgrade`**
 
 ```bash
-docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-upgrade:18.3-17-2
-docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-upgrade:18.3-17
+docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-upgrade:18.4-17-2
+docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-upgrade:18.4-17
 docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-upgrade:18-17
 ```
 
 **`percona-distribution-postgresql-with-postgis`**
 
 ```bash
-docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-with-postgis:18.3
+docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-with-postgis:18.4
 docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-with-postgis:18
 ```
 
