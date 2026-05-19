@@ -26,7 +26,7 @@ Released package versions, published to the release OBS projects after each succ
 
 | Distribution | OBS Project | Package List | Version |
 |---|---|---|---|
-| `ppg:releases:17` | [isv:percona:ppg:releases:17](https://build.opensuse.org/project/show/isv:percona:ppg:releases:17) | [docs/versions/ppg-releases-17.md](docs/versions/ppg-releases-17.md) | 17.9-2 |
+| `ppg:releases:17` | [isv:percona:ppg:releases:17](https://build.opensuse.org/project/show/isv:percona:ppg:releases:17) | [docs/versions/ppg-releases-17.md](docs/versions/ppg-releases-17.md) | 17.10-1 |
 | `ppg:releases:18` | [isv:percona:ppg:releases:18](https://build.opensuse.org/project/show/isv:percona:ppg:releases:18) | [docs/versions/ppg-releases-18.md](docs/versions/ppg-releases-18.md) | 18.3-2 |
 
 ## Documentation
