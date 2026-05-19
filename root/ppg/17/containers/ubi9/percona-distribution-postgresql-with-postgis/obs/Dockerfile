@@ -2,6 +2,7 @@
 #!BuildVersion: %!{PG_VERSION}-%!{PPG_RELEASE}
 #!BuildTag: percona-distribution-postgresql-with-postgis:<VERSION>-<RELEASE>
 #!BuildTag: percona-distribution-postgresql-with-postgis:<VERSION>
+#!BuildTag: percona-distribution-postgresql-with-postgis:%!{PG_VERSION}
 #!BuildTag: percona-distribution-postgresql-with-postgis:%!{PG_MAJOR_VERSION}
 
 FROM percona-ubi9-minimal:latest

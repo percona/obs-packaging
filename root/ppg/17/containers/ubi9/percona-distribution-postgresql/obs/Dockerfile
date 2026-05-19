@@ -2,6 +2,7 @@
 #!BuildVersion: %!{PG_VERSION}-%!{PPG_RELEASE}
 #!BuildTag: percona-distribution-postgresql:<VERSION>-<RELEASE>
 #!BuildTag: percona-distribution-postgresql:<VERSION>
+#!BuildTag: percona-distribution-postgresql:%!{PG_VERSION}
 #!BuildTag: percona-distribution-postgresql:%!{PG_MAJOR_VERSION}
 
 FROM percona-ubi9-minimal:latest
