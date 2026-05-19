@@ -1446,12 +1446,16 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     # Auto-derive release-id from OBS if not provided.
     release_id: str = args.release_id or ""
     if not release_id:
-        pg_pkg = f"percona-postgresql{major}"
         pkg_archs = _fetch_all_pkg_archs(apiurl, source_obs_project)
+        pg_pkg = "percona-postgresql"
         repo_arch = pkg_archs.get(pg_pkg)
         if not repo_arch:
+            pg_pkg = f"percona-postgresql{major}"
+            repo_arch = pkg_archs.get(pg_pkg)
+        if not repo_arch:
             raise SystemExit(
-                f"error: package {pg_pkg} not found in {source_obs_project}; "
+                f"error: package percona-postgresql (or percona-postgresql{major}) "
+                f"not found in {source_obs_project}; "
                 "use --release-id to specify manually"
             )
         repo, arch = repo_arch
