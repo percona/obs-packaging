@@ -47,6 +47,7 @@ from .obs_api import (
     _detect_obs_container_info,
     _extract_obs_managed_elements,
     _fetch_all_pkg_archs,
+    _fetch_build_container_packages,
     _fetch_build_containerinfo,
     _fetch_obs_container_images,
     _fetch_obs_download_url,
@@ -284,6 +285,16 @@ def _fill_release_online_records(
                     )
                     if ci is not None:
                         _apply_containerinfo(rec, ci)
+                    pkgs = _fetch_build_container_packages(
+                        apiurl,
+                        obs_proj,
+                        repo_arch[0],
+                        repo_arch[1],
+                        pkg_name,
+                        args.rootprj,
+                    )
+                    if pkgs is not None:
+                        rec["packages"] = pkgs
                 records.append(rec)
             else:
                 records.append({**base, "type": "package", "version": version})
@@ -1178,6 +1189,11 @@ def cmd_project_versions(args) -> None:
                             record["version"] = _fetch_versrel_from_history(
                                 apiurl, obs_proj, repo, arch, pkg_name
                             )
+                        pkgs = _fetch_build_container_packages(
+                            apiurl, obs_proj, repo, arch, pkg_name, args.rootprj
+                        )
+                        if pkgs is not None:
+                            record["packages"] = pkgs
 
     for record in records:
         record.pop("_agg_src_project", None)
@@ -1206,8 +1222,8 @@ def cmd_project_versions(args) -> None:
                 md_lines += [
                     "## Container Images",
                     "",
-                    "| Package | Project | Image | Version | Tags |",
-                    "| ------- | ------- | ----- | ------- | ---- |",
+                    "| Package | Project | Image | Version | Tags | Installed packages |",
+                    "| ------- | ------- | ----- | ------- | ---- | ------------------ |",
                 ]
                 for r in images:
                     img = r.get("image") or "(none)"
@@ -1218,8 +1234,14 @@ def cmd_project_versions(args) -> None:
                     else:
                         fallback = r.get("tag")
                         tags_str = f"`{fallback}`" if fallback else "(none)"
+                    pkgs_dict: dict = r.get("packages") or {}  # type: ignore[assignment]
+                    pkgs_str = (
+                        ", ".join(f"{n} {v}" for n, v in sorted(pkgs_dict.items()))
+                        if pkgs_dict
+                        else "(none)"
+                    )
                     md_lines.append(
-                        f"| {r['name']} | {r['project']} | {img} | {ver} | {tags_str} |"
+                        f"| {r['name']} | {r['project']} | {img} | {ver} | {tags_str} | {pkgs_str} |"
                     )
             else:
                 md_lines += [
@@ -1277,6 +1299,36 @@ def _rewrite_subproject_paths(
                     path_entry = {**path_entry, "subproject": rewritten}
             new_paths.append(path_entry)
         result.append({**repo, "paths": new_paths})
+    return result
+
+
+def _fetch_subproject_container_pkgs(
+    apiurl: str,
+    obs_project: str,
+    rootprj: str,
+) -> "dict[str, dict[str, str]]":
+    """Return {container_pkg_name: {binary_pkg: versrel}} for all container images in obs_project.
+
+    Only packages identified as container images (via _detect_obs_container_info) are included.
+    Packages where the .packages artifact is unavailable or empty are silently skipped.
+    """
+    result: dict[str, dict[str, str]] = {}
+    pkg_names = sorted(_fetch_obs_package_names(apiurl, obs_project))
+    if not pkg_names:
+        return result
+    pkg_archs = _fetch_all_pkg_archs(apiurl, obs_project)
+    for pkg in pkg_names:
+        if _detect_obs_container_info(apiurl, obs_project, pkg) is None:
+            continue
+        repo_arch = pkg_archs.get(pkg)
+        if not repo_arch:
+            continue
+        repo, arch = repo_arch
+        pkgs = _fetch_build_container_packages(
+            apiurl, obs_project, repo, arch, pkg, rootprj
+        )
+        if pkgs:
+            result[pkg] = pkgs
     return result
 
 
@@ -1347,6 +1399,10 @@ def _build_changelog_section(
     source_versions: "dict[str, str]",
     release_versions: "dict[str, str] | None",
     source_path: Path,
+    *,
+    source_container_pkgs: "dict[str, dict[str, str]] | None" = None,
+    release_container_pkgs: "dict[str, dict[str, str]] | None" = None,
+    prev_release_id: str | None = None,
 ) -> str:
     """Build a keep-a-changelog section for a release."""
     today = datetime.date.today().isoformat()
@@ -1385,6 +1441,46 @@ def _build_changelog_section(
             added.append(f"- {pkg}: add upstream version {pkg_version}{url_str}")
         elif src_ver.split("-")[0] != rel_ver.split("-")[0]:
             changed.append(f"- {pkg}: update upstream version {pkg_version}{url_str}")
+
+    # Container image entries.
+    if source_container_pkgs is not None:
+        all_containers = set(source_container_pkgs.keys())
+        if release_container_pkgs:
+            all_containers |= set(release_container_pkgs.keys())
+
+        for ctr in sorted(all_containers):
+            src_pkgs = source_container_pkgs.get(ctr)
+            rel_pkgs = (release_container_pkgs or {}).get(ctr)
+
+            if src_pkgs is None:
+                # Container removed.
+                prev_ver = prev_release_id or "?"
+                removed.append(f"- {ctr} [container image]: remove image {prev_ver}")
+            elif rel_pkgs is None:
+                # Container added.
+                added.append(f"- {ctr} [container image]: add image {release_id}")
+            else:
+                # Container changed — diff installed package lists.
+                added_pkgs = sorted(p for p in src_pkgs if p not in rel_pkgs)
+                removed_pkgs = sorted(p for p in rel_pkgs if p not in src_pkgs)
+                updated_pkgs = sorted(
+                    p for p in src_pkgs if p in rel_pkgs and src_pkgs[p] != rel_pkgs[p]
+                )
+                if not added_pkgs and not removed_pkgs and not updated_pkgs:
+                    continue
+                prev_ver = prev_release_id or "?"
+                entry_lines = [
+                    f"- {ctr} [container image]: update image {prev_ver} → {release_id}"
+                ]
+                for p in added_pkgs:
+                    entry_lines.append(f"  - added: {p} {src_pkgs[p]}")
+                for p in updated_pkgs:
+                    entry_lines.append(
+                        f"  - updated: {p} {rel_pkgs[p]} -> {src_pkgs[p]}"
+                    )
+                for p in removed_pkgs:
+                    entry_lines.append(f"  - removed: {p}")
+                changed.append("\n".join(entry_lines))
 
     if not source_versions:
         todo = "<!-- TODO: fill in manually -->"
@@ -1496,8 +1592,45 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     release_versions: dict[str, str] | None = None
     if not is_first_release and _obs_project_exists(apiurl, release_obs_project):
         release_versions = _fetch_project_pkg_versions(apiurl, release_obs_project)
+
+    # Fetch container image package lists for each container subproject.
+    _print_pending("fetching container image package lists for CHANGELOG")
+    source_container_pkgs: dict[str, dict[str, str]] = {}
+    release_container_pkgs: dict[str, dict[str, str]] = {}
+    prev_release_id: str | None = None
+    for sub_obs_id, sub_path in find_projects(source_path, args.project):
+        if sub_obs_id == args.project:
+            continue
+        if not any(
+            (sub_path / p.name / "obs" / "Dockerfile").is_file()
+            for p in sub_path.iterdir()
+            if p.is_dir()
+        ):
+            continue  # skip subprojects with no container images
+        sub_full = f"{args.rootprj}:{sub_obs_id}"
+        source_container_pkgs.update(
+            _fetch_subproject_container_pkgs(apiurl, sub_full, args.rootprj)
+        )
+    if not is_first_release and existing_releases:
+        prev_release_id = existing_releases[-1].split("/")[-1]
+        for sub_obs_id, _ in find_projects(source_path, args.project):
+            if sub_obs_id == args.project:
+                continue
+            subproject_name = sub_obs_id[len(args.project) + 1 :]
+            rel_sub_full = f"{args.rootprj}:{release_project}:{subproject_name}"
+            if _obs_project_exists(apiurl, rel_sub_full):
+                release_container_pkgs.update(
+                    _fetch_subproject_container_pkgs(apiurl, rel_sub_full, args.rootprj)
+                )
+
     changelog_section = _build_changelog_section(
-        release_id, source_versions, release_versions, source_path
+        release_id,
+        source_versions,
+        release_versions,
+        source_path,
+        source_container_pkgs=source_container_pkgs or None,
+        release_container_pkgs=release_container_pkgs or None,
+        prev_release_id=prev_release_id,
     )
 
     # Build release.yaml content.

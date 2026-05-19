@@ -309,6 +309,64 @@ def _fetch_build_containerinfo(
         return None
 
 
+def _fetch_build_container_packages(
+    apiurl: str,
+    obs_project: str,
+    repo: str,
+    arch: str,
+    pkg: str,
+    rootprj: str,
+) -> "dict[str, str] | None":
+    """Fetch and parse the .packages artifact from OBS container build results.
+
+    Returns {binary_pkg_name: "VERSION-RELEASE"} filtered to packages whose DISTURL
+    indicates they were built within rootprj (i.e. our own packages, not OS base
+    packages).  Returns None when the file is absent or the build has not succeeded.
+
+    The .packages file is pipe-delimited, one package per line:
+        NAME|EPOCH|VERSION|RELEASE|ARCH|DISTURL|LICENSE
+    Lines with fewer than 5 fields and gpg-pubkey entries are skipped.
+    """
+    url = osc.core.makeurl(apiurl, ["build", obs_project, repo, arch, pkg])
+    try:
+        root = ET.fromstring(osc.connection.http_GET(url).read())
+    except Exception:
+        return None
+
+    packages_filename: str | None = None
+    for binary in root.findall("binary"):
+        name = binary.get("filename", "")
+        if name.endswith(".packages"):
+            packages_filename = name
+            break
+
+    if not packages_filename:
+        return None
+
+    pkg_url = osc.core.makeurl(
+        apiurl, ["build", obs_project, repo, arch, pkg, packages_filename]
+    )
+    try:
+        data = osc.connection.http_GET(pkg_url).read().decode("utf-8", errors="replace")
+    except Exception:
+        return None
+
+    result: dict[str, str] = {}
+    for line in data.splitlines():
+        fields = line.split("|")
+        if len(fields) < 5:
+            continue
+        name, _epoch, version, release, _arch = fields[:5]
+        disturl = fields[5] if len(fields) > 5 else ""
+        if name == "gpg-pubkey":
+            continue
+        if not (disturl.startswith("obs://") and rootprj in disturl):
+            continue
+        result[name] = f"{version}-{release}"
+
+    return result if result else None
+
+
 def _fetch_obs_package_names(apiurl: str, obs_project_name: str) -> set[str]:
     """Return the set of package names currently in an OBS project.
 
