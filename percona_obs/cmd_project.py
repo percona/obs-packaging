@@ -27,6 +27,7 @@ from .common import (
     _print_ok,
     _print_pending,
     apply_env_substitution,
+    _MACRO_RE,
     apply_macro_substitution,
     auto_rootprj_env,
     build_project_meta,
@@ -1410,6 +1411,9 @@ def _build_changelog_section(
     changed: list[str] = []
     removed: list[str] = []
 
+    # Load macros once so %!{VAR} tokens in _service revision fields can be resolved.
+    macros = load_macros(source_path)
+
     all_pkgs = set(source_versions.keys())
     if release_versions:
         all_pkgs |= set(release_versions.keys())
@@ -1431,6 +1435,12 @@ def _build_changelog_section(
             info = _extract_upstream_info_from_service(service_file)
             if info:
                 upstream_url, revision = info
+                # Resolve any %!{VAR} macro tokens in the revision.
+                if macros and _MACRO_RE.search(revision):
+                    try:
+                        revision = apply_macro_substitution(revision, macros)
+                    except SystemExit:
+                        revision = ""
                 release_url = _build_upstream_release_url(
                     upstream_url, revision, pkg_version
                 )
@@ -1457,8 +1467,11 @@ def _build_changelog_section(
                 prev_ver = prev_release_id or "?"
                 removed.append(f"- {ctr} [container image]: remove image {prev_ver}")
             elif rel_pkgs is None:
-                # Container added.
-                added.append(f"- {ctr} [container image]: add image {release_id}")
+                # Container added — list all installed packages.
+                entry_lines = [f"- {ctr} [container image]: add image {release_id}"]
+                for p, v in sorted(src_pkgs.items()):
+                    entry_lines.append(f"  - {p} {v}")
+                added.append("\n".join(entry_lines))
             else:
                 # Container changed — diff installed package lists.
                 added_pkgs = sorted(p for p in src_pkgs if p not in rel_pkgs)
