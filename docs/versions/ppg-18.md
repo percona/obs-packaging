@@ -11,7 +11,7 @@
 | percona-pg_oidc_validator | ppg:18 | 1.0-0+3.1 |
 | percona-pg_repack | ppg:18 | 1.5.3-1+4.1 |
 | percona-pg_stat_monitor | ppg:18 | 2.3.2-1+5.1 |
-| percona-pg_tde | ppg:18 | 2.2.0-1+1.1 |
+| percona-pg_tde | ppg:18 | 2.2.0-1+2.1 |
 | percona-pgaudit | ppg:18 | 18.0-1+4.1 |
 | percona-pgaudit_set_user | ppg:18 | 4.2.0-1+4.1 |
 | percona-pgbackrest | ppg:18 | 2.58.0-0+3.2 |
@@ -50,9 +50,9 @@
 
 | Package | Project | Image | Version | Tags |
 | ------- | ------- | ----- | ------- | ---- |
-| percona-distribution-postgresql | ppg:18:containers:ubi9 | percona-distribution-postgresql | 18.4-2 | `18.4-2-1.3` `18.4-2` `18.4` `18` |
-| percona-distribution-postgresql-upgrade | ppg:18:containers:ubi9 | percona-distribution-postgresql-upgrade | 18.4-2 | `18.4-17-2-1.2` `18.4-17-2` `18.4-17` `18-17` |
-| percona-distribution-postgresql-with-postgis | ppg:18:containers:ubi9 | percona-distribution-postgresql-with-postgis | 18.4-2 | `18.4-2-1.3` `18.4-2` `18.4` `18` |
+| percona-distribution-postgresql | ppg:18:containers:ubi9 | percona-distribution-postgresql | 18.4-1 | `18.4-1-1.1` `18.4-1` `18.4` `18` |
+| percona-distribution-postgresql-upgrade | ppg:18:containers:ubi9 | percona-distribution-postgresql-upgrade | 18.4-1 | `18.4-17-1-1.1` `18.4-17-1` `18.4-17` `18-17` |
+| percona-distribution-postgresql-with-postgis | ppg:18:containers:ubi9 | percona-distribution-postgresql-with-postgis | 18.4-1 | `18.4-1-1.1` `18.4-1` `18.4` `18` |
 | percona-pgbackrest | ppg:18:containers:ubi9 | percona-pgbackrest | 2.58.0 | `2.58.0-4.3` `2.58.0` `latest` |
 | percona-pgbouncer | ppg:18:containers:ubi9 | percona-pgbouncer | 1.25.2 | `1.25.2-1.2` `1.25.2` `latest` |
 
@@ -152,7 +152,7 @@ docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/perc
 **`percona-distribution-postgresql-upgrade`**
 
 ```bash
-docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-upgrade:18.4-17-2
+docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-upgrade:18.4-17-1
 docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-upgrade:18.4-17
 docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-distribution-postgresql-upgrade:18-17
 ```

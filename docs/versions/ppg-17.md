@@ -51,8 +51,8 @@
 
 | Package | Project | Image | Version | Tags |
 | ------- | ------- | ----- | ------- | ---- |
-| percona-distribution-postgresql | ppg:17:containers:ubi9 | percona-distribution-postgresql | 17.10-2 | `17.10-2-3.1` `17.10-2` `17.10` `17` |
-| percona-distribution-postgresql-with-postgis | ppg:17:containers:ubi9 | percona-distribution-postgresql-with-postgis | 17.10-2 | `17.10-2-3.1` `17.10-2` `17.10` `17` |
+| percona-distribution-postgresql | ppg:17:containers:ubi9 | percona-distribution-postgresql | 17.10-1 | `17.10-1-1.1` `17.10-1` `17.10` `17` |
+| percona-distribution-postgresql-with-postgis | ppg:17:containers:ubi9 | percona-distribution-postgresql-with-postgis | 17.10-1 | `17.10-1-1.1` `17.10-1` `17.10` `17` |
 | percona-pgbackrest | ppg:17:containers:ubi9 | percona-pgbackrest | 2.58.0 | `2.58.0-3.1` `2.58.0` `latest` |
 | percona-pgbouncer | ppg:17:containers:ubi9 | percona-pgbouncer | 1.25.2 | `1.25.2-3.2` `1.25.2` `latest` |
 
