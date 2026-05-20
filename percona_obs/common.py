@@ -347,7 +347,7 @@ def build_project_meta(
     debuginfo: "dict[str, bool] | bool | None" = None,
     active_projects: "set[str] | None" = None,
     branch_rootprj: str | None = None,
-    existing_branch_projects: "set[str] | None" = None,
+    existing_branch_projects: "dict[str, set[str]] | None" = None,
 ) -> str:
     """Build OBS project metadata XML from project.yaml fields.
 
@@ -432,7 +432,8 @@ def build_project_meta(
                         redirected = f"{branch_rootprj}:{path_info['subproject']}"
                         if (
                             existing_branch_projects is None
-                            or redirected in existing_branch_projects
+                            or path_info["repository"]
+                            in existing_branch_projects.get(redirected, set())
                         ) and not (
                             redirected == obs_project_name
                             and path_info["repository"] == repo["name"]
@@ -452,7 +453,8 @@ def build_project_meta(
                         if (
                             (
                                 existing_branch_projects is None
-                                or branch_proj in existing_branch_projects
+                                or repo_name
+                                in existing_branch_projects.get(branch_proj, set())
                             )
                             and not (
                                 branch_proj == obs_project_name
@@ -477,7 +479,10 @@ def build_project_meta(
             ET.SubElement(repo_elem, "path", project=_proj, repository=_repo)
         for _proj, _repo in prod_paths:
             ET.SubElement(repo_elem, "path", project=_proj, repository=_repo)
-        if self_branch_proj:
+        if self_branch_proj and (
+            existing_branch_projects is None
+            or repo["name"] in existing_branch_projects.get(self_branch_proj, set())
+        ):
             ET.SubElement(
                 repo_elem, "path", project=self_branch_proj, repository=repo["name"]
             )

@@ -1004,7 +1004,7 @@ def _apply_project_config(
     env_vars: dict[str, str] | None = None,
     active_projects: "set[str] | None" = None,
     branch_rootprj: str | None = None,
-    existing_branch_projects: "set[str] | None" = None,
+    existing_branch_projects: "dict[str, set[str]] | None" = None,
     only_repos: "set[str] | None" = None,
 ) -> "tuple[bool, bool]":
     """Create or update OBS project metadata and build config from project.yaml.

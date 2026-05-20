@@ -401,22 +401,24 @@ def _collect_existing_branch_projects(
     rootprj: str,
     projects: "list[tuple[str, Path]]",
     env_vars: "dict[str, str] | None",
-) -> "set[str]":
-    """Return the subset of branch-source projects that exist on OBS.
+) -> "dict[str, set[str]]":
+    """Return the branch-source projects that exist on OBS, mapped to their repo names.
 
     Walks every (obs_project_name, project_path) in *projects* and gathers
     the candidate branch-source project names that ``build_project_meta``
     may emit as ``<path>`` entries for those projects: the branch counterpart
     of each project itself (``self_branch_proj``) plus the branch counterpart
     of every ``subproject:`` path entry in the project's ``repositories``.
-    Then queries OBS for which of those actually exist and returns that set.
+    Then queries OBS for which of those actually exist and fetches their
+    repository lists, returning a mapping of project name → repo names.
 
     Callers pass the result to ``_apply_project_config`` so paths referencing
-    nonexistent branch-source projects are filtered out before upload.  This
-    handles the case where a PR adds a brand-new subproject (e.g. ``ubi9``)
-    that has no production counterpart yet, which would otherwise cause OBS
-    to reject the meta with ``repository_access_failure`` and trigger a
-    strip-and-retry that loses *all* paths on the affected repository.
+    nonexistent branch-source projects *or repositories* are filtered out
+    before upload.  This handles the case where a PR adds a brand-new repo
+    (e.g. ``UBI_9``) that has no production counterpart yet in the branch-source
+    projects, which would otherwise cause OBS to reject the meta with
+    ``repository_access_failure`` and trigger a strip-and-retry that loses
+    *all* paths on the affected repository.
     """
     candidates: set[str] = set()
     for obs_project_name, project_path in projects:
@@ -429,11 +431,15 @@ def _collect_existing_branch_projects(
                 if "subproject" in path_info:
                     candidates.add(f"{branch_rootprj}:{path_info['subproject']}")
     if not candidates:
-        return set()
+        return {}
     logger.info(
         f"checking {len(candidates)} branch-source project(s) for existence on {branch_apiurl}"
     )
-    return {n for n in candidates if _obs_project_exists(branch_apiurl, n)}
+    result: dict[str, set[str]] = {}
+    for name in candidates:
+        if _obs_project_exists(branch_apiurl, name):
+            result[name] = _fetch_obs_project_repository_names(branch_apiurl, name)
+    return result
 
 
 def cmd_sync(args):
@@ -997,7 +1003,7 @@ def cmd_sync(args):
         # PR with no production counterpart) are then filtered out by
         # build_project_meta, so OBS won't reject the meta with
         # repository_access_failure.
-        existing_branch_projects: set[str] | None = None
+        existing_branch_projects: dict[str, set[str]] | None = None
         if branch_rootprj is not None:
             existing_branch_projects = _collect_existing_branch_projects(
                 branch_apiurl,
@@ -1093,7 +1099,7 @@ def cmd_sync(args):
                 ):
                     time.sleep(5)
                 # Same branch-source existence filter as the full-tree path.
-                chain_existing_branch_projects: set[str] | None = None
+                chain_existing_branch_projects: dict[str, set[str]] | None = None
                 if branch_rootprj is not None:
                     chain_existing_branch_projects = _collect_existing_branch_projects(
                         branch_apiurl,
