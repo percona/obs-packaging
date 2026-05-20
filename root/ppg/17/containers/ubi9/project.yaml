@@ -3,42 +3,36 @@ description: |
   This project contains UBI-9 based container images for Percona Software for PostgreSQL %!{PG_MAJOR_VERSION}.
 
 repositories:
-  - name: RockyLinux_9
+  - name: UBI_9
     paths:
-      - subproject: common:deps:build
-        repository: RockyLinux_9
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
         repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+        repository: devel
     archs: [x86_64, aarch64]
   - name: images
     paths:
       - subproject: ppg:%!{PG_MAJOR_VERSION}:containers:ubi9
-        repository: RockyLinux_9
+        repository: UBI_9
       - subproject: ppg:%!{PG_MAJOR_VERSION}
-        repository: RockyLinux_9
+        repository: UBI_9
+      - subproject: ppg:common:deps
+        repository: UBI_9
       - subproject: common:containers:ubi9
         repository: images
-      - subproject: common:containers:ubi9
-        repository: RockyLinux_9
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
         repository: standard
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
-        repository: appstream
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
-        repository: appstream
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
-        repository: baseos
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
-        repository: baseos
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
-        repository: devel
+        repository: standard
     archs: [x86_64, aarch64]
 
 publish:
-  RockyLinux_9: false
+  UBI_9: false
 
 project-config: |
-  %if "%_repository" == "RockyLinux_9"
+  %if "%_repository" == "UBI_9"
   Type: spec
   Ignore: kbd-legacy < 2.4.0-11
   %endif

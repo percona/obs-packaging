@@ -18,6 +18,8 @@ repositories:
         repository: standard
       - subproject: common:deps:build
         repository: UBI_9
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+        repository: devel
     archs: [x86_64, aarch64]
   - name: Debian_13
     paths:

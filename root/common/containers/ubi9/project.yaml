@@ -3,25 +3,25 @@ description: |
   This project contains UBI-9 base container images used by the several Percona distributions.
 publish: false
 repositories:
-  - name: RockyLinux_9
+  - name: UBI_9
     paths:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
         repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
         repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+        repository: devel
     archs: [x86_64, aarch64]
   - name: images
     paths:
       - subproject: common:containers:ubi9
-        repository: RockyLinux_9
+        repository: UBI_9
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
-        repository: appstream
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
-        repository: baseos
+        repository: standard
     archs: [x86_64, aarch64]
 
 project-config: |
-  %if "%_repository" == "RockyLinux_9"
+  %if "%_repository" == "UBI_9"
   Type: spec
   Ignore: kbd-legacy < 2.4.0-11
   %endif
