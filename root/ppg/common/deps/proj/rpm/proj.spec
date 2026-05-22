@@ -189,17 +189,16 @@ Supplements:  proj\
 %data_subpkg -c be -n Belgium
 %data_subpkg -c br -n Brasil
 %data_subpkg -c ca -n Canada
-%data_subpkg -c ch -n Switzerland -e CH
+%data_subpkg -c ch -n Switzerland
 %data_subpkg -c cz -n Czech
 %data_subpkg -c de -n Germany
-%data_subpkg -c dk -n Denmark -e DK
+%data_subpkg -c dk -n Denmark
 %data_subpkg -c es -n Spain
-%data_subpkg -c eur -n %{quote:Nordic + Baltic} -e NKG
+%data_subpkg -c eur -n %{quote:Nordic + Baltic}
 %data_subpkg -c fi -n Finland
-%data_subpkg -c fo -n %{quote:Faroe Island} -e FO -s 1
 %data_subpkg -c fr -n France
 %data_subpkg -c hu -n Hungary
-%data_subpkg -c is -n Island -e ISL
+%data_subpkg -c is -n Island
 %data_subpkg -c jp -n Japan
 %data_subpkg -c lv -n Latvia
 %data_subpkg -c mx -n Mexico
