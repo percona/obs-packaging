@@ -276,6 +276,17 @@ projection functions. Proj docs: http://www.remotesensing.org/dl/new_docs/
 mkdir -p %{buildroot}%{_datadir}/%{name}
 tar -xf %{SOURCE1} --strip-components=1 --directory %{buildroot}%{_datadir}/%{name}
 
+# Remove repo CI/infrastructure files that are not data
+rm -rf %{buildroot}%{_datadir}/%{name}/.github
+rm -rf %{buildroot}%{_datadir}/%{name}/travis
+rm -f  %{buildroot}%{_datadir}/%{name}/.gitignore
+rm -f  %{buildroot}%{_datadir}/%{name}/.travis.yml
+rm -f  %{buildroot}%{_datadir}/%{name}/CMakeLists.txt
+rm -f  %{buildroot}%{_datadir}/%{name}/CONTRIBUTING.md
+rm -f  %{buildroot}%{_datadir}/%{name}/HOWTO-RELEASE
+rm -f  %{buildroot}%{_datadir}/%{name}/sync_to_cdn.sh
+rm -f  %{buildroot}%{_datadir}/%{name}/regenerate_index_html.py
+
 %if %{with mingw}
 rm -rf %{buildroot}%{mingw32_docdir}
 rm -rf %{buildroot}%{mingw32_mandir}
@@ -353,16 +364,7 @@ rm -rf %{buildroot}%{mingw64_datadir}/bash-completion
 %{_datadir}/%{name}/index.html.in
 %{_datadir}/%{name}/ol.css
 %{_datadir}/%{name}/ol.js
-%{_datadir}/%{name}/regenerate_index_html.py
-%{_datadir}/%{name}/sync_to_cdn.sh
-%{_datadir}/%{name}/CONTRIBUTING.md
-%{_datadir}/%{name}/HOWTO-RELEASE
-%{_datadir}/%{name}/CMakeLists.txt
-%{_datadir}/%{name}/.gitignore
-%{_datadir}/%{name}/.travis.yml
-%{_datadir}/%{name}/.github/
 %{_datadir}/%{name}/grid_tools/
-%{_datadir}/%{name}/travis/
 %{_mandir}/man1/*.1*
 
 %if %{with mingw}
