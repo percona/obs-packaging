@@ -4,6 +4,10 @@
 %bcond_with mingw
 %endif
 
+# proj-data contains grid tool scripts with #!/usr/bin/env python shebangs;
+# these are not RPM-managed executables and should not be mangled.
+%global __brp_mangle_shebangs_exclude_from /usr/share/proj
+
 %global data_version 1.21
 Name:           proj
 # Also check whether there is a new proj-data release when upgrading!
