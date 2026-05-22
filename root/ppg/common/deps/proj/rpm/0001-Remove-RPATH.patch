@@ -1,0 +1,24 @@
+From 03716d0b647bdfdeb189f48dd086151180da3f08 Mon Sep 17 00:00:00 2001
+From: Ales Nezbeda <anezbeda@redhat.com>
+Date: Mon, 28 Apr 2025 11:02:15 +0200
+Subject: [PATCH] Remove RPATH
+
+---
+ src/apps/CMakeLists.txt | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/apps/CMakeLists.txt b/src/apps/CMakeLists.txt
+index d338988..3179248 100644
+--- a/src/apps/CMakeLists.txt
++++ b/src/apps/CMakeLists.txt
+@@ -33,7 +33,6 @@ if(NOT MSVC)
+   if(APPLE)
+     set(CMAKE_INSTALL_RPATH "@loader_path/../${CMAKE_INSTALL_LIBDIR}")
+   else()
+-    set(CMAKE_INSTALL_RPATH "\$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+   endif()
+   # Other apps can link to libproj using e.g. LDFLAGS -Wl,-rpath,${prefix}/lib
+ 
+-- 
+2.49.0
+

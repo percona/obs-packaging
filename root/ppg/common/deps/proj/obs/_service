@@ -1,0 +1,21 @@
+<services>
+  <service name="obs_scm">
+    <param name="url">https://github.com/OSGeo/PROJ.git</param>
+    <param name="scm">git</param>
+    <param name="revision">9.6.0</param>
+    <param name="versionformat">@PARENT_TAG@</param>
+    <param name="filename">proj</param>
+  </service>
+  <service name="obs_scm">
+    <param name="url">https://github.com/OSGeo/PROJ-data.git</param>
+    <param name="scm">git</param>
+    <param name="revision">1.21.0</param>
+    <param name="versionformat">1.21</param>
+    <param name="filename">proj-data</param>
+  </service>
+  <service mode="buildtime" name="tar" />
+  <service mode="buildtime" name="recompress">
+    <param name="file">*.tar</param>
+    <param name="compression">gz</param>
+  </service>
+</services>

@@ -1,0 +1,5 @@
+<aggregatelist>
+  <aggregate project="${OBS_ROOTPRJ}:ppg:common:deps">
+    <package>flexiblas</package>
+  </aggregate>
+</aggregatelist>

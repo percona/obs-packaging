@@ -1,0 +1,20 @@
+<services>
+  <service name="obs_scm">
+    <param name="url">https://github.com/Reference-LAPACK/lapack.git</param>
+    <param name="scm">git</param>
+    <param name="revision">v3.9.0</param>
+    <param name="versionformat">3.9.0</param>
+    <param name="filename">lapack</param>
+  </service>
+  <service name="download_url">
+    <param name="host">www.netlib.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/lapack/manpages.tgz</param>
+    <param name="filename">manpages.tgz</param>
+  </service>
+  <service mode="buildtime" name="tar" />
+  <service mode="buildtime" name="recompress">
+    <param name="file">*.tar</param>
+    <param name="compression">gz</param>
+  </service>
+</services>

@@ -1,0 +1,11 @@
+diff -rupN proj-9.6.0/src/filemanager.cpp proj-9.6.0-new/src/filemanager.cpp
+--- proj-9.6.0/src/filemanager.cpp	2025-03-13 15:31:27.000000000 +0100
++++ proj-9.6.0-new/src/filemanager.cpp	2025-03-21 23:46:25.411487623 +0100
+@@ -41,6 +41,7 @@
+ #include <stdlib.h>
+ 
+ #include <algorithm>
++#include <cstdint>
+ #include <limits>
+ #include <string>
+ 

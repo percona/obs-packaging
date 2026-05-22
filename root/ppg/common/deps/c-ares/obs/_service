@@ -1,0 +1,14 @@
+<services>
+  <service name="obs_scm">
+    <param name="url">https://github.com/c-ares/c-ares.git</param>
+    <param name="scm">git</param>
+    <param name="revision">cares-1_19_1</param>
+    <param name="versionformat">1.19.1</param>
+    <param name="filename">c-ares</param>
+  </service>
+  <service mode="buildtime" name="tar" />
+  <service mode="buildtime" name="recompress">
+    <param name="file">*.tar</param>
+    <param name="compression">gz</param>
+  </service>
+</services>

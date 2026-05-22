@@ -1,0 +1,8 @@
+<services>
+  <service name="download_url">
+    <param name="host">downloads.sourceforge.net</param>
+    <param name="protocol">http</param>
+    <param name="path">/project/math-atlas/Stable/3.10.3/atlas3.10.3.tar.bz2</param>
+    <param name="filename">atlas3.10.3.tar.bz2</param>
+  </service>
+</services>
