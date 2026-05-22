@@ -45,10 +45,10 @@ License: Boost and MIT and Python
   ver = ver:gsub("%.", "_")
   print(ver)
 }
-%global toplev_dirname %{real_name}-%{version}
+%global toplev_dirname %{real_name}_%{version_enc}
 URL: http://www.boost.org
 
-Source0: boost-%{version}.tar.gz
+Source0: boost_%{version_enc}.tar.bz2
 Source1: libboost_thread.so
 # Add a manual page for b2, based on the online documentation:
 # http://www.boost.org/boost-build2/doc/html/bbv2/overview.html
@@ -1285,10 +1285,10 @@ fi
 %{_mandir}/man1/b2.1*
 
 %changelog
-* Thu May 22 2026 Percona Development <info@percona.com> - 1.75.0-1
+* Fri May 22 2026 Percona Development <info@percona.com> - 1.75.0-1
 - Initial packaging of boost for Percona OBS
 
-* Thu Nov 4 2025 Patrick Palka <ppalka@redhat.com> - 1.75.0-13
+* Tue Nov 4 2025 Patrick Palka <ppalka@redhat.com> - 1.75.0-13
 - Add Boost.JSON patch for detecting endianness (RHEL-120655)
 
 * Tue Jul 8 2025 Patrick Palka <ppalka@redhat.com> - 1.75.0-12

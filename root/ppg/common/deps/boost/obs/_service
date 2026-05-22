@@ -1,15 +1,8 @@
 <services>
-  <service name="obs_scm">
-    <param name="url">https://github.com/boostorg/boost.git</param>
-    <param name="scm">git</param>
-    <param name="revision">boost-1.75.0</param>
-    <param name="versionformat">1.75.0</param>
-    <param name="filename">boost</param>
-    <param name="submodules">enable</param>
-  </service>
-  <service mode="buildtime" name="tar" />
-  <service mode="buildtime" name="recompress">
-    <param name="file">*.tar</param>
-    <param name="compression">gz</param>
+  <service name="download_url">
+    <param name="host">github.com</param>
+    <param name="protocol">https</param>
+    <param name="path">/boostorg/boost/releases/download/boost-1.75.0/boost_1_75_0.tar.bz2</param>
+    <param name="filename">boost_1_75_0.tar.bz2</param>
   </service>
 </services>
