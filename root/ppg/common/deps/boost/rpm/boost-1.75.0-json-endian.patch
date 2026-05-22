@@ -1,0 +1,41 @@
+From 8ad666f05367c185598816a3153e05a976ffe920 Mon Sep 17 00:00:00 2001
+From: Dmitry Arkhipov <grisumbras@gmail.com>
+Date: Thu, 9 Jun 2022 18:59:42 +0300
+Subject: [PATCH] deduce endianness of the platform
+
+---
+ boost/json/detail/config.hpp | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/include/boost/json/detail/config.hpp b/include/boost/json/detail/config.hpp
+index 398f789..62a65d1 100644
+--- a/boost/json/detail/config.hpp
++++ b/boost/json/detail/config.hpp
+@@ -250,6 +250,24 @@
+ # endif
+ #endif
+ 
++
++#if ! defined(BOOST_JSON_BIG_ENDIAN) && ! defined(BOOST_JSON_LITTLE_ENDIAN)
++// Copied from Boost.Endian
++# if defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
++#  define BOOST_JSON_LITTLE_ENDIAN
++# elif defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
++#  define BOOST_JSON_BIG_ENDIAN
++# elif defined(__LITTLE_ENDIAN__)
++#  define BOOST_JSON_LITTLE_ENDIAN
++# elif defined(__BIG_ENDIAN__)
++#  define BOOST_JSON_BIG_ENDIAN
++# elif defined(_MSC_VER) || defined(__i386__) || defined(__x86_64__)
++#  define BOOST_JSON_LITTLE_ENDIAN
++# else
++#  error The Boost.JSON library could not determine the endianness of this platform. Define either BOOST_JSON_BIG_ENDIAN or BOOST_JSON_LITTLE_ENDIAN.
++# endif
++#endif
++
+ BOOST_JSON_NS_BEGIN
+ namespace detail {
+ 
+-- 
+2.51.0.463.g79cf913ea9
+

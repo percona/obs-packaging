@@ -1,0 +1,29 @@
+From 296746ce9469210fae520db31b07ccb31a6affce Mon Sep 17 00:00:00 2001
+From: Christopher Kohlhoff <chris@kohlhoff.com>
+Date: Wed, 3 Mar 2021 18:50:31 +1100
+Subject: [PATCH] The executor must be copied when an I/O object is
+ move-assigned.
+
+The moved-from I/O object needs to be left in the same state as if
+constructed with a valid executor but without a resource.
+---
+ boost/asio/detail/io_object_impl.hpp | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/boost/asio/detail/io_object_impl.hpp b/boost/asio/detail/io_object_impl.hpp
+index 54a622d..7f2f36c 100644
+--- a/boost/asio/detail/io_object_impl.hpp
++++ b/boost/asio/detail/io_object_impl.hpp
+@@ -99,8 +99,7 @@ public:
+       service_->move_assign(implementation_,
+           *other.service_, other.implementation_);
+       executor_.~executor_type();
+-      new (&executor_) executor_type(
+-          std::move(other.executor_));
++      new (&executor_) executor_type(other.executor_);
+       service_ = other.service_;
+     }
+     return *this;
+-- 
+2.47.0
+

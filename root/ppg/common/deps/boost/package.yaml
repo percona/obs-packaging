@@ -1,0 +1,7 @@
+build:
+  RockyLinux_9: false
+  Debian_13: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Leap_16: false
+  openSUSE_Tumbleweed: false

@@ -1,0 +1,144 @@
+From 4b9052f1e0b2acf625e8247582f44acdcc78a4ce Mon Sep 17 00:00:00 2001
+From: Andrey Semashev <andrey.semashev@gmail.com>
+Date: Tue, 18 May 2021 22:53:40 +0300
+Subject: [PATCH] Fallback to read/write loop if sendfile/copy_file_range fail.
+
+Since sendfile and copy_file_range can fail for some filesystems
+(e.g. eCryptFS), we have to fallback to the read/write loop in copy_file
+implementation. Additionally, since we implement the fallback now,
+fallback to sendfile if copy_file_range fails with EXDEV and use
+copy_file_range on older kernels that don't implement it for
+cross-filesystem copying. This may be beneficial if copy_file_range
+is used within a filesystem, and is performed on a remote server NFS or CIFS).
+
+Also, it was discovered that copy_file_range can also fail with EOPNOTSUPP
+when it is performed on an NFSv4 filesystem and the remote server does
+not support COPY operation. This happens on some patched kernels in RHEL/CentOS.
+
+Lastly, to make sure the copy_file_data pointer is accessed atomically,
+it is now declared as an atomic value. If std::atomic is unavailable,
+Boost.Atomic is used.
+
+Fixes https://github.com/boostorg/filesystem/issues/184.
+--- boost_1_75_0/libs/filesystem/src/operations.cpp~	2025-05-13 14:50:40.018451372 +0100
++++ boost_1_75_0/libs/filesystem/src/operations.cpp	2025-05-13 15:06:14.490851877 +0100
+@@ -121,6 +121,8 @@
+ # endif  // BOOST_WINDOWS_API
+ 
+ #include "error_handling.hpp"
++#include <atomic>
++namespace atomic_ns = std;
+ 
+ namespace fs = boost::filesystem;
+ using boost::filesystem::path;
+@@ -444,6 +445,9 @@
+   if (BOOST_UNLIKELY(!buf.get()))
+     return ENOMEM;
+ 
++  // Don't use file size to limit the amount of data to copy since some filesystems, like procfs or sysfs,
++  // provide files with generated content and indicate that their size is zero or 4096. Just copy as much data
++  // as we can read from the input file.
+   while (true)
+   {
+     ssize_t sz_read = ::read(infile, buf.get(), buf_sz);
+@@ -478,7 +482,7 @@
+ }
+ 
+ //! Pointer to the actual implementation of the copy_file_data implementation
+-copy_file_data_t* copy_file_data = &copy_file_data_read_write;
++atomic_ns::atomic< copy_file_data_t* > copy_file_data(&copy_file_data_read_write);
+ 
+ #if defined(BOOST_FILESYSTEM_USE_SENDFILE)
+ 
+@@ -500,6 +504,22 @@
+       int err = errno;
+       if (err == EINTR)
+         continue;
++
++      if (offset == 0u)
++      {
++        // sendfile may fail with EINVAL if the underlying filesystem does not support it
++        if (err == EINVAL)
++        {
++fallback_to_read_write:
++          return copy_file_data_read_write(infile, outfile, size);
++        }
++        if (err == ENOSYS)
++        {
++          copy_file_data.store(&copy_file_data_read_write, atomic_ns::memory_order_relaxed);
++          goto fallback_to_read_write;
++        }
++      }
++
+       return err;
+     }
+ 
+@@ -534,6 +554,42 @@
+       int err = errno;
+       if (err == EINTR)
+         continue;
++
++      if (offset == 0u)
++      {
++        // copy_file_range may fail with EINVAL if the underlying filesystem does not support it.
++        // In some RHEL/CentOS 7.7-7.8 kernel versions, copy_file_range on NFSv4 is also known to return EOPNOTSUPP
++        // if the remote server does not support COPY, despite that it is not a documented error code.
++        // See https://patchwork.kernel.org/project/linux-nfs/patch/20190411183418.4510-1-olga.kornievskaia@gmail.com/
++        // and https://bugzilla.redhat.com/show_bug.cgi?id=1783554.
++        if (err == EINVAL || err == EOPNOTSUPP)
++        {
++#if !defined(BOOST_FILESYSTEM_USE_SENDFILE)
++fallback_to_read_write:
++#endif
++          return copy_file_data_read_write(infile, outfile, size);
++        }
++        if (err == EXDEV)
++        {
++#if defined(BOOST_FILESYSTEM_USE_SENDFILE)
++fallback_to_sendfile:
++          return copy_file_data_sendfile(infile, outfile, size);
++#else
++          goto fallback_to_read_write;
++#endif
++        }
++        if (err == ENOSYS)
++        {
++#if defined(BOOST_FILESYSTEM_USE_SENDFILE)
++          copy_file_data.store(&copy_file_data_sendfile, atomic_ns::memory_order_relaxed);
++          goto fallback_to_sendfile;
++#else
++          copy_file_data.store(&copy_file_data_read_write, atomic_ns::memory_order_relaxed);
++          goto fallback_to_read_write;
++#endif
++        }
++      }
++
+       return err;
+     }
+ 
+@@ -569,12 +625,13 @@
+ #endif
+ 
+ #if defined(BOOST_FILESYSTEM_USE_COPY_FILE_RANGE)
+-    // Although copy_file_range appeared in Linux 4.5, it did not support cross-filesystem copying until 5.3
+-    if (major > 5u || (major == 5u && minor >= 3u))
++    // Although copy_file_range appeared in Linux 4.5, it did not support cross-filesystem copying until 5.3.
++    // copy_file_data_copy_file_range will fallback to copy_file_data_sendfile if copy_file_range returns EXDEV.
++    if (major > 4u || (major == 4u && minor >= 5u))
+       cfd = &copy_file_data_copy_file_range;
+ #endif
+ 
+-    copy_file_data = cfd;
++    copy_file_data.store(cfd, atomic_ns::memory_order_relaxed);
+   }
+ }
+ const copy_file_data_init;
+@@ -1349,7 +1406,7 @@
+       goto fail_errno;
+   }
+ 
+-  err = detail::copy_file_data(infile.fd, outfile.fd, get_size(from_stat));
++  err = detail::copy_file_data.load(atomic_ns::memory_order_relaxed)(infile.fd, outfile.fd, get_size(from_stat));
+   if (BOOST_UNLIKELY(err != 0))
+     goto fail; // err already contains the error code
+ 
