@@ -27,7 +27,7 @@ Requires:       perl(strict)
 Requires:       perl(warnings)
 
 %{?perl_default_filter}
-%global __provides_exclude %{?__provides_exclude:%__provides_exclude|}perl\(JSON::(Backend::PP|backportPP::Boolean|Boolean|PP|PP::IncrParser)\)
+%global __provides_exclude %{?__provides_exclude:%__provides_exclude|}perl\(JSON::(Backend::PP|Boolean|PP|PP::IncrParser)\)
 %global __requires_exclude %{?__requires_exclude:%__requires_exclude|}perl\(JSON::(backportPP|backportPP::Boolean)\)
 
 %description
