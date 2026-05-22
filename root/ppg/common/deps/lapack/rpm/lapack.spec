@@ -438,9 +438,9 @@ popd
 
 #rhbz#2222868
 pushd manpages/man/man3
-mv MAX.3 lapack-MAX.3
-mv MIN.3 lapack-MIN.3
-popd 
+[ -f MAX.3 ] && mv MAX.3 lapack-MAX.3 || :
+[ -f MIN.3 ] && mv MIN.3 lapack-MIN.3 || :
+popd
 
 find manpages/man/man3 -type f -printf "%{_mandir}/man3/%f*\n" > lapackmans
 
