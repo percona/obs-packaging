@@ -1,8 +1,8 @@
 <services>
   <service name="download_url">
-    <param name="host">github.com</param>
+    <param name="host">downloads.sourceforge.net</param>
     <param name="protocol">https</param>
-    <param name="path">/boostorg/boost/releases/download/boost-1.75.0/boost_1_75_0.tar.bz2</param>
+    <param name="path">/project/boost/boost/1.75.0/boost_1_75_0.tar.bz2</param>
     <param name="filename">boost_1_75_0.tar.bz2</param>
   </service>
 </services>
