@@ -342,6 +342,27 @@ rm -rf %{buildroot}%{mingw64_datadir}/bash-completion
 %{_datadir}/%{name}/deformation_model.schema.json
 %{_datadir}/%{name}/projjson.schema.json
 %{_datadir}/%{name}/triangulation.schema.json
+%{_datadir}/%{name}/agency.json
+%{_datadir}/%{name}/area.json
+%{_datadir}/%{name}/favicon.png
+%{_datadir}/%{name}/files.geojson
+%{_datadir}/%{name}/files.json
+%{_datadir}/%{name}/files_removed.geojson
+%{_datadir}/%{name}/geotiff.bundle.min.js
+%{_datadir}/%{name}/index.html
+%{_datadir}/%{name}/index.html.in
+%{_datadir}/%{name}/ol.css
+%{_datadir}/%{name}/ol.js
+%{_datadir}/%{name}/regenerate_index_html.py
+%{_datadir}/%{name}/sync_to_cdn.sh
+%{_datadir}/%{name}/CONTRIBUTING.md
+%{_datadir}/%{name}/HOWTO-RELEASE
+%{_datadir}/%{name}/CMakeLists.txt
+%{_datadir}/%{name}/.gitignore
+%{_datadir}/%{name}/.travis.yml
+%{_datadir}/%{name}/.github/
+%{_datadir}/%{name}/grid_tools/
+%{_datadir}/%{name}/travis/
 %{_mandir}/man1/*.1*
 
 %if %{with mingw}
