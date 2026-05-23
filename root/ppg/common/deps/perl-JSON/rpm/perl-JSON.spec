@@ -27,8 +27,15 @@ Requires:       perl(strict)
 Requires:       perl(warnings)
 
 %{?perl_default_filter}
-%global __provides_exclude %{?__provides_exclude:%__provides_exclude|}perl\(JSON::(Backend::PP|Boolean|PP|PP::IncrParser)\)
-%global __requires_exclude %{?__requires_exclude:%__requires_exclude|}perl\(JSON::(backportPP|backportPP::Boolean)\)
+# Exclude provides for modules belonging to separate CPAN distributions
+%global __provides_exclude %{?__provides_exclude:%__provides_exclude|}perl\(JSON::(Boolean|PP|PP::IncrParser)\)
+# Exclude auto-requires for bundled internal modules (self-deps)
+%global __requires_exclude %{?__requires_exclude:%__requires_exclude|}perl\(JSON::(backportPP|backportPP::Boolean|backportPP::Compat5005|backportPP::Compat5006)\)
+# Explicit provides for bundled backportPP modules (auto-provide may be suppressed)
+Provides:       perl(JSON::backportPP)
+Provides:       perl(JSON::backportPP::Boolean)
+Provides:       perl(JSON::backportPP::Compat5005)
+Provides:       perl(JSON::backportPP::Compat5006)
 
 %description
 This module converts between JSON (JavaScript Object Notation) and Perl
