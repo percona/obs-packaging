@@ -1,0 +1,2 @@
+title: Creates a common metadata repository
+description: C implementation of createrepo. Creates RPM repository metadata.
