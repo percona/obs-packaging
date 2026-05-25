@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OBS-AddTag: percona-ubi9-minimal:%RELEASE% percona-ubi9-minimal:latest -->
+<!-- OBS-AddTag: percona-ubi-minimal:9-%RELEASE% percona-ubi-minimal:9 -->
 <!-- OBS-Imagerepo: obsrepositories:/ -->
 <image schemaversion="7.4" name="percona-ubi9-minimal-image">
   <description type="system">
@@ -9,7 +9,7 @@
   </description>
   <preferences>
     <type image="docker">
-      <containerconfig name="percona-ubi9-minimal" tag="%RELEASE%" additionaltags="latest"/>
+      <containerconfig name="percona-ubi9-minimal" tag="latest"/>
     </type>
     <version>9.0.0</version>
     <packagemanager>dnf</packagemanager>
