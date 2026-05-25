@@ -24,15 +24,19 @@ URL:		https://github.com/flame/blis
 Source0:	blis-%{version}.tar.gz
 BuildRequires:	perl
 BuildRequires:	%{?dts:devtoolset-%{?dts}-binutils devtoolset-%{?dts}-}gcc
+%if 0%{?rhel} && 0%{?rhel} >= 8
+BuildRequires:	python3.12 gcc-gfortran chrpath
+%else
 BuildRequires:	/usr/bin/python3 gcc-gfortran chrpath
+%endif
 BuildRequires:	make
 # memkind is currently only relevant for KNL as far as I know, but
 # might be relevant in future for other targets with HBM.  It needs
 # updating in el7.  It should support other targets, but only x86_64
 # is packaged.
-%ifarch x86_64
-BuildRequires: memkind-devel
-%endif
+# %ifarch x86_64
+# BuildRequires: memkind-devel
+# %endif
 
 %global desc \
 BLIS is a portable software framework for instantiating\
@@ -148,7 +152,11 @@ esac
 # <https://github.com/flame/blis/issues/259#issuecomment-463657085>
 %global confflags --enable-debug=opt --disable-static --enable-shared --enable-verbose-make --enable-cblas
 export CFLAGS="$RPM_OPT_FLAGS -O3 -funsafe-math-optimizations" LDFLAGS="%{?__global_ldflags}"
+%if 0%{?rhel} && 0%{?rhel} >= 8
+export PYTHON=python3.12	# Needed by both configure and make
+%else
 export PYTHON=python3		# Needed by both configure and make
+%endif
 
 # It's not an autotools configure
 ./configure --prefix=$(pwd)/o %confflags -t openmp $arch

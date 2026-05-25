@@ -42,7 +42,11 @@ BuildRequires:  libboost_headers-devel >= 1.69
 BuildRequires:  libboost_thread-devel >= 1.69
 BuildRequires:  libboost_serialization-devel >= 1.69
 %else
+%if 0%{?rhel} && 0%{?rhel} >= 8
+BuildRequires:  boost1.78-devel
+%else
 BuildRequires:  boost-devel >= 1.69
+%endif
 %endif
 
 # MPFR
@@ -88,6 +92,13 @@ building applications that use SFCGAL.
 
 %prep
 %autosetup -p1 -n %{srcname}-%{version}
+
+%if 0%{?rhel} && 0%{?rhel} >= 8 && 0%{?rhel} < 9
+# Boost 1.73+ throw_exception wraps in wrapexcept<E> which needs a copy ctor.
+# SFCGAL 2.x deleted copy ctors; restore them (Exception holds only std::string).
+find . -name 'Exception.h' -exec perl -i -0777 \
+  -pe 's/\)\s*noexcept\s*=\s*(delete|default)/) = default/g' {} \;
+%endif
 
 %build
 %if 0%{?suse_version}

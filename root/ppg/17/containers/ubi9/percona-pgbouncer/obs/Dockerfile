@@ -13,8 +13,8 @@ LABEL name="Percona PgBouncer" \
       maintainer="Percona Development <info@percona.com>" \
       org.opencontainers.image.authors="info@percona.com"
 
-LABEL version="<VERSION>"
-LABEL release="<RELEASE>"
+LABEL version="%!{PGBOUNCER_VERSION}"
+LABEL release="1"
 
 ARG PG_VERSION=%!{PG_VERSION}
 

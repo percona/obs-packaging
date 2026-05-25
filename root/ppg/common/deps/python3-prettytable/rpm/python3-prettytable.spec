@@ -1,6 +1,6 @@
 %global debug_package %{nil}
 
-%if 0%{?rhel} && 0%{?rhel} >= 9
+%if 0%{?rhel} && 0%{?rhel} >= 8
 %global __ospython        %{_bindir}/python3.12
 %global python3_pkgprefix python3.12
 %global python3_buildversion 3.12
@@ -47,6 +47,8 @@ try:
     open('setup.cfg','w').write(txt)
 except: pass
 " || true
+# Inject version into setup.cfg so setuptools doesn't need setuptools-scm to determine it
+sed -i "/^\[metadata\]/a version = %{version}" setup.cfg
 
 %build
 export SETUPTOOLS_SCM_PRETEND_VERSION=%{version}

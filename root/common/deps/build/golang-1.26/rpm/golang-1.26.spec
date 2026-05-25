@@ -18,8 +18,8 @@ Source1:  go1.26.4.linux-arm64.tar.gz
 ExclusiveArch: x86_64 aarch64
 AutoReq: no
 
-Provides: golang-go
-Provides: golang
+Provides: golang-go = %{version}
+Provides: golang = %{version}
 
 %description
 The Go programming language toolchain, version 1.26.4,

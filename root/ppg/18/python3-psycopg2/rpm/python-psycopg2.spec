@@ -1,6 +1,6 @@
 %global srcname psycopg2
 
-%if 0%{?rhel} && 0%{?rhel} >= 9
+%if 0%{?rhel} && 0%{?rhel} >= 8
 %global __ospython %{_bindir}/python3.12
 %global python3_buildversion 3.12
 %global __requires_exclude ^python3\\.12dist
@@ -11,7 +11,7 @@
 %global python3_buildversion 3
 %endif
 
-%if 0%{?rhel} && 0%{?rhel} >= 9
+%if 0%{?rhel} && 0%{?rhel} >= 8
 %global pkgprefix python3.12
 %else
 %global pkgprefix python3
@@ -103,7 +103,7 @@ done
 %endif
 
 
-%if 0%{?rhel} && 0%{?rhel} >= 9
+%if 0%{?rhel} && 0%{?rhel} >= 8
 %package -n python3-psycopg2
 Summary:        Compatibility alias for python3-psycopg2 on RHEL >= 9
 Requires:       python3.12-psycopg2 = %{epoch}:%{version}-%{release}

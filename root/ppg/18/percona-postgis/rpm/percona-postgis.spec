@@ -5,7 +5,7 @@
 %global postgissomajorversion 3
 %define pgmajorversion %!{PG_MAJOR_VERSION}
 
-%if 0%{?rhel} >= 9
+%if 0%{?rhel} >= 8
 %global gts_version 14
 %endif
 %global postgiscurrmajorversion %(echo %{postgismajorversion}|tr -d '.')
@@ -29,28 +29,17 @@
 %global projinstdir /usr/proj%{projmajorversion}
 %endif
 
-%if 0%{?rhel} && 0%{?rhel} == 9
+%if 0%{?rhel} && 0%{?rhel} >= 8
 # Using EPEL/CRB packages (non-PGDG build environment)
 %global geosfullversion 3.13.1
 %global geosinstdir /usr
-%global gdalfullversion 3.4.3
+%global gdalfullversion 3.0.4
 %global gdalinstdir /usr
+%global gdalmajorversion %{nil}
 %global projfullversion 9.6.0
 %global projinstdir /usr
 %global libgeotiffmajorversion %{nil}
 %global libgeotiffinstdir /usr
-%endif
-
-%if 0%{?rhel} && 0%{?rhel} == 8
-%global geosfullversion 3.11.2
-%global geosmajorversion 311
-%global geosinstdir /usr/geos%{geosmajorversion}
-%global gdalfullversion 3.8.5
-%global gdalmajorversion 38
-%global gdalinstdir /usr/gdal%{gdalmajorversion}
-%global projmajorversion 95
-%global projfullversion 9.5.1
-%global projinstdir /usr/proj%{projmajorversion}
 %endif
 
 
@@ -132,7 +121,7 @@ BuildRequires:	percona-postgresql%{pgmajorversion}-devel libxml2 libxslt autocon
 %if 0%{?gts_version}
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
 %endif
-%if 0%{?rhel} && 0%{?rhel} == 9
+%if 0%{?rhel} && 0%{?rhel} >= 8
 BuildRequires:	geos-devel libgeotiff-devel
 %else
 BuildRequires:	geos%{geosmajorversion}-devel >= %{geosfullversion}
@@ -156,7 +145,7 @@ Requires:	gmp
 BuildRequires:	libjson-c-devel proj%{projmajorversion}-devel >= %{projfullversion}
 %endif
 %else
-%if 0%{?rhel} && 0%{?rhel} == 9
+%if 0%{?rhel} && 0%{?rhel} >= 8
 BuildRequires:	proj-devel flex json-c-devel
 %else
 BuildRequires:	proj%{projmajorversion}-devel >= %{projfullversion} flex json-c-devel
@@ -167,11 +156,8 @@ BuildRequires:	libxml2-devel
 BuildRequires:	gtk2-devel > 2.8.0
 %endif
 %if %{sfcgal}
-%if 0%{?fedora} >= 41 || 0%{?rhel} >= 9
+%if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
 BuildRequires:	SFCGAL SFCGAL-devel >= 2.1.0
-%endif
-%if 0%{?rhel} == 8
-BuildRequires:        SFCGAL SFCGAL-devel
 %endif
 %if 0%{?suse_version} >= 1500 && 0%{?suse_version} < 1600
 BuildRequires:        SFCGAL SFCGAL-devel
@@ -182,12 +168,17 @@ BuildRequires:        sfcgal sfcgal-devel
 %endif
 
 %if %{raster}
-%if 0%{?rhel} && 0%{?rhel} == 9
-BuildRequires:	gdal3.4-devel
-Requires:	gdal3.4-libs
+%if 0%{?rhel} && 0%{?rhel} >= 9
+BuildRequires:	gdal3.4-devel >= %{gdalfullversion}
+Requires:	gdal3.4-libs >= %{gdalfullversion}
+%else
+%if 0%{?rhel} && 0%{?rhel} >= 8
+BuildRequires:	gdal-devel >= %{gdalfullversion}
+Requires:	gdal-libs >= %{gdalfullversion}
 %else
 BuildRequires:	gdal%{gdalmajorversion}-devel >= %{gdalfullversion}
 Requires:	gdal%{gdalmajorversion}-libs >= %{gdalfullversion}
+%endif
 %endif
 %endif
 
@@ -203,8 +194,15 @@ BuildRequires:	protobuf-c-devel >= 1.1.0
 Requires:	percona-postgresql%{pgmajorversion}
 Requires:	percona-postgresql%{pgmajorversion}-contrib
 Requires:	hdf5
-%if 0%{?rhel} && 0%{?rhel} == 9
-Requires:	geos proj libgeotiff gdal3.4-libs
+%if 0%{?rhel} && 0%{?rhel} >= 9
+Requires:	gdal3.4-libs
+%endif
+%if 0%{?rhel} && 0%{?rhel} >= 8 && 0%{?rhel} < 9
+Requires:	gdal-libs
+%endif
+
+%if 0%{?rhel} && 0%{?rhel} >= 8
+Requires:	geos proj libgeotiff
 %else
 Requires:	geos%{geosmajorversion} >= %{geosfullversion}
 Requires:	proj%{projmajorversion} >= %{projfullversion}

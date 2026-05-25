@@ -5,11 +5,11 @@
 %undefine _ld_as_needed
 
 %if %{with openblas}
-%global default_backend openblas-openmp
+%global default_backend openblas-threads
 %else
 %global default_backend netlib
 %endif
-%global default_backend64 %{default_backend}64
+%global default_backend64 netlib
 
 %global major_version 3
 %global minor_version 0
@@ -30,8 +30,18 @@ Source0:        flexiblas-%{version}.tar.gz
 
 Patch1: flexiblas-3.0.4-annocheck.patch
 
-BuildRequires:  make, cmake, python
+%if 0%{?rhel} && 0%{?rhel} >= 8
+BuildRequires:  make, cmake, python3.12
+%else
+BuildRequires:  make, cmake, python3
+%endif
+
+%if 0%{?rhel} && 0%{?rhel} == 8
+BuildRequires:  gcc-gfortran, gcc-c++
+%else
 BuildRequires:  gcc-fortran, gcc-c++
+%endif
+
 %if %{with system_lapack}
 BuildRequires:  blas-static, lapack-static
 %endif
@@ -112,23 +122,23 @@ threading support with a 32-integer interface.
 
 %if %{with openblas}
 %package        openblas-serial
-Summary:        FlexiBLAS wrappers for OpenBLAS
+Summary:        FlexiBLAS wrappers for OpenBLAS (serial)
 Requires:       %{name}%{?_isa} = %{version}-%{release}
 
 %description    openblas-serial %_description
-This package contains FlexiBLAS wrappers for the sequential library compiled
+This package contains FlexiBLAS wrappers for the sequential OpenBLAS library
 with a 32-integer interface.
 
 %package        openblas-openmp
-Summary:        FlexiBLAS wrappers for OpenBLAS
+Summary:        FlexiBLAS wrappers for OpenBLAS (OpenMP)
 Requires:       %{name}%{?_isa} = %{version}-%{release}
 
 %description    openblas-openmp %_description
-This package contains FlexiBLAS wrappers for the library compiled with
-OpenMP support with a 32-integer interface.
+This package contains FlexiBLAS wrappers for the OpenBLAS library compiled
+with OpenMP support with a 32-integer interface.
 
 %package        openblas-threads
-Summary:        FlexiBLAS wrappers for OpenBLAS
+Summary:        FlexiBLAS wrappers for OpenBLAS (threads)
 Requires:       %{name}%{?_isa} = %{version}-%{release}
 
 %description    openblas-threads %_description
@@ -181,29 +191,30 @@ threading support with a 64-integer interface.
 
 %if %{with openblas}
 %package        openblas-serial64
-Summary:        FlexiBLAS wrappers for OpenBLAS (64-bit)
+Summary:        FlexiBLAS wrappers for OpenBLAS (serial, 64-bit)
 Requires:       %{name}%{?_isa} = %{version}-%{release}
 
 %description    openblas-serial64 %_description
-This package contains FlexiBLAS wrappers for the sequential library compiled
+This package contains FlexiBLAS wrappers for the sequential OpenBLAS library
 with a 64-integer interface.
 
 %package        openblas-openmp64
-Summary:        FlexiBLAS wrappers for OpenBLAS (64-bit)
+Summary:        FlexiBLAS wrappers for OpenBLAS (OpenMP, 64-bit)
 Requires:       %{name}%{?_isa} = %{version}-%{release}
 
 %description    openblas-openmp64 %_description
-This package contains FlexiBLAS wrappers for the library compiled with
-OpenMP support with a 64-integer interface.
+This package contains FlexiBLAS wrappers for the OpenBLAS library compiled
+with OpenMP support with a 64-integer interface.
 
 %package        openblas-threads64
-Summary:        FlexiBLAS wrappers for OpenBLAS (64-bit)
+Summary:        FlexiBLAS wrappers for OpenBLAS (threads, 64-bit)
 Requires:       %{name}%{?_isa} = %{version}-%{release}
 
 %description    openblas-threads64 %_description
-This package contains FlexiBLAS wrappers for the library compiled with
-threading support with a 64-integer interface.
+This package contains FlexiBLAS wrappers for the OpenBLAS library compiled
+with threading support with a 64-integer interface.
 %endif
+
 %endif
 
 %prep
@@ -397,6 +408,7 @@ make -C build64 test
 %{_sysconfdir}/%{name}64rc.d/openblas-threads64.conf
 %{_libdir}/%{name}64/lib%{name}_openblas-threads64.so
 %endif
+
 %endif
 
 %changelog

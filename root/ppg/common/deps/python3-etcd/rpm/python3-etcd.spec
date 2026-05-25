@@ -3,17 +3,17 @@
 %if 0%{?rhel} || 0%{?fedora}
 %global python3_pkgprefix python3
 %endif
+%if 0%{?rhel} && 0%{?rhel} >= 8
+%global python3_pkgprefix python3.12
+%endif
 %if 0%{?suse_version} == 1500
 %global python3_pkgprefix python311
 %endif
 %if 0%{?suse_version} >= 1600
 %global python3_pkgprefix python313
 %endif
-%if 0%{?rhel} && 0%{?rhel} >= 9
-%global python3_pkgprefix python3.12
-%endif
 
-%if 0%{?rhel} && 0%{?rhel} >= 9
+%if 0%{?rhel} && 0%{?rhel} >= 8
 %global __ospython %{_bindir}/python3.12
 %global python3_buildversion 3.12
 %global __requires_exclude ^python3\\.12dist
@@ -94,6 +94,19 @@ Epoch:          1
 
 %description -n python3-etcd
 Compatibility alias that pulls in python3.12-etcd on RHEL >= 9.
+
+%files -n python3-etcd
+%endif
+
+%if 0%{?rhel} && 0%{?rhel} == 8
+%package -n python3-etcd
+Summary:        Compatibility alias for python3-etcd on RHEL 8
+Requires:       python3.12-etcd = %{epoch}:%{version}-%{release}
+BuildArch:      noarch
+Epoch:          1
+
+%description -n python3-etcd
+Compatibility alias that pulls in python3.12-etcd on RHEL 8.
 
 %files -n python3-etcd
 %endif

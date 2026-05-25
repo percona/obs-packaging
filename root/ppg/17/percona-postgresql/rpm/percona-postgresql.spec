@@ -13,7 +13,7 @@
 %global beta 0
 %{?beta:%global __os_install_post /usr/lib/rpm/brp-compress}
 
-%if 0%{?rhel} >= 9
+%if 0%{?rhel} >= 8
 %global gts_version 14
 %endif
 
@@ -215,7 +215,11 @@ BuildRequires:  perl-ExtUtils-Embed
 %endif
 %endif
 
+%if 0%{?rhel} >= 8 && 0%{?rhel} < 9
+BuildRequires:  python3.12-devel
+%else
 BuildRequires:	python3-devel
+%endif
 
 %if %pltcl
 BuildRequires:  tcl-devel
@@ -310,7 +314,7 @@ Requires:       openssl
 %if 0%{?suse_version} >= 1315 && 0%{?suse_version} <= 1499
 Requires:       libopenssl1_0_0
 %else
-Requires:       openssl-devel
+Requires:       openssl-libs
 %endif
 %endif
 Provides:       postgresql-libs >= %{version}-%{release}

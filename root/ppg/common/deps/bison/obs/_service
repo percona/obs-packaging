@@ -1,0 +1,8 @@
+<services>
+  <service name="download_url">
+    <param name="host">ftp.gnu.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/gnu/bison/bison-3.8.2.tar.gz</param>
+    <param name="filename">bison-3.8.2.tar.gz</param>
+  </service>
+</services>

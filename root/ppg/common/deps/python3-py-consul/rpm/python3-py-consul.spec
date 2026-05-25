@@ -3,6 +3,9 @@
 %if 0%{?rhel} || 0%{?fedora}
 %global python3_pkgprefix python3
 %endif
+%if 0%{?rhel} && 0%{?rhel} >= 8
+%global python3_pkgprefix python3.12
+%endif
 %if 0%{?suse_version} == 1500
 %global python3_pkgprefix python311
 %endif
@@ -10,7 +13,7 @@
 %global python3_pkgprefix python313
 %endif
 
-%if 0%{?rhel} && 0%{?rhel} >= 9
+%if 0%{?rhel} && 0%{?rhel} >= 8
 %global __ospython %{_bindir}/python3.12
 %global python3_buildversion 3.12
 %global __requires_exclude ^python3\\.12dist

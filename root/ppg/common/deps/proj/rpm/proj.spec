@@ -4,6 +4,8 @@
 %bcond_with mingw
 %endif
 
+%global gts_version 14
+
 # proj-data contains grid tool scripts with #!/usr/bin/env python shebangs;
 # these are not RPM-managed executables and should not be mangled.
 %global __brp_mangle_shebangs_exclude_from /usr/share/proj
@@ -33,6 +35,9 @@ BuildRequires:  gtest-devel >= 1.8.0
 BuildRequires:  make
 BuildRequires:  libtiff-devel
 BuildRequires:  sqlite-devel
+%if 0%{?gts_version}
+BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
+%endif
 
 %if %{with mingw}
 BuildRequires: mingw32-curl
@@ -249,6 +254,9 @@ projection functions. Proj docs: http://www.remotesensing.org/dl/new_docs/
 
 
 %build
+%if 0%{?gts_version}
+source /opt/rh/gcc-toolset-%{gts_version}/enable
+%endif
 # Native build
 %if 0%{?fedora}
 %cmake -DUSE_EXTERNAL_GTEST=ON
@@ -395,5 +403,8 @@ rm -rf %{buildroot}%{mingw64_datadir}/bash-completion
 
 
 %changelog
+* Tue May 27 2026 Percona Development <info@percona.com> - 9.6.0-2
+- Use gcc-toolset-14 on RHEL-8/UBI-8 to satisfy PROJ 9.6's C23 cmake check
+
 * Thu May 21 2026 Percona Development <info@percona.com> - 9.6.0-1
 - Initial packaging of proj for Percona OBS

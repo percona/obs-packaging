@@ -13,8 +13,8 @@ LABEL name="Percona Distribution for PostgreSQL Upgrade" \
       summary="Percona Distribution for PostgreSQL major version upgrade container" \
       maintainer="Percona Development <info@percona.com>" \
       org.opencontainers.image.authors="info@percona.com"
-LABEL version="<VERSION>"
-LABEL release="<RELEASE>"
+LABEL version="%!{PG_VERSION}-%!{PPG_RELEASE}"
+LABEL release="%!{PPG_RELEASE}"
 
 # openssl-fips-provider-so is not properly obsoleted by the newer openssl-fips-provider
 # (el9_7+), causing a file conflict on /usr/lib64/ossl-modules/fips.so during dnf update.
@@ -25,7 +25,7 @@ RUN microdnf -y install \
     glibc-langpack-en systemd-rpm-macros file \
     mariadb-connector-c-config crypto-policies-scripts pkgconfig
 
-ENV PPG_VERSION <VERSION>
+ENV PPG_VERSION %!{PG_VERSION}-%!{PPG_RELEASE}
 ENV PPG_MAJOR_VERSION %!{PG_MAJOR_VERSION}
 ENV OS_VER el9
 

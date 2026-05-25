@@ -1,0 +1,8 @@
+<services>
+  <service name="download_url">
+    <param name="host">github.com</param>
+    <param name="protocol">https</param>
+    <param name="path">/nlohmann/json/archive/refs/tags/v3.11.3.tar.gz</param>
+    <param name="filename">nlohmann-json-3.11.3.tar.gz</param>
+  </service>
+</services>

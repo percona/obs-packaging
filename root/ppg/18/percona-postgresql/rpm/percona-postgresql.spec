@@ -12,7 +12,7 @@
 %global beta 0
 %{?beta:%global __os_install_post /usr/lib/rpm/brp-compress}
 
-%if 0%{?rhel} >= 9
+%if 0%{?rhel} >= 8
 %global gts_version 14
 %endif
 
@@ -343,6 +343,7 @@ Obsoletes:      %{sname}-docs <= %{version}-%{release}
 Obsoletes:      %{vname}-docs <= %{version}-%{release}
 Epoch:          1
 
+BuildRequires:	docbook-dtds
 %if 0%{?rhel} || 0%{?fedora}
 BuildRequires:	docbook-style-xsl libxslt
 %endif

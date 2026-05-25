@@ -7,9 +7,6 @@ test -f /.profile && . /.profile
 
 echo "Configure UBI image: [$kiwi_iname]..."
 
-rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
-rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-beta
-
 microdnf clean all || true
 
 rm -rf {/target,}/usr/share/doc

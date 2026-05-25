@@ -7,6 +7,8 @@
 %global boost_docdir __tmp_docdir
 %global boost_examplesdir __tmp_examplesdir
 
+%{!?toolchain: %global toolchain gcc}
+
 %if 0%{?flatpak}
 # For bundling in Flatpak, currently build without mpich and openmpi,
 # which aren't needed and cause prefix=/app errors.
@@ -30,6 +32,14 @@
   %bcond_with quadmath
 %else
   %bcond_without quadmath
+%endif
+
+%if 0%{?rhel} && 0%{?rhel} >= 8
+%global python3_pkgversion    3.12
+%global python3_version       3.12
+%global python3_version_nodots 312
+%else
+%global python3_pkgversion 3
 %endif
 
 Name: boost
@@ -99,7 +109,7 @@ Requires: %{name}-type_erasure%{?_isa} = %{version}-%{release}
 Requires: %{name}-wave%{?_isa} = %{version}-%{release}
 
 %if %{with python3}
-Recommends: (boost-numpy3 if python3-numpy)
+Recommends: (boost-numpy3 if python%{python3_pkgversion}-numpy)
 %endif
 
 BuildRequires: gcc-c++
@@ -110,8 +120,8 @@ BuildRequires: zlib-devel
 BuildRequires: xz-devel
 BuildRequires: libzstd-devel
 %if %{with python3}
-BuildRequires: python3-devel
-BuildRequires: python3-numpy
+BuildRequires: python%{python3_pkgversion}-devel
+BuildRequires: python%{python3_pkgversion}-numpy
 %endif
 BuildRequires: libicu-devel
 %if %{with quadmath}
@@ -343,7 +353,7 @@ Run-time support for Boost.Nowide.
 %package numpy3
 Summary: Run-time component of boost numpy library for Python 3
 Requires: %{name}-python3%{?_isa} = %{version}-%{release}
-Requires: python3-numpy
+Requires: python%{python3_pkgversion}-numpy
 
 %description numpy3
 
@@ -749,7 +759,7 @@ find ./boost -name '*.hpp' -perm /111 | xargs chmod a-x
 %set_build_flags
 # Dump the versions being used into the build logs.
 %if %{with python3}
-PYTHON3_ABIFLAGS=$(/usr/bin/python3-config --abiflags)
+PYTHON3_ABIFLAGS=$(/usr/bin/python%{python3_version}-config --abiflags)
 : PYTHON3_VERSION=%{python3_version}
 : PYTHON3_ABIFLAGS=${PYTHON3_ABIFLAGS}
 %endif
@@ -773,7 +783,7 @@ EOF
 
 %if %{with python3}
 cat >> ./tools/build/src/user-config.jam << EOF
-using python : %{python3_version} : /usr/bin/python3 : /usr/include/python%{python3_version}${PYTHON3_ABIFLAGS} : : : ;
+using python : %{python3_version} : /usr/bin/python%{python3_version} : /usr/include/python%{python3_version}${PYTHON3_ABIFLAGS} : : : ;
 EOF
 %endif
 

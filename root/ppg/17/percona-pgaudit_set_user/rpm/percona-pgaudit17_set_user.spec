@@ -1,6 +1,6 @@
 %define pgmajorversion %!{PG_MAJOR_VERSION}
 
-%if 0%{?rhel} >= 9
+%if 0%{?rhel} >= 8
 %global gts_version 14
 %endif
 

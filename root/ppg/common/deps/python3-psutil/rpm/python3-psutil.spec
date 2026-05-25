@@ -1,4 +1,4 @@
-%if 0%{?rhel} && 0%{?rhel} >= 9
+%if 0%{?rhel} && 0%{?rhel} >= 8
 %global __ospython        %{_bindir}/python3.12
 %global python3_pkgprefix python3.12
 %global python3_buildversion 3.12

@@ -7,6 +7,10 @@ repositories:
     paths:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
         repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: appstream
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: baseos
     archs: [x86_64, aarch64]
   - name: images
     paths:
@@ -36,6 +40,13 @@ project-config: |
   Type: kiwi
   Repotype: none
   Patterntype: none
+
+  ExpandFlags: module:perl-5.26
+  ExpandFlags: module:perl-IO-Socket-SSL-2.066
+  ExpandFlags: module:perl-libwww-perl-6.34
+  ExpandFlags: module:llvm-toolset-rhel8
+  ExpandFlags: module:perl-DBD-Pg-3.7
+  ExpandFlags: module:perl-DBI-1.641
 
   ExpandFlags: kiwi-nobasepackages
   Preinstall: filesystem glibc libgcc audit-libs bzip2-libs libacl libattr libarchive libcap libcap-ng lz4-libs libxml2 libzstd lua-libs openssl-libs popt sqlite-libs xz-libs zlib rpm-libs rpm util-linux-user umoci xz

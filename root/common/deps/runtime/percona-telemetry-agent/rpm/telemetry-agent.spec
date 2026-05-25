@@ -13,10 +13,12 @@ Source1: vendor.tar.gz
 
 %if 0%{?suse_version} >= 1600
 BuildRequires:  go >= 1.26
-%endif
-
-%if 0%{?rhel} >= 8
+%else
+%if 0%{?rhel} >= 8 && 0%{?rhel} < 10
 BuildRequires: golang >= 1.26.4
+%else
+BuildRequires: golang
+%endif
 %endif
 
 BuildRequires: make git

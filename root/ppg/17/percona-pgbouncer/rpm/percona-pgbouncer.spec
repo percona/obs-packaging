@@ -19,7 +19,11 @@ Patch0:		%{sname}-ini.patch
 
 BuildRequires:	libevent-devel >= 2.0 libtool pandoc systemd-devel
 Requires:	libevent >= 2.0
+%if 0%{?rhel} >= 8
+Requires:	python3.12 python3.12-psycopg2
+%else
 Requires:	python3 python3-psycopg2
+%endif
 BuildRequires:	openssl-devel pam-devel
 
 %if 0%{?suse_version} >= 1500
@@ -31,7 +35,7 @@ Requires:	openssl-libs >= 1.1.1k
 BuildRequires:	openssl-devel
 %endif
 
-%if 0%{?fedora} >= 41 || 0%{?rhel} >= 9
+%if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
 BuildRequires:	c-ares-devel >= 1.13
 Requires:	c-ares >= 1.13
 %endif
@@ -52,9 +56,12 @@ Requires:	libldap-2
 BuildRequires:	openldap2-devel
 Requires:	libldap-2_5-0
 %endif
-%if 0%{?fedora} >= 41 || 0%{?rhel} >= 9
+%if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
 BuildRequires:	openldap-devel
 Requires:	openldap
+%endif
+%if 0%{?rhel} >= 8
+BuildRequires:	python3.12
 %endif
 
 %if %{systemd_enabled}
@@ -94,7 +101,7 @@ sed -i.fedora \
 
 %configure \
         --datadir=%{_datadir} \
-%if 0%{?rhel} >= 9
+%if 0%{?rhel} >= 8
         --with-cares --disable-evdns \
 %else
         --without-cares \
@@ -113,6 +120,9 @@ sed -i.fedora \
 %{__install} -p -m 644 %{SOURCE2} %{buildroot}%{_sysconfdir}/sysconfig/%{sname}
 %{__install} -p -m 644 etc/pgbouncer.ini %{buildroot}%{_sysconfdir}/%{sname}
 %{__install} -p -m 700 etc/mkauth.py %{buildroot}%{_sysconfdir}/%{sname}/
+%if 0%{?rhel} >= 8
+sed -i 's|/usr/bin/env python3|/usr/bin/python3.12|' %{buildroot}%{_sysconfdir}/%{sname}/mkauth.py
+%endif
 
 %if %{systemd_enabled}
 %{__install} -d %{buildroot}%{_unitdir}
