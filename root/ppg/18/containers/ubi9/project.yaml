@@ -45,6 +45,8 @@ project-config: |
   Type: docker
   BuildEngine: podman
 
+  Preinstall: skopeo
+
   ExpandFlags: filterbasecontainerpkgs
   Prefer: redhat-release
   Prefer: glibc-minimal-langpack
