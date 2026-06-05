@@ -5,7 +5,7 @@ Version:        3.10.3
 %if "%{?enable_native_atlas}" != "0"
 %define dist .native
 %endif
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Automatically Tuned Linear Algebra Software
 
 License:        BSD
@@ -30,6 +30,7 @@ Patch6:	atlas-gcc10.patch
 
 Patch7: 0001-Avoid-c99-standard-compiler.patch
 Patch8: 0002-Fix-rpath-link-command-line-options.patch
+Patch9: atlas-allow-multiple-definition.patch
 Patch10: 0004-Read-L1-data-cache-size-from-sysconf-if-possible.patch
 
 #Covscan
@@ -322,6 +323,7 @@ CPUs. The base ATLAS builds for the ppc64 architecture are made for the Power 5 
 
 %patch7 -p1
 %patch8 -p1
+%patch9 -p1
 %patch10 -p1
 
 %patch101 -p1
@@ -731,6 +733,11 @@ fi
 %endif
 
 %changelog
+* Thu Jun 05 2026 Percona Development <info@percona.com> - 3.10.3-2
+- Add atlas-allow-multiple-definition.patch to fix build with binutils 2.35+
+  (UBI 9 / RHEL 9): duplicate ATL_SetAtomicCount symbols in libatlas.a caused
+  link failure; pass --allow-multiple-definition when building shared libs
+
 * Fri May 22 2026 Percona Development <info@percona.com> - 3.10.3-1
 - Initial packaging of atlas for Percona OBS
 
