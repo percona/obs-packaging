@@ -15,8 +15,8 @@ Source1: vendor.tar.gz
 BuildRequires:  go >= 1.26
 %endif
 
-%if 0%{?rhel} == 9
-BuildRequires: golang >= 1.26
+%if 0%{?rhel} >= 8
+BuildRequires: golang >= 1.26.4
 %endif
 
 BuildRequires: make git

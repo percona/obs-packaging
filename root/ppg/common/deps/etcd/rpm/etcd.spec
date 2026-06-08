@@ -25,7 +25,7 @@ Source3:        vendor-server.tar.gz
 Source4:        vendor-etcdctl.tar.gz
 Source5:        vendor-etcdutl.tar.gz
 
-BuildRequires:  golang
+BuildRequires:  golang >= 1.26.4
 
 BuildRequires:	python3-devel
 %if 0%{?rhel} && 0%{?rhel} == 7
