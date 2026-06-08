@@ -1,10 +1,7 @@
 title: Go 1.26 toolchain
-description: Go programming language toolchain version 1.26.3 binary distribution.
+description: Go programming language toolchain version 1.26.4 binary distribution.
 
 build:
-  Debian_13: true
-  Ubuntu_24.04: true
   Ubuntu_26.04: false
-  RockyLinux_9: true
   openSUSE_Leap_16: false
   openSUSE_Tumbleweed: false
