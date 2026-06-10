@@ -32,6 +32,7 @@
     <package name="rootfiles"/>
     <package name="libusbx"/>
     <package name="langpacks-en"/>
+    <package name="file"/>
     <package name="findutils"/>
     <package name="perl"/>
     <package name="perl-IO-Socket-SSL"/>

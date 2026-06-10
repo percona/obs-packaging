@@ -7,10 +7,6 @@ repositories:
     paths:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
         repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
-        repository: appstream
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
-        repository: baseos
     archs: [x86_64, aarch64]
   - name: images
     paths:
@@ -18,6 +14,10 @@ repositories:
         repository: UBI_8
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
         repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: appstream
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: baseos
     archs: [x86_64, aarch64]
 
 project-config: |
