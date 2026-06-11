@@ -308,15 +308,16 @@ Summary:        The shared libraries required for any PostgreSQL clients
 Group:          Productivity/Databases/Clients
 Provides:       libpq5 >= 10.0
 
-%if 0%{?rhel} && 0%{?rhel} <= 6
-Requires:       openssl
-%else
-%if 0%{?suse_version} >= 1315 && 0%{?suse_version} <= 1499
-Requires:       libopenssl1_0_0
-%else
-Requires:       openssl-libs
+%if 0%{?suse_version} == 1500
+Requires:	libopenssl3
 %endif
+%if 0%{?suse_version} == 1600
+Requires:	libopenssl3
 %endif
+%if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
+Requires:	openssl-libs >= 1.1.1k
+%endif
+
 Provides:       postgresql-libs >= %{version}-%{release}
 Provides:       %{sname}-libs = %{epoch}:%{version}-%{release}
 Provides:       %{vname}-libs = %{epoch}:%{version}-%{release}
