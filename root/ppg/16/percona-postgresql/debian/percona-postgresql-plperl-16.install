@@ -1,0 +1,6 @@
+#!/usr/bin/dh-exec
+
+usr/lib/postgresql/*/lib/*plperl*.so
+[!alpha !hppa !hurd-amd64 !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !loong64 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32] <!pkg.postgresql.nollvm> usr/lib/postgresql/*/lib/bitcode/*plperl*
+usr/share/locale/*/*/plperl-*.mo
+usr/share/postgresql/*/extension/*plperl*

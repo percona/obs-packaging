@@ -1,0 +1,20 @@
+Tests: default-psql
+Depends:
+ postgresql,
+Restrictions: needs-root, skippable
+
+Tests: run-testsuite
+Depends:
+ build-essential,
+ debhelper,
+ fakeroot,
+ hunspell-en-us,
+ iproute2,
+ locales-all,
+ logrotate,
+ netcat-openbsd,
+ perl,
+ postgresql-all,
+ postgresql-doc,
+ procps,
+Restrictions: needs-root

@@ -1,0 +1,1 @@
+rm_conffile /etc/postgresql-common/supported_versions 269~ postgresql-client-common

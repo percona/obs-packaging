@@ -1,0 +1,23 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+    install|upgrade)
+        # Divert libpq-dev's pg_config away so we can install a wrapper that
+        # points at the most recent postgresql-server-dev-NN pg_config.
+        # This makes a difference when compiling extensions against a PG
+        # version that does not match the libpq version.
+	dpkg-divert --package postgresql-common --rename --divert /usr/bin/pg_config.libpq-dev --add /usr/bin/pg_config
+        ;;
+
+    abort-upgrade)
+        ;;
+
+    *)
+        echo "$0 called with unknown argument \`$1'" 1>&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
