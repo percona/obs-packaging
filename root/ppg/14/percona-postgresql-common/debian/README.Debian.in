@@ -1,0 +1,154 @@
+PostgreSQL for Debian
+=====================
+
+PostgreSQL is a fully featured object-relational database management system. It
+supports a large part of the SQL standard and is designed to be extensible by
+users in many aspects. Its features include ACID transactions, foreign keys,
+views, sequences, subqueries, triggers, outer joins, multiversion concurrency
+control, and user-defined types and functions.
+
+Since the on-disk data format of all major PostgreSQL versions (like NN, MM,
+etc.) is incompatible to each other, Debian's PostgreSQL packaging architecture
+is designed to maintain database instances (called "clusters in PostgreSQL
+jargon) of different major versions in parallel.
+
+This postgresql-common package provides the common infrastructure and all
+frontend programs that users and administrators use. The version specific
+server and client programs are shipped in postgresql-*-<version> packages.
+
+For a detailed description of the architecture, please see
+
+  /usr/share/doc/postgresql-common/README.md.gz
+
+First steps for the impatient
+-----------------------------
+Eventually you will not get around reading at least some parts of the manual,
+but if you want to get straight into playing SQL, here are the steps to create
+a database user and a database for the Unix user 'joe':
+
+1. Install "postgresql" metapackage. This will automatically create a default
+   cluster "main" with the database superuser "postgres".
+
+2. Get a shell for the database superuser "postgres":
+
+   $ sudo -u postgres -i
+
+3. In this postgres shell, create a database user with the same name as your
+   original Unix login name (e.g. "joe"):
+
+   $ createuser joe
+
+4. Create a database "joe" which is owned by "joe":
+
+   $ createdb -O joe joe
+
+   For details about the options, see createdb(1).
+
+5. Exit the postgres shell.
+
+6. As user joe, you should now be able to connect to your database with
+
+   $ psql joe
+
+Cluster management
+------------------
+For managing clusters, the following commands are provided (each with its own
+manual page):
+
+   pg_createcluster  - Create a new cluster or integrate an existing one into
+                       the postgresql-common architecture.
+   pg_ctlcluster     - Control the server process of a cluster (start, stop,
+                       restart).
+   pg_lsclusters     - Show a list of all existing clusters and their status.
+   pg_upgradecluster - Migrate a cluster from one major version to another one.
+   pg_renamecluster  - Rename a cluster.
+   pg_dropcluster    - Completely remove a cluster.
+
+Please note that you can of course also use the upstream tools for
+creating clusters, such as initdb(1). However, please note that in
+this case you cannot expect *any* of above pg_* tools to work, since
+they use different configuration settings (SSL, data directories,
+etc.) and file locations (e.g.
+/etc/postgresql/NN/main/postgresql.conf). If in doubt, then do *not*
+use initdb, but only pg_createcluster. Since merely installing
+postgresql-NN will already set up a default cluster which is ready to
+work, most people do not need to bother about initdb or
+pg_createcluster at all.
+
+Port assignment
+---------------
+The pg_* tools automatically manage the server ports unless you specify them
+manually. The first cluster will run on the default port 5432, and each new
+cluster will use the next higher free one.
+
+E. g. if you first install "postgresql-NN" on a clean system, the
+default NN/main cluster will run on port 5432. If you then create
+another NN cluster, or install the "postgresql-MM" package, that new
+one will run on 5433.
+
+Use "pg_lsclusters" for displaying the cluster <-> port mapping.
+
+Upgrading
+------------------------------
+To upgrade a cluster to a newer PostgreSQL major version, install the
+postgresql-MM package (and any extension packages required), and run the
+command:
+
+  pg_upgradecluster NN main -v MM
+
+If the "postgresql" meta package is installed, it automatically pulls in the
+postgresql-NN package for the latest supported PostgreSQL version in the
+package repository. Later, once a newer PostgreSQL version MM is the latest
+supported one, the "postgresql" meta package is switched to pull in
+postgresql-MM. On upgrading this meta package, you will be asked whether an
+attempt should be made to automatically upgrade the "main" cluster to the new
+version.
+
+By default, data is migrated to the new version using pg_dump. This rewrites
+data and indexes and is slow, but safe. A faster upgrade method can be selected
+with --method=upgrade which uses pg_upgrade under the hood. Make sure to
+understand the implications for index ordering on disk ("collation") when using
+this method across operating system upgrades. See the pg_upgradecluster manpage
+for details.
+
+Once the upgrade has been completed and the cluster has been verified to work,
+the old cluster
+can be removed:
+
+  pg_dropcluster NN main
+
+SSL
+---
+The PostgreSQL server packages support SSL, which provides encrypted and
+authenticated network communication. SSL should be used if you have an
+untrusted network between a database server and a client and these exchange
+security sensitive data like passwords or confidential database contents.
+
+When a cluster is created with pg_createcluster, SSL support will automatically
+be enabled. postgresql-common makes use of the 'snakeoil' SSL certificate that
+is generated by the ssl-cert package, so that SSL works out of the box
+(ssl_cert_file, ssl_key_file). In addition, if /etc/postgresql-common/root.crt
+exists, it will be used as CA certificate file (ssl_ca_file).
+
+/etc/postgresql-common/root.crt is a dummy file by default, so that
+client-side authentication is not performed. To enable it, you should
+add some root certificates to it. A reasonable choice is to just
+symlink the file to /etc/ssl/certs/ssl-cert-snakeoil.pem; in this
+case, client certificates need to be signed by the snakeoil
+certificate, which might be desirable in many cases. See
+
+  /usr/share/doc/postgresql-doc-NN/html/ssl-tcp.html
+
+for details (in package postgresql-doc).
+
+Further documentation
+---------------------
+All commands shipped by postgresql-common have detailed manpages. See
+postgresql-common(7) for the documentation of the database client program
+wrapping, and user_clusters(5) and postgresqlrc(5) for the cluster
+configuration.
+
+The documentation of the database server and client functions, SQL commands,
+modules, etc.  documented is shipped in the per-version packages
+postgresql-doc-<version>.
+

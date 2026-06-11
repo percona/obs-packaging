@@ -1,0 +1,11 @@
+percona-pg-telemetry (%!{PG_TELEMETRY_VERSION}-1) unstable; urgency=low
+
+  * Update to upstream version %!{PG_TELEMETRY_VERSION}
+
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}
+
+percona-pg-telemetry (1.0.0-1) unstable; urgency=medium
+
+  * Initial build.
+
+ -- Surabhi Bhat <surabhi.bhat@percona.com>  Fri, 26 Apr 2024 19:20:11 +0100

@@ -1,0 +1,6 @@
+percona-postgresql-common (%!{POSTGRESQL_COMMON_VERSION}) unstable; urgency=low
+
+  * Update to upstream version %!{POSTGRESQL_COMMON_VERSION}.
+
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}
+
