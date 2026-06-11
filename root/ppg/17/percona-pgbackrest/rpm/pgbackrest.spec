@@ -29,9 +29,13 @@ BuildRequires:	openssl-devel
 Requires:	lz4-libs libzstd
 BuildRequires:	lz4-devel bzip2-devel ninja-build
 %endif
+%if 0%{?fedora} >= 42 || 0%{?rhel} >= 8
+Requires:	libssh2
+BuildRequires:	libssh2-devel
+%endif
 %if 0%{?suse_version} && 0%{?suse_version} >= 1500
-Requires:	liblz4-1 libzstd1
-BuildRequires:	liblz4-devel libbz2-devel ninja
+Requires:	liblz4-1 libzstd1 libssh2-1
+BuildRequires:	liblz4-devel libbz2-devel libssh2-devel ninja
 %endif
 
 Requires:	postgresql-libs
@@ -67,7 +71,7 @@ export PG_CONFIG=/usr/pgsql-%{pgmajorversion}/bin/pg_config
 export PKG_CONFIG_LIBDIR=/usr/pgsql-%{pgmajorversion}/lib/pkgconfig:/usr/lib64/pkgconfig
 unset PKG_CONFIG_PATH
 %{__install} -d build
-%meson -Dlibssh2=disabled
+%meson
 %meson_build
 
 %install
@@ -103,7 +107,7 @@ useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
 if [ $1 -eq 1 ] ; then
    /bin/systemctl daemon-reload >/dev/null 2>&1 || :
    %if 0%{?suse_version} >= 1500
-   %service_add_pre pgbackrest}.service
+   %service_add_pre pgbackrest.service
    %else
    %systemd_post pgbackrest.service
    %endif

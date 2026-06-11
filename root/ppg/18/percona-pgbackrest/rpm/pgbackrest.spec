@@ -21,7 +21,7 @@ Source3:	pgbackrest.logrotate
 Source4:	pgbackrest.service
 BuildRequires:	gcc openssl-devel zlib-devel percona-postgresql%{pgmajorversion}-devel
 BuildRequires:	libzstd-devel libxml2-devel libyaml-devel meson
-%if 0%{?rhel} >= 9 || 0%{?fedora} >= 42
+%if 0%{?rhel} >= 8 || 0%{?fedora} >= 42
 BuildRequires:	libssh2-devel
 %endif
 BuildRequires:	libcurl-devel
@@ -39,12 +39,12 @@ BuildRequires:	openssl-devel
 BuildRequires:	lz4-devel bzip2-devel ninja-build
 Requires:	lz4-libs libzstd
 %endif
-%if 0%{?fedora} >= 42 || 0%{?rhel} >= 9
+%if 0%{?fedora} >= 42 || 0%{?rhel} >= 8
 Requires:	libssh2
 %endif
 %if 0%{?suse_version} && 0%{?suse_version} >= 1500
 Requires:	liblz4-1 libzstd1 libssh2-1
-BuildRequires:	liblz4-devel libbz2-devel ninja
+BuildRequires:	liblz4-devel libbz2-devel libssh2-devel ninja
 %endif
 
 Requires:	postgresql-libs
@@ -80,11 +80,7 @@ export PG_CONFIG=/usr/pgsql-%{pgmajorversion}/bin/pg_config
 export PKG_CONFIG_LIBDIR=/usr/pgsql-%{pgmajorversion}/lib/pkgconfig:/usr/lib64/pkgconfig
 unset PKG_CONFIG_PATH
 %{__install} -d build
-%if 0%{?rhel} == 8
-%meson -Dlibssh2=disabled
-%else
 %meson
-%endif
 %meson_build
 
 %install
@@ -120,7 +116,7 @@ useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
 if [ $1 -eq 1 ] ; then
    /bin/systemctl daemon-reload >/dev/null 2>&1 || :
    %if 0%{?suse_version} >= 1500
-   %service_add_pre pgbackrest}.service
+   %service_add_pre pgbackrest.service
    %else
    %systemd_post pgbackrest.service
    %endif
