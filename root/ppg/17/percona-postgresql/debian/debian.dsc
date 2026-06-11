@@ -59,6 +59,7 @@ Build-Depends:
     libcurl4,
     libcurl4-openssl-dev,
     curl | libz-dev,
-    libzstd-dev
+    libzstd-dev,
+    percona-postgresql-common-dev
 Debtransform-Release: 1
 Debtransform-Files-Tar: debian.tar.gz

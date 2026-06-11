@@ -47,7 +47,8 @@ Build-Depends:
  uuid-dev,
  xsltproc,
  zlib1g-dev | libz-dev,
- libzstd-dev
+ libzstd-dev,
+ percona-postgresql-common-dev
 Homepage: http://www.postgresql.org/
 
 Package: libpq-dev
