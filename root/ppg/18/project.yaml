@@ -33,14 +33,14 @@ repositories:
     archs: [x86_64, aarch64]
   - name: UBI_8
     paths:
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:8
-        repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
-        repository: standard
       - subproject: common:deps:build
         repository: UBI_8
       - subproject: ppg:common:deps
         repository: UBI_8
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:8
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
+        repository: standard
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
         repository: appstream
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
