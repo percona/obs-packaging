@@ -28,9 +28,13 @@ URL:		https://github.com/%{sname}/%{sname}/
 Source0:	percona-pgvector-%{version}.tar.gz
 
 BuildRequires:	percona-postgresql%{pgmajorversion}-devel
+
 %if 0%{?gts_version}
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
 %endif
+
+BuildRequires:	clang llvm
+
 Requires:	postgresql%{pgmajorversion}-server
 
 %description
@@ -42,15 +46,7 @@ inner product, and cosine distance
 Summary:	Just-in-time compilation support for pgvector
 Requires:	%{name}%{?_isa} = %{version}-%{release}
 
-%if 0%{?suse_version} == 1500
-BuildRequires:	llvm17-devel clang17-devel clang17 llvm17
-%endif
-%if 0%{?suse_version} >= 1600
-BuildRequires:	llvm19-devel clang19-devel clang19 llvm19
-%endif
-%if 0%{?fedora} || 0%{?rhel}
-BuildRequires:	llvm-devel clang-devel clang llvm
-%endif
+BuildRequires:	llvm-devel clang-devel
 
 %description llvmjit
 This packages provides JIT support for pgvector

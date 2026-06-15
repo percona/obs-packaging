@@ -158,22 +158,7 @@ BuildRequires:	llvm-toolset-7.0-llvm-devel >= 7.0.1 llvm-toolset-7.0-clang >= 7.
 BuildRequires:  llvm5.0-devel >= 5.0 llvm-toolset-7-clang >= 4.0.1
 %endif
 %endif
-%if 0%{?rhel} && 0%{?rhel} >= 8
-# Packages come from Appstream:
 BuildRequires:  llvm-devel clang-devel
-%endif
-%if 0%{?fedora}
-BuildRequires:  llvm-devel >= 5.0 clang-devel >= 5.0
-%endif
-%if 0%{?suse_version} >= 1315 && 0%{?suse_version} <= 1499
-BuildRequires:	llvm6-devel clang6-devel
-%endif
-%if 0%{?suse_version} >= 1500 && 0%{?suse_version} <= 1600
-BuildRequires:  llvm17-devel clang17-devel clang17 llvm17
-%endif
-%if 0%{?suse_version} > 1600
-BuildRequires:  llvm-devel clang-devel
-%endif
 %endif
 
 %if %kerberos

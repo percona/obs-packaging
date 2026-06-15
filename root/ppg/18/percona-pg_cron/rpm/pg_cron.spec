@@ -67,25 +67,8 @@ schedule PostgreSQL commands directly from the database.
 %package llvmjit
 Summary:	Just-in-time compilation support for pg_cron
 Requires:	%{name}%{?_isa} = %{version}-%{release}
-#%%if 0%%{?rhel} && 0%%{?rhel} == 7
-#%%ifarch aarch64
-#Requires:	llvm-toolset-7.0-llvm >= 7.0.1
-#%%else
-#Requires:	llvm5.0 >= 5.0
-#%%endif
-#%%endif
-%if 0%{?suse_version} == 1500
-BuildRequires:	llvm17-devel clang17-devel clang17 llvm17
-%endif
-%if 0%{?suse_version} >= 1600
-BuildRequires:	llvm19-devel clang19-devel clang19 llvm19
-%endif
-%if 0%{?fedora} || 0%{?rhel}
+
 BuildRequires:	llvm-devel clang-devel clang llvm
-%endif
-#%%if 0%%{?fedora} || 0%%{?rhel} >= 8
-#Requires:	llvm => 13.0
-#%%endif
 
 %description llvmjit
 This packages provides JIT support for pg_cron

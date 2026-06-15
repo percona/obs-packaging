@@ -24,12 +24,7 @@ BuildRequires:	percona-postgresql%{pgmajorversion}-devel
 %if 0%{?gts_version}
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
 %endif
-%if 0%{?rhel} || 0%{?fedora}
 BuildRequires:	clang llvm
-%endif
-%if 0%{?suse_version}
-BuildRequires:	clang llvm
-%endif
 
 Requires:	postgresql%{pgmajorversion}
 

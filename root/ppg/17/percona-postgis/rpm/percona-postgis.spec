@@ -298,22 +298,8 @@ The %{name}-utils package provides the utilities for PostGIS.
 %package llvmjit
 Summary:	Just-in-time compilation support for postgis35
 Requires:	%{name}%{?_isa} = %{version}-%{release}
-%if 0%{?suse_version} == 1500
-BuildRequires:  llvm17-devel clang17-devel
-Requires:	llvm17
-%endif
-%if 0%{?suse_version} == 1600
-BuildRequires:  llvm19-devel clang19-devel
-Requires:	llvm19
-%endif
-%if 0%{?suse_version} > 1600
-BuildRequires:	clang llvm
-Requires:	llvm
-%endif
-%if 0%{?fedora} || 0%{?rhel} >= 8
 BuildRequires:	clang llvm
 Requires:	llvm >= 19.0
-%endif
 
 %description llvmjit
 This packages provides JIT support for postgis35

@@ -47,15 +47,7 @@ It seamlessly encrypts and decrypts data in PostgreSQL databases, ensuring secur
 %package llvmjit
 Summary:	Just-in-time compilation support for pg_tde
 Requires:	%{name}%{?_isa} = %{version}-%{release}
-%if 0%{?suse_version} == 1500
-BuildRequires:	llvm17-devel clang17-devel clang17 llvm17
-%endif
-%if 0%{?suse_version} >= 1600
-BuildRequires:	llvm19-devel clang19-devel clang19 llvm19
-%endif
-%if 0%{?fedora} || 0%{?rhel}
 BuildRequires:	llvm-devel clang-devel clang llvm
-%endif
 
 %description llvmjit
 This packages provides JIT support for pg_tde

@@ -162,18 +162,7 @@ Requires:       libicu
 %endif
 
 %if %llvm
-%if 0%{?suse_version} == 1500
-BuildRequires:        llvm17-devel clang17-devel
-%endif
-%if 0%{?suse_version} == 1600
-BuildRequires:        llvm19-devel clang19-devel
-%endif
-%if 0%{?suse_version} > 1600
-BuildRequires:  llvm-devel clang-devel
-%endif
-%if 0%{?fedora} || 0%{?rhel}
-BuildRequires:  llvm-devel => 19.0 clang-devel >= 19.0
-%endif
+BuildRequires:  llvm-devel => 19 clang-devel >= 19
 %endif
 
 %if %kerberos

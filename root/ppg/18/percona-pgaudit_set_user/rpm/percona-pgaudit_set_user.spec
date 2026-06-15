@@ -27,15 +27,7 @@ BuildRequires:	openssl-devel
 %if 0%{?gts_version}
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
 %endif
-%if 0%{?suse_version} >= 1600
-BuildRequires:	clang19 llvm19
-%endif
-%if 0%{?suse_version} == 1500
-BuildRequires:	clang17 llvm17
-%endif
-%if 0%{?fedora} || 0%{?rhel}
 BuildRequires:	clang llvm
-%endif
 
 Requires:	postgresql%{pgmajorversion}
 

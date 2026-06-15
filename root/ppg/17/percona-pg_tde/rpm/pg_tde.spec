@@ -42,12 +42,7 @@ BuildRequires:  libjson-c-devel liblz4-devel
 %else
 BuildRequires:  json-c-devel lz4-devel
 %endif
-%if 0%{?rhel} || 0%{?fedora}
 BuildRequires:  clang llvm
-%endif
-%if 0%{?suse_version}
-BuildRequires:  clang llvm
-%endif
 %if 0%{?suse_version} >= 1500
 Requires:       libjson-c5 curl libopenssl3
 %else
@@ -65,15 +60,7 @@ It seamlessly encrypts and decrypts data in PostgreSQL databases, ensuring secur
 %package llvmjit
 Summary:        Just-in-time compilation support for pg_tde
 Requires:       %{name}%{?_isa} = %{version}-%{release}
-%if 0%{?suse_version} >= 1315 && 0%{?suse_version} <= 1499
-BuildRequires:  llvm6-devel clang6-devel
-%endif
-%if 0%{?suse_version} >= 1500 && 0%{?suse_version} <= 1600
-BuildRequires:  llvm15-devel clang15-devel
-%endif
-%if 0%{?suse_version} > 1600
 BuildRequires:  llvm-devel clang-devel
-%endif
 
 %description llvmjit
 This packages provides JIT support for pg_tde

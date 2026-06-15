@@ -26,15 +26,7 @@ BuildRequires:  percona-postgresql%{pgmajorversion}-server
 BuildRequires:  percona-postgresql%{pgmajorversion}-devel
 BuildRequires:  openssl-devel
 BuildRequires:  krb5-devel
-%if 0%{?suse_version} >= 1600
-BuildRequires:  clang19 llvm19
-%endif
-%if 0%{?suse_version} == 1500
-BuildRequires:  clang17 llvm17
-%endif
-%if 0%{?fedora} || 0%{?rhel}
 BuildRequires:  clang llvm
-%endif
 
 Requires:       postgresql%{pgmajorversion}
 Requires:       postgresql%{pgmajorversion}-libs
