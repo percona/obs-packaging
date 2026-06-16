@@ -2,8 +2,12 @@
 
 | Package | Project | Version |
 | ------- | ------- | ------- |
-| percona-postgresql | ppg:16 | 16.14-1+2.1 |
+| percona-patroni | ppg:16 | 4.1.3-1+1.2 |
+| percona-pg-telemetry | ppg:16 | 1.2.0-1+1.2 |
+| percona-pg_cron | ppg:16 | 1.6.7-1+1.2 |
+| percona-postgresql | ppg:16 | 16.14-1+4.1 |
 | percona-postgresql-common | ppg:16 | 290-1+1.1 |
+| percona-telemetry-agent | ppg:16 | 1.0.14-1+6.1 |
 
 # Repository Installation Instructions
 
