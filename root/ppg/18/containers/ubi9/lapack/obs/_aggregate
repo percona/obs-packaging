@@ -1,5 +1,0 @@
-<aggregatelist>
-  <aggregate project="${OBS_ROOTPRJ}:ppg:common:deps">
-    <package>lapack</package>
-  </aggregate>
-</aggregatelist>
