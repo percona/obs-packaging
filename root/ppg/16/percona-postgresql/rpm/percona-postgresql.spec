@@ -115,6 +115,10 @@ Patch5:         %{sname}-var-run-socket.patch
 Patch6:         %{sname}-perl-rpath.patch
 Patch7:         llvm_static_linking.patch
 
+%if 0%{?suse_version}
+BuildRequires:  update-alternatives
+%endif
+
 BuildRequires:  perl glibc-devel bison flex >= 2.5.31
 BuildRequires:  gcc-c++
 BuildRequires:  perl(ExtUtils::MakeMaker)

@@ -85,6 +85,10 @@ Patch3:         %{sname}-%{pgmajorversion}-conf.patch
 Patch5:         %{sname}-%{pgmajorversion}-var-run-socket.patch
 Patch6:         %{sname}-%{pgmajorversion}-perl-rpath.patch
 
+%if 0%{?suse_version}
+BuildRequires:  update-alternatives
+%endif
+
 BuildRequires:  perl glibc-devel bison flex >= 2.5.31
 BuildRequires:  gcc-c++
 %if 0%{?gts_version}
