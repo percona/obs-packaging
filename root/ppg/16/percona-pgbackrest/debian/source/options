@@ -1,0 +1,3 @@
+# ignore changes in doc cache (username differences)
+extend-diff-ignore=(doc/resource/exe.cache|rpm/)
+

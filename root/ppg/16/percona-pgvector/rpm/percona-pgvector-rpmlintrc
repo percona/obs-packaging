@@ -1,0 +1,8 @@
+addFilter("binary-or-shlib-defines-rpath")
+addFilter("devel-file-in-non-devel-package")
+addFilter("filelist-forbidden-fhs23")
+addFilter("suse-filelist-forbidden-fhs23")
+addFilter("invalid-url")
+addFilter("no-binary")
+addFilter("no-soname")
+addFilter("unstripped-binary-or-object")

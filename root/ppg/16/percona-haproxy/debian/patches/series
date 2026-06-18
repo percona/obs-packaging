@@ -1,0 +1,5 @@
+haproxy.service-start-after-syslog.patch
+haproxy.service-add-documentation.patch
+
+# applied during the build process:
+# debianize-dconv.patch
