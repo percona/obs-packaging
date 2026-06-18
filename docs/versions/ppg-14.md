@@ -4,7 +4,7 @@
 | ------- | ------- | ------- |
 | etcd | ppg:14 | 3.5.30-1+5.1 |
 | percona-haproxy | ppg:14 | 2.8.23-1+1.1 |
-| percona-patroni | ppg:14 | 4.1.3-1+1.2 |
+| percona-patroni | ppg:14 | 4.1.3-1+2.1 |
 | percona-pg-telemetry | ppg:14 | 1.2.0-1+1.2 |
 | percona-pg_cron | ppg:14 | 1.6.7-1+1.2 |
 | percona-pg_gather | ppg:14 | 33-1+1.1 |
