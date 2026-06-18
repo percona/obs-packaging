@@ -1,0 +1,74 @@
+title: Percona UBI-9 Container Images for PostgreSQL %!{PG_MAJOR_VERSION}
+description: |
+  This project contains UBI-9 based container images for Percona Software for PostgreSQL %!{PG_MAJOR_VERSION}.
+
+repositories:
+  - name: UBI_9
+    paths:
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+        repository: devel
+    archs: [x86_64, aarch64]
+  - name: images
+    paths:
+      - subproject: ppg:%!{PG_MAJOR_VERSION}:containers:ubi9
+        repository: UBI_9
+      - subproject: ppg:%!{PG_MAJOR_VERSION}
+        repository: UBI_9
+      - subproject: ppg:common:deps
+        repository: UBI_9
+      - subproject: common:containers:ubi9
+        repository: images
+      - subproject: common:containers:ubi9
+        repository: UBI_9
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+        repository: standard
+    archs: [x86_64, aarch64]
+
+publish:
+  UBI_9: false
+
+project-config: |
+  %if "%_repository" == "UBI_9"
+  Type: spec
+  Ignore: kbd-legacy < 2.4.0-11
+  %endif
+
+  %if "%_repository" == "images"
+  Type: docker
+  BuildEngine: podman
+
+  Preinstall: skopeo
+
+  ExpandFlags: filterbasecontainerpkgs
+  Prefer: redhat-release
+  Prefer: glibc-minimal-langpack
+  Prefer: gpgme
+  Prefer: iptables-nft
+  Prefer: percona-postgresql%!{PG_MAJOR_VERSION}-libs
+  Ignore: rocky-release
+
+  Prefer: glibc-minimal-langpack
+
+  BuildFlags: sbom:spdx
+  BuildFlags: sbom:cyclonedx
+  PublishFlags: withsbom
+  %endif
+
+qa:
+  pipeline: docker-server-parallel-generic
+  parameters:
+    DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
+    SERVER_VERSION: "%!{PG_VERSION}"
+    TESTING_BRANCH: ricardo-work
+    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/14/containers/ubi9/images
+    WITH_POSTGIS:
+      - true
+      - false
+  matrix:
+    - WITH_POSTGIS
