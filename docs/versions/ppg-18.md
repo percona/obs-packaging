@@ -2,16 +2,6 @@
 
 | Package | Project | Version |
 | ------- | ------- | ------- |
-| atlas | ppg:18:containers:ubi9 | 3.10.3-3.3 |
-| blis | ppg:18:containers:ubi9 | 0.7.0-2.2 |
-| boost | ppg:18:containers:ubi9 | 1.75.0-2.2 |
-| c-ares | ppg:18:containers:ubi9 | 1.19.1-1.6 |
-| flexiblas | ppg:18:containers:ubi9 | 3.0.4-2.3 |
-| geos | ppg:18:containers:ubi9 | 3.13.1-1.3 |
-| gosu | ppg:18:containers:ubi9 | 1.19-6.3 |
-| lapack | ppg:18:containers:ubi9 | 3.9.0-1.3 |
-| perl-JSON | ppg:18:containers:ubi9 | 4.03-2.2 |
-| proj | ppg:18:containers:ubi9 | 9.6.0-2.2 |
 | etcd | ppg:18 | 3.5.30-1+5.1 |
 | percona-haproxy | ppg:18 | 2.8.23-1+1.1 |
 | percona-patroni | ppg:18 | 4.1.3-1+2.5 |
