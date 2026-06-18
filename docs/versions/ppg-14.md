@@ -45,6 +45,19 @@
 | sfcgal | ppg:14 | 2.2.0-3.2 |
 | ydiff | ppg:14 | 1.4.2-1+2.1 |
 
+## Container Images
+
+| Package | Project | Image | Version | Tags | Installed packages |
+| ------- | ------- | ----- | ------- | ---- | ------------------ |
+| percona-distribution-postgresql | ppg:14:containers:ubi8 | percona-distribution-postgresql | 14.23-1 | `14.23-1-1.1` `14.23-1` `14.23` `14` | gosu 1.19-6.2, percona-patroni 4.1.3-2.1, percona-patroni-etcd 4.1.3-2.1, percona-pg-telemetry14 1.2.0-1.2, percona-pg_cron_14 1.6.7-1.2, percona-pg_repack14 1.5.3-1.2, percona-pg_stat_monitor14 2.3.2-1.2, percona-pgaudit14 1.6.3-1.2, percona-pgaudit14_set_user 4.2.0-1.2, percona-pgbackrest 2.58.0-1.2, percona-pgvector_14 0.8.2-1.2, percona-pgvector_14-llvmjit 0.8.2-1.2, percona-postgresql-client-common 290-1.1, percona-postgresql-common 290-1.1, percona-postgresql14 14.23-2.1, percona-postgresql14-contrib 14.23-2.1, percona-postgresql14-libs 14.23-2.1, percona-postgresql14-llvmjit 14.23-2.1, percona-postgresql14-server 14.23-2.1, percona-telemetry-agent 1.0.14-7.1, percona-wal2json14 2.6-1.2, perl-JSON 4.03-2.2, python3-etcd 0.4.5-2.3, python3-ydiff 1.4.2-2.3, python3.12-click 8.1.7-2.3, python3.12-dateutil 2.9.0.post0-2.3, python3.12-dns 1.15.0-2.3, python3.12-etcd 0.4.5-2.3, python3.12-prettytable 3.4.0-2.3, python3.12-psutil 6.1.1-2.3, python3.12-psycopg2 2.9.10-1.2, python3.12-six 1.17.0-2.3, python3.12-wcwidth 0.2.13-2.3 |
+| percona-distribution-postgresql-with-postgis | ppg:14:containers:ubi8 | percona-distribution-postgresql-with-postgis | 14.23-1 | `14.23-1-1.1` `14.23-1` `14.23` `14` | SFCGAL 2.2.0-3.3, blas 3.9.0-1.3, geos 3.13.1-1.3, gosu 1.19-6.2, lapack 3.9.0-1.3, percona-patroni 4.1.3-2.1, percona-patroni-etcd 4.1.3-2.1, percona-pg-telemetry14 1.2.0-1.2, percona-pg_cron_14 1.6.7-1.2, percona-pg_repack14 1.5.3-1.2, percona-pg_stat_monitor14 2.3.2-1.2, percona-pgaudit14 1.6.3-1.2, percona-pgaudit14_set_user 4.2.0-1.2, percona-pgbackrest 2.58.0-1.2, percona-pgvector_14 0.8.2-1.2, percona-pgvector_14-llvmjit 0.8.2-1.2, percona-postgis35_14 3.5.6-1.2, percona-postgis35_14-client 3.5.6-1.2, percona-postgis35_14-gui 3.5.6-1.2, percona-postgis35_14-llvmjit 3.5.6-1.2, percona-postgis35_14-utils 3.5.6-1.2, percona-postgresql-client-common 290-1.1, percona-postgresql-common 290-1.1, percona-postgresql14 14.23-2.1, percona-postgresql14-contrib 14.23-2.1, percona-postgresql14-libs 14.23-2.1, percona-postgresql14-llvmjit 14.23-2.1, percona-postgresql14-server 14.23-2.1, percona-telemetry-agent 1.0.14-7.1, percona-wal2json14 2.6-1.2, perl-JSON 4.03-2.2, python3-etcd 0.4.5-2.3, python3-ydiff 1.4.2-2.3, python3.12-click 8.1.7-2.3, python3.12-dateutil 2.9.0.post0-2.3, python3.12-dns 1.15.0-2.3, python3.12-etcd 0.4.5-2.3, python3.12-prettytable 3.4.0-2.3, python3.12-psutil 6.1.1-2.3, python3.12-psycopg2 2.9.10-1.2, python3.12-six 1.17.0-2.3, python3.12-wcwidth 0.2.13-2.3 |
+| percona-pgbackrest | ppg:14:containers:ubi8 | percona-pgbackrest | 2.58.0 | `2.58.0-1.1` `2.58.0` `latest` | percona-pgbackrest 2.58.0-1.2 |
+| percona-pgbouncer | ppg:14:containers:ubi8 | percona-pgbouncer | 1.25.2 | `1.25.2-1.1` `1.25.2` `latest` | c-ares 1.19.1-1.1, percona-pgbouncer 1.25.2-1.1, python3.12-psycopg2 2.9.10-1.2 |
+| percona-distribution-postgresql | ppg:14:containers:ubi9 | percona-distribution-postgresql | 14.23-1 | `14.23-1-1.1` `14.23-1` `14.23` `14` | gosu 1.19-6.3, percona-patroni 4.1.3-2.1, percona-patroni-etcd 4.1.3-2.1, percona-pg-telemetry14 1.2.0-1.2, percona-pg_cron_14 1.6.7-1.2, percona-pg_repack14 1.5.3-1.2, percona-pg_stat_monitor14 2.3.2-1.2, percona-pgaudit14 1.6.3-1.2, percona-pgaudit14_set_user 4.2.0-1.2, percona-pgbackrest 2.58.0-1.2, percona-pgvector_14 0.8.2-1.2, percona-pgvector_14-llvmjit 0.8.2-1.2, percona-postgresql-client-common 290-1.1, percona-postgresql-common 290-1.1, percona-postgresql14 14.23-2.1, percona-postgresql14-contrib 14.23-2.1, percona-postgresql14-libs 14.23-2.1, percona-postgresql14-llvmjit 14.23-2.1, percona-postgresql14-server 14.23-2.1, percona-telemetry-agent 1.0.14-7.1, percona-wal2json14 2.6-1.2, perl-JSON 4.03-2.2, python3-etcd 0.4.5-2.2, python3-ydiff 1.4.2-2.2, python3.12-click 8.1.7-2.2, python3.12-dateutil 2.9.0.post0-2.2, python3.12-dns 1.15.0-2.2, python3.12-etcd 0.4.5-2.2, python3.12-prettytable 3.4.0-2.2, python3.12-psutil 6.1.1-2.2, python3.12-psycopg2 2.9.10-1.2, python3.12-six 1.17.0-2.2, python3.12-wcwidth 0.2.13-2.2 |
+| percona-distribution-postgresql-with-postgis | ppg:14:containers:ubi9 | percona-distribution-postgresql-with-postgis | 14.23-1 | `14.23-1-1.1` `14.23-1` `14.23` `14` | SFCGAL 2.2.0-3.2, blas 3.9.0-1.6, boost-serialization 1.75.0-2.2, flexiblas 3.0.4-2.2, flexiblas-netlib 3.0.4-2.2, flexiblas-netlib64 3.0.4-2.2, flexiblas-openblas-threads 3.0.4-2.2, geos 3.13.1-1.6, gosu 1.19-6.3, lapack 3.9.0-1.6, percona-patroni 4.1.3-2.1, percona-patroni-etcd 4.1.3-2.1, percona-pg-telemetry14 1.2.0-1.2, percona-pg_cron_14 1.6.7-1.2, percona-pg_repack14 1.5.3-1.2, percona-pg_stat_monitor14 2.3.2-1.2, percona-pgaudit14 1.6.3-1.2, percona-pgaudit14_set_user 4.2.0-1.2, percona-pgbackrest 2.58.0-1.2, percona-pgvector_14 0.8.2-1.2, percona-pgvector_14-llvmjit 0.8.2-1.2, percona-postgis35_14 3.5.6-1.2, percona-postgis35_14-client 3.5.6-1.2, percona-postgis35_14-gui 3.5.6-1.2, percona-postgis35_14-llvmjit 3.5.6-1.2, percona-postgis35_14-utils 3.5.6-1.2, percona-postgresql-client-common 290-1.1, percona-postgresql-common 290-1.1, percona-postgresql14 14.23-2.1, percona-postgresql14-contrib 14.23-2.1, percona-postgresql14-libs 14.23-2.1, percona-postgresql14-llvmjit 14.23-2.1, percona-postgresql14-server 14.23-2.1, percona-telemetry-agent 1.0.14-7.1, percona-wal2json14 2.6-1.2, perl-JSON 4.03-2.2, proj 9.6.0-2.2, proj-data 9.6.0-2.2, python3-etcd 0.4.5-2.2, python3-ydiff 1.4.2-2.2, python3.12-click 8.1.7-2.2, python3.12-dateutil 2.9.0.post0-2.2, python3.12-dns 1.15.0-2.2, python3.12-etcd 0.4.5-2.2, python3.12-prettytable 3.4.0-2.2, python3.12-psutil 6.1.1-2.2, python3.12-psycopg2 2.9.10-1.2, python3.12-six 1.17.0-2.2, python3.12-wcwidth 0.2.13-2.2 |
+| percona-pgbackrest | ppg:14:containers:ubi9 | percona-pgbackrest | 2.58.0 | `2.58.0-1.1` `2.58.0` `latest` | percona-pgbackrest 2.58.0-1.2, percona-postgresql14-libs 14.23-2.1 |
+| percona-pgbouncer | ppg:14:containers:ubi9 | percona-pgbouncer | 1.25.2 | `1.25.2-1.1` `1.25.2` `latest` | c-ares 1.19.1-1.6, percona-pgbouncer 1.25.2-1.1, percona-postgresql14-libs 14.23-2.1, python3.12-psycopg2 2.9.10-1.2 |
+
 # Repository Installation Instructions
 
 
@@ -156,5 +169,64 @@ zypper addrepo \
   https://download.opensuse.org/repositories/isv:/percona:/ppg:/14/openSUSE_Tumbleweed/ \
   isv:percona:ppg:14
 zypper --gpg-auto-import-keys refresh
+```
+
+
+### Container Images
+
+**`isv:percona:ppg:14:containers:ubi8`**
+
+**`percona-distribution-postgresql`**
+
+```bash
+docker pull registry.opensuse.org/isv/percona/ppg/14/containers/ubi8/images/percona-distribution-postgresql:14.23
+docker pull registry.opensuse.org/isv/percona/ppg/14/containers/ubi8/images/percona-distribution-postgresql:14
+```
+
+**`percona-distribution-postgresql-with-postgis`**
+
+```bash
+docker pull registry.opensuse.org/isv/percona/ppg/14/containers/ubi8/images/percona-distribution-postgresql-with-postgis:14.23
+docker pull registry.opensuse.org/isv/percona/ppg/14/containers/ubi8/images/percona-distribution-postgresql-with-postgis:14
+```
+
+**`percona-pgbackrest`**
+
+```bash
+docker pull registry.opensuse.org/isv/percona/ppg/14/containers/ubi8/images/percona-pgbackrest:latest
+```
+
+**`percona-pgbouncer`**
+
+```bash
+docker pull registry.opensuse.org/isv/percona/ppg/14/containers/ubi8/images/percona-pgbouncer:latest
+```
+
+**`isv:percona:ppg:14:containers:ubi9`**
+
+**`percona-distribution-postgresql`**
+
+```bash
+docker pull registry.opensuse.org/isv/percona/ppg/14/containers/ubi9/images/percona-distribution-postgresql:14.23
+docker pull registry.opensuse.org/isv/percona/ppg/14/containers/ubi9/images/percona-distribution-postgresql:14
+```
+
+**`percona-distribution-postgresql-with-postgis`**
+
+```bash
+docker pull registry.opensuse.org/isv/percona/ppg/14/containers/ubi9/images/percona-distribution-postgresql-with-postgis:14.23
+docker pull registry.opensuse.org/isv/percona/ppg/14/containers/ubi9/images/percona-distribution-postgresql-with-postgis:14
+```
+
+**`percona-pgbackrest`**
+
+```bash
+docker pull registry.opensuse.org/isv/percona/ppg/14/containers/ubi9/images/percona-pgbackrest:latest
+```
+
+**`percona-pgbouncer`**
+
+```bash
+docker pull registry.opensuse.org/isv/percona/ppg/14/containers/ubi9/images/percona-pgbouncer:latest
 ```
 
