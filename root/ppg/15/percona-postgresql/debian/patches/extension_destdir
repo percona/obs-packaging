@@ -1,0 +1,255 @@
+--- a/src/backend/commands/extension.c
++++ b/src/backend/commands/extension.c
+@@ -64,6 +64,7 @@
+ #include "utils/inval.h"
+ #include "utils/lsyscache.h"
+ #include "utils/memutils.h"
++#include "utils/guc.h"
+ #include "utils/rel.h"
+ #include "utils/snapmgr.h"
+ #include "utils/syscache.h"
+@@ -510,6 +511,15 @@
+ 	return result;
+ }
+ 
++
++static bool
++extension_path_exists(const char *path)
++{
++	struct stat fst;
++
++	return stat(path, &fst) == 0;
++}
++
+ static char *
+ get_extension_control_filename(const char *extname)
+ {
+@@ -518,6 +528,16 @@
+ 
+ 	get_share_path(my_exec_path, sharepath);
+ 	result = (char *) palloc(MAXPGPATH);
++	/*
++	 * If extension_destdir is set, try to find the file there first
++	 */
++	if (*extension_destdir != '\0')
++	{
++		snprintf(result, MAXPGPATH, "%s%s/extension/%s.control",
++				 extension_destdir, sharepath, extname);
++		if (extension_path_exists(result))
++			return result;
++	}
+ 	snprintf(result, MAXPGPATH, "%s/extension/%s.control",
+ 			 sharepath, extname);
+ 
+@@ -557,6 +577,19 @@
+ 	scriptdir = get_extension_script_directory(control);
+ 
+ 	result = (char *) palloc(MAXPGPATH);
++	/*
++	 * If extension_destdir is set, try to find the file there first
++	 */
++	if (*extension_destdir != '\0')
++	{
++		snprintf(result, MAXPGPATH, "%s%s/%s--%s.control",
++				 extension_destdir, scriptdir, control->name, version);
++		if (extension_path_exists(result))
++		{
++			pfree(scriptdir);
++			return result;
++		}
++	}
+ 	snprintf(result, MAXPGPATH, "%s/%s--%s.control",
+ 			 scriptdir, control->name, version);
+ 
+@@ -575,6 +608,23 @@
+ 	scriptdir = get_extension_script_directory(control);
+ 
+ 	result = (char *) palloc(MAXPGPATH);
++	/*
++	 * If extension_destdir is set, try to find the file there first
++	 */
++	if (*extension_destdir != '\0')
++	{
++		if (from_version)
++			snprintf(result, MAXPGPATH, "%s%s/%s--%s--%s.sql",
++					 extension_destdir, scriptdir, control->name, from_version, version);
++		else
++			snprintf(result, MAXPGPATH, "%s%s/%s--%s.sql",
++					 extension_destdir, scriptdir, control->name, version);
++		if (extension_path_exists(result))
++		{
++			pfree(scriptdir);
++			return result;
++		}
++	}
+ 	if (from_version)
+ 		snprintf(result, MAXPGPATH, "%s/%s--%s--%s.sql",
+ 				 scriptdir, control->name, from_version, version);
+@@ -1272,6 +1322,59 @@
+ 	char	   *location;
+ 	DIR		   *dir;
+ 	struct dirent *de;
++
++	/*
++	 * If extension_destdir is set, try to find the files there first
++	 */
++	if (*extension_destdir != '\0')
++	{
++		char		destdir_location[MAXPGPATH];
++
++		snprintf(destdir_location, MAXPGPATH, "%s%s", extension_destdir,
++				get_extension_script_directory(control));
++		dir = AllocateDir(destdir_location);
++		while ((de = ReadDir(dir, destdir_location)) != NULL)
++		{
++			char	   *vername;
++			char	   *vername2;
++			ExtensionVersionInfo *evi;
++			ExtensionVersionInfo *evi2;
++
++			/* must be a .sql file ... */
++			if (!is_extension_script_filename(de->d_name))
++				continue;
++
++			/* ... matching extension name followed by separator */
++			if (strncmp(de->d_name, control->name, extnamelen) != 0 ||
++				de->d_name[extnamelen] != '-' ||
++				de->d_name[extnamelen + 1] != '-')
++				continue;
++
++			/* extract version name(s) from 'extname--something.sql' filename */
++			vername = pstrdup(de->d_name + extnamelen + 2);
++			*strrchr(vername, '.') = '\0';
++			vername2 = strstr(vername, "--");
++			if (!vername2)
++			{
++				/* It's an install, not update, script; record its version name */
++				evi = get_ext_ver_info(vername, &evi_list);
++				evi->installable = true;
++				continue;
++			}
++			*vername2 = '\0';		/* terminate first version */
++			vername2 += 2;			/* and point to second */
++
++			/* if there's a third --, it's bogus, ignore it */
++			if (strstr(vername2, "--"))
++				continue;
++
++			/* Create ExtensionVersionInfos and link them together */
++			evi = get_ext_ver_info(vername, &evi_list);
++			evi2 = get_ext_ver_info(vername2, &evi_list);
++			evi->reachable = lappend(evi->reachable, evi2);
++		}
++		FreeDir(dir);
++	}
+ 
+ 	location = get_extension_script_directory(control);
+ 	dir = AllocateDir(location);
+--- a/src/backend/utils/fmgr/dfmgr.c
++++ b/src/backend/utils/fmgr/dfmgr.c
+@@ -34,6 +34,7 @@
+ #include "lib/stringinfo.h"
+ #include "miscadmin.h"
+ #include "storage/shmem.h"
++#include "utils/guc.h"
+ #include "utils/hsearch.h"
+ 
+ 
+@@ -486,7 +487,7 @@ expand_dynamic_library_name(const char *name)
+ {
+ 	bool		have_slash;
+ 	char	   *new;
+-	char	   *full;
++	char	   *full, *full2;
+ 
+ 	AssertArg(name);
+ 
+@@ -503,6 +504,19 @@
+ 	else
+ 	{
+ 		full = substitute_libpath_macro(name);
++		/*
++		 * If extension_destdir is set, try to find the file there first
++		 */
++		if (*extension_destdir != '\0')
++		{
++			full2 = psprintf("%s%s", extension_destdir, full);
++			if (file_exists(full2))
++			{
++				pfree(full);
++				return full2;
++			}
++			pfree(full2);
++		}
+ 		if (file_exists(full))
+ 			return full;
+ 		pfree(full);
+@@ -520,6 +534,19 @@
+ 	{
+ 		full = substitute_libpath_macro(new);
+ 		pfree(new);
++		/*
++		 * If extension_destdir is set, try to find the file there first
++		 */
++		if (*extension_destdir != '\0')
++		{
++			full2 = psprintf("%s%s", extension_destdir, full);
++			if (file_exists(full2))
++			{
++				pfree(full);
++				return full2;
++			}
++			pfree(full2);
++		}
+ 		if (file_exists(full))
+ 			return full;
+ 		pfree(full);
+--- a/src/backend/utils/misc/guc.c
++++ b/src/backend/utils/misc/guc.c
+@@ -600,6 +600,7 @@
+ char	   *HbaFileName;
+ char	   *IdentFileName;
+ char	   *external_pid_file;
++char	   *extension_destdir;
+ 
+ char	   *pgstat_temp_directory;
+ 
+@@ -4398,6 +4399,17 @@
+ 		check_canonical_path, NULL, NULL
+ 	},
+ 
++	{
++		{"extension_destdir", PGC_SUSET, FILE_LOCATIONS,
++			gettext_noop("Path to prepend for extension loading."),
++			gettext_noop("This directory is prepended to paths when loading extensions (control and SQL files), and to the '$libdir' directive when loading modules that back functions. The location is made configurable to allow build-time testing of extensions that do not have been installed to their proper location yet."),
++			GUC_SUPERUSER_ONLY
++		},
++		&extension_destdir,
++		"",
++		NULL, NULL, NULL
++	},
++
+ 	{
+ 		{"ssl_library", PGC_INTERNAL, PRESET_OPTIONS,
+ 			gettext_noop("Shows the name of the SSL library."),
+--- a/src/backend/utils/misc/postgresql.conf.sample
++++ b/src/backend/utils/misc/postgresql.conf.sample
+@@ -726,6 +726,8 @@
+ # - Other Defaults -
+ 
+ #dynamic_library_path = '$libdir'
++#extension_destdir = ''			# prepend path when loading extensions
++					# and shared objects (added by Debian)
+ #gin_fuzzy_search_limit = 0
+ 
+ 
+--- a/src/include/utils/guc.h
++++ b/src/include/utils/guc.h
+@@ -280,6 +280,7 @@ extern PGDLLIMPORT char *ConfigFileName;
+ extern PGDLLIMPORT char *HbaFileName;
+ extern PGDLLIMPORT char *IdentFileName;
+ extern PGDLLIMPORT char *external_pid_file;
++extern PGDLLIMPORT char *extension_destdir;
+ 
+ extern PGDLLIMPORT char *application_name;
+ 

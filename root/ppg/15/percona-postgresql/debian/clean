@@ -1,0 +1,3 @@
+# regression tests debris
+src/test/regress/regress.o
+src/test/regress/regress.so

@@ -1,0 +1,5 @@
+<aggregatelist>
+  <aggregate project="${OBS_ROOTPRJ}:common:deps:runtime">
+    <package>percona-telemetry-agent</package>
+  </aggregate>
+</aggregatelist>
