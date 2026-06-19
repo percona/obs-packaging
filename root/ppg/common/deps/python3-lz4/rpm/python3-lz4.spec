@@ -39,20 +39,28 @@ This package provides Python bindings for the lz4 compression library.
 %prep
 %setup -n %{srcname}-%{version}
 # Remove pkgconfig and setuptools_scm from setup_requires to avoid pip at build time;
-# lz4-devel pkg-config files are available via BuildRequires
+# lz4-devel pkg-config files are available via BuildRequires; also replace the
+# use_scm_version dict (fallback_version=0.0.0) with an explicit version so that
+# the egg-info gets the correct version regardless of setuptools-scm availability
 python3 -c "
 import re
 try:
     txt = open('setup.py').read()
     txt = re.sub(r'setup_requires\s*=\s*\[[^\]]*\]', 'setup_requires=[]', txt)
+    txt = re.sub(r'use_scm_version\s*=\s*\{[^}]*\}', \"version='%{version}'\", txt, flags=re.DOTALL)
+    txt = re.sub(r'use_scm_version\s*=\s*True', \"version='%{version}'\", txt)
     open('setup.py','w').write(txt)
 except: pass
 " || true
+# Inject version into setup.cfg as a belt-and-suspenders fallback
+sed -i "/^\[metadata\]/a version = %{version}" setup.cfg
 
 %build
+export SETUPTOOLS_SCM_PRETEND_VERSION=%{version}
 %{__ospython} setup.py build
 
 %install
+export SETUPTOOLS_SCM_PRETEND_VERSION=%{version}
 %{__ospython} setup.py install --single-version-externally-managed -O1 --root=$RPM_BUILD_ROOT --record=INSTALLED_FILES
 # Own egg-info and subdirectories (not recorded by --record)
 find %{buildroot} -name "*.egg-info" -type d | sed "s|%{buildroot}||" >> INSTALLED_FILES

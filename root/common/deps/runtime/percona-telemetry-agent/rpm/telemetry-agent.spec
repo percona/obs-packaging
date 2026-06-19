@@ -14,7 +14,7 @@ Source1: vendor.tar.gz
 %if 0%{?suse_version} >= 1600
 BuildRequires:  go >= 1.26
 %else
-%if 0%{?rhel} >= 8 && 0%{?rhel} < 10
+%if 0%{?rhel} >= 8
 BuildRequires: golang >= 1.26.4
 %else
 BuildRequires: golang

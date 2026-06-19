@@ -42,7 +42,7 @@ BuildRequires:  libboost_headers-devel >= 1.69
 BuildRequires:  libboost_thread-devel >= 1.69
 BuildRequires:  libboost_serialization-devel >= 1.69
 %else
-%if 0%{?rhel} && 0%{?rhel} >= 8
+%if 0%{?rhel} && 0%{?rhel} >= 8 && 0%{?rhel} < 10
 BuildRequires:  boost1.78-devel
 %else
 BuildRequires:  boost-devel >= 1.69
@@ -112,7 +112,11 @@ find . -name 'Exception.h' -exec perl -i -0777 \
   -DSFCGAL_BUILD_EXAMPLES=OFF \
   -DSFCGAL_WITH_OSG=OFF \
   -DCMAKE_GMP_ENABLE_CXX=ON \
-  -DSFCGAL_CHECK_VALIDITY=TRUE
+  -DSFCGAL_CHECK_VALIDITY=TRUE \
+%if 0%{?rhel} && 0%{?rhel} >= 10
+  -DCMAKE_SKIP_INSTALL_RPATH=ON \
+%endif
+  %{nil}
 
 %cmake_build
 

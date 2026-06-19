@@ -1,5 +1,6 @@
 build:
   RockyLinux_9: false
+  RockyLinux_10: false
   UBI_8: false
   Debian_13: false
   Ubuntu_24.04: false

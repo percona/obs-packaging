@@ -47,6 +47,8 @@ try:
     open('setup.cfg','w').write(txt)
 except: pass
 " || true
+# Inject version into setup.cfg so setuptools doesn't need setuptools-scm to determine it
+sed -i "/^\[metadata\]/a version = %{version}" setup.cfg
 
 %build
 export SETUPTOOLS_SCM_PRETEND_VERSION=%{version}
