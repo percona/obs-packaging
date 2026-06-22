@@ -1,6 +1,6 @@
 %global pgmajor %!{PG_MAJOR_VERSION}
 
-%if 0%{?rhel} >= 8
+%if 0%{?rhel} >= 8 && 0%{?rhel} <= 9
 %global gts_version 14
 %endif
 
@@ -32,6 +32,9 @@ BuildRequires:  libcurl-devel
 BuildRequires:  openssl-devel
 BuildRequires:  krb5-devel
 BuildRequires:  gcc-c++
+%if 0%{?rhel} >= 10
+BuildRequires:  libstdc++-static
+%endif
 
 Requires:       percona-postgresql%{pgmajorversion}
 Requires:       libcurl

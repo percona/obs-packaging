@@ -18,6 +18,15 @@ repositories:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
         repository: standard
     archs: [x86_64, aarch64]
+  - name: RockyLinux_10
+    paths:
+      - subproject: common:deps:build
+        repository: RockyLinux_10
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:10
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
+        repository: standard
+    archs: [x86_64, aarch64]
   - name: UBI_9
     paths:
       - subproject: ppg:common:deps
@@ -109,6 +118,15 @@ project-config: |
   ExpandFlags: module:llvm-toolset-rhel9
   # hdf-libs (EPEL split package) and hdf both provide libdf.so.0 and libmfhdf.so.0
   Prefer: hdf-libs
+  %endif
+
+  %if "%_repository" == "RockyLinux_10"
+  Prefer: selinux-policy-targeted
+  Prefer: hdf-libs
+
+  Macros:
+  %__brp_check_rpaths %{nil}
+  :Macros
   %endif
 
   %if "%_repository" == "openSUSE_Tumbleweed"

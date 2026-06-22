@@ -12,7 +12,7 @@
 %global beta 0
 %{?beta:%global __os_install_post /usr/lib/rpm/brp-compress}
 
-%if 0%{?rhel} >= 8
+%if 0%{?rhel} >= 8 && 0%{?rhel} <= 9
 %global gts_version 14
 %endif
 

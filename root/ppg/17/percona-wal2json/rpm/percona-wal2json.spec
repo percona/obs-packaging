@@ -1,7 +1,7 @@
 %global sname wal2json
 %define pgmajorversion %!{PG_MAJOR_VERSION}
 
-%if 0%{?rhel} >= 8
+%if 0%{?rhel} >= 8 && 0%{?rhel} <= 9
 %global gts_version 14
 %endif
 %define pginstdir /usr/pgsql-%{pgmajorversion}
