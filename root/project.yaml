@@ -3,21 +3,21 @@ description: "OBS RPM and DEB packaging for Percona products."
 repositories:
   - name: RockyLinux_9
     paths:
+      - subproject: common:deps:build
+        repository: RockyLinux_9
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
         repository: standard
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
         repository: standard
-      - subproject: common:deps:build
-        repository: RockyLinux_9
     archs: [x86_64, aarch64]
   - name: RockyLinux_10
     paths:
+      - subproject: common:deps:build
+        repository: RockyLinux_10
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:10
         repository: standard
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
         repository: standard
-      - subproject: common:deps:build
-        repository: RockyLinux_10
     archs: [x86_64, aarch64]
   - name: UBI_9
     paths:
