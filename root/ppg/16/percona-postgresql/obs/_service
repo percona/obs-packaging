@@ -2,7 +2,7 @@
   <service name="obs_scm">
     <param name="url">https://git.postgresql.org/git/postgresql.git</param>
     <param name="scm">git</param>
-    <param name="revision">REL_%!{PG_MAJOR_VERSION}_STABLE</param>
+    <param name="revision">REL_%!{PG_MAJOR_VERSION}_%!{PG_MINOR_VERSION}</param>
     <param name="version">%!{PG_VERSION}</param>
     <param name="filename">percona-postgresql</param>
   </service>
