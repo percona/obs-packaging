@@ -2,10 +2,34 @@
 
 | Package | Project | Version |
 | ------- | ------- | ------- |
+| etcd | ppg:15 | 3.5.30-1+5.1 |
+| percona-haproxy | ppg:15 | 2.8.23-1+1.1 |
 | percona-pg-telemetry | ppg:15 | 1.2.0-1+1.1 |
+| percona-pgbackrest | ppg:15 | 2.58.0-1+1.1 |
+| percona-pgbadger | ppg:15 | 13.2-1+1.1 |
+| percona-pgbouncer | ppg:15 | 1.25.2-1+1.1 |
 | percona-postgresql | ppg:15 | 15.18-1+1.1 |
 | percona-postgresql-common | ppg:15 | 290-1+1.1 |
 | percona-telemetry-agent | ppg:15 | 1.0.14-1+9.1 |
+| python3-attrs | ppg:15 | 22.1.0-2.1 |
+| python3-blessed | ppg:15 | 1.22.0-2.1 |
+| python3-boto3 | ppg:15 | 1.38.19-2.1 |
+| python3-botocore | ppg:15 | 1.38.19-2.1 |
+| python3-click | ppg:15 | 8.1.7-2.1 |
+| python3-dateutil | ppg:15 | 2.9.0.post0-3.1 |
+| python3-dns | ppg:15 | 1.15.0-2.1 |
+| python3-etcd | ppg:15 | 0.4.5-2.1 |
+| python3-kazoo | ppg:15 | 2.8.0-2.1 |
+| python3-lz4 | ppg:15 | 4.3.3-3.1 |
+| python3-prettytable | ppg:15 | 3.4.0-2.1 |
+| python3-psutil | ppg:15 | 6.1.1-2.1 |
+| python3-psycopg2 | ppg:15 | 2.9.10-1.1 |
+| python3-py-consul | ppg:15 | 1.6.0-2.1 |
+| python3-pysyncobj | ppg:15 | 0.3.10-1+3.1 |
+| python3-six | ppg:15 | 1.17.0-2.1 |
+| python3-wcwidth | ppg:15 | 0.2.13-2.1 |
+| python3-zstandard | ppg:15 | 0.23.0-2.1 |
+| ydiff | ppg:15 | 1.4.2-1+2.1 |
 
 # Repository Installation Instructions
 
