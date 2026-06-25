@@ -151,9 +151,13 @@ _MACRO_RE = re.compile(r"%!\{([A-Za-z_][A-Za-z0-9_]*)\}")
 # Values may contain %!{...} references which PyYAML cannot parse unquoted.
 _MACROS_ENTRY_RE = re.compile(r"^-\s+([A-Za-z_][A-Za-z0-9_]*):\s*(.*?)\s*$")
 
-# Built-in macros resolved dynamically from the source file's mtime.
-# FILE_MODIFY_DATE     → "Thu May 15 2026"              (RPM %changelog format)
-# FILE_MODIFY_DATE_RFC5322 → "Thu, 15 May 2026 10:30:00 +0200"  (Debian changelog / date -R)
+# Built-in macros resolved dynamically from the source file's commit time.
+# Always formatted in UTC so the generated string is identical regardless of the
+# runner's local timezone (local checkout vs GitHub Actions); otherwise the same
+# commit would render different dates/offsets and make the content check report
+# spurious differences.
+# FILE_MODIFY_DATE         → "Thu May 15 2026"                  (RPM %changelog format)
+# FILE_MODIFY_DATE_RFC5322 → "Thu, 15 May 2026 10:30:00 +0000"  (Debian changelog / date -R)
 _FILE_DATE_BUILTINS = {"FILE_MODIFY_DATE", "FILE_MODIFY_DATE_RFC5322"}
 
 
@@ -162,9 +166,10 @@ def apply_macro_substitution(
 ) -> str:
     """Replace every ``%!{VAR}`` token in *text* with the value from *macros*.
 
-    Two built-in macros are resolved from *source*'s mtime rather than *macros*:
-    ``%!{FILE_MODIFY_DATE}`` (RPM changelog format) and
-    ``%!{FILE_MODIFY_DATE_RFC5322}`` (RFC 5322 / ``date -R`` format).
+    Two built-in macros are resolved from *source*'s commit time rather than
+    *macros*: ``%!{FILE_MODIFY_DATE}`` (RPM changelog format) and
+    ``%!{FILE_MODIFY_DATE_RFC5322}`` (RFC 5322 / ``date -R`` format).  Both are
+    rendered in UTC so the output is reproducible across timezones.
 
     Raises ``SystemExit`` if any token has no corresponding entry in *macros*
     and is not a built-in.  *source* is used for error messages and mtime
@@ -181,9 +186,10 @@ def apply_macro_substitution(
             from percona_obs.git_utils import get_file_commit_time
 
             mtime = get_file_commit_time(source) or source.stat().st_mtime
-            dt = datetime.datetime.fromtimestamp(
-                mtime, tz=datetime.timezone.utc
-            ).astimezone()
+            # Render in UTC (do NOT convert to the local timezone): the commit
+            # epoch is timezone-independent, so a fixed UTC rendering produces
+            # the same string on every runner (local vs CI).
+            dt = datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc)
             if var == "FILE_MODIFY_DATE_RFC5322":
                 return email.utils.format_datetime(dt)
             return dt.strftime("%a %b %d %Y")
