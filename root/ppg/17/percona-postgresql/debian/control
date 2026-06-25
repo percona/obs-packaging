@@ -40,7 +40,7 @@ Build-Depends:
  llvm-dev [!alpha !hppa !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32],
  mawk,
  perl (>= 5.8),
- pkg-config,
+ pkg-config | pkgconf,
  python3-dev,
  systemtap-sdt-dev,
  tcl-dev,

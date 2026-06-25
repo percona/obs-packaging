@@ -45,6 +45,13 @@ repositories:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
         repository: devel
     archs: [x86_64, aarch64]
+  - name: Debian_11
+    paths:
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:11
+        repository: standard
+      - subproject: common:deps:build
+        repository: Debian_11
+    archs: [x86_64, aarch64]
   - name: Debian_13
     paths:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:13
@@ -96,7 +103,7 @@ project-config: |
   Prefer: hdf-libs
   %endif
 
-  %if "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
   # libgdal-dev transitively requires both libcurl4-openssl-dev and
   # libcurl4-gnutls-dev which conflict; ignore the gnutls variant so
   # the openssl variant is used consistently.
@@ -106,7 +113,7 @@ project-config: |
   Prefer: libjpeg62-turbo-dev
   %endif
 
-  %if "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04"
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04"
   Prefer: golang-1.26
   %endif
 

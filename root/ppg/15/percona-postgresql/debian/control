@@ -35,7 +35,7 @@ Build-Depends:
  llvm-dev [!alpha !hppa !hurd-amd64 !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !loong64 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32] <!pkg.postgresql.nollvm>,
  mawk,
  perl (>= 5.8),
- pkgconf,
+ pkg-config | pkgconf,
  percona-postgresql-common-dev,
  python3-dev,
  systemtap-sdt-dev [linux-any],

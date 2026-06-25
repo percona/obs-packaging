@@ -16,7 +16,7 @@ Build-Depends: debhelper-compat (= 13),
                libzstd-dev,
                meson,
                perl,
-               pkgconf,
+               pkg-config | pkgconf,
                python3 (>= 3.10) | python3-distutils,
                txt2man,
                zlib1g-dev

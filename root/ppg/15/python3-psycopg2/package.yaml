@@ -1,2 +1,3 @@
 build:
+  Debian_11: false
   Debian_13: false
