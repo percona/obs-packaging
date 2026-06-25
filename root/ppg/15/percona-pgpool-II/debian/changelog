@@ -1,0 +1,5 @@
+percona-pgpool2 (%!{PGPOOL_VERSION}-1) stable; urgency=medium
+
+  * Update to upstream version %!{PGPOOL_VERSION}
+
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}

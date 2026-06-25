@@ -1,0 +1,5 @@
+percona-ppg-server-ha-%!{PG_MAJOR_VERSION} (%!{PG_VERSION}-1) unstable; urgency=low
+
+  * Release of Percona Distribution for PostgreSQL %!{PG_MAJOR_VERSION} HA metapackage.
+
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}

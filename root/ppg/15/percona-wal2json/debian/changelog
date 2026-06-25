@@ -1,0 +1,5 @@
+percona-wal2json (%!{WAL2JSON_VERSION}-1) unstable; urgency=low
+
+  * Update to upstream version %!{WAL2JSON_VERSION}
+
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}
