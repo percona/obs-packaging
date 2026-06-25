@@ -1,0 +1,92 @@
+%global debug_package %{nil}
+%global _vpath_builddir .
+%global pgmajorversion %!{PG_MAJOR_VERSION}
+%global pgroutingmajorversion %!{PGROUTING_MAJOR_VERSION}
+%global pname pgrouting
+%global sname	percona-pgrouting_%{pgmajorversion}
+
+%define pginstdir /usr/pgsql-%{pgmajorversion}/
+
+%if 0%{?rhel} && 0%{?rhel} <= 9
+%global gts_version 14
+%endif
+
+Summary:	Routing functionality for PostGIS
+Name:		%{sname}
+Version:	1.0.0
+Release:	1%{dist}
+License:	GPLv2+
+Source0:	%{sname}-%{version}.tar.gz
+URL:		https://pgrouting.org/
+Packager:       Percona Development Team <https://jira.percona.com>
+Vendor:         Percona, LLC
+
+BuildRequires:	cmake >= 3.12 boost-devel >= 1.56
+BuildRequires:	gcc-c++ gmp-devel
+%if 0%{?gts_version}
+BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
+%endif
+%if 0%{?fedora} >= 42 || 0%{?rhel} >= 8 || 0%{?suse_version} <= 1500
+BuildRequires:	perl-version
+%endif
+BuildRequires:	percona-postgresql%{pgmajorversion}-devel
+Requires:	percona-postgresql%{pgmajorversion} percona-postgis35_%{pgmajorversion}
+
+%description
+pgRouting extends the PostGIS / PostgreSQL geospatial database to
+provide geospatial routing functionality.
+
+Advantages of the database routing approach are:
+
+- Data and attributes can be modified by many clients, like QGIS and
+uDig through JDBC, ODBC, or directly using Pl/pgSQL. The clients can
+either be PCs or mobile devices)
+- Data changes can be reflected instantaneously through the routing
+engine. There is no need for precalculation.
+- The “cost” parameter can be dynamically calculated through SQL and its
+value can come from multiple fields or tables.
+
+%prep
+%setup -q -n %{sname}-%{version}
+
+%build
+%if 0%{?gts_version}
+	source /opt/rh/gcc-toolset-14/enable
+%endif
+%{__install} -d build
+pushd build
+%if 0%{?suse_version} >= 1500
+cmake .. \
+%else
+%cmake .. \
+%endif
+	-DCMAKE_INSTALL_PREFIX=%{_prefix} \
+	-DPOSTGRESQL_BIN=%{pginstdir}/bin \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DBUILD_HTML=OFF -DBUILD_DOXY=OFF \
+	-DLIB_SUFFIX=64
+
+popd
+
+%{__make} -C "%{_vpath_builddir}" %{?_smp_mflags} build
+
+%install
+%{__rm} -rf %{buildroot}
+pushd build
+%{__make} -C "%{_vpath_builddir}" %{?_smp_mflags} install \
+	DESTDIR=%{buildroot}
+popd
+
+%post	-p /sbin/ldconfig
+%postun	-p /sbin/ldconfig
+
+%files
+%defattr(644,root,root,755)
+%license LICENSE
+%doc README.md BOOST_LICENSE_1_0.txt
+%attr(755,root,root) %{pginstdir}/lib/libpgrouting-%{pgroutingmajorversion}.so
+%{pginstdir}/share/extension/%{pname}*
+
+%changelog
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PGROUTING_VERSION}-1
+- Update to upstream version %!{PGROUTING_VERSION}

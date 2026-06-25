@@ -1,0 +1,37 @@
+diff --git i/src/backend/utils/activity/pgstat_database.c w/src/backend/utils/activity/pgstat_database.c
+index 7149f22f729..bb36d73ec04 100644
+--- i/src/backend/utils/activity/pgstat_database.c
++++ w/src/backend/utils/activity/pgstat_database.c
+@@ -81,12 +81,22 @@ void
+ pgstat_report_recovery_conflict(int reason)
+ {
+ 	PgStat_StatDBEntry *dbentry;
++	PgStat_EntryRef *entry_ref;
++	PgStatShared_Database *sharedent;
+ 
+ 	Assert(IsUnderPostmaster);
+ 	if (!pgstat_track_counts)
+ 		return;
+ 
+-	dbentry = pgstat_prep_database_pending(MyDatabaseId);
++	/*
++	 * Update the shared stats directly - recovery conflicts should never be
++	 * common enough for that to be a problem.
++	 */
++	entry_ref =
++		pgstat_get_entry_ref_locked(PGSTAT_KIND_DATABASE, MyDatabaseId, InvalidOid, false);
++
++	sharedent = (PgStatShared_Database *) entry_ref->shared_stats;
++	dbentry = &sharedent->stats;
+ 
+ 	switch (reason)
+ 	{
+@@ -116,6 +126,8 @@ pgstat_report_recovery_conflict(int reason)
+ 			dbentry->conflict_startup_deadlock++;
+ 			break;
+ 	}
++
++	pgstat_unlock_entry(entry_ref);
+ }
+ 
+ /*

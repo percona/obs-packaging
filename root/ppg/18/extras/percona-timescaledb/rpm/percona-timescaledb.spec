@@ -1,0 +1,76 @@
+%global sname	timescaledb
+%global pgmajorversion %!{PG_MAJOR_VERSION}
+
+%define pginstdir /usr/pgsql-%{pgmajorversion}/
+
+%if 0%{?rhel} && 0%{?rhel} <= 9
+%global gts_version 14
+%endif
+
+Summary:	PostgreSQL based time-series database
+Name:		percona-%{sname}_%{pgmajorversion}
+Version:	1.0.0
+Release:	1%{?dist}
+License:	Apache
+Source0:	%{name}-%{version}.tar.gz	
+Packager:       Percona Development Team <https://jira.percona.com>
+Vendor:         Percona, LLC
+URL:		https://github.com/timescale/timescaledb
+BuildRequires:	percona-postgresql%{pgmajorversion}-devel
+%if 0%{?gts_version}
+BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
+%endif
+
+BuildRequires:	cmake >= 3.4
+
+%if 0%{?fedora} >= 42 || 0%{?rhel} >= 8
+Requires:	openssl-libs >= 1.1.1k
+BuildRequires:	openssl-devel
+%endif
+Requires:	percona-postgresql%{pgmajorversion}-server
+
+%description
+TimescaleDB is an open-source database designed to make SQL scalable for
+time-series data. It is engineered up from PostgreSQL, providing automatic
+partitioning across time and space (partitioning key), as well as full SQL
+support.
+
+%prep
+%setup -q -n %{name}-%{version}
+
+# Build only the portions that have Apache Licence, and disable telemetry:
+export PATH=%{pginstdir}/bin:$PATH
+./bootstrap -DAPACHE_ONLY=1 -DSEND_TELEMETRY_DEFAULT=NO \
+	-DPROJECT_INSTALL_METHOD=pgdg -DREGRESS_CHECKS=OFF
+
+%build
+%if 0%{?gts_version}
+	source /opt/rh/gcc-toolset-14/enable
+%endif
+export PATH=%{pginstdir}/bin:$PATH
+%ifarch ppc64 ppc64le
+%else
+	CFLAGS="$RPM_OPT_FLAGS -fPIC -pie"
+	CXXFLAGS="$RPM_OPT_FLAGS -fPIC -pie"
+	export CFLAGS
+	export CXXFLAGS
+%endif
+
+cd build; %{__make} %{?_smp_mflags}
+
+%install
+export PATH=%{pginstdir}/bin:$PATH
+cd build; %{__make} %{?_smp_mflags} DESTDIR=%{buildroot} install
+%{__rm} -f %{buildroot}/%{pginstdir}/lib/pgxs/src/test/perl/*pm
+
+%files
+%defattr(-, root, root)
+%doc README.md
+%license LICENSE-APACHE
+%{pginstdir}/lib/%{sname}*.so
+%{pginstdir}/share/extension/%{sname}--*.sql
+%{pginstdir}/share/extension/%{sname}.control
+
+%changelog
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{TIMESCALEDB_VERSION}-1
+- Update to upstream version %!{TIMESCALEDB_VERSION}
