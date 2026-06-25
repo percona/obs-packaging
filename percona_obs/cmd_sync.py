@@ -46,6 +46,8 @@ from .common import (
 from .git_utils import (
     _generate_sync_message,
     _has_package_changes_since,
+    _is_path_dirty,
+    _macros_changed_since,
 )
 from .obs_api import (
     _add_release_targets,
@@ -372,12 +374,24 @@ def _resolve_branch_decision(
         return _content_check(f"branch was synced dirty at {short_sha}")
 
     changed = _has_package_changes_since(short_sha, package_path)
-    if not changed:
-        logger.debug(
-            f"branch decision: aggregate  {label}  (no changes since {short_sha})"
-        )
-        return True
-    return _content_check(f"git changes since {short_sha}")
+    if changed:
+        return _content_check(f"git changes since {short_sha}")
+    # Committed package history is clean, but the upload is built from the
+    # working tree — not from the synced commit.  Two inputs can still differ
+    # from what OBS holds without showing up in the package directory's git log:
+    #   * uncommitted edits inside the package directory, and
+    #   * inherited (ancestor) macros.yaml changes — committed since short_sha
+    #     or uncommitted — whose values are substituted into the package content
+    #     (e.g. a PGVECTOR_VERSION bump in root/ppg/18/macros.yaml).
+    # In either case route to the authoritative content check rather than
+    # aggregating blindly; it expands macros from the working tree and only
+    # aggregates if the resulting upload truly matches OBS.
+    if _is_path_dirty(package_path):
+        return _content_check("uncommitted changes in package directory")
+    if _macros_changed_since(short_sha, package_path):
+        return _content_check("inherited macros changed")
+    logger.debug(f"branch decision: aggregate  {label}  (no changes since {short_sha})")
+    return True
 
 
 def _compute_branch_project(

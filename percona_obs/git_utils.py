@@ -4,6 +4,9 @@ import sys
 from pathlib import Path
 
 _REPO_DIR = Path(__file__).parent.parent
+# Top of the packaging tree; mirrors common.REPO_ROOT.  Defined locally to keep
+# this module free of an import cycle with common (which imports git_utils).
+_REPO_ROOT = _REPO_DIR / "root"
 
 
 def _check_git_clean() -> None:
@@ -133,6 +136,86 @@ def _has_package_changes_since(short_sha: str, package_path: Path) -> bool:
     if result.returncode != 0:
         return True  # unknown SHA or git error — safe default: sync normally
     return bool(result.stdout.strip())
+
+
+def _is_path_dirty(*paths: Path) -> bool:
+    """Return True if the working tree has uncommitted changes under any of *paths*.
+
+    Covers staged, unstaged, and untracked files (``git status --porcelain``).
+    The branch-decision fast path trusts committed git history, but the upload
+    is built from the working tree, so uncommitted edits to inputs that feed a
+    package's content must route the decision to the authoritative content check.
+
+    With no paths given it returns False; on git error it returns True
+    (safe default).
+    """
+    if not paths:
+        return False
+    result = subprocess.run(
+        ["git", "status", "--porcelain", "--", *(str(p) for p in paths)],
+        capture_output=True,
+        text=True,
+        cwd=_REPO_DIR,
+    )
+    if result.returncode != 0:
+        return True  # git error — safe default: treat as dirty
+    return bool(result.stdout.strip())
+
+
+def _inherited_macros_files(package_path: Path) -> list[Path]:
+    """Return the macros.yaml files inherited by package_path from ancestor dirs.
+
+    Mirrors ``load_macros``' walk (REPO_ROOT .. package_path) but stops *above*
+    the package directory: a macros.yaml inside package_path is already covered
+    by the package-directory change checks.  These ancestor files declare macros
+    that are substituted into the package's uploaded content.
+    """
+    files: list[Path] = []
+    p = package_path.parent
+    while True:
+        macro_file = p / "macros.yaml"
+        if macro_file.is_file():
+            files.append(macro_file)
+        if p == _REPO_ROOT or not p.is_relative_to(_REPO_ROOT):
+            break
+        p = p.parent
+    return files
+
+
+def _macros_changed_since(short_sha: str, package_path: Path) -> bool:
+    """Return True if any macros.yaml inherited by package_path changed.
+
+    Inherited (ancestor) macros are substituted into the package's uploaded
+    content, so a change to one alters what would be uploaded even when no file
+    inside package_path moved.  Considers both committed changes since short_sha
+    and uncommitted working-tree edits, because the upload is built from the
+    working tree rather than from committed history.
+
+    Returns True (treat as changed) on git error (safe default).  A macros.yaml
+    inside package_path is intentionally excluded — it is covered by the
+    package-directory change checks.
+    """
+    files = _inherited_macros_files(package_path)
+    if not files:
+        return False
+    result = subprocess.run(
+        [
+            "git",
+            "diff",
+            "--name-only",
+            f"{short_sha}..HEAD",
+            "--",
+            *(str(f) for f in files),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=_REPO_DIR,
+    )
+    if result.returncode != 0:
+        return True  # unknown SHA or git error — safe default
+    if result.stdout.strip():
+        return True
+    return _is_path_dirty(*files)
 
 
 def _generate_sync_message() -> str:
