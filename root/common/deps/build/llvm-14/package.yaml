@@ -1,0 +1,16 @@
+title: LLVM 14 toolchain for Debian 11
+description: |
+  LLVM 14 and Clang 14 packages repackaged from apt.llvm.org for Bullseye builds
+  that require LLVM >= 14 (e.g. PostgreSQL 18 JIT).
+
+build:
+  RockyLinux_8: false
+  RockyLinux_9: false
+  RockyLinux_10: false
+  UBI_8: false
+  UBI_9: false
+  Debian_13: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Tumbleweed: false
+  openSUSE_Leap_16: false

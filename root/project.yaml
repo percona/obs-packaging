@@ -130,3 +130,11 @@ project-config: |
   Prefer: golang-1.26
   %endif
 
+  %if "%_repository" == "Debian_11"
+  # Bullseye ships LLVM 11; prefer LLVM 14 from common:deps:build for PG 18 JIT.
+  Prefer: llvm-14-dev
+  Prefer: clang-14
+  Substitute: llvm-dev llvm-14-dev
+  Substitute: clang clang-14
+  %endif
+
