@@ -7,6 +7,21 @@ debuginfo:
   openSUSE_Tumbleweed: true
   openSUSE_Leap_16: true
 repositories:
+  - name: RockyLinux_8
+    paths:
+      - subproject: ppg:common:deps
+        repository: RockyLinux_8
+      - subproject: common:deps:build
+        repository: RockyLinux_8
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:8
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: appstream
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: baseos
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: devel
+    archs: [x86_64, aarch64]
   - name: RockyLinux_9
     paths:
       - subproject: ppg:common:deps
