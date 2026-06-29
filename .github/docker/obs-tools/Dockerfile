@@ -1,3 +1,25 @@
+# ---- cargo-builder stage: compile obs-service-cargo (cargo_vendor) ----
+# The Rust toolchain and build artifacts stay in this throwaway stage; the
+# final image only receives the compiled binary + its .service descriptor.
+FROM ubuntu:24.04 AS cargo-builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+        build-essential curl git ca-certificates \
+        libssl-dev libzstd-dev pkgconf && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# release-stripped: upstream's release profile + strip=true (no debug symbols).
+RUN git clone --depth=1 https://github.com/openSUSE-Rust/obs-service-cargo.git /tmp/obs-service-cargo && \
+    cd /tmp/obs-service-cargo && \
+    cargo build --profile release-stripped
+
+# ---- final image ----
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -7,11 +29,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 # libarchive13t64: C library required by the libarchive-c Python binding used by go_modules
 # perl: required by obs-service-set-version (Perl script)
 # build-essential: C compiler/headers for any pip packages that compile C extensions
+# libssl3t64/libzstd1: runtime libs the cargo_vendor binary links against
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg git jq sudo \
         python3 python3-venv python3-pip \
         golang-go libarchive13t64 build-essential perl wget \
+        libssl3t64 libzstd1 \
     && rm -rf /var/lib/apt/lists/*
 
 # GitHub CLI — used in sync-main (create tags, push badge), obs-release
@@ -64,3 +88,8 @@ ENV PATH="/opt/obs-tools/venv/bin:${PATH}"
 # git refuses to operate in the mounted workspace and commands like
 # `git diff origin/main...HEAD` fail with "Could not access ...".
 RUN git config --system --add safe.directory '*'
+
+# obs-service-cargo_vendor — built in the cargo-builder stage above.
+# Vendors Cargo dependencies into the source tree.
+COPY --from=cargo-builder /tmp/obs-service-cargo/target/release-stripped/cargo_vendor /usr/lib/obs/service/cargo_vendor
+COPY --from=cargo-builder /tmp/obs-service-cargo/cargo_vendor.service /usr/lib/obs/service/cargo_vendor.service
