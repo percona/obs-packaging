@@ -104,4 +104,10 @@ COPY --from=cargo-builder /tmp/obs-service-cargo/cargo_vendor.service /usr/lib/o
 # registry cache under .cargo/registry is intentionally NOT copied.
 COPY --from=cargo-builder /root/.cargo/bin /root/.cargo/bin
 COPY --from=cargo-builder /root/.rustup /root/.rustup
-ENV PATH="/root/.cargo/bin:${PATH}"
+# Pin RUSTUP_HOME/CARGO_HOME to absolute paths: the copied cargo/rustc are
+# rustup proxies that find the toolchain (and its default) under $HOME/.rustup,
+# but GitHub Actions container jobs set HOME=/github/home, not /root — without
+# this, rustup reports "no default toolchain configured".
+ENV RUSTUP_HOME="/root/.rustup" \
+    CARGO_HOME="/root/.cargo" \
+    PATH="/root/.cargo/bin:${PATH}"
