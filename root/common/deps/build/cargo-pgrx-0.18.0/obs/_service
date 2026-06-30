@@ -1,0 +1,14 @@
+<services>
+  <!-- Fetch the cargo-pgrx source crate (a .crate is a gzipped tarball). -->
+  <service name="download_url">
+    <param name="url">https://static.crates.io/crates/cargo-pgrx/cargo-pgrx-0.18.0.crate</param>
+    <param name="filename">cargo-pgrx-0.18.0.tar.gz</param>
+  </service>
+  <!-- Vendor cargo-pgrx's dependencies for an offline OBS build. Produces
+       vendor.tar.gz (bundles .cargo/config.toml + Cargo.lock + vendor/). -->
+  <service mode="buildtime" name="cargo_vendor">
+    <param name="src">cargo-pgrx-0.18.0.tar.gz</param>
+    <param name="compression">gz</param>
+    <param name="update">false</param>
+  </service>
+</services>
