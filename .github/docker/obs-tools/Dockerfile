@@ -1,6 +1,8 @@
 # ---- cargo-builder stage: compile obs-service-cargo (cargo_vendor) ----
-# The Rust toolchain and build artifacts stay in this throwaway stage; the
-# final image only receives the compiled binary + its .service descriptor.
+# Build artifacts (object files, registry cache) stay in this throwaway stage.
+# The final image receives the compiled binary AND the minimal rust toolchain:
+# cargo_vendor shells out to `cargo`/`rustc` at runtime, and the crate lockfiles
+# it vendors are lockfile v4 (need cargo >= 1.78, newer than Ubuntu's apt 1.75).
 FROM ubuntu:24.04 AS cargo-builder
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -11,7 +13,9 @@ RUN apt-get update -qq && \
         libssl-dev libzstd-dev pkgconf && \
     rm -rf /var/lib/apt/lists/*
 
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+# --profile minimal: rustc + rust-std + cargo only (no docs/clippy) to keep the
+# toolchain we copy into the final image small.
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # release-stripped: upstream's release profile + strip=true (no debug symbols).
@@ -93,3 +97,11 @@ RUN git config --system --add safe.directory '*'
 # Vendors Cargo dependencies into the source tree.
 COPY --from=cargo-builder /tmp/obs-service-cargo/target/release-stripped/cargo_vendor /usr/lib/obs/service/cargo_vendor
 COPY --from=cargo-builder /tmp/obs-service-cargo/cargo_vendor.service /usr/lib/obs/service/cargo_vendor.service
+
+# Rust toolchain cargo_vendor invokes at runtime. Copied from the builder stage
+# (recent cargo, lockfile v4 capable) rather than apt (1.75, too old). .cargo/bin
+# holds the rustup proxies; .rustup holds the actual toolchain. The build-time
+# registry cache under .cargo/registry is intentionally NOT copied.
+COPY --from=cargo-builder /root/.cargo/bin /root/.cargo/bin
+COPY --from=cargo-builder /root/.rustup /root/.rustup
+ENV PATH="/root/.cargo/bin:${PATH}"
