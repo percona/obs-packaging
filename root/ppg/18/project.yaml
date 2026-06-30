@@ -185,6 +185,18 @@ project-config: |
   # libgdal-dev and several of its deps use libjpeg-dev which is provided
   # by both libjpeg62-turbo-dev and libjpeg-dev; prefer the turbo variant.
   Prefer: libjpeg62-turbo-dev
+  # Repackaged LLVM 21 (Debian 11 only) must not satisfy virtual clang/llvm-dev
+  # on other Debian/Ubuntu targets.
+  Ignore: libllvm21
+  Ignore: llvm-21-runtime
+  Ignore: llvm-21-linker-tools
+  Ignore: libclang-cpp21
+  Ignore: libclang-common-21-dev
+  Ignore: libclang1-21
+  Ignore: llvm-21-tools
+  Ignore: llvm-21
+  Ignore: llvm-21-dev
+  Ignore: clang-21
   %endif
 
 qa:

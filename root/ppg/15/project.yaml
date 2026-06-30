@@ -192,22 +192,6 @@ project-config: |
   Prefer: libncurses-dev
   # logrotate Recommends a cron daemon; Bullseye has both cron and bcron.
   Prefer: cron
-  # JIT builds use Bullseye LLVM 11; ignore repackaged LLVM 21 from
-  # common:deps:build (visible via the shared Debian_11 interconnect).
-  Prefer: llvm-11-dev
-  Prefer: clang-11
-  Substitute: llvm-dev llvm-11-dev
-  Substitute: clang clang-11
-  Ignore: libllvm21
-  Ignore: llvm-21-runtime
-  Ignore: llvm-21-linker-tools
-  Ignore: libclang-cpp21
-  Ignore: libclang-common-21-dev
-  Ignore: libclang1-21
-  Ignore: llvm-21-tools
-  Ignore: llvm-21
-  Ignore: llvm-21-dev
-  Ignore: clang-21
   %endif
 
   %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
@@ -218,6 +202,18 @@ project-config: |
   # libgdal-dev and several of its deps use libjpeg-dev which is provided
   # by both libjpeg62-turbo-dev and libjpeg-dev; prefer the turbo variant.
   Prefer: libjpeg62-turbo-dev
+  # Repackaged LLVM 21 (Debian 11 only) must not satisfy virtual clang/llvm-dev
+  # on other Debian/Ubuntu targets.
+  Ignore: libllvm21
+  Ignore: llvm-21-runtime
+  Ignore: llvm-21-linker-tools
+  Ignore: libclang-cpp21
+  Ignore: libclang-common-21-dev
+  Ignore: libclang1-21
+  Ignore: llvm-21-tools
+  Ignore: llvm-21
+  Ignore: llvm-21-dev
+  Ignore: clang-21
   %endif
 
 qa:

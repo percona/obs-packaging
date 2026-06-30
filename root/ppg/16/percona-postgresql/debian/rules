@@ -145,17 +145,7 @@ override_dh_builddeb:
 	dh_builddeb -- -Zgzip
 
 override_dh_auto_configure:
-ifneq ($(LLVM_CONFIG),)
-	@echo "=== LLVM JIT diagnostics ==="
-	@dpkg -l clang-$(LLVM_VERSION) libclang-cpp$(LLVM_VERSION) libclang1-$(LLVM_VERSION) llvm-$(LLVM_VERSION)-dev 2>&1 || true
-	@ls -la /usr/bin/clang-$(LLVM_VERSION) /usr/bin/llvm-config-$(LLVM_VERSION) 2>&1 || true
-	@ldd /usr/bin/clang-$(LLVM_VERSION) 2>&1 || true
-	@/usr/bin/clang-$(LLVM_VERSION) --version 2>&1 || true
-	LLVM_CONFIG='$(LLVM_CONFIG)' CLANG=/usr/bin/clang-$(LLVM_VERSION) CXX=/usr/bin/clang++-$(LLVM_VERSION) \
-		dh_auto_configure --builddirectory=build -- $(CONFIGURE_FLAGS)
-else
 	dh_auto_configure --builddirectory=build -- $(CONFIGURE_FLAGS)
-endif
 	# remove pre-built documentation
 	rm -fv doc/src/sgml/*-stamp
 
