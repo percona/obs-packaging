@@ -1,0 +1,5 @@
+llvm-21 (21.1.5-1) unstable; urgency=low
+
+  * Repackage LLVM 21.1.5 from apt.llvm.org for Debian 11 (Bullseye).
+
+ -- Percona Development Team <info@percona.com>  Thu, 26 Jun 2026 12:00:00 +0000

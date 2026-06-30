@@ -1,7 +1,7 @@
-title: LLVM 14 toolchain for Debian 11
+title: LLVM 21 toolchain for Debian 11
 description: |
-  LLVM 14 and Clang 14 packages repackaged from apt.llvm.org for Bullseye builds
-  that require LLVM >= 14 (e.g. PostgreSQL 18 JIT).
+  LLVM 21 and Clang 21 packages repackaged from apt.llvm.org for Bullseye builds
+  that require LLVM >= 14 (e.g. PostgreSQL 18 JIT) or C++23 (e.g. pg_oidc_validator).
 
 build:
   RockyLinux_8: false

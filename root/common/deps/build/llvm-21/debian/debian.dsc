@@ -1,8 +1,8 @@
 Format: 3.0 (quilt)
-Source: llvm-14
-Binary: llvm-14-dev clang-14 llvm-14 libllvm14 llvm-14-tools libclang-cpp14 libclang-common-14-dev llvm-14-linker-tools libclang1-14 llvm-14-runtime
+Source: llvm-21
+Binary: llvm-21-dev clang-21 llvm-21 libllvm21 llvm-21-tools libclang-cpp21 libclang-common-21-dev llvm-21-linker-tools libclang1-21 llvm-21-runtime
 Architecture: any
-Version: 14.0.6
+Version: 21.1.5
 Debtransform-Release: 1
 Debtransform-Tar: debian.tar.gz
 Maintainer: Percona Development Team <info@percona.com>

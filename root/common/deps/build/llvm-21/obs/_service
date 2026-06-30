@@ -1,0 +1,62 @@
+<services>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/libllvm21_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/llvm-21-runtime_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/llvm-21-linker-tools_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/libclang-cpp21_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/libclang-common-21-dev_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/libclang1-21_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/llvm-21-tools_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/llvm-21_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/llvm-21-dev_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/clang-21_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/libllvm21_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/llvm-21-runtime_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/llvm-21-linker-tools_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/libclang-cpp21_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/libclang-common-21-dev_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/libclang1-21_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/llvm-21-tools_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/llvm-21_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/llvm-21-dev_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/clang-21_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_arm64.deb</param>
+  </service>
+</services>

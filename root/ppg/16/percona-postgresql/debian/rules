@@ -82,15 +82,25 @@ ifeq ($(call version_ge,10),y)
 endif
 
 ifeq ($(call version_ge,11),y)
-  # if LLVM is installed, use it
-  ifneq ($(wildcard /usr/bin/llvm-config-*),)
+  # Enable JIT only when llvm-config and the matching clang both work.
+  # PostgreSQL configure checks CLANG with a plain --version call (llvm.m4).
+  LLVM_CONFIG :=
+  ifneq ($(wildcard /usr/bin/llvm-config-11),)
+    LLVM_CONFIG = /usr/bin/llvm-config-11
+    LLVM_VERSION = 11
+  else ifneq ($(wildcard /usr/bin/llvm-config-*),)
     LLVM_CONFIG = $(lastword $(sort $(wildcard /usr/bin/llvm-config-*)))
     LLVM_VERSION = $(subst /usr/bin/llvm-config-,,$(LLVM_CONFIG))
+  endif
+  ifneq ($(LLVM_CONFIG),)
+    ifneq ($(shell test -x /usr/bin/clang-$(LLVM_VERSION) && /usr/bin/clang-$(LLVM_VERSION) --version >/dev/null 2>&1; echo $$?),0)
+      $(error JIT build needs /usr/bin/clang-$(LLVM_VERSION) but it is missing or broken — install clang-$(LLVM_VERSION) and libclang-cpp$(LLVM_VERSION))
+    endif
     CONFIGURE_FLAGS += --with-llvm LLVM_CONFIG=$(LLVM_CONFIG) CLANG=/usr/bin/clang-$(LLVM_VERSION)
+    TEMP_CONFIG = TEMP_CONFIG=$(AUX_MK_DIR)/test-with-jit.conf
   else
     LLVM_VERSION = 0.invalid # mute dpkg error on empty version fields in debian/control
   endif
-  TEMP_CONFIG = TEMP_CONFIG=$(AUX_MK_DIR)/test-with-jit.conf
 endif
 
 ifeq ($(call version_ge,%!{PG_MAJOR_VERSION}),y)
@@ -135,7 +145,17 @@ override_dh_builddeb:
 	dh_builddeb -- -Zgzip
 
 override_dh_auto_configure:
+ifneq ($(LLVM_CONFIG),)
+	@echo "=== LLVM JIT diagnostics ==="
+	@dpkg -l clang-$(LLVM_VERSION) libclang-cpp$(LLVM_VERSION) libclang1-$(LLVM_VERSION) llvm-$(LLVM_VERSION)-dev 2>&1 || true
+	@ls -la /usr/bin/clang-$(LLVM_VERSION) /usr/bin/llvm-config-$(LLVM_VERSION) 2>&1 || true
+	@ldd /usr/bin/clang-$(LLVM_VERSION) 2>&1 || true
+	@/usr/bin/clang-$(LLVM_VERSION) --version 2>&1 || true
+	LLVM_CONFIG='$(LLVM_CONFIG)' CLANG=/usr/bin/clang-$(LLVM_VERSION) CXX=/usr/bin/clang++-$(LLVM_VERSION) \
+		dh_auto_configure --builddirectory=build -- $(CONFIGURE_FLAGS)
+else
 	dh_auto_configure --builddirectory=build -- $(CONFIGURE_FLAGS)
+endif
 	# remove pre-built documentation
 	rm -fv doc/src/sgml/*-stamp
 

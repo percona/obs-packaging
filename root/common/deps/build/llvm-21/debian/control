@@ -1,10 +1,10 @@
-Source: llvm-14
+Source: llvm-21
 Section: devel
 Priority: optional
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends: debhelper (>= 9)
 
-Package: libllvm14
+Package: libllvm21
 Architecture: any
 Depends: ${misc:Depends},
  libc6 (>= 2.29),
@@ -21,12 +21,12 @@ Description: Modular compiler and toolchain technologies, runtime library
  compilers, optimizers, just-in-time code generators, and many other
  compiler-related programs.
 
-Package: llvm-14-runtime
+Package: llvm-21-runtime
 Architecture: any
 Depends: ${misc:Depends},
  libc6 (>= 2.15),
  libgcc-s1 (>= 3.3),
- libllvm14 (= ${binary:Version}),
+ libllvm21 (= ${binary:Version}),
  libstdc++6 (>= 6),
  libtinfo6 (>= 6),
  libz3-4 (>= 4.8.10),
@@ -37,54 +37,54 @@ Description: Modular compiler and toolchain technologies, IR interpreter
  compilers, optimizers, just-in-time code generators, and many other
  compiler-related programs.
 
-Package: llvm-14-linker-tools
+Package: llvm-21-linker-tools
 Architecture: any
 Depends: ${misc:Depends},
  libc6 (>= 2.14),
  libgcc-s1 (>= 3.0),
- libllvm14 (= ${binary:Version}),
+ libllvm21 (= ${binary:Version}),
  libstdc++6 (>= 9)
 Description: Modular compiler and toolchain technologies - Plugins
  LLVM is a collection of libraries and tools that make it easy to build
  compilers, optimizers, just-in-time code generators, and many other
  compiler-related programs.
 
-Package: libclang-cpp14
+Package: libclang-cpp21
 Architecture: any
 Depends: ${misc:Depends},
  libc6 (>= 2.29),
  libgcc-s1 (>= 3.0),
- libllvm14 (= ${binary:Version}),
+ libllvm21 (= ${binary:Version}),
  libstdc++6 (>= 6)
 Description: C++ interface to the Clang library
  Clang project is a C, C++, Objective C and Objective C++ front-end
  based on the LLVM compiler.
 
-Package: libclang-common-14-dev
-Architecture: all
+Package: libclang-common-21-dev
+Architecture: any
 Depends: ${misc:Depends},
- libllvm14 (= ${binary:Version})
+ libllvm21 (= ${binary:Version})
 Description: Clang library - Common development package
  Clang project is a C, C++, Objective C and Objective C++ front-end
  based on the LLVM compiler.
 
-Package: libclang1-14
+Package: libclang1-21
 Architecture: any
 Depends: ${misc:Depends},
  libc6 (>= 2.14),
  libgcc-s1 (>= 3.0),
- libllvm14 (= ${binary:Version}),
+ libllvm21 (= ${binary:Version}),
  libstdc++6 (>= 5.2)
 Description: C interface to the Clang library
  Clang project is a C, C++, Objective C and Objective C++ front-end
  based on the LLVM compiler.
 
-Package: llvm-14-tools
+Package: llvm-21-tools
 Architecture: any
 Depends: ${misc:Depends},
  libc6 (>= 2.15),
  libgcc-s1 (>= 3.3),
- libllvm14 (= ${binary:Version}),
+ libllvm21 (= ${binary:Version}),
  libstdc++6 (>= 5.2),
  libtinfo6 (>= 6),
  libz3-4 (>= 4.8.10),
@@ -97,38 +97,38 @@ Description: Modular compiler and toolchain technologies, tools
  compilers, optimizers, just-in-time code generators, and many other
  compiler-related programs.
 
-Package: llvm-14
+Package: llvm-21
 Architecture: any
 Depends: ${misc:Depends},
- llvm-14-runtime (= ${binary:Version}),
- llvm-14-linker-tools (= ${binary:Version}),
+ llvm-21-runtime (= ${binary:Version}),
+ llvm-21-linker-tools (= ${binary:Version}),
  libc6 (>= 2.29),
  libcurl3-nss (>= 7.23.1),
  libgcc-s1 (>= 3.3),
- libllvm14 (= ${binary:Version}),
+ libllvm21 (= ${binary:Version}),
  libpfm4,
  libstdc++6 (>= 6),
  libtinfo6 (>= 6),
  libz3-4 (>= 4.8.10),
  zlib1g (>= 1:1.2.0)
-Recommends: llvm-14-dev
+Recommends: llvm-21-dev
 Description: Modular compiler and toolchain technologies
  LLVM is a collection of libraries and tools that make it easy to build
  compilers, optimizers, just-in-time code generators, and many other
  compiler-related programs.
 
-Package: llvm-14-dev
+Package: llvm-21-dev
 Architecture: any
 Depends: ${misc:Depends},
  libc6 (>= 2.2.5),
  libgcc-s1 (>= 3.0),
- libllvm14 (= ${binary:Version}),
+ libllvm21 (= ${binary:Version}),
  libstdc++6 (>= 4.1.1),
  libffi-dev,
- llvm-14 (= ${binary:Version}),
+ llvm-21 (= ${binary:Version}),
  libtinfo-dev | libncurses-dev,
- llvm-14-tools (= ${binary:Version}),
- libclang-cpp14 (= ${binary:Version}),
+ llvm-21-tools (= ${binary:Version}),
+ libclang-cpp21 (= ${binary:Version}),
  libz3-dev,
  libxml2-dev
 Description: Modular compiler and toolchain technologies, libraries and headers
@@ -136,24 +136,24 @@ Description: Modular compiler and toolchain technologies, libraries and headers
  compilers, optimizers, just-in-time code generators, and many other
  compiler-related programs.
 
-Package: clang-14
+Package: clang-21
 Architecture: any
 Depends: ${misc:Depends},
  libc6 (>= 2.14),
- libclang-cpp14 (= ${binary:Version}),
+ libclang-cpp21 (= ${binary:Version}),
  libgcc-s1 (>= 3.0),
- libllvm14 (= ${binary:Version}),
+ libllvm21 (= ${binary:Version}),
  libstdc++6 (>= 5.2),
  libstdc++-10-dev,
  libgcc-10-dev,
  libobjc-10-dev,
- libclang-common-14-dev (= ${binary:Version}),
- llvm-14-linker-tools (= ${binary:Version}),
- libclang1-14 (= ${binary:Version}),
+ libclang-common-21-dev (= ${binary:Version}),
+ llvm-21-linker-tools (= ${binary:Version}),
+ libclang1-21 (= ${binary:Version}),
  libc6-dev,
  binutils
-Recommends: llvm-14-dev
-Provides: c++-compiler, c-compiler, objc-compiler, clang
+Recommends: llvm-21-dev
+Provides: c++-compiler, c-compiler, objc-compiler
 Description: C, C++ and Objective-C compiler
  Clang project is a C, C++, Objective C and Objective C++ front-end
  based on the LLVM compiler.

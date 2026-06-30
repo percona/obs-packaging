@@ -7,7 +7,9 @@ Rules-Requires-Root: no
 Build-Depends:
  autoconf,
  bison,
- clang [!alpha !hppa !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32],
+ clang-11 [!alpha !hppa !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32],
+ libclang-cpp11 [!alpha !hppa !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32],
+ libclang1-11 [!alpha !hppa !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32],
  debhelper,
  debhelper-compat (= 10),
  dh-exec (>= 0.13~),
@@ -37,7 +39,7 @@ Build-Depends:
  libxml2-dev,
  libxml2-utils,
  libxslt1-dev,
- llvm-dev [!alpha !hppa !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32],
+ llvm-11-dev [!alpha !hppa !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32],
  mawk,
  perl (>= 5.8),
  pkg-config | pkgconf,
@@ -152,7 +154,8 @@ Depends:
  percona-pg-telemetry%!{PG_MAJOR_VERSION},
  ${misc:Depends},
  ${shlibs:Depends}
-Provides: percona-postgresql-contrib-%!{PG_MAJOR_VERSION}, postgresql-contrib-%!{PG_MAJOR_VERSION} (= ${binary:Version}), postgresql-%!{PG_MAJOR_VERSION} (= ${binary:Version})
+Provides: percona-postgresql-contrib-%!{PG_MAJOR_VERSION}, postgresql-contrib-%!{PG_MAJOR_VERSION} (= ${binary:Version}), postgresql-%!{PG_MAJOR_VERSION} (= ${binary:Version}),
+ postgresql-%!{PG_MAJOR_VERSION}-jit-llvm (= ${llvm:Version}) [!alpha !hppa !hurd-amd64 !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !loong64 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32] <!pkg.postgresql.nollvm>,
 Recommends: sysstat
 Description: The World's Most Advanced Open Source Relational Database
  PostgreSQL, also known as Postgres, is a free and open-source relational
@@ -196,9 +199,9 @@ Package: percona-postgresql-server-dev-%!{PG_MAJOR_VERSION}
 Architecture: any
 Section: libdevel
 Depends:
- clang [!alpha !hppa !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32],
+ clang-${llvm:Version} [!alpha !hppa !hurd-amd64 !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !loong64 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32] <!pkg.postgresql.nollvm>,
  libpq-dev (>= %!{PG_MAJOR_VERSION}~~),
- llvm-dev [!alpha !hppa !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32],
+ llvm-${llvm:Version}-dev [!alpha !hppa !hurd-amd64 !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !loong64 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32] <!pkg.postgresql.nollvm>,
  percona-postgresql-client-%!{PG_MAJOR_VERSION}, percona-postgresql-common (>= 162~),
  ${misc:Depends},
  ${shlibs:Depends}
