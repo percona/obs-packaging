@@ -192,18 +192,9 @@ project-config: |
   Prefer: libncurses-dev
   # logrotate Recommends a cron daemon; Bullseye has both cron and bcron.
   Prefer: cron
-  %endif
 
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
-  # libgdal-dev transitively requires both libcurl4-openssl-dev and
-  # libcurl4-gnutls-dev which conflict; ignore the gnutls variant so
-  # the openssl variant is used consistently.
-  Ignore: libcurl4-gnutls-dev
-  # libgdal-dev and several of its deps use libjpeg-dev which is provided
-  # by both libjpeg62-turbo-dev and libjpeg-dev; prefer the turbo variant.
-  Prefer: libjpeg62-turbo-dev
-  # Repackaged LLVM 21 (Debian 11 only) must not satisfy virtual clang/llvm-dev
-  # on other Debian/Ubuntu targets.
+  # Repackaged LLVM 21 (Debian 11 only) to support postgresql 18+ builds in Debian 11.
+  # For other ppg projects, we prefer the system LLVM 11 packages.
   Ignore: libllvm21
   Ignore: llvm-21-runtime
   Ignore: llvm-21-linker-tools
@@ -214,6 +205,20 @@ project-config: |
   Ignore: llvm-21
   Ignore: llvm-21-dev
   Ignore: clang-21
+  %endif
+
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04"
+  Prefer: golang-1.26
+  %endif
+
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
+  # libgdal-dev transitively requires both libcurl4-openssl-dev and
+  # libcurl4-gnutls-dev which conflict; ignore the gnutls variant so
+  # the openssl variant is used consistently.
+  Ignore: libcurl4-gnutls-dev
+  # libgdal-dev and several of its deps use libjpeg-dev which is provided
+  # by both libjpeg62-turbo-dev and libjpeg-dev; prefer the turbo variant.
+  Prefer: libjpeg62-turbo-dev
   %endif
 
 qa:
