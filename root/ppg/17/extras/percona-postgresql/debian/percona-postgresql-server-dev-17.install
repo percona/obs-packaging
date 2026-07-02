@@ -1,0 +1,5 @@
+usr/include/postgresql/*/server
+usr/lib/postgresql/*/bin/pg_bsd_indent
+usr/lib/postgresql/*/bin/pgindent
+usr/lib/postgresql/*/lib/libpg*.a
+usr/share/postgresql/*/typedefs.list

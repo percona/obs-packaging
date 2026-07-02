@@ -1,0 +1,18 @@
+#!/bin/sh
+
+set -e
+
+VERSION=${DPKG_MAINTSCRIPT_PACKAGE##*-}
+
+if [ "$1" = remove ]; then
+    if [ -f /usr/share/postgresql-common/maintscripts-functions ]; then
+        . /usr/share/postgresql-common/maintscripts-functions
+        remove_doc_version $VERSION
+    else
+        update-alternatives --remove SPI_connect.3.gz \
+            /usr/share/postgresql/$VERSION/man/man3/SPI_connect.3.gz
+        rmdir --ignore-fail-on-non-empty -p /usr/share/man/man1 /usr/share/man/man3 /usr/share/man/man7
+    fi
+fi
+
+#DEBHELPER#

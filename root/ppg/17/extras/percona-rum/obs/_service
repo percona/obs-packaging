@@ -1,0 +1,18 @@
+<services>
+  <service name="obs_scm">
+    <param name="url">https://github.com/postgrespro/rum.git/</param>
+    <param name="scm">git</param>
+    <param name="revision">%!{RUM_VERSION}</param>
+    <param name="versionformat">@PARENT_TAG@</param>
+    <param name="versionrewrite-pattern">(.*)</param>
+    <param name="filename">percona-rum_%!{PG_MAJOR_VERSION}</param>
+  </service>
+  <service mode="buildtime" name="tar" />
+  <service mode="buildtime" name="recompress">
+    <param name="file">*.tar</param>
+    <param name="compression">gz</param>
+  </service>
+  <service mode="buildtime" name="set_version">
+    <param name="basename">percona-rum_%!{PG_MAJOR_VERSION}</param>
+  </service>
+</services>
