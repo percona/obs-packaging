@@ -3,7 +3,19 @@
 | Package | Project | Version |
 | ------- | ------- | ------- |
 | etcd | ppg:18 | 3.5.30-1+5.1 |
-| percona-postgresql_anonymizer | ppg:18:extras | 3.1.1-2.1 |
+| h3 | ppg:18:extras | 4.5.0-1.1 |
+| percona-h3-pg | ppg:18:extras | 4.5.0-1.2 |
+| percona-hll | ppg:18:extras | 2.21-1.2 |
+| percona-ip4r | ppg:18:extras | 2.4.3-1.2 |
+| percona-pg_partman | ppg:18:extras | 5.4.3-1.2 |
+| percona-pg_similarity | ppg:18:extras | pg_similarity_1_0-1.2 |
+| percona-pgrouting | ppg:18:extras | 4.0.1-1.2 |
+| percona-pgvectorscale | ppg:18:extras | 0.9.0-1.2 |
+| percona-postgresql | ppg:18:extras | 18.4-1.1 |
+| percona-postgresql-unit | ppg:18:extras | 7.10-1.1 |
+| percona-postgresql_anonymizer | ppg:18:extras | 3.1.1-3.1 |
+| percona-rum | ppg:18:extras | 1.3.15-1.1 |
+| percona-timescaledb | ppg:18:extras | 2.28.1-1.1 |
 | percona-haproxy | ppg:18 | 2.8.23-1+1.1 |
 | percona-patroni | ppg:18 | 4.1.3-1+2.6 |
 | percona-pg_cron | ppg:18 | 1.6.7-1+7.2 |
@@ -60,6 +72,7 @@
 | percona-distribution-postgresql-with-postgis | ppg:18:containers:ubi9 | percona-distribution-postgresql-with-postgis | 18.4-1 | `18.4-1-2.46` `18.4-1` `18.4` `18` | SFCGAL 2.2.0-4.3, blas 3.9.0-1.7, flexiblas 3.0.4-2.4, flexiblas-netlib 3.0.4-2.4, flexiblas-netlib64 3.0.4-2.4, flexiblas-openblas-threads 3.0.4-2.4, geos 3.13.1-1.8, gosu 1.19-6.5, lapack 3.9.0-1.7, percona-patroni 4.1.3-2.3, percona-patroni-etcd 4.1.3-2.3, percona-pg_cron_18 1.6.7-7.4, percona-pg_oidc_validator18 1.0-5.4, percona-pg_repack18 1.5.3-7.4, percona-pg_stat_monitor18 2.3.2-8.4, percona-pg_tde18 2.2.0-8.4, percona-pgaudit18 18.0-7.4, percona-pgaudit18_set_user 4.2.0-7.4, percona-pgbackrest 2.58.0-5.7, percona-pgvector_18 0.8.3-1.2, percona-pgvector_18-llvmjit 0.8.3-1.2, percona-postgis35_18 3.5.7-1.4, percona-postgis35_18-client 3.5.7-1.4, percona-postgis35_18-gui 3.5.7-1.4, percona-postgis35_18-llvmjit 3.5.7-1.4, percona-postgis35_18-utils 3.5.7-1.4, percona-postgresql-client-common 290-1.7, percona-postgresql-common 290-1.7, percona-postgresql18 18.4-6.3, percona-postgresql18-contrib 18.4-6.3, percona-postgresql18-libs 18.4-6.3, percona-postgresql18-llvmjit 18.4-6.3, percona-postgresql18-server 18.4-6.3, percona-wal2json18 2.6-7.3, perl-JSON 4.03-2.3, proj 9.6.0-2.4, proj-data 9.6.0-2.4, python3-etcd 0.4.5-2.3, python3-ydiff 1.4.2-2.3, python3.12-click 8.1.7-2.3, python3.12-dateutil 2.9.0.post0-3.2, python3.12-dns 1.15.0-2.3, python3.12-etcd 0.4.5-2.3, python3.12-prettytable 3.4.0-2.3, python3.12-psutil 6.1.1-2.3, python3.12-psycopg2 2.9.10-2.7, python3.12-six 1.17.0-2.3, python3.12-wcwidth 0.2.13-2.3 |
 | percona-pgbackrest | ppg:18:containers:ubi9 | percona-pgbackrest | 2.58.0 | `2.58.0-5.22` `2.58.0` `latest` | percona-pgbackrest 2.58.0-5.7, percona-postgresql18-libs 18.4-6.3 |
 | percona-pgbouncer | ppg:18:containers:ubi9 | percona-pgbouncer | 1.25.2 | `1.25.2-2.23` `1.25.2` `latest` | c-ares 1.19.1-1.8, percona-pgbouncer 1.25.2-2.5, percona-postgresql18-libs 18.4-6.3, python3.12-psycopg2 2.9.10-2.7 |
+| percona-distribution-postgresql-with-postgis | ppg:18:extras:containers:ubi9 | percona-distribution-postgresql-with-postgis | 18.4-1 | `18.4-1-1.1` `18.4-1` `18.4` `18` | SFCGAL 2.2.0-4.3, blas 3.9.0-1.7, flexiblas 3.0.4-2.4, flexiblas-netlib 3.0.4-2.4, flexiblas-netlib64 3.0.4-2.4, flexiblas-openblas-threads 3.0.4-2.4, geos 3.13.1-1.8, gosu 1.19-6.5, h3 4.5.0-1.1, lapack 3.9.0-1.7, percona-h3-pg_18 4.5.0-1.2, percona-hll_18 2.21-1.2, percona-ip4r_18 2.4.3-1.2, percona-patroni 4.1.3-2.3, percona-patroni-etcd 4.1.3-2.3, percona-pg_cron_18 1.6.7-7.4, percona-pg_oidc_validator18 1.0-5.4, percona-pg_partman_18 5.4.3-1.2, percona-pg_repack18 1.5.3-7.4, percona-pg_similarity_18 pg_similarity_1_0-1.2, percona-pg_stat_monitor18 2.3.2-8.4, percona-pgaudit18 18.0-7.4, percona-pgaudit18_set_user 4.2.0-7.4, percona-pgbackrest 2.58.0-5.7, percona-pgrouting_18 4.0.1-1.2, percona-pgvector_18 0.8.3-1.2, percona-pgvector_18-llvmjit 0.8.3-1.2, percona-pgvectorscale_18 0.9.0-1.2, percona-postgis35_18 3.5.7-1.4, percona-postgis35_18-client 3.5.7-1.4, percona-postgis35_18-gui 3.5.7-1.4, percona-postgis35_18-llvmjit 3.5.7-1.4, percona-postgis35_18-utils 3.5.7-1.4, percona-postgresql-client-common 290-1.7, percona-postgresql-common 290-1.7, percona-postgresql-unit_18 7.10-1.1, percona-postgresql18 18.4-1.1, percona-postgresql18-contrib 18.4-1.1, percona-postgresql18-libs 18.4-1.1, percona-postgresql18-llvmjit 18.4-1.1, percona-postgresql18-server 18.4-1.1, percona-postgresql_anonymizer_18 3.1.1-3.1, percona-rum_18 1.3.15-1.1, percona-timescaledb_18 2.28.1-1.1, percona-wal2json18 2.6-7.3, perl-JSON 4.03-2.3, proj 9.6.0-2.4, proj-data 9.6.0-2.4, python3-etcd 0.4.5-2.3, python3-psycopg2 2.9.10-2.7, python3-ydiff 1.4.2-2.3, python3.12-click 8.1.7-2.3, python3.12-dateutil 2.9.0.post0-3.2, python3.12-dns 1.15.0-2.3, python3.12-etcd 0.4.5-2.3, python3.12-prettytable 3.4.0-2.3, python3.12-psutil 6.1.1-2.3, python3.12-psycopg2 2.9.10-2.7, python3.12-six 1.17.0-2.3, python3.12-wcwidth 0.2.13-2.3 |
 
 # Repository Installation Instructions
 
@@ -305,5 +318,14 @@ docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/perc
 
 ```bash
 docker pull registry.opensuse.org/isv/percona/ppg/18/containers/ubi9/images/percona-pgbouncer:latest
+```
+
+**`isv:percona:ppg:18:extras:containers:ubi9`**
+
+**`percona-distribution-postgresql-with-postgis`**
+
+```bash
+docker pull registry.opensuse.org/isv/percona/ppg/18/extras/containers/ubi9/images/percona-distribution-postgresql-with-postgis:18.4
+docker pull registry.opensuse.org/isv/percona/ppg/18/extras/containers/ubi9/images/percona-distribution-postgresql-with-postgis:18
 ```
 
