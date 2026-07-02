@@ -1,0 +1,2 @@
+#!/bin/sh
+pg_buildext -i '--auth=trust' -o'shared_preload_libraries=pgaudit' installcheck

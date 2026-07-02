@@ -1,0 +1,1 @@
+usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib usr/lib/postgresql/%!{PG_MAJOR_VERSION}/

@@ -1,0 +1,26 @@
+Template: postgresql/auto_upgrade
+Type: boolean
+Default: false
+#flag:translate:1,2,3,5
+_Description: Upgrade PostgreSQL cluster ${oldversion}/main to ${newversion}?
+ The PostgreSQL database cluster ${oldversion}/main can be upgraded to version
+ ${newversion}, this will be attempted now. (If no automated cluster upgrades
+ are desired, uninstall the "postgresql" meta package.)
+ .
+ Alternatively, the cluster can later be upgraded by running the command:
+ .
+   pg_upgradecluster ${oldversion} main -v ${newversion}
+ .
+ Once the upgraded cluster has been validated to work, drop the old cluster
+ using the command:
+ .
+   pg_dropcluster ${oldversion} main
+
+Template: postgresql/auto_upgrade_failed
+Type: note
+#flag:translate:1,2
+_Description: PostgreSQL upgrade of cluster ${oldversion}/main failed
+ The automated upgrade of PostgreSQL cluster ${oldversion}/main to version
+ ${newversion} failed. Please investigate the situation and re-run the command:
+ .
+   pg_upgradecluster ${oldversion} main -v ${newversion}

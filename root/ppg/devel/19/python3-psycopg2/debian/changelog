@@ -1,0 +1,5 @@
+psycopg2 (2.9.5-1) unstable; urgency=low
+
+  * Update to 2.9.5 version.
+
+ -- Percona Development Team <info@percona.com>  Mon, 10 Mar 2026 00:00:00 +0000

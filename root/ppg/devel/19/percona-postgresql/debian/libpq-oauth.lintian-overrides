@@ -1,0 +1,2 @@
+# libpq-oauth.so is a plugin for libpq5
+libpq-oauth: sharedobject-in-library-directory-missing-soname

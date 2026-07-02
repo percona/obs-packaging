@@ -1,0 +1,5 @@
+percona-haproxy (%!{HAPROXY_VERSION}-1) unstable; urgency=low
+
+  * Update to upstream version %!{HAPROXY_VERSION}
+
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}
