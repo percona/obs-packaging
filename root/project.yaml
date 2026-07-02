@@ -122,19 +122,6 @@ project-config: |
   Prefer: libncurses-dev
   # logrotate Recommends a cron daemon; Bullseye has both cron and bcron.
   Prefer: cron
-
-  # Repackaged LLVM 21 (Debian 11 only) to support postgresql 18+ builds in Debian 11.
-  # For other ppg projects, we prefer the system LLVM 11 packages.
-  Ignore: libllvm21
-  Ignore: llvm-21-runtime
-  Ignore: llvm-21-linker-tools
-  Ignore: libclang-cpp21
-  Ignore: libclang-common-21-dev
-  Ignore: libclang1-21
-  Ignore: llvm-21-tools
-  Ignore: llvm-21
-  Ignore: llvm-21-dev
-  Ignore: clang-21
   %endif
 
   %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04"

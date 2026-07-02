@@ -80,15 +80,21 @@ ifeq ($(call version_ge,10),y)
 endif
 
 ifeq ($(call version_ge,11),y)
-  # if LLVM is installed, use it
-  ifneq ($(wildcard /usr/bin/llvm-config-*),)
+  # Prefer repackaged llvm-21 on Debian 11 (PG 18 JIT needs LLVM >= 19).
+  LLVM_CONFIG :=
+  ifneq ($(wildcard /usr/bin/llvm-config-21),)
+    LLVM_CONFIG = /usr/bin/llvm-config-21
+    LLVM_VERSION = 21
+  else ifneq ($(wildcard /usr/bin/llvm-config-*),)
     LLVM_CONFIG = $(lastword $(sort $(wildcard /usr/bin/llvm-config-*)))
     LLVM_VERSION = $(subst /usr/bin/llvm-config-,,$(LLVM_CONFIG))
+  endif
+  ifneq ($(LLVM_CONFIG),)
     CONFIGURE_FLAGS += --with-llvm LLVM_CONFIG=$(LLVM_CONFIG) CLANG=/usr/bin/clang-$(LLVM_VERSION)
+    TEMP_CONFIG = TEMP_CONFIG=$(AUX_MK_DIR)/test-with-jit.conf
   else
     LLVM_VERSION = 0.invalid # mute dpkg error on empty version fields in debian/control
   endif
-  TEMP_CONFIG = TEMP_CONFIG=$(AUX_MK_DIR)/test-with-jit.conf
 endif
 
 ifeq ($(call version_ge,17),y)
@@ -157,7 +163,18 @@ override_dh_builddeb:
 	fi
 
 override_dh_auto_configure:
-	dh_auto_configure --builddirectory=build -- $(CONFIGURE_FLAGS)
+	# PG 18 detects libnuma via pkg-config (--with-libnuma). Debian 11 (Bullseye)
+	# ships libnuma-dev without numa.pc; synthesize one in a build-local dir and
+	# point PKG_CONFIG_PATH at it (the build runs rootless, so /usr is read-only).
+	# No-op where libnuma-dev already provides numa.pc (Debian 13, Ubuntu).
+	if ! pkg-config --exists numa 2>/dev/null; then \
+	  numa_version=$$(dpkg-query -W -f='$${Version}' libnuma1 2>/dev/null | cut -d- -f1); \
+	  numa_version=$${numa_version:-2.0.12}; \
+	  mkdir -p debian/pkgconfig; \
+	  printf 'prefix=/usr\nexec_prefix=$${prefix}\nlibdir=$${exec_prefix}/lib/$(DEB_HOST_MULTIARCH)\nincludedir=$${prefix}/include\n\nName: numa\nDescription: NUMA policy library\nVersion: %s\nLibs: -lnuma\nCflags:\n' "$$numa_version" > debian/pkgconfig/numa.pc; \
+	fi
+	PKG_CONFIG_PATH="$(CURDIR)/debian/pkgconfig:$$PKG_CONFIG_PATH" \
+	  dh_auto_configure --builddirectory=build -- $(CONFIGURE_FLAGS)
 	# remove pre-built documentation
 	rm -fv doc/src/sgml/*-stamp
 
@@ -192,6 +209,14 @@ override_dh_auto_install-indep:
 
 override_dh_makeshlibs:
 	dh_makeshlibs -Xusr/lib/postgresql/$(MAJOR_VER)
+
+DISTRO_CODENAME := $(shell . /etc/os-release 2>/dev/null; echo $$VERSION_CODENAME)
+ifeq ($(DISTRO_CODENAME),bullseye)
+  DWZ_EXCLUDE = -Xllvmjit.so
+endif
+
+override_dh_dwz:
+	dh_dwz $(DWZ_EXCLUDE)
 
 override_dh_auto_clean:
 	rm -rf build

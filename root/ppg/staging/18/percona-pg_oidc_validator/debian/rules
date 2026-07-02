@@ -2,6 +2,16 @@
 
 include /usr/share/postgresql-common/pgxs_debian_control.mk
 
+# Debian 11 ships g++ 10, which cannot compile upstream's -std=c++23. When the
+# repackaged llvm-21 toolchain is present, build with clang++-21 and libc++.
+ifneq ($(wildcard /usr/bin/clang++-21),)
+# PGXS compiles .cpp with CXX but links MODULE_big .so with CC; both must be
+# clang++-21 so -stdlib=libc++ and -lc++/libc++abi resolve on Debian 11.
+PG_OID_VALIDATOR_MAKE_FLAGS = CC=clang++-21 CXX=clang++-21 USE_LIBCXX=1 \
+	CXXFLAGS="$(shell dpkg-buildflags --get CXXFLAGS) -stdlib=libc++" \
+	LDFLAGS="$(shell dpkg-buildflags --get LDFLAGS) -stdlib=libc++"
+endif
+
 %:
 	dh $@
 
@@ -12,14 +22,16 @@ override_dh_auto_clean:
 	rm -rf build
 
 override_dh_auto_build:
-	make USE_PGXS=1 \
+	$(MAKE) USE_PGXS=1 \
 	PG_CONFIG=/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_config \
-	with_llvm=no
+	with_llvm=no \
+	$(PG_OID_VALIDATOR_MAKE_FLAGS)
 
 override_dh_auto_install:
-	make USE_PGXS=1 install DESTDIR=$(CURDIR)/debian/tmp \
+	$(MAKE) USE_PGXS=1 install DESTDIR=$(CURDIR)/debian/tmp \
 	PG_CONFIG=/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_config \
-	with_llvm=no
+	with_llvm=no \
+	$(PG_OID_VALIDATOR_MAKE_FLAGS)
 
 override_dh_auto_test:
 
