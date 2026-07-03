@@ -29,6 +29,7 @@ RUN set -ex; \
     microdnf -y install \
         file \
         perl \
+        tar \
         pkgconfig \
         c-ares
 

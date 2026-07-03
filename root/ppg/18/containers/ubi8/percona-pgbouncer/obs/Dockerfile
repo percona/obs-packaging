@@ -32,6 +32,7 @@ RUN set -ex; \
         shadow-utils \
         file \
         perl \
+        tar \
         pkgconfig \
         c-ares
 
