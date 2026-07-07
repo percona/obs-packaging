@@ -41,6 +41,7 @@ def _is_kiwi_service(name: str) -> bool:
 _CACHE_DIR = _REPO_DIR / ".cache"
 _OBS_SCM_CACHE_DIR = _CACHE_DIR / "obs_scm"
 _SVC_CACHE_DIR = _CACHE_DIR / "services"
+_DOWNLOAD_URL_CACHE_DIR = _CACHE_DIR / "download_url"
 
 # Matches the subdir param of obs_scm services that fetch packaging files
 # from this repo (e.g. "root/ppg/17/percona-haproxy/debian" or the variable
@@ -267,8 +268,8 @@ def _cache_store(commit_hash: str, workdir: Path, artifacts: list[str]) -> None:
         raise
 
 
-def _obs_scm_cache_key(svc: ET.Element) -> str:
-    """Return a stable cache key for an obs_scm service element.
+def _service_params_cache_key(svc: ET.Element) -> str:
+    """Return a stable cache key for a service element (obs_scm, download_url).
 
     The key is the SHA256 of all sorted param name=value pairs, so any change
     to the service configuration (URL, revision, extract, versionformat, …)
@@ -484,6 +485,32 @@ def _obs_scm_store(
         raise
 
 
+def _download_url_lookup(cache_key: str) -> list[str] | None:
+    """Return cached download_url output filenames for cache_key, or None on miss."""
+    entry = _DOWNLOAD_URL_CACHE_DIR / cache_key
+    if not entry.is_dir():
+        return None
+    files = [f.name for f in sorted(entry.iterdir()) if f.is_file()]
+    return files if files else None
+
+
+def _download_url_store(cache_key: str, workdir: Path, filenames: list[str]) -> None:
+    """Atomically copy download_url output files from workdir into the cache."""
+    _DOWNLOAD_URL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = Path(tempfile.mkdtemp(dir=_DOWNLOAD_URL_CACHE_DIR, prefix="_tmp-"))
+    try:
+        for fname in filenames:
+            shutil.copy2(workdir / fname, tmp / fname)
+        final = _DOWNLOAD_URL_CACHE_DIR / cache_key
+        if final.exists():
+            shutil.rmtree(final)
+        tmp.rename(final)
+        logger.debug(f"cached download_url output ({cache_key[:12]}) under {final}")
+    except Exception:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+
+
 def _copy_file_with_macros(src: Path, dst: Path, macros: dict[str, str]) -> None:
     """Copy *src* to *dst*, applying macro substitution to UTF-8 text files.
 
@@ -621,6 +648,9 @@ def _run_local_services(
                 HEAD matches a cached run; on a hit the cached files are restored
                 and the obs_scm invocation is skipped entirely.  On a miss
                 obs_scm runs normally and its output is stored to the cache.
+                download_url services are cached by their service params alone
+                (the URL fully determines the content); on a hit the download
+                is skipped, on a miss the downloaded files are stored.
       Cache check — after Phase 1 the upstream source obsinfo is read for its
                     commit hash.  On a cache hit Phase 2 manual service outputs
                     are restored from cache.
@@ -762,7 +792,7 @@ def _run_local_services(
                 ),
                 "HEAD",
             )
-            obs_key = _obs_scm_cache_key(svc)
+            obs_key = _service_params_cache_key(svc)
             _print_pending(f"service obs_scm  {pkg_label}")
             head_sha = _git_head_sha(obs_url, obs_rev) if obs_url else None
             if head_sha:
@@ -784,6 +814,28 @@ def _run_local_services(
                     _obs_scm_store(obs_key, head_sha, workdir, generated)
                 except Exception as exc:
                     logger.warning(f"obs_scm cache store failed: {exc}")
+        elif cache and svc_name == "download_url":
+            # The service params (URL, filename, …) fully determine the
+            # downloaded content, so they alone are the cache key — no
+            # remote check is needed.
+            dl_key = _service_params_cache_key(svc)
+            cached_files = _download_url_lookup(dl_key)
+            if cached_files is not None:
+                cache_entry = _DOWNLOAD_URL_CACHE_DIR / dl_key
+                for fname in cached_files:
+                    shutil.copy2(cache_entry / fname, workdir / fname)
+                _print_same(f"service download_url  {pkg_label}  (cached)")
+                logger.debug(
+                    f"download_url cache hit ({dl_key[:12]}): "
+                    f"restored {len(cached_files)} file(s)"
+                )
+                continue
+            generated = _run_one(svc)
+            if generated:
+                try:
+                    _download_url_store(dl_key, workdir, generated)
+                except Exception as exc:
+                    logger.warning(f"download_url cache store failed: {exc}")
         else:
             _run_one(svc)
 

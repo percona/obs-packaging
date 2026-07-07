@@ -483,7 +483,7 @@ If a service binary is missing from `/usr/lib/obs/service/`, a warning is logged
 
 #### Local service cache
 
-To avoid re-running expensive operations (git clones, Go dependency vendoring) on every `sync`, `percona-obs` maintains a two-level on-disk cache at `.cache/` in the project root (git-ignored via `.gitignore`).
+To avoid re-running expensive operations (git clones, Go dependency vendoring, tarball downloads) on every `sync`, `percona-obs` maintains a three-level on-disk cache at `.cache/` in the project root (git-ignored via `.gitignore`).
 
 **Level 1 — obs_scm output cache** (`.cache/obs_scm/{params_hash}/{head_sha}/`)
 
@@ -503,9 +503,13 @@ The obsinfo file produced by that upstream obs_scm is named `{filename}.obsinfo`
 - **Cache hit**: `.cache/services/{upstream_commit}/` exists and contains files → those files (vendor tarballs, etc.) are copied to the work directory, all `mode="manual"` services are skipped, and the function returns immediately.
 - **Cache miss**: all `mode="manual"` services run in XML-declaration order, then their output files are stored atomically to `.cache/services/{upstream_commit}/`.
 
-**Atomic writes**: both levels write to a temporary directory inside the cache directory (ensuring same filesystem), then rename it into place, preventing partial or corrupt cache entries.
+**Level 3 — download_url output cache** (`.cache/download_url/{params_hash}/`)
 
-**`--no-cache`**: pass to `sync` to bypass both cache levels unconditionally for that run.
+Before invoking each `download_url` service binary, `percona-obs` computes `params_hash` as the SHA256 of all sorted `name=value` param pairs from the service XML element (after macro/env substitution). Since the URL fully determines the downloaded content for the versioned artifacts these services fetch, no remote check is performed. On a **hit**, the cached files are restored to the work directory and the download is skipped. On a **miss**, `download_url` runs normally and its output files are stored atomically to `.cache/download_url/{params_hash}/`.
+
+**Atomic writes**: all levels write to a temporary directory inside the cache directory (ensuring same filesystem), then rename it into place, preventing partial or corrupt cache entries.
+
+**`--no-cache`**: pass to `sync` to bypass all cache levels unconditionally for that run.
 
 When targeting a specific package (`sync <project> <package>`), the ancestor project chain is only walked if the target project does not yet exist on OBS (fast path avoids redundant GET calls otherwise).
 
