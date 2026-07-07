@@ -18,5 +18,6 @@
   <service mode="buildtime" name="cargo_vendor">
     <param name="src">percona-postgresql_anonymizer_*.tar.gz</param>
     <param name="compression">gz</param>
+    <param name="update">false</param>
   </service>
 </services>
