@@ -13,7 +13,9 @@ repositories:
       - subproject: common:containers:ubi8
         repository: UBI_8
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
-        repository: standard
+        repository: appstream
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
+        repository: baseos
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
         repository: appstream
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
@@ -56,6 +58,9 @@ project-config: |
 
   Prefer: openssl-fips-provider
   Prefer: glibc-minimal-langpack
+  Prefer: redhat-release
+  Ignore: rocky-release
+  Substitute: rocky-release redhat-release
 
   BuildFlags: container-compression-format:zstd
   BuildFlags: container-build-format:oci
