@@ -483,7 +483,7 @@ If a service binary is missing from `/usr/lib/obs/service/`, a warning is logged
 
 #### Local service cache
 
-To avoid re-running expensive operations (git clones, Go dependency vendoring, tarball downloads) on every `sync`, `percona-obs` maintains a three-level on-disk cache at `.cache/` in the project root (git-ignored via `.gitignore`).
+To avoid re-running expensive operations (git clones, Go/Rust dependency vendoring, tarball downloads) on every `sync`, `percona-obs` maintains a four-level on-disk cache at `.cache/` in the project root (git-ignored via `.gitignore`).
 
 **Level 1 — obs_scm output cache** (`.cache/obs_scm/{params_hash}/{head_sha}/`)
 
@@ -506,6 +506,10 @@ The obsinfo file produced by that upstream obs_scm is named `{filename}.obsinfo`
 **Level 3 — download_url output cache** (`.cache/download_url/{params_hash}/`)
 
 Before invoking each `download_url` service binary, `percona-obs` computes `params_hash` as the SHA256 of all sorted `name=value` param pairs from the service XML element (after macro/env substitution). Since the URL fully determines the downloaded content for the versioned artifacts these services fetch, no remote check is performed. On a **hit**, the cached files are restored to the work directory and the download is skipped. On a **miss**, `download_url` runs normally and its output files are stored atomically to `.cache/download_url/{params_hash}/`.
+
+**Level 4 — cargo_vendor output cache** (`.cache/cargo_vendor/{params_hash}/{source_id}/`)
+
+`cargo_vendor` is declared `mode="buildtime"` but is not a fast local transform — it downloads the full crate dependency tree from crates.io. Its output (`vendor.tar.gz`) is cached, keyed on `params_hash` (SHA256 of the service params) plus `source_id`, which identifies the exact source being vendored: the upstream obs_scm commit hash when the package has an obs_scm service, otherwise the SHA256 of the resolved `src` archive(s) themselves (for sources fetched via download_url). Any upstream commit or source change therefore produces a new key and invalidates the cache; on store, entries for older revisions of the same service are pruned (vendor tarballs are large). If no `source_id` can be determined, cargo_vendor runs uncached.
 
 **Atomic writes**: all levels write to a temporary directory inside the cache directory (ensuring same filesystem), then rename it into place, preventing partial or corrupt cache entries.
 
