@@ -1,0 +1,12 @@
+usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib/pg_tde.so
+usr/share/postgresql/%!{PG_MAJOR_VERSION}/extension/pg_tde.control
+usr/share/postgresql/%!{PG_MAJOR_VERSION}/extension/pg_tde*.sql
+usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_tde_change_key_provider
+usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_tde_archive_decrypt
+usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_tde_restore_encrypt
+usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_tde_basebackup
+usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_tde_checksums
+usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_tde_resetwal
+usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_tde_rewind
+usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_tde_waldump
+usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_tde_upgrade
