@@ -220,6 +220,16 @@ def _pkg_env_vars(package_path: Path) -> dict[str, str]:
     }
 
 
+def _is_link_package(obs_dir: Path) -> bool:
+    """Return True if the package's obs/ directory carries an OBS source link.
+
+    Link packages (obs/_link only) are compared against OBS unexpanded: the
+    stored _link file itself is the source of truth.  An expanded fetch would
+    return the link *target's* files and report a permanent mismatch.
+    """
+    return (obs_dir / "_link").is_file()
+
+
 def _content_matches_branch(
     apiurl: str,
     branch_project: str,
@@ -244,7 +254,12 @@ def _content_matches_branch(
     comparison reproduces what was uploaded when the branch project was last synced.
     Falls back to ``env_vars`` when not provided.
     """
-    obs_md5s = _fetch_obs_file_md5s(apiurl, branch_project, package_name, expanded=True)
+    obs_md5s = _fetch_obs_file_md5s(
+        apiurl,
+        branch_project,
+        package_name,
+        expanded=not _is_link_package(obs_dir),
+    )
     if not obs_md5s:
         logger.debug(f"content check: no files in {branch_project}/{package_name}")
         return False
