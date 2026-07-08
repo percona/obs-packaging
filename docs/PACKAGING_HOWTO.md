@@ -26,11 +26,13 @@ Where the package lives in `root/` determines which OBS subproject it belongs to
 
 | Location | OBS subproject |
 |---|---|
-| `root/ppg/17/<pkg>/` | `<rootprj>:ppg:17` |
+| `root/ppg/staging/17/<pkg>/` | `<rootprj>:ppg:staging:17` |
 | `root/common/deps/runtime/<pkg>/` | `<rootprj>:common:deps:runtime` |
 | `root/common/deps/build/<pkg>/` | `<rootprj>:common:deps:build` |
 
-See [root/README.md](../root/README.md) for the full project hierarchy.
+See [root/README.md](../root/README.md) for the full project hierarchy, including the
+`devel/<major-version>/` tier used for dev-branch builds (Class A full copies and Class B
+`obs/_link` packages) — this guide only covers adding a new package to `staging/`.
 
 ---
 
@@ -38,9 +40,9 @@ See [root/README.md](../root/README.md) for the full project hierarchy.
 
 ```bash
 PKG=percona-pgbadger
-mkdir -p root/ppg/17/$PKG/debian/source
-mkdir -p root/ppg/17/$PKG/rpm
-mkdir -p root/ppg/17/$PKG/obs
+mkdir -p root/ppg/staging/17/$PKG/debian/source
+mkdir -p root/ppg/staging/17/$PKG/rpm
+mkdir -p root/ppg/staging/17/$PKG/obs
 ```
 
 ---
@@ -302,7 +304,7 @@ Create `package.yaml` in the package root to set the OBS title/description and t
 per-repo build and publish flags.
 
 ```bash
-cat > root/ppg/17/percona-pgbadger/package.yaml << 'EOF'
+cat > root/ppg/staging/17/percona-pgbadger/package.yaml << 'EOF'
 title: percona-pgbadger
 description: |
   Fast PostgreSQL log analyser built for speed with fully detailed reports.
@@ -373,8 +375,8 @@ package manager repository list.
 > [docs/PERCONA_OBS_TOOL.md](PERCONA_OBS_TOOL.md).
 
 ```bash
-./percona-obs -P dev sync push ppg:17 percona-pgbadger
-./percona-obs -P dev build status ppg:17 percona-pgbadger
+./percona-obs -P dev sync push ppg:staging:17 percona-pgbadger
+./percona-obs -P dev build status ppg:staging:17 percona-pgbadger
 ```
 
 When a build fails, retrieve the log:
@@ -382,14 +384,14 @@ When a build fails, retrieve the log:
 ```bash
 osc -A <apiurl> buildlog <project> percona-pgbadger <repo> x86_64
 # Example:
-osc -A http://192.168.1.103:3000 buildlog home:Admin:percona:ppg:17 percona-pgbadger RockyLinux_9 x86_64
+osc -A http://192.168.1.103:3000 buildlog home:Admin:percona:ppg:staging:17 percona-pgbadger RockyLinux_9 x86_64
 ```
 
 After fixing packaging files, trigger a rebuild (the `_service` file has not changed so
 `sync push` alone will not queue a new build):
 
 ```bash
-./percona-obs -P dev build trigger ppg:17 percona-pgbadger
+./percona-obs -P dev build trigger ppg:staging:17 percona-pgbadger
 ```
 
 ---
@@ -397,7 +399,7 @@ After fixing packaging files, trigger a rebuild (the `_service` file has not cha
 ## Adding a Package as an Aggregate in a Subproject
 
 When a package is built in one subproject (e.g. `common:deps:runtime`) and consumed by
-another (e.g. `ppg:17`), the `ppg:17` subproject should not re-build it. Instead it
+another (e.g. `ppg:staging:17`), the `ppg:staging:17` subproject should not re-build it. Instead it
 references the already-built binaries using an **aggregate**.
 
 ### What an aggregate does
@@ -406,15 +408,15 @@ An `_aggregate` file in a package directory tells OBS to pull pre-built binaries
 another project's repository instead of building from source. No source is uploaded, no
 build is queued — OBS serves the binaries from the referenced project directly.
 
-### Example: `percona-telemetry-agent` in `ppg:17`
+### Example: `percona-telemetry-agent` in `ppg:staging:17`
 
 `percona-telemetry-agent` is built in `common:deps:runtime`. To make its binaries available
-in the `ppg:17` repository without rebuilding:
+in the `ppg:staging:17` repository without rebuilding:
 
 **1. Create the aggregate package directory:**
 
 ```bash
-mkdir -p root/ppg/17/percona-telemetry-agent/obs
+mkdir -p root/ppg/staging/17/percona-telemetry-agent/obs
 ```
 
 **2. Create `obs/_aggregate`:**
@@ -434,7 +436,7 @@ OBS organisation prefix.
 **3. Sync to OBS:**
 
 ```bash
-./percona-obs -P dev sync push ppg:17 percona-telemetry-agent
+./percona-obs -P dev sync push ppg:staging:17 percona-telemetry-agent
 ```
 
 OBS will show the package as `aggregate` in its package list and serve the binaries from
@@ -443,7 +445,7 @@ OBS will show the package as `aggregate` in its package list and serve the binar
 ### When to use aggregates
 
 - A utility or daemon used by packages in multiple subprojects (e.g. `percona-telemetry-agent`
-  used by `ppg:17`, `psmdb`, etc.).
+  used by `ppg:staging:17`, `psmdb`, etc.).
 - A build dependency that is itself built in a `common:deps:build` subproject (OBS handles
   this automatically via the project's repository path configuration — `_aggregate` files
   are only needed for runtime binary reuse between sibling subprojects).

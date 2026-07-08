@@ -11,8 +11,8 @@ see [PACKAGING_HOWTO.md](PACKAGING_HOWTO.md) instead.
 
 > ## ⚠️ Source of truth: upstream, not a prior ppg major
 >
-> When porting a package to a new ppg major (e.g. bootstrapping `ppg:18` while
-> `ppg:17` exists), always start from the authoritative upstream sources for the
+> When porting a package to a new ppg major (e.g. bootstrapping `ppg:staging:18` while
+> `ppg:staging:17` exists), always start from the authoritative upstream sources for the
 > target major — **never** copy a package tree from the previous ppg and
 > mechanically rename `17 → 18`.
 >
@@ -53,10 +53,10 @@ what the builder would assemble and let OBS fetch sources and build directly.
 
 ## Resulting Package Structure
 
-Every package under `root/ppg/17/` follows this layout:
+Every package under `root/ppg/staging/17/` follows this layout:
 
 ```
-root/ppg/17/<package-name>/
+root/ppg/staging/17/<package-name>/
 ├── debian/
 │   ├── debian.dsc          # OBS-specific DSC (see below)
 │   ├── changelog           # Minimal Debian changelog
@@ -139,7 +139,7 @@ point:
 ```bash
 git clone <PKGNAME_SRC_REPO_DEB> /tmp/deb-base
 cd /tmp/deb-base && git checkout <DEB_PACKAGING_TAG>
-cp -r /tmp/deb-base/debian/* root/ppg/17/$PKG/debian/
+cp -r /tmp/deb-base/debian/* root/ppg/staging/17/$PKG/debian/
 ```
 
 If there is no external DEB packaging repo (the builder creates the `debian/`
@@ -153,11 +153,11 @@ versions. Copy those from `postgres-packaging/<pkg>/`:
 
 ```bash
 # Always overridden:
-cp <postgres-packaging>/<pkg>/control  root/ppg/17/$PKG/debian/control
-cp <postgres-packaging>/<pkg>/rules    root/ppg/17/$PKG/debian/rules
+cp <postgres-packaging>/<pkg>/control  root/ppg/staging/17/$PKG/debian/control
+cp <postgres-packaging>/<pkg>/rules    root/ppg/staging/17/$PKG/debian/rules
 
 # Apply sed substitutions the builder performs, e.g.:
-sed -i "s/@@PGMAJOR@@/17/g" root/ppg/17/$PKG/debian/control
+sed -i "s/@@PGMAJOR@@/17/g" root/ppg/staging/17/$PKG/debian/control
 ```
 
 Apply any patch files listed in the builder (e.g. `rules.patch`):
@@ -283,7 +283,7 @@ manually — the resulting patched spec is what goes into `rpm/`.
     <param name="revision">main</param>
     <param name="version">_none_</param>
     <param name="extract">*.dsc</param>
-    <param name="subdir">root/ppg/17/<PKG>/debian</param>
+    <param name="subdir">root/ppg/staging/17/<PKG>/debian</param>
     <param name="filename">debian</param>
   </service>
 
@@ -293,7 +293,7 @@ manually — the resulting patched spec is what goes into `rpm/`.
     <param name="revision">main</param>
     <param name="version">_none_</param>
     <param name="extract">*</param>
-    <param name="subdir">root/ppg/17/<PKG>/rpm</param>
+    <param name="subdir">root/ppg/staging/17/<PKG>/rpm</param>
     <param name="filename">rpm</param>
   </service>
 
@@ -380,16 +380,16 @@ from this repo) to `revision=<package-name>`:
 ### 8b. Commit, push, and sync to OBS
 
 ```bash
-git add root/ppg/17/<pkg>/
-git commit -s -m "Add <pkg> <version> package for ppg/17"
+git add root/ppg/staging/17/<pkg>/
+git commit -s -m "Add <pkg> <version> package for ppg/staging/17"
 git push -u origin <package-name>
-./percona-obs -P dev sync push ppg:17 <pkg>
+./percona-obs -P dev sync push ppg:staging:17 <pkg>
 ```
 
 ### 8c. Monitor build status
 
 ```bash
-./percona-obs -P dev build status ppg:17 <pkg>
+./percona-obs -P dev build status ppg:staging:17 <pkg>
 ```
 
 Targets are listed with status icons: `✔ succeeded`, `✗ failed`, `● building`,
@@ -402,7 +402,7 @@ When a target shows `✗ failed`, retrieve the build log with `osc`:
 ```bash
 osc -A <apiurl> buildlog <project> <pkg> <repo> <arch>
 # Example:
-osc -A http://192.168.1.103:3000 buildlog home:Admin:percona:ppg:17 ydiff RockyLinux_9 x86_64
+osc -A http://192.168.1.103:3000 buildlog home:Admin:percona:ppg:staging:17 ydiff RockyLinux_9 x86_64
 ```
 
 The end of the log contains the RPM or dpkg-buildpackage error. Fix the relevant
@@ -415,7 +415,7 @@ After pushing a fix, the `_service` file itself has not changed so
 its services and rebuild explicitly:
 
 ```bash
-./percona-obs -P dev build trigger ppg:17 <pkg>
+./percona-obs -P dev build trigger ppg:staging:17 <pkg>
 ```
 
 ### 8f. Prepare the branch for merging when all targets succeed

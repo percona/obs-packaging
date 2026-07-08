@@ -26,21 +26,37 @@ root/
 └── <product>/                      # e.g. ppg/
     ├── releases/                   # release pointer files (see root/README.md)
     │   └── <name>/release.yaml
-    └── <major-version>/            # e.g. 17/
-        ├── project.yaml            # OBS project config for this subproject
-        ├── <package>/              # source packages
-        │   ├── debian/             # Debian packaging (control, rules, changelog, …)
-        │   ├── rpm/                # RPM packaging (*.spec, patches, service files)
-        │   ├── package.yaml        # optional OBS package config (title, description)
-        │   └── obs/
-        │       ├── _service        # OBS build service config
-        │       ├── _aggregate      # aggregates binaries from another OBS project
-        │       └── _multibuild     # multi-flavor builds (PostgreSQL extensions only)
-        └── <another-package>/
-            └── ...
+    ├── staging/                    # full package set, tag builds, QA/release candidate
+    │   └── <major-version>/        # e.g. 17/
+    │       ├── project.yaml        # OBS project config for this subproject
+    │       ├── <package>/          # source packages
+    │       │   ├── debian/         # Debian packaging (control, rules, changelog, …)
+    │       │   ├── rpm/            # RPM packaging (*.spec, patches, service files)
+    │       │   ├── package.yaml    # optional OBS package config (title, description)
+    │       │   └── obs/
+    │       │       ├── _service    # OBS build service config
+    │       │       ├── _aggregate  # aggregates binaries from another OBS project
+    │       │       └── _multibuild # multi-flavor builds (PostgreSQL extensions only)
+    │       └── <another-package>/
+    │           └── ...
+    └── devel/                      # manually curated dev-branch subset (see below)
+        └── <major-version>/
+            └── <package>/          # Class A (full copy) or Class B (obs/_link only)
 ```
 
 A directory is treated as a **package** if it contains an `obs/` subdirectory or a `package.yaml` file. Everything else is treated as a **project** (subproject grouping).
+
+### `devel/<major-version>/` packages: Class A vs Class B
+
+`devel/<V>/` holds a manually curated subset of `staging/<V>/`, built from development
+branches so day-to-day branch work can be built and tested without disturbing staging.
+Membership is manual — adding a package there also requires adding its direct dependents,
+since an omitted dependent would otherwise link against staging binaries. A **Class A**
+devel package is a full copy of the staging package (own `rpm/`, `debian/`, `obs/`) with
+`obs/_service` retargeted from a release tag to a development branch, editable independently
+of staging. A **Class B** devel package contains only an `obs/_link` pointing at the staging
+package (e.g. `<link project="${OBS_ROOTPRJ}:ppg:staging:18" package="…"/>`), rebuilt in the
+devel context so it links against devel binaries. See `root/README.md` for full detail.
 
 ## Two Package Archetypes
 
@@ -50,7 +66,7 @@ A directory is treated as a **package** if it contains an `obs/` subdirectory or
 - `debian/rules` extracts version from `.obsinfo` file at build time
 - RPM `Release: 1%{?dist}`
 
-### 2. PostgreSQL extension (e.g., `ppg/17/percona-pg-telemetry/`)
+### 2. PostgreSQL extension (e.g., `ppg/staging/17/percona-pg-telemetry/`)
 - Uses `@BUILD_FLAVOR@` placeholder throughout (replaced by PG major version at build time)
 - `obs/_multibuild` lists PG versions to build for: `<flavor>17</flavor>`
 - `debian/pgversions` specifies min PG version (e.g., `9.3+`)
@@ -99,7 +115,7 @@ project-config: |              # raw OBS project config string
   %endif
 ```
 
-- `name` — absent or empty means the OBS project name is derived from the directory path relative to `root/` joined with `--rootprj` using colons (e.g. `home:Admin:ppg:17`). Set it explicitly only when the OBS project name must differ from the directory path.
+- `name` — absent or empty means the OBS project name is derived from the directory path relative to `root/` joined with `--rootprj` using colons (e.g. `home:Admin:ppg:staging:17`). Set it explicitly only when the OBS project name must differ from the directory path.
 - `repositories[].paths` — list of path entries providing the base build environment. Each entry uses either `project:` (absolute OBS project name) or `subproject:` (resolved as `<rootprj>:<subproject>`) plus `repository:`.
 - `project-config` — passed verbatim to the OBS project config API; used for RPM macros, module expansion flags, etc.
 - `title` and `description` are informational only and never inherited by child projects.
@@ -119,11 +135,12 @@ When `percona-obs` pushes project metadata to OBS, it automatically injects one 
 
 Ancestor paths are injected closest-first (immediate parent before grandparent), followed by the upstream path from `project.yaml`. This gives every subproject **direct** visibility into packages built in all ancestor projects, without relying on OBS transitive resolution.
 
-For example, the `home:Admin:ppg:17` project gets this generated for each repository:
+For example, the `home:Admin:ppg:staging:17` project gets this generated for each repository:
 ```xml
 <repository name="RockyLinux_9">
-  <path project="home:Admin:ppg" repository="RockyLinux_9"/>           <!-- auto-injected: immediate parent -->
-  <path project="home:Admin" repository="RockyLinux_9"/>               <!-- auto-injected: grandparent (rootprj) -->
+  <path project="home:Admin:ppg:staging" repository="RockyLinux_9"/>   <!-- auto-injected: immediate parent -->
+  <path project="home:Admin:ppg" repository="RockyLinux_9"/>           <!-- auto-injected: grandparent -->
+  <path project="home:Admin" repository="RockyLinux_9"/>               <!-- auto-injected: great-grandparent (rootprj) -->
   <path project="openSUSE.org:RockyLinux:9" repository="standard"/>   <!-- from project.yaml -->
   <arch>x86_64</arch>
 </repository>
@@ -183,7 +200,7 @@ env:                                 # optional: variables for ${VAR} substituti
   -e REMOTE_OBS_ORG_INTERCONNECT:'openSUSE.org:' \
   profile create dev
 
-./percona-obs -P dev sync ppg:17 etcd --dry-run
+./percona-obs -P dev sync ppg:staging:17 etcd --dry-run
 ```
 
 To add or update an env variable in an existing profile, use `-P` (to load the current state) plus `-e`:
@@ -280,7 +297,7 @@ When `--branch-from <profile>` is given, each package is individually evaluated:
 
 #### Branch project derivation
 
-The corresponding branch OBS project is derived by substituting the current `rootprj` prefix with the branch profile's `rootprj`. For example, if the current project is `home:Admin:percona-test:ppg:17` and the branch rootprj is `home:Admin:percona`, the branch project is `home:Admin:percona:ppg:17`.
+The corresponding branch OBS project is derived by substituting the current `rootprj` prefix with the branch profile's `rootprj`. For example, if the current project is `home:Admin:percona-test:ppg:staging:17` and the branch rootprj is `home:Admin:percona`, the branch project is `home:Admin:percona:ppg:staging:17`.
 
 #### Primary path — git SHA comparison
 
@@ -517,7 +534,7 @@ Before invoking each `download_url` service binary, `percona-obs` computes `para
 
 When targeting a specific package (`sync <project> <package>`), the ancestor project chain is only walked if the target project does not yet exist on OBS (fast path avoids redundant GET calls otherwise).
 
-Project names use colon notation matching the directory hierarchy (e.g. `ppg:17`).
+Project names use colon notation matching the directory hierarchy (e.g. `ppg:staging:17`).
 
 ### `build trigger [project] [package]`
 
@@ -587,7 +604,7 @@ listed after all trees as isolated packages. Cycles are detected and printed as
 
 Validates local project configuration without connecting to OBS.
 
-The optional `project` argument (colon notation, e.g. `ppg:17`) restricts validation to that subtree. If omitted, the entire `root/` tree is validated.
+The optional `project` argument (colon notation, e.g. `ppg:staging:17`) restricts validation to that subtree. If omitted, the entire `root/` tree is validated.
 
 **Check 1 — subproject references**: every `subproject:` entry in all `project.yaml` files within the scope must resolve to an existing directory under `root/`.
 
@@ -602,8 +619,8 @@ Env resolution for the check (same precedence as all other commands):
 # Validate the entire tree against the dev profile
 ./percona-obs -P dev project verify
 
-# Validate only the ppg:17 subproject
-./percona-obs -P dev project verify ppg:17
+# Validate only the ppg:staging:17 subproject
+./percona-obs -P dev project verify ppg:staging:17
 
 # Check with an inline override (no profile file needed)
 ./percona-obs -e REMOTE_OBS_ORG_INTERCONNECT:'openSUSE.org:' project verify
@@ -641,7 +658,7 @@ Every changelog entry that references an upstream version **must** include a URL
 | `percona-telemetry-agent` | `https://github.com/percona/telemetry-agent/releases/tag/v<version>` | `…/tag/v1.0.13` |
 
 ## Adding a New PostgreSQL Extension
-1. Copy `ppg/17/percona-pg-telemetry/` as a template
+1. Copy `ppg/staging/17/percona-pg-telemetry/` as a template
 2. Replace all `percona-pg-telemetry` references with the new package name
 3. Update `obs/_multibuild` flavors for the target PG versions
 4. Update `obs/_service` upstream URL to point to the new package's GitHub repo
@@ -660,7 +677,7 @@ When given an OBS package URL and a target location within `root/`, follow these
 
 ### Inputs
 - **OBS package URL** — the web UI URL, e.g. `http://192.168.1.103:3000/package/show/home:Admin/obs-service-tar_scm`
-- **Target location** — directory relative to `root/` where the package should land (e.g. `root/` for a top-level package, `root/ppg/17/` for a subproject package)
+- **Target location** — directory relative to `root/` where the package should land (e.g. `root/` for a top-level package, `root/ppg/staging/17/` for a subproject package)
 - **Import mode** — `full` (copy source files) or `aggregate` (create `_aggregate` link)
 
 ### Step 1 — Determine the API URL
@@ -920,9 +937,9 @@ When branching is involved, always confirm which OBS instance is being queried:
 | Purpose | Exemplar |
 |---|---|
 | Go standalone package | `percona-telemetry-agent/` |
-| PG extension multi-version | `ppg/17/percona-pg-telemetry/` |
-| Large PG server package | `ppg/17/percona-postgresql17/` |
-| Third-party infrastructure service | `ppg/17/etcd/` |
+| PG extension multi-version | `ppg/staging/17/percona-pg-telemetry/` |
+| Large PG server package | `ppg/staging/17/percona-postgresql17/` |
+| Third-party infrastructure service | `ppg/staging/17/etcd/` |
 | OBS aggregate (mirrors another OBS project) | `obs-service-tar_scm/` |
 | Root project config | `root/project.yaml` |
 | Management script | `percona-obs` (commands: `sync push`, `sync delete`, `sync promote`, `build trigger`, `build status`, `build dependency`, `profile create`, `profile list`, `project verify`) |
@@ -1015,7 +1032,7 @@ check never ran. `--recursive` ensures projects are deleted even if a build was 
 | `PERCONA_OBS_PACKAGING_REPO` | Profile env | HTTPS clone URL of the packaging repo OBS fetches from. Set to the fork's URL for PR profiles so OBS fetches packaging files from the correct repo when building promoted packages. |
 | `REMOTE_OBS_ORG_INTERCONNECT` | Profile env | Prefix for external OBS instance project references (e.g. `openSUSE.org:`). Empty string when no interconnect is used. |
 | `OBS_ROOTPRJ` | Auto-injected | The root OBS project name (`--rootprj`). Use this in `_aggregate` files to reference sibling subprojects without hardcoding the org prefix (e.g. `${OBS_ROOTPRJ}:common:deps:runtime`). |
-| `DEBIAN_PACKAGE_DIRECTORY` | Auto-injected per package | Path to the package's `debian/` subdir relative to the repo root (e.g. `root/ppg/17/percona-haproxy/debian`). Use as the `subdir` param in the first packaging `obs_scm` service. |
-| `RPM_PACKAGE_DIRECTORY` | Auto-injected per package | Path to the package's `rpm/` subdir relative to the repo root (e.g. `root/ppg/17/percona-haproxy/rpm`). Use as the `subdir` param in the second packaging `obs_scm` service. |
+| `DEBIAN_PACKAGE_DIRECTORY` | Auto-injected per package | Path to the package's `debian/` subdir relative to the repo root (e.g. `root/ppg/staging/17/percona-haproxy/debian`). Use as the `subdir` param in the first packaging `obs_scm` service. |
+| `RPM_PACKAGE_DIRECTORY` | Auto-injected per package | Path to the package's `rpm/` subdir relative to the repo root (e.g. `root/ppg/staging/17/percona-haproxy/rpm`). Use as the `subdir` param in the second packaging `obs_scm` service. |
 
 `PERCONA_OBS_PACKAGING_BRANCH`, `PERCONA_OBS_PACKAGING_REPO`, and `REMOTE_OBS_ORG_INTERCONNECT` are declared in each `percona-obs` profile via `-e KEY:VALUE` at profile-creation time. `OBS_ROOTPRJ`, `DEBIAN_PACKAGE_DIRECTORY`, and `RPM_PACKAGE_DIRECTORY` are injected automatically and do not need to be declared manually.

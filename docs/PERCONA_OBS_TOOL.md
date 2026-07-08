@@ -79,7 +79,7 @@ List all available profiles and their settings:
 Once a profile exists, activate it with `-P`:
 
 ```sh
-./percona-obs -P local sync ppg:17 etcd --dry-run
+./percona-obs -P local sync ppg:staging:17 etcd --dry-run
 ```
 
 Explicit `-A`/`-R` flags always override the profile values when both are given.
@@ -113,17 +113,18 @@ uploads any changed `obs/` files as a single revision per package.
 
 ### Sync a single PostgreSQL extension
 
-PG extensions live under a subproject (`ppg/17/`). Pass the subproject and package
-name separately:
+PG extensions live under a subproject (`ppg/staging/17/`). Pass the subproject and
+package name separately. (There is also a `ppg/devel/17/` tier for dev-branch builds —
+see [root/README.md](../root/README.md) — not covered further here.)
 
 ```sh
-./percona-obs -P local sync push ppg:17 percona-pg-telemetry
+./percona-obs -P local sync push ppg:staging:17 percona-pg-telemetry
 ```
 
 ### Sync all packages under a subproject
 
 ```sh
-./percona-obs -P local sync push ppg:17
+./percona-obs -P local sync push ppg:staging:17
 ```
 
 ---
@@ -169,10 +170,10 @@ Output example:
 ```
   + project meta  home:Admin:percona-test
   + project meta  home:Admin:percona-test:ppg
-  + project meta  home:Admin:percona-test:ppg:17
-  = files  home:Admin:percona-test:ppg:17/percona-postgresql17
-  @ home:Admin:percona-test:ppg:17/percona-postgresql17  → home:Admin:percona:ppg:17/percona-postgresql17
-  ~ 4 files  home:Admin:percona-test:ppg:17/percona-pg-telemetry   ← changed, uploaded
+  + project meta  home:Admin:percona-test:ppg:staging:17
+  = files  home:Admin:percona-test:ppg:staging:17/percona-postgresql17
+  @ home:Admin:percona-test:ppg:staging:17/percona-postgresql17  → home:Admin:percona:ppg:staging:17/percona-postgresql17
+  ~ 4 files  home:Admin:percona-test:ppg:staging:17/percona-pg-telemetry   ← changed, uploaded
   ✔  sync successful
 ```
 
@@ -183,8 +184,8 @@ of pulling pre-built binaries from the branch project, run `sync promote`:
 
 ```sh
 ./percona-obs -P test sync promote           # promote all branch packages
-./percona-obs -P test sync promote ppg:17    # promote all packages under a subproject
-./percona-obs -P test sync promote ppg:17 etcd  # promote a single package
+./percona-obs -P test sync promote ppg:staging:17    # promote all packages under a subproject
+./percona-obs -P test sync promote ppg:staging:17 etcd  # promote a single package
 ```
 
 For each package whose latest OBS revision was created by a `--branch-from` sync,
@@ -270,8 +271,8 @@ packages have no direct source file changes.
 
 ```sh
 ./percona-obs -P local build trigger                     # all packages
-./percona-obs -P local build trigger ppg:17              # all packages under a subproject
-./percona-obs -P local build trigger ppg:17 etcd         # single package
+./percona-obs -P local build trigger ppg:staging:17              # all packages under a subproject
+./percona-obs -P local build trigger ppg:staging:17 etcd         # single package
 ```
 
 Sends an OBS service run request (`runservice`) for each targeted package, causing
@@ -305,15 +306,16 @@ home:Admin:percona
 │   │           ├── Debian_13          ✔ succeeded     3.5.26-6.1
 │   │           └── xUbuntu_24.04      ✔ succeeded     3.5.26-6.1
 └── ppg
-    └── 17
-        ├── etcd
-        │   ├── RockyLinux_9           ✔ succeeded     3.5.26-6.1
-        │   ├── Debian_13              ✔ succeeded     3.5.26-6.1
-        │   └── xUbuntu_24.04          ✔ succeeded     3.5.26-6.1
-        └── percona-pg-telemetry:17
-            ├── RockyLinux_9           ✔ succeeded     1.0.0-1.1
-            ├── Debian_13              ✔ succeeded     1.0.0-1.1
-            └── xUbuntu_24.04          ◌ scheduled
+    └── staging
+        └── 17
+            ├── etcd
+            │   ├── RockyLinux_9           ✔ succeeded     3.5.26-6.1
+            │   ├── Debian_13              ✔ succeeded     3.5.26-6.1
+            │   └── xUbuntu_24.04          ✔ succeeded     3.5.26-6.1
+            └── percona-pg-telemetry:17
+                ├── RockyLinux_9           ✔ succeeded     1.0.0-1.1
+                ├── Debian_13              ✔ succeeded     1.0.0-1.1
+                └── xUbuntu_24.04          ◌ scheduled
 ```
 
 | Symbol | Color | Meaning |
@@ -327,8 +329,8 @@ home:Admin:percona
 Scope can be narrowed the same way as other commands:
 
 ```sh
-./percona-obs -P local build status ppg:17               # subproject only (tree rooted there)
-./percona-obs -P local build status ppg:17 etcd          # single package
+./percona-obs -P local build status ppg:staging:17               # subproject only (tree rooted there)
+./percona-obs -P local build status ppg:staging:17 etcd          # single package
 ./percona-obs -P local build status --repo RockyLinux_9  # all packages, one distro only
 ```
 
@@ -346,12 +348,12 @@ is shown with its direct and transitive build dependencies indented beneath it.
 Packages in the tree are annotated with the OBS project they belong to.
 
 ```
-etcd (home:Admin:percona:ppg:17)
+etcd (home:Admin:percona:ppg:staging:17)
 └── golang-1.25 (home:Admin:percona:common:deps:build)
 
-percona-pg-telemetry (home:Admin:percona:ppg:17)
-├── percona-postgresql-common (home:Admin:percona:ppg:17)
-└── percona-postgresql17 (home:Admin:percona:ppg:17)
+percona-pg-telemetry (home:Admin:percona:ppg:staging:17)
+├── percona-postgresql-common (home:Admin:percona:ppg:staging:17)
+└── percona-postgresql17 (home:Admin:percona:ppg:staging:17)
 
 percona-telemetry-agent (home:Admin:percona:common:deps:runtime)
 └── golang-1.25 (home:Admin:percona:common:deps:build)
@@ -365,7 +367,7 @@ Packages with no local build dependencies and that nothing else depends on are l
 at the bottom as isolated packages. Scope can be narrowed to a subproject:
 
 ```sh
-./percona-obs -P local build dependency ppg:17
+./percona-obs -P local build dependency ppg:staging:17
 ```
 
 ---
@@ -463,7 +465,7 @@ repositories on a target machine, grouped by distribution.
 ### Show instructions for a specific subproject
 
 ```sh
-./percona-obs -P local project install ppg:17
+./percona-obs -P local project install ppg:staging:17
 ```
 
 ### Filter to a single distribution
@@ -478,12 +480,12 @@ Example output for a Rocky Linux 9 repository:
 ────────────────────────────────────────────────────────────────────────
 RockyLinux_9
 
-# home:Admin:percona:ppg:17
-rpm --import http://my-obs.local/home:/Admin:/percona:/ppg:/17/RockyLinux_9/repodata/repomd.xml.key
-tee /etc/yum.repos.d/home_Admin_percona_ppg_17.repo << 'EOF'
-[home:Admin:percona:ppg:17]
-name=home:Admin:percona:ppg:17 - RockyLinux_9
-baseurl=http://my-obs.local/home:/Admin:/percona:/ppg:/17/RockyLinux_9/
+# home:Admin:percona:ppg:staging:17
+rpm --import http://my-obs.local/home:/Admin:/percona:/ppg:/staging:/17/RockyLinux_9/repodata/repomd.xml.key
+tee /etc/yum.repos.d/home_Admin_percona_ppg_staging_17.repo << 'EOF'
+[home:Admin:percona:ppg:staging:17]
+name=home:Admin:percona:ppg:staging:17 - RockyLinux_9
+baseurl=http://my-obs.local/home:/Admin:/percona:/ppg:/staging:/17/RockyLinux_9/
 enabled=1
 gpgcheck=0
 EOF
@@ -502,9 +504,11 @@ are silently excluded from the output.
 ## Releasing packages
 
 A release captures a point-in-time snapshot of a source OBS project by copying
-its built binaries into a dedicated release project. Release IDs include the PG
-minor version and a counter (e.g. `17.9-1`, `17.9-2`, `17.10-1`). A single OBS
-release project (`ppg:releases:17`) covers all minor versions for a PG major.
+its built binaries into a dedicated release project. The source project is `ppg:staging:<V>`
+— the full, tag-built package set (see [root/README.md](../root/README.md) for the
+devel/staging/releases tier layout). Release IDs include the PG minor version and a
+counter (e.g. `17.9-1`, `17.9-2`, `17.10-1`). A single OBS release project
+(`ppg:releases:17`) covers all minor versions for a PG major.
 
 The process is PR-based:
 
@@ -520,13 +524,13 @@ The process is PR-based:
 
 ```sh
 # Fully automatic — both release-name and release-id derived from OBS
-./percona-obs -P local project release ppg:17
+./percona-obs -P local project release ppg:staging:17
 
 # Override release-name only
-./percona-obs -P local project release ppg:17 --release-name 17
+./percona-obs -P local project release ppg:staging:17 --release-name 17
 
 # Override both
-./percona-obs -P local project release ppg:17 --release-name 17 --release-id 17.9-1
+./percona-obs -P local project release ppg:staging:17 --release-name 17 --release-id 17.9-1
 ```
 
 `project release <source-project>` does the following:
@@ -555,7 +559,7 @@ the merge commit lands on `main`. That tag then triggers `obs-release.yml`.
 
 ```yaml
 repository: ${PERCONA_OBS_PACKAGING_REPO}
-project: ppg:17
+project: ppg:staging:17
 releases:
   - ppg/17.9-1          # first release
   - ppg/17.9-2          # update release
@@ -693,7 +697,7 @@ To run manually for recovery (replace `<pr-rootprj>` with e.g. `home:Admin:perco
 
 ```sh
 ./percona-obs -P local sync delete --dry-run
-./percona-obs -P local sync delete ppg:17 --dry-run
+./percona-obs -P local sync delete ppg:staging:17 --dry-run
 ```
 
 ### Delete a full project tree
@@ -708,13 +712,13 @@ unless `--yes` is given. Use `--recursive` to delete projects that still contain
 ### Delete a single subproject
 
 ```sh
-./percona-obs -P local sync delete ppg:17 --yes --recursive
+./percona-obs -P local sync delete ppg:staging:17 --yes --recursive
 ```
 
 ### Delete a single package
 
 ```sh
-./percona-obs -P local sync delete ppg:17 etcd --yes
+./percona-obs -P local sync delete ppg:staging:17 etcd --yes
 ```
 
 ---
@@ -740,7 +744,7 @@ unless `--yes` is given. Use `--recursive` to delete projects that still contain
 
 1. Copy an existing PG extension as a template:
    ```sh
-   cp -r root/ppg/17/percona-pg-telemetry root/ppg/17/my-pg-extension
+   cp -r root/ppg/staging/17/percona-pg-telemetry root/ppg/staging/17/my-pg-extension
    ```
 2. Replace all `percona-pg-telemetry` references with `my-pg-extension` throughout the
    copied files.
@@ -749,5 +753,5 @@ unless `--yes` is given. Use `--recursive` to delete projects that still contain
 5. Update `rpm/*.spec` and `debian/control` — keep `@BUILD_FLAVOR@` placeholders.
 6. Sync to OBS:
    ```sh
-   ./percona-obs -P local sync push ppg:17 my-pg-extension
+   ./percona-obs -P local sync push ppg:staging:17 my-pg-extension
    ```
