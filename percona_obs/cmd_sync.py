@@ -189,13 +189,42 @@ def _rewrite_aggregate_for_branch(
     return ET.tostring(root, encoding="unicode", xml_declaration=False)
 
 
+def _rewrite_link_for_branch(
+    content: str,
+    rootprj: str,
+    branch_rootprj: str,
+    active_projects: "set[str] | None",
+) -> str:
+    """Rewrite _link XML so references to inactive PR subprojects point to branch_rootprj.
+
+    Mirrors _rewrite_aggregate_for_branch.  A devel package's _link targets its
+    staging sibling; in a PR namespace an unpromoted sibling holds an _aggregate
+    (binaries only) or does not exist, and expanding a link onto an _aggregate
+    copies binaries instead of rebuilding.  Redirect the link to the production
+    counterpart, which holds real sources.
+    """
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return content
+    if root.tag != "link":
+        return content
+    proj = root.get("project", "")
+    if proj == rootprj or proj.startswith(rootprj + ":"):
+        if active_projects is None or proj not in active_projects:
+            suffix = proj[len(rootprj) :]  # "" or ":sub:project"
+            root.set("project", branch_rootprj + suffix)
+            return ET.tostring(root, encoding="unicode", xml_declaration=False)
+    return content
+
+
 def _rewrite_aggregates_in_dir(
     directory: Path,
     rootprj: str,
     branch_rootprj: str,
     active_projects: "set[str] | None",
 ) -> None:
-    """Rewrite all _aggregate files in directory in-place for branch mode."""
+    """Rewrite all _aggregate and _link files in directory in-place for branch mode."""
     agg_file = directory / "_aggregate"
     if agg_file.is_file():
         original = agg_file.read_text("utf-8")
@@ -204,6 +233,15 @@ def _rewrite_aggregates_in_dir(
         )
         if rewritten != original:
             agg_file.write_text(rewritten, "utf-8")
+
+    link_file = directory / "_link"
+    if link_file.is_file():
+        original = link_file.read_text("utf-8")
+        rewritten = _rewrite_link_for_branch(
+            original, rootprj, branch_rootprj, active_projects
+        )
+        if rewritten != original:
+            link_file.write_text(rewritten, "utf-8")
 
 
 def _pkg_env_vars(package_path: Path) -> dict[str, str]:
