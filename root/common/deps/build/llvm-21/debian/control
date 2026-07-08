@@ -79,6 +79,40 @@ Description: C interface to the Clang library
  Clang project is a C, C++, Objective C and Objective C++ front-end
  based on the LLVM compiler.
 
+Package: libc++abi1-21
+Architecture: any
+Depends: ${misc:Depends},
+ libc6 (>= 2.18),
+ libgcc-s1 (>= 3.0)
+Description: LLVM low level support for a standard C++ library
+ libc++abi is another implementation of low level support for a standard C++
+ library.
+
+Package: libc++1-21
+Architecture: any
+Depends: ${misc:Depends},
+ libc6 (>= 2.27),
+ libgcc-s1 (>= 3.0),
+ libc++abi1-21 (= ${binary:Version})
+Description: LLVM C++ Standard library
+ libc++ is another implementation of the C++ standard library.
+
+Package: libc++abi-21-dev
+Architecture: any
+Depends: ${misc:Depends},
+ libc++abi1-21 (= ${binary:Version})
+Description: LLVM low level support for a standard C++ library (development files)
+ libc++abi is another implementation of low level support for a standard C++
+ library.
+
+Package: libc++-21-dev
+Architecture: any
+Depends: ${misc:Depends},
+ libc++1-21 (= ${binary:Version}),
+ libc++abi-21-dev (= ${binary:Version})
+Description: LLVM C++ Standard library (development files)
+ libc++ is another implementation of the C++ standard library.
+
 Package: llvm-21-tools
 Architecture: any
 Depends: ${misc:Depends},

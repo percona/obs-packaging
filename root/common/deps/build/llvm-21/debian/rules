@@ -6,7 +6,8 @@ LLVM_UPSTREAM_VER := 21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.
 DEB_ARCH := $(shell dpkg --print-architecture)
 
 DEBS := libllvm21 llvm-21-runtime llvm-21-linker-tools libclang-cpp21 \
-	libclang-common-21-dev libclang1-21 llvm-21-tools llvm-21 llvm-21-dev clang-21
+	libclang-common-21-dev libclang1-21 libc++abi1-21 libc++1-21 \
+	libc++abi-21-dev libc++-21-dev llvm-21-tools llvm-21 llvm-21-dev clang-21
 
 %:
 	dh $@
