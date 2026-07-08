@@ -4,8 +4,8 @@
 **Status:** Approved design, pending implementation plan
 **Ticket:** [PG-2518](https://perconadev.atlassian.net/browse/PG-2518) (epic PG-2412)
 **Supersedes:** the 2026-07-02 design-proposal attachment on PG-2518 (this spec resolves
-its open decisions; where they differ, this spec wins — notably Class A uses direct
-staging subdir paths instead of symlinks).
+its open decisions; where they differ, this spec wins — notably Class A packages carry
+their own full packaging copies instead of symlinks).
 
 ## 1. Motivation
 
@@ -24,7 +24,7 @@ promotion pipeline that separates in-development builds from the tag-based candi
 | D2 | Version scope | All versions (ppg 14–18) move to `staging/`; every version gets a devel project (14–17 empty). |
 | D3 | Devel seeding | `ppg:devel:18` is the worked reference: Class A packages for the three PG-2518 components + one Class B dependent. |
 | D4 | Seed branches | Sensible defaults, confirmed at implementation time against the upstream repos. |
-| D5 | Class A packaging reuse | `_service` packaging `obs_scm` services point `subdir` **directly at staging's `debian/`/`rpm/` directories**. No symlinks, no duplication. |
+| D5 | Class A packaging | Class A devel packages carry **full copies** of `rpm/` and `debian/` (plus `devel/<V>/macros.yaml`), duplicated from staging at seeding time and maintained by hand. Deliberate: dev branches often need packaging changes before staging does, so devel packaging must be independently editable. (Symlinks and obs_scm-subdir reuse were considered and rejected; the sync uploads packaging from the local `rpm/`/`debian/` dirs via `_copy_local_packaging` — `_service` is never uploaded to OBS.) |
 | D6 | Migration sequencing | Four staged PRs: tooling → staging pilot (18) → devel pilot (18) → remaining versions. |
 | D7 | Naming | `devel` / `staging` / `releases` (per the design doc; `stable` rejected — collides with `releases`). |
 | D8 | CLI compatibility | No aliases: after migration the CLI accepts only the new names (`ppg:staging:18`, `ppg:devel:18`). |
@@ -92,9 +92,10 @@ root/ppg/
 │   ├── 14/project.yaml … 17/project.yaml   # empty devel projects (repos per §3.1)
 │   └── 18/
 │       ├── project.yaml
-│       ├── percona-postgresql18/    # Class A — PostgreSQL Server dev branch
-│       ├── percona-pg_tde/          # Class A — pg_tde dev branch (multibuild)
-│       ├── pg_oidc_validator/       # Class A — pg_oidc_validator dev branch
+│       ├── macros.yaml              # copy of staging/18/macros.yaml
+│       ├── percona-postgresql/      # Class A — PostgreSQL Server dev branch
+│       ├── percona-pg_tde/          # Class A — pg_tde dev branch
+│       ├── percona-pg_oidc_validator/  # Class A — pg_oidc_validator dev branch
 │       └── percona-ppg-server/      # Class B — _link dependent
 └── staging/
     ├── project.yaml                 # container project ppg:staging
@@ -103,20 +104,22 @@ root/ppg/
 
 ### 4.1 Class A — dev-branch package
 
-Contains **only** `obs/`:
+A full, self-contained package copied from its staging counterpart at seeding time
+(D5):
 
-- `obs/_service` — upstream `obs_scm` pinned to the dev branch; packaging `obs_scm`
-  services point `subdir` explicitly at **staging's** directories
-  (`root/ppg/staging/18/<pkg>/debian`, `…/rpm`) instead of the auto-injected
-  `${DEBIAN_PACKAGE_DIRECTORY}`/`${RPM_PACKAGE_DIRECTORY}` variables. The
-  "packaging is identical to staging" property is structural (same source
-  directory), not maintained by symlinks. No `rpm/`, `debian/`, or symlinks in the
-  devel package.
-- `obs/_multibuild` — copied from the staging package where one exists (pg_tde).
+- `obs/_service` — same shape as staging's, with the upstream `obs_scm` `revision`
+  retargeted to the **dev branch**. Any other `obs/` files (`_multibuild`, …) are
+  copied too.
+- `rpm/`, `debian/`, `package.yaml` — full copies of staging's, maintained by hand.
+  They may deliberately diverge when the dev branch requires packaging changes
+  (new files, new subpackages) before staging does.
+- `devel/<V>/macros.yaml` — a copy of staging's, so `%!{VAR}` version macros
+  resolve identically (same version scheme as staging, per user decision).
 
-The existing cache, content-check, and `git ls-remote` machinery already handles
-branch revisions (`refs/heads/<rev>` is tried first), so Class A needs **no tooling
-changes**.
+The sync uploads packaging from these local directories (`_copy_local_packaging`);
+`_service` is never uploaded to OBS, and the cache/content-check/`git ls-remote`
+machinery already handles branch revisions (`refs/heads/<rev>` is tried first).
+Class A therefore needs **no tooling changes**.
 
 ### 4.2 Class B — dependent rebuilt against devel
 
