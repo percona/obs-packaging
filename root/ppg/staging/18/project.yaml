@@ -202,7 +202,7 @@ project-config: |
 qa:
   pipeline: ppg-obs
   parameters:
-    REPO: ${OBS_ROOTPRJ}:ppg:%!{PG_MAJOR_VERSION}
+    REPO: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
     VERSION: ppg-%!{PG_VERSION}
     PLATFORMS:
       - rocky-9

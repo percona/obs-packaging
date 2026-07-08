@@ -8,7 +8,7 @@ repositories:
         repository: UBI_9
       - subproject: common:deps:build
         repository: UBI_9
-      - subproject: ppg:%!{PG_MAJOR_VERSION}
+      - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
         repository: UBI_9
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
         repository: standard

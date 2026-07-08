@@ -1,0 +1,5 @@
+title: Percona Distribution for PostgreSQL — Staging
+description: |
+  Container project for the per-version staging projects (ppg:staging:<V>).
+  Staging projects build every package from git tags and feed QA and the
+  release projects (ppg:releases:<V>).

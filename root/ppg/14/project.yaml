@@ -159,7 +159,7 @@ project-config: |
   # (pulled in by percona-telemetry-agent -> yum-utils) recommends postgresql18-server
   # on Tumbleweed. Suppress those packages entirely so that postgresql-server
   # requirements resolve to percona-postgresql14-server via its Provides. Also
-  # suppress the ppg:18 system package (postgresql18-server) so that this project
+  # suppress the ppg:staging:18 system package (postgresql18-server) so that this project
   # does not pick it up when both majors are present in the interconnect.
   Prefer: percona-postgresql%!{PG_MAJOR_VERSION}-server
   # Our python3-dateutil and python3-six packages shadow the SUSE system packages

@@ -10,9 +10,9 @@ repositories:
     archs: [x86_64, aarch64]
   - name: images
     paths:
-      - subproject: ppg:%!{PG_MAJOR_VERSION}:containers:ubi8
+      - subproject: ppg:staging:%!{PG_MAJOR_VERSION}:containers:ubi8
         repository: UBI_8
-      - subproject: ppg:%!{PG_MAJOR_VERSION}
+      - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
         repository: UBI_8
       - subproject: ppg:%!{PG_PREV_MAJOR_VERSION}
         repository: UBI_8
@@ -78,7 +78,7 @@ qa:
     DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
     SERVER_VERSION: "%!{PG_VERSION}"
     TESTING_BRANCH: ricardo-work
-    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/%!{PG_MAJOR_VERSION}/containers/ubi8/images
+    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi8/images
     WITH_POSTGIS:
       - true
       - false

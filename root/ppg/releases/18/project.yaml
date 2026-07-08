@@ -3,7 +3,7 @@ debuginfo:
   RockyLinux_9: true
   openSUSE_Leap_16: true
   openSUSE_Tumbleweed: true
-description: 'Release project for ppg:18 (OBS project ppg:releases:18).
+description: 'Release project for ppg:staging:18 (OBS project ppg:releases:18).
 
   Binaries are populated by osc release and builds are disabled.
 

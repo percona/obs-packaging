@@ -5,9 +5,9 @@ description: |
 repositories:
   - name: images
     paths:
-      - subproject: ppg:%!{PG_MAJOR_VERSION}:extras
+      - subproject: ppg:staging:%!{PG_MAJOR_VERSION}:extras
         repository: UBI_9
-      - subproject: ppg:%!{PG_MAJOR_VERSION}
+      - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
         repository: UBI_9
       - subproject: ppg:%!{PG_PREV_MAJOR_VERSION}
         repository: UBI_9
@@ -51,7 +51,7 @@ qa:
       DOCKER_TAG: %!{PG_MAJOR_VERSION}
       SERVER_VERSION: %!{PG_VERSION}
       TESTING_BRANCH: ricardo-work
-      REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/18/extras/containers/ubi9/images
+      REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/18/extras/containers/ubi9/images
       WITH_POSTGIS:
         - true
         - false
@@ -60,7 +60,7 @@ qa:
 
   - pipeline: ppg-obs-upgrade
     parameters:
-      REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/18/extras/containers/ubi9/images
+      REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/18/extras/containers/ubi9/images
       OLD_SERVER_VERSION: "17.10"
       NEW_SERVER_VERSION: %!{PG_VERSION}
       UPGRADE_DOCKER_TAG: %!{PG_MAJOR_VERSION}-%!{PG_PREV_MAJOR_VERSION}

@@ -1,4 +1,4 @@
-project: ppg:18
+project: ppg:staging:18
 releases:
 - ppg/18.3-1
 - ppg/18.3-2
