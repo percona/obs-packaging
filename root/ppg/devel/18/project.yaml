@@ -81,6 +81,17 @@ repositories:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
         repository: devel
     archs: [x86_64, aarch64]
+  - name: Debian_11
+    paths:
+      - subproject: ppg:staging:18
+        repository: Debian_11
+      - subproject: ppg:common:deps
+        repository: Debian_11
+      - subproject: common:deps:build
+        repository: Debian_11
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:11
+        repository: standard
+    archs: [x86_64, aarch64]
   - name: Debian_13
     paths:
       - subproject: ppg:staging:18
@@ -202,6 +213,40 @@ project-config: |
   Prefer: libncurses-dev
   # logrotate Recommends a cron daemon; Bullseye has both cron and bcron.
   Prefer: cron
+  # PG 18 JIT requires LLVM >= 19; use repackaged llvm-21 from common:deps:build.
+  Prefer: llvm-21-dev
+  Prefer: clang-21
+  Substitute: llvm-dev llvm-21-dev
+  Substitute: clang clang-21
+  # Force the whole llvm-21 toolchain into every Debian 11 build root. clang-21/
+  # llvm-21-dev pull the rest transitively but an inherited Ignore strips them,
+  # and extensions (pgvector, postgis) need clang-21 for PGXS bitcode yet only
+  # Build-Depend on the server-dev package. Support: beats the Ignore.
+  Support: clang-21
+  Support: llvm-21-dev
+  Support: libllvm21
+  Support: libclang-cpp21
+  Support: libclang-common-21-dev
+  Support: llvm-21-linker-tools
+  Support: libclang1-21
+  Support: llvm-21
+  Support: llvm-21-runtime
+  Support: llvm-21-tools
+  Support: libc++-21-dev
+  Support: libc++abi-21-dev
+  Support: libc++1-21
+  Support: libc++abi1-21
+  Support: python3-distutils
+  Ignore: libllvm11
+  Ignore: llvm-11-runtime
+  Ignore: llvm-11-linker-tools
+  Ignore: libclang-cpp11
+  Ignore: libclang-common-11-dev
+  Ignore: libclang1-11
+  Ignore: llvm-11-tools
+  Ignore: llvm-11
+  Ignore: llvm-11-dev
+  Ignore: clang-11
   %endif
 
   %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04"
