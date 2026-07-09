@@ -1,0 +1,5 @@
+title: Percona Distribution for PostgreSQL — Devel
+description: |
+  Container project for the per-version devel projects (ppg:devel:<V>).
+  Devel projects build a manually curated subset of packages from development
+  branches; everything else resolves from ppg:staging:<V> via repository paths.

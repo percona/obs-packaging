@@ -1,0 +1,82 @@
+%global sname percona-pg_stat_monitor
+%global pgrel %!{PG_MAJOR_VERSION}
+
+%if 0%{?rhel} >= 8 && 0%{?rhel} <= 9
+%global gts_version 14
+%endif
+%global pginstdir /usr/pgsql-%{pgrel}
+
+Summary:        Statistics collector for PostgreSQL
+Name:           %{sname}%{pgrel}
+Version:        2.3.2
+Release:        1%{?dist}
+License:        PostgreSQL
+Source0:        percona-pg-stat-monitor%{pgrel}-%{version}.tar.gz
+URL:            https://github.com/Percona-Lab/pg_stat_monitor
+BuildRequires:  percona-postgresql%{pgrel}-devel
+BuildRequires:  krb5-devel
+%if 0%{?gts_version}
+BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
+%endif
+BuildRequires:  clang llvm
+Requires:       postgresql-server
+Provides:       percona-pg-stat-monitor%{pgrel}
+Conflicts:      percona-pg-stat-monitor%{pgrel}
+Obsoletes:      percona-pg-stat-monitor%{pgrel}
+Epoch:          1
+Packager:       Percona Development Team <https://jira.percona.com>
+Vendor:         Percona, Inc
+
+%description
+The pg_stat_monitor is statistics collector tool
+based on PostgreSQL's contrib module "pg_stat_statements".
+.
+pg_stat_monitor is developed on the basis of pg_stat_statments
+as more advanced replacement for pg_stat_statment.
+It provides all the features of pg_stat_statment plus its own feature set.
+
+
+%prep
+%setup -q -n percona-pg-stat-monitor%{pgrel}-%{version}
+
+
+%build
+%if 0%{?gts_version}
+source /opt/rh/gcc-toolset-%{gts_version}/enable
+%endif
+USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags}
+
+
+%install
+%{__rm} -rf %{buildroot}
+USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags} install DESTDIR=%{buildroot}
+%{__install} -d %{buildroot}%{pginstdir}/share/extension
+%{__install} -m 755 README.md %{buildroot}%{pginstdir}/share/extension/README-pg_stat_monitor
+
+
+%clean
+%{__rm} -rf %{buildroot}
+
+
+%post -p /sbin/ldconfig
+
+
+%postun -p /sbin/ldconfig
+
+
+%files
+%defattr(755,root,root,755)
+%dir %{pginstdir}/share
+%dir %{pginstdir}/share/extension
+%doc %{pginstdir}/share/extension/README-pg_stat_monitor
+%{pginstdir}/lib/pg_stat_monitor.so
+%{pginstdir}/share/extension/pg_stat_monitor--*.sql
+%{pginstdir}/share/extension/pg_stat_monitor.control
+%{pginstdir}/lib/bitcode/pg_stat_monitor*.bc
+%dir %{pginstdir}/lib/bitcode/pg_stat_monitor
+%{pginstdir}/lib/bitcode/pg_stat_monitor/*.bc
+
+
+%changelog
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PG_STAT_MONITOR_VERSION}-1
+- Update to upstream version %!{PG_STAT_MONITOR_VERSION}
