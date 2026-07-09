@@ -65,6 +65,13 @@ repositories:
       - subproject: common:deps:build
         repository: Debian_11
     archs: [x86_64, aarch64]
+  - name: Debian_12
+    paths:
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:12
+        repository: standard
+      - subproject: common:deps:build
+        repository: Debian_12
+    archs: [x86_64, aarch64]
   - name: Debian_13
     paths:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:13
@@ -116,19 +123,19 @@ project-config: |
   Prefer: hdf-libs
   %endif
 
-  %if "%_repository" == "Debian_11"
-  # llvm-11-dev needs libtinfo-dev; on Bullseye both libncurses-dev and
-  # libtinfo-dev satisfy it and OBS reports "have choice" without a Prefer.
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12"
+  # llvm-*-dev needs libtinfo-dev; both libncurses-dev and libtinfo-dev satisfy
+  # it and OBS reports "have choice" without a Prefer.
   Prefer: libncurses-dev
-  # logrotate Recommends a cron daemon; Bullseye has both cron and bcron.
+  # logrotate Recommends a cron daemon; both cron and bcron may be available.
   Prefer: cron
   %endif
 
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04"
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04"
   Prefer: golang-1.26
   %endif
 
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
   # libgdal-dev transitively requires both libcurl4-openssl-dev and
   # libcurl4-gnutls-dev which conflict; ignore the gnutls variant so
   # the openssl variant is used consistently.
