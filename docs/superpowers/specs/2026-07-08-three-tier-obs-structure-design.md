@@ -22,8 +22,9 @@ promotion pipeline that separates in-development builds from the tag-based candi
 |---|---|---|
 | D1 | Spec scope | Structure + `root/` migration + `percona_obs` tooling changes. Nightly trigger mechanism is future work. |
 | D2 | Version scope | All versions (ppg 14–18) move to `staging/`; every version gets a devel project (14–17 empty). |
-| D3 | Devel seeding | `ppg:devel:18` is the worked reference: Class A packages for the three PG-2518 components + one Class B dependent. |
-| D4 | Seed branches | Sensible defaults, confirmed at implementation time against the upstream repos. |
+| D3 | Devel seeding | `ppg:devel:18` is the worked reference: Class A packages for the three PG-2518 components **plus `percona-pg_stat_monitor` (added by user, 2026-07-09)** + one Class B dependent. |
+| D4 | Seed branches | User-confirmed (2026-07-09): percona-postgresql = `release-18.4` (Percona's `release-X.Y` branches are the working dev lines); pg_tde, pg_oidc_validator, pg_stat_monitor = `main`. |
+| D9 | Devel publishing | Devel projects keep OBS default publishing (user decision, 2026-07-09), accepting the documented caveats: devel binaries carry the same NEVRA as staging's (ambiguous pick for consumers with both repos enabled; same-EVR devel snapshots never appear as upgrades — reinstall required). |
 | D5 | Class A packaging | Class A devel packages carry **full copies** of `rpm/` and `debian/` (plus `devel/<V>/macros.yaml`), duplicated from staging at seeding time and maintained by hand. Deliberate: dev branches often need packaging changes before staging does, so devel packaging must be independently editable. (Symlinks and obs_scm-subdir reuse were considered and rejected; the sync uploads packaging from the local `rpm/`/`debian/` dirs via `_copy_local_packaging` — `_service` is never uploaded to OBS.) |
 | D6 | Migration sequencing | Four staged PRs: tooling → staging pilot (18) → devel pilot (18) → remaining versions. |
 | D7 | Naming | `devel` / `staging` / `releases` (per the design doc; `stable` rejected — collides with `releases`). |
@@ -96,6 +97,7 @@ root/ppg/
 │       ├── percona-postgresql/      # Class A — PostgreSQL Server dev branch
 │       ├── percona-pg_tde/          # Class A — pg_tde dev branch
 │       ├── percona-pg_oidc_validator/  # Class A — pg_oidc_validator dev branch
+│       ├── percona-pg_stat_monitor/ # Class A — pg_stat_monitor dev branch (D3)
 │       └── percona-ppg-server/      # Class B — _link dependent
 └── staging/
     ├── project.yaml                 # container project ppg:staging
@@ -115,6 +117,11 @@ A full, self-contained package copied from its staging counterpart at seeding ti
   (new files, new subpackages) before staging does.
 - `devel/<V>/macros.yaml` — a copy of staging's, so `%!{VAR}` version macros
   resolve identically (same version scheme as staging, per user decision).
+
+**Maintenance rule:** devel's `macros.yaml` and the hardcoded `_service` branch
+revisions must be reviewed together whenever staging bumps its versions — the copy
+is independent, so a staging `PG_MINOR_VERSION` bump would otherwise relabel
+devel's unchanged branch build with the new version string.
 
 The sync uploads packaging from these local directories (`_copy_local_packaging`);
 `_service` is never uploaded to OBS, and the cache/content-check/`git ls-remote`
