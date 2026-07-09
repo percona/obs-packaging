@@ -14,8 +14,6 @@ repositories:
         repository: UBI_8
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
         repository: UBI_8
-      - subproject: ppg:staging:%!{PG_PREV_MAJOR_VERSION}
-        repository: UBI_8
       - subproject: ppg:common:deps
         repository: UBI_8
       - subproject: common:containers:ubi8

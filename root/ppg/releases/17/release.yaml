@@ -1,4 +1,4 @@
-project: ppg:17
+project: ppg:staging:17
 releases:
 - ppg/17.9-1
 - ppg/17.9-2

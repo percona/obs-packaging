@@ -1,0 +1,239 @@
+title: Percona Distribution for PostgreSQL %!{PG_MAJOR_VERSION}
+description: |
+  Packages for Percona Distribution for PostgreSQL %!{PG_MAJOR_VERSION} — the server, extensions,
+  HA components (Patroni, etcd, HAProxy, pgBouncer, pgPool-II), and companion tools.
+debuginfo:
+  RockyLinux_9: true
+  openSUSE_Tumbleweed: true
+  openSUSE_Leap_16: true
+repositories:
+  - name: RockyLinux_8
+    paths:
+      - subproject: ppg:common:deps
+        repository: RockyLinux_8
+      - subproject: common:deps:build
+        repository: RockyLinux_8
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:8
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: appstream
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: baseos
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: devel
+    archs: [x86_64, aarch64]
+  - name: RockyLinux_9
+    paths:
+      - subproject: ppg:common:deps
+        repository: RockyLinux_9
+      - subproject: common:deps:build
+        repository: RockyLinux_9
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+        repository: standard
+    archs: [x86_64, aarch64]
+  - name: RockyLinux_10
+    paths:
+      - subproject: common:deps:build
+        repository: RockyLinux_10
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:10
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
+        repository: standard
+    archs: [x86_64, aarch64]
+  - name: UBI_9
+    paths:
+      - subproject: ppg:common:deps
+        repository: UBI_9
+      - subproject: common:deps:build
+        repository: UBI_9
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+        repository: devel
+    archs: [x86_64, aarch64]
+  - name: UBI_8
+    paths:
+      - subproject: common:deps:build
+        repository: UBI_8
+      - subproject: ppg:common:deps
+        repository: UBI_8
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:8
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: appstream
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: baseos
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: devel
+    archs: [x86_64, aarch64]
+  - name: Debian_11
+    paths:
+      - subproject: ppg:common:deps
+        repository: Debian_11
+      - subproject: common:deps:build
+        repository: Debian_11
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:11
+        repository: standard
+    archs: [x86_64, aarch64]
+  - name: Debian_13
+    paths:
+      - subproject: ppg:common:deps
+        repository: Debian_13
+      - subproject: common:deps:build
+        repository: Debian_13
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:13
+        repository: standard
+    archs: [x86_64, aarch64]
+  - name: Ubuntu_24.04
+    paths:
+      - subproject: ppg:common:deps
+        repository: Ubuntu_24.04
+      - subproject: common:deps:build
+        repository: Ubuntu_24.04
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:24.04
+        repository: universe
+    archs: [x86_64, aarch64]
+  - name: Ubuntu_26.04
+    paths:
+      - subproject: ppg:common:deps
+        repository: Ubuntu_26.04
+      - subproject: common:deps:build
+        repository: Ubuntu_26.04
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:26.04
+        repository: universe
+    archs: [x86_64, aarch64]
+  - name: openSUSE_Tumbleweed
+    paths:
+      - subproject: ppg:common:deps
+        repository: openSUSE_Tumbleweed
+      - subproject: common:deps:build
+        repository: openSUSE_Tumbleweed
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Tumbleweed
+        repository: standard
+    archs: [x86_64, aarch64]
+  - name: openSUSE_Leap_16
+    paths:
+      - subproject: ppg:common:deps
+        repository: openSUSE_Leap_16
+      - subproject: common:deps:build
+        repository: openSUSE_Leap_16
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Leap:16.0
+        repository: standard
+    archs: [x86_64, aarch64]
+
+project-config: |
+  %if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_8"
+  ExpandFlags: module:llvm-toolset-rhel8
+  ExpandFlags: module:perl-5.26
+  ExpandFlags: module:perl-IO-Socket-SSL-2.066
+  ExpandFlags: module:perl-libwww-perl-6.34
+  Prefer: python3-devel
+  Prefer: atlas
+  Prefer: selinux-policy-targeted
+  %endif
+
+  %if "%_repository" == "RockyLinux_9" || "%_repository" == "UBI_9"
+  ExpandFlags: module:llvm-toolset-rhel9
+  # hdf-libs (EPEL split package) and hdf both provide libdf.so.0 and libmfhdf.so.0
+  Prefer: hdf-libs
+  %endif
+
+  %if "%_repository" == "RockyLinux_10"
+  Prefer: selinux-policy-targeted
+  Prefer: hdf-libs
+
+  Macros:
+  %__brp_check_rpaths %{nil}
+  :Macros
+  %endif
+
+  %if "%_repository" == "openSUSE_Tumbleweed"
+  # percona-postgresql15-server conflicts with postgresql18-server and the
+  # postgresql-server-18 meta-package (both own /var/lib/pgsql). The DNF stack
+  # (pulled in by percona-telemetry-agent -> yum-utils) recommends postgresql18-server
+  # on Tumbleweed. Suppress those packages entirely so that postgresql-server
+  # requirements resolve to percona-postgresql15-server via its Provides. Also
+  # suppress the ppg:staging:18 system package (postgresql18-server) so that this project
+  # does not pick it up when both majors are present in the interconnect.
+  Prefer: percona-postgresql%!{PG_MAJOR_VERSION}-server
+  # Our python3-dateutil and python3-six packages shadow the SUSE system packages
+  # (python313-python-dateutil, python313-six). Prefer system packages so that
+  # build deps like python3-dnf-plugins-core and python3-libmodulemd resolve correctly.
+  Prefer: python313-python-dateutil
+  Prefer: python313-six
+  Ignore: postgresql18-server
+  Ignore: postgresql-server
+  Ignore: postgresql
+  %endif
+
+  %if "%_repository" == "openSUSE_Leap_16"
+  # Same conflict as Tumbleweed: the system PostgreSQL packages conflict with
+  # percona-postgresql15-server. Suppress them so dependencies resolve correctly.
+  Prefer: percona-postgresql%!{PG_MAJOR_VERSION}-server
+  # Our python3-dateutil and python3-six packages shadow the SUSE system packages
+  # (python313-python-dateutil, python313-six). Prefer system packages so that
+  # build deps like python3-dnf-plugins-core and python3-libmodulemd resolve correctly.
+  Prefer: python313-python-dateutil
+  Prefer: python313-six
+  Ignore: postgresql18-server
+  Ignore: postgresql-server
+  Ignore: postgresql
+  %endif
+
+  %if "%_repository" == "Debian_11"
+  # llvm-11-dev needs libtinfo-dev; on Bullseye both libncurses-dev and
+  # libtinfo-dev satisfy it and OBS reports "have choice" without a Prefer.
+  Prefer: libncurses-dev
+  # logrotate Recommends a cron daemon; Bullseye has both cron and bcron.
+  Prefer: cron
+
+  # Repackaged LLVM 21 (Debian 11 only) to support postgresql 18+ builds in Debian 11.
+  # For other ppg projects, we prefer the system LLVM 11 packages.
+  Ignore: libllvm21
+  Ignore: llvm-21-runtime
+  Ignore: llvm-21-linker-tools
+  Ignore: libclang-cpp21
+  Ignore: libclang-common-21-dev
+  Ignore: libclang1-21
+  Ignore: llvm-21-tools
+  Ignore: llvm-21
+  Ignore: llvm-21-dev
+  Ignore: clang-21
+  %endif
+
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04"
+  Prefer: golang-1.26
+  %endif
+
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
+  # libgdal-dev transitively requires both libcurl4-openssl-dev and
+  # libcurl4-gnutls-dev which conflict; ignore the gnutls variant so
+  # the openssl variant is used consistently.
+  Ignore: libcurl4-gnutls-dev
+  # libgdal-dev and several of its deps use libjpeg-dev which is provided
+  # by both libjpeg62-turbo-dev and libjpeg-dev; prefer the turbo variant.
+  Prefer: libjpeg62-turbo-dev
+  %endif
+
+qa:
+  pipeline: ppg-obs
+  parameters:
+    REPO: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+    VERSION: ppg-%!{PG_VERSION}
+    PLATFORMS:
+      - rocky-9
+      - debian-13
+      - ubuntu-noble
+    TESTING_BRANCH: ricardo-work
+    SCENARIO:
+      - pg-%!{PG_MAJOR_VERSION}
+      - pg-%!{PG_MAJOR_VERSION}-meta-server
+      - pg-%!{PG_MAJOR_VERSION}-meta-ha
+  matrix:
+    - SCENARIO

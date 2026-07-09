@@ -18,8 +18,6 @@ repositories:
         repository: UBI_9
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
         repository: UBI_9
-      - subproject: ppg:staging:%!{PG_PREV_MAJOR_VERSION}
-        repository: UBI_9
       - subproject: ppg:common:deps
         repository: UBI_9
       - subproject: common:containers:ubi9
@@ -33,7 +31,7 @@ repositories:
     archs: [x86_64, aarch64]
 
 publish:
-  RockyLinux_9: false
+  UBI_9: false
 
 project-config: |
   %if "%_repository" == "UBI_9"
@@ -63,23 +61,14 @@ project-config: |
   %endif
 
 qa:
-  - pipeline: docker-server-parallel-generic
-    parameters:
-      DOCKER_TAG: %!{PG_MAJOR_VERSION}
-      SERVER_VERSION: %!{PG_VERSION}
-      TESTING_BRANCH: ricardo-work
-      REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/18/containers/ubi9/images
-      WITH_POSTGIS:
-        - true
-        - false
-    matrix:
-      - WITH_POSTGIS
-
-  - pipeline: ppg-obs-upgrade
-    parameters:
-      REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/18/containers/ubi9/images
-      OLD_SERVER_VERSION: "17.10"
-      NEW_SERVER_VERSION: %!{PG_VERSION}
-      UPGRADE_DOCKER_TAG: %!{PG_MAJOR_VERSION}-%!{PG_PREV_MAJOR_VERSION}
-      OLD_DOCKER_REPOSITORY: registry.opensuse.org/isv/percona/ppg/staging/%!{PG_PREV_MAJOR_VERSION}/containers/ubi9/images
-      TESTING_BRANCH: ricardo-work
+  pipeline: docker-server-parallel-generic
+  parameters:
+    DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
+    SERVER_VERSION: "%!{PG_VERSION}"
+    TESTING_BRANCH: ricardo-work
+    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi9/images
+    WITH_POSTGIS:
+      - true
+      - false
+  matrix:
+    - WITH_POSTGIS

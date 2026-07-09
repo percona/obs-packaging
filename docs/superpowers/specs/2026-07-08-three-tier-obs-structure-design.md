@@ -25,6 +25,7 @@ promotion pipeline that separates in-development builds from the tag-based candi
 | D3 | Devel seeding | `ppg:devel:18` is the worked reference: Class A packages for the three PG-2518 components **plus `percona-pg_stat_monitor` (added by user, 2026-07-09)** + one Class B dependent. |
 | D4 | Seed branches | User-confirmed (2026-07-09): percona-postgresql = `release-18.4` (Percona's `release-X.Y` branches are the working dev lines); pg_tde, pg_oidc_validator, pg_stat_monitor = `main`. |
 | D9 | Devel publishing | Devel projects keep OBS default publishing (user decision, 2026-07-09), accepting the documented caveats: devel binaries carry the same NEVRA as staging's (ambiguous pick for consumers with both repos enabled; same-EVR devel snapshots never appear as upgrades — reinstall required). |
+| D10 | Package-less projects | Never synced to OBS (user decision, 2026-07-09): empty projects (devel/14..17, the ppg:releases container) exist in the git tree only and are created on OBS when they gain their first package via the normal ancestor-chain sync. |
 | D5 | Class A packaging | Class A devel packages carry **full copies** of `rpm/` and `debian/` (plus `devel/<V>/macros.yaml`), duplicated from staging at seeding time and maintained by hand. Deliberate: dev branches often need packaging changes before staging does, so devel packaging must be independently editable. (Symlinks and obs_scm-subdir reuse were considered and rejected; the sync uploads packaging from the local `rpm/`/`debian/` dirs via `_copy_local_packaging` — `_service` is never uploaded to OBS.) |
 | D6 | Migration sequencing | Four staged PRs: tooling → staging pilot (18) → devel pilot (18) → remaining versions. |
 | D7 | Naming | `devel` / `staging` / `releases` (per the design doc; `stable` rejected — collides with `releases`). |
@@ -244,6 +245,10 @@ shape-agnostic:
   unexpanded content check).
 - A throwaway PR touching a devel Class A package shows correct promote/aggregate
   decisions in the PR comment.
+
+**Final gates (PR 4):**
+- Empty devel projects exist in the git tree only (per D10); they are NOT created
+  on OBS.
 
 **Tooling verification (PR 1):** `venv/bin/black percona_obs/` and
 `venv/bin/pyright` pass; behavior exercised with `-P dev` dry-run syncs.

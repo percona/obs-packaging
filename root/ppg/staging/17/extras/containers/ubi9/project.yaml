@@ -51,7 +51,7 @@ qa:
       DOCKER_TAG: %!{PG_MAJOR_VERSION}
       SERVER_VERSION: %!{PG_VERSION}
       TESTING_BRANCH: ricardo-work
-      REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/18/extras/containers/ubi9/images
+      REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/17/extras/containers/ubi9/images
       WITH_POSTGIS:
         - true
         - false
@@ -60,8 +60,8 @@ qa:
 
   - pipeline: ppg-obs-upgrade
     parameters:
-      REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/18/extras/containers/ubi9/images
-      OLD_SERVER_VERSION: "17.10"
+      REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/17/extras/containers/ubi9/images
+      OLD_SERVER_VERSION: "16.14"
       NEW_SERVER_VERSION: %!{PG_VERSION}
       UPGRADE_DOCKER_TAG: %!{PG_MAJOR_VERSION}-%!{PG_PREV_MAJOR_VERSION}
       OLD_DOCKER_REPOSITORY: registry.opensuse.org/isv/percona/ppg/staging/%!{PG_PREV_MAJOR_VERSION}/extras/containers/ubi9/images

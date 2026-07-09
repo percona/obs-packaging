@@ -973,7 +973,7 @@ Permissions: `contents: write` (for badge publishing).
 
 ### Workflow 2 — `obs-pr-check.yml` (PR build check)
 
-**Trigger**: `pull_request` against `main` (types: `opened`, `synchronize`, `reopened`) where at least one file under `root/**` changed.
+**Trigger**: `pull_request` against `main` (types: `opened`, `synchronize`, `reopened`, `labeled`) where at least one file under `root/**` changed. The sync/build (and QA) jobs only run when a trigger label — `obs-sync`, `qa-packages`, or `qa-containers` — is present on the PR. For `labeled` events, a job-level `if` on `resolve` skips the entire run unless the label just added is a trigger label; for the other event types `resolve` runs, checks the PR's labels, and if no trigger label is present the run gates out after `resolve` with the rest of the DAG skipped.
 
 **What it does**:
 1. Full-history checkout (same reason as above).
