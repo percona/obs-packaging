@@ -48,7 +48,7 @@ def _project_entry(product: str, rest: list[str]) -> tuple[str, Path] | None:
     """Return (project_id, outfile) for a candidate distribution directory.
 
     ``rest`` contains the path segments after the product directory, e.g.
-    ``["17"]`` or ``["releases", "17.9"]``.
+    ``["staging", "17"]`` or ``["releases", "17.9"]``.
     """
     if not rest:
         return None
@@ -62,7 +62,15 @@ def _project_entry(product: str, rest: list[str]) -> tuple[str, Path] | None:
 
 
 def find_all_distribution_projects() -> list[tuple[str, Path]]:
-    """Return all distribution projects found under root/."""
+    """Return all distribution projects found under root/.
+
+    The tree is a three-tier layout: ``releases/<v>`` (frozen), ``staging/<v>``
+    (the full package sets — these are listed), and ``devel/<v>`` (dev-branch
+    packages expected to fail builds — never listed). Only ``releases`` and
+    ``staging`` are descended into one level to find per-version projects;
+    ``devel`` and any other/unknown subdirectory (e.g. ``common``) are
+    ignored rather than treated as a project themselves.
+    """
     results: list[tuple[str, Path]] = []
     for product_dir in sorted(ROOT_DIR.iterdir()):
         if not product_dir.is_dir() or product_dir.name == "common":
@@ -71,16 +79,15 @@ def find_all_distribution_projects() -> list[tuple[str, Path]]:
         for sub in sorted(product_dir.iterdir()):
             if not sub.is_dir():
                 continue
-            if sub.name == "releases":
-                for rel in sorted(sub.iterdir()):
-                    if rel.is_dir():
-                        entry = _project_entry(product, ["releases", rel.name])
+            if sub.name in ("releases", "staging"):
+                for child in sorted(sub.iterdir()):
+                    if child.is_dir():
+                        entry = _project_entry(product, [sub.name, child.name])
                         if entry:
                             results.append(entry)
-            else:
-                entry = _project_entry(product, [sub.name])
-                if entry:
-                    results.append(entry)
+            # Devel builds are expected to fail and are never listed; any
+            # other/unknown subdir under a product is ignored rather than
+            # treated as a project itself.
     return results
 
 
@@ -104,10 +111,13 @@ def map_files_to_distribution_projects(
         product = parts[0]
         if product == "common":
             continue
-        if parts[1] == "releases" and len(parts) >= 3:
-            rest = ["releases", parts[2]]
+        if parts[1] in ("releases", "staging") and len(parts) >= 3:
+            rest = parts[1:3]
         else:
-            rest = [parts[1]]
+            # "devel/..." (expected-to-fail dev builds, never listed), bare
+            # "releases"/"staging" container paths with no version segment,
+            # or any other unrecognised top-level layout dir.
+            continue
 
         key = ":".join([product] + rest)
         if key in seen:
@@ -158,7 +168,7 @@ def get_latest_release_id(project_id: str) -> str:
 def file_to_project_id(path: Path) -> str:
     """Reverse the docs/versions/<product>-<devproj>.md → project_id mapping.
 
-    ``ppg-17.md``          → ``ppg:17``
+    ``ppg-staging-17.md``    → ``ppg:staging:17``
     ``ppg-releases-17.9.md`` → ``ppg:releases:17.9``
     """
     name = path.stem  # strip .md

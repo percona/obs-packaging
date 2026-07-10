@@ -17,12 +17,11 @@ Per-distribution package version lists, updated automatically after every succes
 
 | Distribution | OBS Project | Package List | QA Status |
 |---|---|---|---|
-| `ppg:17` | [isv:percona:ppg:17](https://build.opensuse.org/project/show/isv:percona:ppg:17) | [docs/versions/ppg-17.md](docs/versions/ppg-17.md) | Not Available |
-| `ppg:18` | [isv:percona:ppg:18](https://build.opensuse.org/project/show/isv:percona:ppg:18) | [docs/versions/ppg-18.md](docs/versions/ppg-18.md) | [![QA ppg:18](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/rjd15372/percona-obs-packaging/badges/qa-badge-ppg-18.json)](https://github.com/rjd15372/percona-obs-packaging/actions/workflows/obs-nightly-qa.yml) |
-| `ppg:16` | [isv:percona:ppg:16](https://build.opensuse.org/project/show/isv:percona:ppg:16) | [docs/versions/ppg-16.md](docs/versions/ppg-16.md) | Not Available |
-| `ppg:14` | [isv:percona:ppg:14](https://build.opensuse.org/project/show/isv:percona:ppg:14) | [docs/versions/ppg-14.md](docs/versions/ppg-14.md) | Not Available |
-| `ppg:15` | [isv:percona:ppg:15](https://build.opensuse.org/project/show/isv:percona:ppg:15) | [docs/versions/ppg-15.md](docs/versions/ppg-15.md) | Not Available |
-| `ppg:staging` | [isv:percona:ppg:staging](https://build.opensuse.org/project/show/isv:percona:ppg:staging) | [docs/versions/ppg-staging.md](docs/versions/ppg-staging.md) | [![QA ppg:staging](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/rjd15372/percona-obs-packaging/badges/qa-badge-ppg-staging.json)](https://github.com/rjd15372/percona-obs-packaging/actions/workflows/obs-nightly-qa.yml) |
+| `ppg:staging:14` | [isv:percona:ppg:staging:14](https://build.opensuse.org/project/show/isv:percona:ppg:staging:14) | [docs/versions/ppg-staging-14.md](docs/versions/ppg-staging-14.md) | Not Available |
+| `ppg:staging:15` | [isv:percona:ppg:staging:15](https://build.opensuse.org/project/show/isv:percona:ppg:staging:15) | [docs/versions/ppg-staging-15.md](docs/versions/ppg-staging-15.md) | Not Available |
+| `ppg:staging:16` | [isv:percona:ppg:staging:16](https://build.opensuse.org/project/show/isv:percona:ppg:staging:16) | [docs/versions/ppg-staging-16.md](docs/versions/ppg-staging-16.md) | Not Available |
+| `ppg:staging:17` | [isv:percona:ppg:staging:17](https://build.opensuse.org/project/show/isv:percona:ppg:staging:17) | [docs/versions/ppg-staging-17.md](docs/versions/ppg-staging-17.md) | Not Available |
+| `ppg:staging:18` | [isv:percona:ppg:staging:18](https://build.opensuse.org/project/show/isv:percona:ppg:staging:18) | [docs/versions/ppg-staging-18.md](docs/versions/ppg-staging-18.md) | Not Available |
 
 ## Current Releases
 

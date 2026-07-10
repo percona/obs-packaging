@@ -64,6 +64,12 @@ else:
     scope_path = REPO_ROOT
     scope_obs = root_obs
 
+# Devel projects build unreleased branches and are expected to fail; they
+# must not gate sync-main (PG-2518 D-decision).  But when the operator
+# explicitly scopes the run to a devel project, monitoring it is the whole
+# point — only apply the devel skip when the scope itself is not devel.
+scope_is_devel = "devel" in scope_project.split(":") if scope_project else False
+
 obs_projects: set[str] = set()
 for obs_project, package_path in find_packages(scope_path, scope_obs):
     project_config = load_project_yaml(package_path.parent / "project.yaml")
@@ -73,6 +79,9 @@ for obs_project, package_path in find_packages(scope_path, scope_obs):
     # the root_obs prefix so builds are fetched from the correct project.
     if rootprj != root_obs and obs_name.startswith(root_obs):
         obs_name = rootprj + obs_name[len(root_obs) :]
+    # Skip devel projects (expected build failures) unless explicitly scoped.
+    if not scope_is_devel and "devel" in obs_name.split(":"):
+        continue
     obs_projects.add(obs_name)
 
 print(

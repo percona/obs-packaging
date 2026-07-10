@@ -3,10 +3,11 @@
 
 Walks ``<reports-dir>`` recursively (actions/download-artifact@v4 places each
 artifact in its own subdirectory), groups every ``qa-report.json`` by the
-top-level project (the first two colon-separated segments of the report's
-``project`` field, e.g. ``ppg:17:containers:ubi9`` → ``ppg:17``), and writes
-one shields.io endpoint JSON per group to ``<out-dir>/qa-badge-<slug>.json``
-(slug = top-level project with ``:`` replaced by ``-``).
+distribution project derived from the report's ``project`` field (e.g.
+``ppg:17:containers:ubi9`` → ``ppg:17``, and under the three-tier layout
+``ppg:staging:18:containers:ubi9`` → ``ppg:staging:18``), and writes one
+shields.io endpoint JSON per group to ``<out-dir>/qa-badge-<slug>.json``
+(slug = distribution project with ``:`` replaced by ``-``).
 
 A combo is considered passing iff its ``result`` is ``"SUCCESS"``; everything
 else (``FAILURE``, ``ABORTED``, ``UNSTABLE``, ``null``) counts as failed.
@@ -28,7 +29,16 @@ from pathlib import Path
 
 
 def top_level(project: str) -> str:
+    """Return the distribution-project id a QA report belongs to.
+
+    Two-segment ids (``ppg:18``) are already distribution projects.  Under
+    the three-tier layout the second segment is a tier (staging/releases/
+    devel) and the distribution project includes the version, e.g.
+    ``ppg:staging:18:containers:ubi9`` → ``ppg:staging:18``.
+    """
     parts = project.split(":")
+    if len(parts) >= 3 and parts[1] in {"staging", "releases", "devel"}:
+        return ":".join(parts[:3])
     return ":".join(parts[:2]) if len(parts) >= 2 else project
 
 

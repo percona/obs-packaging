@@ -4,8 +4,8 @@ name: OBS Nightly QA
 # Discovers QA-enabled OBS subprojects beneath ${{ vars.OBS_ROOTPRJ }},
 # triggers Jenkins via `percona-obs qa run` for each matrix combo (each is
 # its own GitHub Actions check run on the main HEAD), and finally aggregates
-# the results into one shields.io endpoint badge per top-level project
-# (qa-badge-ppg-17.json, qa-badge-ppg-18.json, ...) on the `badges` branch.
+# the results into one shields.io endpoint badge per distribution project
+# (qa-badge-ppg-staging-18.json, ...) on the `badges` branch.
 
 on:
   schedule:
