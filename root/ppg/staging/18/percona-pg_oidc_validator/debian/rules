@@ -4,12 +4,17 @@ include /usr/share/postgresql-common/pgxs_debian_control.mk
 
 # Debian 11 ships g++ 10, which cannot compile upstream's -std=c++23. When the
 # repackaged llvm-21 toolchain is present, build with clang++-21 and libc++.
+# Gate on Debian 11 itself, not just the compiler: on Ubuntu 26.04 the distro
+# clang-21 is pulled in via percona-postgresql-server-dev-18 (JIT) but ships
+# without libc++, so -stdlib=libc++ would break there (g++ is recent enough).
+ifeq ($(shell . /etc/os-release && echo $$ID$$VERSION_ID),debian11)
 ifneq ($(wildcard /usr/bin/clang++-21),)
 # PGXS compiles .cpp with CXX but links MODULE_big .so with CC; both must be
 # clang++-21 so -stdlib=libc++ and -lc++/libc++abi resolve on Debian 11.
 PG_OID_VALIDATOR_MAKE_FLAGS = CC=clang++-21 CXX=clang++-21 USE_LIBCXX=1 \
 	CXXFLAGS="$(shell dpkg-buildflags --get CXXFLAGS) -stdlib=libc++" \
 	LDFLAGS="$(shell dpkg-buildflags --get LDFLAGS) -stdlib=libc++"
+endif
 endif
 
 %:
