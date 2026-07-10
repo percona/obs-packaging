@@ -22,7 +22,7 @@ Per-distribution package version lists, updated automatically after every succes
 | `ppg:16` | [isv:percona:ppg:16](https://build.opensuse.org/project/show/isv:percona:ppg:16) | [docs/versions/ppg-16.md](docs/versions/ppg-16.md) | Not Available |
 | `ppg:14` | [isv:percona:ppg:14](https://build.opensuse.org/project/show/isv:percona:ppg:14) | [docs/versions/ppg-14.md](docs/versions/ppg-14.md) | Not Available |
 | `ppg:15` | [isv:percona:ppg:15](https://build.opensuse.org/project/show/isv:percona:ppg:15) | [docs/versions/ppg-15.md](docs/versions/ppg-15.md) | Not Available |
-| `ppg:staging` | [isv:percona:ppg:staging](https://build.opensuse.org/project/show/isv:percona:ppg:staging) | [docs/versions/ppg-staging.md](docs/versions/ppg-staging.md) | Not Available |
+| `ppg:staging` | [isv:percona:ppg:staging](https://build.opensuse.org/project/show/isv:percona:ppg:staging) | [docs/versions/ppg-staging.md](docs/versions/ppg-staging.md) | [![QA ppg:staging](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/rjd15372/percona-obs-packaging/badges/qa-badge-ppg-staging.json)](https://github.com/rjd15372/percona-obs-packaging/actions/workflows/obs-nightly-qa.yml) |
 
 ## Current Releases
 
