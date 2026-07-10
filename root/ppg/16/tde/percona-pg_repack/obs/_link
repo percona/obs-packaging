@@ -1,1 +1,0 @@
-<link project="${OBS_ROOTPRJ}:ppg:16" package="percona-pg_repack" />

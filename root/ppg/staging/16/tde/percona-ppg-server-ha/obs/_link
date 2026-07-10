@@ -1,0 +1,1 @@
+<link project="${OBS_ROOTPRJ}:ppg:staging:16" package="percona-ppg-server-ha" />
