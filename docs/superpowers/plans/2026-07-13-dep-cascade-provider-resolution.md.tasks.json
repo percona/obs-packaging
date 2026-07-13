@@ -1,0 +1,30 @@
+{
+  "planPath": "docs/superpowers/plans/2026-07-13-dep-cascade-provider-resolution.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: Provider-resolution helpers + unit tests",
+      "status": "completed",
+      "description": "**Goal:** Add pure functions `_resolve_provider` (own-project-first / path-chain / unique-fallback resolution) and `_parse_repo_path_projects` (extract a repo's <path> projects from _meta XML) plus thin HTTP wrapper `_fetch_repo_path_projects` to percona_obs/obs_api.py, with pytest coverage reproducing the PR #139 tier collision.\n\n**Files:**\n- Modify: percona_obs/obs_api.py (insert above _fetch_image_pkg_deps, line 446)\n- Modify: requirements.txt (add pytest)\n- Create: tests/test_provider_resolution.py\n\n**Acceptance Criteria:**\n- _resolve_provider prefers the consumer's own project over sibling tiers providing the same binary name\n- path-chain lookup resolves container projects to the chain project, never a sibling tier\n- unique-global fallback works; ambiguous unresolvable binaries return None\n- resolution independent of provider-map insertion order\n- _parse_repo_path_projects preserves order, dedups, returns [] for missing repo / bad XML\n- black + pyright clean\n\n**Verify:** venv/bin/pytest tests/ -v -> 7 passed\n\n**Steps:** pip install pytest + requirements.txt; write failing tests (full code in plan Task 1 Step 2); implement the three helpers (full code in plan Task 1 Step 4); pytest green; black + pyright; git commit -s.\n\n```json:metadata\n{\"files\": [\"percona_obs/obs_api.py\", \"tests/test_provider_resolution.py\", \"requirements.txt\"], \"verifyCommand\": \"venv/bin/pytest tests/ -v && venv/bin/black percona_obs/ && venv/bin/pyright\", \"acceptanceCriteria\": [\"7 tests pass\", \"own-project beats sibling tier\", \"chain resolution for containers\", \"order-independence test passes\", \"pyright 0 errors\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: Rewire _fetch_combined_depinfo + _fetch_image_pkg_deps",
+      "status": "completed",
+      "blockedBy": [
+        0
+      ],
+      "description": "**Goal:** Replace the flat last-write-wins provided_by map with per-project provider maps + repo path chains, resolving every dep edge (pkgdep and container bdep) through _resolve_provider. Public signature of _fetch_combined_depinfo unchanged; cmd_sync.py untouched.\n\n**Files:**\n- Modify: percona_obs/obs_api.py (_fetch_image_pkg_deps and _fetch_combined_depinfo replaced wholesale \u2014 full code in plan Task 2 Steps 1-2)\n- Modify: .github/copilot-instructions.md (dep-promote debugging section ~line 870, additions in plan Task 2 Step 3)\n\n**Acceptance Criteria:**\n- providers_by_project built per project; path chain fetched once per queried (project, repo); lazy chain fetch for image (project, repo) pairs\n- _fetch_image_pkg_deps takes providers_by_project/path_chain/global_providers instead of flat provided_by\n- _fetch_combined_depinfo signature unchanged (cmd_sync.py callers at lines 836/871 need no edits)\n- docs table row + paragraph added\n- black + pyright clean, tests pass\n\n**Verify:** venv/bin/black percona_obs/ && venv/bin/pyright && venv/bin/pytest tests/ -v -> 0 errors, 7 passed\n\n**Steps:** replace both functions with the plan's full code; update copilot-instructions.md; run black/pyright/pytest; git commit -s with the message given in plan Task 2 Step 5.\n\n```json:metadata\n{\"files\": [\"percona_obs/obs_api.py\", \".github/copilot-instructions.md\"], \"verifyCommand\": \"venv/bin/black percona_obs/ && venv/bin/pyright && venv/bin/pytest tests/ -v\", \"acceptanceCriteria\": [\"per-project provider maps\", \"path chains fetched per queried repo\", \"image bdeps use resolver\", \"signature unchanged\", \"pyright 0 errors, 7 tests pass\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: Live read-only verification (api.opensuse.org)",
+      "status": "completed",
+      "blockedBy": [
+        1
+      ],
+      "description": "**Goal:** Prove on production data (read-only GETs only \u2014 isv:percona rule) that the fixed dep map yields zero staging:18*->devel:18 edges for any hash seed while devel-internal cascade edges are preserved.\n\n**Files:**\n- Create: tmp/verify_dep_resolution.py (gitignored; full code in plan Task 3 Step 1)\n- Create: tmp/dep-resolution-evidence.txt (captured output)\n\n**Acceptance Criteria:**\n- exits 0 for PYTHONHASHSEED in {0,1,2,3,42}\n- every run: staging->devel edges = 0\n- every run: >=1 devel:18 consumer depends on (devel:18, percona-postgresql) (positive control)\n- evidence captured in tmp/dep-resolution-evidence.txt\n\n**Verify:** for s in 0 1 2 3 42; do PYTHONHASHSEED=$s venv/bin/python tmp/verify_dep_resolution.py || exit 1; done; echo ALL_OK -> ALL_OK\n\n**Steps:** write script from plan; run 5-seed loop teeing to evidence file; no commit (tmp/ gitignored). Pre-fix baseline = CI run 29241998426 job 86789994630 (35 bad dep-promote lines) \u2014 do not re-run broken code.\n\n```json:metadata\n{\"files\": [\"tmp/verify_dep_resolution.py\", \"tmp/dep-resolution-evidence.txt\"], \"verifyCommand\": \"for s in 0 1 2 3 42; do PYTHONHASHSEED=$s venv/bin/python tmp/verify_dep_resolution.py || exit 1; done\", \"acceptanceCriteria\": [\"0 staging->devel edges across 5 seeds\", \">=1 intra-devel control edge\", \"evidence file captured\"], \"modelTier\": \"standard\"}\n```"
+    }
+  ],
+  "lastUpdated": "2026-07-13T12:35:00Z"
+}
