@@ -28,6 +28,9 @@ override_dh_builddeb:
 
 override_dh_auto_build:
 	+pg_buildext clean . build-%v
+	# Sources on git main live under src/; pg_buildext's out-of-tree build
+	# does not create output subdirectories, so -o src/*.o fails without this.
+	mkdir -p build-%!{PG_MAJOR_VERSION}/src
 	+pg_buildext build . build-%v
 
 override_dh_auto_test:

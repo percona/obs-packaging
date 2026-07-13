@@ -19,6 +19,7 @@ BuildRequires:  krb5-devel
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
 %endif
 BuildRequires:  clang llvm
+BuildRequires:  openssl-devel
 Requires:       postgresql-server
 Provides:       percona-pg-stat-monitor%{pgrel}
 Conflicts:      percona-pg-stat-monitor%{pgrel}
@@ -73,8 +74,7 @@ USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags} install DESTDIR
 %{pginstdir}/share/extension/pg_stat_monitor--*.sql
 %{pginstdir}/share/extension/pg_stat_monitor.control
 %{pginstdir}/lib/bitcode/pg_stat_monitor*.bc
-%dir %{pginstdir}/lib/bitcode/pg_stat_monitor
-%{pginstdir}/lib/bitcode/pg_stat_monitor/*.bc
+%{pginstdir}/lib/bitcode/pg_stat_monitor
 
 
 %changelog

@@ -7,6 +7,8 @@ Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 9),
  mawk,
+ libssl-dev,
+ libkrb5-dev,
  percona-postgresql-server-dev-all (>= 153~),
 Debtransform-Release: 1
 Debtransform-Files-Tar: debian.tar.gz
