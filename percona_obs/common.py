@@ -271,6 +271,16 @@ def load_project_yaml(
     return load_yaml_with_env(path, env_vars, macros=load_macros(path.parent))
 
 
+def load_package_yaml(path: Path) -> dict:
+    """Load a package.yaml with macro substitution resolved from the directory hierarchy.
+
+    Equivalent to ``load_yaml_with_env(path, None, macros=load_macros(path.parent))``.
+    Use this instead of ``load_yaml`` for all ``package.yaml`` files so that
+    ``%!{VAR}`` tokens are expanded before the YAML parser sees them.
+    """
+    return load_yaml_with_env(path, None, macros=load_macros(path.parent))
+
+
 def load_yaml_with_env(
     path: Path,
     env_vars: dict[str, str] | None,

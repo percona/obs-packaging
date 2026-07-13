@@ -24,7 +24,7 @@ from .common import (
     _silence_stdout,
     build_package_meta,
     build_project_meta,
-    load_yaml,
+    load_package_yaml,
     logger,
 )
 
@@ -1238,7 +1238,7 @@ def _apply_package_config(
 
     Prints '+' for creates, '~' for updates, '=' for unchanged resources.
     """
-    package_config = load_yaml(package_path / "package.yaml")
+    package_config = load_package_yaml(package_path / "package.yaml")
     build_flags: dict[str, bool] | None = package_config.get("build") or None
     publish_flags: dict[str, bool] | None = package_config.get("publish") or None
     meta = build_package_meta(
