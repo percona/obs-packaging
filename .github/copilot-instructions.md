@@ -353,8 +353,10 @@ against locally-controlled sources rather than the branch copy.
      **target OBS** (`apiurl`) for the union of target projects and any source projects
      recorded from `branch:` revision comments (`branch_project_for.values()`).
 2. Call `_fetch_combined_depinfo(dep_apiurl, dep_projects, local_pkg_names)` to build:
-   - `provided_by`: binary package name → source OBS package name (multibuild `:flavor`
-     suffixes are stripped from source names at construction time).
+   - `providers_by_project`: per-project map of binary package name → source OBS
+     package (multibuild `:flavor` suffixes are stripped from source names at
+     construction time); each consumer's dep is resolved own-project-first, then
+     via the queried repo's `<path>` chain.
    - `fwd_deps[A]`: set of local packages that **A** build-depends on.
 3. Run fixed-point bidirectional propagation until stable:
    - **Forward**: if B is in `fwd_deps[A]` and B is promoted → promote A.
@@ -594,8 +596,8 @@ listed after all trees as isolated packages. Cycles are detected and printed as
 1. Scan all packages under scope with `find_packages`.
 2. Collect all OBS project names from those packages.
 3. Call `_fetch_combined_depinfo(apiurl, dep_projects, local_pkg_names)` to build
-   `provided_by` (binary → source package) and `fwd_deps` (source package → set of
-   local packages it depends on).
+   `fwd_deps` (source package → set of local packages it depends on), resolving
+   each binary to its provider project-aware (own project, then repo path chain).
 4. Identify root packages: any package **not** present in any `fwd_deps` value set.
 5. Print trees with `_print_dep_tree()`, then isolated packages (no deps, not depended
    on by anything).
