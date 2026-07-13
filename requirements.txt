@@ -4,3 +4,4 @@ pyyaml
 # development tools
 black
 pyright
+pytest

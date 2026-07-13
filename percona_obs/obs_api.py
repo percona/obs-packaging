@@ -443,6 +443,87 @@ def _fetch_obs_project_repository_names(apiurl: str, obs_project: str) -> set[st
         return set()
 
 
+def _resolve_provider(
+    consumer_project: str,
+    binary: str,
+    providers_by_project: dict[str, dict[str, tuple[str, str]]],
+    path_chain: list[str],
+    global_providers: dict[str, set[tuple[str, str]]],
+) -> "tuple[str, str] | None":
+    """Resolve *binary* to the (project, source_pkg) providing it for a
+    consumer that builds in *consumer_project*.
+
+    Mirrors OBS build-environment resolution: the consumer's own project is
+    searched first, then the ``<path>`` projects of the repository whose
+    builddepinfo was queried, in document order.  This keeps same-named
+    binaries built in multiple sibling projects (e.g. percona-postgresql18-*
+    in both ppg:devel:18 and ppg:staging:18) attributed to the correct tier;
+    a flat merged map was last-write-wins over set iteration order, causing
+    spurious cross-tier dep-promotions (or, with the opposite order,
+    silently missed rebuilds).
+
+    Falls back to the unique provider when exactly one queried project
+    provides the binary (path data may be incomplete, e.g. remote
+    interconnect paths).  Ambiguous binaries not visible through the
+    consumer's path chain are dropped with a debug log rather than guessed.
+    """
+    for candidate_project in (consumer_project, *path_chain):
+        provider = providers_by_project.get(candidate_project, {}).get(binary)
+        if provider is not None:
+            return provider
+    candidates = global_providers.get(binary, set())
+    if len(candidates) == 1:
+        return next(iter(candidates))
+    if candidates:
+        logger.debug(
+            f"_resolve_provider: ambiguous providers for {binary!r} from"
+            f" {consumer_project!r} (none in path chain): {sorted(candidates)}"
+        )
+    return None
+
+
+def _parse_repo_path_projects(meta_xml: str, repo_name: str) -> list[str]:
+    """Return the ordered ``<path project="...">`` names of *repo_name*.
+
+    Parses a project ``_meta`` document and extracts the path projects of
+    the ``<repository>`` element matching *repo_name*, preserving document
+    order and dropping duplicates.  Returns ``[]`` when the repository is
+    absent or the XML does not parse.
+    """
+    try:
+        root = ET.fromstring(meta_xml)
+    except ET.ParseError:
+        return []
+    for repo_elem in root.findall("repository"):
+        if repo_elem.get("name") != repo_name:
+            continue
+        chain: list[str] = []
+        for path_elem in repo_elem.findall("path"):
+            path_project = path_elem.get("project", "")
+            if path_project and path_project not in chain:
+                chain.append(path_project)
+        return chain
+    return []
+
+
+def _fetch_repo_path_projects(
+    apiurl: str, obs_project: str, repo_name: str
+) -> list[str]:
+    """Fetch *obs_project*'s ``_meta`` and return *repo_name*'s path projects.
+
+    Returns ``[]`` on any fetch error — the resolver then falls back to
+    own-project and unique-provider resolution only.
+    """
+    try:
+        raw = _decode_obs_response(osc.core.show_project_meta(apiurl, obs_project))
+    except Exception as exc:
+        logger.debug(
+            f"_fetch_repo_path_projects: error fetching {obs_project!r}: {exc}"
+        )
+        return []
+    return _parse_repo_path_projects(raw, repo_name)
+
+
 def _fetch_image_pkg_deps(
     apiurl: str,
     branch_project: str,
