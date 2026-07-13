@@ -6,7 +6,7 @@ Build-Depends: debhelper (>= 9)
 
 Package: golang-1.26
 Architecture: any
-Provides: golang-go (= 3:1.26.4), golang (= 3:1.26.4)
+Provides: golang-go (= 3:%!{GOLANG_VERSION}), golang (= 3:%!{GOLANG_VERSION})
 Description: Go programming language toolchain version 1.26
- The Go programming language toolchain, version 1.26.4,
+ The Go programming language toolchain, version %!{GOLANG_VERSION},
  installed from the official binary distribution.

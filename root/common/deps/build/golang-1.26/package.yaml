@@ -1,5 +1,5 @@
 title: Go 1.26 toolchain
-description: Go programming language toolchain version 1.26.4 binary distribution.
+description: Go programming language toolchain version %!{GOLANG_VERSION} binary distribution.
 
 build:
   openSUSE_Leap_16: false

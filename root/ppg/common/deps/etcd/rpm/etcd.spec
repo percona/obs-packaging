@@ -26,7 +26,7 @@ Source4:        vendor-etcdctl.tar.gz
 Source5:        vendor-etcdutl.tar.gz
 
 %if 0%{?rhel} && 0%{?rhel} >= 8
-BuildRequires:  golang >= 1.26.4
+BuildRequires:  golang >= %!{GOLANG_VERSION}
 %else
 BuildRequires:  golang
 %endif

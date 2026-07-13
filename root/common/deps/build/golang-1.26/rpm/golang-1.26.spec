@@ -1,19 +1,19 @@
 %global debug_package %{nil}
 
 %ifarch aarch64
-%global go_tarball go1.26.4.linux-arm64.tar.gz
+%global go_tarball go%!{GOLANG_VERSION}.linux-arm64.tar.gz
 %else
-%global go_tarball go1.26.4.linux-amd64.tar.gz
+%global go_tarball go%!{GOLANG_VERSION}.linux-amd64.tar.gz
 %endif
 
 Name:     golang-1.26
-Version:  1.26.4
+Version:  %!{GOLANG_VERSION}
 Release:  1%{?dist}
 Summary:  Go programming language toolchain version 1.26
 License:  BSD-3-Clause
 URL:      https://go.dev
-Source0:  go1.26.4.linux-amd64.tar.gz
-Source1:  go1.26.4.linux-arm64.tar.gz
+Source0:  go%!{GOLANG_VERSION}.linux-amd64.tar.gz
+Source1:  go%!{GOLANG_VERSION}.linux-arm64.tar.gz
 
 ExclusiveArch: x86_64 aarch64
 AutoReq: no
@@ -22,7 +22,7 @@ Provides: golang-go = %{version}
 Provides: golang = %{version}
 
 %description
-The Go programming language toolchain, version 1.26.4,
+The Go programming language toolchain, version %!{GOLANG_VERSION},
 installed from the official binary distribution.
 
 %prep
@@ -44,6 +44,9 @@ ln -sf /usr/local/go/bin/gofmt %{buildroot}%{_bindir}/gofmt
 %{_bindir}/gofmt
 
 %changelog
+* Mon Jul 13 2026 Percona Development Team <info@percona.com> - %!{GOLANG_VERSION}-1
+- Package Go %!{GOLANG_VERSION} binary distribution for RHEL based distributions
+
 * Mon Jun 08 2026 Percona Development Team <info@percona.com> - 1.26.4-1
 - Package Go 1.26.4 binary distribution for RHEL based distributions
 

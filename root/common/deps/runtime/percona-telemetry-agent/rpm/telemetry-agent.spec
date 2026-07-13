@@ -15,7 +15,7 @@ Source1: vendor.tar.gz
 BuildRequires:  go >= 1.26
 %else
 %if 0%{?rhel} >= 8
-BuildRequires: golang >= 1.26.4
+BuildRequires: golang >= %!{GOLANG_VERSION}
 %else
 BuildRequires: golang
 %endif
