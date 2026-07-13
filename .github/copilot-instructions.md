@@ -871,9 +871,16 @@ Key things to look for in verbose output:
 | `planning: checking build dependencies (N project(s))` | Phase 2 started; N = number of projects queried |
 | `dep-promote: builddepinfo covers N local packages` | How many packages the dep query returned data for |
 | `dep-promote: <pkg> promoted by dep on <other>` | A package was cascade-promoted by Phase 2 |
+| `_resolve_provider: ambiguous providers for <binary>` | A dep edge was dropped: multiple projects build the binary and none is in the consumer's repo path chain |
 | `fetching revision history: <project>/<pkg>` | OBS revision comment lookup (build dependency / Phase 1 plain-push) |
 
 If `dep-promote: builddepinfo covers 0 local packages` appears, the dep query returned nothing — likely querying the wrong OBS instance or querying projects with no build results yet.
+
+Dep edges attribute each binary to a provider by searching the consumer's own
+project first, then the `<path>` projects of the queried repository (fetched
+from the project `_meta`), then falling back to the unique provider across all
+queried projects.  Same-named binaries in sibling tiers (devel vs staging of
+the same PG major) are therefore never conflated.
 
 ### 3. Add targeted `logger.debug()` calls
 

@@ -530,7 +530,9 @@ def _fetch_image_pkg_deps(
     repo: str,
     arch: str,
     pkg_name: str,
-    provided_by: dict[str, tuple[str, str]],
+    providers_by_project: dict[str, dict[str, tuple[str, str]]],
+    path_chain: list[str],
+    global_providers: dict[str, set[tuple[str, str]]],
     local_pkg_set: set[tuple[str, str]],
 ) -> set[tuple[str, str]]:
     """Return local source packages a Dockerfile image depends on, via _buildinfo.
@@ -538,13 +540,12 @@ def _fetch_image_pkg_deps(
     OBS's project-level _builddepinfo does not expose the RPM packages parsed
     by Build::Docker from the Dockerfile's RUN dnf/zypper/apt/apk install
     blocks — only the FROM base container shows up.  The per-package _buildinfo
-    endpoint does include them, as <bdep name="..."/> entries.  Look each bdep
-    name up in the provided_by map (built from _builddepinfo) to translate
-    binary → (home_project, source_pkg).
-
-    Each returned dep edge is a ``(home_project, src_pkg)`` tuple so callers
-    can attribute the dep to the correct project (preventing same-named
-    packages in unrelated projects from being conflated).
+    endpoint does include them, as <bdep name="..."/> entries.  Each bdep name
+    is resolved to its providing (home_project, source_pkg) with
+    _resolve_provider, searching the image project itself and then *path_chain*
+    (the <path> projects of the image's repository) so that same-named
+    binaries built in multiple sibling projects are attributed to the tier the
+    image actually pulls from.
     """
     try:
         url = osc.core.makeurl(
@@ -562,7 +563,9 @@ def _fetch_image_pkg_deps(
         name = bdep.get("name", "")
         if not name:
             continue
-        provider = provided_by.get(name)
+        provider = _resolve_provider(
+            branch_project, name, providers_by_project, path_chain, global_providers
+        )
         if (
             provider
             and provider != (branch_project, pkg_name)
@@ -580,18 +583,28 @@ def _fetch_combined_depinfo(
 ) -> dict[tuple[str, str], set[tuple[str, str]]]:
     """Return a project-aware forward build-dependency map across OBS projects.
 
-    Queries _builddepinfo for each project in branch_projects, merges the
-    provided_by maps (binary → (home_project, source_pkg)), then builds a
-    forward dep map:
+    Queries _builddepinfo for each project in branch_projects, records each
+    project's provided binaries separately (binary → (home_project, source_pkg)
+    per project), then builds a forward dep map:
 
         fwd_deps[(P, A)] = set of (Q, B) where source pkg A in project P
                            build-depends on a binary produced by source pkg
                            B in project Q.
 
+    Each <pkgdep> is resolved with _resolve_provider: the consumer's own
+    project first, then the <path> projects of the queried repository (from
+    the project's _meta), then a unique-global-provider fallback.  This keeps
+    same-named binaries built in multiple sibling projects (e.g.
+    percona-postgresql18-* in ppg:devel:18, ppg:staging:18 AND
+    ppg:staging:18:extras) attributed to the tier the consumer actually
+    builds against — a flat merged map was last-write-wins over set
+    iteration order and produced spurious (or missed) cross-tier
+    dep-promotions.  Only first-level <path> projects are considered; OBS's
+    transitive expansion of the last path is not modelled, the unique-global
+    fallback covers providers reached that way.
+
     Edges are filtered to entries whose ``(project, name)`` tuple is in
-    ``local_pkg_set`` (the producer side).  Tracking projects on both ends
-    prevents conflating same-named packages that live in unrelated projects
-    (e.g. ``percona-pgaudit`` exists separately under ppg:17 and ppg:18).
+    ``local_pkg_set`` (the producer side).
 
     OBS _builddepinfo for a project includes <package> entries inherited from
     <path> targets; those carry a ``project`` attribute pointing at their
@@ -605,9 +618,14 @@ def _fetch_combined_depinfo(
     edges that OBS omits from _builddepinfo.  It maps image pkg_name →
     list of (branch_project, repo, arch) to query per-package _buildinfo for.
     """
-    # Collect provided_by and all <package> elements from all branch projects.
-    # provided_by maps binary_name → (home_project, source_pkg).
-    provided_by: dict[str, tuple[str, str]] = {}
+    # providers_by_project[P][binary] = (P, source_pkg) for binaries built
+    # in P itself (inherited entries excluded).
+    providers_by_project: dict[str, dict[str, tuple[str, str]]] = {}
+    # path_chains[(P, repo)] = ordered <path> projects of P's repo, used as
+    # the provider search order after P itself.
+    path_chains: dict[tuple[str, str], list[str]] = {}
+    # queried_repo[P] = the repository whose builddepinfo was fetched for P.
+    queried_repo: dict[str, str] = {}
     # Each entry: (pkg_elem, home_project, src) where home_project is the
     # OBS project this <package> belongs to (the queried project, after
     # filtering out inherited entries).
@@ -639,6 +657,11 @@ def _fetch_combined_depinfo(
             )
             continue
 
+        queried_repo[obs_project] = repos[0]
+        path_chains[(obs_project, repos[0])] = _fetch_repo_path_projects(
+            apiurl, obs_project, repos[0]
+        )
+
         for pkg_elem in dep_root.findall("package"):
             # Skip <package> entries inherited from path targets — they are
             # attributed to their home project when that project is queried,
@@ -653,10 +676,19 @@ def _fetch_combined_depinfo(
             # that dep lookups always use the base package name.
             src = raw_src.split(":")[0]
             all_pkg_elems.append((pkg_elem, obs_project, src))
+            project_providers = providers_by_project.setdefault(obs_project, {})
             for subpkg in pkg_elem.findall("subpkg"):
                 binary = (subpkg.text or "").strip()
                 if binary:
-                    provided_by[binary] = (obs_project, src)
+                    project_providers[binary] = (obs_project, src)
+
+    # global_providers[binary] = every (project, src) building it — the
+    # unambiguous fallback for binaries not visible through a consumer's
+    # own project or path chain.
+    global_providers: dict[str, set[tuple[str, str]]] = {}
+    for project_providers in providers_by_project.values():
+        for binary, provider in project_providers.items():
+            global_providers.setdefault(binary, set()).add(provider)
 
     # Build forward dep map: fwd_deps[(P, A)] = {(Q, B), ...}.
     fwd_deps: dict[tuple[str, str], set[tuple[str, str]]] = {}
@@ -664,9 +696,12 @@ def _fetch_combined_depinfo(
         if not src:
             continue
         src_key = (home_project, src)
+        chain = path_chains.get((home_project, queried_repo.get(home_project, "")), [])
         for pkgdep in pkg_elem.findall("pkgdep"):
             binary = (pkgdep.text or "").strip()
-            provider = provided_by.get(binary)
+            provider = _resolve_provider(
+                home_project, binary, providers_by_project, chain, global_providers
+            )
             if provider and provider != src_key and provider in local_pkg_set:
                 fwd_deps.setdefault(src_key, set()).add(provider)
 
@@ -674,13 +709,20 @@ def _fetch_combined_depinfo(
     if image_pkgs:
         for pkg_name, entries in image_pkgs.items():
             for branch_project, repo, arch in entries:
+                chain_key = (branch_project, repo)
+                if chain_key not in path_chains:
+                    path_chains[chain_key] = _fetch_repo_path_projects(
+                        apiurl, branch_project, repo
+                    )
                 extra = _fetch_image_pkg_deps(
                     apiurl,
                     branch_project,
                     repo,
                     arch,
                     pkg_name,
-                    provided_by,
+                    providers_by_project,
+                    path_chains[chain_key],
+                    global_providers,
                     local_pkg_set,
                 )
                 if extra:

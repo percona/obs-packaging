@@ -127,6 +127,21 @@ META_XML = """\
 """
 
 
+def test_earlier_chain_project_wins():
+    # When two chain projects both provide the binary, the one earlier in
+    # the <path> order must win (mirrors OBS repo layering).
+    providers = {
+        DEPS: {PG_DEVEL_BIN: (DEPS, "percona-postgresql")},
+        STAGING: {PG_DEVEL_BIN: (STAGING, "percona-postgresql")},
+    }
+    assert _resolve_provider(
+        UBI9, PG_DEVEL_BIN, providers, [DEPS, STAGING], _globals(providers)
+    ) == (DEPS, "percona-postgresql")
+    assert _resolve_provider(
+        UBI9, PG_DEVEL_BIN, providers, [STAGING, DEPS], _globals(providers)
+    ) == (STAGING, "percona-postgresql")
+
+
 def test_parse_repo_path_projects():
     assert _parse_repo_path_projects(META_XML, "UBI_9") == [
         "isv:percona:ppg:common:deps",
