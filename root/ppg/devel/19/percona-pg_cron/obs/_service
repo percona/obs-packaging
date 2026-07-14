@@ -2,8 +2,8 @@
   <service name="obs_scm">
     <param name="url">https://github.com/citusdata/pg_cron.git</param>
     <param name="scm">git</param>
-    <param name="revision">v%!{PG_CRON_VERSION}</param>
-    <param name="version">%!{PG_CRON_VERSION}</param>
+    <param name="revision">main</param>
+    <param name="versionformat">@PARENT_TAG@+@TAG_OFFSET@</param>
     <param name="filename">percona-pg_cron_%!{PG_MAJOR_VERSION}</param>
     <param name="versionrewrite-pattern">v(.*)</param>
     <param name="versionrewrite-replacement">\1</param>

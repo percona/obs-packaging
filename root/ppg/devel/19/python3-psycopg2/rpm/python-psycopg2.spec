@@ -94,7 +94,7 @@ done
 %license LICENSE
 %doc AUTHORS NEWS README.rst
 %{python3_sitearch}/%{srcname}
-%{python3_sitearch}/%{srcname}-%{version}-py%{python3_version}.egg-info
+%{python3_sitearch}/%{srcname}-*.egg-info
 
 
 %if !0%{?suse_version}

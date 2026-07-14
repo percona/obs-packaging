@@ -3,7 +3,7 @@
     <param name="url">https://github.com/jeltz/pg_tde.git</param>
     <param name="scm">git</param>
     <param name="revision">pg19</param>
-    <param name="version">%!{PG_TDE_VERSION}</param>
+    <param name="version">2.2.2.dev</param>
     <param name="submodules">enable</param>
     <param name="filename">percona-pg_tde%!{PG_MAJOR_VERSION}</param>
   </service>

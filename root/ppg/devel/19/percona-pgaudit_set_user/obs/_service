@@ -2,11 +2,11 @@
   <service name="obs_scm">
     <param name="url">https://github.com/pgaudit/set_user.git</param>
     <param name="scm">git</param>
-    <param name="revision">%!{PGAUDIT_SET_USER_TAG}</param>
-    <param name="version">%!{PGAUDIT_SET_USER_VERSION}</param>
+    <param name="revision">main</param>
+    <param name="versionformat">@PARENT_TAG@+@TAG_OFFSET@</param>
     <param name="filename">percona-pgaudit%!{PG_MAJOR_VERSION}_set_user</param>
-    <param name="versionrewrite-pattern">REL(.*)</param>
-    <param name="versionrewrite-replacement">\1</param>
+    <param name="versionrewrite-pattern">REL(\d+)_(\d+)_(\d+)</param>
+    <param name="versionrewrite-replacement">\1.\2.\3</param>
   </service>
   <service mode="buildtime" name="tar" />
   <service mode="buildtime" name="recompress">
