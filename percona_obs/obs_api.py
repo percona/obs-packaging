@@ -1549,6 +1549,13 @@ def _upload_obs_files(
                         f"{obs_project_name}/{package_name} (HTTP 400 Bad Request).\n"
                         f"       The file may use features unsupported by this OBS instance."
                     ) from None
+                if e.code == 404 and filepath.name == "_link":
+                    raise SystemExit(
+                        f"error: OBS rejected _link for "
+                        f"{obs_project_name}/{package_name} (HTTP 404 Not Found).\n"
+                        f"       The link target package does not exist on the server —"
+                        f" it may not have been uploaded or promoted yet."
+                    ) from None
                 raise
 
     for obs_name in sorted(obs_md5s.keys() - local_files):

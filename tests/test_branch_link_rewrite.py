@@ -201,3 +201,58 @@ def test_collect_link_dep_edges_skips_packages_without_link():
         [(proj, pkg_path)], auto_rootprj_env(ROOTPRJ), {(proj, "etcd"): "promote"}
     )
     assert edges == {}
+
+
+# --- _order_targets_for_link_uploads -------------------------------------------
+
+
+def _mk_target(tmp_path, proj: str, pkg: str):
+    # No project.yaml on disk: the key project name falls back to obs_project.
+    path = tmp_path / proj.replace(":", "_") / pkg
+    path.mkdir(parents=True, exist_ok=True)
+    return (proj, path)
+
+
+def test_order_uploads_link_target_before_linker(tmp_path):
+    from percona_obs.cmd_sync import _order_targets_for_link_uploads
+
+    devel = f"{ROOTPRJ}:ppg:devel:18"
+    linker = _mk_target(tmp_path, devel, "percona-ppg-server")
+    other = _mk_target(tmp_path, devel, "percona-patroni")
+    target = _mk_target(tmp_path, STAGING, "percona-ppg-server")
+    edges = {
+        (STAGING, "percona-ppg-server"): {(devel, "percona-ppg-server")},
+    }
+    ordered = _order_targets_for_link_uploads([linker, other, target], edges)
+    assert ordered.index(target) < ordered.index(linker)
+    # Stable: packages not involved in links keep their relative order.
+    assert ordered.index(other) < ordered.index(linker) or ordered == [
+        target,
+        linker,
+        other,
+    ]
+
+
+def test_order_without_edges_is_unchanged(tmp_path):
+    from percona_obs.cmd_sync import _order_targets_for_link_uploads
+
+    a = _mk_target(tmp_path, STAGING, "a")
+    b = _mk_target(tmp_path, STAGING, "b")
+    assert _order_targets_for_link_uploads([a, b], {}) == [a, b]
+
+
+def test_order_handles_link_chains(tmp_path):
+    from percona_obs.cmd_sync import _order_targets_for_link_uploads
+
+    p1 = f"{ROOTPRJ}:t1"
+    p2 = f"{ROOTPRJ}:t2"
+    p3 = f"{ROOTPRJ}:t3"
+    a = _mk_target(tmp_path, p1, "pkg")  # links b
+    b = _mk_target(tmp_path, p2, "pkg")  # links c
+    c = _mk_target(tmp_path, p3, "pkg")
+    edges = {
+        (p2, "pkg"): {(p1, "pkg")},
+        (p3, "pkg"): {(p2, "pkg")},
+    }
+    ordered = _order_targets_for_link_uploads([a, b, c], edges)
+    assert ordered == [c, b, a]

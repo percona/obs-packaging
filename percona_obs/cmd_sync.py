@@ -342,6 +342,47 @@ def _collect_link_dep_edges(
     return edges
 
 
+def _order_targets_for_link_uploads(
+    targets: "list[tuple[str, Path]]",
+    link_edges: "dict[tuple[str, str], set[tuple[str, str]]]",
+) -> "list[tuple[str, Path]]":
+    """Reorder targets so link targets are uploaded before their linking packages.
+
+    OBS validates a _link's target package when the file itself is uploaded,
+    so a linking package uploaded before its (promoted) link target fails
+    with HTTP 404 even though the target would have been created moments
+    later in the same sync.  Packages are sorted by link-chain depth (link
+    targets first); the sort is stable, so packages not involved in link
+    chains keep their relative order.
+    """
+    if not link_edges:
+        return targets
+    target_of: dict[tuple[str, str], tuple[str, str]] = {}
+    for tgt, linkers in link_edges.items():
+        for linker in linkers:
+            target_of[linker] = tgt
+
+    def _depth(key: tuple[str, str]) -> int:
+        depth = 0
+        seen = {key}
+        cur = key
+        while (nxt := target_of.get(cur)) is not None and nxt not in seen:
+            depth += 1
+            seen.add(nxt)
+            cur = nxt
+        return depth
+
+    decorated: list[tuple[int, tuple[str, Path]]] = []
+    for obs_project, package_path in targets:
+        cfg = load_project_yaml(package_path.parent / "project.yaml")
+        obs_project_name = cfg.get("name") or obs_project
+        decorated.append(
+            (_depth((obs_project_name, package_path.name)), (obs_project, package_path))
+        )
+    decorated.sort(key=lambda entry: entry[0])
+    return [entry[1] for entry in decorated]
+
+
 def _pkg_env_vars(package_path: Path) -> dict[str, str]:
     """Per-package env vars auto-injected into ${VAR} substitution.
 
@@ -854,6 +895,11 @@ def cmd_sync(args):
             if _profile is not None:
                 branch_profile_for[_key] = _profile
 
+    # Source-level _link edges (target key → linking keys), derived from the
+    # local files.  Used for dep-promotion (Phase 2) and to order uploads so
+    # link targets are created before their linking packages (Phase 3).
+    link_dep_edges = _collect_link_dep_edges(targets, env_vars, decisions)
+
     # --- Phase 2: dep-triggered promotion (forward fixed-point) ---
     # If a package is being promoted (full sources), any package that depends
     # on it must also be promoted so it is rebuilt against the new binaries.
@@ -1003,9 +1049,7 @@ def cmd_sync(args):
         # sources, so promoting the target must promote the linking package.
         # OBS builddepinfo does not model this relationship — derive it from
         # the local _link files.
-        for link_target, linkers in _collect_link_dep_edges(
-            targets, env_vars, decisions
-        ).items():
+        for link_target, linkers in link_dep_edges.items():
             rdeps.setdefault(link_target, set()).update(linkers)
         if rdeps:
             # Iterate until no new promotions are triggered.
@@ -1242,6 +1286,11 @@ def cmd_sync(args):
     # --- Phase 3: execute uploads based on decisions ---
     # Track packages that were triggered by file changes so the config-triggered
     # rebuild sweep below doesn't double-trigger them.
+
+    # Upload link targets before the packages that link to them: OBS validates
+    # a _link's target package at upload time and rejects the file with HTTP
+    # 404 when the target does not exist yet.
+    targets = _order_targets_for_link_uploads(targets, link_dep_edges)
 
     for obs_project, package_path in targets:
         project_path = package_path.parent
