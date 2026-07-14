@@ -83,4 +83,88 @@
   <service name="download_url">
     <param name="url">https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-21/libc++-21-dev_21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50_arm64.deb</param>
   </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/libllvm21_21.1.8~++20251221032947+2078da43e25a-1~exp1~20251221153113.67_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/llvm-21-runtime_21.1.8~++20251221032947+2078da43e25a-1~exp1~20251221153113.67_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/llvm-21-linker-tools_21.1.8~++20251221032947+2078da43e25a-1~exp1~20251221153113.67_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/libclang-cpp21_21.1.8~++20251221032947+2078da43e25a-1~exp1~20251221153113.67_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/libclang-common-21-dev_21.1.8~++20251221032947+2078da43e25a-1~exp1~20251221153113.67_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/libclang1-21_21.1.8~++20251221032947+2078da43e25a-1~exp1~20251221153113.67_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/llvm-21-tools_21.1.8~++20251221032947+2078da43e25a-1~exp1~20251221153113.67_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/llvm-21_21.1.8~++20251221032947+2078da43e25a-1~exp1~20251221153113.67_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/llvm-21-dev_21.1.8~++20251221032947+2078da43e25a-1~exp1~20251221153113.67_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/clang-21_21.1.8~++20251221032947+2078da43e25a-1~exp1~20251221153113.67_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/libc++abi1_21.1.8~++20251221032947+2078da43e25a-1~exp1~20251221153113.67_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/libc++1_21.1.8~++20251221032947+2078da43e25a-1~exp1~20251221153113.67_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/libc++abi-21-dev_21.1.8~++20251221032947+2078da43e25a-1~exp1~20251221153113.67_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/libc++-21-dev_21.1.8~++20251221032947+2078da43e25a-1~exp1~20251221153113.67_amd64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/libllvm21_21.1.5~++20251023083151+45afac62e373-1~exp1~20251023083333.51_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/llvm-21-runtime_21.1.5~++20251023083151+45afac62e373-1~exp1~20251023083333.51_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/llvm-21-linker-tools_21.1.5~++20251023083151+45afac62e373-1~exp1~20251023083333.51_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/libclang-cpp21_21.1.5~++20251023083151+45afac62e373-1~exp1~20251023083333.51_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/libclang-common-21-dev_21.1.5~++20251023083151+45afac62e373-1~exp1~20251023083333.51_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/libclang1-21_21.1.5~++20251023083151+45afac62e373-1~exp1~20251023083333.51_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/llvm-21-tools_21.1.5~++20251023083151+45afac62e373-1~exp1~20251023083333.51_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/llvm-21_21.1.5~++20251023083151+45afac62e373-1~exp1~20251023083333.51_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/llvm-21-dev_21.1.5~++20251023083151+45afac62e373-1~exp1~20251023083333.51_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/clang-21_21.1.5~++20251023083151+45afac62e373-1~exp1~20251023083333.51_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/libc++abi1-21_21.1.5~++20251023083151+45afac62e373-1~exp1~20251023083333.51_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/libc++1-21_21.1.5~++20251023083151+45afac62e373-1~exp1~20251023083333.51_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/libc++abi-21-dev_21.1.5~++20251023083151+45afac62e373-1~exp1~20251023083333.51_arm64.deb</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://apt.llvm.org/bookworm/pool/main/l/llvm-toolchain-21/libc++-21-dev_21.1.5~++20251023083151+45afac62e373-1~exp1~20251023083333.51_arm64.deb</param>
+  </service>
 </services>

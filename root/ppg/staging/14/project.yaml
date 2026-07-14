@@ -202,8 +202,8 @@ project-config: |
   # logrotate Recommends a cron daemon; both cron and bcron may be available.
   Prefer: cron
 
-  # Repackaged LLVM 21 (Debian 11 only) to support postgresql 18+ builds in Debian 11.
-  # For other ppg projects, we prefer the system LLVM packages.
+  # Repackaged LLVM 21 (built for Debian 11/12) is only for PPG 18 JIT.
+  # For PPG 14–17, Ignore it so builds use the distro LLVM packages.
   Ignore: libllvm21
   Ignore: llvm-21-runtime
   Ignore: llvm-21-linker-tools

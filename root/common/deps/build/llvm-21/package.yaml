@@ -1,7 +1,10 @@
-title: LLVM 21 toolchain for Debian 11
+title: LLVM 21 toolchain for Debian 11 and 12
 description: |
-  LLVM 21 and Clang 21 packages repackaged from apt.llvm.org for Bullseye builds
-  that require LLVM >= 14 (e.g. PostgreSQL 18 JIT) or C++23 (e.g. pg_oidc_validator).
+  LLVM 21 and Clang 21 packages repackaged from apt.llvm.org for Debian 11
+  (Bullseye builds) and Debian 12 (Bookworm builds) that require LLVM >= 14
+  (e.g. PostgreSQL 18 JIT) or C++23 (e.g. pg_oidc_validator on Bullseye).
+  Used only by PPG 18; other PPG majors Ignore these packages and use the
+  distro LLVM instead.
 
 build:
   RockyLinux_8: false
@@ -9,7 +12,6 @@ build:
   RockyLinux_10: false
   UBI_8: false
   UBI_9: false
-  Debian_12: false
   Debian_13: false
   Ubuntu_24.04: false
   Ubuntu_26.04: false

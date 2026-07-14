@@ -1,3 +1,12 @@
+llvm-21 (21.1.5-2) unstable; urgency=low
+
+  * Also package for Debian 12 (Bookworm): use apt.llvm.org Bookworm binaries
+    on Bookworm so deps resolve against libffi8 / gcc-12 rather than Bullseye
+    libffi7 / gcc-10 (missing from the OBS Debian_12 build environment).
+  * Expand Depends alternatives for gcc-12, libffi8, and libcurl4.
+
+ -- Percona Development Team <info@percona.com>  Wed, 15 Jul 2026 14:30:00 +0000
+
 llvm-21 (21.1.5-1) unstable; urgency=low
 
   * Repackage LLVM 21.1.5 from apt.llvm.org for Debian 11 (Bullseye).

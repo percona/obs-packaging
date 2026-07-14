@@ -2,12 +2,32 @@
 export DH_VERBOSE=1
 
 OBS_SOURCES := /usr/src/packages/SOURCES
-LLVM_UPSTREAM_VER := 21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50
 DEB_ARCH := $(shell dpkg --print-architecture)
+DISTRO_CODENAME := $(shell . /etc/os-release 2>/dev/null; echo $$VERSION_CODENAME)
 
+# Our binary package names stay stable across distros; Bookworm amd64 renamed
+# the libc++ runtime debs (dropped the -21 suffix). Map source .deb → dest dir.
 DEBS := libllvm21 llvm-21-runtime llvm-21-linker-tools libclang-cpp21 \
 	libclang-common-21-dev libclang1-21 libc++abi1-21 libc++1-21 \
 	libc++abi-21-dev libc++-21-dev llvm-21-tools llvm-21 llvm-21-dev clang-21
+
+ifeq ($(DISTRO_CODENAME),bookworm)
+  ifeq ($(DEB_ARCH),amd64)
+    LLVM_UPSTREAM_VER := 21.1.8~++20251221032947+2078da43e25a-1~exp1~20251221153113.67
+    LIBCXX1_DEB := libc++1
+    LIBCXXABI1_DEB := libc++abi1
+  else
+    # Bookworm/arm64 still publishes libc++*-21 at an older 21.1.5 build.
+    LLVM_UPSTREAM_VER := 21.1.5~++20251023083151+45afac62e373-1~exp1~20251023083333.51
+    LIBCXX1_DEB := libc++1-21
+    LIBCXXABI1_DEB := libc++abi1-21
+  endif
+else
+  # Debian 11 (bullseye) and fallback
+  LLVM_UPSTREAM_VER := 21.1.5~++20251023083244+45afac62e373-1~exp1~20251023083401.50
+  LIBCXX1_DEB := libc++1-21
+  LIBCXXABI1_DEB := libc++abi1-21
+endif
 
 %:
 	dh $@
@@ -25,7 +45,12 @@ override_dh_strip_nondeterminism:
 override_dh_auto_install:
 	@set -e; \
 	for pkg in $(DEBS); do \
-	  deb="$(OBS_SOURCES)/$${pkg}_$(LLVM_UPSTREAM_VER)_$(DEB_ARCH).deb"; \
+	  src="$$pkg"; \
+	  case "$$pkg" in \
+	    libc++1-21) src="$(LIBCXX1_DEB)" ;; \
+	    libc++abi1-21) src="$(LIBCXXABI1_DEB)" ;; \
+	  esac; \
+	  deb="$(OBS_SOURCES)/$${src}_$(LLVM_UPSTREAM_VER)_$(DEB_ARCH).deb"; \
 	  test -f "$$deb" || { echo "missing $$deb" >&2; exit 1; }; \
 	  dpkg-deb -x "$$deb" "debian/$${pkg}/"; \
 	done

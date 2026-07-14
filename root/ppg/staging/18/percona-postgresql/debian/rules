@@ -80,7 +80,7 @@ ifeq ($(call version_ge,10),y)
 endif
 
 ifeq ($(call version_ge,11),y)
-  # Prefer repackaged llvm-21 on Debian 11 (PG 18 JIT needs LLVM >= 19).
+  # Prefer repackaged llvm-21 on Debian 11/12 (PG 18 JIT needs LLVM >= 19).
   LLVM_CONFIG :=
   ifneq ($(wildcard /usr/bin/llvm-config-21),)
     LLVM_CONFIG = /usr/bin/llvm-config-21
@@ -210,11 +210,11 @@ override_dh_auto_install-indep:
 override_dh_makeshlibs:
 	dh_makeshlibs -Xusr/lib/postgresql/$(MAJOR_VER)
 
-# On Debian 11 (bullseye) only: dwz 0.13 cannot parse the DWARF 5 (.debug_addr)
-# that llvm-21/clang-21 emit into llvmjit.so, so exclude just that file. Newer
-# dwz on Debian 13/Ubuntu handles DWARF 5, so nothing is excluded there.
+# On Debian 11/12 (bullseye/bookworm): older dwz cannot parse the DWARF 5
+# (.debug_addr) that llvm-21/clang-21 emit into llvmjit.so, so exclude that
+# file. Newer dwz on Debian 13/Ubuntu handles DWARF 5, so nothing is excluded.
 DISTRO_CODENAME := $(shell . /etc/os-release 2>/dev/null; echo $$VERSION_CODENAME)
-ifeq ($(DISTRO_CODENAME),bullseye)
+ifneq ($(filter $(DISTRO_CODENAME),bullseye bookworm),)
   DWZ_EXCLUDE = -Xllvmjit.so
 endif
 
