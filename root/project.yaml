@@ -79,6 +79,13 @@ repositories:
       - subproject: common:deps:build
         repository: Debian_13
     archs: [x86_64, aarch64]
+  - name: Ubuntu_22.04
+    paths:
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:22.04
+        repository: universe
+      - subproject: common:deps:build
+        repository: Ubuntu_22.04
+    archs: [x86_64, aarch64]
   - name: Ubuntu_24.04
     paths:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:24.04
@@ -123,7 +130,7 @@ project-config: |
   Prefer: hdf-libs
   %endif
 
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12"
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository" == "Ubuntu_22.04"
   # llvm-*-dev needs libtinfo-dev; both libncurses-dev and libtinfo-dev satisfy
   # it and OBS reports "have choice" without a Prefer.
   Prefer: libncurses-dev
@@ -131,11 +138,11 @@ project-config: |
   Prefer: cron
   %endif
 
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04"
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04"
   Prefer: golang-1.26
   %endif
 
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
   # libgdal-dev transitively requires both libcurl4-openssl-dev and
   # libcurl4-gnutls-dev which conflict; ignore the gnutls variant so
   # the openssl variant is used consistently.

@@ -103,6 +103,17 @@ repositories:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:13
         repository: standard
     archs: [x86_64, aarch64]
+  - name: Ubuntu_22.04
+    paths:
+      - subproject: ppg:staging:14
+        repository: Ubuntu_22.04
+      - subproject: ppg:common:deps
+        repository: Ubuntu_22.04
+      - subproject: common:deps:build
+        repository: Ubuntu_22.04
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:22.04
+        repository: universe
+    archs: [x86_64, aarch64]
   - name: Ubuntu_24.04
     paths:
       - subproject: ppg:staging:14
@@ -207,7 +218,7 @@ project-config: |
   Ignore: postgresql
   %endif
 
-  %if "%_repository" == "Debian_11"
+  %if "%_repository" == "Debian_11" || "%_repository" == "Ubuntu_22.04"
   # llvm-11-dev needs libtinfo-dev; on Bullseye both libncurses-dev and
   # libtinfo-dev satisfy it and OBS reports "have choice" without a Prefer.
   Prefer: libncurses-dev
@@ -228,11 +239,11 @@ project-config: |
   Ignore: clang-21
   %endif
 
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04"
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04"
   Prefer: golang-1.26
   %endif
 
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
   # libgdal-dev transitively requires both libcurl4-openssl-dev and
   # libcurl4-gnutls-dev which conflict; ignore the gnutls variant so
   # the openssl variant is used consistently.

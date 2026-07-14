@@ -207,6 +207,18 @@ gpgcheck=0
 EOF
 ```
 
+### Ubuntu_22.04
+
+**`isv:percona:ppg:staging:17`**
+
+```bash
+echo 'deb https://download.opensuse.org/repositories/isv:/percona:/ppg:/staging:/17/Ubuntu_22.04/ /' \
+  | tee /etc/apt/sources.list.d/isv:percona:ppg:staging:17.list
+curl -fsSL https://download.opensuse.org/repositories/isv:/percona:/ppg:/staging:/17/Ubuntu_22.04/Release.key \
+  | gpg --dearmor | tee /etc/apt/trusted.gpg.d/isv_percona_ppg_staging_17.gpg > /dev/null
+apt update
+```
+
 
 ### Ubuntu_24.04
 

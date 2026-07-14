@@ -214,7 +214,7 @@ override_dh_makeshlibs:
 # (.debug_addr) that llvm-21/clang-21 emit into llvmjit.so, so exclude that
 # file. Newer dwz on Debian 13/Ubuntu handles DWARF 5, so nothing is excluded.
 DISTRO_CODENAME := $(shell . /etc/os-release 2>/dev/null; echo $$VERSION_CODENAME)
-ifneq ($(filter $(DISTRO_CODENAME),bullseye bookworm),)
+ifneq ($(filter $(DISTRO_CODENAME),bullseye bookworm jammy),)
   DWZ_EXCLUDE = -Xllvmjit.so
 endif
 

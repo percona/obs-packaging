@@ -395,7 +395,7 @@ description: |
 
 - [ ] **Step 2: Create `root/ppg/devel/18/project.yaml`** from `root/ppg/staging/18/project.yaml` with these exact transformations:
   1. `title:` → `Percona Distribution for PostgreSQL %!{PG_MAJOR_VERSION} — devel`; description states dev-branch purpose.
-  2. In **every** repository's `paths:` list, prepend an entry pathing to staging (repository name mirrors the repo's own `name:`). Pattern, shown for RockyLinux_9 — apply to all ten repositories (RockyLinux_8, RockyLinux_9, RockyLinux_10, UBI_9, UBI_8, Debian_13, Ubuntu_24.04, Ubuntu_26.04, openSUSE_Tumbleweed, openSUSE_Leap_16):
+  2. In **every** repository's `paths:` list, prepend an entry pathing to staging (repository name mirrors the repo's own `name:`). Pattern, shown for RockyLinux_9 — apply to all ten repositories (RockyLinux_8, RockyLinux_9, RockyLinux_10, UBI_9, UBI_8, Debian_13, Ubuntu_22.04, Ubuntu_24.04, Ubuntu_26.04, openSUSE_Tumbleweed, openSUSE_Leap_16):
 
 ```yaml
   - name: RockyLinux_9

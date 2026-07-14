@@ -11,7 +11,11 @@ DEBS := libllvm21 llvm-21-runtime llvm-21-linker-tools libclang-cpp21 \
 	libclang-common-21-dev libclang1-21 libc++abi1-21 libc++1-21 \
 	libc++abi-21-dev libc++-21-dev llvm-21-tools llvm-21 llvm-21-dev clang-21
 
-ifeq ($(DISTRO_CODENAME),bookworm)
+ifeq ($(DISTRO_CODENAME),jammy)
+  LLVM_UPSTREAM_VER := 21.1.8~++20251221032842+2078da43e25a-1~exp1~20251221153008.77
+  LIBCXX1_DEB := libc++1
+  LIBCXXABI1_DEB := libc++abi1
+else ifeq ($(DISTRO_CODENAME),bookworm)
   ifeq ($(DEB_ARCH),amd64)
     LLVM_UPSTREAM_VER := 21.1.8~++20251221032947+2078da43e25a-1~exp1~20251221153113.67
     LIBCXX1_DEB := libc++1

@@ -5,5 +5,6 @@ description: |
   Used by PostGIS for advanced 3D geometry operations.
 build:
   Debian_13: false
+  Ubuntu_22.04: false
   Ubuntu_24.04: false
   Ubuntu_26.04: false

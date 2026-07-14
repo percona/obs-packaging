@@ -296,17 +296,16 @@ gpgcheck=0
 EOF
 ```
 
-**`isv:percona:ppg:staging:16:tde`**
+### Ubuntu_22.04
+
+**`isv:percona:ppg:staging:16`**
 
 ```bash
-rpm --import https://download.opensuse.org/repositories/isv:/percona:/ppg:/staging:/16:/tde/UBI_9/repodata/repomd.xml.key
-tee /etc/yum.repos.d/isv_percona_ppg_staging_16_tde.repo << 'EOF'
-[isv:percona:ppg:staging:16:tde]
-name=isv:percona:ppg:staging:16:tde - UBI_9
-baseurl=https://download.opensuse.org/repositories/isv:/percona:/ppg:/staging:/16:/tde/UBI_9/
-enabled=1
-gpgcheck=0
-EOF
+echo 'deb https://download.opensuse.org/repositories/isv:/percona:/ppg:/staging:/16/Ubuntu_22.04/ /' \
+  | tee /etc/apt/sources.list.d/isv:percona:ppg:staging:16.list
+curl -fsSL https://download.opensuse.org/repositories/isv:/percona:/ppg:/staging:/16/Ubuntu_22.04/Release.key \
+  | gpg --dearmor | tee /etc/apt/trusted.gpg.d/isv_percona_ppg_staging_16.gpg > /dev/null
+apt update
 ```
 
 
