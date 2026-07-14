@@ -161,14 +161,24 @@ def _rewrite_aggregate_for_branch(
     content: str,
     rootprj: str,
     branch_rootprj: str,
-    active_projects: "set[str] | None",
+    promoted_keys: "set[tuple[str, str]] | None",
 ) -> str:
-    """Rewrite _aggregate XML so references to inactive PR subprojects point to branch_rootprj.
+    """Rewrite _aggregate XML so references to non-promoted packages point to branch_rootprj.
 
-    When a package in a PR project aggregates from a sibling subproject that
-    was NOT promoted (not in active_projects), the sibling doesn't exist on
-    OBS under rootprj.  Redirect those aggregate references to branch_rootprj
-    so OBS pulls the binaries from the production counterpart instead.
+    When a package in a PR project aggregates from a sibling subproject
+    package that was NOT promoted (its (project, package) key is absent from
+    promoted_keys), the referenced package doesn't exist on OBS under rootprj
+    even if its project does (other packages promoted there).  Redirect those
+    aggregate references to branch_rootprj so OBS pulls the binaries from the
+    production counterpart instead.
+
+    promoted_keys is the set of (obs_project, package) keys uploaded with
+    full sources in this sync; None means no promotion information is
+    available, in which case every reference under rootprj is redirected.
+    An <aggregate> element is kept only when ALL its <package> entries
+    (base names, ":flavor" multibuild suffixes stripped) were promoted; an
+    element with no <package> children aggregates the whole project and is
+    kept when any package was promoted into that project.
     """
     try:
         root = ET.fromstring(content)
@@ -177,12 +187,22 @@ def _rewrite_aggregate_for_branch(
     changed = False
     for agg in root.findall("aggregate"):
         proj = agg.get("project", "")
-        if proj == rootprj or proj.startswith(rootprj + ":"):
-            if active_projects is None or proj not in active_projects:
-                suffix = proj[len(rootprj) :]  # "" or ":sub:project"
-                new_proj = branch_rootprj + suffix
-                agg.set("project", new_proj)
-                changed = True
+        if not (proj == rootprj or proj.startswith(rootprj + ":")):
+            continue
+        pkgs = [
+            (p.text or "").strip().split(":")[0]
+            for p in agg.findall("package")
+            if (p.text or "").strip()
+        ]
+        if promoted_keys is not None:
+            if pkgs:
+                if all((proj, p) in promoted_keys for p in pkgs):
+                    continue
+            elif any(k[0] == proj for k in promoted_keys):
+                continue
+        suffix = proj[len(rootprj) :]  # "" or ":sub:project"
+        agg.set("project", branch_rootprj + suffix)
+        changed = True
     if not changed:
         return content
     ET.indent(root, space="  ")
@@ -193,15 +213,23 @@ def _rewrite_link_for_branch(
     content: str,
     rootprj: str,
     branch_rootprj: str,
-    active_projects: "set[str] | None",
+    promoted_keys: "set[tuple[str, str]] | None",
+    package_name: str,
 ) -> str:
-    """Rewrite _link XML so references to inactive PR subprojects point to branch_rootprj.
+    """Rewrite _link XML so a link to a non-promoted package points to branch_rootprj.
 
-    Mirrors _rewrite_aggregate_for_branch.  A devel package's _link targets its
-    staging sibling; in a PR namespace an unpromoted sibling holds an _aggregate
-    (binaries only) or does not exist, and expanding a link onto an _aggregate
-    copies binaries instead of rebuilding.  Redirect the link to the production
-    counterpart, which holds real sources.
+    A _link is a source-level reference to a specific (project, package).
+    Unlike binaries, link targets are not resolved through repository <path>
+    fallbacks, and OBS rejects the source commit outright when the target
+    package does not exist.  A link into the PR namespace is therefore only
+    valid when the exact target package was promoted in this sync — checking
+    the target project alone is not enough (the project exists as soon as any
+    of its packages is promoted).  Otherwise redirect the link to the
+    production counterpart, which holds real sources.
+
+    package_name is the linking package's own name, used when the <link> has
+    no package attribute (OBS defaults a link to the same package name).
+    promoted_keys semantics match _rewrite_aggregate_for_branch.
     """
     try:
         root = ET.fromstring(content)
@@ -211,7 +239,8 @@ def _rewrite_link_for_branch(
         return content
     proj = root.get("project", "")
     if proj == rootprj or proj.startswith(rootprj + ":"):
-        if active_projects is None or proj not in active_projects:
+        target_pkg = (root.get("package") or package_name).split(":")[0]
+        if promoted_keys is None or (proj, target_pkg) not in promoted_keys:
             suffix = proj[len(rootprj) :]  # "" or ":sub:project"
             root.set("project", branch_rootprj + suffix)
             return ET.tostring(root, encoding="unicode", xml_declaration=False)
@@ -222,14 +251,15 @@ def _rewrite_aggregates_in_dir(
     directory: Path,
     rootprj: str,
     branch_rootprj: str,
-    active_projects: "set[str] | None",
+    promoted_keys: "set[tuple[str, str]] | None",
+    package_name: str,
 ) -> None:
     """Rewrite all _aggregate and _link files in directory in-place for branch mode."""
     agg_file = directory / "_aggregate"
     if agg_file.is_file():
         original = agg_file.read_text("utf-8")
         rewritten = _rewrite_aggregate_for_branch(
-            original, rootprj, branch_rootprj, active_projects
+            original, rootprj, branch_rootprj, promoted_keys
         )
         if rewritten != original:
             agg_file.write_text(rewritten, "utf-8")
@@ -238,10 +268,78 @@ def _rewrite_aggregates_in_dir(
     if link_file.is_file():
         original = link_file.read_text("utf-8")
         rewritten = _rewrite_link_for_branch(
-            original, rootprj, branch_rootprj, active_projects
+            original, rootprj, branch_rootprj, promoted_keys, package_name
         )
         if rewritten != original:
             link_file.write_text(rewritten, "utf-8")
+
+
+def _parse_link_target(
+    content: str, default_project: str, default_package: str
+) -> "tuple[str, str] | None":
+    """Return the (project, package) a _link XML points at.
+
+    Missing attributes default to the linking package's own project/name,
+    mirroring OBS link semantics.  Returns None when content is not a <link>
+    element or cannot be parsed.
+    """
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return None
+    if root.tag != "link":
+        return None
+    return (
+        root.get("project") or default_project,
+        (root.get("package") or default_package).split(":")[0],
+    )
+
+
+def _collect_link_dep_edges(
+    targets: "list[tuple[str, Path]]",
+    env_vars: "dict[str, str]",
+    decisions: "dict[tuple[str, str], str]",
+) -> "dict[tuple[str, str], set[tuple[str, str]]]":
+    """Return reverse-dep edges derived from local _link files.
+
+    edges[(target_project, target_pkg)] = {(linking_project, linking_pkg), ...}
+
+    A package whose obs/_link targets another local package builds that
+    target's sources; when the target is promoted the linking package must be
+    promoted too, or the sync would keep serving binaries built from the old
+    sources.  OBS _builddepinfo only models binary build dependencies, not
+    this source-level relationship, so the edges are derived locally.
+
+    Only edges whose target is a decisions key (a package in this sync's
+    scope) are returned.  Link refs are macro- and env-substituted the same
+    way the upload path substitutes them, so ${OBS_ROOTPRJ} tokens resolve to
+    the target namespace used by the decisions keys.
+    """
+    edges: dict[tuple[str, str], set[tuple[str, str]]] = {}
+    for obs_project, package_path in targets:
+        link_file = package_path / "obs" / "_link"
+        if not link_file.is_file():
+            continue
+        project_config = load_project_yaml(package_path.parent / "project.yaml")
+        obs_project_name = project_config.get("name") or obs_project
+        try:
+            text = link_file.read_text("utf-8")
+        except UnicodeDecodeError:
+            continue
+        pkg_macros = load_macros(package_path)
+        if pkg_macros:
+            text = apply_macro_substitution(text, pkg_macros, source=link_file)
+        text = apply_env_substitution(
+            text, {**env_vars, **_pkg_env_vars(package_path)}, source=link_file
+        )
+        target = _parse_link_target(text, obs_project_name, package_path.name)
+        if target is None:
+            continue
+        linking_key = (obs_project_name, package_path.name)
+        if target == linking_key or target not in decisions:
+            continue
+        edges.setdefault(target, set()).add(linking_key)
+    return edges
 
 
 def _pkg_env_vars(package_path: Path) -> dict[str, str]:
@@ -886,22 +984,30 @@ def cmd_sync(args):
                 "dep-promote: no build dep info available"
                 " (branch projects may not have build results yet)"
             )
-        else:
-            # Build reverse map in decisions-key namespace:
-            # rdeps[(target_proj, dep_pkg)] = {(target_proj, src_pkg), ...}
-            # Only edges where both sides map to a decisions key are kept;
-            # this is what makes dep-promotion project-aware (no spurious
-            # cross-project promotions on package-name collisions).
-            rdeps: dict[tuple[str, str], set[tuple[str, str]]] = {}
-            for src_key, deps in fwd_deps.items():
-                src_dec_key = src_to_decision_key.get(src_key)
-                if src_dec_key is None:
+        # Build reverse map in decisions-key namespace:
+        # rdeps[(target_proj, dep_pkg)] = {(target_proj, src_pkg), ...}
+        # Only edges where both sides map to a decisions key are kept;
+        # this is what makes dep-promotion project-aware (no spurious
+        # cross-project promotions on package-name collisions).
+        rdeps: dict[tuple[str, str], set[tuple[str, str]]] = {}
+        for src_key, deps in fwd_deps.items():
+            src_dec_key = src_to_decision_key.get(src_key)
+            if src_dec_key is None:
+                continue
+            for dep_src_key in deps:
+                dep_dec_key = src_to_decision_key.get(dep_src_key)
+                if dep_dec_key is None:
                     continue
-                for dep_src_key in deps:
-                    dep_dec_key = src_to_decision_key.get(dep_src_key)
-                    if dep_dec_key is None:
-                        continue
-                    rdeps.setdefault(dep_dec_key, set()).add(src_dec_key)
+                rdeps.setdefault(dep_dec_key, set()).add(src_dec_key)
+        # Source-level _link edges: a linking package builds its target's
+        # sources, so promoting the target must promote the linking package.
+        # OBS builddepinfo does not model this relationship — derive it from
+        # the local _link files.
+        for link_target, linkers in _collect_link_dep_edges(
+            targets, env_vars, decisions
+        ).items():
+            rdeps.setdefault(link_target, set()).update(linkers)
+        if rdeps:
             # Iterate until no new promotions are triggered.
             changed = True
             while changed:
@@ -1027,6 +1133,15 @@ def cmd_sync(args):
             obs_project for (obs_project, _), d in decisions.items() if d == "promote"
         }
         active_projects.add(args.rootprj)
+
+    # (project, package) keys uploaded with full sources in this sync.  The
+    # branch rewrites use this to decide, per referenced package, whether a
+    # PR-namespace _link/_aggregate reference is valid — a link to a package
+    # that was not promoted must be redirected to the branch source even when
+    # its project is active, or OBS rejects the commit (missing link target).
+    promoted_keys: "set[tuple[str, str]] | None" = None
+    if branch_rootprj:
+        promoted_keys = {k for k, d in decisions.items() if d == "promote"}
 
     # Pre-pass: two-stage project creation to handle OBS path-reference cycles.
     #
@@ -1263,7 +1378,11 @@ def cmd_sync(args):
                             shutil.copy2(f, combined / f.name)
                     if branch_rootprj:
                         _rewrite_aggregates_in_dir(
-                            combined, args.rootprj, branch_rootprj, active_projects
+                            combined,
+                            args.rootprj,
+                            branch_rootprj,
+                            promoted_keys,
+                            package_path.name,
                         )
                     files_changed = _upload_obs_files(
                         apiurl,
@@ -1294,7 +1413,11 @@ def cmd_sync(args):
                 )
                 if branch_rootprj:
                     _rewrite_aggregates_in_dir(
-                        sub_dir, args.rootprj, branch_rootprj, active_projects
+                        sub_dir,
+                        args.rootprj,
+                        branch_rootprj,
+                        promoted_keys,
+                        package_path.name,
                     )
                 files_changed = _upload_obs_files(
                     apiurl,
