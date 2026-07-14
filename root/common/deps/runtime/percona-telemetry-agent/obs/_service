@@ -2,7 +2,7 @@
   <service name="obs_scm">
     <param name="url">https://github.com/percona/telemetry-agent.git</param>
     <param name="scm">git</param>
-    <param name="revision">main</param>
+    <param name="revision">v%!{TELEMETRY_AGENT_VERSION}</param>
     <param name="versionformat">@PARENT_TAG@</param>
     <param name="versionrewrite-pattern">v(.*)</param>
     <param name="filename">percona-telemetry-agent</param>
