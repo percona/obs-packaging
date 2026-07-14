@@ -71,6 +71,11 @@ sed -i 's:PG_CONFIG = pg_config:PG_CONFIG = /usr/pgsql-%{pgmajorversion}/bin/pg_
 %files
 %defattr(-,root,root,-)
 %doc %{pginstdir}/doc/extension/README-pgaudit.md
+%dir %{pginstdir}
+%dir %{pginstdir}/lib
+%dir %{pginstdir}/lib/bitcode
+%dir %{pginstdir}/share
+%dir %{pginstdir}/share/extension
 %{pginstdir}/lib/pgaudit.so
 %{pginstdir}/share/extension/pgaudit--%{pgmajorversion}.*.sql
 %{pginstdir}/lib/bitcode/pgaudit*.bc
