@@ -18,6 +18,9 @@ Build-Depends:
  libxslt1-dev,
  libzstd-dev,
  mawk,
+ meson,
+ ninja-build,
+ pkg-config,
  percona-postgresql-server-dev-all (>= 153~),
  zlib1g-dev,
 Debtransform-Release: 1

@@ -4,6 +4,9 @@ Priority: optional
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  mawk,
+ meson,
+ ninja-build,
+ pkg-config,
  debhelper (>= 9),
  percona-postgresql-server-dev-all (>= 153~),
  libcurl4-openssl-dev,
