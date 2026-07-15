@@ -37,8 +37,13 @@ override_dh_auto_build:
 	# release-date-static requires a tagged release (release.xml carries
 	# XXXX-XX-XX between releases); the devel tier builds dev snapshots,
 	# so let the docs use the build date instead.
+	# The user guide is rendered by executing containers recorded in
+	# doc/resource/exe.cache; upstream only refreshes the cache at release
+	# time, so on main the cache keys go stale (--cache-only forbids a
+	# reset). Exclude it like backlog.
 	perl $(CURDIR)/doc/doc.pl --out=man --out=html --cache-only \
-	  --var=project-url-root=index.html --exclude=backlog
+	  --var=project-url-root=index.html --exclude=backlog \
+	  --exclude=user-guide
 	txt2man \
 	  -v "pgBackRest Command Reference" \
 	  -t pgbackrest \
