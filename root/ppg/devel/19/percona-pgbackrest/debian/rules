@@ -34,9 +34,11 @@ override_dh_auto_build:
 	# Replace user name in doc cache with the current user
 	[ $$(whoami) = root ] || sed -i "s/vagrant/$$(whoami)/g" $(CURDIR)/doc/resource/exe.cache
 
+	# release-date-static requires a tagged release (release.xml carries
+	# XXXX-XX-XX between releases); the devel tier builds dev snapshots,
+	# so let the docs use the build date instead.
 	perl $(CURDIR)/doc/doc.pl --out=man --out=html --cache-only \
-	  --var=project-url-root=index.html --exclude=backlog \
-	  --var=release-date-static=y
+	  --var=project-url-root=index.html --exclude=backlog
 	txt2man \
 	  -v "pgBackRest Command Reference" \
 	  -t pgbackrest \
