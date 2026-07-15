@@ -29,6 +29,7 @@ Source0:	%{name}-%{version}.tar.gz
 
 BuildRequires:  meson
 BuildRequires:	percona-postgresql%{pgmajorversion}-devel chrpath openssl-devel libcurl-devel zlib-devel libxml2-devel libxslt-devel libselinux-devel pam-devel krb5-devel readline-devel
+BuildRequires:	percona-postgresql%{pgmajorversion}-static
 %if 0%{?gts_version}
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
 %endif
