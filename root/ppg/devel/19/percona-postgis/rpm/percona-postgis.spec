@@ -394,7 +394,7 @@ fi
 
 %files
 %defattr(-,root,root)
-%doc COPYING CREDITS NEWS TODO README.%{sname} doc/html loader/README.* doc/%{sname}.xml doc/ZMSgeoms.txt
+%doc COPYING CREDITS NEWS README.%{sname} doc/html loader/README.* doc/%{sname}.xml doc/ZMSgeoms.txt
 %license LICENSE.TXT
 %dir %{pginstdir}lib
 %dir %{pginstdir}share
@@ -404,7 +404,6 @@ fi
 %dir %{_mandir}/%{name}/man1
 %{pginstdir}/bin/postgis
 %{pginstdir}/bin/postgis_restore
-%{pginstdir}/doc/extension/README.address_standardizer
 %{pginstdir}/share/contrib/%{sname}-%{postgismajorversion}/postgis.sql
 %{pginstdir}/share/contrib/%{sname}-%{postgismajorversion}/postgis_comments.sql
 %{pginstdir}/share/contrib/%{sname}-%{postgismajorversion}/postgis_upgrade*.sql
@@ -423,14 +422,9 @@ fi
 %endif
 %{pginstdir}/share/extension/%{sname}.control
 %{pginstdir}/lib/%{sname}_topology-%{postgissomajorversion}.so
-%{pginstdir}/lib/address_standardizer-3.so
-%{pginstdir}/share/extension/address_standardizer*.sql
-%{pginstdir}/share/extension/address_standardizer*.control
 %{pginstdir}/share/contrib/%{sname}-%{postgismajorversion}/sfcgal_comments.sql
 %{pginstdir}/share/contrib/%{sname}-%{postgismajorversion}/raster_comments.sql
 %{pginstdir}/share/contrib/%{sname}-%{postgismajorversion}/spatial*.sql
-%{pginstdir}/share/extension/%{sname}_tiger_geocoder*.sql
-%{pginstdir}/share/extension/%{sname}_tiger_geocoder.control
 %{pginstdir}/share/extension/%{sname}_topology-*.sql
 %{pginstdir}/share/extension/%{sname}_topology.control
 %{pginstdir}/share/contrib/%{sname}-%{postgismajorversion}/uninstall_legacy.sql
@@ -510,11 +504,8 @@ fi
 %files llvmjit
 %dir %{pginstdir}lib
 %dir %{pginstdir}lib/bitcode
-%dir %{pginstdir}lib/bitcode/address_standardizer-3
 %dir %{pginstdir}lib/bitcode/postgis-%{postgissomajorversion}
 %dir %{pginstdir}lib/bitcode/postgis_topology-%{postgissomajorversion}
-   %{pginstdir}/lib/bitcode/address_standardizer*.bc
-   %{pginstdir}/lib/bitcode/address_standardizer-3/*.bc
    %{pginstdir}/lib/bitcode/postgis-%{postgissomajorversion}*.bc
    %{pginstdir}/lib/bitcode/postgis_topology-%{postgissomajorversion}/*.bc
    %{pginstdir}/lib/bitcode/postgis_topology-%{postgissomajorversion}*.bc
