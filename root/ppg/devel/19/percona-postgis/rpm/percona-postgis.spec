@@ -375,6 +375,11 @@ SHLIB_LINK="$SHLIB_LINK" %{__make} %{?_smp_mflags} install DESTDIR=%{buildroot}
 %{__install} -m 644 utils/*.pl %{buildroot}%{_datadir}/%{name}
 %endif
 
+%if !%raster
+# make install ships the raster2pgsql man page even with --without-raster
+%{__rm} -f %{buildroot}%{_mandir}/%{name}/man1/raster2pgsql.1*
+%endif
+
 # Create alternatives entries for common binaries
 %post client
 %{_sbindir}/update-alternatives --install %{_bindir}/pgsql2shp postgis-pgsql2shp %{pginstdir}/bin/pgsql2shp %{pgmajorversion}0
