@@ -1,0 +1,10 @@
+#!/usr/bin/make -f
+
+override_dh_builddeb:
+	dh_builddeb -- -Zgzip
+
+override_dh_pgxs_test:
+	# regression tests need a running cluster; skipped in OBS
+
+%:
+	dh $@
