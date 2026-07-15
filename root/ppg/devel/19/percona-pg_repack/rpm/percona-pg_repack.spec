@@ -19,7 +19,7 @@ Epoch:          1
 License:        BSD
 Group:          Applications/Databases
 Source0:        %{sname}-%{version}.tar.gz
-Patch0:         pg_repack-pg%{pgmajorversion}-makefile-pgxs.patch
+Patch0:         pg_repack-makefile-pgxs.patch
 URL:            https://pgxn.org/dist/pg_repack/
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id_u} -n)
 Packager:       Percona Development Team <https://jira.percona.com>
