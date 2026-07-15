@@ -33,9 +33,11 @@ from .common import (
     apply_env_substitution,
     apply_macro_substitution,
     auto_rootprj_env,
+    build_package_meta,
     find_projects,
     is_package,
     load_macros,
+    load_package_yaml,
     load_project_yaml,
     load_yaml,
     load_yaml_with_env,
@@ -52,6 +54,7 @@ from .git_utils import (
 from .obs_api import (
     _add_release_targets,
     _apply_package_config,
+    _flag_entries,
     _apply_project_config,
     _disable_package_builds,
     _disable_project_builds,
@@ -65,6 +68,7 @@ from .obs_api import (
     _fetch_obs_file_md5s,
     _fetch_obs_package_latest_comment,
     _fetch_obs_package_meaningful_comment,
+    _fetch_obs_package_meta_bytes,
     _fetch_obs_package_names,
     _fetch_obs_project_repository_names,
     _fetch_obs_subproject_names,
@@ -508,6 +512,35 @@ def _content_matches_branch(
             shutil.rmtree(workdir, ignore_errors=True)
 
 
+def _package_meta_flags_match(branch_meta: bytes, package_config: dict) -> bool:
+    """Return True if package.yaml's build/publish flags match the branch package meta.
+
+    The ``build:``/``publish:`` maps in package.yaml are emitted into the OBS
+    package _meta as ``<enable>/<disable>`` flags — they never appear in any
+    uploaded source file, so the file-content check cannot see them.  Compares
+    only the flag sections; title/description do not affect binaries and must
+    not force a promotion.
+    """
+    desired = build_package_meta(
+        "flags-check",
+        "flags-check",
+        "",
+        "",
+        build=package_config.get("build") or None,
+        publish=package_config.get("publish") or None,
+    )
+    try:
+        current_elem = ET.fromstring(branch_meta)
+    except ET.ParseError:
+        return False
+    desired_elem = ET.fromstring(desired)
+    return _flag_entries(current_elem, "build") == _flag_entries(
+        desired_elem, "build"
+    ) and _flag_entries(current_elem, "publish") == _flag_entries(
+        desired_elem, "publish"
+    )
+
+
 def _resolve_branch_decision(
     apiurl: str,
     branch_project: str,
@@ -534,6 +567,23 @@ def _resolve_branch_decision(
 
     def _content_check(reason: str) -> bool:
         logger.debug(f"branch decision: content check  {label}  ({reason})")
+        # Check the package-meta build/publish flags before the (expensive)
+        # file-content comparison.  An aggregate only carries binaries for
+        # the repos the branch package actually built, so e.g. enabling a
+        # repo that the branch package has disabled must promote even when
+        # every uploaded source file is identical.
+        branch_meta = _fetch_obs_package_meta_bytes(
+            apiurl, branch_project, package_name
+        )
+        package_config = load_package_yaml(package_path / "package.yaml")
+        if branch_meta is None or not _package_meta_flags_match(
+            branch_meta, package_config
+        ):
+            logger.debug(
+                f"branch decision: sync  {label}  "
+                "(build/publish flags differ from branch package meta)"
+            )
+            return False
         obs_dir = package_path / "obs"
         matches = _content_matches_branch(
             apiurl,

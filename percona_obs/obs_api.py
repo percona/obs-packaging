@@ -1345,6 +1345,18 @@ def check_project_config_changed(
     return meta_changed or conf_changed, False
 
 
+def _fetch_obs_package_meta_bytes(
+    apiurl: str, obs_project_name: str, package_name: str
+) -> "bytes | None":
+    """Return the raw package _meta XML, or None if it cannot be fetched."""
+    try:
+        return _decode_obs_response(
+            osc.core.show_package_meta(apiurl, obs_project_name, package_name)
+        ).encode()
+    except (urllib.error.HTTPError, urllib.error.URLError):
+        return None
+
+
 def _apply_package_config(
     apiurl: str,
     obs_project_name: str,
