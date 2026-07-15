@@ -5,6 +5,8 @@ Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  mawk,
  debhelper (>= 9),
+ libkrb5-dev,
+ libssl-dev,
  postgresql-server-dev-all (>= 153~) | percona-postgresql-server-dev-all (>= 153~),
 
 Package: percona-pg-stat-monitor%!{PG_MAJOR_VERSION}

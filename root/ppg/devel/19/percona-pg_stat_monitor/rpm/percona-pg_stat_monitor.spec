@@ -15,6 +15,7 @@ Source0:        percona-pg-stat-monitor%{pgrel}-%{version}.tar.gz
 URL:            https://github.com/Percona-Lab/pg_stat_monitor
 BuildRequires:  percona-postgresql%{pgrel}-devel
 BuildRequires:  krb5-devel
+BuildRequires:  openssl-devel
 %if 0%{?gts_version}
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
 %endif
