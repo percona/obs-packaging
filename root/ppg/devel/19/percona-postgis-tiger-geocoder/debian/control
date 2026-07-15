@@ -1,0 +1,20 @@
+Source: percona-postgis-tiger-geocoder
+Section: database
+Priority: optional
+Maintainer: Percona Development Team <info@percona.com>
+Build-Depends: debhelper,
+ mawk, perl, percona-postgresql-server-dev-all (>= 153~),
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://git.osgeo.org/gitea/postgis/postgis_tiger_geocoder
+
+Package: percona-postgresql-%!{PG_MAJOR_VERSION}-postgis-tiger-geocoder
+Architecture: all
+Depends: ${postgresql:Depends}, ${misc:Depends}
+Description: Geocoder and reverse geocoder for US TIGER data
+ The postgis_tiger_geocoder PostgreSQL extension provides a geocoder
+ and reverse geocoder that works with US Census TIGER (Topologically
+ Integrated Geographic Encoding and Referencing) data. It was formerly
+ distributed as part of PostGIS and is now maintained as a standalone
+ SQL-only extension. It requires the postgis and fuzzystrmatch
+ extensions at CREATE EXTENSION time.

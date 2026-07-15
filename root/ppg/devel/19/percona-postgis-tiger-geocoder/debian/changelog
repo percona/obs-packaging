@@ -1,0 +1,5 @@
+percona-postgis-tiger-geocoder (%!{POSTGIS_TIGER_GEOCODER_VERSION}-1) unstable; urgency=low
+
+  * Initial packaging of the standalone postgis_tiger_geocoder extension.
+
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}
