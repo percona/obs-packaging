@@ -10,6 +10,16 @@ so different profiles/instances never share entries.
 The manifest is an optimization layer only: a missing, stale, or evicted
 manifest falls back to the OBS revision-comment check, and any doubt there
 falls back to the normal promote path whose MD5 comparison is authoritative.
+
+Two properties keep a manifest entry honest:
+
+- Cleanliness is a *tree-diff* against the recorded SHA (``git diff sha..HEAD``),
+  not a commit-log check.  A history rewrite (e.g. resetting away an unpushed
+  commit that was already uploaded) produces an empty log but a non-empty
+  diff, so the package correctly routes to promote.
+- Recording requires HEAD to be pushed and the package inputs (directory plus
+  inherited macros.yaml files) to be clean, so the SHA durably names exactly
+  the content that was uploaded.
 """
 
 import hashlib
@@ -18,7 +28,8 @@ from pathlib import Path
 
 from .common import _REPO_DIR, logger
 from .git_utils import (
-    _has_package_changes_since,
+    _has_package_content_changes_since,
+    _inherited_macros_files,
     _is_path_dirty,
     _macros_changed_since,
 )
@@ -61,16 +72,53 @@ def manifest_entry_clean(
     """Return True when the manifest SHA for *key* is present and nothing changed.
 
     Runs the same local git checks as the OBS-comment fast path — package
-    directory commits since the SHA, uncommitted edits, inherited macros —
-    but requires no API call.
+    content diff against the SHA, uncommitted edits, inherited macros — but
+    requires no API call.  The content check is a tree diff (``git diff
+    sha..HEAD``) rather than a commit log so that history rewrites which
+    change the tree (e.g. ``git reset --hard`` past an uploaded commit) are
+    always detected, even when the recorded SHA is not an ancestor of HEAD.
     """
     sha = manifest.get(key)
     if not sha:
         return False
-    if _has_package_changes_since(sha, package_path):
+    if _has_package_content_changes_since(sha, package_path):
         return False
     if _is_path_dirty(package_path):
         return False
     if _macros_changed_since(sha, package_path):
         return False
     return True
+
+
+def record_or_invalidate(
+    manifest: dict[str, str],
+    key: str,
+    head_sha: str | None,
+    head_pushed: bool,
+    package_path: Path,
+    invalidate: bool = True,
+) -> None:
+    """Record *head_sha* for *key* when it can honestly represent the upload.
+
+    Honest means: HEAD is pushed (an unpushed SHA can be reset away, leaving
+    a stale entry whose emptiness would wrongly claim OBS matches) and the
+    package inputs — the package directory and its inherited macros.yaml
+    files — carry no uncommitted edits (uploaded content would bake in state
+    no SHA represents).
+
+    When the conditions fail:
+
+    - ``invalidate=True`` (promote path): drop any existing entry — the
+      upload that just happened invalidated whatever the old entry claimed.
+    - ``invalidate=False`` (skip path): leave the manifest untouched — the
+      package was just verified clean against its existing state, so an
+      existing entry is still valid; it just cannot be refreshed to HEAD.
+    """
+    if (
+        head_sha
+        and head_pushed
+        and not _is_path_dirty(package_path, *_inherited_macros_files(package_path))
+    ):
+        manifest[key] = head_sha
+    elif invalidate:
+        manifest.pop(key, None)

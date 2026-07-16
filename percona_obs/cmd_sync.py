@@ -50,11 +50,17 @@ from .common import (
 from .git_utils import (
     _generate_sync_message,
     _has_package_changes_since,
+    _head_is_pushed,
     _head_short_sha,
     _is_path_dirty,
     _macros_changed_since,
 )
-from .sync_state import load_manifest, manifest_entry_clean, save_manifest
+from .sync_state import (
+    load_manifest,
+    manifest_entry_clean,
+    record_or_invalidate,
+    save_manifest,
+)
 from .obs_api import (
     _add_release_targets,
     _apply_package_config,
@@ -1001,11 +1007,15 @@ def cmd_sync(args):
 
     # Sync-state manifest: {'project/package': short-sha} of the last upload.
     # Only maintained in --skip-unchanged mode; lets the skip decision run
-    # with zero API calls when warm.
+    # with zero API calls when warm.  HEAD state is computed once here:
+    # recording additionally requires HEAD to be pushed, because an unpushed
+    # SHA can be reset away while OBS keeps the uploaded content — a later
+    # tree-diff against the vanished SHA must not be trusted to stay empty.
     sync_manifest: dict[str, str] = (
         load_manifest(apiurl, args.rootprj) if skip_unchanged else {}
     )
-    _head_sha = _head_short_sha()
+    _head_sha = _head_short_sha() if skip_unchanged else None
+    _head_pushed = _head_is_pushed() if skip_unchanged else False
 
     # Per-package decision function run in parallel via a thread pool.
     # All closures over outer-scope variables are read-only except for the
@@ -1620,9 +1630,19 @@ def cmd_sync(args):
                 package_path.name
             )
             # Record the confirmed-clean state so the next run's skip decision
-            # comes from the local manifest with zero API calls.
-            if skip_unchanged and _head_sha and not _is_path_dirty(package_path):
-                sync_manifest[f"{obs_project_name}/{package_path.name}"] = _head_sha
+            # comes from the local manifest with zero API calls.  Record-only
+            # (invalidate=False): the package was just verified clean, so an
+            # existing manifest entry is still valid even when HEAD cannot be
+            # recorded (unpushed/dirty) — it must not be dropped.
+            if skip_unchanged:
+                record_or_invalidate(
+                    sync_manifest,
+                    f"{obs_project_name}/{package_path.name}",
+                    _head_sha,
+                    _head_pushed,
+                    package_path,
+                    invalidate=False,
+                )
             _print_same(f"skip  {obs_project_name}/{package_path.name}  (unchanged)")
             continue
 
@@ -1727,15 +1747,17 @@ def cmd_sync(args):
 
         # Record the uploaded state (whether or not files changed, OBS now
         # matches this SHA) so the next run's skip decision comes from the
-        # local manifest with zero API calls.  Never record dirty syncs —
-        # uncommitted edits are not represented by any SHA.
-        if (
-            skip_unchanged
-            and not dry_run_obs
-            and _head_sha
-            and not _is_path_dirty(package_path)
-        ):
-            sync_manifest[f"{obs_project_name}/{package_path.name}"] = _head_sha
+        # local manifest with zero API calls.  When HEAD cannot honestly be
+        # recorded (unpushed, dirty inputs, no SHA) any existing entry is
+        # dropped instead — the upload just invalidated its claim.
+        if skip_unchanged and not dry_run_obs:
+            record_or_invalidate(
+                sync_manifest,
+                f"{obs_project_name}/{package_path.name}",
+                _head_sha,
+                _head_pushed,
+                package_path,
+            )
 
     # --- orphan cleanup ---
     # Remove packages on OBS that no longer exist locally, but only when the

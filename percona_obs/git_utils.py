@@ -263,6 +263,25 @@ def _head_short_sha() -> str | None:
     return result.stdout.strip() or None
 
 
+def _head_is_pushed() -> bool:
+    """Return True when HEAD is contained in at least one remote branch.
+
+    Uses the same discovery as _generate_sync_message (``git branch -r
+    --contains HEAD``).  An unpushed HEAD can be rewritten or reset away, so
+    its SHA must never be recorded as durable sync state.  Errors return
+    False (conservative: treat as unpushed).
+    """
+    result = subprocess.run(
+        ["git", "branch", "-r", "--contains", "HEAD"],
+        capture_output=True,
+        text=True,
+        cwd=_REPO_DIR,
+    )
+    if result.returncode != 0:
+        return False
+    return bool(result.stdout.strip())
+
+
 def get_file_commit_time(path: Path) -> float | None:
     """Return the Unix timestamp of the last git commit that touched *path*.
 
