@@ -50,9 +50,11 @@ from .common import (
 from .git_utils import (
     _generate_sync_message,
     _has_package_changes_since,
+    _head_short_sha,
     _is_path_dirty,
     _macros_changed_since,
 )
+from .sync_state import load_manifest, manifest_entry_clean, save_manifest
 from .obs_api import (
     _add_release_targets,
     _apply_package_config,
@@ -992,9 +994,18 @@ def cmd_sync(args):
 
     # Seed the moving-ref classification cache from disk so unchanged
     # (url, revision) pairs cost no git ls-remote across runs.
-    if getattr(args, "skip_unchanged", False):
+    skip_unchanged = getattr(args, "skip_unchanged", False)
+    if skip_unchanged:
         with _ref_types_lock:
             _ref_types.update(_load_ref_types_cache())
+
+    # Sync-state manifest: {'project/package': short-sha} of the last upload.
+    # Only maintained in --skip-unchanged mode; lets the skip decision run
+    # with zero API calls when warm.
+    sync_manifest: dict[str, str] = (
+        load_manifest(apiurl, args.rootprj) if skip_unchanged else {}
+    )
+    _head_sha = _head_short_sha()
 
     # Per-package decision function run in parallel via a thread pool.
     # All closures over outer-scope variables are read-only except for the
@@ -1079,18 +1090,24 @@ def cmd_sync(args):
             # compares file MD5s against OBS and only uploads what changed,
             # so unchanged packages are effectively skipped at upload time.
             # The moving-ref check runs first: it is local/cached, so the
-            # OBS comment fetch only happens for genuinely skippable packages.
+            # local-manifest and OBS-comment checks only happen for genuinely
+            # skippable packages.  The manifest is consulted before the OBS
+            # comment so a warm manifest costs zero API calls.
             if (
-                getattr(args, "skip_unchanged", False)
+                skip_unchanged
                 and not args.force
                 and not _has_moving_upstream_ref(
                     package_path, {**env_vars, **_pkg_env_vars(package_path)}
                 )
-                and _resolve_skip_decision(
-                    apiurl, obs_project_name, package_path.name, package_path
-                )
             ):
-                return key, "skip", None, None
+                mkey = f"{obs_project_name}/{package_path.name}"
+                if manifest_entry_clean(sync_manifest, mkey, package_path):
+                    logger.debug(f"skip decision: skip  {mkey}  (manifest)")
+                    return key, "skip", None, None
+                if _resolve_skip_decision(
+                    apiurl, obs_project_name, package_path.name, package_path
+                ):
+                    return key, "skip", None, None
             return key, "promote", None, None
 
     with ThreadPoolExecutor(max_workers=16) as _pool:
@@ -1108,7 +1125,7 @@ def cmd_sync(args):
 
     # Persist ref classifications gathered during Phase 1 (single-threaded
     # point — the decision pool has completed).
-    if getattr(args, "skip_unchanged", False):
+    if skip_unchanged:
         _save_ref_types_cache()
 
     # Source-level _link edges (target key → linking keys), derived from the
@@ -1602,6 +1619,10 @@ def cmd_sync(args):
             local_packages_by_project.setdefault(obs_project_name, set()).add(
                 package_path.name
             )
+            # Record the confirmed-clean state so the next run's skip decision
+            # comes from the local manifest with zero API calls.
+            if skip_unchanged and _head_sha and not _is_path_dirty(package_path):
+                sync_manifest[f"{obs_project_name}/{package_path.name}"] = _head_sha
             _print_same(f"skip  {obs_project_name}/{package_path.name}  (unchanged)")
             continue
 
@@ -1704,6 +1725,18 @@ def cmd_sync(args):
             finally:
                 shutil.rmtree(sub_dir, ignore_errors=True)
 
+        # Record the uploaded state (whether or not files changed, OBS now
+        # matches this SHA) so the next run's skip decision comes from the
+        # local manifest with zero API calls.  Never record dirty syncs —
+        # uncommitted edits are not represented by any SHA.
+        if (
+            skip_unchanged
+            and not dry_run_obs
+            and _head_sha
+            and not _is_path_dirty(package_path)
+        ):
+            sync_manifest[f"{obs_project_name}/{package_path.name}"] = _head_sha
+
     # --- orphan cleanup ---
     # Remove packages on OBS that no longer exist locally, but only when the
     # full package set of a project was processed (not a single-package sync).
@@ -1735,6 +1768,10 @@ def cmd_sync(args):
         }
         for orphan_proj in sorted(orphan_projects, key=lambda x: -x.count(":")):
             _delete_obs_project(apiurl, orphan_proj, dry_run_obs, recursive=True)
+
+    # Persist the sync-state manifest for the next run's zero-request skips.
+    if skip_unchanged and not dry_run_obs:
+        save_manifest(apiurl, args.rootprj, sync_manifest)
 
     suffix = " (dry run)" if args.dry_run else ""
     _print_ok(f"sync successful{suffix}")

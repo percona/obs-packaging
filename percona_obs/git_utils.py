@@ -250,6 +250,19 @@ def _generate_sync_message() -> str:
     return f"sync: {branch}@{short_sha} ({detail})"
 
 
+def _head_short_sha() -> str | None:
+    """Return the abbreviated SHA of HEAD, or None on git error."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        capture_output=True,
+        text=True,
+        cwd=_REPO_DIR,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None
+
+
 def get_file_commit_time(path: Path) -> float | None:
     """Return the Unix timestamp of the last git commit that touched *path*.
 
