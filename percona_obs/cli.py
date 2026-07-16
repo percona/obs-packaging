@@ -195,7 +195,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip packages whose OBS revision comment records a sync from a git "
         "SHA with no local changes since (plain pushes only; cannot be combined "
         "with --branch-from). Skipped packages make one API call instead of "
-        "running services and uploads.",
+        "running services and uploads. Packages whose _service tracks a moving "
+        "branch ref are never skipped; --force disables skipping entirely.",
     )
     sync_push_parser.set_defaults(func=cmd_sync)
 

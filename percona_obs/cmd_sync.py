@@ -1,10 +1,12 @@
 import hashlib
+import json
 import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
@@ -81,6 +83,7 @@ from .services import (
     _copy_local_packaging,
     _has_runnable_services,
     _run_local_services,
+    upstream_scm_refs,
 )
 from .targets import _iter_project_chain, _resolve_targets, is_dockerfile_image
 
@@ -575,6 +578,107 @@ def _clean_sync_check(
     return None
 
 
+# A full 40-hex revision pins an immutable commit — never a moving ref.
+_SHA1_FULL_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+
+# Persistent (url, revision) → "branch"/"tag" classifications.  A given
+# pair's type is stable (a name is either a branch or a tag on that remote),
+# so results survive across runs.  Keyed "url|revision".
+_REF_TYPES_CACHE_FILE = _REPO_DIR / ".cache" / "sync_state" / "scm_ref_types.json"
+
+# In-memory classification cache shared by the Phase 1 decision threads.
+_ref_types: dict[str, str] = {}
+_ref_types_lock = threading.Lock()
+
+
+def _load_ref_types_cache() -> dict[str, str]:
+    """Load persisted ref classifications; corrupt/missing file → empty."""
+    try:
+        data = json.loads(_REF_TYPES_CACHE_FILE.read_text("utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {
+        k: v for k, v in data.items() if isinstance(k, str) and v in ("branch", "tag")
+    }
+
+
+def _save_ref_types_cache() -> None:
+    """Persist the in-memory ref classifications for future runs."""
+    with _ref_types_lock:
+        data = dict(_ref_types)
+    try:
+        _REF_TYPES_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _REF_TYPES_CACHE_FILE.write_text(
+            json.dumps(data, indent=1, sort_keys=True), "utf-8"
+        )
+    except OSError as exc:
+        logger.debug(f"ref-type cache: save failed: {exc}")
+
+
+def _classify_remote_ref(url: str, revision: str) -> str:
+    """Classify *revision* on remote *url* as "branch" or "tag".
+
+    Runs ``git ls-remote <url> refs/heads/<revision>``: a match means the
+    revision names a branch (moving ref); no match means a tag (immutable).
+    Errors and timeouts conservatively classify as "branch" — the caller
+    then never skips a package it could not verify — and are NOT cached so
+    a transient failure does not stick.
+    """
+    key = f"{url}|{revision}"
+    with _ref_types_lock:
+        cached = _ref_types.get(key)
+    if cached is not None:
+        return cached
+    logger.debug(f"ref-type check: git ls-remote {url} refs/heads/{revision}")
+    try:
+        proc = subprocess.run(
+            ["git", "ls-remote", url, f"refs/heads/{revision}"],
+            capture_output=True,
+            timeout=15,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        logger.debug(f"ref-type check: error for {key}: {exc}")
+        return "branch"
+    if proc.returncode != 0:
+        logger.debug(f"ref-type check: ls-remote failed for {key}")
+        return "branch"
+    ref_type = "branch" if proc.stdout.strip() else "tag"
+    with _ref_types_lock:
+        _ref_types[key] = ref_type
+    return ref_type
+
+
+def _has_moving_upstream_ref(package_path: Path, pkg_env_vars: dict[str, str]) -> bool:
+    """Return True when any upstream obs_scm service tracks a moving ref.
+
+    --skip-unchanged must never skip such packages: their tarball is
+    re-resolved from upstream HEAD on every sync, so upstream-only commits
+    would otherwise never reach OBS.  Moving refs are: a missing revision
+    param or explicit HEAD (remote default branch) and revisions that name
+    a remote branch.  Full 40-hex SHAs and tags are immutable.
+    """
+    service_file = package_path / "obs" / "_service"
+    if not service_file.is_file():
+        return False
+    macros = load_macros(package_path)
+    try:
+        refs = upstream_scm_refs(service_file, pkg_env_vars, macros)
+    except SystemExit:
+        # Unresolvable ${VAR}/%!{VAR} tokens: be conservative (no skip) and
+        # let the normal promote path surface the substitution error.
+        return True
+    for url, revision in refs:
+        if not revision or revision == "HEAD":
+            return True
+        if _SHA1_FULL_RE.match(revision):
+            continue
+        if _classify_remote_ref(url, revision) == "branch":
+            return True
+    return False
+
+
 def _resolve_skip_decision(
     apiurl: str, obs_project: str, package_name: str, package_path: Path
 ) -> bool:
@@ -884,6 +988,12 @@ def cmd_sync(args):
 
     _print_action("planning: checking sync decisions")
 
+    # Seed the moving-ref classification cache from disk so unchanged
+    # (url, revision) pairs cost no git ls-remote across runs.
+    if getattr(args, "skip_unchanged", False):
+        with _ref_types_lock:
+            _ref_types.update(_load_ref_types_cache())
+
     # Per-package decision function run in parallel via a thread pool.
     # All closures over outer-scope variables are read-only except for the
     # shared caches (_branch_repo_cache, _target_repos_cache,
@@ -966,9 +1076,14 @@ def cmd_sync(args):
             # no md5 listing).  Otherwise always promote — the upload function
             # compares file MD5s against OBS and only uploads what changed,
             # so unchanged packages are effectively skipped at upload time.
+            # The moving-ref check runs first: it is local/cached, so the
+            # OBS comment fetch only happens for genuinely skippable packages.
             if (
                 getattr(args, "skip_unchanged", False)
                 and not args.force
+                and not _has_moving_upstream_ref(
+                    package_path, {**env_vars, **_pkg_env_vars(package_path)}
+                )
                 and _resolve_skip_decision(
                     apiurl, obs_project_name, package_path.name, package_path
                 )
@@ -988,6 +1103,11 @@ def cmd_sync(args):
                 branch_project_for[_key] = _bp
             if _profile is not None:
                 branch_profile_for[_key] = _profile
+
+    # Persist ref classifications gathered during Phase 1 (single-threaded
+    # point — the decision pool has completed).
+    if getattr(args, "skip_unchanged", False):
+        _save_ref_types_cache()
 
     # Source-level _link edges (target key → linking keys), derived from the
     # local files.  Used for dep-promotion (Phase 2) and to order uploads so

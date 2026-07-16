@@ -194,6 +194,50 @@ def _get_packaging_obs_scm_infos(
     return _parse_obs_scm_infos(svc_text, packaging_only=True)
 
 
+def upstream_scm_refs(
+    service_file: Path,
+    env_vars: dict[str, str] | None = None,
+    macros: dict[str, str] | None = None,
+) -> list[tuple[str, str]]:
+    """Return substituted (url, revision) for each upstream obs_scm service.
+
+    Packaging obs_scm services (subdir matching _PACKAGING_SUBDIR_RE) are
+    excluded — they fetch this packaging repo itself, which the caller's
+    local git checks already cover.  ``%!{VAR}`` macros are substituted
+    first, then ``${VAR}`` env vars, mirroring _run_local_services.
+
+    revision is "" when the service has no revision param (obs_scm then
+    tracks the remote default branch — always a moving ref).  Services
+    without a url param are skipped.
+    """
+    svc_text = service_file.read_text("utf-8")
+    if macros:
+        svc_text = apply_macro_substitution(svc_text, macros, source=service_file)
+    if env_vars:
+        svc_text = apply_env_substitution(svc_text, env_vars, source=service_file)
+    results: list[tuple[str, str]] = []
+    for svc in ET.fromstring(svc_text).findall("service"):
+        if svc.get("name") != "obs_scm":
+            continue
+        subdir_el = svc.find("param[@name='subdir']")
+        if subdir_el is not None and _PACKAGING_SUBDIR_RE.match(
+            (subdir_el.text or "").strip()
+        ):
+            continue
+        url = ""
+        revision = ""
+        for p in svc.findall("param"):
+            name = p.get("name", "")
+            val = (p.text or "").strip()
+            if name == "url":
+                url = val
+            elif name == "revision":
+                revision = val
+        if url:
+            results.append((url, revision))
+    return results
+
+
 def _find_upstream_obs_scm_filename(
     svc_root: ET.Element, service_file: Path
 ) -> str | None:
