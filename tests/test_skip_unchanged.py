@@ -8,7 +8,7 @@ string.
 from pathlib import Path
 
 import percona_obs.cmd_sync as cmd_sync
-from percona_obs.cmd_sync import _clean_sync_check
+from percona_obs.cmd_sync import _clean_sync_check, _resolve_skip_decision
 
 PKG = Path("/repo/root/ppg/17/percona-pgaudit")
 
@@ -134,3 +134,21 @@ def test_dirty_sync_short_circuits_before_git_checks(monkeypatch):
     assert (
         _clean_sync_check("http://obs", "prj", "pkg", PKG) == "synced dirty at abc1234"
     )
+
+
+def test_skip_decision_true_when_clean(monkeypatch):
+    _patch_git_clean(monkeypatch)
+    monkeypatch.setattr(
+        cmd_sync,
+        "_fetch_obs_package_meaningful_comment",
+        lambda *a: "sync: main@abc1234 (git@github.com:x/y.git)",
+    )
+    assert _resolve_skip_decision("http://obs", "prj", "pkg", PKG) is True
+
+
+def test_skip_decision_false_when_unclean(monkeypatch):
+    _patch_git_clean(monkeypatch)
+    monkeypatch.setattr(
+        cmd_sync, "_fetch_obs_package_meaningful_comment", lambda *a: None
+    )
+    assert _resolve_skip_decision("http://obs", "prj", "pkg", PKG) is False

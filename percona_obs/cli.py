@@ -187,6 +187,16 @@ def build_parser() -> argparse.ArgumentParser:
         "Packages are still synced normally; only the repository list in "
         "the project meta is filtered.",
     )
+    sync_push_parser.add_argument(
+        "--skip-unchanged",
+        action="store_true",
+        default=False,
+        dest="skip_unchanged",
+        help="Skip packages whose OBS revision comment records a sync from a git "
+        "SHA with no local changes since (plain pushes only; cannot be combined "
+        "with --branch-from). Skipped packages make one API call instead of "
+        "running services and uploads.",
+    )
     sync_push_parser.set_defaults(func=cmd_sync)
 
     sync_delete_parser = sync_subparsers.add_parser(

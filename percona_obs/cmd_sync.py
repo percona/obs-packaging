@@ -575,6 +575,26 @@ def _clean_sync_check(
     return None
 
 
+def _resolve_skip_decision(
+    apiurl: str, obs_project: str, package_name: str, package_path: Path
+) -> bool:
+    """Return True if the package can be skipped entirely on a plain push.
+
+    Unlike the --branch-from aggregate decision there is no content-check
+    fallback: any doubt (no comment, dirty sync, changes since the SHA) simply
+    routes the package through the normal promote path, whose MD5 comparison
+    makes an unchanged upload a no-op anyway.
+    """
+    reason = _clean_sync_check(apiurl, obs_project, package_name, package_path)
+    if reason is not None:
+        logger.debug(
+            f"skip decision: promote  {obs_project}/{package_name}  ({reason})"
+        )
+        return False
+    logger.debug(f"skip decision: skip  {obs_project}/{package_name}")
+    return True
+
+
 def _resolve_branch_decision(
     apiurl: str,
     branch_project: str,
@@ -780,6 +800,13 @@ def cmd_sync(args):
         print("error: --no-dep-cascade requires --branch-from", file=sys.stderr)
         sys.exit(1)
 
+    if getattr(args, "skip_unchanged", False) and args.branch_from:
+        print(
+            "error: --skip-unchanged cannot be combined with --branch-from",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     # Resolve --branch-from profile.
     branch_apiurl: str = apiurl  # defaults to the target OBS instance
     branch_rootprj: str | None = None
@@ -844,6 +871,8 @@ def cmd_sync(args):
     # decisions[(obs_project_name, pkg_name)]:
     #   "aggregate"   — skip package; served via project PATH from branch_project_for[key]
     #   "skip_branch" — (reserved) leave unchanged
+    #   "skip"        — --skip-unchanged: OBS already holds this exact content;
+    #                   no services, no uploads (plain pushes only)
     #   "promote"     — upload full obs/ sources
     decisions: dict[tuple[str, str], str] = {}
     branch_project_for: dict[tuple[str, str], str] = {}
@@ -932,9 +961,19 @@ def cmd_sync(args):
             else:
                 return key, "promote", None, None
         else:
-            # Without --branch-from, always promote.  The upload function
+            # Without --branch-from: --skip-unchanged trusts the recorded sync
+            # SHA and skips clean packages outright (no meta fetch, no services,
+            # no md5 listing).  Otherwise always promote — the upload function
             # compares file MD5s against OBS and only uploads what changed,
             # so unchanged packages are effectively skipped at upload time.
+            if (
+                getattr(args, "skip_unchanged", False)
+                and not args.force
+                and _resolve_skip_decision(
+                    apiurl, obs_project_name, package_path.name, package_path
+                )
+            ):
+                return key, "skip", None, None
             return key, "promote", None, None
 
     with ThreadPoolExecutor(max_workers=16) as _pool:
@@ -1434,6 +1473,15 @@ def cmd_sync(args):
         obs_dir = package_path / "obs"
         key = (obs_project_name, package_path.name)
         decision = decisions.get(key, "promote")
+
+        if decision == "skip":
+            # Register for orphan cleanup — a skipped package still exists
+            # locally and must not be deleted from OBS.
+            local_packages_by_project.setdefault(obs_project_name, set()).add(
+                package_path.name
+            )
+            _print_same(f"skip  {obs_project_name}/{package_path.name}  (unchanged)")
+            continue
 
         if decision != "promote":
             _print_aggregate(f"files  {obs_project_name}/{package_path.name}")
