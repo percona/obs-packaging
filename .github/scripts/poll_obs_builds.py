@@ -262,15 +262,31 @@ def write_details(
 # ---------------------------------------------------------------------------
 # Poll loop
 # ---------------------------------------------------------------------------
+run_loop = True
 if not obs_projects:
-    # Nothing uploaded → no rebuilds triggered by this run.  Take a single
-    # full-tree snapshot so the badge reflects reality, then exit on it
-    # without waiting for unrelated in-flight builds.
-    print("No monitored projects; taking one badge snapshot.")
+    # Nothing uploaded → no rebuilds triggered by this run.  Take a full-tree
+    # snapshot (no initial wait: nothing new needs scheduling).  If it shows
+    # in-flight builds from a previous run, adopt the whole tree and poll
+    # them to completion — a downstream step (e.g. release tagging) may
+    # depend on those builds, and exiting on a still-building snapshot would
+    # let it fire early.  Only a fully terminal snapshot exits immediately.
     state_counts, per_repo_counts = collect(all_projects)
+    _snapshot_building = sum(state_counts.get(s, 0) for s in NON_TERMINAL)
+    if _snapshot_building:
+        print(
+            f"No monitored projects, but {_snapshot_building} in-flight "
+            f"build(s) from a previous run; adopting full tree.",
+            flush=True,
+        )
+        obs_projects = set(all_projects)
+    else:
+        print("No monitored projects; single badge snapshot.", flush=True)
+        run_loop = False
 else:
     print(f"Waiting {initial_wait}s for OBS to schedule builds…", flush=True)
     time.sleep(initial_wait)
+
+if run_loop:
     interval = poll_interval
     prev_counts: dict[str, int] = {}
     while True:
