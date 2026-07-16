@@ -709,6 +709,10 @@ def main() -> None:
         osc.conf.get_config(override_apiurl=args.apiurl)
         socket.setdefaulttimeout(30)
 
+        from .http_throttle import install as _install_http_throttle
+
+        _install_http_throttle()
+
     # Garbage-collect terminal qa runs older than the retention window.
     # Done at the top of every qa command so finished state files do not
     # accumulate in .percona-obs/qa/.

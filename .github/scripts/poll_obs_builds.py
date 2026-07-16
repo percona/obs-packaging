@@ -49,6 +49,10 @@ scope_project = os.environ.get("OBS_SCOPE_PROJECT", "")
 # ---------------------------------------------------------------------------
 osc.conf.get_config(override_apiurl=apiurl)
 
+from percona_obs.http_throttle import install as _install_http_throttle
+
+_install_http_throttle()
+
 # ---------------------------------------------------------------------------
 # Discover OBS projects from the local repo tree
 # ---------------------------------------------------------------------------

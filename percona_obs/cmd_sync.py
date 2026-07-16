@@ -1141,7 +1141,7 @@ def cmd_sync(args):
                     return key, "skip", None, None
             return key, "promote", None, None
 
-    with ThreadPoolExecutor(max_workers=16) as _pool:
+    with ThreadPoolExecutor(max_workers=8) as _pool:
         _futures = [_pool.submit(_decide_package, op, pp) for op, pp in targets]
         for _fut in _futures:
             _result = _fut.result()
