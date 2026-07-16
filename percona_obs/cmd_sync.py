@@ -541,6 +541,40 @@ def _package_meta_flags_match(branch_meta: bytes, package_config: dict) -> bool:
     )
 
 
+def _clean_sync_check(
+    apiurl: str,
+    obs_project: str,
+    package_name: str,
+    package_path: Path,
+) -> str | None:
+    """Return None when the OBS package matches the local git state, else a reason.
+
+    Fast path shared by --branch-from (aggregate decision) and --skip-unchanged
+    (skip decision): trusts the 'sync: <branch>@<sha> (...)' revision comment
+    recorded by _generate_sync_message, then checks locally (no further API
+    calls) that nothing feeding the package's uploaded content changed since
+    that SHA: package directory commits, uncommitted edits, and inherited
+    ancestor macros.yaml values.
+    """
+    comment = _fetch_obs_package_meaningful_comment(apiurl, obs_project, package_name)
+    if not comment:
+        return "no revision comment"
+    m = _SYNC_MSG_RE.match(comment)
+    if not m:
+        return f"comment is not a sync message: {comment!r}"
+    short_sha = m.group(1)
+    details = m.group(2)
+    if details.startswith("local changes on"):
+        return f"synced dirty at {short_sha}"
+    if _has_package_changes_since(short_sha, package_path):
+        return f"git changes since {short_sha}"
+    if _is_path_dirty(package_path):
+        return "uncommitted changes in package directory"
+    if _macros_changed_since(short_sha, package_path):
+        return "inherited macros changed"
+    return None
+
+
 def _resolve_branch_decision(
     apiurl: str,
     branch_project: str,
@@ -600,40 +634,11 @@ def _resolve_branch_decision(
         return matches
 
     label = f"{branch_project}/{package_name}"
-    comment = _fetch_obs_package_meaningful_comment(
-        apiurl, branch_project, package_name
-    )
-    if not comment:
-        return _content_check("no revision comment in branch project")
-
-    m = _SYNC_MSG_RE.match(comment)
-    if not m:
-        return _content_check(f"comment is not a sync message: {comment!r}")
-
-    short_sha = m.group(1)
-    details = m.group(2)
-    if details.startswith("local changes on"):
-        return _content_check(f"branch was synced dirty at {short_sha}")
-
-    changed = _has_package_changes_since(short_sha, package_path)
-    if changed:
-        return _content_check(f"git changes since {short_sha}")
-    # Committed package history is clean, but the upload is built from the
-    # working tree — not from the synced commit.  Two inputs can still differ
-    # from what OBS holds without showing up in the package directory's git log:
-    #   * uncommitted edits inside the package directory, and
-    #   * inherited (ancestor) macros.yaml changes — committed since short_sha
-    #     or uncommitted — whose values are substituted into the package content
-    #     (e.g. a PGVECTOR_VERSION bump in root/ppg/18/macros.yaml).
-    # In either case route to the authoritative content check rather than
-    # aggregating blindly; it expands macros from the working tree and only
-    # aggregates if the resulting upload truly matches OBS.
-    if _is_path_dirty(package_path):
-        return _content_check("uncommitted changes in package directory")
-    if _macros_changed_since(short_sha, package_path):
-        return _content_check("inherited macros changed")
-    logger.debug(f"branch decision: aggregate  {label}  (no changes since {short_sha})")
-    return True
+    reason = _clean_sync_check(apiurl, branch_project, package_name, package_path)
+    if reason is None:
+        logger.debug(f"branch decision: aggregate  {label}  (clean sync state)")
+        return True
+    return _content_check(reason)
 
 
 def _compute_branch_project(
