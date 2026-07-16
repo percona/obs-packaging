@@ -51,6 +51,11 @@ override_dh_auto_build:
 	  ${MANTEMPLATE} > ${CURDIR}/doc/output/man/pgbackrest.1
 	dh_auto_build
 
+# The upstream meson smoke test (test/smoke.py) needs a live PostgreSQL
+# installation (initdb/pg_ctl/psql) to run against, which is not available
+# in the build chroot.
+override_dh_auto_test:
+
 override_dh_auto_clean:
 	! [ -f src/Makefile ] || $(MAKE) -C src clean-all
 
