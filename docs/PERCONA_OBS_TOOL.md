@@ -265,6 +265,115 @@ packages have no direct source file changes.
 
 ---
 
+## Reducing OBS API traffic
+
+A full-tree `sync push` normally runs services and compares files for every package,
+even when almost nothing changed. The features below cut that down to a handful of
+API calls on a quiet tree, and keep CI polite towards the OBS traffic limiter.
+
+```sh
+venv/bin/python -m percona_obs -P main sync push --skip-unchanged --report-json /tmp/sync-report.json
+```
+
+### `sync push --skip-unchanged`
+
+Skips packages whose latest OBS revision comment records a clean
+`sync: <branch>@<sha> (...)` from a git SHA with no changes since. "No changes since"
+is checked locally against three inputs: commits touching the package directory,
+uncommitted edits in it, and inherited ancestor `macros.yaml` values. A skipped
+package runs no services and uploads nothing — it costs one API call (the
+revision-history fetch), or **zero** when the sync-state manifest is warm (see below).
+Skipped packages are printed as `= skip <project>/<package> (unchanged)`.
+
+Plain pushes only: combining `--skip-unchanged` with `--branch-from` is rejected
+(the branch decision already has its own unchanged detection).
+
+Caveats:
+
+- **Packages tracking a moving upstream ref are never skipped.** If the package's
+  `_service` has an upstream `obs_scm` whose `revision` is missing, `HEAD`, or names a
+  remote *branch* (the devel-tier pattern of tracking `main`), the tarball must be
+  re-resolved from upstream on every sync — upstream-only commits would otherwise
+  never reach OBS. Branch-vs-tag classification runs `git ls-remote` once per
+  `(url, revision)` pair and is cached persistently in
+  `.cache/sync_state/scm_ref_types.json`; full 40-hex SHA revisions are always
+  immutable and need no lookup. Classification errors conservatively count as
+  "branch" (no skip) and are not cached.
+- **Any doubt falls back to the normal promote path.** No revision comment, a
+  non-`sync:` comment, a dirty (`local changes on ...`) sync, or changes since the
+  recorded SHA all route the package through the regular upload, whose per-file MD5
+  comparison is authoritative — an unchanged upload is a no-op anyway.
+  `--force` disables skipping entirely.
+- **Out-of-band OBS edits are not detected.** Changes made directly on OBS that
+  create no source revision (e.g. a manual `_meta` edit) are invisible to the skip
+  decision — the same trust model as `--branch-from` aggregates.
+
+### The sync-state manifest
+
+`--skip-unchanged` also maintains a local manifest `.cache/sync_state/<hash>.json`
+mapping `project/package` → last-synced git SHA, keyed by `(apiurl, rootprj)` so
+different profiles and instances never share entries. When the manifest entry for a
+package is present and the same local checks pass — package-directory tree diff
+against the recorded SHA, uncommitted edits, inherited `macros.yaml` — the package is
+skipped with **zero** API calls, without even fetching the OBS revision history.
+
+Entries are recorded only for uploads made from a **pushed, clean** HEAD: an unpushed
+SHA can be reset away, and dirty inputs would bake in content no SHA represents. In
+CI the manifest is persisted between runs by `actions/cache` (it lives in the same
+cache entry as the service outputs). A missing, corrupt, or evicted manifest simply
+falls back to the OBS revision-comment check above.
+
+### `sync push --report-json PATH`
+
+Writes a JSON sync report:
+
+```json
+{
+  "rebuild_projects": ["home:Admin:percona:ppg:staging:17", "..."],
+  "promoted": ["home:Admin:percona:ppg:staging:17/etcd", "..."],
+  "skipped": 42,
+  "head_sha": "<full git HEAD sha>"
+}
+```
+
+`rebuild_projects` lists every project whose builds this run may have triggered —
+committed file uploads plus meta/prjconf creates or updates. The CI poll script
+(`.github/scripts/poll_obs_builds.py`) consumes the report via the `OBS_SYNC_REPORT`
+environment variable and monitors only those projects instead of the full tree,
+finishing with one full-tree sweep to adopt cross-project rebuild cascades.
+`head_sha` anchors the report to the checkout that produced it; the poll fails
+**open** — full-tree polling as before — on a missing, corrupt, or stale (head_sha
+mismatch) report. The report is also written in `--dry-run` (it reflects the
+computed would-be changes).
+
+### Client-side HTTP pacing and retry
+
+All osc HTTP requests made by `percona-obs` are paced client-side: a shared
+minimum interval between request starts reshapes thread-pool bursts into a steady
+stream (default 8 requests/s; tune with `PERCONA_OBS_MAX_RPS`, `0` disables pacing).
+Requests failing with HTTP 429 or 503 are retried for every method, and 502/504
+additionally for GETs, honoring `Retry-After` when present (otherwise exponential
+backoff), up to 5 attempts. On any throttling response the shared pacing slot is
+pushed forward so **all** threads back off together, not just the throttled one.
+Note that osc's internal urllib3 layer performs its own connection-level retries
+(500/502/503) beneath this wrapper.
+
+### CI poll backoff and the split sync-main workflow
+
+The CI build poll (`poll_obs_builds.py`) starts at `OBS_POLL_INTERVAL` seconds
+between polls (default 30) and ramps the interval ×1.5 per cycle while build states
+are unchanged, up to `OBS_POLL_MAX_INTERVAL` (default 300); any state change resets
+it to the base.
+
+The `sync-main.yml` workflow is split into two jobs: a `sync` job serialized on its
+own concurrency group (never cancelled mid-upload, so back-to-back pushes queue up
+short sync runs) and a `poll` job in a cancel-superseding group (newest poll wins —
+a newer push's poll replaces an older run's). The version lists and release tags are
+diffed from the head SHA of the last *successful* run, so the surviving poll covers
+any superseded runs' ranges too.
+
+---
+
 ## Triggering and monitoring builds
 
 ### Trigger a rebuild

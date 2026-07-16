@@ -270,7 +270,7 @@ In dry-run mode the same `+`/`~`/`=`/`-`/`!` symbols are used — the `(dry run)
 
 Every resource is always printed with its status (`+`/`~`/`=`/`-`). The `=` line is printed even when nothing changed. Use `--force` to bypass comparison and always write.
 
-### `sync push [--force] [--dry-run] [--no-services] [--no-cache] [--non-recursive] [--project-only] [--branch-from PROFILE] [-m MSG] [project] [package]`
+### `sync push [--force] [--dry-run] [--no-services] [--no-cache] [--non-recursive] [--project-only] [--branch-from PROFILE] [--skip-unchanged] [--report-json PATH] [-m MSG] [project] [package]`
 
 Syncs local packaging files to OBS. For each target package, all ancestor projects (from root down) are created/updated first, then the package meta is applied, then source files are synced as a **single OBS source revision**. Services are run locally to produce the upstream source tarball and packaging artifacts; the `_service` file is **not** uploaded to OBS.
 
@@ -289,6 +289,8 @@ Options:
 - `--non-recursive` — only sync packages directly under the specified project; do not descend into sub-projects.
 - `--project-only` — only sync project configuration (meta and build config); skip all package syncing.
 - `--branch-from PROFILE` — for each package unchanged since the given profile's last sync, upload only an `_aggregate` file that reuses pre-built binaries from that profile's OBS project instead of uploading sources. The branch profile may target a different OBS instance. After the initial changed/unchanged classification, a second phase queries OBS `_builddepinfo` and automatically promotes any additional packages whose build dependencies or dependents were promoted (bidirectional fixed-point propagation). The aggregate message format is `branch: <profile> (<source_project>/<package>)`.
+- `--skip-unchanged` — plain pushes only (rejected with `--branch-from`): skip packages whose OBS revision comment records a clean sync from a git SHA with no changes since (package-directory commits, uncommitted edits, inherited macros.yaml). One API call per skipped package, or zero when the `.cache/sync_state/` manifest is warm. Packages whose `_service` has an upstream obs_scm tracking a moving ref (branch or no revision) are never skipped; `--force` disables skipping entirely. See "Reducing OBS API traffic" in `docs/PERCONA_OBS_TOOL.md`.
+- `--report-json PATH` — write a JSON sync report (`rebuild_projects`, `promoted`, `skipped`, `head_sha`) consumed by the CI poll script via `OBS_SYNC_REPORT` to scope build monitoring to the projects the sync actually touched.
 - `-m MSG` / `--message MSG` — commit message recorded in the OBS source revision. When omitted, a message is generated automatically: `sync: <branch>@<short-sha> (<remote_url> or <hostname>)`
 
 ### `--branch-from` decision process
@@ -970,12 +972,16 @@ Reusable setup steps called by every workflow:
 
 **Trigger**: push to `main` where at least one file under `root/**` changed.
 
-**What it does**:
+**What it does** — two jobs. The `sync` job serializes on its own concurrency group and is never cancelled mid-upload; the `poll` job runs in a cancel-superseding group (newest poll wins — version lists and release tags are diffed from the last *successful* run's head SHA, so the surviving poll covers superseded runs' ranges).
+
+`sync` job:
 1. Checks out the repo with full history (`fetch-depth: 0`) — required because `sync push` reads `git log` to detect per-package changes since the last OBS sync SHA stored in OBS revision comments.
-2. Runs `obs-setup`.
+2. Runs `obs-setup` and restores the `.cache/` actions/cache entries (including the `sync_state` manifest used by `--skip-unchanged`).
 3. Creates a `percona-obs` profile named `main` pointing at `OBS_ROOTPRJ` with env vars `PERCONA_OBS_PACKAGING_BRANCH=main`, `PERCONA_OBS_PACKAGING_REPO=<repo-url>`, and `REMOTE_OBS_ORG_INTERCONNECT=` (empty — no interconnect in the self-hosted setup).
-4. Runs `percona-obs -P main sync push` to create/update OBS projects and packages, and delete any OBS packages whose local directories were removed.
-5. Runs `.github/scripts/poll_obs_builds.py` to poll `build status` until all packages reach a terminal state (`succeeded`/`failed`/`unresolvable`/`disabled`). The script exits non-zero when any build failed/broke/was unresolvable, which fails the job's GitHub Actions check run — that check run is the merge-gating signal, no separate commit status is posted.
+4. Runs `percona-obs -P main sync push --no-scm-validate --skip-unchanged --report-json /tmp/sync-report.json` to create/update OBS projects and packages, delete any OBS packages whose local directories were removed, and hand the sync report to the poll job as an artifact.
+
+`poll` job:
+5. Runs `.github/scripts/poll_obs_builds.py` to poll `build status` until all packages reach a terminal state (`succeeded`/`failed`/`unresolvable`/`disabled`). `OBS_SYNC_REPORT` points at the sync report so monitoring is scoped to the projects the sync actually touched (failing open to full-tree polling on a missing/corrupt/stale report); the poll interval backs off ×1.5 while states are unchanged (`OBS_POLL_INTERVAL`, default 30 s, up to `OBS_POLL_MAX_INTERVAL`, default 300 s). The script exits non-zero when any build failed/broke/was unresolvable, which fails the job's GitHub Actions check run — that check run is the merge-gating signal, no separate commit status is posted.
 
 **Required repository config**: `OBS_APIURL`, `OBS_WEB_URL`, `OBS_ROOTPRJ`, `OBS_USER` (vars); `OBS_PASSWORD` (secret).
 Permissions: `contents: write` (for badge publishing).
