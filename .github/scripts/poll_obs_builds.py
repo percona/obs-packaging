@@ -17,9 +17,18 @@ OBS_ROOTPRJ         Root OBS project (e.g. home:Admin:percona)
 
 Optional environment variables
 -------------------------------
-OBS_POLL_INTERVAL   Seconds between polls (default: 30)
-OBS_INITIAL_WAIT    Seconds to wait before the first poll so OBS has time to
-                    schedule builds after a fresh service upload (default: 30)
+OBS_POLL_INTERVAL       Base seconds between polls (default: 30)
+OBS_POLL_MAX_INTERVAL   Cap for the poll-interval backoff (default: 300); the
+                        interval ramps 1.5x per unchanged cycle up to this cap
+                        and resets to the base on any state change
+OBS_INITIAL_WAIT        Seconds to wait before the first poll so OBS has time
+                        to schedule builds after a fresh service upload
+                        (default: 30)
+OBS_SYNC_REPORT         Path to the JSON report written by `sync push
+                        --report-json`; when set (and the file exists),
+                        monitoring is scoped to the projects the sync actually
+                        touched, with a final full-tree sweep to adopt
+                        cross-project rebuild cascades
 """
 
 import json
@@ -30,7 +39,12 @@ import time
 import osc.conf
 
 from percona_obs.cmd_build import _fetch_build_results
-from percona_obs.common import REPO_ROOT, find_packages, load_project_yaml
+from percona_obs.common import (
+    REPO_ROOT,
+    find_packages,
+    load_project_yaml,
+    next_poll_interval,
+)
 from percona_obs.http_throttle import install as _install_http_throttle
 
 # ---------------------------------------------------------------------------
@@ -40,7 +54,11 @@ apiurl = os.environ["OBS_APIURL"]
 rootprj = os.environ["OBS_ROOTPRJ"]
 
 poll_interval = int(os.environ.get("OBS_POLL_INTERVAL", "30"))
+max_interval = int(os.environ.get("OBS_POLL_MAX_INTERVAL", "300"))
 initial_wait = int(os.environ.get("OBS_INITIAL_WAIT", "30"))
+# Path to the `sync push --report-json` output; when present, monitoring is
+# scoped to the projects the sync actually touched.
+sync_report_path = os.environ.get("OBS_SYNC_REPORT", "")
 # When set, restrict monitoring to packages under this project subtree
 # (colon-notation relative to rootprj, e.g. "ppg:releases:17").
 scope_project = os.environ.get("OBS_SCOPE_PROJECT", "")
@@ -86,6 +104,20 @@ for obs_project, package_path in find_packages(scope_path, scope_obs):
         continue
     obs_projects.add(obs_name)
 
+# When a sync report is available, scope monitoring to the projects the sync
+# actually touched (committed uploads or meta/prjconf changes).  The full
+# discovered tree is kept for the badge snapshot and the final cascade sweep.
+all_projects = set(obs_projects)
+if sync_report_path and os.path.isfile(sync_report_path):
+    with open(sync_report_path) as fh:
+        report = json.load(fh)
+    touched = set(report.get("rebuild_projects", []))
+    obs_projects = obs_projects & touched
+    print(
+        f"Sync report: {len(touched)} project(s) touched, "
+        f"monitoring {len(obs_projects)} after devel filter"
+    )
+
 print(
     f"Monitoring {len(obs_projects)} OBS project(s): {', '.join(sorted(obs_projects))}"
 )
@@ -99,6 +131,22 @@ BROKEN_STATES = {"broken"}
 UNRESOLVABLE_STATES = {"unresolvable"}
 EXCLUDED_STATES = {"excluded", "disabled"}
 FAILURE_STATES = FAILED_STATES | BROKEN_STATES | UNRESOLVABLE_STATES
+
+
+def collect(projects):
+    """One pass over *projects*; returns (state_counts, per_repo_counts)."""
+    state_counts: dict[str, int] = {}
+    per_repo_counts: dict[str, dict[str, int]] = {}
+    for obs_name in projects:
+        results, _ = _fetch_build_results(apiurl, obs_name)
+        for _pkg, repos in results.items():
+            for repo, flavors in repos.items():
+                repo_counts = per_repo_counts.setdefault(repo, {})
+                for _flavor, code in flavors.items():
+                    state_counts[code] = state_counts.get(code, 0) + 1
+                    repo_counts[code] = repo_counts.get(code, 0) + 1
+    return state_counts, per_repo_counts
+
 
 # ---------------------------------------------------------------------------
 # Badge and details helpers
@@ -160,44 +208,57 @@ def write_details(
 
 
 # ---------------------------------------------------------------------------
-# Wait for OBS to schedule the builds, then poll
-# ---------------------------------------------------------------------------
-print(f"Waiting {initial_wait}s for OBS to schedule builds…", flush=True)
-time.sleep(initial_wait)
-
-# ---------------------------------------------------------------------------
 # Poll loop
 # ---------------------------------------------------------------------------
-while True:
-    state_counts: dict[str, int] = {}
-    per_repo_counts: dict[str, dict[str, int]] = {}
-    for obs_name in obs_projects:
-        results, _ = _fetch_build_results(apiurl, obs_name)
-        for _pkg, repos in results.items():
-            for repo, flavors in repos.items():
-                repo_counts = per_repo_counts.setdefault(repo, {})
-                for _flavor, code in flavors.items():
-                    state_counts[code] = state_counts.get(code, 0) + 1
-                    repo_counts[code] = repo_counts.get(code, 0) + 1
-
-    total = sum(state_counts.values())
-    still_building = sum(state_counts.get(s, 0) for s in NON_TERMINAL)
-    succeeded = state_counts.get("succeeded", 0)
-    failed = sum(state_counts.get(s, 0) for s in FAILED_STATES)
-    broken = sum(state_counts.get(s, 0) for s in BROKEN_STATES)
-    unresolvable = sum(state_counts.get(s, 0) for s in UNRESOLVABLE_STATES)
-    excluded = sum(state_counts.get(s, 0) for s in EXCLUDED_STATES)
-    summary = ", ".join(f"{s}={n}" for s, n in sorted(state_counts.items()))
-    print(f"{summary or 'no results yet'}", flush=True)
-
-    if total > 0 and still_building == 0:
-        break
-
-    time.sleep(poll_interval)
+if not obs_projects:
+    # Nothing uploaded → no rebuilds triggered by this run.  Take a single
+    # full-tree snapshot so the badge reflects reality, then exit on it
+    # without waiting for unrelated in-flight builds.
+    print("No monitored projects; taking one badge snapshot.")
+    state_counts, per_repo_counts = collect(all_projects)
+else:
+    print(f"Waiting {initial_wait}s for OBS to schedule builds…", flush=True)
+    time.sleep(initial_wait)
+    interval = poll_interval
+    prev_counts: dict[str, int] = {}
+    while True:
+        state_counts, per_repo_counts = collect(obs_projects)
+        total = sum(state_counts.values())
+        still_building = sum(state_counts.get(s, 0) for s in NON_TERMINAL)
+        summary = ", ".join(f"{s}={n}" for s, n in sorted(state_counts.items()))
+        print(f"{summary or 'no results yet'}", flush=True)
+        if total > 0 and still_building == 0:
+            # Monitored set is terminal.  One sweep over the rest of the tree
+            # adopts projects rebuilt by cross-project cascades (e.g.
+            # containers aggregating freshly built packages).
+            sweep_counts, _ = collect(all_projects - obs_projects)
+            sweep_building = sum(sweep_counts.get(s, 0) for s in NON_TERMINAL)
+            if sweep_building == 0:
+                state_counts, per_repo_counts = collect(all_projects)
+                break
+            print(
+                f"Adopting {sweep_building} still-building result(s) from full tree",
+                flush=True,
+            )
+            obs_projects = set(all_projects)
+        interval = next_poll_interval(
+            interval,
+            changed=(state_counts != prev_counts),
+            base=poll_interval,
+            cap=max_interval,
+        )
+        prev_counts = state_counts
+        time.sleep(interval)
 
 # ---------------------------------------------------------------------------
 # Report final outcome
 # ---------------------------------------------------------------------------
+succeeded = state_counts.get("succeeded", 0)
+failed = sum(state_counts.get(s, 0) for s in FAILED_STATES)
+broken = sum(state_counts.get(s, 0) for s in BROKEN_STATES)
+unresolvable = sum(state_counts.get(s, 0) for s in UNRESOLVABLE_STATES)
+excluded = sum(state_counts.get(s, 0) for s in EXCLUDED_STATES)
+
 write_badge(succeeded, failed, broken, unresolvable, excluded)
 write_details(per_repo_counts, succeeded, failed, broken, unresolvable, excluded)
 

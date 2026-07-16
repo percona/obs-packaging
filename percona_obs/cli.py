@@ -198,6 +198,14 @@ def build_parser() -> argparse.ArgumentParser:
         "running services and uploads. Packages whose _service tracks a moving "
         "branch ref are never skipped; --force disables skipping entirely.",
     )
+    sync_push_parser.add_argument(
+        "--report-json",
+        metavar="PATH",
+        default=None,
+        dest="report_json",
+        help="Write a JSON sync report (projects needing rebuild monitoring, "
+        "promoted packages, skip count) to PATH.",
+    )
     sync_push_parser.set_defaults(func=cmd_sync)
 
     sync_delete_parser = sync_subparsers.add_parser(

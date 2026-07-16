@@ -1038,6 +1038,12 @@ def cmd_sync(args):
     _head_sha = _head_short_sha() if skip_unchanged else None
     _head_pushed = _head_is_pushed() if skip_unchanged else False
 
+    # Sync report (--report-json): projects whose builds this run may have
+    # triggered (committed file uploads or meta/prjconf changes) plus the
+    # per-package upload list, consumed by CI to scope build monitoring.
+    rebuild_projects: set[str] = set()
+    promoted_uploads: list[str] = []
+
     # Per-package decision function run in parallel via a thread pool.
     # All closures over outer-scope variables are read-only except for the
     # shared caches (_branch_repo_cache, _target_repos_cache,
@@ -1531,7 +1537,7 @@ def cmd_sync(args):
                 _print_same(f"project config  {prj_name}")
                 seen_projects.add(raw_proj)
                 continue
-            stripped, _ = _apply_project_config(
+            stripped, _proj_changed = _apply_project_config(
                 apiurl,
                 prj_name,
                 proj_path,
@@ -1544,6 +1550,8 @@ def cmd_sync(args):
                 existing_branch_projects=existing_branch_projects,
                 only_repos=effective_only_repos,
             )
+            if _proj_changed:
+                rebuild_projects.add(prj_name)
             if stripped:
                 needs_reconfig.append((raw_proj, prj_name, proj_path))
             seen_projects.add(raw_proj)
@@ -1552,7 +1560,7 @@ def cmd_sync(args):
         # so OBS will accept the full meta.  Projects already correctly
         # configured are detected by _project_meta_subset_equal and skipped.
         for raw_proj, prj_name, proj_path in needs_reconfig:
-            _, _ = _apply_project_config(
+            _, _proj_changed2 = _apply_project_config(
                 apiurl,
                 prj_name,
                 proj_path,
@@ -1565,6 +1573,8 @@ def cmd_sync(args):
                 existing_branch_projects=existing_branch_projects,
                 only_repos=effective_only_repos,
             )
+            if _proj_changed2:
+                rebuild_projects.add(prj_name)
 
     if args.project_only:
         suffix = " (dry run)" if args.dry_run else ""
@@ -1633,7 +1643,7 @@ def cmd_sync(args):
                 chain_needs_reconfig: list[tuple[str, str, Path]] = []
                 for raw_proj, (prj_name, proj_path) in sorted_chain:
                     if raw_proj not in seen_projects:
-                        stripped, _ = _apply_project_config(
+                        stripped, _proj_changed = _apply_project_config(
                             apiurl,
                             prj_name,
                             proj_path,
@@ -1646,11 +1656,13 @@ def cmd_sync(args):
                             existing_branch_projects=chain_existing_branch_projects,
                             only_repos=effective_only_repos,
                         )
+                        if _proj_changed:
+                            rebuild_projects.add(prj_name)
                         if stripped:
                             chain_needs_reconfig.append((raw_proj, prj_name, proj_path))
                         seen_projects.add(raw_proj)
                 for raw_proj, prj_name, proj_path in chain_needs_reconfig:
-                    _, _ = _apply_project_config(
+                    _, _proj_changed2 = _apply_project_config(
                         apiurl,
                         prj_name,
                         proj_path,
@@ -1663,6 +1675,8 @@ def cmd_sync(args):
                         existing_branch_projects=chain_existing_branch_projects,
                         only_repos=effective_only_repos,
                     )
+                    if _proj_changed2:
+                        rebuild_projects.add(prj_name)
 
         obs_dir = package_path / "obs"
         key = (obs_project_name, package_path.name)
@@ -1804,6 +1818,12 @@ def cmd_sync(args):
                 package_path,
             )
 
+        # A committed upload triggers rebuilds in this project — record it
+        # for the sync report so CI can scope its build monitoring.
+        if files_changed:
+            rebuild_projects.add(obs_project_name)
+            promoted_uploads.append(f"{obs_project_name}/{package_path.name}")
+
     # --- orphan cleanup ---
     # Remove packages on OBS that no longer exist locally, but only when the
     # full package set of a project was processed (not a single-package sync).
@@ -1839,6 +1859,16 @@ def cmd_sync(args):
     # Persist the sync-state manifest for the next run's zero-request skips.
     if skip_unchanged and not dry_run_obs:
         save_manifest(apiurl, args.rootprj, sync_manifest)
+
+    # Write the sync report (read-only output — also written in dry-run).
+    if getattr(args, "report_json", None):
+        _skipped = sum(1 for d in decisions.values() if d == "skip")
+        report = {
+            "rebuild_projects": sorted(rebuild_projects),
+            "promoted": promoted_uploads,
+            "skipped": _skipped,
+        }
+        Path(args.report_json).write_text(json.dumps(report, indent=2))
 
     suffix = " (dry run)" if args.dry_run else ""
     _print_ok(f"sync successful{suffix}")

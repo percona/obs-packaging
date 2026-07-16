@@ -624,6 +624,13 @@ def auto_rootprj_env(rootprj: str) -> dict[str, str]:
     }
 
 
+def next_poll_interval(current: int, changed: bool, base: int, cap: int) -> int:
+    """Return the next poll sleep: reset to *base* on change, else ramp 1.5x to *cap*."""
+    if changed:
+        return base
+    return min(int(current * 1.5), cap)
+
+
 def parse_env_overrides(entries: list[str]) -> dict[str, str]:
     """Parse a list of ``KEY:VALUE`` strings from ``-e`` flags.
 
