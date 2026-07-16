@@ -775,6 +775,27 @@ def _resolve_branch_decision(
     return _content_check(reason)
 
 
+def _can_skip_project_apply(
+    verdict: "tuple[bool, bool] | None",
+    branch_rootprj: "str | None",
+    force: bool,
+    only_repos: "set[str] | None",
+) -> bool:
+    """Return True when the pre-pass may skip a project's meta/prjconf apply.
+
+    Requires a Phase 2.5 verdict of (changed=False, is_new=False) on a plain,
+    unforced, unfiltered push.  In --branch-from mode the verdict compares the
+    *production* project, so it cannot stand in for the target project's state;
+    --only-repos changes the desired meta, invalidating the comparison.
+    """
+    return (
+        branch_rootprj is None
+        and not force
+        and only_repos is None
+        and verdict == (False, False)
+    )
+
+
 def _compute_branch_project(
     obs_project_name: str, rootprj: str, branch_rootprj: str
 ) -> str:
@@ -1329,6 +1350,7 @@ def cmd_sync(args):
     # them redirected to branch_rootprj, producing a false "config changed"
     # verdict that would flip every aggregate to a promote on re-sync.
     config_changed_projects: set[str] = set()
+    proj_verdicts: dict[str, tuple[bool, bool]] = {}
     if targets:
         _preliminary_active: set[str] | None = None
         if branch_rootprj and args.package is None:
@@ -1389,6 +1411,7 @@ def cmd_sync(args):
             for _pname, _changed, _is_new in _proj_pool.map(
                 _check_proj_changed, _unique_proj_paths.items()
             ):
+                proj_verdicts[_pname] = (_changed, _is_new)
                 if not _is_new and _changed:
                     config_changed_projects.add(_pname)
 
@@ -1453,18 +1476,28 @@ def cmd_sync(args):
                 if raw_proj not in all_projects:
                     all_projects[raw_proj] = (prj_name, proj_path)
         sorted_projs = sorted(all_projects.items(), key=lambda kv: kv[1][0].count(":"))
+        created_any = False
         for _raw, (prj_name, proj_path) in sorted_projs:
-            _create_project_skeleton(
+            # Phase 2.5 already fetched this project's meta; skip the
+            # existence GET when it is known to exist.  Not applicable in
+            # --branch-from mode: there the verdict describes the PRODUCTION
+            # project, so is_new=False says nothing about whether the target
+            # PR project exists on this OBS instance.
+            _verdict = proj_verdicts.get(prj_name)
+            if branch_rootprj is None and _verdict is not None and not _verdict[1]:
+                continue
+            if _create_project_skeleton(
                 apiurl,
                 prj_name,
                 proj_path,
                 args.rootprj,
                 dry_run=dry_run_obs,
                 env_vars=env_vars,
-            )
+            ):
+                created_any = True
         # Give OBS a moment to settle after creating skeleton projects
         # before applying the full configuration.
-        if sorted_projs and not dry_run_obs:
+        if created_any and not dry_run_obs:
             time.sleep(5)
         # When --branch-from is active, query the branch-source OBS instance
         # for which referenced branch projects actually exist.  Paths to
@@ -1486,6 +1519,18 @@ def cmd_sync(args):
         # will have those paths stripped and need a second pass.
         needs_reconfig: list[tuple[str, str, Path]] = []
         for raw_proj, (prj_name, proj_path) in sorted_projs:
+            if _can_skip_project_apply(
+                proj_verdicts.get(prj_name),
+                branch_rootprj,
+                args.force,
+                effective_only_repos,
+            ):
+                # Phase 2.5 already verified this project's meta and prjconf
+                # match the local config — skip the redundant fetch/compare.
+                _print_same(f"project meta  {prj_name}")
+                _print_same(f"project config  {prj_name}")
+                seen_projects.add(raw_proj)
+                continue
             stripped, _ = _apply_project_config(
                 apiurl,
                 prj_name,

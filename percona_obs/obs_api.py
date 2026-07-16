@@ -738,7 +738,7 @@ def _create_project_skeleton(
     rootprj: str = "",
     dry_run: bool = False,
     env_vars: dict[str, str] | None = None,
-) -> None:
+) -> bool:
     """Create a bare OBS project (no repositories) if it does not already exist.
 
     This is Stage 1 of a two-stage project creation process.  Creating projects
@@ -752,10 +752,13 @@ def _create_project_skeleton(
     the same access rights from the moment they are created.
 
     If the project already exists, this is a no-op.
+
+    Returns True when the project was created (or would be created in dry-run
+    mode), False when it already existed.
     """
     try:
         osc.core.show_project_meta(apiurl, obs_project_name)
-        return  # project already exists
+        return False  # project already exists
     except urllib.error.HTTPError as e:
         if e.code != 404:
             _obs_api_error(e, f"checking project {obs_project_name}")
@@ -788,6 +791,7 @@ def _create_project_skeleton(
         except urllib.error.HTTPError as e:
             _obs_api_error(e, f"creating skeleton for {obs_project_name}")
     _print_create(f"project  {obs_project_name}")
+    return True
 
 
 def _fetch_obs_download_url(apiurl: str) -> str | None:
