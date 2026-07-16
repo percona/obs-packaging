@@ -634,9 +634,10 @@ def _classify_remote_ref(url: str, revision: str) -> str:
     logger.debug(f"ref-type check: git ls-remote {url} refs/heads/{revision}")
     try:
         proc = subprocess.run(
-            ["git", "ls-remote", url, f"refs/heads/{revision}"],
+            ["git", "ls-remote", "--", url, f"refs/heads/{revision}"],
             capture_output=True,
             timeout=15,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
         logger.debug(f"ref-type check: error for {key}: {exc}")
@@ -665,9 +666,10 @@ def _has_moving_upstream_ref(package_path: Path, pkg_env_vars: dict[str, str]) -
     macros = load_macros(package_path)
     try:
         refs = upstream_scm_refs(service_file, pkg_env_vars, macros)
-    except SystemExit:
-        # Unresolvable ${VAR}/%!{VAR} tokens: be conservative (no skip) and
-        # let the normal promote path surface the substitution error.
+    except (SystemExit, ET.ParseError, OSError):
+        # Unresolvable ${VAR}/%!{VAR} tokens, malformed XML, or an unreadable
+        # file: be conservative (no skip) and let the normal promote path
+        # surface the error.
         return True
     for url, revision in refs:
         if not revision or revision == "HEAD":

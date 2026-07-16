@@ -303,3 +303,13 @@ def test_moving_ref_false_when_no_service_file(monkeypatch, tmp_path):
     (pkg / "obs").mkdir(parents=True)
     _forbid_classification(monkeypatch)
     assert cmd_sync._has_moving_upstream_ref(pkg, {}) is False
+
+
+def test_moving_ref_true_for_malformed_service_file(monkeypatch, tmp_path):
+    pkg = tmp_path / "pkg"
+    (pkg / "obs").mkdir(parents=True)
+    (pkg / "obs" / "_service").write_text(
+        '<services><service name="obs_scm"><param name="url">x</param>'
+    )
+    _forbid_classification(monkeypatch)
+    assert cmd_sync._has_moving_upstream_ref(pkg, {}) is True
