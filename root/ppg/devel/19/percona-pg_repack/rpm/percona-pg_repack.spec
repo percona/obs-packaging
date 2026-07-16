@@ -115,7 +115,7 @@ update-alternatives --remove pg_repack %{pginstdir}/bin/pg_repack
 %dir %{pginstdir}/share/extension
 %attr (755,root,root) %{pginstdir}/bin/pg_repack
 %attr (755,root,root) %{pginstdir}/lib/pg_repack.so
-%{pginstdir}/share/extension/pg_repack--%{version}.sql
+%{pginstdir}/share/extension/pg_repack--*.sql
 %{pginstdir}/share/extension/pg_repack.control
 
 %if %llvm
