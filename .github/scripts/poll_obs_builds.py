@@ -31,6 +31,7 @@ import osc.conf
 
 from percona_obs.cmd_build import _fetch_build_results
 from percona_obs.common import REPO_ROOT, find_packages, load_project_yaml
+from percona_obs.http_throttle import install as _install_http_throttle
 
 # ---------------------------------------------------------------------------
 # Configuration from environment
@@ -48,9 +49,6 @@ scope_project = os.environ.get("OBS_SCOPE_PROJECT", "")
 # Initialise osc (reads credentials from ~/.config/osc/oscrc)
 # ---------------------------------------------------------------------------
 osc.conf.get_config(override_apiurl=apiurl)
-
-from percona_obs.http_throttle import install as _install_http_throttle
-
 _install_http_throttle()
 
 # ---------------------------------------------------------------------------

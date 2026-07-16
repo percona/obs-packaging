@@ -2,7 +2,22 @@
 
 import urllib.error
 
+import pytest
+
 import percona_obs.http_throttle as ht
+
+
+@pytest.fixture(autouse=True)
+def _isolate_pacing(monkeypatch):
+    """Reset shared pacing state and neutralize real pacing sleeps.
+
+    _defer_all_requests pushes _next_slot into the future on every retryable
+    error; with time.sleep mocked, time.monotonic never catches up, so
+    without this fixture _pace would really sleep for the backoff duration.
+    Pacing-specific tests re-patch _pace_sleep to record delays instead.
+    """
+    monkeypatch.setattr(ht, "_next_slot", 0.0)
+    monkeypatch.setattr(ht, "_pace_sleep", lambda s: None)
 
 
 def _http_error(code: int, headers: dict | None = None):
@@ -105,6 +120,45 @@ def test_min_interval_parsing(monkeypatch):
     assert ht._min_interval() == 0.125  # falls back to 8 rps
     monkeypatch.delenv("PERCONA_OBS_MAX_RPS")
     assert ht._min_interval() == 0.125
+
+
+def test_pace_spaces_consecutive_calls(monkeypatch):
+    delays: list[float] = []
+    monkeypatch.setattr(ht, "_pace_sleep", lambda s: delays.append(s))
+    monkeypatch.setattr(ht.time, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(ht, "_next_slot", 0.0)
+    monkeypatch.delenv("PERCONA_OBS_MAX_RPS", raising=False)  # default 8 rps
+
+    ht._pace()
+    assert delays == []  # first call goes through immediately
+    ht._pace()
+    assert len(delays) == 1
+    assert abs(delays[0] - 0.125) < 1e-9  # spaced by the min interval
+
+
+def test_pace_disabled_skips_sleep_and_slot(monkeypatch):
+    delays: list[float] = []
+    monkeypatch.setattr(ht, "_pace_sleep", lambda s: delays.append(s))
+    monkeypatch.setenv("PERCONA_OBS_MAX_RPS", "0")
+    monkeypatch.setattr(ht, "_next_slot", 123.0)  # sentinel
+
+    ht._pace()
+    ht._pace()
+    assert delays == []
+    assert ht._next_slot == 123.0  # slot untouched when pacing is disabled
+
+
+def test_defer_all_requests_delays_next_pace(monkeypatch):
+    delays: list[float] = []
+    monkeypatch.setattr(ht, "_pace_sleep", lambda s: delays.append(s))
+    monkeypatch.setattr(ht.time, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(ht, "_next_slot", 0.0)
+    monkeypatch.delenv("PERCONA_OBS_MAX_RPS", raising=False)
+
+    ht._defer_all_requests(42.0)
+    ht._pace()
+    assert len(delays) == 1
+    assert abs(delays[0] - 42.0) < 1e-9  # next request start pushed out 42s
 
 
 def test_install_idempotent(monkeypatch):
