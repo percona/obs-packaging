@@ -263,6 +263,19 @@ def _head_short_sha() -> str | None:
     return result.stdout.strip() or None
 
 
+def _head_full_sha() -> str | None:
+    """Return the full SHA of HEAD, or None on git error."""
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        cwd=_REPO_DIR,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None
+
+
 def _head_is_pushed() -> bool:
     """Return True when HEAD is contained in at least one remote branch.
 

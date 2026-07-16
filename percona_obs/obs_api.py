@@ -1142,7 +1142,8 @@ def _apply_project_config(
       once all sibling/child projects have their repositories configured on OBS).
     - project_changed: True if the project meta or project-config was created or
       updated (i.e. something that affects how packages are built changed).
-    Both are False in dry-run mode (no actual writes happen).
+    In dry-run mode paths_stripped is always False (no writes happen), but
+    project_changed still reflects the computed would-be creates/updates.
 
     Skips the API call when the content already matches what OBS has, unless
     --force is given (which bypasses both the local comparison and OBS conflict checks).

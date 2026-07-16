@@ -50,6 +50,7 @@ from .common import (
 from .git_utils import (
     _generate_sync_message,
     _has_package_changes_since,
+    _head_full_sha,
     _head_is_pushed,
     _head_short_sha,
     _is_path_dirty,
@@ -1044,6 +1045,26 @@ def cmd_sync(args):
     rebuild_projects: set[str] = set()
     promoted_uploads: list[str] = []
 
+    def _write_report() -> None:
+        """Write the --report-json sync report (read-only output — also in dry-run).
+
+        In dry-run both inputs reflect the computed would-be changes:
+        _upload_obs_files returns the would-be upload diff and
+        _apply_project_config still reports would-be meta/prjconf
+        creates/updates (only the writes themselves are suppressed).
+        head_sha anchors the report to the checkout it was produced from so
+        the CI poll script can detect a stale report; None on git error.
+        """
+        if not getattr(args, "report_json", None):
+            return
+        report = {
+            "rebuild_projects": sorted(rebuild_projects),
+            "promoted": promoted_uploads,
+            "skipped": sum(1 for d in decisions.values() if d == "skip"),
+            "head_sha": _head_full_sha(),
+        }
+        Path(args.report_json).write_text(json.dumps(report, indent=2))
+
     # Per-package decision function run in parallel via a thread pool.
     # All closures over outer-scope variables are read-only except for the
     # shared caches (_branch_repo_cache, _target_repos_cache,
@@ -1577,6 +1598,9 @@ def cmd_sync(args):
                 rebuild_projects.add(prj_name)
 
     if args.project_only:
+        # Package decisions/uploads are empty here — the report carries only
+        # project-config-triggered rebuild_projects.
+        _write_report()
         suffix = " (dry run)" if args.dry_run else ""
         _print_ok(f"sync successful{suffix}")
         return
@@ -1861,14 +1885,7 @@ def cmd_sync(args):
         save_manifest(apiurl, args.rootprj, sync_manifest)
 
     # Write the sync report (read-only output — also written in dry-run).
-    if getattr(args, "report_json", None):
-        _skipped = sum(1 for d in decisions.values() if d == "skip")
-        report = {
-            "rebuild_projects": sorted(rebuild_projects),
-            "promoted": promoted_uploads,
-            "skipped": _skipped,
-        }
-        Path(args.report_json).write_text(json.dumps(report, indent=2))
+    _write_report()
 
     suffix = " (dry run)" if args.dry_run else ""
     _print_ok(f"sync successful{suffix}")
