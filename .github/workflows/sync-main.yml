@@ -3,7 +3,15 @@ name: Sync to OBS (main)
 # Runs whenever a push to main touches any file under root/.
 # Syncs the full package tree to OBS (releases/ directories are excluded from
 # sync push traversal), then creates git tags from any release.yaml files
-# that changed in this push to trigger obs-release.yml.
+# that changed since the last successful run to trigger obs-release.yml.
+#
+# Two-job debounce design: the `sync` job serializes on its own concurrency
+# group and is never cancelled mid-upload, so back-to-back pushes queue up
+# short sync runs instead of waiting behind a multi-hour build poll.  The
+# `poll` job runs in a cancel-superseding group so a newer push's poll
+# replaces an older run's poll (the OBS badge, version lists and release
+# tags are derived from the last *successful* run's SHA, so whichever poll
+# survives covers the superseded runs' ranges too).
 
 on:
   push:
@@ -13,20 +21,17 @@ on:
       - '!root/README.md'
   workflow_dispatch: {}
 
-concurrency:
-  group: sync-main
-  cancel-in-progress: false
-
 jobs:
   sync:
     name: percona-obs sync push
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    # Serialize syncs; never cancel a sync mid-upload.
+    concurrency:
+      group: sync-main-sync
+      cancel-in-progress: false
     permissions:
-      # Required to push the badge JSON to the badges branch.
-      contents: write
-      # Required to list/watch sibling workflow runs (gh run list/watch).
-      actions: read
+      contents: read
       packages: read
 
     steps:
@@ -42,7 +47,8 @@ jobs:
       #
       #   deps — download_url, cargo_vendor and Phase 2 manual-service
       #          outputs (crates, go tarballs, vendor tarballs): small and
-      #          stable across commits.
+      #          stable across commits.  Also carries the sync_state
+      #          manifest used by --skip-unchanged.
       #   scm  — Phase 1 obs_scm outputs: multi-GB source archives keyed by
       #          upstream HEAD, churning on every upstream advance.
       #
@@ -59,6 +65,7 @@ jobs:
             .cache/download_url
             .cache/cargo_vendor
             .cache/services
+            .cache/sync_state
           key: percona-obs-deps-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
             percona-obs-deps-${{ runner.os }}-
@@ -94,8 +101,13 @@ jobs:
       # root/*/releases/<name>/ contains a release.yaml marker that prevents
       # find_projects/find_packages from descending), so release commits are
       # synced normally but produce no OBS changes.
+      # The report JSON scopes the poll job to the packages this run touched;
+      # remove any stale report first (self-hosted runners reuse /tmp).
       - name: Sync to OBS
-        run: venv/bin/python -m percona_obs --verbose -P main sync push --no-scm-validate
+        run: |
+          rm -f /tmp/sync-report.json
+          venv/bin/python -m percona_obs --verbose -P main sync push \
+            --no-scm-validate --skip-unchanged --report-json /tmp/sync-report.json
 
       # Drop cache entries not used by any run in the last 7 days so the
       # .cache/ tree saved by actions/cache stops growing monotonically.
@@ -107,37 +119,105 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/prune_obs_cache.py
 
+      # Hand the report to the poll job.  Only uploaded on success: poll
+      # only runs after a successful sync, so an always() upload is not
+      # needed.
+      - name: Upload sync report
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-report
+          path: /tmp/sync-report.json
+          retention-days: 1
+
+  poll:
+    name: Wait for OBS builds
+    needs: sync
+    runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    timeout-minutes: 360
+    # Newest poll wins: a newer push's poll supersedes (cancels) older polls.
+    concurrency:
+      group: sync-main-poll
+      cancel-in-progress: true
+    permissions:
+      # Required to push the badge JSON to the badges branch.
+      contents: write
+      # Required to query sibling workflow runs (gh api .../actions/...).
+      actions: read
+      packages: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history is required to git-diff release.yaml files against
+          # the last-successful base SHA; GH_PAT is required to push tags.
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
+      - uses: ./.github/actions/obs-setup
+        with:
+          obs-apiurl: ${{ vars.OBS_APIURL }}
+          obs-user: ${{ vars.OBS_USER }}
+          obs-password: ${{ secrets.OBS_PASSWORD }}
+
+      - name: Download sync report
+        uses: actions/download-artifact@v4
+        with:
+          name: sync-report
+          path: /tmp
+
+      # A superseded (cancelled) poll never runs the version-lists / release
+      # -tags steps below, so the surviving run must cover the cancelled
+      # runs' ranges too.  Diffing from the head SHA of the last SUCCESSFUL
+      # sync-main run does exactly that (and tag creation already tolerates
+      # existing tags).  Fall back to github.event.before (empty for
+      # workflow_dispatch), then to the all-zeros SHA.
+      - name: Compute last-successful base SHA
+        id: base
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LAST_GOOD=$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/sync-main.yml/runs?branch=main&status=success&per_page=1" \
+            --jq '.workflow_runs[0].head_sha // empty' || true)
+          BASE="${LAST_GOOD:-${{ github.event.before }}}"
+          BASE="${BASE:-0000000000000000000000000000000000000000}"
+          echo "sha=${BASE}" >> "$GITHUB_OUTPUT"
+          echo "Diff base: ${BASE}"
+
       # Poll OBS until all builds reach a terminal state.  Fails the job if
-      # any build fails, is broken, or is unresolvable.
+      # any build fails, is broken, or is unresolvable.  The sync report
+      # scopes polling to the packages the sync job actually touched.
       - name: Poll OBS build status
         id: poll
         env:
           OBS_APIURL: ${{ vars.OBS_APIURL }}
           OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
+          OBS_SYNC_REPORT: /tmp/sync-report.json
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/poll_obs_builds.py
 
       # Update docs/versions/<dist>.md for each distribution project touched
-      # by this push, and refresh the README "## Development Projects" section.
-      # Only runs when OBS builds all succeed.
+      # since the last successful run, and refresh the README "## Development
+      # Projects" section.  Only runs when OBS builds all succeed.
       - name: Update version lists
         if: steps.poll.outcome == 'success'
         env:
-          GITHUB_EVENT_BEFORE: ${{ github.event.before || '0000000000000000000000000000000000000000' }}
+          GITHUB_EVENT_BEFORE: ${{ steps.base.outputs.sha }}
           OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
           OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/update_version_lists.py
 
-      # After sync completes, detect any release.yaml files changed in this
-      # push and create git tags from their latest releases: entries.
-      # The tag (e.g. ppg/17.9-1) triggers obs-release.yml.
+      # After builds succeed, detect any release.yaml files changed since the
+      # last successful run and create git tags from their latest releases:
+      # entries.  The tag (e.g. ppg/17.9-1) triggers obs-release.yml.
       - name: Create release tags
         if: steps.poll.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          CHANGED=$(git diff --name-only "${{ github.event.before }}" "$GITHUB_SHA" \
+          CHANGED=$(git diff --name-only "${{ steps.base.outputs.sha }}" "$GITHUB_SHA" \
             -- 'root/*/releases/*/release.yaml' 2>/dev/null || true)
           for release_file in $CHANGED; do
             [ -f "$release_file" ] || continue
