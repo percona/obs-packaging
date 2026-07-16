@@ -28,8 +28,7 @@ FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Base tools + Go compiler + libarchive
-# golang-go: required by obs-service-go_modules (runs `go mod download/vendor/verify`)
+# Base tools + libarchive
 # libarchive13t64: C library required by the libarchive-c Python binding used by go_modules
 # perl: required by obs-service-set-version (Perl script)
 # build-essential: C compiler/headers for any pip packages that compile C extensions
@@ -38,9 +37,30 @@ RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg git jq sudo \
         python3 python3-venv python3-pip \
-        golang-go libarchive13t64 build-essential perl wget \
+        libarchive13t64 build-essential perl wget \
         libssl3t64 libzstd1 \
     && rm -rf /var/lib/apt/lists/*
+
+# Pinned Go toolchain — required by obs-service-go_modules (runs
+# `go mod download/vendor/verify`).  This is the SAME upstream tarball the
+# golang-1.26 OBS package (root/common/deps/build/golang-1.26) repackages,
+# versioned by the same GOLANG_VERSION macro in root/macros.yaml (passed as
+# a build-arg by build-obs-image.yml).  GOTOOLCHAIN=local forbids go from
+# auto-downloading a different toolchain per module go.mod, so
+# `go mod vendor` output — and therefore the vendor tarballs the go_modules
+# service uploads to OBS — can only change when GOLANG_VERSION is bumped
+# deliberately.  If an upstream module starts requiring a newer Go,
+# vendoring fails loudly instead of silently switching toolchains.
+ARG GO_VERSION
+RUN if [ -z "$GO_VERSION" ]; then \
+        echo "GO_VERSION build-arg is required (from GOLANG_VERSION in root/macros.yaml)" >&2; \
+        exit 1; \
+    fi && \
+    curl -fsSL "https://dl.google.com/go/go${GO_VERSION}.linux-$(dpkg --print-architecture).tar.gz" \
+      | tar -C /usr/local -xz && \
+    /usr/local/go/bin/go version
+ENV PATH="/usr/local/go/bin:${PATH}" \
+    GOTOOLCHAIN=local
 
 # GitHub CLI — used in sync-main (create tags, push badge), obs-release
 # (gh release create/edit), obs-stale-cleanup (gh pr list/comment),
