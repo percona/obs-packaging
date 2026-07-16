@@ -116,7 +116,7 @@ if sync_report_path and os.path.isfile(sync_report_path):
     try:
         with open(sync_report_path) as fh:
             report = json.load(fh)
-        raw = report.get("rebuild_projects", [])
+        raw = report.get("rebuild_projects", []) if isinstance(report, dict) else None
         touched = (
             {p for p in raw if isinstance(p, str)} if isinstance(raw, list) else None
         )
@@ -129,7 +129,7 @@ if sync_report_path and os.path.isfile(sync_report_path):
     # from.  If the checkout has moved on, its project discovery no longer
     # matches the report — fall back to the full tree.  A missing head_sha
     # (older tool) or a git error keeps the report (backward tolerant).
-    if touched is not None:
+    if touched is not None and isinstance(report, dict):
         report_sha = report.get("head_sha")
         if isinstance(report_sha, str) and report_sha:
             checkout_sha = ""

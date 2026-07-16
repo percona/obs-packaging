@@ -1598,8 +1598,9 @@ def cmd_sync(args):
                 rebuild_projects.add(prj_name)
 
     if args.project_only:
-        # Package decisions/uploads are empty here — the report carries only
-        # project-config-triggered rebuild_projects.
+        # Uploads are empty here (Phase 3 never runs), so rebuild_projects
+        # carries only project-config-triggered entries; skipped still
+        # reflects the Phase-1 decisions, which run unconditionally.
         _write_report()
         suffix = " (dry run)" if args.dry_run else ""
         _print_ok(f"sync successful{suffix}")
