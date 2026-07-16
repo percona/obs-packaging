@@ -34,7 +34,7 @@ def test_reason_when_no_comment(monkeypatch):
     monkeypatch.setattr(
         cmd_sync, "_fetch_obs_package_meaningful_comment", lambda *a: None
     )
-    assert _clean_sync_check("http://obs", "prj", "pkg", PKG) is not None
+    assert _clean_sync_check("http://obs", "prj", "pkg", PKG) == "no revision comment"
 
 
 def test_reason_when_comment_not_sync_format(monkeypatch):
@@ -42,7 +42,10 @@ def test_reason_when_comment_not_sync_format(monkeypatch):
     monkeypatch.setattr(
         cmd_sync, "_fetch_obs_package_meaningful_comment", lambda *a: "manual edit"
     )
-    assert _clean_sync_check("http://obs", "prj", "pkg", PKG) is not None
+    assert (
+        _clean_sync_check("http://obs", "prj", "pkg", PKG)
+        == "comment is not a sync message: 'manual edit'"
+    )
 
 
 def test_reason_when_synced_dirty(monkeypatch):
@@ -52,7 +55,9 @@ def test_reason_when_synced_dirty(monkeypatch):
         "_fetch_obs_package_meaningful_comment",
         lambda *a: "sync: main@abc1234 (local changes on somehost)",
     )
-    assert _clean_sync_check("http://obs", "prj", "pkg", PKG) is not None
+    assert (
+        _clean_sync_check("http://obs", "prj", "pkg", PKG) == "synced dirty at abc1234"
+    )
 
 
 def test_reason_when_git_changes_since_sha(monkeypatch):
@@ -63,7 +68,10 @@ def test_reason_when_git_changes_since_sha(monkeypatch):
         "_fetch_obs_package_meaningful_comment",
         lambda *a: "sync: main@abc1234 (git@github.com:x/y.git)",
     )
-    assert _clean_sync_check("http://obs", "prj", "pkg", PKG) is not None
+    assert (
+        _clean_sync_check("http://obs", "prj", "pkg", PKG)
+        == "git changes since abc1234"
+    )
 
 
 def test_reason_when_working_tree_dirty(monkeypatch):
@@ -74,7 +82,10 @@ def test_reason_when_working_tree_dirty(monkeypatch):
         "_fetch_obs_package_meaningful_comment",
         lambda *a: "sync: main@abc1234 (git@github.com:x/y.git)",
     )
-    assert _clean_sync_check("http://obs", "prj", "pkg", PKG) is not None
+    assert (
+        _clean_sync_check("http://obs", "prj", "pkg", PKG)
+        == "uncommitted changes in package directory"
+    )
 
 
 def test_reason_when_inherited_macros_changed(monkeypatch):
@@ -85,4 +96,41 @@ def test_reason_when_inherited_macros_changed(monkeypatch):
         "_fetch_obs_package_meaningful_comment",
         lambda *a: "sync: main@abc1234 (git@github.com:x/y.git)",
     )
-    assert _clean_sync_check("http://obs", "prj", "pkg", PKG) is not None
+    assert (
+        _clean_sync_check("http://obs", "prj", "pkg", PKG) == "inherited macros changed"
+    )
+
+
+def test_sha_from_comment_is_passed_to_git_checks(monkeypatch):
+    _patch_git_clean(monkeypatch)
+    seen: list[str] = []
+
+    def _record(sha, path):
+        seen.append(sha)
+        return False
+
+    monkeypatch.setattr(cmd_sync, "_has_package_changes_since", _record)
+    monkeypatch.setattr(
+        cmd_sync,
+        "_fetch_obs_package_meaningful_comment",
+        lambda *a: "sync: main@abc1234 (git@github.com:x/y.git)",
+    )
+    assert _clean_sync_check("http://obs", "prj", "pkg", PKG) is None
+    assert seen == ["abc1234"]
+
+
+def test_dirty_sync_short_circuits_before_git_checks(monkeypatch):
+    _patch_git_clean(monkeypatch)
+
+    def _boom(*a):
+        raise AssertionError("_has_package_changes_since must not be called")
+
+    monkeypatch.setattr(cmd_sync, "_has_package_changes_since", _boom)
+    monkeypatch.setattr(
+        cmd_sync,
+        "_fetch_obs_package_meaningful_comment",
+        lambda *a: "sync: main@abc1234 (local changes on somehost)",
+    )
+    assert (
+        _clean_sync_check("http://obs", "prj", "pkg", PKG) == "synced dirty at abc1234"
+    )
