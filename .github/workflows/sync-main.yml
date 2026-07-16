@@ -37,19 +37,39 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
 
-      # Persists the content-addressed .cache/ tree (Phase 1 obs_scm outputs
-      # and Phase 2 manual-service outputs such as go_modules vendor tarballs)
-      # across runs.  Without this, every main sync regenerates vendor
-      # tarballs with new file mtimes and needlessly re-uploads them.
-      # Entries are content-addressed so a partial hit via restore-keys is
-      # always safe: unused SHA-keyed subdirs are ignored.
-      - name: Restore percona-obs cache
+      # Persists the content-addressed .cache/ tree across runs, split in
+      # two entries:
+      #
+      #   deps — download_url, cargo_vendor and Phase 2 manual-service
+      #          outputs (crates, go tarballs, vendor tarballs): small and
+      #          stable across commits.
+      #   scm  — Phase 1 obs_scm outputs: multi-GB source archives keyed by
+      #          upstream HEAD, churning on every upstream advance.
+      #
+      # Splitting keeps the small, highly-reusable deps cache from being
+      # evicted out of the repo's 10 GB Actions cache quota by churn in the
+      # much larger scm tree.  Without any cache, every main sync would
+      # regenerate vendor tarballs with new file mtimes and needlessly
+      # re-upload them.  Entries are content-addressed so a partial hit via
+      # restore-keys is always safe: unused SHA-keyed subdirs are ignored.
+      - name: Restore percona-obs deps cache
         uses: actions/cache@v4
         with:
-          path: .cache
-          key: percona-obs-${{ runner.os }}-${{ github.sha }}
+          path: |
+            .cache/download_url
+            .cache/cargo_vendor
+            .cache/services
+          key: percona-obs-deps-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
-            percona-obs-${{ runner.os }}-
+            percona-obs-deps-${{ runner.os }}-
+
+      - name: Restore percona-obs scm cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/obs_scm
+          key: percona-obs-scm-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            percona-obs-scm-${{ runner.os }}-
 
       - uses: ./.github/actions/obs-setup
         with:
@@ -76,6 +96,16 @@ jobs:
       # synced normally but produce no OBS changes.
       - name: Sync to OBS
         run: venv/bin/python -m percona_obs --verbose -P main sync push --no-scm-validate
+
+      # Drop cache entries not used by any run in the last 7 days so the
+      # .cache/ tree saved by actions/cache stops growing monotonically.
+      # Entry mtimes are bumped on every cache hit, so age == unused-for.
+      # Runs even when the sync fails: pruning only removes stale entries.
+      - name: Prune stale cache entries
+        if: always()
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: venv/bin/python .github/scripts/prune_obs_cache.py
 
       # Poll OBS until all builds reach a terminal state.  Fails the job if
       # any build fails, is broken, or is unresolvable.

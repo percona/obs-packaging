@@ -1,8 +1,10 @@
 import hashlib
+import os
 import re
 import shutil
 import subprocess
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -251,11 +253,21 @@ def _read_obsinfo_commit(workdir: Path, filename_prefix: str) -> str | None:
 
 
 def _cache_entry_lookup(entry: Path) -> list[str] | None:
-    """Return the filenames cached under *entry*, or None on miss."""
+    """Return the filenames cached under *entry*, or None on miss.
+
+    A hit bumps the entry's mtime so that age-based pruning (prune_cache)
+    treats mtime as "last used" and keeps hot entries alive.
+    """
     if not entry.is_dir():
         return None
     files = [f.name for f in sorted(entry.iterdir()) if f.is_file()]
-    return files if files else None
+    if not files:
+        return None
+    try:
+        os.utime(entry)
+    except OSError:
+        pass
+    return files
 
 
 def _cache_entry_store(entry: Path, workdir: Path, filenames: list[str]) -> None:
@@ -277,6 +289,47 @@ def _cache_entry_store(entry: Path, workdir: Path, filenames: list[str]) -> None
     except Exception:
         shutil.rmtree(tmp, ignore_errors=True)
         raise
+
+
+def prune_cache(max_age_days: int = 7) -> int:
+    """Delete cache entries whose mtime is older than *max_age_days* days.
+
+    Entry mtimes are set on store (_cache_entry_store) and bumped on every
+    hit (_cache_entry_lookup), so age here means "not used by any service
+    run for N days".  Without pruning the content-addressed trees grow
+    monotonically: obs_scm entries keyed by superseded upstream HEADs and
+    download_url/cargo_vendor entries for dropped URLs are never removed.
+
+    Emptied intermediate key directories (obs_scm/cargo_vendor nest
+    ``<params-key>/<src-id>``) are removed as well.  Leftover ``_tmp-*``
+    directories from interrupted stores age out like any other entry.
+    Returns the number of entries deleted.
+    """
+    # Depth (relative to each cache root) at which entries live: obs_scm and
+    # cargo_vendor nest <params-key>/<src-id>, the others store entries
+    # directly under the root.  Built here, not at module level, so tests can
+    # monkeypatch the cache-dir constants.
+    entry_depth = {
+        _OBS_SCM_CACHE_DIR: 2,
+        _SVC_CACHE_DIR: 1,
+        _DOWNLOAD_URL_CACHE_DIR: 1,
+        _CARGO_VENDOR_CACHE_DIR: 2,
+    }
+    cutoff = time.time() - max_age_days * 86400
+    deleted = 0
+    for root, depth in entry_depth.items():
+        if not root.is_dir():
+            continue
+        parents = [root] if depth == 1 else [d for d in root.iterdir() if d.is_dir()]
+        for parent in parents:
+            for entry in parent.iterdir():
+                if entry.is_dir() and entry.stat().st_mtime < cutoff:
+                    shutil.rmtree(entry, ignore_errors=True)
+                    logger.debug(f"pruned stale cache entry {entry}")
+                    deleted += 1
+            if parent != root and not any(parent.iterdir()):
+                parent.rmdir()
+    return deleted
 
 
 def _service_params_cache_key(svc: ET.Element) -> str:

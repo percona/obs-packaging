@@ -21,6 +21,8 @@ jobs:
     permissions:
       # Required to push release tags via the GitHub API.
       contents: write
+      # Required to delete the PR's Actions caches.
+      actions: write
       packages: read
 
     env:
@@ -84,3 +86,21 @@ jobs:
             --yes \
             --recursive \
             --from-obs
+
+      # Delete this PR's Actions caches (created by obs-pr-check.yml on the
+      # refs/pull/N/merge ref).  Caches on PR merge refs can never be
+      # restored by main-branch runs, so leaving them around only churns the
+      # repo's 10 GB cache quota and evicts the main branch's caches.
+      - name: Delete PR Actions caches
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/caches?ref=refs/pull/${PR_NUMBER}/merge" \
+            --jq '.actions_caches[].id' |
+          while read -r cache_id; do
+            echo "Deleting Actions cache id ${cache_id}"
+            gh api -X DELETE \
+              "repos/${GITHUB_REPOSITORY}/actions/caches/${cache_id}" || true
+          done
