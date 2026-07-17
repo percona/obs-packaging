@@ -451,6 +451,7 @@ fi
 %attr(755,root,root) %{pginstdir}/bin/pgsql2shp
 %if %{raster}
 %attr(755,root,root) %{pginstdir}/bin/raster2pgsql
+%{_mandir}/%{name}/man1/raster2pgsql.1*
 %endif
 %attr(755,root,root) %{pginstdir}/bin/shp2pgsql
 %attr(755,root,root) %{pginstdir}/bin/pgtopo_export
