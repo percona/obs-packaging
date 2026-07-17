@@ -81,6 +81,15 @@ repositories:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:11
         repository: standard
     archs: [x86_64, aarch64]
+  - name: Debian_12
+    paths:
+      - subproject: ppg:common:deps
+        repository: Debian_12
+      - subproject: common:deps:build
+        repository: Debian_12
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:12
+        repository: standard
+    archs: [x86_64, aarch64]
   - name: Debian_13
     paths:
       - subproject: ppg:common:deps
@@ -186,18 +195,18 @@ project-config: |
   Ignore: postgresql
   %endif
 
-  %if "%_repository" == "Debian_11"
-  # llvm-11-dev needs libtinfo-dev; on Bullseye both libncurses-dev and
-  # libtinfo-dev satisfy it and OBS reports "have choice" without a Prefer.
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12"
+  # llvm-*-dev needs libtinfo-dev; both libncurses-dev and libtinfo-dev satisfy
+  # it and OBS reports "have choice" without a Prefer.
   Prefer: libncurses-dev
-  # logrotate Recommends a cron daemon; Bullseye has both cron and bcron.
+  # logrotate Recommends a cron daemon; both cron and bcron may be available.
   Prefer: cron
   # PG 19 JIT requires LLVM >= 19; use repackaged llvm-21 from common:deps:build.
   Prefer: llvm-21-dev
   Prefer: clang-21
   Substitute: llvm-dev llvm-21-dev
   Substitute: clang clang-21
-  # Force the whole llvm-21 toolchain into every Debian 11 build root. clang-21/
+  # Force the whole llvm-21 toolchain into every Debian 11/12 build root. clang-21/
   # llvm-21-dev pull the rest transitively but an inherited Ignore strips them,
   # and extensions (pgvector, postgis) need clang-21 for PGXS bitcode yet only
   # Build-Depend on the server-dev package. Support: beats the Ignore.
@@ -215,6 +224,10 @@ project-config: |
   Support: libc++abi-21-dev
   Support: libc++1-21
   Support: libc++abi1-21
+  %endif
+
+  %if "%_repository" == "Debian_11"
+  # python3-distutils is needed for some Python packaging on Bullseye only.
   Support: python3-distutils
   Ignore: libllvm11
   Ignore: llvm-11-runtime
@@ -228,11 +241,25 @@ project-config: |
   Ignore: clang-11
   %endif
 
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04"
+  %if "%_repository" == "Debian_12"
+  # Prefer repackaged llvm-21 over Bookworm's system LLVM 14.
+  Ignore: libllvm14
+  Ignore: llvm-14-runtime
+  Ignore: llvm-14-linker-tools
+  Ignore: libclang-cpp14
+  Ignore: libclang-common-14-dev
+  Ignore: libclang1-14
+  Ignore: llvm-14-tools
+  Ignore: llvm-14
+  Ignore: llvm-14-dev
+  Ignore: clang-14
+  %endif
+
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04"
   Prefer: golang-1.26
   %endif
 
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
   # libgdal-dev transitively requires both libcurl4-openssl-dev and
   # libcurl4-gnutls-dev which conflict; ignore the gnutls variant so
   # the openssl variant is used consistently.
