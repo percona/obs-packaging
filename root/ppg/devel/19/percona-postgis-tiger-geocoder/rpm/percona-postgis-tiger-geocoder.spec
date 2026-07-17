@@ -16,6 +16,10 @@ URL:		https://git.osgeo.org/gitea/postgis/postgis_tiger_geocoder
 BuildArch:	noarch
 BuildRequires:	percona-postgresql%{pgmajorversion}-devel perl
 Requires:	postgresql%{pgmajorversion}-server
+# CREATE EXTENSION postgis_tiger_geocoder requires the postgis and
+# fuzzystrmatch (contrib) extensions to be installed.
+Requires:	postgis3_%{pgmajorversion}
+Requires:	percona-postgresql%{pgmajorversion}-contrib
 
 %description
 The postgis_tiger_geocoder PostgreSQL extension provides a geocoder and
