@@ -7,7 +7,7 @@ Rules-Requires-Root: no
 Build-Depends:
  autoconf,
  bison,
- clang [amd64 arm64 mips64el ppc64 ppc64el s390x],
+ clang | clang-21 [amd64 arm64 mips64el ppc64 ppc64el s390x],
  debhelper-compat (= 13),
  dh-exec (>= 0.13~),
  docbook-xml,
@@ -35,7 +35,7 @@ Build-Depends:
  libxml2-utils,
  libxslt1-dev,
  libzstd-dev (>= 1.4.0),
- llvm-dev [amd64 arm64 mips64el ppc64 ppc64el s390x],
+ llvm-dev | llvm-21-dev [amd64 arm64 mips64el ppc64 ppc64el s390x],
  mawk,
  openssl,
  perl (>= 5.8),
@@ -225,9 +225,9 @@ Package: percona-postgresql-server-dev-%!{PG_MAJOR_VERSION}
 Architecture: any
 Section: libdevel
 Depends:
- clang [amd64 arm64 mips64el ppc64 ppc64el s390x],
+ clang-${llvm:Version} [amd64 arm64 mips64el ppc64 ppc64el s390x],
  libpq-dev (>= %!{PG_MAJOR_VERSION}~~),
- llvm-dev [amd64 arm64 mips64el ppc64 ppc64el s390x],
+ llvm-${llvm:Version}-dev [amd64 arm64 mips64el ppc64 ppc64el s390x],
  percona-postgresql-client-%!{PG_MAJOR_VERSION}, percona-postgresql-common (>= 142~),
  ${misc:Depends},
  ${shlibs:Depends}

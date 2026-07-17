@@ -80,15 +80,21 @@ ifeq ($(call version_ge,10),y)
 endif
 
 ifeq ($(call version_ge,11),y)
-  # if LLVM is installed, use it
-  ifneq ($(wildcard /usr/bin/llvm-config-*),)
+  # Prefer repackaged llvm-21 on Debian 11/12 (PG 19 JIT needs LLVM >= 19).
+  LLVM_CONFIG :=
+  ifneq ($(wildcard /usr/bin/llvm-config-21),)
+    LLVM_CONFIG = /usr/bin/llvm-config-21
+    LLVM_VERSION = 21
+  else ifneq ($(wildcard /usr/bin/llvm-config-*),)
     LLVM_CONFIG = $(lastword $(sort $(wildcard /usr/bin/llvm-config-*)))
     LLVM_VERSION = $(subst /usr/bin/llvm-config-,,$(LLVM_CONFIG))
+  endif
+  ifneq ($(LLVM_CONFIG),)
     CONFIGURE_FLAGS += --with-llvm LLVM_CONFIG=$(LLVM_CONFIG) CLANG=/usr/bin/clang-$(LLVM_VERSION)
+    TEMP_CONFIG = TEMP_CONFIG=$(AUX_MK_DIR)/test-with-jit.conf
   else
     LLVM_VERSION = 0.invalid # mute dpkg error on empty version fields in debian/control
   endif
-  TEMP_CONFIG = TEMP_CONFIG=$(AUX_MK_DIR)/test-with-jit.conf
 endif
 
 ifeq ($(call version_ge,17),y)
@@ -192,6 +198,17 @@ override_dh_auto_install-indep:
 
 override_dh_makeshlibs:
 	dh_makeshlibs -Xusr/lib/postgresql/$(MAJOR_VER)
+
+# On Debian 11/12 (bullseye/bookworm): older dwz cannot parse the DWARF 5
+# (.debug_addr) that llvm-21/clang-21 emit into llvmjit.so, so exclude that
+# file. Newer dwz on Debian 13/Ubuntu handles DWARF 5, so nothing is excluded.
+DISTRO_CODENAME := $(shell . /etc/os-release 2>/dev/null; echo $$VERSION_CODENAME)
+ifneq ($(filter $(DISTRO_CODENAME),bullseye bookworm),)
+  DWZ_EXCLUDE = -Xllvmjit.so
+endif
+
+override_dh_dwz:
+	dh_dwz $(DWZ_EXCLUDE)
 
 override_dh_auto_clean:
 	rm -rf build
