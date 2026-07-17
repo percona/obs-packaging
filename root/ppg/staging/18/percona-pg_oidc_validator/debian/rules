@@ -9,7 +9,7 @@ include /usr/share/postgresql-common/pgxs_debian_control.mk
 # clang-21 is pulled in via percona-postgresql-server-dev-18 (JIT) but ships
 # without libc++, so -stdlib=libc++ would break there (g++ is recent enough).
 DEBIAN_RELEASE := $(shell . /etc/os-release && echo $$ID$$VERSION_ID)
-ifneq ($(filter $(DEBIAN_RELEASE),debian11 debian12),)
+ifneq ($(filter $(DEBIAN_RELEASE),debian11 debian12 ubuntu22.04),)
 ifneq ($(wildcard /usr/bin/clang++-21),)
 # PGXS compiles .cpp with CXX but links MODULE_big .so with CC; both must be
 # clang++-21 so -stdlib=libc++ and -lc++/libc++abi resolve.

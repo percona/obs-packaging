@@ -2,7 +2,7 @@
   <service name="obs_scm">
     <param name="url">https://github.com/Percona-Lab/pg_oidc_validator.git</param>
     <param name="scm">git</param>
-    <param name="revision">release-%!{PG_OIDC_VALIDATOR_VERSION}</param>
+    <param name="revision">main</param>
     <param name="version">%!{PG_OIDC_VALIDATOR_VERSION}</param>
     <param name="filename">percona-pg_oidc_validator%!{PG_MAJOR_VERSION}</param>
   </service>
