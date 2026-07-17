@@ -334,6 +334,13 @@ export AUTOCONF=autoconf
 sh -x autogen.sh
 autoconf
 
+%if 0%{?rhel} == 8
+# EL8's gmp-devel ships no gmp.pc; preset the PKG_CHECK_MODULES([GMP]) output
+# variables so configure does not need pkg-config to find it.
+export GMP_CFLAGS="-I/usr/include"
+export GMP_LIBS="-lgmp"
+%endif
+
 %configure --with-pgconfig=%{pginstdir}/bin/pg_config \
         --bindir=%{pginstdir}/bin/ \
 	      --datadir=%{pginstdir}/share/ \
