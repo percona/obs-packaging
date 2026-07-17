@@ -231,6 +231,9 @@ Provides:	%{sname} = %{version}-%{release}
 Obsoletes:	%{sname}3_%{pgmajorversion} <= %{postgismajorversion}.0-1
 Provides:	%{sname}3_%{pgmajorversion} => %{postgismajorversion}.0
 
+Suggests:	percona-postgis-tiger-geocoder%{pgmajorversion}
+Suggests:	percona-address-standardizer%{pgmajorversion}
+
 %description
 PostGIS adds support for geographic objects to the PostgreSQL object-relational
 database. In effect, PostGIS "spatially enables" the PostgreSQL server,

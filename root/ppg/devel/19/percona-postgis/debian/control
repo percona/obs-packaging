@@ -72,7 +72,9 @@ Depends: percona-postgresql-%!{PG_MAJOR_VERSION},
          percona-postgresql-%!{PG_MAJOR_VERSION}-postgis-3-scripts,
          ${shlibs:Depends},
          ${misc:Depends}
-Suggests: percona-postgis
+Suggests: percona-postgis,
+          percona-postgresql-%!{PG_MAJOR_VERSION}-postgis-tiger-geocoder,
+          percona-postgresql-%!{PG_MAJOR_VERSION}-address-standardizer
 Breaks: percona-postgis (<< 1.2.1)
 Provides: percona-postgresql-%!{PG_MAJOR_VERSION}-postgis
 Description: Geographic objects support for PostgreSQL %!{PG_MAJOR_VERSION}
