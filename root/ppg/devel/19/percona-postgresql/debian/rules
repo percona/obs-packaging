@@ -163,7 +163,18 @@ override_dh_builddeb:
 	fi
 
 override_dh_auto_configure:
-	dh_auto_configure --builddirectory=build -- $(CONFIGURE_FLAGS)
+	# PG 19 detects libnuma via pkg-config (--with-libnuma). Debian 11 (Bullseye)
+	# ships libnuma-dev without numa.pc; synthesize one in a build-local dir and
+	# point PKG_CONFIG_PATH at it (the build runs rootless, so /usr is read-only).
+	# No-op where libnuma-dev already provides numa.pc (Debian 12+, Ubuntu).
+	if ! pkg-config --exists numa 2>/dev/null; then \
+	  numa_version=$$(dpkg-query -W -f='$${Version}' libnuma1 2>/dev/null | cut -d- -f1); \
+	  numa_version=$${numa_version:-2.0.12}; \
+	  mkdir -p debian/pkgconfig; \
+	  printf 'prefix=/usr\nexec_prefix=$${prefix}\nlibdir=$${exec_prefix}/lib/$(DEB_HOST_MULTIARCH)\nincludedir=$${prefix}/include\n\nName: numa\nDescription: NUMA policy library\nVersion: %s\nLibs: -lnuma\nCflags:\n' "$$numa_version" > debian/pkgconfig/numa.pc; \
+	fi
+	PKG_CONFIG_PATH="$(CURDIR)/debian/pkgconfig:$$PKG_CONFIG_PATH" \
+	  dh_auto_configure --builddirectory=build -- $(CONFIGURE_FLAGS)
 	# remove pre-built documentation
 	rm -fv doc/src/sgml/*-stamp
 
