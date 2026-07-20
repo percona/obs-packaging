@@ -149,7 +149,6 @@ BuildRequires:  python3-pysyncobj
 BuildRequires:  python3.12
 BuildRequires:  python3.12-pip
 BuildRequires:  python3.12-devel
-BuildRequires:  python3.12-idle
 BuildRequires:  perl
 BuildRequires:  perl-libs
 BuildRequires:  perl-devel
@@ -222,7 +221,10 @@ after OBS installs the BuildRequires closure:
    `pltcl.so` additionally get `/opt/percona-python3/lib`, the perl `CORE` dir, and
    `/opt/percona-tcl/lib` appended (matching official RUNPATHs).
 5. **Pre-tar verification (build fails on error — addition over the POC):**
-   - `ldd` audit over `/opt`: zero `not found` beyond the deliberate exclusion list.
+   - DT_NEEDED soname audit over `/opt` (`patchelf --print-needed`): every needed
+     soname must pass the exclusion list or be bundled (dangling symlinks rejected).
+     (Replaced the originally-specified `ldd` audit, which is blind inside a fully
+     populated buildroot — missing libs still resolve from `/usr/lib64`.)
    - Smoke: `bin/initdb --version`, `bin/postgres.real --version`,
      `percona-python3/bin/python3 -c 'import ssl, yaml'`,
      `percona-patroni/bin/patronictl version` — all with RPATH/wrapper resolution only.
