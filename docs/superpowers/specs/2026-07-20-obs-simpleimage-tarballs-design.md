@@ -209,6 +209,9 @@ in `targets.py` / `cmd_sync.py` / `cmd_project.py` special-cases containers.
   per repo (PostGIS/sfcgal are excluded from this scope).
 - Confirm Rocky 10 ships OpenSSL 3.5 (naming of the `ssl3.5` variant depends on it).
 - Confirm where published simpleimage artifacts land in the publish tree URL layout.
+- Confirm the `obs-pr-sync` workflow correctly creates PR projects for *brand-new*
+  subprojects (`tarballs:ssl*` do not exist in production yet), including their
+  repo path rewrites against the PR project namespace.
 
 ## Rejected alternatives
 
