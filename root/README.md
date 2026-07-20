@@ -135,6 +135,26 @@ Each package directory contains the packaging sources split by format:
 └── debian/     # Debian packaging files
 ```
 
+#### `tarballs/`
+
+Binary-tarball builds (OBS `simpleimage` format) for air-gapped / unsupported-distro
+installs, replicating the official Percona tarball layout. One subproject per SSL
+variant, each building against a different EL base of `ppg:staging:<V>`:
+
+| Subproject | Base repo | Host ABI targeted |
+|---|---|---|
+| `tarballs/ssl1.1` | RockyLinux_8 | glibc ≥ 2.28, OpenSSL 1.1 |
+| `tarballs/ssl3` | RockyLinux_9 | glibc ≥ 2.34, OpenSSL 3.x |
+| `tarballs/ssl3.5` | RockyLinux_10 | glibc ≥ 2.39, OpenSSL 3.5 |
+
+The `percona-postgresql-tarball` package files (`simpleimage`, `build-tarball.sh`)
+are byte-identical across variants (enforced by `tests/test_tarball_variants.py`);
+variant identity comes from each subproject's `macros.yaml` (`TARBALL_SSL_VARIANT`,
+`TARBALL_PYTHON_PKG`) and repository paths. The `%build` script stages all components
+under `/opt/percona-*` and creates the artifact itself (`#!NoTarBall`), so the tarball
+contains only the official per-component tree. Repositories publish their results, so
+the `.tar.gz` is downloadable from the OBS publish tree.
+
 ### `devel/<major-version>/`
 
 A manually curated subset of `staging/<major-version>/`, built from development branches instead of
