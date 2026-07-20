@@ -102,13 +102,20 @@ copy_deps() {
     done
 }
 
-# Run copy_deps over all ELF files in a prefix (3 passes for dep depth)
+# Run copy_deps over all ELF files in a prefix (3 passes for dep depth).
+# Any extra arguments are additional directory trees walked recursively for
+# ELF .so files (e.g. python lib-dynload/ + site-packages C extensions),
+# so their NEEDED libs are bundled too.
 bundle_deps() {
     local prefix="$1"
+    shift
     local libdir="$prefix/lib"
     mkdir -p "$libdir"
     for pass in 1 2 3; do
-        find "$prefix/bin" "$libdir" -maxdepth 1 -type f 2>/dev/null | while read f; do
+        {
+            find "$prefix/bin" "$libdir" -maxdepth 1 -type f 2>/dev/null
+            [ $# -gt 0 ] && find "$@" -type f -name '*.so*' 2>/dev/null
+        } | while read f; do
             file "$f" 2>/dev/null | grep -q ELF && copy_deps "$f" "$libdir" || true
         done
     done
@@ -206,11 +213,14 @@ cp /usr/bin/pgbouncer /opt/percona-pgbouncer/bin/
 [ -d /etc/pgbouncer ] && \
     mkdir -p /opt/percona-pgbouncer/etc && \
     cp -rp /etc/pgbouncer/. /opt/percona-pgbouncer/etc/ || true
-# share/ and doc/
-for d in /usr/share/doc/percona-pgbouncer*; do
-    [ -d "$d" ] && mkdir -p /opt/percona-pgbouncer/doc && cp -rp "$d" /opt/percona-pgbouncer/doc/ || true
-done
-[ -d /usr/share/pgbouncer ] && cp -rp /usr/share/pgbouncer /opt/percona-pgbouncer/share/ || true
+# share/doc (RPM doc dir is unprefixed /usr/share/doc/pgbouncer; reference
+# tarball layout is share/doc/pgbouncer/)
+[ -d /usr/share/doc/pgbouncer ] && \
+    mkdir -p /opt/percona-pgbouncer/share/doc && \
+    cp -rp /usr/share/doc/pgbouncer /opt/percona-pgbouncer/share/doc/ || true
+[ -d /usr/share/pgbouncer ] && \
+    mkdir -p /opt/percona-pgbouncer/share && \
+    cp -rp /usr/share/pgbouncer /opt/percona-pgbouncer/share/ || true
 
 ###############################################################
 # 4. pgPool-II
@@ -224,8 +234,13 @@ find /usr/bin -maxdepth 1 \( -name 'pgpool' -o -name 'pcp_*' -o -name 'pg_md5' \
     cp -rp /etc/pgpool-II/. /opt/percona-pgpool-II/etc/ || true
 # share/ and include/
 [ -d /usr/share/pgpool-II ] && cp -rp /usr/share/pgpool-II /opt/percona-pgpool-II/share/ || true
-for d in /usr/include/pgpool*; do
-    [ -e "$d" ] && mkdir -p /opt/percona-pgpool-II/include && cp -rp "$d" /opt/percona-pgpool-II/include/ || true
+# Headers from the -devel package are installed flat into /usr/include
+# (pcp.h, libpcp_ext.h, pool_*.h); reference layout nests them under
+# include/pgpool2/. Use the RPM manifest to pick exactly those headers.
+rpm -ql percona-pgpool-II-pg${PG_MAJOR}-devel 2>/dev/null | \
+    grep '^/usr/include/.*\.h$' | while read -r h; do
+    mkdir -p /opt/percona-pgpool-II/include/pgpool2
+    cp -p "$h" /opt/percona-pgpool-II/include/pgpool2/
 done
 
 ###############################################################
@@ -238,9 +253,9 @@ cp /usr/bin/pgbackrest /opt/percona-pgbackrest/bin/
 [ -f /etc/pgbackrest.conf ] && \
     mkdir -p /opt/percona-pgbackrest/etc && \
     cp /etc/pgbackrest.conf /opt/percona-pgbackrest/etc/ || true
-# License
-for d in /usr/share/doc/percona-pgbackrest*; do
-    [ -d "$d" ] && cp "$d"/LICENSE /opt/percona-pgbackrest/pgbackrest_license 2>/dev/null || true
+# License (RPMs install %license files under /usr/share/licenses)
+for d in /usr/share/licenses/percona-pgbackrest* /usr/share/doc/percona-pgbackrest*; do
+    [ -f "$d/LICENSE" ] && cp "$d/LICENSE" /opt/percona-pgbackrest/pgbackrest_license && break || true
 done
 
 ###############################################################
@@ -250,8 +265,9 @@ cp /usr/bin/pgbadger /opt/percona-pgbadger/pgbadger
 rmdir /opt/percona-pgbadger/bin /opt/percona-pgbadger/lib 2>/dev/null || true
 # Man page
 find /usr/share/man -name 'pgbadger.1*' -exec sh -c 'f="{}"; case "$f" in *.gz) gunzip -c "$f" > /opt/percona-pgbadger/pgbadger.1p ;; *) cp "$f" /opt/percona-pgbadger/pgbadger.1p ;; esac' \; 2>/dev/null || true
-# License and README
-for d in /usr/share/doc/percona-pgbadger*; do
+# License and README (LICENSE lives under /usr/share/licenses, README under
+# /usr/share/doc)
+for d in /usr/share/doc/percona-pgbadger* /usr/share/licenses/percona-pgbadger*; do
     [ -d "$d" ] || continue
     [ -f "$d/LICENSE" ] && cp "$d/LICENSE" /opt/percona-pgbadger/LICENSE || true
     for readme in "$d"/README*; do
@@ -291,6 +307,18 @@ cp -a /usr/lib64/libffi.so* $PYTHON_PREFIX/lib/ 2>/dev/null || true
 # pkgconfig
 mkdir -p $PYTHON_PREFIX/lib/pkgconfig
 cp /usr/lib64/pkgconfig/python-${PY_VER}*.pc $PYTHON_PREFIX/lib/pkgconfig/ 2>/dev/null || true
+
+# share/man (reference ships the python man page uncompressed + python3.1 alias)
+mkdir -p $PYTHON_PREFIX/share/man/man1
+for m in /usr/share/man/man1/python${PY_VER}.1*; do
+    [ -e "$m" ] || continue
+    case "$m" in
+        *.gz) gunzip -c "$m" > $PYTHON_PREFIX/share/man/man1/python${PY_VER}.1 ;;
+        *)    cp -p "$m" $PYTHON_PREFIX/share/man/man1/ ;;
+    esac
+done
+[ -f $PYTHON_PREFIX/share/man/man1/python${PY_VER}.1 ] && \
+    ln -sf python${PY_VER}.1 $PYTHON_PREFIX/share/man/man1/python3.1 || true
 
 # Copy Python utility scripts and update shebangs to bundled python
 # Note: with PY_VER=X.Y, pip3.${PY_VER#*.} = pip3.Y and 2to3-${PY_VER} = 2to3-X.Y
@@ -343,6 +371,9 @@ for pkg in patroni patroni-*.dist-info patroni-*.egg-info \
            kazoo kazoo-*.dist-info \
            etcd python_etcd-*.dist-info python_etcd-*.egg-info \
            boto3 boto3-*.dist-info botocore botocore-*.dist-info \
+           jmespath jmespath-*.dist-info jmespath-*.egg-info \
+           s3transfer s3transfer-*.dist-info s3transfer-*.egg-info \
+           psycopg2 psycopg2-*.dist-info psycopg2-*.egg-info \
            consul py_consul-*.dist-info \
            prettytable prettytable-*.dist-info \
            packaging packaging-*.dist-info \
@@ -376,7 +407,7 @@ mkdir -p /opt/percona-patroni/share/doc
 for d in /usr/share/doc/percona-patroni*; do
     [ -d "$d" ] && cp -rp "$d"/. /opt/percona-patroni/share/doc/ || true
 done
-for d in /usr/share/doc/percona-patroni*; do
+for d in /usr/share/licenses/percona-patroni* /usr/share/doc/percona-patroni*; do
     [ -f "$d/LICENSE" ] && cp "$d/LICENSE" /opt/percona-patroni/patroni_license && break || true
 done
 # Remove empty lib/ from patroni (Python app, no native libs)
@@ -560,13 +591,27 @@ ln -sf python3 "$PYTHON_PREFIX/bin/python" 2>/dev/null || true
 # 13. Bundle .so deps and patchelf RPATH for ELF prefixes
 ###############################################################
 for prefix in $PG_PREFIX /opt/percona-pgbouncer \
-              /opt/percona-pgpool-II /opt/percona-pgbackrest \
-              $PYTHON_PREFIX; do
+              /opt/percona-pgpool-II /opt/percona-pgbackrest; do
     bundle_deps "$prefix"
     patch_rpath "$prefix"
 done
+# Python: also walk the whole lib/pythonX.Y tree (lib-dynload/ C extensions,
+# site-packages extensions like psycopg2/_psycopg) so their NEEDED libs
+# (libsqlite3, libncursesw, libuuid, libgdbm, libpq, ...) are bundled into
+# $PYTHON_PREFIX/lib, which the python3 wrapper puts on LD_LIBRARY_PATH.
+bundle_deps $PYTHON_PREFIX "$PYTHON_PREFIX/lib/python${PY_VER}"
+patch_rpath $PYTHON_PREFIX
+# Perl: walk the lib tree so XS-module deps (libdb for DB_File, libsombok
+# for Unicode::LineBreak, ...) are bundled, then point the XS modules at
+# the bundled libs (absolute /opt path — same convention as LANG_RPATH;
+# depth under auto/ varies so $ORIGIN-relative paths won't work).
+# Note: percona-perl/percona-tcl RPATHs for bin/ were already set in
+# section 12 and bundle_deps does not touch RPATHs.
+bundle_deps $PERL_PREFIX "$PERL_PREFIX/lib"
+find "$PERL_PREFIX/lib" -type f -name '*.so' -path '*/auto/*' | while read f; do
+    patchelf --set-rpath '/opt/percona-perl/lib:$ORIGIN' "$f" 2>/dev/null || true
+done
 # Note: etcd (Go static), pgbadger (Perl script), patroni (Python) -- no bundling needed
-# Note: percona-perl and percona-tcl are NOT in the loop — their RPATHs were set above
 
 # Bundle OpenSSL into percona-python3 explicitly.
 # _hashlib.cpython-*.so is compiled against the build env's OpenSSL (3.4+) which may
@@ -610,13 +655,17 @@ echo "=== Verification: NEEDED-soname audit ==="
 # ldd would resolve against the fully-populated buildroot (ld.so.cache), hiding
 # libraries we failed to bundle. Instead audit DT_NEEDED sonames directly: each
 # must either be host-provided by design (is_system_lib) or bundled under /opt.
+# Precompute the bundled-soname list (real files and symlinks) once; a
+# per-soname 'find /opt' rescan is O(tree size) for every NEEDED entry.
+find /opt \( -type f -o -type l \) -name '*.so*' -printf '%f\n' | sort -u \
+    > /tmp/bundled-sonames.txt
 find /opt -type f \( -perm -u+x -o -name '*.so*' \) | while read -r f; do
     file "$f" 2>/dev/null | grep -q ELF || continue
     patchelf --print-needed "$f" 2>/dev/null | while read -r soname; do
         if is_system_lib "$soname"; then
             continue
         fi
-        if [ -z "$(find /opt -name "$soname" -print -quit)" ]; then
+        if ! grep -qxF "$soname" /tmp/bundled-sonames.txt; then
             echo "UNRESOLVED: $f needs $soname (not bundled, not in system exclude list)"
         fi
     done

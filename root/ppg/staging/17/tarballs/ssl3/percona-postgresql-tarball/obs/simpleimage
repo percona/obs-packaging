@@ -26,6 +26,8 @@ BuildRequires:  percona-pg_gather
 # Companion tools
 BuildRequires:  percona-pgbouncer
 BuildRequires:  percona-pgpool-II-pg%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pgpool-II-pg%!{PG_MAJOR_VERSION}-devel
+BuildRequires:  percona-pgpool-II-pg%!{PG_MAJOR_VERSION}-extensions
 BuildRequires:  percona-pgbackrest
 BuildRequires:  percona-pgbadger
 BuildRequires:  percona-patroni
@@ -36,7 +38,6 @@ BuildRequires:  python3-pysyncobj
 BuildRequires:  %!{TARBALL_PYTHON_PKG}
 BuildRequires:  %!{TARBALL_PYTHON_PKG}-pip
 BuildRequires:  %!{TARBALL_PYTHON_PKG}-devel
-BuildRequires:  %!{TARBALL_PYTHON_PKG}-idle
 BuildRequires:  perl
 BuildRequires:  perl-libs
 BuildRequires:  perl-devel
