@@ -179,14 +179,16 @@ in `targets.py` / `cmd_sync.py` / `cmd_project.py` special-cases containers.
 
 1. **Script-level:** `shellcheck` on `build-tarball.sh`; fast iteration by running the
    script in a Rocky 9 container with staging RPMs preinstalled (no OBS round-trip).
-2. **Dev OBS (`-P dev`):** create the variant projects on the dev instance, sync,
-   build, download artifacts.
+2. **PR project in production OBS:** open a PR (manually) adding the `tarballs/`
+   layout; the `obs-pr-sync` workflow creates a PR project in production OBS that
+   builds the tarball packages. Check build results and download the produced
+   tarball artifacts from there.
 3. **Acceptance:** on a container of a *different* distro with no PostgreSQL
    (e.g. `ubuntu:24.04` against the ssl3 variant — the "unsupported distro" scenario):
-   untar, `initdb`, `pg_ctl start`, `psql` smoke queries, `CREATE EXTENSION pg_tde`.
-   Structure-diff `percona-postgresql17/` against the official 17.10 tarball's same
-   component.
-4. Only after acceptance passes is the layout added to the production `root/` tree.
+   untar the PR-project artifact, `initdb`, `pg_ctl start`, `psql` smoke queries,
+   `CREATE EXTENSION pg_tde`. Structure-diff `percona-postgresql17/` against the
+   official 17.10 tarball's same component.
+4. The PR is merged only after acceptance passes.
 
 ## Known caveats (documented, accepted)
 
