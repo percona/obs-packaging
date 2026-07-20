@@ -1,0 +1,78 @@
+{
+  "planPath": "docs/superpowers/plans/2026-07-16-sync-api-traffic-optimizations.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: Extract _clean_sync_check helper",
+      "status": "completed",
+      "description": "**Goal:** Factor the clean-sync-SHA check out of _resolve_branch_decision into a reusable _clean_sync_check helper.\n\n**Files:**\n- Modify: percona_obs/cmd_sync.py:544-637\n- Test: tests/test_skip_unchanged.py (new)\n\n**Acceptance Criteria:**\n- _clean_sync_check(apiurl, obs_project, package_name, package_path) -> str | None exists: None when clean, else reason string\n- _resolve_branch_decision delegates to it; tests/test_branch_decision_meta.py passes unmodified\n- New tests cover: no comment, non-sync comment, dirty sync, git changes, dirty tree, macros changed, clean case\n\n**Verify:** venv/bin/python -m pytest tests/test_skip_unchanged.py tests/test_branch_decision_meta.py -q\n\n**Steps:** Write failing tests; implement helper above _resolve_branch_decision; refactor _resolve_branch_decision tail to reason = _clean_sync_check(...); black+pyright+pytest; git commit -s. Full code in plan doc Task 1.\n\n```json:metadata\n{\"files\": [\"percona_obs/cmd_sync.py\", \"tests/test_skip_unchanged.py\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/test_skip_unchanged.py tests/test_branch_decision_meta.py -q\", \"acceptanceCriteria\": [\"helper returns None/reason\", \"branch decision behaviour unchanged\", \"7 new tests pass\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: --skip-unchanged mode for plain pushes",
+      "status": "completed",
+      "blockedBy": [
+        0
+      ],
+      "description": "**Goal:** Decide 'skip' for packages with a clean recorded sync SHA on plain pushes, bypassing package meta fetch, services, and md5 listing.\n\n**Files:**\n- Modify: percona_obs/cli.py:180 (flag), percona_obs/cmd_sync.py (_decide_package ~929, Phase 3 ~1430, validation ~710)\n- Test: tests/test_skip_unchanged.py\n\n**Acceptance Criteria:**\n- --skip-unchanged flag exists; combined with --branch-from errors out\n- _resolve_skip_decision returns True only when _clean_sync_check is None\n- Phase 1 returns \"skip\" for clean packages (not with --force)\n- Phase 3 skip branch registers package in local_packages_by_project (orphan-cleanup protection) and continues before _apply_package_config\n- Dep-cascade does not run for skip decisions\n\n**Verify:** venv/bin/python -m pytest tests/test_skip_unchanged.py -q; dry-run: venv/bin/python -m percona_obs -P dev sync push --dry-run --skip-unchanged ppg:17.9 percona-pgaudit\n\n**Steps:** Failing tests for _resolve_skip_decision; add CLI flag; implement decision + Phase 3 skip handling with orphan registration; live dry-run; black+pyright+pytest; git commit -s. Full code in plan doc Task 2.\n\n```json:metadata\n{\"files\": [\"percona_obs/cli.py\", \"percona_obs/cmd_sync.py\", \"tests/test_skip_unchanged.py\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/test_skip_unchanged.py -q\", \"acceptanceCriteria\": [\"flag wired\", \"skip decision correct\", \"orphan cleanup protected\", \"no cascade for skip\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: Sync-state manifest for zero-request skips",
+      "status": "completed",
+      "blockedBy": [
+        1
+      ],
+      "description": "**Goal:** Persist project/package -> last-synced short SHA under .cache/sync_state/ keyed by (apiurl, rootprj); consult it before the OBS comment fetch so warm skips cost zero API calls.\n\n**Files:**\n- Create: percona_obs/sync_state.py\n- Modify: percona_obs/git_utils.py (_head_short_sha), percona_obs/cmd_sync.py (manifest check, record, save)\n- Test: tests/test_sync_state.py\n\n**Acceptance Criteria:**\n- load/save round-trip; corrupt/missing -> {}; atomic save (tmp+rename)\n- manifest_entry_clean checks stored SHA + _has_package_changes_since/_is_path_dirty/_macros_changed_since\n- _decide_package tries manifest before comment fetch\n- Uploads and confirmed skips record HEAD short SHA (never when package path dirty or dry-run); manifest saved at end when --skip-unchanged\n\n**Verify:** venv/bin/python -m pytest tests/test_sync_state.py -q\n\n**Steps:** Failing tests; implement sync_state.py; add _head_short_sha; wire into cmd_sync; black+pyright+pytest; git commit -s. Full code in plan doc Task 3.\n\n```json:metadata\n{\"files\": [\"percona_obs/sync_state.py\", \"percona_obs/git_utils.py\", \"percona_obs/cmd_sync.py\", \"tests/test_sync_state.py\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/test_sync_state.py -q\", \"acceptanceCriteria\": [\"round-trip + corrupt handling\", \"entry-clean git checks\", \"manifest-first decision\", \"recorded on upload/skip, saved at end\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 4: Deduplicate project meta/prjconf fetches",
+      "status": "completed",
+      "blockedBy": [
+        0
+      ],
+      "description": "**Goal:** Reuse Phase 2.5 (changed, is_new) verdicts to skip the skeleton existence GET and skip _apply_project_config for unchanged existing projects on plain pushes (~3 requests/project saved).\n\n**Files:**\n- Modify: percona_obs/cmd_sync.py (Phase 2.5 ~1195, pre-pass ~1250-1330), percona_obs/obs_api.py:734 (_create_project_skeleton -> bool)\n- Test: tests/test_project_prepass.py\n\n**Acceptance Criteria:**\n- proj_verdicts dict collected in Phase 2.5\n- _can_skip_project_apply pure helper: True only for (False, False) verdict on plain, unforced, unfiltered push\n- Skeleton GET skipped for known-existing projects; 5s settle sleep only when a skeleton was created\n- _apply_project_config skipped with '=' output preserved when helper says so; chain projects without verdict take full path\n- --branch-from behaviour unchanged\n\n**Verify:** venv/bin/python -m pytest tests/test_project_prepass.py -q; dry-run: venv/bin/python -m percona_obs -P dev sync push --dry-run --project-only ppg:17.9\n\n**Steps:** Failing tests; helper + verdict collection; skeleton return-bool + pre-pass rewrite; live dry-run; black+pyright+pytest; git commit -s. Full code in plan doc Task 4.\n\n```json:metadata\n{\"files\": [\"percona_obs/cmd_sync.py\", \"percona_obs/obs_api.py\", \"tests/test_project_prepass.py\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/test_project_prepass.py -q\", \"acceptanceCriteria\": [\"verdicts collected\", \"pure helper gates skip\", \"conditional sleep\", \"branch mode untouched\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 5: Global client-side throttle and 429/503 retry",
+      "status": "completed",
+      "description": "**Goal:** Pace all osc HTTP traffic (default 8 req/s via PERCONA_OBS_MAX_RPS) and retry 429/503 (502/504 GET-only) honoring Retry-After, by patching osc.connection.http_request.\n\n**Files:**\n- Create: percona_obs/http_throttle.py\n- Modify: percona_obs/cli.py (install in main), .github/scripts/poll_obs_builds.py (install), percona_obs/cmd_sync.py:935 (pool 16->8)\n- Test: tests/test_http_throttle.py\n\n**Acceptance Criteria:**\n- Wrapper installed at osc.connection.http_request (http_GET/PUT/POST/DELETE resolve at call time)\n- Retry semantics: 429/503 all methods, 502/504 GET only, max 5 attempts, Retry-After honored, exp backoff min(2**n, 60), original HTTPError re-raised\n- Thread-shared min-interval pacing; 0 disables\n- install() idempotent\n\n**Verify:** venv/bin/python -m pytest tests/test_http_throttle.py -q\n\n**Steps:** Failing tests against _request_with_retry/_pace; implement module; install in cli + poll script; lower Phase 1 pool; black+pyright+pytest; git commit -s. Full code in plan doc Task 5.\n\n```json:metadata\n{\"files\": [\"percona_obs/http_throttle.py\", \"percona_obs/cli.py\", \"percona_obs/cmd_sync.py\", \".github/scripts/poll_obs_builds.py\", \"tests/test_http_throttle.py\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/test_http_throttle.py -q\", \"acceptanceCriteria\": [\"retry semantics\", \"pacing\", \"idempotent install\", \"wired in cli and poll\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 6: Sync report + scoped backoff poll loop",
+      "status": "completed",
+      "blockedBy": [
+        1
+      ],
+      "description": "**Goal:** sync push --report-json writes rebuild_projects/promoted/skipped; poll script monitors only rebuild_projects (single badge snapshot when empty), ramps interval 30s->300s while unchanged, final full-tree sweep adopts cross-project cascades.\n\n**Files:**\n- Modify: percona_obs/cli.py (--report-json), percona_obs/cmd_sync.py (collect rebuild projects, write report), percona_obs/common.py (next_poll_interval), .github/scripts/poll_obs_builds.py\n- Test: tests/test_poll_interval.py\n\n**Acceptance Criteria:**\n- Report JSON: rebuild_projects (committed uploads or created/updated project meta/prjconf), promoted list, skipped count\n- next_poll_interval ramps x1.5 to cap, resets on change\n- Poll with OBS_SYNC_REPORT: scoped monitoring, devel skip kept, empty set -> one full snapshot + exit, terminal -> full sweep adoption\n- Poll without report: full-tree as today + backoff\n\n**Verify:** venv/bin/python -m pytest tests/test_poll_interval.py -q\n\n**Steps:** Failing tests for next_poll_interval; implement helper; add flag + report collection in cmd_sync; rework poll loop with collect() helper; black+pyright+pytest; git commit -s. Full code in plan doc Task 6.\n\n```json:metadata\n{\"files\": [\"percona_obs/cli.py\", \"percona_obs/cmd_sync.py\", \"percona_obs/common.py\", \".github/scripts/poll_obs_builds.py\", \"tests/test_poll_interval.py\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/test_poll_interval.py -q\", \"acceptanceCriteria\": [\"report written\", \"backoff helper\", \"scoped poll + adoption sweep\", \"legacy behaviour without report\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 7: Workflow restructure \u2014 debounce + wiring",
+      "status": "completed",
+      "blockedBy": [
+        2,
+        5
+      ],
+      "description": "**Goal:** Split sync-main.yml into serialized sync job (group sync-main-sync, no cancel) and cancellable poll job (group sync-main-poll, cancel-in-progress: true, needs: sync); diff base for version-lists/release-tags becomes last-successful-run head SHA; wire --skip-unchanged --report-json, OBS_SYNC_REPORT, .cache/sync_state in deps cache.\n\n**Files:**\n- Modify: .github/workflows/sync-main.yml\n\n**Acceptance Criteria:**\n- Workflow-level concurrency removed; job-level groups as specified\n- Sync report passed via artifact; poll sets OBS_SYNC_REPORT\n- .cache/sync_state in deps cache paths\n- Diff base: last successful run head SHA, fallback event.before, fallback zeros SHA\n- Badge publish stays if: always() in poll job; sync job drops contents: write, poll job gains it\n- YAML parses\n\n**Verify:** venv/bin/python -c \"import yaml; yaml.safe_load(open('.github/workflows/sync-main.yml')); print('OK')\"\n\n**Steps:** Restructure per plan doc Task 7 skeleton; validate YAML; git commit -s; post-merge observation via gh run list.\n\n```json:metadata\n{\"files\": [\".github/workflows/sync-main.yml\"], \"verifyCommand\": \"venv/bin/python -c \\\"import yaml; yaml.safe_load(open('.github/workflows/sync-main.yml')); print('OK')\\\"\", \"acceptanceCriteria\": [\"two jobs with correct concurrency\", \"report artifact wired\", \"last-successful diff base\", \"badge always\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 8: Documentation and final verification",
+      "status": "completed",
+      "blockedBy": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "description": "**Goal:** Document new flags/env vars and run the full verification suite.\n\n**Files:**\n- Modify: docs/PERCONA_OBS_TOOL.md, .github/copilot-instructions.md (only if it enumerates sync flags)\n\n**Acceptance Criteria:**\n- --skip-unchanged, --report-json, PERCONA_OBS_MAX_RPS, OBS_SYNC_REPORT, OBS_POLL_MAX_INTERVAL, .cache/sync_state documented\n- black + pyright + full pytest pass; live dry-run with --skip-unchanged works\n\n**Verify:** venv/bin/black percona_obs/ tests/ && venv/bin/pyright && venv/bin/python -m pytest tests/ -q\n\n**Steps:** Add 'Reducing OBS API traffic' section (text in plan doc Task 8); check copilot-instructions; full suite + dry-run; git commit -s.\n\n```json:metadata\n{\"files\": [\"docs/PERCONA_OBS_TOOL.md\", \".github/copilot-instructions.md\"], \"verifyCommand\": \"venv/bin/black percona_obs/ tests/ && venv/bin/pyright && venv/bin/python -m pytest tests/ -q\", \"acceptanceCriteria\": [\"all new knobs documented\", \"full suite green\"], \"modelTier\": \"mechanical\"}\n```"
+    }
+  ],
+  "lastUpdated": "2026-07-16T22:30:00Z"
+}
