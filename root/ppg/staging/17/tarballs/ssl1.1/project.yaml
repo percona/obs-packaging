@@ -1,0 +1,36 @@
+title: Percona PostgreSQL %!{PG_MAJOR_VERSION} Tarballs (%!{TARBALL_SSL_VARIANT})
+description: |
+  Binary tarball (simpleimage) builds for Percona Software for PostgreSQL
+  %!{PG_MAJOR_VERSION}, %!{TARBALL_SSL_VARIANT} variant. The tarball repackages
+  the ppg:staging:%!{PG_MAJOR_VERSION} RPMs into the official per-component
+  layout for air-gapped / unsupported-distro installs.
+
+repositories:
+  - name: RockyLinux_8
+    paths:
+      - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
+        repository: RockyLinux_8
+      - subproject: ppg:common:deps
+        repository: RockyLinux_8
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:8
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: appstream
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: baseos
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: devel
+    archs: [x86_64]
+
+publish:
+  RockyLinux_8: true
+
+project-config: |
+  Type: simpleimage
+  # Same install-time resolution hints as staging RockyLinux_8.
+  ExpandFlags: module:llvm-toolset-rhel8
+  ExpandFlags: module:perl-5.26
+  ExpandFlags: module:perl-IO-Socket-SSL-2.066
+  ExpandFlags: module:perl-libwww-perl-6.34
+  Prefer: python3-devel
+  Prefer: selinux-policy-targeted
