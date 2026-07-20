@@ -10,12 +10,14 @@ import pytest
 TARBALLS_ROOT = (
     Path(__file__).parent.parent / "root" / "ppg" / "staging" / "17" / "tarballs"
 )
-VARIANTS = ["ssl1.1", "ssl3", "ssl3.5"]
 PACKAGE = "percona-postgresql-tarball"
+# Derived from the tree so new variant subprojects are covered automatically.
+VARIANTS = sorted(d.name for d in TARBALLS_ROOT.iterdir() if (d / PACKAGE).is_dir())
 
 
 @pytest.mark.parametrize("filename", ["simpleimage", "build-tarball.sh"])
 def test_variant_copies_identical(filename: str) -> None:
+    assert "ssl3" in VARIANTS, f"reference variant ssl3 missing from {TARBALLS_ROOT}"
     contents = {
         variant: (TARBALLS_ROOT / variant / PACKAGE / "obs" / filename).read_bytes()
         for variant in VARIANTS
