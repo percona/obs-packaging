@@ -89,6 +89,11 @@ copy_deps() {
         local real=$(readlink -f "$lib")
         local dir=$(dirname "$real")
         local base=$(basename "$lib" | sed 's/\.so.*//')
+        # The resolved real file may not match the ${base}.so* glob below
+        # (e.g. libldap.so.2 -> libldap_r.so.2.0.200, libopenblaso.so.0 ->
+        # libopenblaso-r0.3.29.so); copy it explicitly so the recreated
+        # symlinks never dangle.
+        cp -pn "$real" "$destlib/" 2>/dev/null || true
         # Copy real file + all related symlinks
         for f in "$dir"/${base}.so*; do
             [ -e "$f" ] || [ -L "$f" ] || continue
@@ -598,9 +603,17 @@ done
 # Python: also walk the whole lib/pythonX.Y tree (lib-dynload/ C extensions,
 # site-packages extensions like psycopg2/_psycopg) so their NEEDED libs
 # (libsqlite3, libncursesw, libuuid, libgdbm, libpq, ...) are bundled into
-# $PYTHON_PREFIX/lib, which the python3 wrapper puts on LD_LIBRARY_PATH.
+# $PYTHON_PREFIX/lib.
 bundle_deps $PYTHON_PREFIX "$PYTHON_PREFIX/lib/python${PY_VER}"
 patch_rpath $PYTHON_PREFIX
+# RPATH the C extensions at the bundled lib dir: the python3 wrapper sets
+# LD_LIBRARY_PATH, but embedded interpreters (plpython3 inside postgres.real)
+# don't run through the wrapper, and the executable's RUNPATH does not apply
+# to dlopened extensions' own deps.
+find "$PYTHON_PREFIX/lib/python${PY_VER}" -type f -name '*.so*' | while read -r f; do
+    file "$f" 2>/dev/null | grep -q ELF || continue
+    patchelf --set-rpath '/opt/percona-python3/lib:$ORIGIN' "$f"
+done
 # Perl: walk the lib tree so XS-module deps (libdb for DB_File, libsombok
 # for Unicode::LineBreak, ...) are bundled, then point the XS modules at
 # the bundled libs (absolute /opt path — same convention as LANG_RPATH;
@@ -608,8 +621,8 @@ patch_rpath $PYTHON_PREFIX
 # Note: percona-perl/percona-tcl RPATHs for bin/ were already set in
 # section 12 and bundle_deps does not touch RPATHs.
 bundle_deps $PERL_PREFIX "$PERL_PREFIX/lib"
-find "$PERL_PREFIX/lib" -type f -name '*.so' -path '*/auto/*' | while read f; do
-    patchelf --set-rpath '/opt/percona-perl/lib:$ORIGIN' "$f" 2>/dev/null || true
+find "$PERL_PREFIX/lib" -type f -name '*.so' -path '*/auto/*' | while read -r f; do
+    patchelf --set-rpath '/opt/percona-perl/lib:$ORIGIN' "$f"
 done
 # Note: etcd (Go static), pgbadger (Perl script), patroni (Python) -- no bundling needed
 
@@ -655,9 +668,10 @@ echo "=== Verification: NEEDED-soname audit ==="
 # ldd would resolve against the fully-populated buildroot (ld.so.cache), hiding
 # libraries we failed to bundle. Instead audit DT_NEEDED sonames directly: each
 # must either be host-provided by design (is_system_lib) or bundled under /opt.
-# Precompute the bundled-soname list (real files and symlinks) once; a
-# per-soname 'find /opt' rescan is O(tree size) for every NEEDED entry.
-find /opt \( -type f -o -type l \) -name '*.so*' -printf '%f\n' | sort -u \
+# Precompute the bundled-soname list once; a per-soname 'find /opt' rescan
+# is O(tree size) for every NEEDED entry. -xtype f = regular files plus
+# symlinks that resolve to one, so dangling symlinks never count as bundled.
+find /opt -name '*.so*' -xtype f -printf '%f\n' | sort -u \
     > /tmp/bundled-sonames.txt
 find /opt -type f \( -perm -u+x -o -name '*.so*' \) | while read -r f; do
     file "$f" 2>/dev/null | grep -q ELF || continue
