@@ -519,6 +519,9 @@ if [ -n "$CORE_DIR" ]; then
     # Recreate SONAME symlink and unversioned symlink pointing to real file
     ln -sf "$LIBPERL_REAL" "$CORE_DIR/libperl.so.${PERL_VER%.*}"  # e.g. libperl.so.5.32
     ln -sf "$LIBPERL_REAL" "$CORE_DIR/libperl.so"
+    # RPATH libperl itself: RUNPATH is not transitive, so libperl.so must be
+    # able to find its own deps (libcrypt copied into CORE/ above).
+    patchelf --set-rpath '$ORIGIN' "$CORE_DIR/$LIBPERL_REAL"
 fi
 # patchelf perl binary so dynamic linker finds libperl in CORE at $ORIGIN
 patchelf --set-rpath "\$ORIGIN/../lib/${PERL_VER}/CORE" "$PERL_PREFIX/bin/perl"
@@ -581,11 +584,10 @@ PERL_CORE_REL=${PERL_CORE_DIR#/opt/}  # e.g., percona-perl/lib/5.32.1/CORE
 LANG_RPATH='$ORIGIN/../lib:/opt/percona-python3/lib:/opt/'"${PERL_CORE_REL}"':/opt/percona-tcl/lib'
 LANG_RPATH_LIB='$ORIGIN:/opt/percona-python3/lib:/opt/'"${PERL_CORE_REL}"':/opt/percona-tcl/lib'
 
-# Patch postgres and postmaster binaries
-for pgbin in postgres postmaster; do
-    [ -f "$PG_PREFIX/bin/$pgbin" ] && \
-        patchelf --set-rpath "$LANG_RPATH" "$PG_PREFIX/bin/$pgbin" 2>/dev/null || true
-done
+# Patch the real postgres binary ($PG_PREFIX/bin/postgres is the shell wrapper
+# created in section 2c; postmaster no longer exists in PG >= 16). Mandatory —
+# fail loudly if patchelf cannot rewrite it.
+patchelf --set-rpath "$LANG_RPATH" "$PG_PREFIX/bin/postgres.real"
 
 # Patch PL language extension .so files
 for ext in plperl.so plpython3.so pltcl.so; do
@@ -604,18 +606,23 @@ done
 ###############################################################
 # 15. Verification gate — fail the build on any breakage
 ###############################################################
-echo "=== Verification: ldd audit ==="
+echo "=== Verification: NEEDED-soname audit ==="
+# ldd would resolve against the fully-populated buildroot (ld.so.cache), hiding
+# libraries we failed to bundle. Instead audit DT_NEEDED sonames directly: each
+# must either be host-provided by design (is_system_lib) or bundled under /opt.
 find /opt -type f \( -perm -u+x -o -name '*.so*' \) | while read -r f; do
     file "$f" 2>/dev/null | grep -q ELF || continue
-    ldd "$f" 2>/dev/null | grep 'not found' | while read -r line; do
-        lib=$(echo "$line" | awk '{print $1}')
-        if ! is_system_lib "$lib"; then
-            echo "UNRESOLVED: $f -> $line"
+    patchelf --print-needed "$f" 2>/dev/null | while read -r soname; do
+        if is_system_lib "$soname"; then
+            continue
+        fi
+        if [ -z "$(find /opt -name "$soname" -print -quit)" ]; then
+            echo "UNRESOLVED: $f needs $soname (not bundled, not in system exclude list)"
         fi
     done
-done > /tmp/ldd-audit.txt
-if [ -s /tmp/ldd-audit.txt ]; then
-    cat /tmp/ldd-audit.txt
+done > /tmp/needed-audit.txt
+if [ -s /tmp/needed-audit.txt ]; then
+    cat /tmp/needed-audit.txt
     echo "FATAL: unresolved libraries found" >&2
     exit 1
 fi
