@@ -1,0 +1,50 @@
+#!NoTarBall
+#!NoSquashfs
+Name:           percona-postgresql
+Version:        %!{PG_VERSION}-%!{TARBALL_SSL_VARIANT}-linux
+
+# PostgreSQL server and all extensions
+BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-server
+BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-contrib
+BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-libs
+BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-plpython3
+BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-plperl
+BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-pltcl
+BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-devel
+BuildRequires:  percona-pg_tde%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pgaudit%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pgaudit%!{PG_MAJOR_VERSION}_set_user
+BuildRequires:  percona-pg_stat_monitor%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pg_repack%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pg_cron_%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-wal2json%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pgvector_%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-postgis35_%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pg-telemetry%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pg_gather
+# Companion tools
+BuildRequires:  percona-pgbouncer
+BuildRequires:  percona-pgpool-II-pg%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pgbackrest
+BuildRequires:  percona-pgbadger
+BuildRequires:  percona-patroni
+BuildRequires:  percona-patroni-aws
+BuildRequires:  etcd
+BuildRequires:  python3-pysyncobj
+# Language runtimes
+BuildRequires:  %!{TARBALL_PYTHON_PKG}
+BuildRequires:  %!{TARBALL_PYTHON_PKG}-pip
+BuildRequires:  %!{TARBALL_PYTHON_PKG}-devel
+BuildRequires:  %!{TARBALL_PYTHON_PKG}-idle
+BuildRequires:  perl
+BuildRequires:  perl-libs
+BuildRequires:  perl-devel
+BuildRequires:  tcl
+BuildRequires:  tcl-devel
+# Build tools
+BuildRequires:  patchelf
+BuildRequires:  file
+
+%build
+exec bash /usr/src/packages/SOURCES/build-tarball.sh
