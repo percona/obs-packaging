@@ -4,44 +4,55 @@
     {
       "id": 1,
       "subject": "Task 1: ssl3 variant subproject (reference variant)",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Create root/ppg/staging/17/tarballs/ssl3/ — project.yaml, macros.yaml, and the percona-postgresql-tarball package (simpleimage + build-tarball.sh) — complete and shellcheck-clean.\n\n**Files:**\n- Create: root/ppg/staging/17/tarballs/ssl3/project.yaml\n- Create: root/ppg/staging/17/tarballs/ssl3/macros.yaml\n- Create: root/ppg/staging/17/tarballs/ssl3/percona-postgresql-tarball/obs/simpleimage\n- Create: root/ppg/staging/17/tarballs/ssl3/percona-postgresql-tarball/obs/build-tarball.sh\n\n**Acceptance Criteria:**\n- simpleimage uses only %!{...} macros defined in ancestor macros.yaml files (PG_MAJOR_VERSION, PG_VERSION, TARBALL_SSL_VARIANT, TARBALL_PYTHON_PKG)\n- All BuildRequires names verified against the published staging repo (dnf repoquery)\n- shellcheck --severity=error build-tarball.sh → no errors\n- build-tarball.sh contains no hardcoded PG major or python version (discovers at run time)\n\n**Verify:** shellcheck --severity=error root/ppg/staging/17/tarballs/ssl3/percona-postgresql-tarball/obs/build-tarball.sh && bash -n <same file> → exit 0\n\nFull step-by-step content (including the complete simpleimage recipe, POC modification list 4a-4e, and project.yaml) is in the plan document Task 1.\n\n```json:metadata\n{\"files\": [\"root/ppg/staging/17/tarballs/ssl3/project.yaml\", \"root/ppg/staging/17/tarballs/ssl3/macros.yaml\", \"root/ppg/staging/17/tarballs/ssl3/percona-postgresql-tarball/obs/simpleimage\", \"root/ppg/staging/17/tarballs/ssl3/percona-postgresql-tarball/obs/build-tarball.sh\"], \"verifyCommand\": \"shellcheck --severity=error root/ppg/staging/17/tarballs/ssl3/percona-postgresql-tarball/obs/build-tarball.sh\", \"acceptanceCriteria\": [\"macros resolve from ancestor macros.yaml\", \"BuildRequires names verified vs published repo\", \"shellcheck severity=error clean\", \"no hardcoded PG/python versions\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 2,
       "subject": "Task 2: Local container validation of build-tarball.sh",
-      "status": "pending",
-      "blockedBy": [1],
+      "status": "completed",
+      "blockedBy": [
+        1
+      ],
       "description": "**Goal:** Prove build-tarball.sh produces a correct tarball in a Rocky 9 container with the staging RPMs installed, before touching OBS. Iterate on the script until it passes.\n\n**Files:**\n- Modify (as needed): root/ppg/staging/17/tarballs/ssl3/percona-postgresql-tarball/obs/build-tarball.sh\n- Create: <scratchpad>/tarball-test/run-local.sh (throwaway harness, NOT committed)\n\n**Acceptance Criteria:**\n- Script runs to completion inside rockylinux:9 with all BuildRequires packages installed\n- /.simpleimage.tar.gz produced; top-level entries are exactly the percona-* component dirs\n- Verification gate (section 15) passes: 0 unresolved libs, all smoke commands OK\n- Structure-diff vs official percona-postgresql-17.10-ssl3-linux-x86_64.tar.gz: no missing component dirs / bin,lib,share,include subdirs (haproxy absence accepted)\n\n**Verify:** bash run-local.sh && tar -tzf out/.simpleimage.tar.gz | awk -F/ '{print $1}' | sort -u → component dir list\n\nFull harness script and diff commands are in the plan document Task 2.\n\n```json:metadata\n{\"files\": [\"root/ppg/staging/17/tarballs/ssl3/percona-postgresql-tarball/obs/build-tarball.sh\"], \"verifyCommand\": \"bash run-local.sh (scratchpad harness)\", \"acceptanceCriteria\": [\"container run completes\", \"tarball top-level = percona-* dirs only\", \"ldd audit 0 unresolved + smoke commands OK\", \"structure-diff vs official reviewed\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 3,
       "subject": "Task 3: Replicate to ssl1.1 and ssl3.5 + copy-identity test",
-      "status": "pending",
-      "blockedBy": [2],
+      "status": "completed",
+      "blockedBy": [
+        2
+      ],
       "description": "**Goal:** Create the ssl1.1 (Rocky 8) and ssl3.5 (Rocky 10) variant subprojects as byte-identical package copies with variant-specific macros.yaml/project.yaml, plus a pytest guarding the copies against divergence.\n\n**Files:**\n- Create: root/ppg/staging/17/tarballs/ssl1.1/{project.yaml,macros.yaml}\n- Create: root/ppg/staging/17/tarballs/ssl1.1/percona-postgresql-tarball/obs/{simpleimage,build-tarball.sh} (copies)\n- Create: root/ppg/staging/17/tarballs/ssl3.5/{project.yaml,macros.yaml}\n- Create: root/ppg/staging/17/tarballs/ssl3.5/percona-postgresql-tarball/obs/{simpleimage,build-tarball.sh} (copies)\n- Test: tests/test_tarball_variants.py\n\n**Acceptance Criteria:**\n- simpleimage and build-tarball.sh byte-identical across the three variant dirs (enforced by pytest)\n- ssl1.1 repo chain = staging RockyLinux_8 chain; ssl3.5 = RockyLinux_10 chain; archs [x86_64]; publish enabled\n- ssl3.5 macros.yaml sets TARBALL_PYTHON_PKG: python3\n- Rocky 10 openssl-libs confirmed 3.5.* (else STOP and ask user about variant naming)\n- black + pyright pass; pytest tests/test_tarball_variants.py passes\n\n**Verify:** venv/bin/pytest tests/test_tarball_variants.py -v → 2 passed\n\nFull project.yaml contents and test code are in the plan document Task 3.\n\n```json:metadata\n{\"files\": [\"root/ppg/staging/17/tarballs/ssl1.1/project.yaml\", \"root/ppg/staging/17/tarballs/ssl1.1/macros.yaml\", \"root/ppg/staging/17/tarballs/ssl3.5/project.yaml\", \"root/ppg/staging/17/tarballs/ssl3.5/macros.yaml\", \"tests/test_tarball_variants.py\"], \"verifyCommand\": \"venv/bin/pytest tests/test_tarball_variants.py -v\", \"acceptanceCriteria\": [\"byte-identical package files across variants\", \"correct repo chains per base\", \"TARBALL_PYTHON_PKG python3 on ssl3.5\", \"Rocky 10 openssl 3.5 confirmed\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 4,
       "subject": "Task 4: Sync tooling dry-run verification",
-      "status": "pending",
-      "blockedBy": [3],
+      "status": "completed",
+      "blockedBy": [
+        3
+      ],
       "description": "**Goal:** Confirm percona-obs resolves and syncs the new tarball subprojects without code changes (spec says none expected — verify, don't assume).\n\n**Files:**\n- None expected; modify percona_obs/*.py only if the dry-run exposes a container-specific assumption.\n\n**Acceptance Criteria:**\n- sync push --dry-run for each of the three variant projects resolves the target, expands macros, reports files to upload (simpleimage, build-tarball.sh) and project meta/prjconf — no tracebacks\n- Dry-run output shows Type: simpleimage in prjconf and expanded Version: 17.10-<variant>-linux\n\n**Verify:** venv/bin/python -m percona_obs -P isv sync push --dry-run ppg:staging:17:tarballs:ssl3 percona-postgresql-tarball → dry-run report, exit 0\n\nSTANDING RULE: -P isv is production — NEVER any write op without --dry-run.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"venv/bin/python -m percona_obs -P isv sync push --dry-run ppg:staging:17:tarballs:ssl3 percona-postgresql-tarball\", \"acceptanceCriteria\": [\"all three variants dry-run clean\", \"prjconf Type: simpleimage visible\", \"macro-expanded Version visible\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 5,
       "subject": "Task 5: Document the tarballs subprojects",
-      "status": "pending",
-      "blockedBy": [3],
+      "status": "completed",
+      "blockedBy": [
+        3
+      ],
       "description": "**Goal:** Record the tarballs layout and build model in root/README.md.\n\n**Files:**\n- Modify: root/README.md\n\n**Acceptance Criteria:**\n- root/README.md explains: one subproject per SSL variant, base-distro mapping, byte-identical package files with variant macros.yaml, #!NoTarBall self-tar model, publish-enabled artifact location\n\n**Verify:** grep -A5 'tarballs' root/README.md → shows the new subsection\n\nFull markdown content is in the plan document Task 5.\n\n```json:metadata\n{\"files\": [\"root/README.md\"], \"verifyCommand\": \"grep -A5 tarballs root/README.md\", \"acceptanceCriteria\": [\"tarballs subsection present with variant table and build model\"], \"modelTier\": \"mechanical\"}\n```"
     },
     {
       "id": 6,
       "subject": "Task 6: PR build in production OBS + acceptance test",
       "status": "pending",
-      "blockedBy": [4, 5],
+      "blockedBy": [
+        4,
+        5
+      ],
       "description": "**Goal:** Prove the end-to-end deliverable: obs-pr-sync builds all three variants in a production PR project, and the ssl3 artifact passes the acceptance test on a foreign distro.\n\n**USER-ORDERED GATE — NON-SKIPPABLE.** This task was requested by the user in the current conversation. It MUST NOT be closed by walking around it, by declaring it \"verified inline\", or by substituting a cheaper check. Close only after every item in acceptanceCriteria has been re-validated independently, with output captured.\n\n**Files:**\n- None (operational; fixes loop back into Tasks 1–3 files if builds fail)\n\n**Acceptance Criteria:**\n- User has opened the PR (manual — do NOT git push or gh pr create without explicit go-ahead)\n- obs-pr-sync created the PR project incl. all three tarballs:ssl* subprojects; build status succeeded for percona-postgresql-tarball in all three\n- Artifact downloaded from the PR project\n- Acceptance on ubuntu:24.04 (ssl3): untar to /opt/pgdistro, copy percona-{python3,perl,tcl} to /opt, as non-root: initdb OK, pg_ctl start OK, psql SELECT version() shows Percona 17.10, CREATE EXTENSION pg_tde OK, patronictl version prints\n- Structure-diff vs official 17.10 ssl3 tarball reviewed; divergences accepted explicitly or fixed\n\n**Verify:** venv/bin/python -m percona_obs -A https://api.opensuse.org -R isv:percona:PR:pr-<N> build status ppg:staging:17:tarballs:ssl3 → succeeded; then the containerized acceptance commands (plan Task 6 Step 4), each with captured output\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"build status per variant + containerized acceptance script (plan Task 6 Step 4)\", \"acceptanceCriteria\": [\"PR opened by user\", \"all three variants build succeeded in PR project\", \"artifact downloaded\", \"ubuntu:24.04 acceptance: initdb/pg_ctl/psql/pg_tde/patronictl all OK with captured output\", \"structure-diff reviewed\"], \"userGate\": true, \"tags\": [\"user-gate\"], \"gateScope\": \"task\", \"requireEvidenceTokens\": [[\"succeeded\", \"build status\"], [\"initdb\", \"pg_ctl\", \"CREATE EXTENSION\"]], \"modelTier\": \"standard\"}\n```"
     }
   ],
-  "lastUpdated": "2026-07-20"
+  "lastUpdated": "2026-07-21T03:00:00"
 }
