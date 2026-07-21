@@ -153,8 +153,9 @@ Per-repository differences (Python package names, prjconf resolution hints) are
 handled with `%if "%_repository" == "..."` conditionals in the `simpleimage` recipe
 and the project config. The `%build` script stages all components under
 `/opt/percona-*` and creates the artifact itself: it derives the official tarball
-name at build time (the SSL variant is detected from the buildroot's `openssl-libs`
-version) and writes it directly into the OBS result directory
+name at build time (the SSL variant is mapped from the buildroot's EL major
+version, read from `/etc/os-release` with a glibc `%dist`-tag fallback) and
+writes it directly into the OBS result directory
 (`/usr/src/packages/OTHER`), bypassing the recipe's own fixed-name tar step
 (`#!NoTarBall`). All three repositories publish their results, so the `.tar.gz`
 files are downloadable from the OBS publish tree.
