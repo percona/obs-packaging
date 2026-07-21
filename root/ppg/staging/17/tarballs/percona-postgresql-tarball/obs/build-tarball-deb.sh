@@ -742,6 +742,11 @@ done
 ###############################################################
 # 15. Verification gate — fail the build on any breakage
 ###############################################################
+# readelf is required by the OpenSSL host-ABI audit below. Assert it exists:
+# if it were silently missing, the audit would see empty input and pass
+# vacuously — the exact failure mode this gate exists to prevent.
+command -v readelf >/dev/null || { echo "FATAL: readelf missing — SSL-ABI audit impossible" >&2; exit 1; }
+
 # The SSL variant labels follow the official tarball naming and map 1:1 to
 # the deb base of the repository. Each deb base maps to exactly one variant;
 # extend this table deliberately when a new base is added, and fail loudly
