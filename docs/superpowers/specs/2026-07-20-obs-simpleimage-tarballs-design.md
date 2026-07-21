@@ -73,41 +73,62 @@ basis for the build script.
 
 ### Project & tree structure
 
-Three variant subprojects, one per SSL generation, mirroring the `containers/` pattern:
+*(Revised 2026-07-21, user decision: SSL variants are **repositories** of a single
+subproject, not separate subprojects.)*
+
+One subproject with one package; each SSL variant is an OBS repository whose path
+chain points at a different EL base of `ppg:staging:17`:
 
 ```
-root/ppg/staging/17/tarballs/
-├── ssl1.1/                          → ppg:staging:17:tarballs:ssl1.1
-│   ├── macros.yaml                  # - TARBALL_SSL_VARIANT: ssl1.1
-│   ├── project.yaml
-│   └── percona-postgresql-tarball/
-│       └── obs/
-│           ├── simpleimage
-│           └── build-tarball.sh
-├── ssl3/                            → ppg:staging:17:tarballs:ssl3     (RockyLinux_9)
-└── ssl3.5/                          → ppg:staging:17:tarballs:ssl3.5   (RockyLinux_10)
+root/ppg/staging/17/tarballs/            → ppg:staging:17:tarballs
+├── project.yaml                          # repos: ssl1.1, ssl3, ssl3.5
+└── percona-postgresql-tarball/
+    └── obs/
+        ├── simpleimage
+        └── build-tarball.sh
 ```
 
-Each `project.yaml` defines one repository whose path chain matches the corresponding
-base in `ppg:staging:17` (repos listed explicitly — OBS only expands the last path
-transitively):
+Path chains listed explicitly — OBS only expands the last path transitively:
 
-| Subproject | Repo | Path chain | Host ABI targeted |
-|---|---|---|---|
-| `tarballs:ssl1.1` | `RockyLinux_8` | `ppg:staging:17/RockyLinux_8` + `ppg:common:deps` + EPEL 8 + Rocky 8 (appstream, baseos, devel) | glibc ≥ 2.28, OpenSSL 1.1 |
-| `tarballs:ssl3` | `RockyLinux_9` | `ppg:staging:17/RockyLinux_9` + `ppg:common:deps` + EPEL 9 + Rocky 9 | glibc ≥ 2.34, OpenSSL 3.x |
-| `tarballs:ssl3.5` | `RockyLinux_10` | `ppg:staging:17/RockyLinux_10` + EPEL 10 + Rocky 10 | glibc ≥ 2.39, OpenSSL 3.5 |
+| Repository | Path chain | Host ABI targeted |
+|---|---|---|
+| `ssl1.1` | `ppg:staging:17/RockyLinux_8` + `ppg:common:deps` + EPEL 8 + Rocky 8 (appstream, baseos, devel) | glibc ≥ 2.28, OpenSSL 1.1 |
+| `ssl3` | `ppg:staging:17/RockyLinux_9` + `ppg:common:deps` + EPEL 9 + Rocky 9 | glibc ≥ 2.34, OpenSSL 3.x |
+| `ssl3.5` | `ppg:staging:17/RockyLinux_10` + EPEL 10 + Rocky 10 | glibc ≥ 2.39, OpenSSL 3.5 |
 
-- Archs: `[x86_64]`.
-- Project-config: `Type: simpleimage`, plus any `ExpandFlags`/`Prefer` lines the base
-  repo needs (mirroring `staging/17/project.yaml` prjconf for that repo).
-- **Publishing: enabled** — the produced `.tar.gz` is directly downloadable from the
-  published repository tree of each variant project.
+- Archs: `[x86_64]` on every repo.
+- Single project-config: `Type: simpleimage` globally, plus per-repo
+  `%if "%_repository" == "…"` blocks carrying the `ExpandFlags`/`Prefer` hints the
+  base needs (mirroring `staging/17/project.yaml` prjconf). OBS defines
+  `%_repository` in every build config (`BSSched/ProjPacks.pm` prepends
+  `%define _repository <repo>`), so the same conditionals also work inside the
+  `simpleimage` recipe, which is parsed as an RPM spec.
+- **Publishing: enabled on all three repos** — the produced `.tar.gz` is directly
+  downloadable from each repo's publish tree.
+- OBS builds the one package once per repository → three artifacts per checkin;
+  no duplicated package files, no copy-identity test needed.
 
 ### The simpleimage package
 
-The package files are **byte-identical across all three variants**; variant identity
-comes from the subproject's `macros.yaml` and its repo path chain.
+One copy of each file. Per-variant differences are expressed with
+`%if "%_repository"` conditionals inside `simpleimage` (the EL10 base has no
+`python3.12` package name — its default `python3` *is* 3.12):
+
+```
+%if "%_repository" == "ssl3.5"
+BuildRequires:  python3
+BuildRequires:  python3-pip
+BuildRequires:  python3-devel
+%else
+BuildRequires:  python3.12
+BuildRequires:  python3.12-pip
+BuildRequires:  python3.12-devel
+%endif
+```
+
+`Version:` is plain `%!{PG_VERSION}` — metadata only; it no longer drives the
+artifact name (see below). The `TARBALL_SSL_VARIANT`/`TARBALL_PYTHON_PKG` macros
+are gone.
 
 `obs/simpleimage` (macro-expanded at sync time) — POC preamble adapted to staging:17
 package names and macros:
@@ -116,7 +137,7 @@ package names and macros:
 #!NoTarBall
 #!NoSquashfs
 Name:           percona-postgresql
-Version:        %!{PG_VERSION}-%!{TARBALL_SSL_VARIANT}-linux
+Version:        %!{PG_VERSION}
 
 # PostgreSQL server and all extensions
 BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}
@@ -145,10 +166,7 @@ BuildRequires:  percona-patroni
 BuildRequires:  percona-patroni-aws
 BuildRequires:  etcd
 BuildRequires:  python3-pysyncobj
-# Language runtimes
-BuildRequires:  python3.12
-BuildRequires:  python3.12-pip
-BuildRequires:  python3.12-devel
+# Language runtimes (python via the %if "%_repository" conditional shown above)
 BuildRequires:  perl
 BuildRequires:  perl-libs
 BuildRequires:  perl-devel
@@ -169,9 +187,16 @@ Notes:
   pg_cron / pg-telemetry) are **verified against staging:17 build results and the
   official tarball structure-diff during implementation** — the POC list is the
   starting point, and it may need per-repo `%if` guards if names differ across bases.
-- Output artifact: `percona-postgresql-17.10-ssl3-linux_x86_64.tar.gz`
-  (recipe naming is `Name-Version_ARCH.tar.gz`; the underscore before the arch differs
-  from the official name — exact renaming, if needed, happens at release/download time).
+- Output artifact: `percona-postgresql-17.10-ssl3-linux-x86_64.tar.gz` — **exactly**
+  the official name, including the dash before the arch. The recipe's own
+  `Name-Version_ARCH` naming cannot vary per repository (it reads the tags with a raw
+  `sed`, no macro expansion), so the `%build` script writes the artifact itself into
+  `/usr/src/packages/OTHER/` (the directory OBS collects results from) and creates no
+  `/.simpleimage.tar.gz` (which makes the recipe's rename step a no-op). The name is
+  fully self-derived inside the buildroot: PG version from the installed server RPM,
+  SSL variant mapped from the installed `openssl-libs` version (1.1.\*→ssl1.1,
+  3.5.\*→ssl3.5, other 3.\*→ssl3; anything unmapped fails the build loudly), arch from
+  `uname -m`.
 - Version bumps are automatic: `PG_VERSION` derives from `PG_MINOR_VERSION` in
   `staging/17/macros.yaml`, which is already bumped during release prep.
 - All build logic lives in `build-tarball.sh`, not inline in `%build`: the `%build`
@@ -179,7 +204,7 @@ Notes:
   standalone script can be exercised locally in a container. The script is macro-free —
   it discovers the PG major version from `/usr/pgsql-*` and probes perl/tcl/python
   versions at run time (replacing the POC's hardcoded `PG_MAJOR=17` / `PY_VER=3.12`
-  where practical) — so it stays identical across variants and future PG majors.
+  where practical) — so the same script serves all variant repos and future PG majors.
 
 ### The %build pipeline (`build-tarball.sh`)
 
@@ -228,14 +253,18 @@ after OBS installs the BuildRequires closure:
    - Smoke: `bin/initdb --version`, `bin/postgres.real --version`,
      `percona-python3/bin/python3 -c 'import ssl, yaml'`,
      `percona-patroni/bin/patronictl version` — all with RPATH/wrapper resolution only.
-6. **Create the artifact ourselves:** `cd /opt && tar -czf /.simpleimage.tar.gz *`.
-   With `#!NoTarBall` set, the recipe skips its own full-buildroot tar and just renames
-   our file to `Name-Version_ARCH.tar.gz`. No buildroot pruning, no `rm -rf` tricks.
+6. **Create the artifact ourselves, with the official name:** derive the full name
+   inside the buildroot (PG version from the server RPM, SSL variant from
+   `openssl-libs`, arch from `uname -m`) and
+   `tar -czf /usr/src/packages/OTHER/percona-postgresql-<ver>-<variant>-linux-<arch>.tar.gz`
+   from `/opt`. `#!NoTarBall` keeps the recipe from tarring the buildroot, and with no
+   `/.simpleimage.tar.gz` present its rename step is a no-op — OBS collects our file
+   from `OTHER/` as the build result. No buildroot pruning, no `rm -rf` tricks.
 
 ### percona-obs tooling impact
 
-None expected. The `tarballs/ssl*/` dirs have the same shape as `containers/ubi*/`:
-colon-named subprojects with `project.yaml` and packages whose `obs/` files sync
+None expected. The `tarballs/` dir has the same shape as `containers/ubi*/`:
+a colon-named subproject with `project.yaml` and a package whose `obs/` files sync
 verbatim with macro expansion (a package is any dir with an `obs/` subdir —
 `common.is_package`). Implementation includes a verification step that nothing in
 `targets.py` / `cmd_sync.py` / `cmd_project.py` special-cases containers.
@@ -275,9 +304,9 @@ verbatim with macro expansion (a package is any dir with an `obs/` subdir —
   haproxy presence; pgvector/postgis/pgpool RPM naming).
 - Confirm Rocky 10 ships OpenSSL 3.5 (naming of the `ssl3.5` variant depends on it).
 - Confirm where published simpleimage artifacts land in the publish tree URL layout.
-- Confirm the `obs-pr-sync` workflow correctly creates PR projects for *brand-new*
-  subprojects (`tarballs:ssl*` do not exist in production yet), including their
-  repo path rewrites against the PR project namespace.
+- Confirm the `obs-pr-sync` workflow correctly creates PR projects for the *brand-new*
+  subproject (`ppg:staging:17:tarballs` does not exist in production yet), including
+  its repo path rewrites against the PR project namespace.
 - Python runtime availability per base: `python3.12` exists on EL8/EL9 as parallel
   stacks and is the default on EL10 — the script's version probing must handle both
   (`/usr/bin/python3.12` vs `/usr/bin/python3`).
