@@ -138,22 +138,26 @@ Each package directory contains the packaging sources split by format:
 #### `tarballs/`
 
 Binary-tarball builds (OBS `simpleimage` format) for air-gapped / unsupported-distro
-installs, replicating the official Percona tarball layout. One subproject per SSL
-variant, each building against a different EL base of `ppg:staging:<V>`:
+installs, replicating the official Percona tarball layout. One subproject
+(`ppg:staging:<V>:tarballs`) with a single `percona-postgresql-tarball` package,
+built across three repositories — one per SSL variant, each stacked on a different
+EL base of `ppg:staging:<V>`:
 
-| Subproject | Base repo | Host ABI targeted |
+| Repository | Base | Host ABI targeted |
 |---|---|---|
-| `tarballs/ssl1.1` | RockyLinux_8 | glibc ≥ 2.28, OpenSSL 1.1 |
-| `tarballs/ssl3` | RockyLinux_9 | glibc ≥ 2.34, OpenSSL 3.x |
-| `tarballs/ssl3.5` | RockyLinux_10 | glibc ≥ 2.39, OpenSSL 3.5 |
+| `ssl1.1` | RockyLinux_8 | glibc ≥ 2.28, OpenSSL 1.1 |
+| `ssl3` | RockyLinux_9 | glibc ≥ 2.34, OpenSSL 3.x |
+| `ssl3.5` | RockyLinux_10 | glibc ≥ 2.39, OpenSSL 3.5 |
 
-The `percona-postgresql-tarball` package files (`simpleimage`, `build-tarball.sh`)
-are byte-identical across variants (enforced by `tests/test_tarball_variants.py`);
-variant identity comes from each subproject's `macros.yaml` (`TARBALL_SSL_VARIANT`,
-`TARBALL_PYTHON_PKG`) and repository paths. The `%build` script stages all components
-under `/opt/percona-*` and creates the artifact itself (`#!NoTarBall`), so the tarball
-contains only the official per-component tree. Repositories publish their results, so
-the `.tar.gz` is downloadable from the OBS publish tree.
+Per-repository differences (Python package names, prjconf resolution hints) are
+handled with `%if "%_repository" == "..."` conditionals in the `simpleimage` recipe
+and the project config. The `%build` script stages all components under
+`/opt/percona-*` and creates the artifact itself: it derives the official tarball
+name at build time (the SSL variant is detected from the buildroot's `openssl-libs`
+version) and writes it directly into the OBS result directory
+(`/usr/src/packages/OTHER`), bypassing the recipe's own fixed-name tar step
+(`#!NoTarBall`). All three repositories publish their results, so the `.tar.gz`
+files are downloadable from the OBS publish tree.
 
 ### `devel/<major-version>/`
 

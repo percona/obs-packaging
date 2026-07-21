@@ -1,7 +1,10 @@
 #!/bin/bash
 # Builds the Percona PostgreSQL binary tarball from RPM-installed content.
 # Runs chrooted as root inside an OBS simpleimage buildroot; writes the
-# final artifact to /.simpleimage.tar.gz (picked up via #!NoTarBall).
+# final artifact (with its official self-derived name) directly into
+# /usr/src/packages/OTHER, where OBS collects build results. The recipe's
+# own /.simpleimage.tar.gz handling is skipped (#!NoTarBall, and no such
+# file is created).
 set -e
 
 PG_MAJOR=$(basename "$(ls -d /usr/pgsql-*)" | sed 's/^pgsql-//')
@@ -699,7 +702,32 @@ env -u LD_LIBRARY_PATH "$PG_PREFIX/bin/postgres.real" --version
 echo 'puts "tcl OK"' | "$TCL_PREFIX/bin/tclsh"
 
 ###############################################################
-# 16. Create tarball of /opt only (skip default simpleimage tar)
+# 16. Create the final artifact with the official tarball name
 ###############################################################
+# The simpleimage recipe names its own output from raw (unexpanded)
+# Name:/Version: tags, which cannot vary per repository. Instead we
+# write the artifact directly into /usr/src/packages/OTHER (collected
+# by OBS as a build result) and skip /.simpleimage.tar.gz entirely.
+PG_FULL_VERSION=$(rpm -q --qf '%{version}' "percona-postgresql${PG_MAJOR}-server")
+# The SSL variant labels follow the official tarball naming and map 1:1 to
+# the EL base of each repository: EL8=ssl1.1, EL9=ssl3, EL10=ssl3.5.
+# (The buildroot's openssl-libs version cannot tell the variants apart:
+# EL 9.8+ and EL10 both ship OpenSSL 3.5.x.) Fail loudly on anything
+# unmapped, e.g. a future EL11.
+EL_MAJOR=$( (. /etc/os-release 2>/dev/null && echo "${PLATFORM_ID#platform:el}") || true)
+if [ -z "$EL_MAJOR" ]; then
+    # Buildroots without a release package (no /etc/os-release): fall back
+    # to glibc's %dist tag (glibc is present in every buildroot).
+    EL_MAJOR=$(rpm -q --qf '%{release}' glibc | sed -n 's/.*\.el\([0-9][0-9]*\).*/\1/p')
+fi
+case "$EL_MAJOR" in
+    8)  SSL_VARIANT=ssl1.1 ;;
+    9)  SSL_VARIANT=ssl3 ;;
+    10) SSL_VARIANT=ssl3.5 ;;
+    *)  echo "FATAL: unmapped EL major version '$EL_MAJOR'" >&2; exit 1 ;;
+esac
+TARBALL="percona-postgresql-${PG_FULL_VERSION}-${SSL_VARIANT}-linux-$(uname -m).tar.gz"
+mkdir -p /usr/src/packages/OTHER
 cd /opt
-tar -czf /.simpleimage.tar.gz *
+tar -czf "/usr/src/packages/OTHER/${TARBALL}" -- *
+echo "Created ${TARBALL}"
