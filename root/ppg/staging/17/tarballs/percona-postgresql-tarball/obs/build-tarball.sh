@@ -475,6 +475,13 @@ mkdir -p $PERL_PREFIX/lib/site_perl
 # Software::License::SSLeay module is left alone.
 find "$PERL_PREFIX" -type d -path '*/Net/SSLeay' -prune -exec rm -rf {} +
 find "$PERL_PREFIX" -type f \( -path '*/Net/SSLeay.pm' -o -path '*/Net/SSLeay.pod' \) -delete
+# Prune IO::Socket::SSL as well: it is pure perl (no host-ABI impact) but
+# hard-requires the Net::SSLeay XS module pruned above, so it could never
+# load — and the official tarball's percona-perl tree does not ship it
+# either (the only IO/Socket/SSL in the official artifact sits inside
+# pgbackrest's private bin/vendor_perl bundle, which we do not stage).
+find "$PERL_PREFIX" -type d -path '*/IO/Socket/SSL' -prune -exec rm -rf {} +
+find "$PERL_PREFIX" -type f \( -path '*/IO/Socket/SSL.pm' -o -path '*/IO/Socket/SSL.pod' \) -delete
 
 # Copy libcrypt into Perl CORE dir (reference does this)
 CORE_DIR=$(find $PERL_PREFIX -name "CORE" -type d | head -1)
@@ -681,10 +688,12 @@ done
 # 15. Verification gate — fail the build on any breakage
 ###############################################################
 # The SSL variant labels follow the official tarball naming and map 1:1 to
-# the EL base of each repository: EL8=ssl1.1, EL9=ssl3, EL10=ssl3.5.
-# (The buildroot's openssl-libs version cannot tell the variants apart:
-# EL 9.8+ and EL10 both ship OpenSSL 3.5.x.) Fail loudly on anything
-# unmapped, e.g. a future EL11.
+# the EL base of each repository: EL8=ssl1.1, EL10=ssl3.5. EL9 is no longer
+# a tarball base: ssl3 is built from Ubuntu 22.04 by build-tarball-deb.sh
+# (staging EL9 binaries need OPENSSL_3.4 symbol versions — Rocky 9.8+ ships
+# OpenSSL 3.5.x — which breaks the "ssl3 runs on any OpenSSL 3.0 host"
+# promise this gate enforces). Fail loudly on anything unmapped, e.g. a
+# future EL11.
 # The variant is derived here, before the gate, because the OpenSSL
 # host-ABI audit below picks its allowed-symbol policy from it; section 16
 # reuses it for the artifact name.
@@ -696,7 +705,9 @@ if [ -z "$EL_MAJOR" ]; then
 fi
 case "$EL_MAJOR" in
     8)  SSL_VARIANT=ssl1.1 ;;
-    9)  SSL_VARIANT=ssl3 ;;
+    9)  echo "FATAL: EL9 is no longer a tarball base — ssl3 is built from" \
+             "Ubuntu 22.04 (staging EL9 binaries need OPENSSL_3.4)" >&2
+        exit 1 ;;
     10) SSL_VARIANT=ssl3.5 ;;
     *)  echo "FATAL: unmapped EL major version '$EL_MAJOR'" >&2; exit 1 ;;
 esac
@@ -753,10 +764,11 @@ case "$SSL_VARIANT" in
 esac
 # Scan every ELF under /opt EXCEPT the percona-python3 tree: the python
 # component bundles its own OpenSSL copy (libssl/libcrypto in its lib/,
-# plus psycopg2's vendored copies), and its loaders are pointed at those
-# bundled 3.5 libs via RPATH/LD_LIBRARY_PATH — so the python tree's
-# OpenSSL symbol needs are satisfied internally and are NOT part of the
-# host promise.
+# used by lib-dynload extensions like _ssl/_hashlib and by site-packages
+# extensions (psycopg2's _psycopg) whose OpenSSL needs resolve to the
+# bundled copy), and its loaders are pointed at those bundled libs via
+# RPATH/LD_LIBRARY_PATH — so the python tree's OpenSSL symbol needs are
+# satisfied internally and are NOT part of the host promise.
 find /opt -path /opt/percona-python3 -prune -o \
         -type f \( -perm -u+x -o -name '*.so*' \) -print | while read -r f; do
     file "$f" 2>/dev/null | grep -q ELF || continue
