@@ -121,6 +121,6 @@ BuildRequires:  binutils
 %build
 . /etc/os-release
 case "$ID" in
-    ubuntu|debian) exec bash /usr/src/packages/SOURCES/build-tarball-deb.sh ;;
-    *)             exec bash /usr/src/packages/SOURCES/build-tarball.sh ;;
+    ubuntu|debian) exec bash -x /usr/src/packages/SOURCES/build-tarball-deb.sh ;;
+    *)             exec bash -x /usr/src/packages/SOURCES/build-tarball.sh ;;
 esac
