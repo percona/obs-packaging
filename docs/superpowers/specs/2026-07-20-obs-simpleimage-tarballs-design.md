@@ -93,8 +93,18 @@ Path chains listed explicitly — OBS only expands the last path transitively:
 | Repository | Path chain | Host ABI targeted |
 |---|---|---|
 | `ssl1.1` | `ppg:staging:17/RockyLinux_8` + `ppg:common:deps` + EPEL 8 + Rocky 8 (appstream, baseos, devel) | glibc ≥ 2.28, OpenSSL 1.1 |
-| `ssl3` | `ppg:staging:17/RockyLinux_9` + `ppg:common:deps` + EPEL 9 + Rocky 9 | glibc ≥ 2.34, OpenSSL 3.x |
+| `ssl3` | `ppg:staging:17/Ubuntu_22.04` + `ppg:common:deps` + Ubuntu 22.04 universe | glibc ≥ 2.35, OpenSSL 3.0 |
 | `ssl3.5` | `ppg:staging:17/RockyLinux_10` + EPEL 10 + Rocky 10 | glibc ≥ 2.39, OpenSSL 3.5 |
+
+*(Revised 2026-07-21: ssl3 was originally Rocky 9-based, but RHEL 9.8 rebased to
+OpenSSL 3.5 and the EL9 staging `pgcrypto.so` references `OPENSSL_3.4.0` symbols —
+breaking the "OpenSSL 3.0 hosts" promise. Verified: Ubuntu 22.04 staging debs need
+only `OPENSSL_3.0.0`. The ssl3 repo therefore consumes the staging **deb** packages
+via a second builder script, `build-tarball-deb.sh`, selected by a `/etc/os-release`
+dispatcher in `%build`. The verification gate enforces each variant's OpenSSL promise
+via a versioned-symbol-needs audit, so any future drift fails the build loudly.
+Documented divergence: the ssl3 tarball bundles python 3.10 — the Ubuntu 22.04
+distro python — while ssl1.1/ssl3.5 bundle 3.12.)*
 
 - Archs: `[x86_64]` on every repo.
 - Single project-config: `Type: simpleimage` globally, plus per-repo
@@ -193,10 +203,13 @@ Notes:
   `sed`, no macro expansion), so the `%build` script writes the artifact itself into
   `/usr/src/packages/OTHER/` (the directory OBS collects results from) and creates no
   `/.simpleimage.tar.gz` (which makes the recipe's rename step a no-op). The name is
-  fully self-derived inside the buildroot: PG version from the installed server RPM,
-  SSL variant mapped from the installed `openssl-libs` version (1.1.\*→ssl1.1,
-  3.5.\*→ssl3.5, other 3.\*→ssl3; anything unmapped fails the build loudly), arch from
-  `uname -m`.
+  fully self-derived inside the buildroot: PG version from the installed server
+  package (`rpm -q` / `dpkg-query`), SSL variant mapped from the buildroot's platform
+  (RPM side: EL major from `/etc/os-release` `PLATFORM_ID` with a glibc dist-tag
+  fallback, 8→ssl1.1, 10→ssl3.5, 9→fatal since the ssl3 rebase; deb side:
+  `ubuntu`+`22.04`→ssl3; anything unmapped fails the build loudly), arch from
+  `uname -m`. *(An openssl-version-based mapping was originally specified but is
+  impossible: EL9 and EL10 both ship OpenSSL 3.5 now.)*
 - Version bumps are automatic: `PG_VERSION` derives from `PG_MINOR_VERSION` in
   `staging/17/macros.yaml`, which is already bumped during release prep.
 - All build logic lives in `build-tarball.sh`, not inline in `%build`: the `%build`
