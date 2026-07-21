@@ -113,6 +113,12 @@ project-config: |
   # python3.12-boto3 choice), but EPEL10's python3-botocore also provides
   # python3.12-botocore, so the same choice surfaces once boto3 resolves.
   Prefer: python3.12-botocore
+  # boto3/botocore carry rich requires on python3.12dist(jmespath) and
+  # python3.12dist(s3transfer); EPEL10's python3-jmespath/python3-s3transfer
+  # provide those dist names too (python3 = 3.12 on EL10), colliding with
+  # our staging python3.12-jmespath/python3.12-s3transfer packages.
+  Prefer: python3.12-jmespath
+  Prefer: python3.12-s3transfer
   # Defensive: percona-patroni requires python3.12-psycopg2. Today Rocky
   # 10's python3-psycopg2 (which also provides python3.12-psycopg2) is
   # shadowed by our same-named python3-psycopg2 transition package, so
