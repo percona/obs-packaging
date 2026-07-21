@@ -687,6 +687,11 @@ done
 ###############################################################
 # 15. Verification gate — fail the build on any breakage
 ###############################################################
+# readelf is required by the OpenSSL host-ABI audit below. Assert it exists:
+# if it were silently missing, the audit would see empty input and pass
+# vacuously — the exact failure mode this gate exists to prevent.
+command -v readelf >/dev/null || { echo "FATAL: readelf missing — SSL-ABI audit impossible" >&2; exit 1; }
+
 # The SSL variant labels follow the official tarball naming and map 1:1 to
 # the EL base of each repository: EL8=ssl1.1, EL10=ssl3.5. EL9 is no longer
 # a tarball base: ssl3 is built from Ubuntu 22.04 by build-tarball-deb.sh
@@ -757,6 +762,8 @@ case "$SSL_VARIANT" in
     # EL8 links openssl 1.1.1: nodes are OPENSSL_1_1_0 / OPENSSL_1_1_1x.
     ssl1.1) OPENSSL_ALLOWED='OPENSSL_1_1_[0-9a-z]*' ;;
     # Must run on any OpenSSL 3.0 host: only 3.0.x nodes are acceptable.
+    # unreachable — ssl3 is deb-based (Ubuntu 22.04, see build-tarball-deb.sh);
+    # kept only to document the policy.
     ssl3)   OPENSSL_ALLOWED='OPENSSL_3\.0\.[0-9]*' ;;
     # Hosts ship 3.5: any node up to and including 3.5.x is fine.
     ssl3.5) OPENSSL_ALLOWED='OPENSSL_3\.[0-5]\.[0-9]*' ;;
