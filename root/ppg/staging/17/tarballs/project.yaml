@@ -2,8 +2,8 @@ title: Percona PostgreSQL %!{PG_MAJOR_VERSION} Tarballs
 description: |
   Binary tarball (simpleimage) builds for Percona Software for PostgreSQL
   %!{PG_MAJOR_VERSION}. Each repository is one SSL variant of the official
-  tarball, built against a different EL base of ppg:staging:%!{PG_MAJOR_VERSION}:
-  ssl1.1 (RockyLinux 8), ssl3 (RockyLinux 9), ssl3.5 (RockyLinux 10).
+  tarball, built against a different base of ppg:staging:%!{PG_MAJOR_VERSION}:
+  ssl1.1 (RockyLinux 8), ssl3 (Ubuntu 22.04), ssl3.5 (RockyLinux 10).
 
 repositories:
   - name: ssl1.1
@@ -21,16 +21,19 @@ repositories:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
         repository: devel
     archs: [x86_64]
+  # ssl3 is deb-based (Ubuntu 22.04, OpenSSL 3.0.2 / glibc 2.35): the EL9
+  # base could not keep the "ssl3 runs on any OpenSSL 3.0 host" promise —
+  # Rocky 9.8+ ships OpenSSL 3.5.x, so staging-built binaries (pgcrypto.so)
+  # reference OPENSSL_3.4.0 version nodes and the verification gate fails
+  # them. The staging Ubuntu 22.04 debs reference only OPENSSL_3.0.0.
   - name: ssl3
     paths:
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
-        repository: RockyLinux_9
+        repository: Ubuntu_22.04
       - subproject: ppg:common:deps
-        repository: RockyLinux_9
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
-        repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
-        repository: standard
+        repository: Ubuntu_22.04
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:22.04
+        repository: universe
     archs: [x86_64]
   - name: ssl3.5
     paths:
@@ -60,11 +63,9 @@ project-config: |
   Prefer: selinux-policy-targeted
   %endif
 
-  %if "%_repository" == "ssl3"
-  # Same choice-resolution as staging RockyLinux_9 (hdf-libs vs hdf both
-  # provide libdf.so.0 — pulled in via the PostGIS/gdal dependency chain).
-  Prefer: hdf-libs
-  %endif
+  # ssl3 (deb-based, Ubuntu 22.04) currently needs no extra resolution
+  # hints; if the first OBS build reports unresolvable/have-choice errors,
+  # add a %_repository == "ssl3" block here with the needed Prefer/Ignore.
 
   %if "%_repository" == "ssl3.5"
   # Same install-time resolution hints as staging RockyLinux_10.
