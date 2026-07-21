@@ -278,7 +278,7 @@ manually — the resulting patched spec is what goes into `rpm/`.
 ```xml
 <services>
   <service name="obs_scm">
-    <param name="url">https://github.com/rjd15372/percona-obs-packaging.git</param>
+    <param name="url">https://github.com/percona/obs-packaging.git</param>
     <param name="scm">git</param>
     <param name="revision">main</param>
     <param name="version">_none_</param>
@@ -288,7 +288,7 @@ manually — the resulting patched spec is what goes into `rpm/`.
   </service>
 
   <service name="obs_scm">
-    <param name="url">https://github.com/rjd15372/percona-obs-packaging.git</param>
+    <param name="url">https://github.com/percona/obs-packaging.git</param>
     <param name="scm">git</param>
     <param name="revision">main</param>
     <param name="version">_none_</param>
