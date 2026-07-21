@@ -141,24 +141,39 @@ Binary-tarball builds (OBS `simpleimage` format) for air-gapped / unsupported-di
 installs, replicating the official Percona tarball layout. One subproject
 (`ppg:staging:<V>:tarballs`) with a single `percona-postgresql-tarball` package,
 built across three repositories — one per SSL variant, each stacked on a different
-EL base of `ppg:staging:<V>`:
+base of `ppg:staging:<V>`:
 
 | Repository | Base | Host ABI targeted |
 |---|---|---|
 | `ssl1.1` | RockyLinux_8 | glibc ≥ 2.28, OpenSSL 1.1 |
-| `ssl3` | RockyLinux_9 | glibc ≥ 2.34, OpenSSL 3.x |
+| `ssl3` | Ubuntu_22.04 | glibc ≥ 2.35, OpenSSL 3.0 |
 | `ssl3.5` | RockyLinux_10 | glibc ≥ 2.39, OpenSSL 3.5 |
 
-Per-repository differences (Python package names, prjconf resolution hints) are
-handled with `%if "%_repository" == "..."` conditionals in the `simpleimage` recipe
-and the project config. The `%build` script stages all components under
-`/opt/percona-*` and creates the artifact itself: it derives the official tarball
-name at build time (the SSL variant is mapped from the buildroot's EL major
-version, read from `/etc/os-release` with a glibc `%dist`-tag fallback) and
-writes it directly into the OBS result directory
-(`/usr/src/packages/OTHER`), bypassing the recipe's own fixed-name tar step
-(`#!NoTarBall`). All three repositories publish their results, so the `.tar.gz`
-files are downloadable from the OBS publish tree.
+`ssl3` is deliberately deb-based: staging binaries built on EL9 reference
+`OPENSSL_3.4.0` symbol-version nodes (Rocky 9.8+ ships OpenSSL 3.5.x), which
+breaks the "ssl3 runs on any OpenSSL 3.0 host" promise; Ubuntu 22.04 ships
+OpenSSL 3.0.2, so its binaries can only reference 3.0.x nodes.
+
+Per-repository differences (deb vs RPM package names, Python package names,
+prjconf resolution hints) are handled with `%if "%_repository" == "..."`
+conditionals in the `simpleimage` recipe and the project config. The `%build`
+section is a small dispatcher that reads `/etc/os-release` and runs the builder
+matching the buildroot's package universe: `build-tarball.sh` on RPM bases,
+`build-tarball-deb.sh` on deb bases — two section-by-section parallel scripts
+sharing the same layout, bundling rules, and verification gate (unresolved-soname
+audit plus a per-variant OpenSSL host-ABI audit). Each script stages all
+components under `/opt/percona-*` and creates the artifact itself: it derives
+the official tarball name at build time (the SSL variant is mapped from the
+buildroot's identity in `/etc/os-release` — EL major on RPM bases, with a glibc
+`%dist`-tag fallback; distro ID + version on deb bases) and writes it directly
+into the OBS result directory (`/usr/src/packages/OTHER`), bypassing the
+recipe's own fixed-name tar step (`#!NoTarBall`). All three repositories publish
+their results, so the `.tar.gz` files are downloadable from the OBS publish tree.
+
+Documented divergence: the bundled Python is the base distro's stack — 3.12 on
+the EL bases (`ssl1.1`/`ssl3.5`), 3.10 on the Ubuntu 22.04 base (`ssl3`) — and
+on the deb base third-party modules live in `lib/python3/dist-packages`
+(Debian's version-agnostic layout) instead of `site-packages`.
 
 ### `devel/<major-version>/`
 
