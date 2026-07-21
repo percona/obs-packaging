@@ -107,9 +107,10 @@ BuildRequires:  perl-libs
 BuildRequires:  perl-devel
 BuildRequires:  tcl
 BuildRequires:  tcl-devel
-# Build tools
+# Build tools (binutils provides readelf for the verification gate)
 BuildRequires:  patchelf
 BuildRequires:  file
+BuildRequires:  binutils
 %endif
 
 # Dispatch to the builder matching the buildroot's package universe: deb
