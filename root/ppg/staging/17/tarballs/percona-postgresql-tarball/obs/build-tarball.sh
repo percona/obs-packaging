@@ -463,6 +463,19 @@ mkdir -p $PERL_PREFIX/lib/site_perl
 [ -d /usr/local/lib64/perl5 ] && cp -rp /usr/local/lib64/perl5/. $PERL_PREFIX/lib/site_perl/ || true
 [ -d /usr/local/share/perl5 ] && cp -rp /usr/local/share/perl5/. $PERL_PREFIX/lib/site_perl/ || true
 
+# Prune Net::SSLeay from the staged tree. The official Percona tarball does
+# not ship it, and its XS module (auto/Net/SSLeay/SSLeay.so) links the HOST
+# libssl/libcrypto with OPENSSL_3.2.0 version needs — that would violate
+# the ssl variant host-ABI promise enforced by the verification gate
+# (section 15). The copies above can land it in several places (vendor_perl
+# is copied both as a subtree and flattened), so sweep the whole prefix:
+# both the XS dirs (*/auto/Net/SSLeay) and the pure-perl parts
+# (Net/SSLeay.pm + Net/SSLeay.pod + Net/SSLeay/ support dir). Note: the
+# path patterns are anchored under Net/ so the unrelated
+# Software::License::SSLeay module is left alone.
+find "$PERL_PREFIX" -type d -path '*/Net/SSLeay' -prune -exec rm -rf {} +
+find "$PERL_PREFIX" -type f \( -path '*/Net/SSLeay.pm' -o -path '*/Net/SSLeay.pod' \) -delete
+
 # Copy libcrypt into Perl CORE dir (reference does this)
 CORE_DIR=$(find $PERL_PREFIX -name "CORE" -type d | head -1)
 if [ -n "$CORE_DIR" ] && [ -d "$CORE_DIR" ]; then
@@ -667,6 +680,27 @@ done
 ###############################################################
 # 15. Verification gate — fail the build on any breakage
 ###############################################################
+# The SSL variant labels follow the official tarball naming and map 1:1 to
+# the EL base of each repository: EL8=ssl1.1, EL9=ssl3, EL10=ssl3.5.
+# (The buildroot's openssl-libs version cannot tell the variants apart:
+# EL 9.8+ and EL10 both ship OpenSSL 3.5.x.) Fail loudly on anything
+# unmapped, e.g. a future EL11.
+# The variant is derived here, before the gate, because the OpenSSL
+# host-ABI audit below picks its allowed-symbol policy from it; section 16
+# reuses it for the artifact name.
+EL_MAJOR=$( (. /etc/os-release 2>/dev/null && echo "${PLATFORM_ID#platform:el}") || true)
+if [ -z "$EL_MAJOR" ]; then
+    # Buildroots without a release package (no /etc/os-release): fall back
+    # to glibc's %dist tag (glibc is present in every buildroot).
+    EL_MAJOR=$(rpm -q --qf '%{release}' glibc | sed -n 's/.*\.el\([0-9][0-9]*\).*/\1/p')
+fi
+case "$EL_MAJOR" in
+    8)  SSL_VARIANT=ssl1.1 ;;
+    9)  SSL_VARIANT=ssl3 ;;
+    10) SSL_VARIANT=ssl3.5 ;;
+    *)  echo "FATAL: unmapped EL major version '$EL_MAJOR'" >&2; exit 1 ;;
+esac
+
 echo "=== Verification: NEEDED-soname audit ==="
 # ldd would resolve against the fully-populated buildroot (ld.so.cache), hiding
 # libraries we failed to bundle. Instead audit DT_NEEDED sonames directly: each
@@ -693,6 +727,69 @@ if [ -s /tmp/needed-audit.txt ]; then
     exit 1
 fi
 
+echo "=== Verification: OpenSSL host-ABI audit ($SSL_VARIANT) ==="
+# libssl/libcrypto are deliberately NOT bundled (they are on the system
+# exclude list above), so every bundled binary resolves them from the HOST
+# at run time. The ssl variant label is therefore a host-compatibility
+# promise: ssl1.1 must run on hosts with OpenSSL 1.1, ssl3 on hosts with
+# any OpenSSL 3.0+, ssl3.5 on hosts with 3.5+. What enforces that promise
+# at the ELF level is the set of versioned symbol references (version
+# NEEDS, e.g. OPENSSL_3.0.0) each binary carries against libssl/libcrypto:
+# the host's loader refuses to start a binary that needs a version node
+# the host libraries do not define. The buildroot may ship a NEWER OpenSSL
+# than the promise (the EL9 buildroot has 3.5.x), so a staging rebuild
+# could silently start referencing newer nodes — this audit turns the
+# variant label into a tested guarantee.
+#
+# Per-variant allowed version-node pattern (anchored full-line grep):
+case "$SSL_VARIANT" in
+    # EL8 links openssl 1.1.1: nodes are OPENSSL_1_1_0 / OPENSSL_1_1_1x.
+    ssl1.1) OPENSSL_ALLOWED='OPENSSL_1_1_[0-9a-z]*' ;;
+    # Must run on any OpenSSL 3.0 host: only 3.0.x nodes are acceptable.
+    ssl3)   OPENSSL_ALLOWED='OPENSSL_3\.0\.[0-9]*' ;;
+    # Hosts ship 3.5: any node up to and including 3.5.x is fine.
+    ssl3.5) OPENSSL_ALLOWED='OPENSSL_3\.[0-5]\.[0-9]*' ;;
+    *)      echo "FATAL: no SSL-ABI policy for $SSL_VARIANT" >&2; exit 1 ;;
+esac
+# Scan every ELF under /opt EXCEPT the percona-python3 tree: the python
+# component bundles its own OpenSSL copy (libssl/libcrypto in its lib/,
+# plus psycopg2's vendored copies), and its loaders are pointed at those
+# bundled 3.5 libs via RPATH/LD_LIBRARY_PATH — so the python tree's
+# OpenSSL symbol needs are satisfied internally and are NOT part of the
+# host promise.
+find /opt -path /opt/percona-python3 -prune -o \
+        -type f \( -perm -u+x -o -name '*.so*' \) -print | while read -r f; do
+    file "$f" 2>/dev/null | grep -q ELF || continue
+    # Parse the version NEEDS only — never version definitions. readelf -V
+    # prints up to three blocks (Version symbols / Version definition /
+    # Version needs); grepping the whole output would also match version
+    # DEFINITIONS (e.g. the bundled libs' own OPENSSL_* defs) and needs
+    # against non-OpenSSL libs (GLIBC_*). The awk below activates only
+    # inside the "Version needs section" block, tracks the current
+    # "File: <soname>" attribution line, and emits "<soname> <node>" pairs
+    # only for the host-provided OpenSSL sonames (libssl.so.*/libcrypto.so.*).
+    readelf -V "$f" 2>/dev/null | awk '
+        /^Version needs section/ { inneeds = 1; next }
+        /^Version (symbols|definition) section/ { inneeds = 0 }
+        !inneeds { next }
+        /File:/ { for (i = 1; i <= NF; i++) if ($i == "File:") fname = $(i + 1) }
+        /Name:/ && fname ~ /^lib(ssl|crypto)\.so/ {
+            for (i = 1; i <= NF; i++) if ($i == "Name:") print fname, $(i + 1)
+        }
+    ' | while read -r soname node; do
+        # Anchored match: the node must be entirely covered by the allowed
+        # pattern, otherwise it exceeds what the variant's hosts provide.
+        if ! echo "$node" | grep -qx "$OPENSSL_ALLOWED"; then
+            echo "SSL-ABI: $f references $node via $soname (exceeds $SSL_VARIANT promise)"
+        fi
+    done
+done > /tmp/ssl-abi-audit.txt
+if [ -s /tmp/ssl-abi-audit.txt ]; then
+    cat /tmp/ssl-abi-audit.txt
+    echo "FATAL: OpenSSL symbol-version needs exceed the $SSL_VARIANT promise" >&2
+    exit 1
+fi
+
 echo "=== Verification: smoke commands ==="
 env -u LD_LIBRARY_PATH "$PG_PREFIX/bin/initdb" --version
 env -u LD_LIBRARY_PATH "$PG_PREFIX/bin/postgres.real" --version
@@ -709,23 +806,8 @@ echo 'puts "tcl OK"' | "$TCL_PREFIX/bin/tclsh"
 # write the artifact directly into /usr/src/packages/OTHER (collected
 # by OBS as a build result) and skip /.simpleimage.tar.gz entirely.
 PG_FULL_VERSION=$(rpm -q --qf '%{version}' "percona-postgresql${PG_MAJOR}-server")
-# The SSL variant labels follow the official tarball naming and map 1:1 to
-# the EL base of each repository: EL8=ssl1.1, EL9=ssl3, EL10=ssl3.5.
-# (The buildroot's openssl-libs version cannot tell the variants apart:
-# EL 9.8+ and EL10 both ship OpenSSL 3.5.x.) Fail loudly on anything
-# unmapped, e.g. a future EL11.
-EL_MAJOR=$( (. /etc/os-release 2>/dev/null && echo "${PLATFORM_ID#platform:el}") || true)
-if [ -z "$EL_MAJOR" ]; then
-    # Buildroots without a release package (no /etc/os-release): fall back
-    # to glibc's %dist tag (glibc is present in every buildroot).
-    EL_MAJOR=$(rpm -q --qf '%{release}' glibc | sed -n 's/.*\.el\([0-9][0-9]*\).*/\1/p')
-fi
-case "$EL_MAJOR" in
-    8)  SSL_VARIANT=ssl1.1 ;;
-    9)  SSL_VARIANT=ssl3 ;;
-    10) SSL_VARIANT=ssl3.5 ;;
-    *)  echo "FATAL: unmapped EL major version '$EL_MAJOR'" >&2; exit 1 ;;
-esac
+# SSL_VARIANT was derived at the top of section 15 (EL-major mapping),
+# where the OpenSSL host-ABI audit also depends on it.
 TARBALL="percona-postgresql-${PG_FULL_VERSION}-${SSL_VARIANT}-linux-$(uname -m).tar.gz"
 mkdir -p /usr/src/packages/OTHER
 cd /opt
