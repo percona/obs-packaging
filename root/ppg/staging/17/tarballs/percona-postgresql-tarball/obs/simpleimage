@@ -3,6 +3,64 @@
 Name:           percona-postgresql
 Version:        %!{PG_VERSION}
 
+%if "%_repository" == "ssl3"
+# ssl3 builds on a deb base (Ubuntu 22.04, OpenSSL 3.0 / glibc 2.35), so the
+# BuildRequires use Debian binary package names. The remaining variants
+# (ssl1.1/ssl3.5) build on EL bases and keep the RPM names below.
+# PostgreSQL server and all extensions (contrib is part of the -17 deb)
+BuildRequires:  percona-postgresql-%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-postgresql-client-%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-postgresql-server-dev-%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-postgresql-plpython3-%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-postgresql-plperl-%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-postgresql-pltcl-%!{PG_MAJOR_VERSION}
+BuildRequires:  libpq5
+# ecpg preprocessor + runtime libs (part of the RPM -devel package, split
+# out on deb; the official tarball ships them in the PG component)
+BuildRequires:  libecpg-dev
+BuildRequires:  percona-pg-tde%!{PG_MAJOR_VERSION}
+# pg_tde_* recovery/admin tools (split out of the extension deb)
+BuildRequires:  percona-pg-tde%!{PG_MAJOR_VERSION}-client
+BuildRequires:  percona-postgresql-%!{PG_MAJOR_VERSION}-pgaudit
+BuildRequires:  percona-pgaudit%!{PG_MAJOR_VERSION}-set-user
+BuildRequires:  percona-pg-stat-monitor%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-postgresql-%!{PG_MAJOR_VERSION}-repack
+BuildRequires:  percona-postgresql-%!{PG_MAJOR_VERSION}-cron
+BuildRequires:  percona-postgresql-%!{PG_MAJOR_VERSION}-wal2json
+BuildRequires:  percona-postgresql-%!{PG_MAJOR_VERSION}-pgvector
+BuildRequires:  percona-postgresql-%!{PG_MAJOR_VERSION}-postgis-3
+BuildRequires:  percona-postgresql-%!{PG_MAJOR_VERSION}-postgis-3-scripts
+BuildRequires:  percona-pg-telemetry%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pg-gather
+# Companion tools
+BuildRequires:  percona-pgbouncer
+BuildRequires:  percona-pgpool2
+BuildRequires:  postgresql-%!{PG_MAJOR_VERSION}-pgpool2
+BuildRequires:  libpgpoolpcp3
+BuildRequires:  libpgpool-dev
+BuildRequires:  percona-pgbackrest
+BuildRequires:  percona-pgbadger
+# Single deb — the AWS entry points (patroni_aws, ...) ship inside it;
+# their boto3 stack comes from Ubuntu universe below.
+BuildRequires:  percona-patroni
+BuildRequires:  etcd
+BuildRequires:  python3-pysyncobj
+BuildRequires:  python3-boto3
+BuildRequires:  python3-botocore
+BuildRequires:  python3-jmespath
+BuildRequires:  python3-s3transfer
+# Language runtimes (python3 = 3.10 on Ubuntu 22.04)
+BuildRequires:  python3
+BuildRequires:  python3-pip
+BuildRequires:  python3-dev
+BuildRequires:  perl
+BuildRequires:  tcl
+BuildRequires:  tcl-dev
+# Build tools (binutils provides readelf for the verification gate)
+BuildRequires:  patchelf
+BuildRequires:  file
+BuildRequires:  binutils
+%else
 # PostgreSQL server and all extensions
 BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}
 BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-server
@@ -52,6 +110,16 @@ BuildRequires:  tcl-devel
 # Build tools
 BuildRequires:  patchelf
 BuildRequires:  file
+%endif
 
+# Dispatch to the builder matching the buildroot's package universe: deb
+# bases (ssl3 = Ubuntu 22.04) stage from dpkg paths, RPM bases (ssl1.1/
+# ssl3.5) from rpm paths. Decided from os-release because the %build body
+# is extracted verbatim by the simpleimage recipe and piped to a shell —
+# no macro expansion happens here.
 %build
-exec bash /usr/src/packages/SOURCES/build-tarball.sh
+. /etc/os-release
+case "$ID" in
+    ubuntu|debian) exec bash /usr/src/packages/SOURCES/build-tarball-deb.sh ;;
+    *)             exec bash /usr/src/packages/SOURCES/build-tarball.sh ;;
+esac
