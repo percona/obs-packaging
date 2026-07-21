@@ -54,6 +54,13 @@ project-config: |
   Type: simpleimage
 
   %if "%_repository" == "ssl1.1"
+  # Explicit binary format: "Type: simpleimage" above disables obs-build's
+  # recipe-type guessing (which would have derived it from the Preinstall
+  # list), and simpleimage is not one of the image types (kiwi, docker, ...)
+  # for which Build.pm re-derives the binary format, so without this the
+  # repo resolves with binarytype UNDEFINED. Harmless for RPM repos (the
+  # expander falls back to RPM semantics) but declare it anyway.
+  Binarytype: rpm
   # Same install-time resolution hints as staging RockyLinux_8.
   ExpandFlags: module:llvm-toolset-rhel8
   ExpandFlags: module:perl-5.26
@@ -61,14 +68,56 @@ project-config: |
   ExpandFlags: module:perl-libwww-perl-6.34
   Prefer: python3-devel
   Prefer: selinux-policy-targeted
+  # glibc requires the virtual "glibc-langpack"; every glibc-langpack-*
+  # (plus glibc-all-langpacks and glibc-minimal-langpack) provides it, and
+  # image-type expansion resolves the full runtime closure while ignoring
+  # the base config's "Ignore: glibc:glibc-langpack" rule, so OBS reports
+  # "have choice for glibc-langpack needed by glibc". Pick the minimal
+  # langpack (same fix as the ubi9 container project config).
+  Prefer: glibc-minimal-langpack
   %endif
 
-  # ssl3 (deb-based, Ubuntu 22.04) currently needs no extra resolution
-  # hints; if the first OBS build reports unresolvable/have-choice errors,
-  # add a %_repository == "ssl3" block here with the needed Prefer/Ignore.
+  %if "%_repository" == "ssl3"
+  # Explicit binary format for the deb repo. "Type: simpleimage" above
+  # disables obs-build's recipe-type guessing (staging's Ubuntu_22.04 repo
+  # is guessed as Type dsc from the "debianutils" Preinstall, which implies
+  # binarytype deb), and simpleimage is not one of the image types (kiwi,
+  # docker, ...) for which Build.pm re-derives the binary format from the
+  # Preinstall list. Without this line the repo resolves with binarytype
+  # UNDEFINED, i.e. RPM dependency/conflict semantics applied to the deb
+  # metadata, which breaks the preinstall expansion ("unresolvable:
+  # preinstalls: conflict for providers of perl-base >= 5.20.1-3 needed by
+  # init-system-helpers").
+  Binarytype: deb
+  %endif
 
   %if "%_repository" == "ssl3.5"
+  # Explicit binary format (see the ssl1.1/ssl3 comments).
+  Binarytype: rpm
   # Same install-time resolution hints as staging RockyLinux_10.
   Prefer: selinux-policy-targeted
   Prefer: hdf-libs
+  # python3 is 3.12 on EL10, so the EPEL10/Rocky 10 python3-foo packages
+  # also provide "python3.12-foo" and OBS reports "have choice" between
+  # them and our staging python3.12-foo packages for every percona-patroni
+  # dependency that both sides ship. Prefer our packages.
+  Prefer: python3.12-wcwidth
+  Prefer: python3.12-dateutil
+  Prefer: python3.12-six
+  Prefer: python3.12-click
+  Prefer: python3.12-prettytable
+  Prefer: python3.12-psutil
+  Prefer: python3.12-boto3
+  Prefer: python3.12-dns
+  # Not in the first OBS error report (the resolver stops at the
+  # python3.12-boto3 choice), but EPEL10's python3-botocore also provides
+  # python3.12-botocore, so the same choice surfaces once boto3 resolves.
+  Prefer: python3.12-botocore
+  # Defensive: percona-patroni requires python3.12-psycopg2. Today Rocky
+  # 10's python3-psycopg2 (which also provides python3.12-psycopg2) is
+  # shadowed by our same-named python3-psycopg2 transition package, so
+  # there is no choice, but prefer ours explicitly in case that changes.
+  Prefer: python3.12-psycopg2
+  # No glibc-langpack Prefer needed here: unlike Rocky 8, the EL10 base
+  # configs already carry "Prefer: glibc-langpack-en".
   %endif
