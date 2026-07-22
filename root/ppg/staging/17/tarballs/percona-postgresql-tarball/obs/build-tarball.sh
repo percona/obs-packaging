@@ -183,19 +183,52 @@ done
 mv $PG_PREFIX/bin/psql $PG_PREFIX/bin/psql.bin
 cat > $PG_PREFIX/bin/psql << 'EOF'
 #!/bin/bash
+# psql wrapper (mirrors the official Percona tarball wrapper).
+#
+# psql.bin is built against libreadline, which is deliberately NOT bundled
+# (system exclude list) — the HOST copy is used at run time. Two mechanisms:
+#
+#  * LD_PRELOAD of the host libreadline: covers the case where psql.bin's
+#    DT_NEEDED soname matches a host library (e.g. the EL9-built ssl3
+#    binary needs libreadline.so.8, present on all modern hosts).
+#
+#  * libreadline.so.7 symlink fallback: the EL8-built (ssl1.1) psql.bin
+#    carries "NEEDED libreadline.so.7", but current hosts ship only
+#    libreadline.so.8 — and LD_PRELOAD can NOT satisfy a missing NEEDED
+#    soname, the loader still refuses to start. So when the host offers
+#    only .so.8, create a libreadline.so.7 -> <host .so.8> symlink inside
+#    the artifact's own lib dir, which the loader reaches through
+#    psql.bin's RUNPATH ($ORIGIN/../lib). readline 7 -> 8 is compatible
+#    for everything psql uses; the official wrapper does exactly this.
+#    The symlink write into the extraction dir is best-effort (|| true):
+#    on a read-only install it fails silently and we still exec psql.bin
+#    (which then only matters for the .so.7-needing binary anyway).
 PG_BIN_PATH=`dirname "$0"`
-PG_LIB_PATH=$PG_BIN_PATH/../lib/
+PG_LIB_PATH=$PG_BIN_PATH/../lib
 PLL=""
-if [ -f /lib64/libreadline.so.8 ]; then
-    PLL=/lib64/libreadline.so.8
-elif [ -f /lib64/libreadline.so.7 ]; then
+RL8=""
+if [ -f /lib64/libreadline.so.7 ]; then
+    # Host still ships .so.7: satisfies the EL8-built binary directly.
     PLL=/lib64/libreadline.so.7
+elif [ -f /lib64/libreadline.so.8 ]; then
+    PLL=/lib64/libreadline.so.8
+    RL8=$PLL
 elif [ -f /usr/lib/x86_64-linux-gnu/libreadline.so.8 ]; then
     PLL=/usr/lib/x86_64-linux-gnu/libreadline.so.8
+    RL8=$PLL
 elif [ -f /lib/x86_64-linux-gnu/libreadline.so.8 ]; then
     PLL=/lib/x86_64-linux-gnu/libreadline.so.8
+    RL8=$PLL
 elif [ -f /lib/aarch64-linux-gnu/libreadline.so.8 ]; then
     PLL=/lib/aarch64-linux-gnu/libreadline.so.8
+    RL8=$PLL
+fi
+# Symlink fallback: host has only .so.8 and no .so.7 is reachable yet in
+# our lib dir — link .so.7 to the host .so.8 so an EL8-built psql.bin's
+# NEEDED entry resolves. Harmless for the .so.8-linked (EL9) binary: the
+# extra symlink is simply never looked up.
+if [ -n "$RL8" ] && [ ! -e "$PG_LIB_PATH/libreadline.so.7" ]; then
+    ln -sf "$RL8" "$PG_LIB_PATH/libreadline.so.7" 2>/dev/null || true
 fi
 if [ -z "$PLL" ]; then
     LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PG_BIN_PATH/../lib "$PG_BIN_PATH/psql.bin" "$@"
