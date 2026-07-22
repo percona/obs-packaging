@@ -62,14 +62,12 @@
 
 **Goal:** ssl1.1 tarball loads on stock OpenSSL 1.1 hosts (Debian 11-class), no RH-only symbol needs.
 
-**Files:**
-- Create: a NEW unpublished OBS subproject for tarball build deps (proposal: `root/ppg/common/tarball-deps/` → `ppg:common:tarball-deps`, RockyLinux_8 repo only, `publish: false`; NOT type simpleimage — normal spec builds; final naming/location per repo conventions, implementer verifies against README structure rules)
-- Create: three packages in it:
-  - `percona-tarball-openssl11` — stock upstream 1.1.1w, **devel/link-time only, never bundled, never published**; spec comment documents the EOL/build-only policy
-  - `percona-tarball-krb5` — krb5 rebuilt `--with-crypto-impl=builtin` (no OpenSSL linkage; official-tarball parity), Provides/Conflicts arranged so the tarball chroot picks it over RH krb5 (verify mechanism: Prefer in prjconf + higher EVR, or distinct names + simpleimage BuildRequires swap)
-  - `percona-tarball-libssh` — libssh rebuilt against percona-tarball-openssl11 headers (RH-KDF conditional off → stock nodes)
-- Modify: `root/ppg/staging/17/tarballs/project.yaml` (ssl1.1 path chain += tarball-deps repo; Prefers for the portable packages)
-- Modify: `obs/simpleimage` ssl1.1-relevant BuildRequires if package names replace distro ones
+**Files (USER DECISION 2026-07-22: packages live in `ppg:common:deps`, RockyLinux_8 ONLY, with the SAME NAMES as the distro originals):**
+- Create: `root/ppg/common/deps/krb5/` — krb5 rebuilt with `--with-crypto-impl=builtin` (no OpenSSL linkage at all; official-tarball parity). Same source-package/binary names as the distro (`krb5-libs` etc.); wins resolution via higher EVR (e.g. a `.percona` release suffix). `package.yaml` restricts builds to RockyLinux_8 only (repo-restriction convention already used in the tree).
+- Create: `root/ppg/common/deps/libssh/` — libssh rebuilt so its OpenSSL needs are stock-only. PREFERRED approach: build with the **libgcrypt backend** (`-DWITH_GCRYPT=ON`) — no OpenSSL involvement, no extra package needed (note: libgcrypt then must stay host-provided; it is in SYSTEM_LIBS_EXCLUDE and universally present). FALLBACK if gcrypt backend proves unworkable: build against a stock OpenSSL 1.1 devel package — in that case create `root/ppg/common/deps/openssl11-build/` with a DISTINCT name (`percona-openssl11-devel` or similar — same-name shadowing of `openssl` in common:deps would leak into every EL8 staging build chroot and is NOT acceptable), devel-only, never bundled/published.
+- Modify: `root/ppg/staging/17/tarballs/project.yaml` — ssl1.1 chain already includes `ppg:common:deps/RockyLinux_8`; verify our same-named packages win (EVR) and add `Prefer:` lines only if OBS still reports a choice.
+
+**Shadowing side effect to verify (not skip):** `ppg:staging:17`'s RockyLinux_8 repo chains `ppg:common:deps` too, so every EL8 staging build chroot will now resolve OUR krb5/libssh instead of Red Hat's. Consumers reference only stable krb5/libssh sonames+symbols, so produced RPMs should be identical in their requirements — but the implementer must verify at least one affected staging package (e.g. percona-postgresql EL8 buildinfo before/after via dry-run reasoning or PR build) and record the finding. If this side effect is deemed unwanted at review time, escalate to the user rather than silently switching to Prefer-scoped containment.
 
 **Acceptance Criteria:**
 - [ ] Rebuilt libk5crypto: NO libcrypto dependency at all (readelf NEEDED)
