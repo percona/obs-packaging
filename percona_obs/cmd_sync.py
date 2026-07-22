@@ -992,15 +992,6 @@ def cmd_sync(args):
             if not (_csm := _CONTAINER_SUBPROJ_RE.search(op))
             or _csm.group(1) in container_subprojs
         ]
-    # Precompute which decision keys correspond to container image packages so
-    # --no-dep-cascade can exempt them from the cascade-skip.
-    container_keys: set[tuple[str, str]] = set()
-    if getattr(args, "no_dep_cascade", False):
-        for _ck_proj, _ck_path in targets:
-            if is_dockerfile_image(_ck_path):
-                _ck_cfg = load_project_yaml(_ck_path.parent / "project.yaml")
-                _ck_name = _ck_cfg.get("name") or _ck_proj
-                container_keys.add((_ck_name, _ck_path.name))
     seen_projects: set = set()
     local_project_names: set[str] = set()
     local_packages_by_project: dict[str, set[str]] = {}
@@ -1206,9 +1197,12 @@ def cmd_sync(args):
     # --- Phase 2: dep-triggered promotion (forward fixed-point) ---
     # If a package is being promoted (full sources), any package that depends
     # on it must also be promoted so it is rebuilt against the new binaries.
+    # --no-dep-cascade disables this entirely (containers included): only
+    # packages whose own files changed are promoted, and the dep-graph API
+    # queries below are skipped as they would have no effect.
     has_promotes = any(d == "promote" for d in decisions.values())
     has_branches = any(d in ("aggregate", "skip_branch") for d in decisions.values())
-    if has_promotes and has_branches:
+    if has_promotes and has_branches and not getattr(args, "no_dep_cascade", False):
         # The dep graph is tracked project-aware: each edge carries the
         # OBS project where the package source/binary lives.  This prevents
         # same-named packages in unrelated projects (e.g. percona-pgaudit
@@ -1369,11 +1363,6 @@ def cmd_sync(args):
                             "skip_branch",
                             "skip",
                         ):
-                            if (
-                                getattr(args, "no_dep_cascade", False)
-                                and dep_key not in container_keys
-                            ):
-                                continue
                             _print_action(
                                 f"dep-promote: {dep_key[0]}/{dep_key[1]}"
                                 f"  (depends on promoted {key[0]}/{key[1]})"

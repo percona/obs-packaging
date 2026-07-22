@@ -175,7 +175,7 @@ def build_parser() -> argparse.ArgumentParser:
         dest="no_dep_cascade",
         help="With --branch-from: skip dependency-triggered promotion. Only packages "
         "whose own files changed are promoted; packages that merely depend on them "
-        "stay aggregated. Container image packages are always promoted regardless.",
+        "stay aggregated (container images included).",
     )
     sync_push_parser.add_argument(
         "--only-repos",
