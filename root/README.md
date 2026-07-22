@@ -171,8 +171,18 @@ files are downloadable from the OBS publish tree.
 
 Host prerequisites (beyond the glibc/OpenSSL floors above): a `/run/postgresql`
 directory writable by the postgres user (the default Unix-socket directory),
-tzdata (`/usr/share/zoneinfo` — the server is built with system tzdata), and
-the krb5 client libraries.
+tzdata (`/usr/share/zoneinfo` — the server is built with system tzdata), and,
+for GSSAPI/Kerberos authentication only, host krb5 *configuration*
+(`/etc/krb5.conf`) — the krb5 libraries themselves are bundled.
+Note: the `postgres` wrapper exports `PYTHONHOME=/opt/percona-python3` (needed
+by the embedded PL/Python) and every child the server spawns inherits it, so
+host-python commands launched by the server (`archive_command`,
+`restore_command`, backup hooks) must strip it, e.g.
+`archive_command = 'env -u PYTHONHOME ...'`.
+Operational note: if the `ssl1.1` SSL-ABI audit ever fires on
+`OPENSSL_1_1_1b`-class version nodes via libkrb5/libgssapi/libssh, the EL8
+distro has rebased krb5/libssh past the percona `-NN.percona` rebuilds in
+`ppg:common:deps` — bump those rebuilds.
 
 ### `devel/<major-version>/`
 
