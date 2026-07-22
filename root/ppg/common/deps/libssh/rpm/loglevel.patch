@@ -1,0 +1,3424 @@
+diff --git a/include/libssh/libssh.h b/include/libssh/libssh.h
+index 1664dfce..8ce364a3 100644
+--- a/include/libssh/libssh.h
++++ b/include/libssh/libssh.h
+@@ -322,7 +322,7 @@ enum {
+ 	/** No logging at all
+ 	 */
+ 	SSH_LOG_NOLOG=0,
+-	/** Only warnings
++	/** Only fatal warnings
+ 	 */
+ 	SSH_LOG_WARNING,
+ 	/** High level protocol information
+@@ -347,7 +347,7 @@ enum {
+ 
+ /** No logging at all */
+ #define SSH_LOG_NONE 0
+-/** Show only warnings */
++/** Show only fatal warnings */
+ #define SSH_LOG_WARN 1
+ /** Get some information what's going on */
+ #define SSH_LOG_INFO 2
+diff --git a/src/agent.c b/src/agent.c
+index 62b0093e..02f628cd 100644
+--- a/src/agent.c
++++ b/src/agent.c
+@@ -261,12 +261,12 @@ static int agent_talk(struct ssh_session_struct *session,
+   if (atomicio(session->agent, payload, 4, 0) == 4) {
+     if (atomicio(session->agent, ssh_buffer_get(request), len, 0)
+         != len) {
+-      SSH_LOG(SSH_LOG_WARN, "atomicio sending request failed: %s",
++      SSH_LOG(SSH_LOG_TRACE, "atomicio sending request failed: %s",
+           strerror(errno));
+       return -1;
+     }
+   } else {
+-    SSH_LOG(SSH_LOG_WARN,
++    SSH_LOG(SSH_LOG_TRACE,
+         "atomicio sending request length failed: %s",
+         strerror(errno));
+     return -1;
+@@ -274,7 +274,7 @@ static int agent_talk(struct ssh_session_struct *session,
+ 
+   /* wait for response, read the length of the response packet */
+   if (atomicio(session->agent, payload, 4, 1) != 4) {
+-    SSH_LOG(SSH_LOG_WARN, "atomicio read response length failed: %s",
++    SSH_LOG(SSH_LOG_TRACE, "atomicio read response length failed: %s",
+         strerror(errno));
+     return -1;
+   }
+@@ -293,12 +293,12 @@ static int agent_talk(struct ssh_session_struct *session,
+       n = sizeof(payload);
+     }
+     if (atomicio(session->agent, payload, n, 1) != n) {
+-      SSH_LOG(SSH_LOG_WARN,
++      SSH_LOG(SSH_LOG_DEBUG,
+           "Error reading response from authentication socket.");
+       return -1;
+     }
+     if (ssh_buffer_add_data(reply, payload, n) < 0) {
+-      SSH_LOG(SSH_LOG_WARN, "Not enough space");
++      SSH_LOG(SSH_LOG_DEBUG, "Not enough space");
+       return -1;
+     }
+     len -= n;
+@@ -353,7 +353,7 @@ uint32_t ssh_agent_get_ident_count(struct ssh_session_struct *session)
+     type = bswap_32(type);
+ #endif
+ 
+-    SSH_LOG(SSH_LOG_WARN,
++    SSH_LOG(SSH_LOG_TRACE,
+             "Answer type: %d, expected answer: %d",
+             type, SSH2_AGENT_IDENTITIES_ANSWER);
+ 
+@@ -573,7 +573,7 @@ ssh_string ssh_agent_sign_data(ssh_session session,
+ #endif
+ 
+     if (agent_failed(type)) {
+-        SSH_LOG(SSH_LOG_WARN, "Agent reports failure in signing the key");
++        SSH_LOG(SSH_LOG_DEBUG, "Agent reports failure in signing the key");
+         SSH_BUFFER_FREE(reply);
+         return NULL;
+     } else if (type != SSH2_AGENT_SIGN_RESPONSE) {
+diff --git a/src/auth.c b/src/auth.c
+index 3a5f0efb..59d7e8dd 100644
+--- a/src/auth.c
++++ b/src/auth.c
+@@ -71,7 +71,7 @@ static int ssh_userauth_request_service(ssh_session session) {
+ 
+     rc = ssh_service_request(session, "ssh-userauth");
+     if ((rc != SSH_OK) && (rc != SSH_AGAIN)) {
+-        SSH_LOG(SSH_LOG_WARN,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "Failed to request \"ssh-userauth\" service");
+     }
+ 
+@@ -199,7 +199,7 @@ SSH_PACKET_CALLBACK(ssh_packet_userauth_banner) {
+ 
+     banner = ssh_buffer_get_ssh_string(packet);
+     if (banner == NULL) {
+-        SSH_LOG(SSH_LOG_WARN,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "Invalid SSH_USERAUTH_BANNER packet");
+     } else {
+         SSH_LOG(SSH_LOG_DEBUG,
+@@ -237,7 +237,7 @@ SSH_PACKET_CALLBACK(ssh_packet_userauth_failure) {
+ 
+     if (partial) {
+         session->auth.state = SSH_AUTH_STATE_PARTIAL;
+-        SSH_LOG(SSH_LOG_INFO,
++        SSH_LOG(SSH_LOG_DEBUG,
+                 "Partial success for '%s'. Authentication that can continue: %s",
+                 current_method,
+                 auth_methods);
+@@ -247,7 +247,7 @@ SSH_PACKET_CALLBACK(ssh_packet_userauth_failure) {
+                       "Access denied for '%s'. Authentication that can continue: %s",
+                       current_method,
+                       auth_methods);
+-        SSH_LOG(SSH_LOG_INFO,
++        SSH_LOG(SSH_LOG_DEBUG,
+                 "%s",
+                 ssh_get_error(session));
+ 
+@@ -942,7 +942,7 @@ int ssh_userauth_agent(ssh_session session,
+                 session->agent_state = NULL;
+                 return rc;
+             } else if (rc != SSH_AUTH_SUCCESS) {
+-                SSH_LOG(SSH_LOG_INFO,
++                SSH_LOG(SSH_LOG_DEBUG,
+                         "Server accepted public key but refused the signature");
+                 ssh_key_free(state->pubkey);
+                 state->pubkey = ssh_agent_get_next_ident(session, &state->comment);
+@@ -1102,7 +1102,7 @@ int ssh_userauth_publickey_auto(ssh_session session,
+ 
+                 rc = ssh_pki_export_pubkey_file(state->pubkey, pubkey_file);
+                 if (rc == SSH_ERROR) {
+-                    SSH_LOG(SSH_LOG_WARN,
++                    SSH_LOG(SSH_LOG_TRACE,
+                             "Could not write public key to file: %s",
+                             pubkey_file);
+                 }
+@@ -1112,7 +1112,7 @@ int ssh_userauth_publickey_auto(ssh_session session,
+         if (state->state == SSH_AUTH_AUTO_STATE_KEY_IMPORTED) {
+             rc = ssh_userauth_try_publickey(session, username, state->pubkey);
+             if (rc == SSH_AUTH_ERROR) {
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_TRACE,
+                         "Public key authentication error for %s",
+                         privkey_file);
+                 ssh_key_free(state->privkey);
+@@ -1159,7 +1159,7 @@ int ssh_userauth_publickey_auto(ssh_session session,
+                     /* If the file doesn't exist, continue */
+                     ssh_key_free(state->pubkey);
+                     state->pubkey = NULL;
+-                    SSH_LOG(SSH_LOG_INFO,
++                    SSH_LOG(SSH_LOG_DEBUG,
+                             "Private key %s doesn't exist.",
+                             privkey_file);
+                     state->it = state->it->next;
+@@ -1174,7 +1174,7 @@ int ssh_userauth_publickey_auto(ssh_session session,
+                 ssh_key_free(state->pubkey);
+                 SAFE_FREE(session->auth.auto_state);
+                 if (rc == SSH_AUTH_SUCCESS) {
+-                    SSH_LOG(SSH_LOG_INFO,
++                    SSH_LOG(SSH_LOG_DEBUG,
+                             "Successfully authenticated using %s",
+                             privkey_file);
+                 }
+@@ -1187,15 +1187,15 @@ int ssh_userauth_publickey_auto(ssh_session session,
+             ssh_key_free(state->privkey);
+             ssh_key_free(state->pubkey);
+ 
+-            SSH_LOG(SSH_LOG_WARN,
++            SSH_LOG(SSH_LOG_DEBUG,
+                     "The server accepted the public key but refused the signature");
+             state->it = state->it->next;
+             state->state = SSH_AUTH_AUTO_STATE_PUBKEY;
+             /* continue */
+         }
+     }
+-    SSH_LOG(SSH_LOG_INFO,
+-            "Tried every public key, none matched");
++    SSH_LOG(SSH_LOG_WARN,
++            "Access denied: Tried every public key, none matched");
+     SAFE_FREE(session->auth.auto_state);
+     return SSH_AUTH_DENIED;
+ }
+@@ -1917,7 +1917,7 @@ int ssh_userauth_gssapi(ssh_session session) {
+     } else if (rc == SSH_ERROR) {
+         return SSH_AUTH_ERROR;
+     }
+-    SSH_LOG(SSH_LOG_PROTOCOL, "Authenticating with gssapi-with-mic");
++    SSH_LOG(SSH_LOG_DEBUG, "Authenticating with gssapi-with-mic");
+ 
+     session->auth.current_method = SSH_AUTH_METHOD_GSSAPI_MIC;
+     session->auth.state = SSH_AUTH_STATE_NONE;
+diff --git a/src/bind.c b/src/bind.c
+index fa8df9ea..d65a789e 100644
+--- a/src/bind.c
++++ b/src/bind.c
+@@ -294,7 +294,7 @@ int ssh_bind_listen(ssh_bind sshbind) {
+ 
+       sshbind->bindfd = fd;
+   } else {
+-      SSH_LOG(SSH_LOG_INFO, "Using app-provided bind socket");
++      SSH_LOG(SSH_LOG_DEBUG, "Using app-provided bind socket");
+   }
+   return 0;
+ }
+diff --git a/src/bind_config.c b/src/bind_config.c
+index 14b84db0..56b66660 100644
+--- a/src/bind_config.c
++++ b/src/bind_config.c
+@@ -343,7 +343,7 @@ ssh_bind_config_parse_line(ssh_bind bind,
+         if (p && (*parser_flags & PARSING)) {
+             rc = ssh_bind_options_set(bind, SSH_BIND_OPTIONS_HOSTKEY, p);
+             if (rc != 0) {
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_TRACE,
+                         "line %d: Failed to set Hostkey value '%s'",
+                         count, p);
+             }
+@@ -354,7 +354,7 @@ ssh_bind_config_parse_line(ssh_bind bind,
+         if (p && (*parser_flags & PARSING)) {
+             rc = ssh_bind_options_set(bind, SSH_BIND_OPTIONS_BINDADDR, p);
+             if (rc != 0) {
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_TRACE,
+                         "line %d: Failed to set ListenAddress value '%s'",
+                         count, p);
+             }
+@@ -365,7 +365,7 @@ ssh_bind_config_parse_line(ssh_bind bind,
+         if (p && (*parser_flags & PARSING)) {
+             rc = ssh_bind_options_set(bind, SSH_BIND_OPTIONS_BINDPORT_STR, p);
+             if (rc != 0) {
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_TRACE,
+                         "line %d: Failed to set Port value '%s'",
+                         count, p);
+             }
+@@ -376,7 +376,7 @@ ssh_bind_config_parse_line(ssh_bind bind,
+         if (p && (*parser_flags & PARSING)) {
+             rc = ssh_bind_options_set(bind, SSH_BIND_OPTIONS_CIPHERS_C_S, p);
+             if (rc != 0) {
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_TRACE,
+                         "line %d: Failed to set C->S Ciphers value '%s'",
+                         count, p);
+                 break;
+@@ -384,7 +384,7 @@ ssh_bind_config_parse_line(ssh_bind bind,
+ 
+             rc = ssh_bind_options_set(bind, SSH_BIND_OPTIONS_CIPHERS_S_C, p);
+             if (rc != 0) {
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_TRACE,
+                         "line %d: Failed to set S->C Ciphers value '%s'",
+                         count, p);
+             }
+@@ -395,7 +395,7 @@ ssh_bind_config_parse_line(ssh_bind bind,
+         if (p && (*parser_flags & PARSING)) {
+             rc = ssh_bind_options_set(bind, SSH_BIND_OPTIONS_HMAC_C_S, p);
+             if (rc != 0) {
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_TRACE,
+                         "line %d: Failed to set C->S MAC value '%s'",
+                         count, p);
+                 break;
+@@ -403,7 +403,7 @@ ssh_bind_config_parse_line(ssh_bind bind,
+ 
+             rc = ssh_bind_options_set(bind, SSH_BIND_OPTIONS_HMAC_S_C, p);
+             if (rc != 0) {
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_TRACE,
+                         "line %d: Failed to set S->C MAC value '%s'",
+                         count, p);
+             }
+@@ -417,10 +417,10 @@ ssh_bind_config_parse_line(ssh_bind bind,
+             if (strcasecmp(p, "quiet") == 0) {
+                 value = SSH_LOG_NONE;
+             } else if (strcasecmp(p, "fatal") == 0 ||
+-                    strcasecmp(p, "error")== 0 ||
+-                    strcasecmp(p, "info") == 0) {
++                    strcasecmp(p, "error")== 0) {
+                 value = SSH_LOG_WARN;
+-            } else if (strcasecmp(p, "verbose") == 0) {
++            } else if (strcasecmp(p, "verbose") == 0 ||
++                    strcasecmp(p, "info") == 0) {
+                 value = SSH_LOG_INFO;
+             } else if (strcasecmp(p, "DEBUG") == 0 ||
+                     strcasecmp(p, "DEBUG1") == 0) {
+@@ -433,7 +433,7 @@ ssh_bind_config_parse_line(ssh_bind bind,
+                 rc = ssh_bind_options_set(bind, SSH_BIND_OPTIONS_LOG_VERBOSITY,
+                         &value);
+                 if (rc != 0) {
+-                    SSH_LOG(SSH_LOG_WARN,
++                    SSH_LOG(SSH_LOG_TRACE,
+                             "line %d: Failed to set LogLevel value '%s'",
+                             count, p);
+                 }
+@@ -445,7 +445,7 @@ ssh_bind_config_parse_line(ssh_bind bind,
+         if (p && (*parser_flags & PARSING)) {
+             rc = ssh_bind_options_set(bind, SSH_BIND_OPTIONS_KEY_EXCHANGE, p);
+             if (rc != 0) {
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_TRACE,
+                         "line %d: Failed to set KexAlgorithms value '%s'",
+                         count, p);
+             }
+@@ -520,13 +520,13 @@ ssh_bind_config_parse_line(ssh_bind bind,
+                 /* Skip one argument */
+                 p = ssh_config_get_str_tok(&s, NULL);
+                 if (p == NULL || p[0] == '\0') {
+-                    SSH_LOG(SSH_LOG_WARN, "line %d: Match keyword "
++                    SSH_LOG(SSH_LOG_TRACE, "line %d: Match keyword "
+                             "'%s' requires argument\n", count, p2);
+                     SAFE_FREE(x);
+                     return -1;
+                 }
+                 args++;
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_DEBUG,
+                         "line %d: Unsupported Match keyword '%s', ignoring\n",
+                         count,
+                         p2);
+@@ -556,7 +556,7 @@ ssh_bind_config_parse_line(ssh_bind bind,
+             rc = ssh_bind_options_set(bind,
+                                  SSH_BIND_OPTIONS_PUBKEY_ACCEPTED_KEY_TYPES, p);
+             if (rc != 0) {
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_TRACE,
+                         "line %d: Failed to set PubKeyAcceptedKeyTypes value '%s'",
+                         count, p);
+             }
+@@ -568,26 +568,26 @@ ssh_bind_config_parse_line(ssh_bind bind,
+             rc = ssh_bind_options_set(bind,
+                                  SSH_BIND_OPTIONS_HOSTKEY_ALGORITHMS, p);
+             if (rc != 0) {
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_TRACE,
+                         "line %d: Failed to set HostkeyAlgorithms value '%s'",
+                         count, p);
+             }
+         }
+         break;
+     case BIND_CFG_NOT_ALLOWED_IN_MATCH:
+-        SSH_LOG(SSH_LOG_WARN, "Option not allowed in Match block: %s, line: %d",
++        SSH_LOG(SSH_LOG_DEBUG, "Option not allowed in Match block: %s, line: %d",
+                 keyword, count);
+         break;
+     case BIND_CFG_UNKNOWN:
+-        SSH_LOG(SSH_LOG_WARN, "Unknown option: %s, line: %d",
++        SSH_LOG(SSH_LOG_TRACE, "Unknown option: %s, line: %d",
+                 keyword, count);
+         break;
+     case BIND_CFG_UNSUPPORTED:
+-        SSH_LOG(SSH_LOG_WARN, "Unsupported option: %s, line: %d",
++        SSH_LOG(SSH_LOG_TRACE, "Unsupported option: %s, line: %d",
+                 keyword, count);
+         break;
+     case BIND_CFG_NA:
+-        SSH_LOG(SSH_LOG_WARN, "Option not applicable: %s, line: %d",
++        SSH_LOG(SSH_LOG_TRACE, "Option not applicable: %s, line: %d",
+                 keyword, count);
+         break;
+     default:
+diff --git a/src/buffer.c b/src/buffer.c
+index ce12f491..685fd455 100644
+--- a/src/buffer.c
++++ b/src/buffer.c
+@@ -878,7 +878,7 @@ static int ssh_buffer_pack_allocate_va(struct ssh_buffer_struct *buffer,
+             cstring = NULL;
+             break;
+         default:
+-            SSH_LOG(SSH_LOG_WARN, "Invalid buffer format %c", *p);
++            SSH_LOG(SSH_LOG_TRACE, "Invalid buffer format %c", *p);
+             rc = SSH_ERROR;
+         }
+         if (rc != SSH_OK){
+@@ -1007,7 +1007,7 @@ int ssh_buffer_pack_va(struct ssh_buffer_struct *buffer,
+             cstring = NULL;
+             break;
+         default:
+-            SSH_LOG(SSH_LOG_WARN, "Invalid buffer format %c", *p);
++            SSH_LOG(SSH_LOG_TRACE, "Invalid buffer format %c", *p);
+             rc = SSH_ERROR;
+         }
+         if (rc != SSH_OK){
+@@ -1238,7 +1238,7 @@ int ssh_buffer_unpack_va(struct ssh_buffer_struct *buffer,
+             rc = SSH_OK;
+             break;
+         default:
+-            SSH_LOG(SSH_LOG_WARN, "Invalid buffer format %c", *p);
++            SSH_LOG(SSH_LOG_TRACE, "Invalid buffer format %c", *p);
+         }
+         if (rc != SSH_OK) {
+             break;
+diff --git a/src/channels.c b/src/channels.c
+index 1041dbff..36e19598 100644
+--- a/src/channels.c
++++ b/src/channels.c
+@@ -187,7 +187,7 @@ SSH_PACKET_CALLBACK(ssh_packet_channel_open_conf){
+   if (rc != SSH_OK)
+       goto error;
+ 
+-  SSH_LOG(SSH_LOG_PROTOCOL,
++  SSH_LOG(SSH_LOG_DEBUG,
+       "Received a CHANNEL_OPEN_CONFIRMATION for channel %d:%d",
+       channel->local_channel,
+       channel->remote_channel);
+@@ -200,7 +200,7 @@ SSH_PACKET_CALLBACK(ssh_packet_channel_open_conf){
+       goto error;
+   }
+ 
+-  SSH_LOG(SSH_LOG_PROTOCOL,
++  SSH_LOG(SSH_LOG_DEBUG,
+       "Remote window : %"PRIu32", maxpacket : %"PRIu32,
+       (uint32_t) channel->remote_window,
+       (uint32_t) channel->remote_maxpacket);
+@@ -264,11 +264,14 @@ error:
+ 
+ static int ssh_channel_open_termination(void *c){
+   ssh_channel channel = (ssh_channel) c;
+-  if (channel->state != SSH_CHANNEL_STATE_OPENING ||
+-      channel->session->session_state == SSH_SESSION_STATE_ERROR)
++  if (channel->state != SSH_CHANNEL_STATE_OPENING) {
+     return 1;
+-  else
++  } else if (channel->session->session_state == SSH_SESSION_STATE_ERROR) {
++	SSH_LOG(SSH_LOG_WARN, "Error: %s", ssh_get_error(channel->session));
++    return 1;
++  } else {
+     return 0;
++  }
+ }
+ 
+ /**
+@@ -320,7 +323,7 @@ channel_open(ssh_channel channel,
+     channel->local_maxpacket = maxpacket;
+     channel->local_window = window;
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL,
++    SSH_LOG(SSH_LOG_DEBUG,
+             "Creating a channel %d with %d window and %d max packet",
+             channel->local_channel, window, maxpacket);
+ 
+@@ -410,7 +413,7 @@ static int grow_window(ssh_session session,
+   int rc;
+ 
+   if(new_window <= channel->local_window){
+-    SSH_LOG(SSH_LOG_PROTOCOL,
++    SSH_LOG(SSH_LOG_DEBUG,
+         "growing window (channel %d:%d) to %d bytes : not needed (%d bytes)",
+         channel->local_channel, channel->remote_channel, new_window,
+         channel->local_window);
+@@ -434,7 +437,7 @@ static int grow_window(ssh_session session,
+     goto error;
+   }
+ 
+-  SSH_LOG(SSH_LOG_PROTOCOL,
++  SSH_LOG(SSH_LOG_DEBUG,
+       "growing window (channel %d:%d) to %d bytes",
+       channel->local_channel,
+       channel->remote_channel,
+@@ -504,7 +507,7 @@ SSH_PACKET_CALLBACK(channel_rcv_change_window) {
+     return SSH_PACKET_USED;
+   }
+ 
+-  SSH_LOG(SSH_LOG_PROTOCOL,
++  SSH_LOG(SSH_LOG_DEBUG,
+       "Adding %d bytes to channel (%d:%d) (from %d bytes)",
+       bytes,
+       channel->local_channel,
+@@ -808,7 +811,7 @@ SSH_PACKET_CALLBACK(channel_rcv_request) {
+ 	}
+ 	if(strcmp(request,"keepalive@openssh.com")==0){
+ 	  SAFE_FREE(request);
+-	  SSH_LOG(SSH_LOG_PROTOCOL,"Responding to Openssh's keepalive");
++	  SSH_LOG(SSH_LOG_DEBUG,"Responding to Openssh's keepalive");
+ 
+       rc = ssh_buffer_pack(session->out_buffer,
+                            "bd",
+@@ -824,7 +827,7 @@ SSH_PACKET_CALLBACK(channel_rcv_request) {
+ 
+   if (strcmp(request, "auth-agent-req@openssh.com") == 0) {
+     SAFE_FREE(request);
+-    SSH_LOG(SSH_LOG_PROTOCOL, "Received an auth-agent-req request");
++    SSH_LOG(SSH_LOG_DEBUG, "Received an auth-agent-req request");
+     ssh_callbacks_execute_list(channel->callbacks,
+                                ssh_channel_callbacks,
+                                channel_auth_agent_req_function,
+@@ -840,7 +843,7 @@ SSH_PACKET_CALLBACK(channel_rcv_request) {
+ 	 */
+ 	ssh_message_handle_channel_request(session,channel,packet,request,status);
+ #else
+-    SSH_LOG(SSH_LOG_WARNING, "Unhandled channel request %s", request);
++    SSH_LOG(SSH_LOG_DEBUG, "Unhandled channel request %s", request);
+ #endif
+ 	
+ 	SAFE_FREE(request);
+@@ -1403,7 +1406,7 @@ static int channel_write_common(ssh_channel channel,
+   }
+ 
+   if (len > INT_MAX) {
+-      SSH_LOG(SSH_LOG_PROTOCOL,
++      SSH_LOG(SSH_LOG_TRACE,
+               "Length (%u) is bigger than INT_MAX", len);
+       return SSH_ERROR;
+   }
+@@ -1440,14 +1443,14 @@ static int channel_write_common(ssh_channel channel,
+   }
+   while (len > 0) {
+     if (channel->remote_window < len) {
+-      SSH_LOG(SSH_LOG_PROTOCOL,
++      SSH_LOG(SSH_LOG_DEBUG,
+           "Remote window is %d bytes. going to write %d bytes",
+           channel->remote_window,
+           len);
+       /* What happens when the channel window is zero? */
+       if(channel->remote_window == 0) {
+           /* nothing can be written */
+-          SSH_LOG(SSH_LOG_PROTOCOL,
++          SSH_LOG(SSH_LOG_DEBUG,
+                 "Wait for a growing window message...");
+           rc = ssh_handle_packets_termination(session, SSH_TIMEOUT_DEFAULT,
+               ssh_channel_waitwindow_termination,channel);
+@@ -1698,11 +1701,14 @@ SSH_PACKET_CALLBACK(ssh_packet_channel_failure){
+ 
+ static int ssh_channel_request_termination(void *c){
+   ssh_channel channel = (ssh_channel)c;
+-  if(channel->request_state != SSH_CHANNEL_REQ_STATE_PENDING ||
+-      channel->session->session_state == SSH_SESSION_STATE_ERROR)
++  if(channel->request_state != SSH_CHANNEL_REQ_STATE_PENDING) {
+     return 1;
+-  else
++  } else if (channel->session->session_state == SSH_SESSION_STATE_ERROR) {
++	SSH_LOG(SSH_LOG_WARN, "Error: %s", ssh_get_error(channel->session));
++    return 1;
++  } else {
+     return 0;
++  }
+ }
+ 
+ static int channel_request(ssh_channel channel, const char *request,
+@@ -1767,7 +1773,7 @@ pending:
+       rc=SSH_ERROR;
+       break;
+     case SSH_CHANNEL_REQ_STATE_ACCEPTED:
+-      SSH_LOG(SSH_LOG_PROTOCOL,
++      SSH_LOG(SSH_LOG_DEBUG,
+           "Channel request %s success",request);
+       rc=SSH_OK;
+       break;
+@@ -2237,11 +2243,14 @@ SSH_PACKET_CALLBACK(ssh_request_denied){
+ 
+ static int ssh_global_request_termination(void *s){
+   ssh_session session = (ssh_session) s;
+-  if (session->global_req_state != SSH_CHANNEL_REQ_STATE_PENDING ||
+-      session->session_state == SSH_SESSION_STATE_ERROR)
++  if (session->global_req_state != SSH_CHANNEL_REQ_STATE_PENDING) {
+     return 1;
+-  else
++  } else if (session->session_state == SSH_SESSION_STATE_ERROR) {
++	SSH_LOG(SSH_LOG_WARN, "Error: %s", ssh_get_error(session));
++    return 1;
++  } else {
+     return 0;
++  }
+ }
+ 
+ /**
+@@ -2324,7 +2333,7 @@ pending:
+   }
+   switch(session->global_req_state){
+     case SSH_CHANNEL_REQ_STATE_ACCEPTED:
+-      SSH_LOG(SSH_LOG_PROTOCOL, "Global request %s success",request);
++      SSH_LOG(SSH_LOG_DEBUG, "Global request %s success",request);
+       rc=SSH_OK;
+       break;
+     case SSH_CHANNEL_REQ_STATE_DENIED:
+@@ -2808,11 +2817,14 @@ struct ssh_channel_read_termination_struct {
+ static int ssh_channel_read_termination(void *s){
+   struct ssh_channel_read_termination_struct *ctx = s;
+   if (ssh_buffer_get_len(ctx->buffer) >= ctx->count ||
+-      ctx->channel->remote_eof ||
+-      ctx->channel->session->session_state == SSH_SESSION_STATE_ERROR)
++      ctx->channel->remote_eof) {
+     return 1;
+-  else
++  } else if (ctx->channel->session->session_state == SSH_SESSION_STATE_ERROR) {
++	SSH_LOG(SSH_LOG_WARN, "Error: %s", ssh_get_error(ctx->channel->session));
++    return 1;
++  } else {
+     return 0;
++  }
+ }
+ 
+ /* TODO FIXME Fix the delayed close thing */
+@@ -3172,10 +3184,12 @@ static int ssh_channel_exit_status_termination(void *c){
+       /* When a channel is closed, no exit status message can
+        * come anymore */
+       (channel->flags & SSH_CHANNEL_FLAG_CLOSED_REMOTE) ||
+-      channel->session->session_state == SSH_SESSION_STATE_ERROR)
++      channel->session->session_state == SSH_SESSION_STATE_ERROR) {
++	SSH_LOG(SSH_LOG_WARN, "Error: %s", ssh_get_error(channel->session));
+     return 1;
+-  else
++  } else {
+     return 0;
++  }
+ }
+ 
+ /**
+diff --git a/src/client.c b/src/client.c
+index a4a7317e..82a436fc 100644
+--- a/src/client.c
++++ b/src/client.c
+@@ -72,7 +72,7 @@ static void socket_callback_connected(int code, int errno_code, void *user){
+ 		return;
+ 	}
+ 
+-	SSH_LOG(SSH_LOG_RARE,"Socket connection callback: %d (%d)",code, errno_code);
++	SSH_LOG(SSH_LOG_TRACE,"Socket connection callback: %d (%d)",code, errno_code);
+ 	if(code == SSH_SOCKET_CONNECTED_OK)
+ 		session->session_state=SSH_SESSION_STATE_SOCKET_CONNECTED;
+ 	else {
+@@ -400,7 +400,7 @@ static void ssh_client_connection_callback(ssh_session session)
+                 goto error;
+             }
+             set_status(session, 0.4f);
+-            SSH_LOG(SSH_LOG_PROTOCOL,
++            SSH_LOG(SSH_LOG_DEBUG,
+                     "SSH server banner: %s", session->serverbanner);
+ 
+             /* Here we analyze the different protocols the server allows. */
+@@ -475,7 +475,7 @@ error:
+     ssh_socket_close(session->socket);
+     session->alive = 0;
+     session->session_state=SSH_SESSION_STATE_ERROR;
+-
++    SSH_LOG(SSH_LOG_WARN, "%s", ssh_get_error(session));
+ }
+ 
+ /** @internal
+@@ -558,7 +558,7 @@ int ssh_connect(ssh_session session)
+         return SSH_ERROR;
+     }
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL,
++    SSH_LOG(SSH_LOG_DEBUG,
+             "libssh %s, using threading %s",
+             ssh_copyright(),
+             ssh_threads_get_type());
+@@ -593,7 +593,7 @@ int ssh_connect(ssh_session session)
+     set_status(session, 0.2f);
+ 
+     session->alive = 1;
+-    SSH_LOG(SSH_LOG_PROTOCOL,
++    SSH_LOG(SSH_LOG_DEBUG,
+             "Socket connecting, now waiting for the callbacks to work");
+ 
+ pending:
+diff --git a/src/config.c b/src/config.c
+index 54ada276..5a5058c1 100644
+--- a/src/config.c
++++ b/src/config.c
+@@ -360,7 +360,7 @@ ssh_config_parse_proxy_jump(ssh_session session, const char *s, bool do_parsing)
+                       next ? next : "",
+                       hostname);
+         if (rv < 0 || rv >= (int)sizeof(com)) {
+-            SSH_LOG(SSH_LOG_WARN, "Too long ProxyJump configuration line");
++            SSH_LOG(SSH_LOG_TRACE, "Too long ProxyJump configuration line");
+             rv = SSH_ERROR;
+             goto out;
+         }
+@@ -494,7 +494,7 @@ ssh_config_parse_line(ssh_session session,
+ 
+             case MATCH_FINAL:
+             case MATCH_CANONICAL:
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_DEBUG,
+                         "line %d: Unsupported Match keyword '%s', skipping",
+                         count,
+                         p);
+@@ -506,13 +506,13 @@ ssh_config_parse_line(ssh_session session,
+                 /* Skip to the end of line as unsupported */
+                 p = ssh_config_get_cmd(&s);
+                 if (p == NULL || p[0] == '\0') {
+-                    SSH_LOG(SSH_LOG_WARN, "line %d: Match keyword "
++                    SSH_LOG(SSH_LOG_TRACE, "line %d: Match keyword "
+                             "'%s' requires argument", count, p2);
+                     SAFE_FREE(x);
+                     return -1;
+                 }
+                 args++;
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_DEBUG,
+                         "line %d: Unsupported Match keyword '%s', ignoring",
+                         count,
+                         p2);
+@@ -531,7 +531,7 @@ ssh_config_parse_line(ssh_session session,
+                 }
+                 localuser = ssh_get_local_username();
+                 if (localuser == NULL) {
+-                    SSH_LOG(SSH_LOG_WARN, "line %d: Can not get local username "
++                    SSH_LOG(SSH_LOG_TRACE, "line %d: Can not get local username "
+                             "for conditional matching.", count);
+                     SAFE_FREE(x);
+                     return -1;
+@@ -545,13 +545,13 @@ ssh_config_parse_line(ssh_session session,
+                 /* Skip one argument */
+                 p = ssh_config_get_str_tok(&s, NULL);
+                 if (p == NULL || p[0] == '\0') {
+-                    SSH_LOG(SSH_LOG_WARN, "line %d: Match keyword "
++                    SSH_LOG(SSH_LOG_TRACE, "line %d: Match keyword "
+                             "'%s' requires argument", count, p2);
+                     SAFE_FREE(x);
+                     return -1;
+                 }
+                 args++;
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_TRACE,
+                         "line %d: Unsupported Match keyword '%s', ignoring",
+                         count,
+                         p2);
+@@ -786,10 +786,10 @@ ssh_config_parse_line(ssh_session session,
+             if (strcasecmp(p, "quiet") == 0) {
+                 value = SSH_LOG_NONE;
+             } else if (strcasecmp(p, "fatal") == 0 ||
+-                    strcasecmp(p, "error")== 0 ||
+-                    strcasecmp(p, "info") == 0) {
++                    strcasecmp(p, "error")== 0) {
+                 value = SSH_LOG_WARN;
+-            } else if (strcasecmp(p, "verbose") == 0) {
++            } else if (strcasecmp(p, "verbose") == 0 ||
++                    strcasecmp(p, "info") == 0) {
+                 value = SSH_LOG_INFO;
+             } else if (strcasecmp(p, "DEBUG") == 0 ||
+                     strcasecmp(p, "DEBUG1") == 0) {
+@@ -834,13 +834,13 @@ ssh_config_parse_line(ssh_session session,
+             ll = strtoll(p, &endp, 10);
+             if (p == endp || ll < 0) {
+                 /* No number or negative */
+-                SSH_LOG(SSH_LOG_WARN, "Invalid argument to rekey limit");
++                SSH_LOG(SSH_LOG_TRACE, "Invalid argument to rekey limit");
+                 break;
+             }
+             switch (*endp) {
+             case 'G':
+                 if (ll > LLONG_MAX / 1024) {
+-                    SSH_LOG(SSH_LOG_WARN, "Possible overflow of rekey limit");
++                    SSH_LOG(SSH_LOG_TRACE, "Possible overflow of rekey limit");
+                     ll = -1;
+                     break;
+                 }
+@@ -848,7 +848,7 @@ ssh_config_parse_line(ssh_session session,
+                 FALL_THROUGH;
+             case 'M':
+                 if (ll > LLONG_MAX / 1024) {
+-                    SSH_LOG(SSH_LOG_WARN, "Possible overflow of rekey limit");
++                    SSH_LOG(SSH_LOG_TRACE, "Possible overflow of rekey limit");
+                     ll = -1;
+                     break;
+                 }
+@@ -856,7 +856,7 @@ ssh_config_parse_line(ssh_session session,
+                 FALL_THROUGH;
+             case 'K':
+                 if (ll > LLONG_MAX / 1024) {
+-                    SSH_LOG(SSH_LOG_WARN, "Possible overflow of rekey limit");
++                    SSH_LOG(SSH_LOG_TRACE, "Possible overflow of rekey limit");
+                     ll = -1;
+                     break;
+                 }
+@@ -872,7 +872,7 @@ ssh_config_parse_line(ssh_session session,
+                 break;
+             }
+             if (*endp != ' ' && *endp != '\0') {
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_TRACE,
+                         "Invalid trailing characters after the rekey limit: %s",
+                         endp);
+                 break;
+@@ -893,14 +893,14 @@ ssh_config_parse_line(ssh_session session,
+             ll = strtoll(p, &endp, 10);
+             if (p == endp || ll < 0) {
+                 /* No number or negative */
+-                SSH_LOG(SSH_LOG_WARN, "Invalid argument to rekey limit");
++                SSH_LOG(SSH_LOG_TRACE, "Invalid argument to rekey limit");
+                 break;
+             }
+             switch (*endp) {
+             case 'w':
+             case 'W':
+                 if (ll > LLONG_MAX / 7) {
+-                    SSH_LOG(SSH_LOG_WARN, "Possible overflow of rekey limit");
++                    SSH_LOG(SSH_LOG_TRACE, "Possible overflow of rekey limit");
+                     ll = -1;
+                     break;
+                 }
+@@ -909,7 +909,7 @@ ssh_config_parse_line(ssh_session session,
+             case 'd':
+             case 'D':
+                 if (ll > LLONG_MAX / 24) {
+-                    SSH_LOG(SSH_LOG_WARN, "Possible overflow of rekey limit");
++                    SSH_LOG(SSH_LOG_TRACE, "Possible overflow of rekey limit");
+                     ll = -1;
+                     break;
+                 }
+@@ -918,7 +918,7 @@ ssh_config_parse_line(ssh_session session,
+             case 'h':
+             case 'H':
+                 if (ll > LLONG_MAX / 60) {
+-                    SSH_LOG(SSH_LOG_WARN, "Possible overflow of rekey limit");
++                    SSH_LOG(SSH_LOG_TRACE, "Possible overflow of rekey limit");
+                     ll = -1;
+                     break;
+                 }
+@@ -927,7 +927,7 @@ ssh_config_parse_line(ssh_session session,
+             case 'm':
+             case 'M':
+                 if (ll > LLONG_MAX / 60) {
+-                    SSH_LOG(SSH_LOG_WARN, "Possible overflow of rekey limit");
++                    SSH_LOG(SSH_LOG_TRACE, "Possible overflow of rekey limit");
+                     ll = -1;
+                     break;
+                 }
+@@ -946,7 +946,7 @@ ssh_config_parse_line(ssh_session session,
+                 break;
+             }
+             if (*endp != '\0') {
+-                SSH_LOG(SSH_LOG_WARN, "Invalid trailing characters after the"
++                SSH_LOG(SSH_LOG_TRACE, "Invalid trailing characters after the"
+                         " rekey limit: %s", endp);
+                 break;
+             }
+@@ -982,7 +982,7 @@ ssh_config_parse_line(ssh_session session,
+         }
+         break;
+     case SOC_NA:
+-      SSH_LOG(SSH_LOG_INFO, "Unapplicable option: %s, line: %d",
++      SSH_LOG(SSH_LOG_TRACE, "Unapplicable option: %s, line: %d",
+               keyword, count);
+       break;
+     case SOC_UNSUPPORTED:
+@@ -990,7 +990,7 @@ ssh_config_parse_line(ssh_session session,
+               keyword, count);
+       break;
+     case SOC_UNKNOWN:
+-      SSH_LOG(SSH_LOG_WARN, "Unknown option: %s, line: %d",
++      SSH_LOG(SSH_LOG_TRACE, "Unknown option: %s, line: %d",
+               keyword, count);
+       break;
+     default:
+diff --git a/src/config_parser.c b/src/config_parser.c
+index ae2aa2c8..3a219d61 100644
+--- a/src/config_parser.c
++++ b/src/config_parser.c
+@@ -209,7 +209,7 @@ int ssh_config_parse_uri(const char *tok,
+         /* Verify the port is valid positive number */
+         port_n = strtol(endp + 1, &port_end, 10);
+         if (port_n < 1 || *port_end != '\0') {
+-            SSH_LOG(SSH_LOG_WARN, "Failed to parse port number."
++            SSH_LOG(SSH_LOG_TRACE, "Failed to parse port number."
+                     " The value '%ld' is invalid or there are some"
+                     " trailing characters: '%s'", port_n, port_end);
+             goto error;
+diff --git a/src/curve25519.c b/src/curve25519.c
+index d2517551..d8e0456a 100644
+--- a/src/curve25519.c
++++ b/src/curve25519.c
+@@ -339,7 +339,7 @@ static SSH_PACKET_CALLBACK(ssh_packet_client_curve25519_reply){
+     goto error;
+   }
+ 
+-  SSH_LOG(SSH_LOG_PROTOCOL, "SSH_MSG_NEWKEYS sent");
++  SSH_LOG(SSH_LOG_DEBUG, "SSH_MSG_NEWKEYS sent");
+   session->dh_handshake_state = DH_STATE_NEWKEYS_SENT;
+ 
+   return SSH_PACKET_USED;
+@@ -491,7 +491,7 @@ static SSH_PACKET_CALLBACK(ssh_packet_server_curve25519_init){
+         goto error;
+     }
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL, "SSH_MSG_KEX_ECDH_REPLY sent");
++    SSH_LOG(SSH_LOG_DEBUG, "SSH_MSG_KEX_ECDH_REPLY sent");
+     rc = ssh_packet_send(session);
+     if (rc == SSH_ERROR) {
+         return SSH_ERROR;
+@@ -508,7 +508,7 @@ static SSH_PACKET_CALLBACK(ssh_packet_server_curve25519_init){
+     if (rc == SSH_ERROR) {
+         goto error;
+     }
+-    SSH_LOG(SSH_LOG_PROTOCOL, "SSH_MSG_NEWKEYS sent");
++    SSH_LOG(SSH_LOG_DEBUG, "SSH_MSG_NEWKEYS sent");
+ 
+     return SSH_PACKET_USED;
+ error:
+diff --git a/src/dh-gex.c b/src/dh-gex.c
+index 88a97140..ace572dc 100644
+--- a/src/dh-gex.c
++++ b/src/dh-gex.c
+@@ -112,7 +112,7 @@ SSH_PACKET_CALLBACK(ssh_packet_client_dhgex_group)
+     (void) type;
+     (void) user;
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL, "SSH_MSG_KEX_DH_GEX_GROUP received");
++    SSH_LOG(SSH_LOG_DEBUG, "SSH_MSG_KEX_DH_GEX_GROUP received");
+ 
+     if (bignum_ctx_invalid(ctx)) {
+         goto error;
+@@ -246,7 +246,7 @@ static SSH_PACKET_CALLBACK(ssh_packet_client_dhgex_reply)
+     bignum server_pubkey = NULL;
+     (void)type;
+     (void)user;
+-    SSH_LOG(SSH_LOG_PROTOCOL, "SSH_MSG_KEX_DH_GEX_REPLY received");
++    SSH_LOG(SSH_LOG_DEBUG, "SSH_MSG_KEX_DH_GEX_REPLY received");
+ 
+     ssh_packet_remove_callbacks(session, &ssh_dhgex_client_callbacks);
+     rc = ssh_buffer_unpack(packet,
+@@ -290,7 +290,7 @@ static SSH_PACKET_CALLBACK(ssh_packet_client_dhgex_reply)
+     if (rc == SSH_ERROR) {
+         goto error;
+     }
+-    SSH_LOG(SSH_LOG_PROTOCOL, "SSH_MSG_NEWKEYS sent");
++    SSH_LOG(SSH_LOG_DEBUG, "SSH_MSG_NEWKEYS sent");
+     session->dh_handshake_state = DH_STATE_NEWKEYS_SENT;
+ 
+     return SSH_PACKET_USED;
+@@ -425,7 +425,7 @@ static int ssh_retrieve_dhgroup_file(FILE *moduli,
+             if (rc == EOF) {
+                 break;
+             }
+-            SSH_LOG(SSH_LOG_INFO, "Invalid moduli entry line %zu", line);
++            SSH_LOG(SSH_LOG_DEBUG, "Invalid moduli entry line %zu", line);
+             do {
+                 firstbyte = getc(moduli);
+             } while(firstbyte != '\n' && firstbyte != EOF);
+@@ -463,13 +463,13 @@ static int ssh_retrieve_dhgroup_file(FILE *moduli,
+         }
+     }
+     if (*best_size != 0) {
+-        SSH_LOG(SSH_LOG_INFO,
++        SSH_LOG(SSH_LOG_DEBUG,
+                 "Selected %zu bits modulus out of %zu candidates in %zu lines",
+                 *best_size,
+                 best_nlines - 1,
+                 line);
+     } else {
+-        SSH_LOG(SSH_LOG_WARNING,
++        SSH_LOG(SSH_LOG_DEBUG,
+                 "No moduli found for [%u:%u:%u]",
+                 pmin,
+                 pn,
+@@ -510,7 +510,7 @@ static int ssh_retrieve_dhgroup(uint32_t pmin,
+ 
+     moduli = fopen(MODULI_FILE, "r");
+     if (moduli == NULL) {
+-        SSH_LOG(SSH_LOG_WARNING,
++        SSH_LOG(SSH_LOG_DEBUG,
+                 "Unable to open moduli file: %s",
+                 strerror(errno));
+         return ssh_fallback_group(pmax, p, g);
+@@ -605,7 +605,7 @@ static SSH_PACKET_CALLBACK(ssh_packet_server_dhgex_request)
+         ssh_set_error_invalid(session);
+         goto error;
+     }
+-    SSH_LOG(SSH_LOG_INFO, "dh-gex: DHGEX_REQUEST[%u:%u:%u]", pmin, pn, pmax);
++    SSH_LOG(SSH_LOG_DEBUG, "dh-gex: DHGEX_REQUEST[%u:%u:%u]", pmin, pn, pmax);
+ 
+     if (pmin > pn || pn > pmax || pn > DH_PMAX || pmax < DH_PMIN) {
+         ssh_set_error(session,
+diff --git a/src/dh.c b/src/dh.c
+index 18b71734..ede4855d 100644
+--- a/src/dh.c
++++ b/src/dh.c
+@@ -390,7 +390,7 @@ SSH_PACKET_CALLBACK(ssh_packet_client_dh_reply){
+     goto error;
+   }
+ 
+-  SSH_LOG(SSH_LOG_PROTOCOL, "SSH_MSG_NEWKEYS sent");
++  SSH_LOG(SSH_LOG_DEBUG, "SSH_MSG_NEWKEYS sent");
+   session->dh_handshake_state = DH_STATE_NEWKEYS_SENT;
+   return SSH_PACKET_USED;
+ error:
+diff --git a/src/ecdh.c b/src/ecdh.c
+index a4c07ccb..b57789d4 100644
+--- a/src/ecdh.c
++++ b/src/ecdh.c
+@@ -97,7 +97,7 @@ SSH_PACKET_CALLBACK(ssh_packet_client_ecdh_reply){
+     goto error;
+   }
+ 
+-  SSH_LOG(SSH_LOG_PROTOCOL, "SSH_MSG_NEWKEYS sent");
++  SSH_LOG(SSH_LOG_DEBUG, "SSH_MSG_NEWKEYS sent");
+   session->dh_handshake_state = DH_STATE_NEWKEYS_SENT;
+ 
+   return SSH_PACKET_USED;
+diff --git a/src/ecdh_crypto.c b/src/ecdh_crypto.c
+index a1de27fd..d050544f 100644
+--- a/src/ecdh_crypto.c
++++ b/src/ecdh_crypto.c
+@@ -317,7 +317,7 @@ SSH_PACKET_CALLBACK(ssh_packet_server_ecdh_init){
+         goto error;
+     }
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL, "SSH_MSG_KEXDH_REPLY sent");
++    SSH_LOG(SSH_LOG_DEBUG, "SSH_MSG_KEXDH_REPLY sent");
+     rc = ssh_packet_send(session);
+     if (rc == SSH_ERROR) {
+         goto error;
+@@ -334,7 +334,7 @@ SSH_PACKET_CALLBACK(ssh_packet_server_ecdh_init){
+     if (rc == SSH_ERROR){
+         goto error;
+     }
+-    SSH_LOG(SSH_LOG_PROTOCOL, "SSH_MSG_NEWKEYS sent");
++    SSH_LOG(SSH_LOG_DEBUG, "SSH_MSG_NEWKEYS sent");
+ 
+     return SSH_PACKET_USED;
+ error:
+diff --git a/src/ecdh_gcrypt.c b/src/ecdh_gcrypt.c
+index d9c41bf9..ca643467 100644
+--- a/src/ecdh_gcrypt.c
++++ b/src/ecdh_gcrypt.c
+@@ -366,7 +366,7 @@ SSH_PACKET_CALLBACK(ssh_packet_server_ecdh_init){
+         goto out;
+     }
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL, "SSH_MSG_KEXDH_REPLY sent");
++    SSH_LOG(SSH_LOG_DEBUG, "SSH_MSG_KEXDH_REPLY sent");
+     rc = ssh_packet_send(session);
+     if (rc != SSH_OK) {
+         goto out;
+@@ -381,7 +381,7 @@ SSH_PACKET_CALLBACK(ssh_packet_server_ecdh_init){
+ 
+     session->dh_handshake_state = DH_STATE_NEWKEYS_SENT;
+     rc = ssh_packet_send(session);
+-    SSH_LOG(SSH_LOG_PROTOCOL, "SSH_MSG_NEWKEYS sent");
++    SSH_LOG(SSH_LOG_DEBUG, "SSH_MSG_NEWKEYS sent");
+ 
+  out:
+     gcry_sexp_release(param);
+diff --git a/src/ecdh_mbedcrypto.c b/src/ecdh_mbedcrypto.c
+index 718f1522..855d4770 100644
+--- a/src/ecdh_mbedcrypto.c
++++ b/src/ecdh_mbedcrypto.c
+@@ -293,7 +293,7 @@ SSH_PACKET_CALLBACK(ssh_packet_server_ecdh_init){
+         goto out;
+     }
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL, "SSH_MSG_KEXDH_REPLY sent");
++    SSH_LOG(SSH_LOG_DEBUG, "SSH_MSG_KEXDH_REPLY sent");
+     rc = ssh_packet_send(session);
+     if (rc != SSH_OK) {
+         rc = SSH_ERROR;
+@@ -308,7 +308,7 @@ SSH_PACKET_CALLBACK(ssh_packet_server_ecdh_init){
+ 
+     session->dh_handshake_state = DH_STATE_NEWKEYS_SENT;
+     rc = ssh_packet_send(session);
+-    SSH_LOG(SSH_LOG_PROTOCOL, "SSH_MSG_NEWKEYS sent");
++    SSH_LOG(SSH_LOG_DEBUG, "SSH_MSG_NEWKEYS sent");
+ 
+ out:
+     mbedtls_ecp_group_free(&grp);
+diff --git a/src/error.c b/src/error.c
+index 22180407..5e850adb 100644
+--- a/src/error.c
++++ b/src/error.c
+@@ -63,8 +63,8 @@ void _ssh_set_error(void *error,
+     va_end(va);
+ 
+     err->error.error_code = code;
+-    if (ssh_get_log_level() >= SSH_LOG_WARN) {
+-        ssh_log_function(SSH_LOG_WARN,
++    if (ssh_get_log_level() == SSH_LOG_TRACE) {
++        ssh_log_function(SSH_LOG_TRACE,
+                          function,
+                          err->error.error_buffer);
+     }
+diff --git a/src/gssapi.c b/src/gssapi.c
+index 1d0fb6ae..cfa36a95 100644
+--- a/src/gssapi.c
++++ b/src/gssapi.c
+@@ -218,8 +218,8 @@ int ssh_gssapi_handle_userauth(ssh_session session, const char *user, uint32_t n
+ 
+     maj_stat = gss_indicate_mechs(&min_stat, &supported);
+     if (maj_stat != GSS_S_COMPLETE) {
+-        SSH_LOG(SSH_LOG_WARNING, "indicate mecks %d, %d", maj_stat, min_stat);
+-        ssh_gssapi_log_error(SSH_LOG_WARNING,
++        SSH_LOG(SSH_LOG_DEBUG, "indicate mecks %d, %d", maj_stat, min_stat);
++        ssh_gssapi_log_error(SSH_LOG_DEBUG,
+                              "indicate mechs",
+                              maj_stat,
+                              min_stat);
+@@ -240,7 +240,7 @@ int ssh_gssapi_handle_userauth(ssh_session session, const char *user, uint32_t n
+             continue;
+         }
+         if(len < 2 || oid_s[0] != SSH_OID_TAG || ((size_t)oid_s[1]) != len - 2){
+-            SSH_LOG(SSH_LOG_WARNING,"GSSAPI: received invalid OID");
++            SSH_LOG(SSH_LOG_TRACE,"GSSAPI: received invalid OID");
+             continue;
+         }
+         oid.elements = &oid_s[2];
+@@ -253,7 +253,7 @@ int ssh_gssapi_handle_userauth(ssh_session session, const char *user, uint32_t n
+     }
+     gss_release_oid_set(&min_stat, &supported);
+     if (oid_count == 0){
+-        SSH_LOG(SSH_LOG_PROTOCOL,"GSSAPI: no OID match");
++        SSH_LOG(SSH_LOG_DEBUG,"GSSAPI: no OID match");
+         ssh_auth_reply_default(session, 0);
+         gss_release_oid_set(&min_stat, &both_supported);
+         return SSH_OK;
+@@ -267,8 +267,8 @@ int ssh_gssapi_handle_userauth(ssh_session session, const char *user, uint32_t n
+     maj_stat = gss_import_name(&min_stat, &name_buf,
+             (gss_OID) GSS_C_NT_HOSTBASED_SERVICE, &server_name);
+     if (maj_stat != GSS_S_COMPLETE) {
+-        SSH_LOG(SSH_LOG_WARNING, "importing name %d, %d", maj_stat, min_stat);
+-        ssh_gssapi_log_error(SSH_LOG_WARNING,
++        SSH_LOG(SSH_LOG_DEBUG, "importing name %d, %d", maj_stat, min_stat);
++        ssh_gssapi_log_error(SSH_LOG_DEBUG,
+                              "importing name",
+                              maj_stat,
+                              min_stat);
+@@ -282,8 +282,8 @@ int ssh_gssapi_handle_userauth(ssh_session session, const char *user, uint32_t n
+     gss_release_oid_set(&min_stat, &both_supported);
+ 
+     if (maj_stat != GSS_S_COMPLETE) {
+-        SSH_LOG(SSH_LOG_WARNING, "error acquiring credentials %d, %d", maj_stat, min_stat);
+-        ssh_gssapi_log_error(SSH_LOG_WARNING,
++        SSH_LOG(SSH_LOG_TRACE, "error acquiring credentials %d, %d", maj_stat, min_stat);
++        ssh_gssapi_log_error(SSH_LOG_TRACE,
+                              "acquiring creds",
+                              maj_stat,
+                              min_stat);
+@@ -291,7 +291,7 @@ int ssh_gssapi_handle_userauth(ssh_session session, const char *user, uint32_t n
+         return SSH_ERROR;
+     }
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL, "acquiring credentials %d, %d", maj_stat, min_stat);
++    SSH_LOG(SSH_LOG_DEBUG, "acquiring credentials %d, %d", maj_stat, min_stat);
+ 
+     /* finding which OID from client we selected */
+     for (i=0 ; i< n_oid ; ++i){
+@@ -302,7 +302,7 @@ int ssh_gssapi_handle_userauth(ssh_session session, const char *user, uint32_t n
+             continue;
+         }
+         if(len < 2 || oid_s[0] != SSH_OID_TAG || ((size_t)oid_s[1]) != len - 2){
+-            SSH_LOG(SSH_LOG_WARNING,"GSSAPI: received invalid OID");
++            SSH_LOG(SSH_LOG_TRACE,"GSSAPI: received invalid OID");
+             continue;
+         }
+         oid.elements = &oid_s[2];
+@@ -332,7 +332,7 @@ static char *ssh_gssapi_name_to_char(gss_name_t name){
+     OM_uint32 maj_stat, min_stat;
+     char *ptr;
+     maj_stat = gss_display_name(&min_stat, name, &buffer, NULL);
+-    ssh_gssapi_log_error(SSH_LOG_WARNING,
++    ssh_gssapi_log_error(SSH_LOG_DEBUG,
+                          "converting name",
+                          maj_stat,
+                          min_stat);
+@@ -407,7 +407,7 @@ SSH_PACKET_CALLBACK(ssh_packet_userauth_gssapi_token_server){
+     maj_stat = gss_accept_sec_context(&min_stat, &session->gssapi->ctx, session->gssapi->server_creds,
+             &input_token, input_bindings, &client_name, NULL /*mech_oid*/, &output_token, &ret_flags,
+             NULL /*time*/, &session->gssapi->client_creds);
+-    ssh_gssapi_log_error(SSH_LOG_PROTOCOL,
++    ssh_gssapi_log_error(SSH_LOG_DEBUG,
+                          "accepting token",
+                          maj_stat,
+                          min_stat);
+@@ -417,7 +417,7 @@ SSH_PACKET_CALLBACK(ssh_packet_userauth_gssapi_token_server){
+         session->gssapi->canonic_user = ssh_gssapi_name_to_char(client_name);
+     }
+     if (GSS_ERROR(maj_stat)){
+-        ssh_gssapi_log_error(SSH_LOG_WARNING,
++        ssh_gssapi_log_error(SSH_LOG_DEBUG,
+                              "Gssapi error",
+                              maj_stat,
+                              min_stat);
+@@ -524,7 +524,7 @@ SSH_PACKET_CALLBACK(ssh_packet_userauth_gssapi_mic)
+         mic_token_buf.value = ssh_string_data(mic_token);
+ 
+         maj_stat = gss_verify_mic(&min_stat, session->gssapi->ctx, &mic_buf, &mic_token_buf, NULL);
+-        ssh_gssapi_log_error(SSH_LOG_PROTOCOL,
++        ssh_gssapi_log_error(SSH_LOG_DEBUG,
+                              "verifying MIC",
+                              maj_stat,
+                              min_stat);
+@@ -739,8 +739,8 @@ int ssh_gssapi_auth_mic(ssh_session session){
+                                (gss_OID)GSS_C_NT_HOSTBASED_SERVICE,
+                                &session->gssapi->client.server_name);
+     if (maj_stat != GSS_S_COMPLETE) {
+-        SSH_LOG(SSH_LOG_WARNING, "importing name %d, %d", maj_stat, min_stat);
+-        ssh_gssapi_log_error(SSH_LOG_WARNING,
++        SSH_LOG(SSH_LOG_DEBUG, "importing name %d, %d", maj_stat, min_stat);
++        ssh_gssapi_log_error(SSH_LOG_DEBUG,
+                              "importing name",
+                              maj_stat,
+                              min_stat);
+@@ -754,7 +754,7 @@ int ssh_gssapi_auth_mic(ssh_session session){
+         return SSH_AUTH_ERROR;
+     }
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL, "Authenticating with gssapi to host %s with user %s",
++    SSH_LOG(SSH_LOG_DEBUG, "Authenticating with gssapi to host %s with user %s",
+             session->opts.host, session->gssapi->user);
+     rc = ssh_gssapi_match(session, &selected);
+     if (rc == SSH_ERROR) {
+@@ -762,7 +762,7 @@ int ssh_gssapi_auth_mic(ssh_session session){
+     }
+ 
+     n_oids = selected->count;
+-    SSH_LOG(SSH_LOG_PROTOCOL, "Sending %zu oids", n_oids);
++    SSH_LOG(SSH_LOG_DEBUG, "Sending %zu oids", n_oids);
+ 
+     oids = calloc(n_oids, sizeof(ssh_string));
+     if (oids == NULL) {
+@@ -875,7 +875,7 @@ SSH_PACKET_CALLBACK(ssh_packet_userauth_gssapi_response){
+                                     0, NULL, &input_token, NULL,
+                                     &output_token, NULL, NULL);
+     if(GSS_ERROR(maj_stat)){
+-        ssh_gssapi_log_error(SSH_LOG_WARNING,
++        ssh_gssapi_log_error(SSH_LOG_DEBUG,
+                              "Initializing gssapi context",
+                              maj_stat,
+                              min_stat);
+@@ -923,7 +923,7 @@ static int ssh_gssapi_send_mic(ssh_session session){
+                            &mic_buf, &mic_token_buf);
+     if (GSS_ERROR(maj_stat)){
+         SSH_BUFFER_FREE(mic_buffer);
+-        ssh_gssapi_log_error(SSH_LOG_PROTOCOL,
++        ssh_gssapi_log_error(SSH_LOG_DEBUG,
+                              "generating MIC",
+                              maj_stat,
+                              min_stat);
+@@ -980,13 +980,13 @@ SSH_PACKET_CALLBACK(ssh_packet_userauth_gssapi_token_client){
+                                     0, NULL, &input_token, NULL,
+                                     &output_token, NULL, NULL);
+ 
+-    ssh_gssapi_log_error(SSH_LOG_PROTOCOL,
++    ssh_gssapi_log_error(SSH_LOG_DEBUG,
+                          "accepting token",
+                          maj_stat,
+                          min_stat);
+     SSH_STRING_FREE(token);
+     if (GSS_ERROR(maj_stat)){
+-        ssh_gssapi_log_error(SSH_LOG_PROTOCOL,
++        ssh_gssapi_log_error(SSH_LOG_DEBUG,
+                              "Gssapi error",
+                              maj_stat,
+                              min_stat);
+diff --git a/src/kex.c b/src/kex.c
+index 82071c74..9b599657 100644
+--- a/src/kex.c
++++ b/src/kex.c
+@@ -345,7 +345,7 @@ SSH_PACKET_CALLBACK(ssh_packet_kexinit)
+     (void)user;
+ 
+     if (session->session_state == SSH_SESSION_STATE_AUTHENTICATED) {
+-        SSH_LOG(SSH_LOG_INFO, "Initiating key re-exchange");
++        SSH_LOG(SSH_LOG_DEBUG, "Initiating key re-exchange");
+     } else if (session->session_state != SSH_SESSION_STATE_INITIAL_KEX) {
+         ssh_set_error(session,SSH_FATAL,"SSH_KEXINIT received in wrong state");
+         goto error;
+@@ -590,7 +590,7 @@ char *ssh_client_select_hostkeys(ssh_session session)
+     /* This removes the certificate types, unsupported for now */
+     wanted_without_certs = ssh_find_all_matching(HOSTKEYS, wanted);
+     if (wanted_without_certs == NULL) {
+-        SSH_LOG(SSH_LOG_WARNING,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "List of allowed host key algorithms is empty or contains only "
+                 "unsupported algorithms");
+         return NULL;
+@@ -643,7 +643,7 @@ char *ssh_client_select_hostkeys(ssh_session session)
+         fips_hostkeys = ssh_keep_fips_algos(SSH_HOSTKEYS, new_hostkeys);
+         SAFE_FREE(new_hostkeys);
+         if (fips_hostkeys == NULL) {
+-            SSH_LOG(SSH_LOG_WARNING,
++            SSH_LOG(SSH_LOG_TRACE,
+                     "None of the wanted host keys or keys in known_hosts files "
+                     "is allowed in FIPS mode.");
+             return NULL;
+@@ -813,7 +813,7 @@ int ssh_kex_select_methods (ssh_session session)
+     } else if (strcmp(session->next_crypto->kex_methods[SSH_KEX], "curve25519-sha256") == 0){
+       session->next_crypto->kex_type=SSH_KEX_CURVE25519_SHA256;
+     }
+-    SSH_LOG(SSH_LOG_INFO, "Negotiated %s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
++    SSH_LOG(SSH_LOG_DEBUG, "Negotiated %s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
+             session->next_crypto->kex_methods[SSH_KEX],
+             session->next_crypto->kex_methods[SSH_HOSTKEYS],
+             session->next_crypto->kex_methods[SSH_CRYPT_C_S],
+@@ -1114,7 +1114,7 @@ int ssh_make_sessionid(ssh_session session)
+     case SSH_KEX_ECDH_SHA2_NISTP521:
+         if (session->next_crypto->ecdh_client_pubkey == NULL ||
+             session->next_crypto->ecdh_server_pubkey == NULL) {
+-            SSH_LOG(SSH_LOG_WARNING, "ECDH parameted missing");
++            SSH_LOG(SSH_LOG_TRACE, "ECDH parameted missing");
+             goto error;
+         }
+         rc = ssh_buffer_pack(buf,
+diff --git a/src/knownhosts.c b/src/knownhosts.c
+index f2ef088c..e632ef22 100644
+--- a/src/knownhosts.c
++++ b/src/knownhosts.c
+@@ -224,7 +224,7 @@ static int ssh_known_hosts_read_entries(const char *match,
+ 
+     fp = fopen(filename, "r");
+     if (fp == NULL) {
+-        SSH_LOG(SSH_LOG_WARN, "Failed to open the known_hosts file '%s': %s",
++        SSH_LOG(SSH_LOG_TRACE, "Failed to open the known_hosts file '%s': %s",
+                 filename, strerror(errno));
+         /* The missing file is not an error here */
+         return SSH_OK;
+@@ -483,7 +483,7 @@ static const char *ssh_known_host_sigs_from_hostkey_type(enum ssh_keytypes_e typ
+ #endif
+     case SSH_KEYTYPE_UNKNOWN:
+     default:
+-        SSH_LOG(SSH_LOG_WARN, "The given type %d is not a base private key type "
++        SSH_LOG(SSH_LOG_TRACE, "The given type %d is not a base private key type "
+                 "or is unsupported", type);
+         return NULL;
+     }
+@@ -719,7 +719,7 @@ int ssh_known_hosts_parse_line(const char *hostname,
+ 
+     key_type = ssh_key_type_from_name(p);
+     if (key_type == SSH_KEYTYPE_UNKNOWN) {
+-        SSH_LOG(SSH_LOG_WARN, "key type '%s' unknown!", p);
++        SSH_LOG(SSH_LOG_TRACE, "key type '%s' unknown!", p);
+         rc = SSH_ERROR;
+         goto out;
+     }
+@@ -735,7 +735,7 @@ int ssh_known_hosts_parse_line(const char *hostname,
+                                       key_type,
+                                       &e->publickey);
+     if (rc != SSH_OK) {
+-        SSH_LOG(SSH_LOG_WARN,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "Failed to parse %s key for entry: %s!",
+                 ssh_key_type_to_char(key_type),
+                 e->unparsed);
+@@ -806,7 +806,7 @@ enum ssh_known_hosts_e ssh_session_has_known_hosts_entry(ssh_session session)
+     if (session->opts.knownhosts != NULL) {
+         known_hosts_found = ssh_file_readaccess_ok(session->opts.knownhosts);
+         if (!known_hosts_found) {
+-            SSH_LOG(SSH_LOG_WARN, "Cannot access file %s",
++            SSH_LOG(SSH_LOG_TRACE, "Cannot access file %s",
+                     session->opts.knownhosts);
+         }
+     }
+@@ -815,7 +815,7 @@ enum ssh_known_hosts_e ssh_session_has_known_hosts_entry(ssh_session session)
+         global_known_hosts_found =
+                 ssh_file_readaccess_ok(session->opts.global_knownhosts);
+         if (!global_known_hosts_found) {
+-            SSH_LOG(SSH_LOG_WARN, "Cannot access file %s",
++            SSH_LOG(SSH_LOG_TRACE, "Cannot access file %s",
+                     session->opts.global_knownhosts);
+         }
+     }
+diff --git a/src/libcrypto.c b/src/libcrypto.c
+index 3db75df6..c002262a 100644
+--- a/src/libcrypto.c
++++ b/src/libcrypto.c
+@@ -496,7 +496,7 @@ static void evp_cipher_init(struct ssh_cipher_struct *cipher) {
+     case SSH_AES128_CTR:
+     case SSH_AES192_CTR:
+     case SSH_AES256_CTR:
+-        SSH_LOG(SSH_LOG_WARNING, "This cipher is not available in evp_cipher_init");
++        SSH_LOG(SSH_LOG_TRACE, "This cipher is not available in evp_cipher_init");
+         break;
+ #endif
+ #ifdef HAVE_OPENSSL_EVP_AES_GCM
+@@ -509,7 +509,7 @@ static void evp_cipher_init(struct ssh_cipher_struct *cipher) {
+ #else
+     case SSH_AEAD_AES128_GCM:
+     case SSH_AEAD_AES256_GCM:
+-        SSH_LOG(SSH_LOG_WARNING, "This cipher is not available in evp_cipher_init");
++        SSH_LOG(SSH_LOG_TRACE, "This cipher is not available in evp_cipher_init");
+         break;
+ #endif /* HAVE_OPENSSL_EVP_AES_GCM */
+     case SSH_3DES_CBC:
+@@ -522,10 +522,10 @@ static void evp_cipher_init(struct ssh_cipher_struct *cipher) {
+         /* ciphers not using EVP */
+ #endif
+     case SSH_AEAD_CHACHA20_POLY1305:
+-        SSH_LOG(SSH_LOG_WARNING, "The ChaCha cipher cannot be handled here");
++        SSH_LOG(SSH_LOG_TRACE, "The ChaCha cipher cannot be handled here");
+         break;
+     case SSH_NO_CIPHER:
+-        SSH_LOG(SSH_LOG_WARNING, "No valid ciphertype found");
++        SSH_LOG(SSH_LOG_TRACE, "No valid ciphertype found");
+         break;
+     }
+ }
+@@ -540,7 +540,7 @@ static int evp_cipher_set_encrypt_key(struct ssh_cipher_struct *cipher,
+ 
+     rc = EVP_EncryptInit_ex(cipher->ctx, cipher->cipher, NULL, key, IV);
+     if (rc != 1){
+-        SSH_LOG(SSH_LOG_WARNING, "EVP_EncryptInit_ex failed");
++        SSH_LOG(SSH_LOG_TRACE, "EVP_EncryptInit_ex failed");
+         return SSH_ERROR;
+     }
+ 
+@@ -553,7 +553,7 @@ static int evp_cipher_set_encrypt_key(struct ssh_cipher_struct *cipher,
+                                  -1,
+                                  (uint8_t *)IV);
+         if (rc != 1) {
+-            SSH_LOG(SSH_LOG_WARNING, "EVP_CTRL_GCM_SET_IV_FIXED failed");
++            SSH_LOG(SSH_LOG_TRACE, "EVP_CTRL_GCM_SET_IV_FIXED failed");
+             return SSH_ERROR;
+         }
+     }
+@@ -573,7 +573,7 @@ static int evp_cipher_set_decrypt_key(struct ssh_cipher_struct *cipher,
+ 
+     rc = EVP_DecryptInit_ex(cipher->ctx, cipher->cipher, NULL, key, IV);
+     if (rc != 1){
+-        SSH_LOG(SSH_LOG_WARNING, "EVP_DecryptInit_ex failed");
++        SSH_LOG(SSH_LOG_TRACE, "EVP_DecryptInit_ex failed");
+         return SSH_ERROR;
+     }
+ 
+@@ -586,7 +586,7 @@ static int evp_cipher_set_decrypt_key(struct ssh_cipher_struct *cipher,
+                                  -1,
+                                  (uint8_t *)IV);
+         if (rc != 1) {
+-            SSH_LOG(SSH_LOG_WARNING, "EVP_CTRL_GCM_SET_IV_FIXED failed");
++            SSH_LOG(SSH_LOG_TRACE, "EVP_CTRL_GCM_SET_IV_FIXED failed");
+             return SSH_ERROR;
+         }
+     }
+@@ -612,11 +612,11 @@ static void evp_cipher_encrypt(struct ssh_cipher_struct *cipher,
+                            (unsigned char *)in,
+                            (int)len);
+     if (rc != 1){
+-        SSH_LOG(SSH_LOG_WARNING, "EVP_EncryptUpdate failed");
++        SSH_LOG(SSH_LOG_TRACE, "EVP_EncryptUpdate failed");
+         return;
+     }
+     if (outlen != (int)len){
+-        SSH_LOG(SSH_LOG_WARNING,
++        SSH_LOG(SSH_LOG_DEBUG,
+                 "EVP_EncryptUpdate: output size %d for %zu in",
+                 outlen,
+                 len);
+@@ -638,11 +638,11 @@ static void evp_cipher_decrypt(struct ssh_cipher_struct *cipher,
+                            (unsigned char *)in,
+                            (int)len);
+     if (rc != 1){
+-        SSH_LOG(SSH_LOG_WARNING, "EVP_DecryptUpdate failed");
++        SSH_LOG(SSH_LOG_TRACE, "EVP_DecryptUpdate failed");
+         return;
+     }
+     if (outlen != (int)len){
+-        SSH_LOG(SSH_LOG_WARNING,
++        SSH_LOG(SSH_LOG_DEBUG,
+                 "EVP_DecryptUpdate: output size %d for %zu in",
+                 outlen,
+                 len);
+@@ -759,7 +759,7 @@ evp_cipher_aead_encrypt(struct ssh_cipher_struct *cipher,
+                              1,
+                              lastiv);
+     if (rc == 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "EVP_CTRL_GCM_IV_GEN failed");
++        SSH_LOG(SSH_LOG_TRACE, "EVP_CTRL_GCM_IV_GEN failed");
+         return;
+     }
+ 
+@@ -771,7 +771,7 @@ evp_cipher_aead_encrypt(struct ssh_cipher_struct *cipher,
+                            (int)aadlen);
+     outlen = tmplen;
+     if (rc == 0 || outlen != aadlen) {
+-        SSH_LOG(SSH_LOG_WARNING, "Failed to pass authenticated data");
++        SSH_LOG(SSH_LOG_TRACE, "Failed to pass authenticated data");
+         return;
+     }
+     memcpy(out, in, aadlen);
+@@ -784,7 +784,7 @@ evp_cipher_aead_encrypt(struct ssh_cipher_struct *cipher,
+                            (int)len - aadlen);
+     outlen = tmplen;
+     if (rc != 1 || outlen != (int)len - aadlen) {
+-        SSH_LOG(SSH_LOG_WARNING, "EVP_EncryptUpdate failed");
++        SSH_LOG(SSH_LOG_TRACE, "EVP_EncryptUpdate failed");
+         return;
+     }
+ 
+@@ -793,7 +793,7 @@ evp_cipher_aead_encrypt(struct ssh_cipher_struct *cipher,
+                           NULL,
+                           &tmplen);
+     if (rc < 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "EVP_EncryptFinal failed: Failed to create a tag");
++        SSH_LOG(SSH_LOG_TRACE, "EVP_EncryptFinal failed: Failed to create a tag");
+         return;
+     }
+ 
+@@ -802,7 +802,7 @@ evp_cipher_aead_encrypt(struct ssh_cipher_struct *cipher,
+                              authlen,
+                              (unsigned char *)tag);
+     if (rc != 1) {
+-        SSH_LOG(SSH_LOG_WARNING, "EVP_CTRL_GCM_GET_TAG failed");
++        SSH_LOG(SSH_LOG_TRACE, "EVP_CTRL_GCM_GET_TAG failed");
+         return;
+     }
+ }
+@@ -830,7 +830,7 @@ evp_cipher_aead_decrypt(struct ssh_cipher_struct *cipher,
+                              1,
+                              lastiv);
+     if (rc == 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "EVP_CTRL_GCM_IV_GEN failed");
++        SSH_LOG(SSH_LOG_TRACE, "EVP_CTRL_GCM_IV_GEN failed");
+         return SSH_ERROR;
+     }
+ 
+@@ -840,7 +840,7 @@ evp_cipher_aead_decrypt(struct ssh_cipher_struct *cipher,
+                              authlen,
+                              (unsigned char *)complete_packet + aadlen + encrypted_size);
+     if (rc == 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "EVP_CTRL_GCM_SET_TAG failed");
++        SSH_LOG(SSH_LOG_TRACE, "EVP_CTRL_GCM_SET_TAG failed");
+         return SSH_ERROR;
+     }
+ 
+@@ -851,7 +851,7 @@ evp_cipher_aead_decrypt(struct ssh_cipher_struct *cipher,
+                            (unsigned char *)complete_packet,
+                            (int)aadlen);
+     if (rc == 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "Failed to pass authenticated data");
++        SSH_LOG(SSH_LOG_TRACE, "Failed to pass authenticated data");
+         return SSH_ERROR;
+     }
+     /* Do not copy the length to the target buffer, because it is already processed */
+@@ -864,12 +864,12 @@ evp_cipher_aead_decrypt(struct ssh_cipher_struct *cipher,
+                            (unsigned char *)complete_packet + aadlen,
+                            encrypted_size /* already substracted aadlen*/);
+     if (rc != 1) {
+-        SSH_LOG(SSH_LOG_WARNING, "EVP_DecryptUpdate failed");
++        SSH_LOG(SSH_LOG_TRACE, "EVP_DecryptUpdate failed");
+         return SSH_ERROR;
+     }
+ 
+     if (outlen != (int)encrypted_size) {
+-        SSH_LOG(SSH_LOG_WARNING,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "EVP_DecryptUpdate: output size %d for %zd in",
+                 outlen,
+                 encrypted_size);
+@@ -881,7 +881,7 @@ evp_cipher_aead_decrypt(struct ssh_cipher_struct *cipher,
+                           NULL,
+                           &outlen);
+     if (rc < 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "EVP_DecryptFinal failed: Failed authentication");
++        SSH_LOG(SSH_LOG_TRACE, "EVP_DecryptFinal failed: Failed authentication");
+         return SSH_ERROR;
+     }
+ 
+@@ -1084,7 +1084,7 @@ int ssh_crypto_init(void)
+         return SSH_OK;
+     }
+     if (OpenSSL_version_num() != OPENSSL_VERSION_NUMBER){
+-        SSH_LOG(SSH_LOG_WARNING, "libssh compiled with %s "
++        SSH_LOG(SSH_LOG_DEBUG, "libssh compiled with %s "
+             "headers, currently running with %s.",
+             OPENSSL_VERSION_TEXT,
+             OpenSSL_version(OpenSSL_version_num())
+diff --git a/src/libgcrypt.c b/src/libgcrypt.c
+index 8fbf2157..9a811005 100644
+--- a/src/libgcrypt.c
++++ b/src/libgcrypt.c
+@@ -329,7 +329,7 @@ static int aes_set_key(struct ssh_cipher_struct *cipher, void *key, void *IV) {
+         }
+         break;
+       default:
+-        SSH_LOG(SSH_LOG_WARNING, "Unksupported key length %u.", cipher->keysize);
++        SSH_LOG(SSH_LOG_TRACE, "Unsupported key length %u.", cipher->keysize);
+         SAFE_FREE(cipher->key);
+         return -1;
+     }
+@@ -420,7 +420,7 @@ aes_gcm_encrypt(struct ssh_cipher_struct *cipher,
+      */
+     uint64_inc(cipher->last_iv + 4);
+     if (err) {
+-        SSH_LOG(SSH_LOG_WARNING, "gcry_cipher_setiv failed: %s",
++        SSH_LOG(SSH_LOG_TRACE, "gcry_cipher_setiv failed: %s",
+                 gpg_strerror(err));
+         return;
+     }
+@@ -428,7 +428,7 @@ aes_gcm_encrypt(struct ssh_cipher_struct *cipher,
+     /* Pass the authenticated data (packet_length) */
+     err = gcry_cipher_authenticate(cipher->key[0], in, aadlen);
+     if (err) {
+-        SSH_LOG(SSH_LOG_WARNING, "gcry_cipher_authenticate failed: %s",
++        SSH_LOG(SSH_LOG_TRACE, "gcry_cipher_authenticate failed: %s",
+                 gpg_strerror(err));
+         return;
+     }
+@@ -441,7 +441,7 @@ aes_gcm_encrypt(struct ssh_cipher_struct *cipher,
+                               (unsigned char *)in + aadlen,
+                               len - aadlen);
+     if (err) {
+-        SSH_LOG(SSH_LOG_WARNING, "gcry_cipher_encrypt failed: %s",
++        SSH_LOG(SSH_LOG_TRACE, "gcry_cipher_encrypt failed: %s",
+                 gpg_strerror(err));
+         return;
+     }
+@@ -451,7 +451,7 @@ aes_gcm_encrypt(struct ssh_cipher_struct *cipher,
+                              (void *)tag,
+                              authlen);
+     if (err) {
+-        SSH_LOG(SSH_LOG_WARNING, "gcry_cipher_gettag failed: %s",
++        SSH_LOG(SSH_LOG_TRACE, "gcry_cipher_gettag failed: %s",
+                 gpg_strerror(err));
+         return;
+     }
+@@ -485,7 +485,7 @@ aes_gcm_decrypt(struct ssh_cipher_struct *cipher,
+      */
+     uint64_inc(cipher->last_iv + 4);
+     if (err) {
+-        SSH_LOG(SSH_LOG_WARNING, "gcry_cipher_setiv failed: %s",
++        SSH_LOG(SSH_LOG_TRACE, "gcry_cipher_setiv failed: %s",
+                 gpg_strerror(err));
+         return SSH_ERROR;
+     }
+@@ -495,7 +495,7 @@ aes_gcm_decrypt(struct ssh_cipher_struct *cipher,
+                                    complete_packet,
+                                    aadlen);
+     if (err) {
+-        SSH_LOG(SSH_LOG_WARNING, "gcry_cipher_authenticate failed: %s",
++        SSH_LOG(SSH_LOG_TRACE, "gcry_cipher_authenticate failed: %s",
+                 gpg_strerror(err));
+         return SSH_ERROR;
+     }
+@@ -509,7 +509,7 @@ aes_gcm_decrypt(struct ssh_cipher_struct *cipher,
+                               (unsigned char *)complete_packet + aadlen,
+                               encrypted_size);
+     if (err) {
+-        SSH_LOG(SSH_LOG_WARNING, "gcry_cipher_decrypt failed: %s",
++        SSH_LOG(SSH_LOG_TRACE, "gcry_cipher_decrypt failed: %s",
+                 gpg_strerror(err));
+         return SSH_ERROR;
+     }
+@@ -519,10 +519,10 @@ aes_gcm_decrypt(struct ssh_cipher_struct *cipher,
+                                (unsigned char *)complete_packet + aadlen + encrypted_size,
+                                authlen);
+     if (gpg_err_code(err) == GPG_ERR_CHECKSUM) {
+-        SSH_LOG(SSH_LOG_WARNING, "The authentication tag does not match");
++        SSH_LOG(SSH_LOG_DEBUG, "The authentication tag does not match");
+         return SSH_ERROR;
+     } else if (err != GPG_ERR_NO_ERROR) {
+-        SSH_LOG(SSH_LOG_WARNING, "General error while decryption: %s",
++        SSH_LOG(SSH_LOG_TRACE, "General error while decryption: %s",
+                 gpg_strerror(err));
+         return SSH_ERROR;
+     }
+diff --git a/src/libmbedcrypto.c b/src/libmbedcrypto.c
+index a2e74d3b..ee30c38a 100644
+--- a/src/libmbedcrypto.c
++++ b/src/libmbedcrypto.c
+@@ -468,7 +468,7 @@ cipher_init(struct ssh_cipher_struct *cipher,
+     } else if (operation == MBEDTLS_DECRYPT) {
+         ctx = &cipher->decrypt_ctx;
+     } else {
+-        SSH_LOG(SSH_LOG_WARNING, "unknown operation");
++        SSH_LOG(SSH_LOG_TRACE, "unknown operation");
+         return 1;
+     }
+ 
+@@ -477,7 +477,7 @@ cipher_init(struct ssh_cipher_struct *cipher,
+ 
+     rc = mbedtls_cipher_setup(ctx, cipher_info);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_setup failed");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_cipher_setup failed");
+         goto error;
+     }
+ 
+@@ -485,13 +485,13 @@ cipher_init(struct ssh_cipher_struct *cipher,
+                                cipher_info->key_bitlen,
+                                operation);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_setkey failed");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_cipher_setkey failed");
+         goto error;
+     }
+ 
+     rc = mbedtls_cipher_set_iv(ctx, IV, cipher_info->iv_size);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_set_iv failed");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_cipher_set_iv failed");
+         goto error;
+     }
+ 
+@@ -510,13 +510,13 @@ cipher_set_encrypt_key(struct ssh_cipher_struct *cipher,
+ 
+     rc = cipher_init(cipher, MBEDTLS_ENCRYPT, key, IV);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "cipher_init failed");
++        SSH_LOG(SSH_LOG_TRACE, "cipher_init failed");
+         goto error;
+     }
+ 
+     rc = mbedtls_cipher_reset(&cipher->encrypt_ctx);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_reset failed");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_cipher_reset failed");
+         goto error;
+     }
+ 
+@@ -534,7 +534,7 @@ cipher_set_encrypt_key_cbc(struct ssh_cipher_struct *cipher,
+ 
+     rc = cipher_init(cipher, MBEDTLS_ENCRYPT, key, IV);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "cipher_init failed");
++        SSH_LOG(SSH_LOG_TRACE, "cipher_init failed");
+         goto error;
+     }
+ 
+@@ -544,13 +544,13 @@ cipher_set_encrypt_key_cbc(struct ssh_cipher_struct *cipher,
+             MBEDTLS_PADDING_NONE);
+ 
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_set_padding_mode failed");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_cipher_set_padding_mode failed");
+         goto error;
+     }
+ 
+     rc = mbedtls_cipher_reset(&cipher->encrypt_ctx);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_reset failed");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_cipher_reset failed");
+         goto error;
+     }
+ 
+@@ -577,7 +577,7 @@ cipher_set_key_gcm(struct ssh_cipher_struct *cipher,
+                             key,
+                             cipher_info->key_bitlen);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_gcm_setkey failed");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_gcm_setkey failed");
+         goto error;
+     }
+ 
+@@ -600,13 +600,13 @@ cipher_set_decrypt_key(struct ssh_cipher_struct *cipher,
+ 
+     rc = cipher_init(cipher, MBEDTLS_DECRYPT, key, IV);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "cipher_init failed");
++        SSH_LOG(SSH_LOG_TRACE, "cipher_init failed");
+         goto error;
+     }
+ 
+     mbedtls_cipher_reset(&cipher->decrypt_ctx);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_reset failed");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_cipher_reset failed");
+         goto error;
+     }
+ 
+@@ -625,20 +625,20 @@ cipher_set_decrypt_key_cbc(struct ssh_cipher_struct *cipher,
+ 
+     rc = cipher_init(cipher, MBEDTLS_DECRYPT, key, IV);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "cipher_init failed");
++        SSH_LOG(SSH_LOG_TRACE, "cipher_init failed");
+         goto error;
+     }
+ 
+     rc = mbedtls_cipher_set_padding_mode(&cipher->decrypt_ctx,
+             MBEDTLS_PADDING_NONE);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_set_padding_mode failed");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_cipher_set_padding_mode failed");
+         goto error;
+     }
+ 
+     mbedtls_cipher_reset(&cipher->decrypt_ctx);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_reset failed");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_cipher_reset failed");
+         goto error;
+     }
+ 
+@@ -658,7 +658,7 @@ static void cipher_encrypt(struct ssh_cipher_struct *cipher,
+     int rc = 0;
+     rc = mbedtls_cipher_update(&cipher->encrypt_ctx, in, len, out, &outlen);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_update failed during encryption");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_cipher_update failed during encryption");
+         return;
+     }
+ 
+@@ -674,12 +674,12 @@ static void cipher_encrypt(struct ssh_cipher_struct *cipher,
+     total_len += outlen;
+ 
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_finish failed during encryption");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_cipher_finish failed during encryption");
+         return;
+     }
+ 
+     if (total_len != len) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_update: output size %zu for %zu",
++        SSH_LOG(SSH_LOG_DEBUG, "mbedtls_cipher_update: output size %zu for %zu",
+                 outlen, len);
+         return;
+     }
+@@ -693,12 +693,12 @@ static void cipher_encrypt_cbc(struct ssh_cipher_struct *cipher, void *in, void
+     int rc = 0;
+     rc = mbedtls_cipher_update(&cipher->encrypt_ctx, in, len, out, &outlen);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_update failed during encryption");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_cipher_update failed during encryption");
+         return;
+     }
+ 
+     if (outlen != len) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_update: output size %zu for %zu",
++        SSH_LOG(SSH_LOG_DEBUG "mbedtls_cipher_update: output size %zu for %zu",
+                 outlen, len);
+         return;
+     }
+@@ -716,7 +716,7 @@ static void cipher_decrypt(struct ssh_cipher_struct *cipher,
+ 
+     rc = mbedtls_cipher_update(&cipher->decrypt_ctx, in, len, out, &outlen);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_update failed during decryption");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_cipher_update failed during decryption");
+         return;
+     }
+ 
+@@ -730,14 +730,14 @@ static void cipher_decrypt(struct ssh_cipher_struct *cipher,
+             outlen, &outlen);
+ 
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_reset failed during decryption");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_cipher_reset failed during decryption");
+         return;
+     }
+ 
+     total_len += outlen;
+ 
+     if (total_len != len) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_update: output size %zu for %zu",
++        SSH_LOG(SSH_LOG_DEBUG, "mbedtls_cipher_update: output size %zu for %zu",
+                 outlen, len);
+         return;
+     }
+@@ -751,7 +751,7 @@ static void cipher_decrypt_cbc(struct ssh_cipher_struct *cipher, void *in, void
+     int rc = 0;
+     rc = mbedtls_cipher_update(&cipher->decrypt_ctx, in, len, out, &outlen);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_update failed during decryption");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_cipher_update failed during decryption");
+         return;
+     }
+ 
+@@ -770,19 +770,19 @@ static void cipher_decrypt_cbc(struct ssh_cipher_struct *cipher, void *in, void
+     }
+ 
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_finish failed during decryption");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_cipher_finish failed during decryption");
+         return;
+     }
+ 
+     rc = mbedtls_cipher_reset(&cipher->decrypt_ctx);
+ 
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_reset failed during decryption");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_cipher_reset failed during decryption");
+         return;
+     }
+ 
+     if (outlen != len) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_cipher_update: output size %zu for %zu",
++        SSH_LOG(SSH_LOG_DEBUG, "mbedtls_cipher_update: output size %zu for %zu",
+                 outlen, len);
+         return;
+     }
+@@ -836,7 +836,7 @@ cipher_encrypt_gcm(struct ssh_cipher_struct *cipher,
+                                    authlen,
+                                    tag); /* tag */
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_gcm_crypt_and_tag failed");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_gcm_crypt_and_tag failed");
+         return;
+     }
+ 
+@@ -870,7 +870,7 @@ cipher_decrypt_gcm(struct ssh_cipher_struct *cipher,
+                                   (const uint8_t *)complete_packet + aadlen, /* input */
+                                   (unsigned char *)out); /* output */
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "mbedtls_gcm_auth_decrypt failed");
++        SSH_LOG(SSH_LOG_TRACE, "mbedtls_gcm_auth_decrypt failed");
+         return SSH_ERROR;
+     }
+ 
+diff --git a/src/messages.c b/src/messages.c
+index a772d488..2f4f99f8 100644
+--- a/src/messages.c
++++ b/src/messages.c
+@@ -160,7 +160,7 @@ static int ssh_execute_server_request(ssh_session session, ssh_message msg)
+                 if (channel != NULL) {
+                     rc = ssh_message_channel_request_open_reply_accept_channel(msg, channel);
+                     if (rc != SSH_OK) {
+-                        SSH_LOG(SSH_LOG_WARNING,
++                        SSH_LOG(SSH_LOG_TRACE,
+                                 "Failed to send reply for accepting a channel "
+                                 "open");
+                     }
+@@ -237,7 +237,7 @@ static int ssh_execute_server_request(ssh_session session, ssh_message msg)
+                                                     msg->channel_request.pxwidth,
+                                                     msg->channel_request.pxheight);
+                     if (rc != SSH_OK) {
+-                        SSH_LOG(SSH_LOG_WARNING,
++                        SSH_LOG(SSH_LOG_TRACE,
+                                 "Failed to iterate callbacks for window change");
+                     }
+                     return SSH_OK;
+@@ -494,8 +494,11 @@ ssh_message ssh_message_pop_head(ssh_session session){
+ static int ssh_message_termination(void *s){
+   ssh_session session = s;
+   struct ssh_iterator *it;
+-  if(session->session_state == SSH_SESSION_STATE_ERROR)
++  if (session->session_state == SSH_SESSION_STATE_ERROR) {
++	  // TODO not sure of this
++	SSH_LOG(SSH_LOG_WARN, "Error: %s", ssh_get_error(session));
+     return 1;
++  }
+   it = ssh_list_get_iterator(session->ssh_message_list);
+   if(!it)
+     return 0;
+@@ -774,7 +777,7 @@ SSH_PACKET_CALLBACK(ssh_packet_userauth_request){
+ 
+   cmp = strcmp(service, "ssh-connection");
+   if (cmp != 0) {
+-      SSH_LOG(SSH_LOG_WARNING,
++      SSH_LOG(SSH_LOG_TRACE,
+               "Invalid service request: %s",
+               service);
+       goto end;
+@@ -1046,7 +1049,7 @@ SSH_PACKET_CALLBACK(ssh_packet_userauth_info_response){
+   }
+ 
+   if (session->kbdint == NULL) {
+-    SSH_LOG(SSH_LOG_PROTOCOL, "Warning: Got a keyboard-interactive "
++    SSH_LOG(SSH_LOG_DEBUG, "Warning: Got a keyboard-interactive "
+                         "response but it seems we didn't send the request.");
+ 
+     session->kbdint = ssh_kbdint_new();
+@@ -1080,7 +1083,7 @@ SSH_PACKET_CALLBACK(ssh_packet_userauth_info_response){
+ 
+   if(nanswers != session->kbdint->nprompts) {
+     /* warn but let the application handle this case */
+-    SSH_LOG(SSH_LOG_PROTOCOL, "Warning: Number of prompts and answers"
++    SSH_LOG(SSH_LOG_DEBUG, "Warning: Number of prompts and answers"
+                 " mismatch: p=%u a=%u", session->kbdint->nprompts, nanswers);
+   }
+   session->kbdint->nanswers = nanswers;
+@@ -1487,7 +1490,7 @@ SSH_PACKET_CALLBACK(ssh_packet_global_request){
+     (void)type;
+     (void)packet;
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL,"Received SSH_MSG_GLOBAL_REQUEST packet");
++    SSH_LOG(SSH_LOG_DEBUG,"Received SSH_MSG_GLOBAL_REQUEST packet");
+     r = ssh_buffer_unpack(packet, "sb",
+             &request,
+             &want_reply);
+@@ -1519,12 +1522,12 @@ SSH_PACKET_CALLBACK(ssh_packet_global_request){
+         msg->global_request.type = SSH_GLOBAL_REQUEST_TCPIP_FORWARD;
+         msg->global_request.want_reply = want_reply;
+ 
+-        SSH_LOG(SSH_LOG_PROTOCOL, "Received SSH_MSG_GLOBAL_REQUEST %s %d %s:%d", request, want_reply,
++        SSH_LOG(SSH_LOG_DEBUG, "Received SSH_MSG_GLOBAL_REQUEST %s %d %s:%d", request, want_reply,
+                 msg->global_request.bind_address,
+                 msg->global_request.bind_port);
+ 
+         if(ssh_callbacks_exists(session->common.callbacks, global_request_function)) {
+-            SSH_LOG(SSH_LOG_PROTOCOL, "Calling callback for SSH_MSG_GLOBAL_REQUEST %s %d %s:%d", request,
++            SSH_LOG(SSH_LOG_DEBUG, "Calling callback for SSH_MSG_GLOBAL_REQUEST %s %d %s:%d", request,
+                     want_reply, msg->global_request.bind_address,
+                     msg->global_request.bind_port);
+             session->common.callbacks->global_request_function(session, msg, session->common.callbacks->userdata);
+@@ -1549,7 +1552,7 @@ SSH_PACKET_CALLBACK(ssh_packet_global_request){
+         msg->global_request.type = SSH_GLOBAL_REQUEST_CANCEL_TCPIP_FORWARD;
+         msg->global_request.want_reply = want_reply;
+ 
+-        SSH_LOG(SSH_LOG_PROTOCOL, "Received SSH_MSG_GLOBAL_REQUEST %s %d %s:%d", request, want_reply,
++        SSH_LOG(SSH_LOG_DEBUG, "Received SSH_MSG_GLOBAL_REQUEST %s %d %s:%d", request, want_reply,
+                 msg->global_request.bind_address,
+                 msg->global_request.bind_port);
+ 
+@@ -1563,14 +1566,14 @@ SSH_PACKET_CALLBACK(ssh_packet_global_request){
+     } else if(strcmp(request, "keepalive@openssh.com") == 0) {
+         msg->global_request.type = SSH_GLOBAL_REQUEST_KEEPALIVE;
+         msg->global_request.want_reply = want_reply;
+-        SSH_LOG(SSH_LOG_PROTOCOL, "Received keepalive@openssh.com %d", want_reply);
++        SSH_LOG(SSH_LOG_DEBUG, "Received keepalive@openssh.com %d", want_reply);
+         if(ssh_callbacks_exists(session->common.callbacks, global_request_function)) {
+             session->common.callbacks->global_request_function(session, msg, session->common.callbacks->userdata);
+         } else {
+             ssh_message_global_request_reply_success(msg, 0);
+         }
+     } else {
+-        SSH_LOG(SSH_LOG_PROTOCOL, "UNKNOWN SSH_MSG_GLOBAL_REQUEST %s, "
++        SSH_LOG(SSH_LOG_DEBUG, "UNKNOWN SSH_MSG_GLOBAL_REQUEST %s, "
+                 "want_reply = %d", request, want_reply);
+         goto reply_with_failure;
+     }
+@@ -1603,7 +1606,7 @@ reply_with_failure:
+ error:
+     SAFE_FREE(msg);
+     SAFE_FREE(request);
+-    SSH_LOG(SSH_LOG_WARNING, "Invalid SSH_MSG_GLOBAL_REQUEST packet");
++    SSH_LOG(SSH_LOG_TRACE, "Invalid SSH_MSG_GLOBAL_REQUEST packet");
+     return rc;
+ }
+ 
+diff --git a/src/misc.c b/src/misc.c
+index 0f1a7d49..0429ffac 100644
+--- a/src/misc.c
++++ b/src/misc.c
+@@ -622,7 +622,7 @@ void ssh_log_hexdump(const char *descr, const unsigned char *what, size_t len)
+     return;
+ 
+ error:
+-    SSH_LOG(SSH_LOG_WARN, "Could not print to buffer");
++    SSH_LOG(SSH_LOG_DEBUG, "Could not print to buffer");
+     return;
+ }
+ 
+@@ -1249,7 +1249,7 @@ int ssh_analyze_banner(ssh_session session, int server)
+           return -1;
+     }
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL, "Analyzing banner: %s", banner);
++    SSH_LOG(SSH_LOG_DEBUG, "Analyzing banner: %s", banner);
+ 
+     switch (banner[4]) {
+         case '2':
+@@ -1299,7 +1299,7 @@ int ssh_analyze_banner(ssh_session session, int server)
+ 
+             session->openssh = SSH_VERSION_INT(((int) major), ((int) minor), 0);
+ 
+-            SSH_LOG(SSH_LOG_PROTOCOL,
++            SSH_LOG(SSH_LOG_DEBUG,
+                     "We are talking to an OpenSSH client version: %lu.%lu (%x)",
+                     major, minor, session->openssh);
+         }
+@@ -1393,7 +1393,7 @@ int ssh_timeout_elapsed(struct ssh_timestamp *ts, int timeout) {
+                   * -2 means user-defined timeout as available in
+                   * session->timeout, session->timeout_usec.
+                   */
+-            SSH_LOG(SSH_LOG_WARN, "ssh_timeout_elapsed called with -2. this needs to "
++            SSH_LOG(SSH_LOG_DEBUG, "ssh_timeout_elapsed called with -2. this needs to "
+                             "be fixed. please set a breakpoint on misc.c:%d and "
+                             "fix the caller\n", __LINE__);
+             return 0;
+@@ -1546,20 +1546,20 @@ int ssh_quote_file_name(const char *file_name, char *buf, size_t buf_len)
+     enum ssh_quote_state_e state = NO_QUOTE;
+ 
+     if (file_name == NULL || buf == NULL || buf_len == 0) {
+-        SSH_LOG(SSH_LOG_WARNING, "Invalid parameter");
++        SSH_LOG(SSH_LOG_TRACE, "Invalid parameter");
+         return SSH_ERROR;
+     }
+ 
+     /* Only allow file names smaller than 32kb. */
+     if (strlen(file_name) > 32 * 1024) {
+-        SSH_LOG(SSH_LOG_WARNING, "File name too long");
++        SSH_LOG(SSH_LOG_TRACE, "File name too long");
+         return SSH_ERROR;
+     }
+ 
+     /* Paranoia check */
+     required_buf_len = (size_t)3 * strlen(file_name) + 1;
+     if (required_buf_len > buf_len) {
+-        SSH_LOG(SSH_LOG_WARNING, "Buffer too small");
++        SSH_LOG(SSH_LOG_TRACE, "Buffer too small");
+         return SSH_ERROR;
+     }
+ 
+@@ -1717,7 +1717,7 @@ int ssh_newline_vis(const char *string, char *buf, size_t buf_len)
+     }
+ 
+     if ((2 * strlen(string) + 1) > buf_len) {
+-        SSH_LOG(SSH_LOG_WARNING, "Buffer too small");
++        SSH_LOG(SSH_LOG_TRACE, "Buffer too small");
+         return SSH_ERROR;
+     }
+ 
+diff --git a/src/packet.c b/src/packet.c
+index ec4a7203..c9555ba0 100644
+--- a/src/packet.c
++++ b/src/packet.c
+@@ -1543,7 +1543,7 @@ SSH_PACKET_CALLBACK(ssh_packet_unimplemented){
+ 
+     rc = ssh_buffer_unpack(packet, "d", &seq);
+     if (rc != SSH_OK) {
+-        SSH_LOG(SSH_LOG_WARNING,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "Could not unpack SSH_MSG_UNIMPLEMENTED packet");
+     }
+ 
+@@ -1864,7 +1864,7 @@ ssh_init_rekey_state(struct ssh_session_struct *session,
+                                  session->opts.rekey_data / cipher->blocksize);
+     }
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL,
++    SSH_LOG(SSH_LOG_DEBUG,
+             "Set rekey after %" PRIu64 " blocks",
+             cipher->max_blocks);
+ }
+@@ -1891,7 +1891,7 @@ ssh_packet_set_newkeys(ssh_session session,
+     session->next_crypto->used |= direction;
+     if (session->current_crypto != NULL) {
+         if (session->current_crypto->used & direction) {
+-            SSH_LOG(SSH_LOG_WARNING, "This direction isn't used anymore.");
++            SSH_LOG(SSH_LOG_TRACE, "This direction isn't used anymore.");
+         }
+         /* Mark the current requested direction unused */
+         session->current_crypto->used &= ~direction;
+@@ -1966,7 +1966,7 @@ ssh_packet_set_newkeys(ssh_session session,
+                          session->next_crypto->in_cipher);
+     if (session->opts.rekey_time != 0) {
+         ssh_timestamp_init(&session->last_rekey_time);
+-        SSH_LOG(SSH_LOG_PROTOCOL, "Set rekey after %" PRIu32 " seconds",
++        SSH_LOG(SSH_LOG_DEBUG, "Set rekey after %" PRIu32 " seconds",
+                 session->opts.rekey_time/1000);
+     }
+ 
+diff --git a/src/packet_cb.c b/src/packet_cb.c
+index 39575b17..98d21b12 100644
+--- a/src/packet_cb.c
++++ b/src/packet_cb.c
+@@ -87,7 +87,7 @@ SSH_PACKET_CALLBACK(ssh_packet_ignore_callback){
+ 	(void)user;
+ 	(void)type;
+ 	(void)packet;
+-	SSH_LOG(SSH_LOG_PROTOCOL,"Received %s packet",type==SSH2_MSG_IGNORE ? "SSH_MSG_IGNORE" : "SSH_MSG_DEBUG");
++	SSH_LOG(SSH_LOG_DEBUG,"Received %s packet",type==SSH2_MSG_IGNORE ? "SSH_MSG_IGNORE" : "SSH_MSG_DEBUG");
+ 	/* TODO: handle a graceful disconnect */
+ 	return SSH_PACKET_USED;
+ }
+@@ -99,7 +99,7 @@ SSH_PACKET_CALLBACK(ssh_packet_newkeys){
+   (void)packet;
+   (void)user;
+   (void)type;
+-  SSH_LOG(SSH_LOG_PROTOCOL, "Received SSH_MSG_NEWKEYS");
++  SSH_LOG(SSH_LOG_DEBUG, "Received SSH_MSG_NEWKEYS");
+ 
+   if (session->session_state != SSH_SESSION_STATE_DH ||
+       session->dh_handshake_state != DH_STATE_NEWKEYS_SENT) {
+@@ -158,7 +158,7 @@ SSH_PACKET_CALLBACK(ssh_packet_newkeys){
+     if (rc == SSH_ERROR) {
+       goto error;
+     }
+-    SSH_LOG(SSH_LOG_PROTOCOL,"Signature verified and valid");
++    SSH_LOG(SSH_LOG_DEBUG,"Signature verified and valid");
+ 
+     /* When receiving this packet, we switch on the incomming crypto. */
+     rc = ssh_packet_set_newkeys(session, SSH_DIRECTION_IN);
+diff --git a/src/pki.c b/src/pki.c
+index 932abf2c..db808355 100644
+--- a/src/pki.c
++++ b/src/pki.c
+@@ -330,7 +330,7 @@ enum ssh_digest_e ssh_key_hash_from_name(const char *name)
+         return SSH_DIGEST_AUTO;
+     }
+ 
+-    SSH_LOG(SSH_LOG_WARN, "Unknown signature name %s", name);
++    SSH_LOG(SSH_LOG_TRACE, "Unknown signature name %s", name);
+ 
+     /* TODO we should rather fail */
+     return SSH_DIGEST_AUTO;
+@@ -362,13 +362,13 @@ int ssh_key_algorithm_allowed(ssh_session session, const char *type)
+     else if (session->server) {
+         allowed_list = session->opts.wanted_methods[SSH_HOSTKEYS];
+         if (allowed_list == NULL) {
+-            SSH_LOG(SSH_LOG_WARN, "Session invalid: no host key available");
++            SSH_LOG(SSH_LOG_TRACE, "Session invalid: no host key available");
+             return 0;
+         }
+     }
+ #endif
+     else {
+-        SSH_LOG(SSH_LOG_WARN, "Session invalid: not set as client nor server");
++        SSH_LOG(SSH_LOG_TRACE, "Session invalid: not set as client nor server");
+         return 0;
+     }
+ 
+@@ -438,7 +438,7 @@ enum ssh_digest_e ssh_key_type_to_hash(ssh_session session,
+     case SSH_KEYTYPE_ECDSA:
+     case SSH_KEYTYPE_UNKNOWN:
+     default:
+-        SSH_LOG(SSH_LOG_WARN, "Digest algorithm to be used with key type %u "
++        SSH_LOG(SSH_LOG_TRACE, "Digest algorithm to be used with key type %u "
+                 "is not defined", type);
+     }
+ 
+@@ -625,7 +625,7 @@ int ssh_key_cmp(const ssh_key k1,
+     }
+ 
+     if (k1->type != k2->type) {
+-        SSH_LOG(SSH_LOG_WARN, "key types don't match!");
++        SSH_LOG(SSH_LOG_DEBUG, "key types don't match!");
+         return 1;
+     }
+ 
+@@ -744,7 +744,7 @@ int ssh_pki_import_privkey_base64(const char *b64_key,
+         return SSH_ERROR;
+     }
+ 
+-    SSH_LOG(SSH_LOG_INFO,
++    SSH_LOG(SSH_LOG_DEBUG,
+             "Trying to decode privkey passphrase=%s",
+             passphrase ? "true" : "false");
+ 
+@@ -864,7 +864,7 @@ int ssh_pki_import_privkey_file(const char *filename,
+ 
+     file = fopen(filename, "rb");
+     if (file == NULL) {
+-        SSH_LOG(SSH_LOG_WARN,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "Error opening %s: %s",
+                 filename,
+                 strerror(errno));
+@@ -874,7 +874,7 @@ int ssh_pki_import_privkey_file(const char *filename,
+     rc = fstat(fileno(file), &sb);
+     if (rc < 0) {
+         fclose(file);
+-        SSH_LOG(SSH_LOG_WARN,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "Error getting stat of %s: %s",
+                 filename,
+                 strerror(errno));
+@@ -888,7 +888,7 @@ int ssh_pki_import_privkey_file(const char *filename,
+     }
+ 
+     if (sb.st_size > MAX_PRIVKEY_SIZE) {
+-        SSH_LOG(SSH_LOG_WARN,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "Private key is bigger than 4M.");
+         fclose(file);
+         return SSH_ERROR;
+@@ -897,7 +897,7 @@ int ssh_pki_import_privkey_file(const char *filename,
+     key_buf = malloc(sb.st_size + 1);
+     if (key_buf == NULL) {
+         fclose(file);
+-        SSH_LOG(SSH_LOG_WARN, "Out of memory!");
++        SSH_LOG(SSH_LOG_TRACE, "Out of memory!");
+         return SSH_ERROR;
+     }
+ 
+@@ -906,7 +906,7 @@ int ssh_pki_import_privkey_file(const char *filename,
+ 
+     if (size != sb.st_size) {
+         SAFE_FREE(key_buf);
+-        SSH_LOG(SSH_LOG_WARN,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "Error reading %s: %s",
+                 filename,
+                 strerror(errno));
+@@ -1068,7 +1068,7 @@ int pki_import_privkey_buffer(enum ssh_keytypes_e type,
+                 rc = ssh_buffer_unpack(buffer, "SSSSS", &p, &q, &g,
+                                        &pubkey, &privkey);
+                 if (rc != SSH_OK) {
+-                    SSH_LOG(SSH_LOG_WARN, "Unpack error");
++                    SSH_LOG(SSH_LOG_TRACE, "Unpack error");
+                     goto fail;
+                 }
+ 
+@@ -1109,7 +1109,7 @@ int pki_import_privkey_buffer(enum ssh_keytypes_e type,
+                 rc = ssh_buffer_unpack(buffer, "SSSSSS", &n, &e, &d,
+                                        &iqmp, &p, &q);
+                 if (rc != SSH_OK) {
+-                    SSH_LOG(SSH_LOG_WARN, "Unpack error");
++                    SSH_LOG(SSH_LOG_TRACE, "Unpack error");
+                     goto fail;
+                 }
+ 
+@@ -1136,7 +1136,7 @@ int pki_import_privkey_buffer(enum ssh_keytypes_e type,
+                 ssh_string_burn(q);
+                 SSH_STRING_FREE(q);
+                 if (rc == SSH_ERROR) {
+-                    SSH_LOG(SSH_LOG_WARN, "Failed to build RSA private key");
++                    SSH_LOG(SSH_LOG_TRACE, "Failed to build RSA private key");
+                     goto fail;
+                 }
+             }
+@@ -1153,7 +1153,7 @@ int pki_import_privkey_buffer(enum ssh_keytypes_e type,
+ 
+                 rc = ssh_buffer_unpack(buffer, "SSS", &i, &e, &exp);
+                 if (rc != SSH_OK) {
+-                    SSH_LOG(SSH_LOG_WARN, "Unpack error");
++                    SSH_LOG(SSH_LOG_TRACE, "Unpack error");
+                     goto fail;
+                 }
+ 
+@@ -1173,7 +1173,7 @@ int pki_import_privkey_buffer(enum ssh_keytypes_e type,
+                 ssh_string_burn(exp);
+                 SSH_STRING_FREE(exp);
+                 if (rc < 0) {
+-                    SSH_LOG(SSH_LOG_WARN, "Failed to build ECDSA private key");
++                    SSH_LOG(SSH_LOG_TRACE, "Failed to build ECDSA private key");
+                     goto fail;
+                 }
+             }
+@@ -1185,7 +1185,7 @@ int pki_import_privkey_buffer(enum ssh_keytypes_e type,
+ 
+                 rc = ssh_buffer_unpack(buffer, "SS", &pubkey, &privkey);
+                 if (rc != SSH_OK){
+-                    SSH_LOG(SSH_LOG_WARN, "Unpack error");
++                    SSH_LOG(SSH_LOG_TRACE, "Unpack error");
+                     goto fail;
+                 }
+ 
+@@ -1194,7 +1194,7 @@ int pki_import_privkey_buffer(enum ssh_keytypes_e type,
+                 SSH_STRING_FREE(privkey);
+                 SSH_STRING_FREE(pubkey);
+                 if (rc != SSH_OK) {
+-                    SSH_LOG(SSH_LOG_WARN, "Failed to build ed25519 key");
++                    SSH_LOG(SSH_LOG_TRACE, "Failed to build ed25519 key");
+                     goto fail;
+                 }
+             }
+@@ -1208,7 +1208,7 @@ int pki_import_privkey_buffer(enum ssh_keytypes_e type,
+         case SSH_KEYTYPE_RSA1:
+         case SSH_KEYTYPE_UNKNOWN:
+         default:
+-            SSH_LOG(SSH_LOG_WARN, "Unknown private key type (%d)", type);
++            SSH_LOG(SSH_LOG_TRACE, "Unknown private key type (%d)", type);
+             goto fail;
+     }
+ 
+@@ -1245,7 +1245,7 @@ static int pki_import_pubkey_buffer(ssh_buffer buffer,
+ 
+                 rc = ssh_buffer_unpack(buffer, "SSSS", &p, &q, &g, &pubkey);
+                 if (rc != SSH_OK) {
+-                    SSH_LOG(SSH_LOG_WARN, "Unpack error");
++                    SSH_LOG(SSH_LOG_TRACE, "Unpack error");
+                     goto fail;
+                 }
+ 
+@@ -1264,7 +1264,7 @@ static int pki_import_pubkey_buffer(ssh_buffer buffer,
+                 ssh_string_burn(pubkey);
+                 SSH_STRING_FREE(pubkey);
+                 if (rc == SSH_ERROR) {
+-                    SSH_LOG(SSH_LOG_WARN, "Failed to build DSA public key");
++                    SSH_LOG(SSH_LOG_TRACE, "Failed to build DSA public key");
+                     goto fail;
+                 }
+             }
+@@ -1276,7 +1276,7 @@ static int pki_import_pubkey_buffer(ssh_buffer buffer,
+ 
+                 rc = ssh_buffer_unpack(buffer, "SS", &e, &n);
+                 if (rc != SSH_OK) {
+-                    SSH_LOG(SSH_LOG_WARN, "Unpack error");
++                    SSH_LOG(SSH_LOG_TRACE, "Unpack error");
+                     goto fail;
+                 }
+ 
+@@ -1290,7 +1290,7 @@ static int pki_import_pubkey_buffer(ssh_buffer buffer,
+                 ssh_string_burn(n);
+                 SSH_STRING_FREE(n);
+                 if (rc == SSH_ERROR) {
+-                    SSH_LOG(SSH_LOG_WARN, "Failed to build RSA public key");
++                    SSH_LOG(SSH_LOG_TRACE, "Failed to build RSA public key");
+                     goto fail;
+                 }
+             }
+@@ -1307,7 +1307,7 @@ static int pki_import_pubkey_buffer(ssh_buffer buffer,
+ 
+                 rc = ssh_buffer_unpack(buffer, "SS", &i, &e);
+                 if (rc != SSH_OK) {
+-                    SSH_LOG(SSH_LOG_WARN, "Unpack error");
++                    SSH_LOG(SSH_LOG_TRACE, "Unpack error");
+                     goto fail;
+                 }
+ 
+@@ -1321,7 +1321,7 @@ static int pki_import_pubkey_buffer(ssh_buffer buffer,
+                 ssh_string_burn(e);
+                 SSH_STRING_FREE(e);
+                 if (rc < 0) {
+-                    SSH_LOG(SSH_LOG_WARN, "Failed to build ECDSA public key");
++                    SSH_LOG(SSH_LOG_TRACE, "Failed to build ECDSA public key");
+                     goto fail;
+                 }
+ 
+@@ -1336,7 +1336,7 @@ static int pki_import_pubkey_buffer(ssh_buffer buffer,
+         {
+             ssh_string pubkey = ssh_buffer_get_ssh_string(buffer);
+             if (ssh_string_len(pubkey) != ED25519_KEY_LEN) {
+-                SSH_LOG(SSH_LOG_WARN, "Invalid public key length");
++                SSH_LOG(SSH_LOG_TRACE, "Invalid public key length");
+                 ssh_string_burn(pubkey);
+                 SSH_STRING_FREE(pubkey);
+                 goto fail;
+@@ -1363,7 +1363,7 @@ static int pki_import_pubkey_buffer(ssh_buffer buffer,
+         case SSH_KEYTYPE_RSA1:
+         case SSH_KEYTYPE_UNKNOWN:
+         default:
+-            SSH_LOG(SSH_LOG_WARN, "Unknown public key protocol %d", type);
++            SSH_LOG(SSH_LOG_TRACE, "Unknown public key protocol %d", type);
+             goto fail;
+     }
+ 
+@@ -1532,26 +1532,26 @@ int ssh_pki_import_pubkey_blob(const ssh_string key_blob,
+ 
+     buffer = ssh_buffer_new();
+     if (buffer == NULL) {
+-        SSH_LOG(SSH_LOG_WARN, "Out of memory!");
++        SSH_LOG(SSH_LOG_TRACE, "Out of memory!");
+         return SSH_ERROR;
+     }
+ 
+     rc = ssh_buffer_add_data(buffer, ssh_string_data(key_blob),
+             ssh_string_len(key_blob));
+     if (rc < 0) {
+-        SSH_LOG(SSH_LOG_WARN, "Out of memory!");
++        SSH_LOG(SSH_LOG_TRACE, "Out of memory!");
+         goto fail;
+     }
+ 
+     type_s = ssh_buffer_get_ssh_string(buffer);
+     if (type_s == NULL) {
+-        SSH_LOG(SSH_LOG_WARN, "Out of memory!");
++        SSH_LOG(SSH_LOG_TRACE, "Out of memory!");
+         goto fail;
+     }
+ 
+     type = ssh_key_type_from_name(ssh_string_get_char(type_s));
+     if (type == SSH_KEYTYPE_UNKNOWN) {
+-        SSH_LOG(SSH_LOG_WARN, "Unknown key type found!");
++        SSH_LOG(SSH_LOG_TRACE, "Unknown key type found!");
+         goto fail;
+     }
+     SSH_STRING_FREE(type_s);
+@@ -1602,7 +1602,7 @@ int ssh_pki_import_pubkey_file(const char *filename, ssh_key *pkey)
+ 
+     file = fopen(filename, "rb");
+     if (file == NULL) {
+-        SSH_LOG(SSH_LOG_WARN, "Error opening %s: %s",
++        SSH_LOG(SSH_LOG_TRACE, "Error opening %s: %s",
+                     filename, strerror(errno));
+         return SSH_EOF;
+     }
+@@ -1610,7 +1610,7 @@ int ssh_pki_import_pubkey_file(const char *filename, ssh_key *pkey)
+     rc = fstat(fileno(file), &sb);
+     if (rc < 0) {
+         fclose(file);
+-        SSH_LOG(SSH_LOG_WARN, "Error gettint stat of %s: %s",
++        SSH_LOG(SSH_LOG_TRACE, "Error gettint stat of %s: %s",
+                     filename, strerror(errno));
+         switch (errno) {
+             case ENOENT:
+@@ -1628,7 +1628,7 @@ int ssh_pki_import_pubkey_file(const char *filename, ssh_key *pkey)
+     key_buf = malloc(sb.st_size + 1);
+     if (key_buf == NULL) {
+         fclose(file);
+-        SSH_LOG(SSH_LOG_WARN, "Out of memory!");
++        SSH_LOG(SSH_LOG_TRACE, "Out of memory!");
+         return SSH_ERROR;
+     }
+ 
+@@ -1637,7 +1637,7 @@ int ssh_pki_import_pubkey_file(const char *filename, ssh_key *pkey)
+ 
+     if (size != sb.st_size) {
+         SAFE_FREE(key_buf);
+-        SSH_LOG(SSH_LOG_WARN, "Error reading %s: %s",
++        SSH_LOG(SSH_LOG_TRACE, "Error reading %s: %s",
+                     filename, strerror(errno));
+         return SSH_ERROR;
+     }
+@@ -1650,7 +1650,7 @@ int ssh_pki_import_pubkey_file(const char *filename, ssh_key *pkey)
+         *pkey = ssh_pki_openssh_pubkey_import(key_buf);
+         SAFE_FREE(key_buf);
+         if (*pkey == NULL) {
+-            SSH_LOG(SSH_LOG_WARN, "Failed to import public key from OpenSSH"
++            SSH_LOG(SSH_LOG_TRACE, "Failed to import public key from OpenSSH"
+                                   " private key file");
+             return SSH_ERROR;
+         }
+@@ -2183,7 +2183,7 @@ int pki_key_check_hash_compatible(ssh_key key,
+     case SSH_KEYTYPE_DSS:
+         if (hash_type == SSH_DIGEST_SHA1) {
+             if (ssh_fips_mode()) {
+-                SSH_LOG(SSH_LOG_WARN, "SHA1 is not allowed in FIPS mode");
++                SSH_LOG(SSH_LOG_TRACE, "SHA1 is not allowed in FIPS mode");
+                 return SSH_ERROR;
+             } else {
+                 return SSH_OK;
+@@ -2194,7 +2194,7 @@ int pki_key_check_hash_compatible(ssh_key key,
+     case SSH_KEYTYPE_RSA:
+         if (hash_type == SSH_DIGEST_SHA1) {
+             if (ssh_fips_mode()) {
+-                SSH_LOG(SSH_LOG_WARN, "SHA1 is not allowed in FIPS mode");
++                SSH_LOG(SSH_LOG_TRACE, "SHA1 is not allowed in FIPS mode");
+                 return SSH_ERROR;
+             } else {
+                 return SSH_OK;
+@@ -2234,11 +2234,11 @@ int pki_key_check_hash_compatible(ssh_key key,
+     case SSH_KEYTYPE_RSA1:
+     case SSH_KEYTYPE_ECDSA:
+     case SSH_KEYTYPE_UNKNOWN:
+-        SSH_LOG(SSH_LOG_WARN, "Unknown key type %d", key->type);
++        SSH_LOG(SSH_LOG_TRACE, "Unknown key type %d", key->type);
+         return SSH_ERROR;
+     }
+ 
+-    SSH_LOG(SSH_LOG_WARN, "Key type %d incompatible with hash type  %d",
++    SSH_LOG(SSH_LOG_TRACE, "Key type %d incompatible with hash type  %d",
+             key->type, hash_type);
+ 
+     return SSH_ERROR;
+@@ -2265,7 +2265,7 @@ int ssh_pki_signature_verify(ssh_session session,
+             sig->type_c);
+ 
+     if (key_type != sig->type) {
+-        SSH_LOG(SSH_LOG_WARN,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "Can not verify %s signature with %s key",
+                 sig->type_c, key->type_c);
+         return SSH_ERROR;
+diff --git a/src/pki_container_openssh.c b/src/pki_container_openssh.c
+index ecde4cdd..dadeefaa 100644
+--- a/src/pki_container_openssh.c
++++ b/src/pki_container_openssh.c
+@@ -69,20 +69,20 @@ static int pki_openssh_import_privkey_blob(ssh_buffer key_blob_buffer,
+ 
+     rc = ssh_buffer_unpack(key_blob_buffer, "s", &type_s);
+     if (rc == SSH_ERROR){
+-        SSH_LOG(SSH_LOG_WARN, "Unpack error");
++        SSH_LOG(SSH_LOG_TRACE, "Unpack error");
+         return SSH_ERROR;
+     }
+ 
+     type = ssh_key_type_from_name(type_s);
+     if (type == SSH_KEYTYPE_UNKNOWN) {
+-        SSH_LOG(SSH_LOG_WARN, "Unknown key type '%s' found!", type_s);
++        SSH_LOG(SSH_LOG_TRACE, "Unknown key type '%s' found!", type_s);
+         return SSH_ERROR;
+     }
+     SAFE_FREE(type_s);
+ 
+     rc = pki_import_privkey_buffer(type, key_blob_buffer, &key);
+     if (rc != SSH_OK) {
+-        SSH_LOG(SSH_LOG_WARN, "Failed to read key in OpenSSH format");
++        SSH_LOG(SSH_LOG_TRACE, "Failed to read key in OpenSSH format");
+         goto fail;
+     }
+ 
+@@ -133,17 +133,17 @@ static int pki_private_key_decrypt(ssh_string blob,
+     }
+ 
+     if (ciphers[i].name == NULL){
+-        SSH_LOG(SSH_LOG_WARN, "Unsupported cipher %s", ciphername);
++        SSH_LOG(SSH_LOG_TRACE, "Unsupported cipher %s", ciphername);
+         return SSH_ERROR;
+     }
+ 
+     cmp = strcmp(kdfname, "bcrypt");
+     if (cmp != 0) {
+-        SSH_LOG(SSH_LOG_WARN, "Unsupported KDF %s", kdfname);
++        SSH_LOG(SSH_LOG_TRACE, "Unsupported KDF %s", kdfname);
+         return SSH_ERROR;
+     }
+     if (ssh_string_len(blob) % cipher.blocksize != 0) {
+-        SSH_LOG(SSH_LOG_WARN,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "Encrypted string not multiple of blocksize: %zu",
+                 ssh_string_len(blob));
+         return SSH_ERROR;
+@@ -167,7 +167,7 @@ static int pki_private_key_decrypt(ssh_string blob,
+     /* We need material for key (keysize bits / 8) and IV (blocksize)  */
+     key_material_len =  cipher.keysize/8 + cipher.blocksize;
+     if (key_material_len > sizeof(key_material)) {
+-        SSH_LOG(SSH_LOG_WARN, "Key material too big");
++        SSH_LOG(SSH_LOG_TRACE, "Key material too big");
+         return SSH_ERROR;
+     }
+ 
+@@ -181,7 +181,7 @@ static int pki_private_key_decrypt(ssh_string blob,
+     if (passphrase == NULL) {
+         if (auth_fn == NULL) {
+             SAFE_FREE(salt);
+-            SSH_LOG(SSH_LOG_WARN, "No passphrase provided");
++            SSH_LOG(SSH_LOG_TRACE, "No passphrase provided");
+             return SSH_ERROR;
+         }
+         rc = auth_fn("Passphrase",
+@@ -251,7 +251,7 @@ ssh_pki_openssh_import(const char *text_key,
+ 
+     cmp = strncmp(ptr, OPENSSH_HEADER_BEGIN, strlen(OPENSSH_HEADER_BEGIN));
+     if (cmp != 0) {
+-        SSH_LOG(SSH_LOG_WARN, "Not an OpenSSH private key (no header)");
++        SSH_LOG(SSH_LOG_TRACE, "Not an OpenSSH private key (no header)");
+         goto out;
+     }
+     ptr += strlen(OPENSSH_HEADER_BEGIN);
+@@ -260,7 +260,7 @@ ssh_pki_openssh_import(const char *text_key,
+     }
+     end = strstr(ptr, OPENSSH_HEADER_END);
+     if (end == NULL) {
+-        SSH_LOG(SSH_LOG_WARN, "Not an OpenSSH private key (no footer)");
++        SSH_LOG(SSH_LOG_TRACE, "Not an OpenSSH private key (no footer)");
+         goto out;
+     }
+     base64 = malloc(end - ptr + 1);
+@@ -277,7 +277,7 @@ ssh_pki_openssh_import(const char *text_key,
+     buffer = base64_to_bin(base64);
+     SAFE_FREE(base64);
+     if (buffer == NULL) {
+-        SSH_LOG(SSH_LOG_WARN, "Not an OpenSSH private key (base64 error)");
++        SSH_LOG(SSH_LOG_TRACE, "Not an OpenSSH private key (base64 error)");
+         goto out;
+     }
+     rc = ssh_buffer_unpack(buffer, "PssSdSS",
+@@ -290,21 +290,21 @@ ssh_pki_openssh_import(const char *text_key,
+                            &pubkey0,
+                            &privkeys);
+     if (rc == SSH_ERROR) {
+-        SSH_LOG(SSH_LOG_WARN, "Not an OpenSSH private key (unpack error)");
++        SSH_LOG(SSH_LOG_TRACE, "Not an OpenSSH private key (unpack error)");
+         goto out;
+     }
+     cmp = strncmp(magic, OPENSSH_AUTH_MAGIC, strlen(OPENSSH_AUTH_MAGIC));
+     if (cmp != 0) {
+-        SSH_LOG(SSH_LOG_WARN, "Not an OpenSSH private key (bad magic)");
++        SSH_LOG(SSH_LOG_TRACE, "Not an OpenSSH private key (bad magic)");
+         goto out;
+     }
+-    SSH_LOG(SSH_LOG_INFO,
++    SSH_LOG(SSH_LOG_DEBUG,
+             "Opening OpenSSH private key: ciphername: %s, kdf: %s, nkeys: %d",
+             ciphername,
+             kdfname,
+             nkeys);
+     if (nkeys != 1) {
+-        SSH_LOG(SSH_LOG_WARN, "Opening OpenSSH private key: only 1 key supported (%d available)", nkeys);
++        SSH_LOG(SSH_LOG_TRACE, "Opening OpenSSH private key: only 1 key supported (%d available)", nkeys);
+         goto out;
+     }
+ 
+@@ -314,7 +314,7 @@ ssh_pki_openssh_import(const char *text_key,
+     if (!private) {
+         rc = ssh_pki_import_pubkey_blob(pubkey0, &key);
+         if (rc != SSH_OK) {
+-            SSH_LOG(SSH_LOG_WARN, "Failed to import public key blob");
++            SSH_LOG(SSH_LOG_TRACE, "Failed to import public key blob");
+         }
+         /* in either case we clean up here */
+         goto out;
+@@ -343,7 +343,7 @@ ssh_pki_openssh_import(const char *text_key,
+ 
+     rc = ssh_buffer_unpack(privkey_buffer, "dd", &checkint1, &checkint2);
+     if (rc == SSH_ERROR || checkint1 != checkint2) {
+-        SSH_LOG(SSH_LOG_WARN, "OpenSSH private key unpack error (correct password?)");
++        SSH_LOG(SSH_LOG_TRACE, "OpenSSH private key unpack error (correct password?)");
+         goto out;
+     }
+     rc = pki_openssh_import_privkey_blob(privkey_buffer, &key);
+@@ -358,7 +358,7 @@ ssh_pki_openssh_import(const char *text_key,
+         if (padding != i) {
+             ssh_key_free(key);
+             key = NULL;
+-            SSH_LOG(SSH_LOG_WARN, "Invalid padding");
++            SSH_LOG(SSH_LOG_TRACE, "Invalid padding");
+             goto out;
+         }
+     }
+@@ -407,7 +407,7 @@ static int pki_openssh_export_privkey_blob(const ssh_key privkey,
+     int rc;
+ 
+     if (privkey->type != SSH_KEYTYPE_ED25519) {
+-        SSH_LOG(SSH_LOG_WARN, "Type %s not supported", privkey->type_c);
++        SSH_LOG(SSH_LOG_TRACE, "Type %s not supported", privkey->type_c);
+         return SSH_ERROR;
+     }
+     if (privkey->ed25519_privkey == NULL ||
+@@ -462,29 +462,29 @@ static int pki_private_key_encrypt(ssh_buffer privkey_buffer,
+     }
+ 
+     if (ciphers[i].name == NULL){
+-        SSH_LOG(SSH_LOG_WARN, "Unsupported cipher %s", ciphername);
++        SSH_LOG(SSH_LOG_TRACE, "Unsupported cipher %s", ciphername);
+         return SSH_ERROR;
+     }
+ 
+     cmp = strcmp(kdfname, "bcrypt");
+     if (cmp != 0){
+-        SSH_LOG(SSH_LOG_WARN, "Unsupported KDF %s", kdfname);
++        SSH_LOG(SSH_LOG_TRACE, "Unsupported KDF %s", kdfname);
+         return SSH_ERROR;
+     }
+     /* We need material for key (keysize bits / 8) and IV (blocksize)  */
+     key_material_len =  cipher.keysize/8 + cipher.blocksize;
+     if (key_material_len > sizeof(key_material)){
+-        SSH_LOG(SSH_LOG_WARN, "Key material too big");
++        SSH_LOG(SSH_LOG_TRACE, "Key material too big");
+         return SSH_ERROR;
+     }
+ 
+-    SSH_LOG(SSH_LOG_WARN, "Encryption: %d key, %d IV, %d rounds, %zu bytes salt",
++    SSH_LOG(SSH_LOG_DEBUG, "Encryption: %d key, %d IV, %d rounds, %zu bytes salt",
+                 cipher.keysize/8,
+                 cipher.blocksize, rounds, ssh_string_len(salt));
+ 
+     if (passphrase == NULL){
+         if (auth_fn == NULL){
+-            SSH_LOG(SSH_LOG_WARN, "No passphrase provided");
++            SSH_LOG(SSH_LOG_TRACE, "No passphrase provided");
+             return SSH_ERROR;
+         }
+         rc = auth_fn("Passphrase",
+@@ -555,11 +555,11 @@ ssh_string ssh_pki_openssh_privkey_export(const ssh_key privkey,
+         return NULL;
+     }
+     if (privkey->type != SSH_KEYTYPE_ED25519){
+-        SSH_LOG(SSH_LOG_WARN, "Unsupported key type %s", privkey->type_c);
++        SSH_LOG(SSH_LOG_TRACE, "Unsupported key type %s", privkey->type_c);
+         return NULL;
+     }
+     if (passphrase != NULL || auth_fn != NULL){
+-        SSH_LOG(SSH_LOG_INFO, "Enabling encryption for private key export");
++        SSH_LOG(SSH_LOG_DEBUG, "Enabling encryption for private key export");
+         to_encrypt = 1;
+     }
+     buffer = ssh_buffer_new();
+diff --git a/src/pki_crypto.c b/src/pki_crypto.c
+index ec9cfa4b..e9fe32d3 100644
+--- a/src/pki_crypto.c
++++ b/src/pki_crypto.c
+@@ -587,7 +587,7 @@ int pki_key_generate_ecdsa(ssh_key key, int parameter) {
+             key->type = SSH_KEYTYPE_ECDSA_P256;
+             break;
+         default:
+-            SSH_LOG(SSH_LOG_WARN, "Invalid parameter %d for ECDSA key "
++            SSH_LOG(SSH_LOG_TRACE, "Invalid parameter %d for ECDSA key "
+                     "generation", parameter);
+             return SSH_ERROR;
+     }
+@@ -779,7 +779,7 @@ ssh_string pki_private_key_to_pem(const ssh_key key,
+             rc = 1;
+             break;
+ #else
+-            SSH_LOG(SSH_LOG_WARN, "PEM output not supported for key type ssh-ed25519");
++            SSH_LOG(SSH_LOG_TRACE, "PEM output not supported for key type ssh-ed25519");
+             goto err;
+ #endif
+         case SSH_KEYTYPE_DSS_CERT01:
+@@ -790,11 +790,11 @@ ssh_string pki_private_key_to_pem(const ssh_key key,
+         case SSH_KEYTYPE_ED25519_CERT01:
+         case SSH_KEYTYPE_UNKNOWN:
+         default:
+-            SSH_LOG(SSH_LOG_WARN, "Unknown or invalid private key type %d", key->type);
++            SSH_LOG(SSH_LOG_TRACE, "Unknown or invalid private key type %d", key->type);
+             goto err;
+     }
+     if (rc != 1) {
+-        SSH_LOG(SSH_LOG_WARN, "Failed to initialize EVP_PKEY structure");
++        SSH_LOG(SSH_LOG_TRACE, "Failed to initialize EVP_PKEY structure");
+         goto err;
+     }
+ 
+@@ -887,8 +887,8 @@ ssh_key pki_private_key_from_base64(const char *b64_key,
+     BIO_free(mem);
+ 
+     if (pkey == NULL) {
+-        SSH_LOG(SSH_LOG_WARN,
+-                "Parsing private key: %s",
++        SSH_LOG(SSH_LOG_TRACE,
++                "Error parsing private key: %s",
+                 ERR_error_string(ERR_get_error(), NULL));
+         return NULL;
+     }
+@@ -896,8 +896,8 @@ ssh_key pki_private_key_from_base64(const char *b64_key,
+     case EVP_PKEY_DSA:
+         dsa = EVP_PKEY_get1_DSA(pkey);
+         if (dsa == NULL) {
+-            SSH_LOG(SSH_LOG_WARN,
+-                    "Parsing private key: %s",
++            SSH_LOG(SSH_LOG_TRACE,
++		    "Error parsing private key: %s",
+                     ERR_error_string(ERR_get_error(),NULL));
+             goto fail;
+         }
+@@ -906,8 +906,8 @@ ssh_key pki_private_key_from_base64(const char *b64_key,
+     case EVP_PKEY_RSA:
+         rsa = EVP_PKEY_get1_RSA(pkey);
+         if (rsa == NULL) {
+-            SSH_LOG(SSH_LOG_WARN,
+-                    "Parsing private key: %s",
++            SSH_LOG(SSH_LOG_TRACE,
++		    "Error parsing private key: %s",
+                     ERR_error_string(ERR_get_error(),NULL));
+             goto fail;
+         }
+@@ -917,8 +917,8 @@ ssh_key pki_private_key_from_base64(const char *b64_key,
+ #ifdef HAVE_OPENSSL_ECC
+         ecdsa = EVP_PKEY_get1_EC_KEY(pkey);
+         if (ecdsa == NULL) {
+-            SSH_LOG(SSH_LOG_WARN,
+-                    "Parsing private key: %s",
++            SSH_LOG(SSH_LOG_TRACE,
++		    "Error parsing private key: %s",
+                     ERR_error_string(ERR_get_error(), NULL));
+             goto fail;
+         }
+@@ -927,7 +927,7 @@ ssh_key pki_private_key_from_base64(const char *b64_key,
+          * keys, so we need to figure out the correct type here */
+         type = pki_key_ecdsa_to_key_type(ecdsa);
+         if (type == SSH_KEYTYPE_UNKNOWN) {
+-            SSH_LOG(SSH_LOG_WARN, "Invalid private key.");
++            SSH_LOG(SSH_LOG_TRACE, "Invalid private key.");
+             goto fail;
+         }
+ 
+@@ -954,7 +954,7 @@ ssh_key pki_private_key_from_base64(const char *b64_key,
+ 
+         ed25519 = malloc(key_len);
+         if (ed25519 == NULL) {
+-            SSH_LOG(SSH_LOG_WARN, "Out of memory");
++            SSH_LOG(SSH_LOG_TRACE, "Out of memory");
+             goto fail;
+         }
+ 
+@@ -972,7 +972,7 @@ ssh_key pki_private_key_from_base64(const char *b64_key,
+ #endif
+     default:
+         EVP_PKEY_free(pkey);
+-        SSH_LOG(SSH_LOG_WARN, "Unknown or invalid private key type %d",
++        SSH_LOG(SSH_LOG_TRACE, "Unknown or invalid private key type %d",
+                 EVP_PKEY_base_id(pkey));
+         return NULL;
+     }
+@@ -1571,7 +1571,7 @@ ssh_string pki_signature_to_blob(const ssh_signature sig)
+ #endif
+         default:
+         case SSH_KEYTYPE_UNKNOWN:
+-            SSH_LOG(SSH_LOG_WARN, "Unknown signature key type: %s", sig->type_c);
++            SSH_LOG(SSH_LOG_TRACE, "Unknown signature key type: %s", sig->type_c);
+             return NULL;
+     }
+ 
+@@ -1591,13 +1591,13 @@ static int pki_signature_from_rsa_blob(const ssh_key pubkey,
+     size_t len = ssh_string_len(sig_blob);
+ 
+     if (pubkey->rsa == NULL) {
+-        SSH_LOG(SSH_LOG_WARN, "Pubkey RSA field NULL");
++        SSH_LOG(SSH_LOG_TRACE, "Pubkey RSA field NULL");
+         goto errout;
+     }
+ 
+     rsalen = RSA_size(pubkey->rsa);
+     if (len > rsalen) {
+-        SSH_LOG(SSH_LOG_WARN,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "Signature is too big: %lu > %lu",
+                 (unsigned long)len,
+                 (unsigned long)rsalen);
+@@ -1605,7 +1605,7 @@ static int pki_signature_from_rsa_blob(const ssh_key pubkey,
+     }
+ 
+ #ifdef DEBUG_CRYPTO
+-    SSH_LOG(SSH_LOG_WARN, "RSA signature len: %lu", (unsigned long)len);
++    SSH_LOG(SSH_LOG_DEBUG, "RSA signature len: %lu", (unsigned long)len);
+     ssh_log_hexdump("RSA signature", ssh_string_data(sig_blob), len);
+ #endif
+ 
+@@ -1669,7 +1669,7 @@ static int pki_signature_from_dsa_blob(UNUSED_PARAM(const ssh_key pubkey),
+ 
+     /* 40 is the dual signature blob len. */
+     if (len != 40) {
+-        SSH_LOG(SSH_LOG_WARN,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "Signature has wrong size: %lu",
+                 (unsigned long)len);
+         goto error;
+@@ -1832,7 +1832,7 @@ static int pki_signature_from_ecdsa_blob(UNUSED_PARAM(const ssh_key pubkey),
+     if (rlen != 0) {
+         ssh_string_burn(s);
+         SSH_STRING_FREE(s);
+-        SSH_LOG(SSH_LOG_WARN,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "Signature has remaining bytes in inner "
+                 "sigblob: %lu",
+                 (unsigned long)rlen);
+@@ -1921,7 +1921,7 @@ ssh_signature pki_signature_from_blob(const ssh_key pubkey,
+     int rc;
+ 
+     if (ssh_key_type_plain(pubkey->type) != type) {
+-        SSH_LOG(SSH_LOG_WARN,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "Incompatible public key provided (%d) expecting (%d)",
+                 type,
+                 pubkey->type);
+@@ -1972,7 +1972,7 @@ ssh_signature pki_signature_from_blob(const ssh_key pubkey,
+ #endif
+         default:
+         case SSH_KEYTYPE_UNKNOWN:
+-            SSH_LOG(SSH_LOG_WARN, "Unknown signature type");
++            SSH_LOG(SSH_LOG_TRACE, "Unknown signature type");
+             goto error;
+     }
+ 
+diff --git a/src/pki_ed25519_common.c b/src/pki_ed25519_common.c
+index 7aa05269..15c9abef 100644
+--- a/src/pki_ed25519_common.c
++++ b/src/pki_ed25519_common.c
+@@ -34,7 +34,7 @@ int pki_privkey_build_ed25519(ssh_key key,
+     if (ssh_string_len(pubkey) != ED25519_KEY_LEN ||
+         ssh_string_len(privkey) != (2 * ED25519_KEY_LEN))
+     {
+-        SSH_LOG(SSH_LOG_WARN, "Invalid ed25519 key len");
++        SSH_LOG(SSH_LOG_TRACE, "Invalid ed25519 key len");
+         return SSH_ERROR;
+     }
+ 
+@@ -266,7 +266,7 @@ int pki_signature_from_ed25519_blob(ssh_signature sig, ssh_string sig_blob)
+ 
+     len = ssh_string_len(sig_blob);
+     if (len != ED25519_SIG_LEN){
+-        SSH_LOG(SSH_LOG_WARN, "Invalid ssh-ed25519 signature len: %zu", len);
++        SSH_LOG(SSH_LOG_TRACE, "Invalid ssh-ed25519 signature len: %zu", len);
+         return SSH_ERROR;
+     }
+ 
+diff --git a/src/pki_gcrypt.c b/src/pki_gcrypt.c
+index bf45351d..87cd91c8 100644
+--- a/src/pki_gcrypt.c
++++ b/src/pki_gcrypt.c
+@@ -938,7 +938,7 @@ ssh_string pki_private_key_to_pem(const ssh_key key,
+     (void) auth_fn;
+     (void) auth_data;
+ 
+-    SSH_LOG(SSH_LOG_WARN, "PEM export not supported by gcrypt backend!");
++    SSH_LOG(SSH_LOG_TRACE, "PEM export not supported by gcrypt backend!");
+ 
+     return NULL;
+ }
+@@ -957,7 +957,7 @@ ssh_key pki_private_key_from_base64(const char *b64_key,
+ 
+     type = pki_privatekey_type_from_string(b64_key);
+     if (type == SSH_KEYTYPE_UNKNOWN) {
+-        SSH_LOG(SSH_LOG_WARN, "Unknown or invalid private key.");
++        SSH_LOG(SSH_LOG_TRACE, "Unknown or invalid private key.");
+         return NULL;
+     }
+ 
+@@ -977,7 +977,7 @@ ssh_key pki_private_key_from_base64(const char *b64_key,
+             }
+ 
+             if (!valid) {
+-                SSH_LOG(SSH_LOG_WARN, "Parsing private key");
++                SSH_LOG(SSH_LOG_TRACE, "Error parsing private key");
+                 goto fail;
+             }
+             break;
+@@ -996,7 +996,7 @@ ssh_key pki_private_key_from_base64(const char *b64_key,
+             }
+ 
+             if (!valid) {
+-                SSH_LOG(SSH_LOG_WARN, "Parsing private key");
++                SSH_LOG(SSH_LOG_TRACE, "Error parsing private key");
+                 goto fail;
+             }
+             break;
+@@ -1027,7 +1027,7 @@ ssh_key pki_private_key_from_base64(const char *b64_key,
+             }
+ 
+             if (!valid) {
+-                SSH_LOG(SSH_LOG_WARN, "Parsing private key");
++                SSH_LOG(SSH_LOG_TRACE, "Error parsing private key");
+                 goto fail;
+             }
+ 
+@@ -1035,7 +1035,7 @@ ssh_key pki_private_key_from_base64(const char *b64_key,
+              * keys, so we need to figure out the correct type here */
+             type = pki_key_ecdsa_to_key_type(ecdsa);
+             if (type == SSH_KEYTYPE_UNKNOWN) {
+-                SSH_LOG(SSH_LOG_WARN, "Invalid private key.");
++                SSH_LOG(SSH_LOG_TRACE, "Invalid private key.");
+                 goto fail;
+             }
+             break;
+@@ -1045,7 +1045,7 @@ ssh_key pki_private_key_from_base64(const char *b64_key,
+         case SSH_KEYTYPE_RSA1:
+         case SSH_KEYTYPE_UNKNOWN:
+         default:
+-            SSH_LOG(SSH_LOG_WARN, "Unknown or invalid private key type %d", type);
++            SSH_LOG(SSH_LOG_TRACE, "Unknown or invalid private key type %d", type);
+             return NULL;
+     }
+ 
+@@ -1905,7 +1905,7 @@ ssh_string pki_signature_to_blob(const ssh_signature sig)
+         case SSH_KEYTYPE_RSA1:
+         case SSH_KEYTYPE_UNKNOWN:
+         default:
+-            SSH_LOG(SSH_LOG_WARN, "Unknown signature key type: %d", sig->type);
++            SSH_LOG(SSH_LOG_TRACE, "Unknown signature key type: %d", sig->type);
+             return NULL;
+             break;
+     }
+@@ -1925,7 +1925,7 @@ ssh_signature pki_signature_from_blob(const ssh_key pubkey,
+     int rc;
+ 
+     if (ssh_key_type_plain(pubkey->type) != type) {
+-        SSH_LOG(SSH_LOG_WARN,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "Incompatible public key provided (%d) expecting (%d)",
+                 type,
+                 pubkey->type);
+@@ -1947,7 +1947,7 @@ ssh_signature pki_signature_from_blob(const ssh_key pubkey,
+         case SSH_KEYTYPE_DSS:
+             /* 40 is the dual signature blob len. */
+             if (len != 40) {
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_TRACE,
+                         "Signature has wrong size: %lu",
+                         (unsigned long)len);
+                 ssh_signature_free(sig);
+@@ -1977,7 +1977,7 @@ ssh_signature pki_signature_from_blob(const ssh_key pubkey,
+             rsalen = (gcry_pk_get_nbits(pubkey->rsa) + 7) / 8;
+ 
+             if (len > rsalen) {
+-                SSH_LOG(SSH_LOG_WARN,
++                SSH_LOG(SSH_LOG_TRACE,
+                         "Signature is to big size: %lu",
+                         (unsigned long)len);
+                 ssh_signature_free(sig);
+@@ -2055,7 +2055,7 @@ ssh_signature pki_signature_from_blob(const ssh_key pubkey,
+                 }
+ 
+                 if (rlen != 0) {
+-                    SSH_LOG(SSH_LOG_WARN,
++                    SSH_LOG(SSH_LOG_TRACE,
+                             "Signature has remaining bytes in inner "
+                             "sigblob: %lu",
+                             (unsigned long)rlen);
+@@ -2093,7 +2093,7 @@ ssh_signature pki_signature_from_blob(const ssh_key pubkey,
+         case SSH_KEYTYPE_RSA1:
+         case SSH_KEYTYPE_UNKNOWN:
+         default:
+-            SSH_LOG(SSH_LOG_WARN, "Unknown signature type");
++            SSH_LOG(SSH_LOG_TRACE, "Unknown signature type");
+             return NULL;
+     }
+ 
+@@ -2154,7 +2154,7 @@ ssh_signature pki_do_sign_hash(const ssh_key privkey,
+                 break;
+             case SSH_DIGEST_AUTO:
+             default:
+-                SSH_LOG(SSH_LOG_WARN, "Incompatible key algorithm");
++                SSH_LOG(SSH_LOG_TRACE, "Incompatible key algorithm");
+                 return NULL;
+             }
+             err = gcry_sexp_build(&sexp,
+diff --git a/src/pki_mbedcrypto.c b/src/pki_mbedcrypto.c
+index c33fb726..ca19a5fa 100644
+--- a/src/pki_mbedcrypto.c
++++ b/src/pki_mbedcrypto.c
+@@ -95,7 +95,7 @@ ssh_key pki_private_key_from_base64(const char *b64_key, const char *passphrase,
+ 
+     type = pki_privatekey_type_from_string(b64_key);
+     if (type == SSH_KEYTYPE_UNKNOWN) {
+-        SSH_LOG(SSH_LOG_WARN, "Unknown or invalid private key.");
++        SSH_LOG(SSH_LOG_TRACE, "Unknown or invalid private key.");
+         return NULL;
+     }
+ 
+@@ -136,7 +136,7 @@ ssh_key pki_private_key_from_base64(const char *b64_key, const char *passphrase,
+             if (valid != 0) {
+                 char error_buf[100];
+                 mbedtls_strerror(valid, error_buf, 100);
+-                SSH_LOG(SSH_LOG_WARN,"Parsing private key %s", error_buf);
++                SSH_LOG(SSH_LOG_TRACE,"Parsing private key %s", error_buf);
+                 goto fail;
+             }
+             break;
+@@ -177,14 +177,14 @@ ssh_key pki_private_key_from_base64(const char *b64_key, const char *passphrase,
+             if (valid != 0) {
+                 char error_buf[100];
+                 mbedtls_strerror(valid, error_buf, 100);
+-                SSH_LOG(SSH_LOG_WARN,"Parsing private key %s", error_buf);
++                SSH_LOG(SSH_LOG_TRACE,"Parsing private key %s", error_buf);
+                 goto fail;
+             }
+             break;
+         case SSH_KEYTYPE_ED25519:
+             /* Cannot open ed25519 keys with libmbedcrypto */
+         default:
+-            SSH_LOG(SSH_LOG_WARN, "Unknown or invalid private key type %d",
++            SSH_LOG(SSH_LOG_TRACE, "Unknown or invalid private key type %d",
+                     type);
+             return NULL;
+     }
+@@ -213,7 +213,7 @@ ssh_key pki_private_key_from_base64(const char *b64_key, const char *passphrase,
+         * keys, so we need to figure out the correct type here */
+         type = pki_key_ecdsa_to_key_type(key->ecdsa);
+         if (type == SSH_KEYTYPE_UNKNOWN) {
+-            SSH_LOG(SSH_LOG_WARN, "Invalid private key.");
++            SSH_LOG(SSH_LOG_TRACE, "Invalid private key.");
+             goto fail;
+         }
+     } else {
+@@ -276,19 +276,19 @@ int pki_privkey_build_rsa(ssh_key key,
+                                 ssh_string_data(d), ssh_string_len(d),
+                                 ssh_string_data(e), ssh_string_len(e));
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARN, "Failed to import private RSA key");
++        SSH_LOG(SSH_LOG_TRACE, "Failed to import private RSA key");
+         goto fail;
+     }
+ 
+     rc = mbedtls_rsa_complete(rsa);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARN, "Failed to complete private RSA key");
++        SSH_LOG(SSH_LOG_TRACE, "Failed to complete private RSA key");
+         goto fail;
+     }
+ 
+     rc = mbedtls_rsa_check_privkey(rsa);
+     if (rc != 0) {
+-        SSH_LOG(SSH_LOG_WARN, "Inconsistent private RSA key");
++        SSH_LOG(SSH_LOG_TRACE, "Inconsistent private RSA key");
+         goto fail;
+     }
+ 
+@@ -845,7 +845,7 @@ ssh_string pki_signature_to_blob(const ssh_signature sig)
+             sig_blob = pki_ed25519_signature_to_blob(sig);
+             break;
+         default:
+-            SSH_LOG(SSH_LOG_WARN, "Unknown signature key type: %s",
++            SSH_LOG(SSH_LOG_TRACE, "Unknown signature key type: %s",
+                     sig->type_c);
+             return NULL;
+     }
+@@ -865,20 +865,20 @@ static ssh_signature pki_signature_from_rsa_blob(const ssh_key pubkey, const
+     size_t len = ssh_string_len(sig_blob);
+ 
+     if (pubkey->rsa == NULL) {
+-        SSH_LOG(SSH_LOG_WARN, "Pubkey RSA field NULL");
++        SSH_LOG(SSH_LOG_TRACE, "Pubkey RSA field NULL");
+         goto errout;
+     }
+ 
+     rsalen = mbedtls_pk_get_bitlen(pubkey->rsa) / 8;
+     if (len > rsalen) {
+-        SSH_LOG(SSH_LOG_WARN,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "Signature is too big: %lu > %lu",
+                 (unsigned long) len,
+                 (unsigned long) rsalen);
+         goto errout;
+     }
+ #ifdef DEBUG_CRYPTO
+-    SSH_LOG(SSH_LOG_WARN, "RSA signature len: %lu", (unsigned long)len);
++    SSH_LOG(SSH_LOG_TRACE, "RSA signature len: %lu", (unsigned long)len);
+     ssh_log_hexdump("RSA signature", ssh_string_data(sig_blob), len);
+ #endif
+ 
+@@ -919,7 +919,7 @@ ssh_signature pki_signature_from_blob(const ssh_key pubkey,
+     int rc;
+ 
+     if (ssh_key_type_plain(pubkey->type) != type) {
+-        SSH_LOG(SSH_LOG_WARN,
++        SSH_LOG(SSH_LOG_TRACE,
+                 "Incompatible public key provided (%d) expecting (%d)",
+                 type,
+                 pubkey->type);
+@@ -1003,7 +1003,7 @@ ssh_signature pki_signature_from_blob(const ssh_key pubkey,
+             }
+ 
+             if (rlen != 0) {
+-                SSH_LOG(SSH_LOG_WARN, "Signature has remaining bytes in inner "
++                SSH_LOG(SSH_LOG_TRACE, "Signature has remaining bytes in inner "
+                         "sigblob: %lu",
+                         (unsigned long)rlen);
+                 ssh_signature_free(sig);
+@@ -1020,7 +1020,7 @@ ssh_signature pki_signature_from_blob(const ssh_key pubkey,
+             }
+             break;
+         default:
+-            SSH_LOG(SSH_LOG_WARN, "Unknown signature type");
++            SSH_LOG(SSH_LOG_TRACE, "Unknown signature type");
+             return NULL;
+     }
+ 
+@@ -1050,7 +1050,7 @@ static ssh_string rsa_do_sign_hash(const unsigned char *digest,
+         break;
+     case SSH_DIGEST_AUTO:
+     default:
+-        SSH_LOG(SSH_LOG_WARN, "Incompatible key algorithm");
++        SSH_LOG(SSH_LOG_TRACE, "Incompatible key algorithm");
+         return NULL;
+     }
+ 
+diff --git a/src/scp.c b/src/scp.c
+index 85d670a4..d3f9a831 100644
+--- a/src/scp.c
++++ b/src/scp.c
+@@ -140,7 +140,7 @@ int ssh_scp_init(ssh_scp scp)
+         return SSH_ERROR;
+     }
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL, "Initializing scp session %s %son location '%s'",
++    SSH_LOG(SSH_LOG_DEBUG, "Initializing scp session %s %son location '%s'",
+             scp->mode == SSH_SCP_WRITE?"write":"read",
+             scp->recursive ? "recursive " : "",
+             scp->location);
+@@ -364,7 +364,7 @@ int ssh_scp_push_directory(ssh_scp scp, const char *dirname, int mode)
+         goto error;
+     }
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL,
++    SSH_LOG(SSH_LOG_DEBUG,
+             "SCP pushing directory %s with permissions '%s'",
+             vis_encoded, perms);
+ 
+@@ -501,7 +501,7 @@ int ssh_scp_push_file64(ssh_scp scp, const char *filename, uint64_t size,
+         goto error;
+     }
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL,
++    SSH_LOG(SSH_LOG_DEBUG,
+             "SCP pushing file %s, size %" PRIu64 " with permissions '%s'",
+             vis_encoded, size, perms);
+ 
+@@ -800,7 +800,7 @@ int ssh_scp_pull_request(ssh_scp scp)
+         *p = '\0';
+     }
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL, "Received SCP request: '%s'", buffer);
++    SSH_LOG(SSH_LOG_DEBUG, "Received SCP request: '%s'", buffer);
+     switch(buffer[0]) {
+     case 'C':
+         /* File */
+diff --git a/src/server.c b/src/server.c
+index 841a1c42..acfbfffe 100644
+--- a/src/server.c
++++ b/src/server.c
+@@ -348,7 +348,7 @@ static void ssh_server_connection_callback(ssh_session session){
+                 goto error;
+             }
+             set_status(session, 0.4f);
+-            SSH_LOG(SSH_LOG_PROTOCOL,
++            SSH_LOG(SSH_LOG_DEBUG,
+                     "SSH client banner: %s", session->clientbanner);
+ 
+             /* Here we analyze the different protocols the server allows. */
+@@ -884,7 +884,7 @@ int ssh_message_auth_interactive_request(ssh_message msg, const char *name,
+ 
+   /* fill in the kbdint structure */
+   if (msg->session->kbdint == NULL) {
+-    SSH_LOG(SSH_LOG_PROTOCOL, "Warning: Got a "
++    SSH_LOG(SSH_LOG_DEBUG, "Warning: Got a "
+                                         "keyboard-interactive response but it "
+                                         "seems we didn't send the request.");
+ 
+@@ -981,13 +981,13 @@ int ssh_auth_reply_success(ssh_session session, int partial)
+ 
+     crypto = ssh_packet_get_current_crypto(session, SSH_DIRECTION_OUT);
+     if (crypto != NULL && crypto->delayed_compress_out) {
+-        SSH_LOG(SSH_LOG_PROTOCOL, "Enabling delayed compression OUT");
++        SSH_LOG(SSH_LOG_DEBUG, "Enabling delayed compression OUT");
+         crypto->do_compress_out = 1;
+     }
+ 
+     crypto = ssh_packet_get_current_crypto(session, SSH_DIRECTION_IN);
+     if (crypto != NULL && crypto->delayed_compress_in) {
+-        SSH_LOG(SSH_LOG_PROTOCOL, "Enabling delayed compression IN");
++        SSH_LOG(SSH_LOG_DEBUG, "Enabling delayed compression IN");
+         crypto->do_compress_in = 1;
+     }
+     return r;
+diff --git a/src/session.c b/src/session.c
+index 3199096a..fe87cadd 100644
+--- a/src/session.c
++++ b/src/session.c
+@@ -504,11 +504,14 @@ int ssh_is_blocking(ssh_session session)
+ /* Waits until the output socket is empty */
+ static int ssh_flush_termination(void *c){
+   ssh_session session = c;
+-  if (ssh_socket_buffered_write_bytes(session->socket) == 0 ||
+-      session->session_state == SSH_SESSION_STATE_ERROR)
++  if (ssh_socket_buffered_write_bytes(session->socket) == 0) {
+     return 1;
+-  else
++  } else if (session->session_state == SSH_SESSION_STATE_ERROR) {
++	SSH_LOG(SSH_LOG_WARN, "Error: %s", ssh_get_error(session));
++    return 1;
++  } else {
+     return 0;
++  }
+ }
+ 
+ /**
+@@ -1184,7 +1187,7 @@ int ssh_get_publickey_hash(const ssh_key key,
+ 
+             /* In FIPS mode, we cannot use MD5 */
+             if (ssh_fips_mode()) {
+-                SSH_LOG(SSH_LOG_WARN, "In FIPS mode MD5 is not allowed."
++                SSH_LOG(SSH_LOG_TRACE, "In FIPS mode MD5 is not allowed."
+                                       "Try using SSH_PUBLICKEY_HASH_SHA256");
+                 rc = SSH_ERROR;
+                 goto out;
+diff --git a/src/sftp.c b/src/sftp.c
+index a8346040..e3a842d5 100644
+--- a/src/sftp.c
++++ b/src/sftp.c
+@@ -316,7 +316,7 @@ int sftp_server_init(sftp_session sftp){
+   }
+   SSH_BUFFER_FREE(reply);
+ 
+-  SSH_LOG(SSH_LOG_PROTOCOL, "Server version sent");
++  SSH_LOG(SSH_LOG_DEBUG, "Server version sent");
+ 
+   if (version > LIBSFTP_VERSION) {
+     sftp->version = LIBSFTP_VERSION;
+@@ -707,7 +707,7 @@ int sftp_init(sftp_session sftp) {
+       sftp_set_error(sftp, SSH_FX_FAILURE);
+       return -1;
+   }
+-  SSH_LOG(SSH_LOG_PROTOCOL,
++  SSH_LOG(SSH_LOG_DEBUG,
+       "SFTP server version %d",
+       version);
+   rc = ssh_buffer_unpack(packet->payload, "s", &ext_name);
+@@ -720,7 +720,7 @@ int sftp_init(sftp_session sftp) {
+       break;
+     }
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL,
++    SSH_LOG(SSH_LOG_DEBUG,
+         "SFTP server extension: %s, version: %s",
+         ext_name, ext_data);
+ 
+@@ -1353,7 +1353,7 @@ static sftp_attributes sftp_parse_attr_3(sftp_session sftp, ssh_buffer buf,
+         if (rc != SSH_OK){
+             goto error;
+         }
+-        SSH_LOG(SSH_LOG_PROTOCOL, "Name: %s", attr->name);
++        SSH_LOG(SSH_LOG_DEBUG, "Name: %s", attr->name);
+ 
+         /* Set owner and group if we talk to openssh and have the longname */
+         if (ssh_get_openssh_version(sftp->session)) {
+@@ -1373,7 +1373,7 @@ static sftp_attributes sftp_parse_attr_3(sftp_session sftp, ssh_buffer buf,
+     if (rc != SSH_OK){
+         goto error;
+     }
+-    SSH_LOG(SSH_LOG_PROTOCOL,
++    SSH_LOG(SSH_LOG_DEBUG,
+             "Flags: %.8"PRIx32"\n", (uint32_t) attr->flags);
+ 
+     if (attr->flags & SSH_FILEXFER_ATTR_SIZE) {
+@@ -1381,7 +1381,7 @@ static sftp_attributes sftp_parse_attr_3(sftp_session sftp, ssh_buffer buf,
+         if(rc != SSH_OK) {
+             goto error;
+         }
+-        SSH_LOG(SSH_LOG_PROTOCOL,
++        SSH_LOG(SSH_LOG_DEBUG,
+                 "Size: %"PRIu64"\n",
+                 (uint64_t) attr->size);
+     }
+@@ -1644,7 +1644,7 @@ sftp_attributes sftp_readdir(sftp_session sftp, sftp_dir dir)
+         return NULL;
+     }
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL, "Count is %d", dir->count);
++    SSH_LOG(SSH_LOG_DEBUG, "Count is %d", dir->count);
+ 
+     attr = sftp_parse_attr(sftp, dir->buffer, 1);
+     if (attr == NULL) {
+diff --git a/src/socket.c b/src/socket.c
+index 2fef8e7e..f470bb28 100644
+--- a/src/socket.c
++++ b/src/socket.c
+@@ -473,12 +473,12 @@ void ssh_socket_close(ssh_socket s)
+         kill(pid, SIGTERM);
+         while (waitpid(pid, &status, 0) == -1) {
+             if (errno != EINTR) {
+-                SSH_LOG(SSH_LOG_WARN, "waitpid failed: %s", strerror(errno));
++                SSH_LOG(SSH_LOG_TRACE, "waitpid failed: %s", strerror(errno));
+                 return;
+             }
+         }
+         if (!WIFEXITED(status)) {
+-            SSH_LOG(SSH_LOG_WARN, "Proxy command exitted abnormally");
++            SSH_LOG(SSH_LOG_TRACE, "Proxy command exitted abnormally");
+             return;
+         }
+         SSH_LOG(SSH_LOG_TRACE, "Proxy command returned %d", WEXITSTATUS(status));
+@@ -849,7 +849,7 @@ int ssh_socket_connect(ssh_socket s,
+         return SSH_ERROR;
+     }
+     fd = ssh_connect_host_nonblocking(s->session, host, bind_addr, port);
+-    SSH_LOG(SSH_LOG_PROTOCOL, "Nonblocking connection socket: %d", fd);
++    SSH_LOG(SSH_LOG_DEBUG, "Nonblocking connection socket: %d", fd);
+     if (fd == SSH_INVALID_SOCKET) {
+         return SSH_ERROR;
+     }
+@@ -873,7 +873,7 @@ ssh_execute_command(const char *command, socket_t in, socket_t out)
+     /* Prepare /dev/null socket for the stderr redirection */
+     int devnull = open("/dev/null", O_WRONLY);
+     if (devnull == -1) {
+-        SSH_LOG(SSH_LOG_WARNING, "Failed to open /dev/null");
++        SSH_LOG(SSH_LOG_TRACE, "Failed to open /dev/null");
+         exit(1);
+     }
+ 
+@@ -914,7 +914,7 @@ ssh_socket_connect_proxycommand(ssh_socket s, const char *command)
+         return SSH_ERROR;
+     }
+ 
+-    SSH_LOG(SSH_LOG_PROTOCOL, "Executing proxycommand '%s'", command);
++    SSH_LOG(SSH_LOG_DEBUG, "Executing proxycommand '%s'", command);
+     pid = fork();
+     if (pid == 0) {
+         ssh_execute_command(command, pair[0], pair[0]);
+@@ -922,7 +922,7 @@ ssh_socket_connect_proxycommand(ssh_socket s, const char *command)
+     }
+     s->proxy_pid = pid;
+     close(pair[0]);
+-    SSH_LOG(SSH_LOG_PROTOCOL, "ProxyCommand connection pipe: [%d,%d]",pair[0],pair[1]);
++    SSH_LOG(SSH_LOG_DEBUG, "ProxyCommand connection pipe: [%d,%d]",pair[0],pair[1]);
+     ssh_socket_set_fd(s, pair[1]);
+     s->state=SSH_SOCKET_CONNECTED;
+     s->fd_is_socket=0;
