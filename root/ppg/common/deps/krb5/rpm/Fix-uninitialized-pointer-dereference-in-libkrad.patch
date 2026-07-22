@@ -1,0 +1,44 @@
+From f143a0ce9eb923a94a5c20234a8cb85205e8ff9c Mon Sep 17 00:00:00 2001
+From: Julien Rische <jrische@redhat.com>
+Date: Wed, 21 Jan 2026 11:31:39 +0100
+Subject: [PATCH] Fix uninitialized pointer dereference in libkrad
+
+Commit 871125fea8ce0370a972bf65f7d1de63f619b06c changed
+krad_packet_decode_request() to use a local variable "req" to hold the
+decoded packet until it is verified, instead of immediately storing
+into the caller's *reqpkt.  The code to check for duplicate packets
+erroneously continues to use *reqpkt, causing a read dereference of
+whatever was in *reqpkt on entry to the function (typically null or an
+uninitialized value).  Fix the code to use req instead of *reqpkt.
+
+This bug does not affect the KDC (which only uses libkrad as a
+client), but can crash external software using libkrad as a server if
+it ever processes more than one packet at a time.
+
+[ghudson@mit.edu: edited commit message]
+
+ticket: 9193 (new)
+tags: pullup
+target_version: 1.22-next
+
+(cherry picked from commit f74a1b3fcde44cfa0d487973fd47a943cda49dc8)
+---
+ src/lib/krad/packet.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/lib/krad/packet.c b/src/lib/krad/packet.c
+index b1a31d78cc..10362cf9ed 100644
+--- a/src/lib/krad/packet.c
++++ b/src/lib/krad/packet.c
+@@ -575,7 +575,7 @@ krad_packet_decode_request(krb5_context ctx, const char *secret,
+ 
+     if (cb != NULL) {
+         for (tmp = (*cb)(data, FALSE); tmp != NULL; tmp = (*cb)(data, FALSE)) {
+-            if (pkt_id_get(*reqpkt) == pkt_id_get(tmp))
++            if (pkt_id_get(req) == pkt_id_get(tmp))
+                 break;
+         }
+ 
+-- 
+2.51.1
+

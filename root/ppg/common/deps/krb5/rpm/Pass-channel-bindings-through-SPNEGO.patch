@@ -1,0 +1,257 @@
+From 6265b0fbc59e13756364b97a5e3e8672514f8302 Mon Sep 17 00:00:00 2001
+From: Isaac Boukris <iboukris@gmail.com>
+Date: Tue, 28 Apr 2020 18:15:55 +0200
+Subject: [PATCH] Pass channel bindings through SPNEGO
+
+ticket: 8907 (new)
+(cherry picked from commit d16325a24c34ec9a5f6fb4910987f162e0d4d9cd)
+(cherry picked from commit ee79bd43005245d3e5a2d3ec6d61146945e77717)
+---
+ src/lib/gssapi/spnego/gssapiP_negoex.h |  8 ++---
+ src/lib/gssapi/spnego/negoex_ctx.c     | 34 +++++++++++----------
+ src/lib/gssapi/spnego/spnego_mech.c    | 41 +++++++++++++-------------
+ 3 files changed, 43 insertions(+), 40 deletions(-)
+
+diff --git a/src/lib/gssapi/spnego/gssapiP_negoex.h b/src/lib/gssapi/spnego/gssapiP_negoex.h
+index 44b08f523..489ab7c42 100644
+--- a/src/lib/gssapi/spnego/gssapiP_negoex.h
++++ b/src/lib/gssapi/spnego/gssapiP_negoex.h
+@@ -201,10 +201,10 @@ negoex_restrict_auth_schemes(spnego_gss_ctx_id_t ctx,
+ OM_uint32
+ negoex_init(OM_uint32 *minor, spnego_gss_ctx_id_t ctx, gss_cred_id_t cred,
+             gss_name_t target_name, OM_uint32 req_flags, OM_uint32 time_req,
+-            gss_buffer_t input_token, gss_buffer_t output_token,
+-            OM_uint32 *time_rec);
++            gss_buffer_t input_token, gss_channel_bindings_t bindings,
++            gss_buffer_t output_token, OM_uint32 *time_rec);
+ 
+ OM_uint32
+ negoex_accept(OM_uint32 *minor, spnego_gss_ctx_id_t ctx, gss_cred_id_t cred,
+-              gss_buffer_t input_token, gss_buffer_t output_token,
+-              OM_uint32 *time_rec);
++              gss_buffer_t input_token, gss_channel_bindings_t bindings,
++              gss_buffer_t output_token, OM_uint32 *time_rec);
+diff --git a/src/lib/gssapi/spnego/negoex_ctx.c b/src/lib/gssapi/spnego/negoex_ctx.c
+index 18d9d4147..8848ee4db 100644
+--- a/src/lib/gssapi/spnego/negoex_ctx.c
++++ b/src/lib/gssapi/spnego/negoex_ctx.c
+@@ -276,7 +276,8 @@ static OM_uint32
+ mech_init(OM_uint32 *minor, spnego_gss_ctx_id_t ctx, gss_cred_id_t cred,
+           gss_name_t target, OM_uint32 req_flags, OM_uint32 time_req,
+           struct negoex_message *messages, size_t nmessages,
+-          gss_buffer_t output_token, OM_uint32 *time_rec)
++          gss_channel_bindings_t bindings, gss_buffer_t output_token,
++          OM_uint32 *time_rec)
+ {
+     OM_uint32 major, first_major = 0, first_minor = 0;
+     struct negoex_auth_mech *mech = NULL;
+@@ -316,10 +317,9 @@ mech_init(OM_uint32 *minor, spnego_gss_ctx_id_t ctx, gss_cred_id_t cred,
+         mech = K5_TAILQ_FIRST(&ctx->negoex_mechs);
+ 
+         major = gss_init_sec_context(minor, cred, &mech->mech_context, target,
+-                                     mech->oid, req_flags, time_req,
+-                                     GSS_C_NO_CHANNEL_BINDINGS, input_token,
+-                                     &ctx->actual_mech, output_token,
+-                                     &ctx->ctx_flags, time_rec);
++                                     mech->oid, req_flags, time_req, bindings,
++                                     input_token, &ctx->actual_mech,
++                                     output_token, &ctx->ctx_flags, time_rec);
+ 
+         if (major == GSS_S_COMPLETE)
+             mech->complete = 1;
+@@ -351,7 +351,8 @@ mech_init(OM_uint32 *minor, spnego_gss_ctx_id_t ctx, gss_cred_id_t cred,
+ static OM_uint32
+ mech_accept(OM_uint32 *minor, spnego_gss_ctx_id_t ctx,
+             gss_cred_id_t cred, struct negoex_message *messages,
+-            size_t nmessages, gss_buffer_t output_token, OM_uint32 *time_rec)
++            size_t nmessages, gss_channel_bindings_t bindings,
++            gss_buffer_t output_token, OM_uint32 *time_rec)
+ {
+     OM_uint32 major, tmpmin;
+     struct negoex_auth_mech *mech;
+@@ -395,10 +396,10 @@ mech_accept(OM_uint32 *minor, spnego_gss_ctx_id_t ctx,
+         gss_release_cred(&tmpmin, &ctx->deleg_cred);
+ 
+     major = gss_accept_sec_context(minor, &mech->mech_context, cred,
+-                                   &msg->token, GSS_C_NO_CHANNEL_BINDINGS,
+-                                   &ctx->internal_name, &ctx->actual_mech,
+-                                   output_token, &ctx->ctx_flags,
+-                                   time_rec, &ctx->deleg_cred);
++                                   &msg->token, bindings, &ctx->internal_name,
++                                   &ctx->actual_mech, output_token,
++                                   &ctx->ctx_flags, time_rec,
++                                   &ctx->deleg_cred);
+ 
+     if (major == GSS_S_COMPLETE)
+         mech->complete = 1;
+@@ -609,8 +610,8 @@ make_output_token(OM_uint32 *minor, spnego_gss_ctx_id_t ctx,
+ OM_uint32
+ negoex_init(OM_uint32 *minor, spnego_gss_ctx_id_t ctx, gss_cred_id_t cred,
+             gss_name_t target_name, OM_uint32 req_flags, OM_uint32 time_req,
+-            gss_buffer_t input_token, gss_buffer_t output_token,
+-            OM_uint32 *time_rec)
++            gss_buffer_t input_token, gss_channel_bindings_t bindings,
++            gss_buffer_t output_token, OM_uint32 *time_rec)
+ {
+     OM_uint32 major, tmpmin;
+     gss_buffer_desc mech_output_token = GSS_C_EMPTY_BUFFER;
+@@ -663,7 +664,8 @@ negoex_init(OM_uint32 *minor, spnego_gss_ctx_id_t ctx, gss_cred_id_t cred,
+     /* Process the input token and/or produce an output token.  This may prune
+      * the mech list, but on success there will be at least one mech entry. */
+     major = mech_init(minor, ctx, cred, target_name, req_flags, time_req,
+-                      messages, nmessages, &mech_output_token, time_rec);
++                      messages, nmessages, bindings, &mech_output_token,
++                      time_rec);
+     if (major != GSS_S_COMPLETE)
+         goto cleanup;
+     assert(!K5_TAILQ_EMPTY(&ctx->negoex_mechs));
+@@ -701,8 +703,8 @@ cleanup:
+ 
+ OM_uint32
+ negoex_accept(OM_uint32 *minor, spnego_gss_ctx_id_t ctx, gss_cred_id_t cred,
+-              gss_buffer_t input_token, gss_buffer_t output_token,
+-              OM_uint32 *time_rec)
++              gss_buffer_t input_token, gss_channel_bindings_t bindings,
++              gss_buffer_t output_token, OM_uint32 *time_rec)
+ {
+     OM_uint32 major, tmpmin;
+     gss_buffer_desc mech_output_token = GSS_C_EMPTY_BUFFER;
+@@ -754,7 +756,7 @@ negoex_accept(OM_uint32 *minor, spnego_gss_ctx_id_t ctx, gss_cred_id_t cred,
+      * prune the list to a single mech.  Continue on error if an output token
+      * is generated, so that we send the token to the initiator.
+      */
+-    major = mech_accept(minor, ctx, cred, messages, nmessages,
++    major = mech_accept(minor, ctx, cred, messages, nmessages, bindings,
+                         &mech_output_token, time_rec);
+     if (major != GSS_S_COMPLETE && mech_output_token.length == 0)
+         goto cleanup;
+diff --git a/src/lib/gssapi/spnego/spnego_mech.c b/src/lib/gssapi/spnego/spnego_mech.c
+index 594fc5894..4cf011143 100644
+--- a/src/lib/gssapi/spnego/spnego_mech.c
++++ b/src/lib/gssapi/spnego/spnego_mech.c
+@@ -130,6 +130,7 @@ init_ctx_reselect(OM_uint32 *, spnego_gss_ctx_id_t, OM_uint32,
+ static OM_uint32
+ init_ctx_call_init(OM_uint32 *, spnego_gss_ctx_id_t, spnego_gss_cred_id_t,
+ 		   OM_uint32, gss_name_t, OM_uint32, OM_uint32, gss_buffer_t,
++		   gss_channel_bindings_t,
+ 		   gss_buffer_t, OM_uint32 *, send_token_flag *);
+ 
+ static OM_uint32
+@@ -144,8 +145,8 @@ acc_ctx_vfy_oid(OM_uint32 *, spnego_gss_ctx_id_t, gss_OID,
+ 		OM_uint32 *, send_token_flag *);
+ static OM_uint32
+ acc_ctx_call_acc(OM_uint32 *, spnego_gss_ctx_id_t, spnego_gss_cred_id_t,
+-		 gss_buffer_t, gss_buffer_t, OM_uint32 *, OM_uint32 *,
+-		 send_token_flag *);
++		 gss_buffer_t, gss_channel_bindings_t, gss_buffer_t,
++		 OM_uint32 *, OM_uint32 *, send_token_flag *);
+ 
+ static gss_OID
+ negotiate_mech(spnego_gss_ctx_id_t, gss_OID_set, OM_uint32 *);
+@@ -905,6 +906,7 @@ init_ctx_call_init(OM_uint32 *minor_status,
+ 		   OM_uint32 req_flags,
+ 		   OM_uint32 time_req,
+ 		   gss_buffer_t mechtok_in,
++		   gss_channel_bindings_t bindings,
+ 		   gss_buffer_t mechtok_out,
+ 		   OM_uint32 *time_rec,
+ 		   send_token_flag *send_token)
+@@ -921,15 +923,14 @@ init_ctx_call_init(OM_uint32 *minor_status,
+ 	if (gss_oid_equal(sc->internal_mech, &negoex_mech)) {
+ 		ret = negoex_init(minor_status, sc, mcred, target_name,
+ 				  mech_req_flags, time_req, mechtok_in,
+-				  mechtok_out, time_rec);
++				  bindings, mechtok_out, time_rec);
+ 	} else {
+ 		ret = gss_init_sec_context(minor_status, mcred,
+ 					   &sc->ctx_handle, target_name,
+ 					   sc->internal_mech, mech_req_flags,
+-					   time_req, GSS_C_NO_CHANNEL_BINDINGS,
+-					   mechtok_in, &sc->actual_mech,
+-					   mechtok_out, &sc->ctx_flags,
+-					   time_rec);
++					   time_req, bindings, mechtok_in,
++					   &sc->actual_mech, mechtok_out,
++					   &sc->ctx_flags, time_rec);
+ 	}
+ 
+ 	/* Bail out if the acceptor gave us an error token but the mech didn't
+@@ -981,8 +982,8 @@ init_ctx_call_init(OM_uint32 *minor_status,
+ 	gss_delete_sec_context(&tmpmin, &sc->ctx_handle, GSS_C_NO_BUFFER);
+ 	tmpret = init_ctx_call_init(&tmpmin, sc, spcred, acc_negState,
+ 				    target_name, req_flags, time_req,
+-				    mechtok_in, mechtok_out, time_rec,
+-				    send_token);
++				    mechtok_in, bindings, mechtok_out,
++				    time_rec, send_token);
+ 	if (HARD_ERROR(tmpret))
+ 		goto fail;
+ 	*minor_status = tmpmin;
+@@ -1004,7 +1005,7 @@ spnego_gss_init_sec_context(
+ 			gss_OID mech_type,
+ 			OM_uint32 req_flags,
+ 			OM_uint32 time_req,
+-			gss_channel_bindings_t input_chan_bindings,
++			gss_channel_bindings_t bindings,
+ 			gss_buffer_t input_token,
+ 			gss_OID *actual_mech,
+ 			gss_buffer_t output_token,
+@@ -1084,8 +1085,8 @@ spnego_gss_init_sec_context(
+ 	if (!spnego_ctx->mech_complete) {
+ 		ret = init_ctx_call_init(minor_status, spnego_ctx, spcred,
+ 					 acc_negState, target_name, req_flags,
+-					 time_req, mechtok_in, &mechtok_out,
+-					 time_rec, &send_token);
++					 time_req, mechtok_in, bindings,
++					 &mechtok_out, time_rec, &send_token);
+ 		if (ret != GSS_S_COMPLETE)
+ 			goto cleanup;
+ 
+@@ -1542,8 +1543,9 @@ cleanup:
+ static OM_uint32
+ acc_ctx_call_acc(OM_uint32 *minor_status, spnego_gss_ctx_id_t sc,
+ 		 spnego_gss_cred_id_t spcred, gss_buffer_t mechtok_in,
+-		 gss_buffer_t mechtok_out, OM_uint32 *time_rec,
+-		 OM_uint32 *negState, send_token_flag *tokflag)
++		 gss_channel_bindings_t bindings, gss_buffer_t mechtok_out,
++		 OM_uint32 *time_rec, OM_uint32 *negState,
++		 send_token_flag *tokflag)
+ {
+ 	OM_uint32 ret, tmpmin;
+ 	gss_OID_desc mechoid;
+@@ -1568,13 +1570,12 @@ acc_ctx_call_acc(OM_uint32 *minor_status, spnego_gss_ctx_id_t sc,
+ 	mcred = (spcred == NULL) ? GSS_C_NO_CREDENTIAL : spcred->mcred;
+ 	if (negoex) {
+ 		ret = negoex_accept(minor_status, sc, mcred, mechtok_in,
+-				    mechtok_out, time_rec);
++				    bindings, mechtok_out, time_rec);
+ 	} else {
+ 		(void) gss_release_name(&tmpmin, &sc->internal_name);
+ 		(void) gss_release_cred(&tmpmin, &sc->deleg_cred);
+ 		ret = gss_accept_sec_context(minor_status, &sc->ctx_handle,
+-					     mcred, mechtok_in,
+-					     GSS_C_NO_CHANNEL_BINDINGS,
++					     mcred, mechtok_in, bindings,
+ 					     &sc->internal_name,
+ 					     &sc->actual_mech, mechtok_out,
+ 					     &sc->ctx_flags, time_rec,
+@@ -1620,7 +1621,7 @@ spnego_gss_accept_sec_context(
+ 			    gss_ctx_id_t *context_handle,
+ 			    gss_cred_id_t verifier_cred_handle,
+ 			    gss_buffer_t input_token,
+-			    gss_channel_bindings_t input_chan_bindings,
++			    gss_channel_bindings_t bindings,
+ 			    gss_name_t *src_name,
+ 			    gss_OID *mech_type,
+ 			    gss_buffer_t output_token,
+@@ -1734,8 +1735,8 @@ spnego_gss_accept_sec_context(
+ 	 */
+ 	if (negState != REQUEST_MIC && mechtok_in != GSS_C_NO_BUFFER) {
+ 		ret = acc_ctx_call_acc(minor_status, sc, spcred, mechtok_in,
+-				       &mechtok_out, time_rec, &negState,
+-				       &return_token);
++				       bindings, &mechtok_out, time_rec,
++				       &negState, &return_token);
+ 	}
+ 
+ 	/* Step 3: process or generate the MIC, if the negotiated mech is

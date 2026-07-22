@@ -1,0 +1,242 @@
+From ab814a990f109357fc4b505169792f9d4d5b5155 Mon Sep 17 00:00:00 2001
+From: Greg Hudson <ghudson@mit.edu>
+Date: Mon, 24 Feb 2020 15:58:59 -0500
+Subject: [PATCH] Allow certauth modules to set hw-authent flag
+
+In PKINIT, if a certauth module returns KRB5_CERTAUTH_HWAUTH from its
+authorize method, set the hw-authent flag in the ticket.
+
+ticket: 8879 (new)
+(cherry picked from commit 50fb43b4a2d97ce2cd53e1ced30e8e8224fede70)
+(cherry picked from commit d23b2ed4f06fa77cd021814834dd1391ef6f452f)
+---
+ doc/plugindev/certauth.rst              |  7 +++++--
+ src/include/krb5/certauth_plugin.h      |  9 ++++++---
+ src/lib/krb5/error_tables/k5e1_err.et   |  1 +
+ src/plugins/certauth/test/Makefile.in   |  4 ++--
+ src/plugins/certauth/test/main.c        | 11 +++++++++--
+ src/plugins/preauth/pkinit/pkinit_srv.c | 24 ++++++++++++++++--------
+ src/tests/t_certauth.py                 | 13 +++++++++++++
+ 7 files changed, 52 insertions(+), 17 deletions(-)
+
+diff --git a/doc/plugindev/certauth.rst b/doc/plugindev/certauth.rst
+index 8a7f7c5eb..3b715f738 100644
+--- a/doc/plugindev/certauth.rst
++++ b/doc/plugindev/certauth.rst
+@@ -15,8 +15,11 @@ principal.  **authorize** receives the DER-encoded certificate, the
+ requested client principal, and a pointer to the client's
+ krb5_db_entry (for modules that link against libkdb5).  It returns the
+ authorization status and optionally outputs a list of authentication
+-indicator strings to be added to the ticket.  A module must use its
+-own internal or library-provided ASN.1 certificate decoder.
++indicator strings to be added to the ticket.  Beginning in release
++1.19, the authorize method can request that the hardware
++authentication bit be set in the ticket by returning
++**KRB5_CERTAUTH_HWAUTH**.  A module must use its own internal or
++library-provided ASN.1 certificate decoder.
+ 
+ A module can optionally create and destroy module data with the
+ **init** and **fini** methods.  Module data objects last for the
+diff --git a/src/include/krb5/certauth_plugin.h b/src/include/krb5/certauth_plugin.h
+index 3074790f8..3466cf345 100644
+--- a/src/include/krb5/certauth_plugin.h
++++ b/src/include/krb5/certauth_plugin.h
+@@ -85,14 +85,17 @@ typedef void
+ (*krb5_certauth_fini_fn)(krb5_context context, krb5_certauth_moddata moddata);
+ 
+ /*
+- * Mandatory:
+- * Return 0 if the DER-encoded cert is authorized for PKINIT authentication by
+- * princ; otherwise return one of the following error codes:
++ * Mandatory: return 0 or KRB5_CERTAUTH_HWAUTH if the DER-encoded cert is
++ * authorized for PKINIT authentication by princ; otherwise return one of the
++ * following error codes:
+  * - KRB5KDC_ERR_CLIENT_NAME_MISMATCH - incorrect SAN value
+  * - KRB5KDC_ERR_INCONSISTENT_KEY_PURPOSE - incorrect EKU
+  * - KRB5KDC_ERR_CERTIFICATE_MISMATCH - other extension error
+  * - KRB5_PLUGIN_NO_HANDLE - the module has no opinion about cert
+  *
++ * Returning KRB5_CERTAUTH_HWAUTH will cause the hw-authent flag to be set in
++ * the issued ticket (new in release 1.19).
++ *
+  * - opts is used by built-in modules to receive internal data, and must be
+  *   ignored by other modules.
+  * - db_entry receives the client principal database entry, and can be ignored
+diff --git a/src/lib/krb5/error_tables/k5e1_err.et b/src/lib/krb5/error_tables/k5e1_err.et
+index ade5caecf..abd9f3bfe 100644
+--- a/src/lib/krb5/error_tables/k5e1_err.et
++++ b/src/lib/krb5/error_tables/k5e1_err.et
+@@ -42,4 +42,5 @@ error_code KRB5_KCM_MALFORMED_REPLY, "Malformed reply from KCM daemon"
+ error_code KRB5_KCM_RPC_ERROR, "Mach RPC error communicating with KCM daemon"
+ error_code KRB5_KCM_REPLY_TOO_BIG, "KCM daemon reply too big"
+ error_code KRB5_KCM_NO_SERVER, "No KCM server found"
++error_code KRB5_CERTAUTH_HWAUTH, "Authorize and set hw-authent ticket flag"
+ end
+diff --git a/src/plugins/certauth/test/Makefile.in b/src/plugins/certauth/test/Makefile.in
+index d3524084c..e94c13845 100644
+--- a/src/plugins/certauth/test/Makefile.in
++++ b/src/plugins/certauth/test/Makefile.in
+@@ -5,8 +5,8 @@ LIBBASE=certauth_test
+ LIBMAJOR=0
+ LIBMINOR=0
+ RELDIR=../plugins/certauth/test
+-SHLIB_EXPDEPS=$(KRB5_BASE_DEPLIBS)
+-SHLIB_EXPLIBS=$(KRB5_BASE_LIBS)
++SHLIB_EXPDEPS=$(KDB5_DEPLIBS) $(KRB5_BASE_DEPLIBS)
++SHLIB_EXPLIBS=$(KDB5_LIBS) $(KRB5_BASE_LIBS)
+ 
+ STLIBOBJS=main.o
+ 
+diff --git a/src/plugins/certauth/test/main.c b/src/plugins/certauth/test/main.c
+index 77641230c..d4633b8cd 100644
+--- a/src/plugins/certauth/test/main.c
++++ b/src/plugins/certauth/test/main.c
+@@ -31,6 +31,7 @@
+  */
+ 
+ #include <k5-int.h>
++#include <kdb.h>
+ #include "krb5/certauth_plugin.h"
+ 
+ struct krb5_certauth_moddata_st {
+@@ -131,7 +132,8 @@ has_cn(krb5_context context, const uint8_t *cert, size_t cert_len,
+ 
+ /*
+  * Test module 2 returns OK if princ matches the CN part of the subject name,
+- * and returns indicators of the module name and princ.
++ * and returns indicators of the module name and princ.  If the "hwauth" string
++ * attribute is set on db_entry, it returns KRB5_CERTAUTH_HWAUTH.
+  */
+ static krb5_error_code
+ test2_authorize(krb5_context context, krb5_certauth_moddata moddata,
+@@ -141,7 +143,7 @@ test2_authorize(krb5_context context, krb5_certauth_moddata moddata,
+                 char ***authinds_out)
+ {
+     krb5_error_code ret;
+-    char *name = NULL, **ais = NULL;
++    char *name = NULL, *strval = NULL, **ais = NULL;
+ 
+     *authinds_out = NULL;
+ 
+@@ -167,6 +169,11 @@ test2_authorize(krb5_context context, krb5_certauth_moddata moddata,
+ 
+     ais = NULL;
+ 
++    ret = krb5_dbe_get_string(context, (krb5_db_entry *)db_entry, "hwauth",
++                              &strval);
++    ret = (strval != NULL) ? KRB5_CERTAUTH_HWAUTH : 0;
++    krb5_dbe_free_string(context, strval);
++
+ cleanup:
+     krb5_free_unparsed_name(context, name);
+     return ret;
+diff --git a/src/plugins/preauth/pkinit/pkinit_srv.c b/src/plugins/preauth/pkinit/pkinit_srv.c
+index feca11806..3ae56c064 100644
+--- a/src/plugins/preauth/pkinit/pkinit_srv.c
++++ b/src/plugins/preauth/pkinit/pkinit_srv.c
+@@ -320,12 +320,12 @@ static krb5_error_code
+ authorize_cert(krb5_context context, certauth_handle *certauth_modules,
+                pkinit_kdc_context plgctx, pkinit_kdc_req_context reqctx,
+                krb5_kdcpreauth_callbacks cb, krb5_kdcpreauth_rock rock,
+-               krb5_principal client)
++               krb5_principal client, krb5_boolean *hwauth_out)
+ {
+     krb5_error_code ret;
+     certauth_handle h;
+     struct certauth_req_opts opts;
+-    krb5_boolean accepted = FALSE;
++    krb5_boolean accepted = FALSE, hwauth = FALSE;
+     uint8_t *cert;
+     size_t i, cert_len;
+     void *db_ent = NULL;
+@@ -347,9 +347,10 @@ authorize_cert(krb5_context context, certauth_handle *certauth_modules,
+ 
+     /*
+      * Check the certificate against each certauth module.  For the certificate
+-     * to be authorized at least one module must return 0, and no module can an
+-     * error code other than KRB5_PLUGIN_NO_HANDLE (pass).  Add indicators from
+-     * modules that return 0 or pass.
++     * to be authorized at least one module must return 0 or
++     * KRB5_CERTAUTH_HWAUTH, and no module can return an error code other than
++     * KRB5_PLUGIN_NO_HANDLE (pass).  Add indicators from modules that return 0
++     * or pass.
+      */
+     ret = KRB5_PLUGIN_NO_HANDLE;
+     for (i = 0; certauth_modules != NULL && certauth_modules[i] != NULL; i++) {
+@@ -359,6 +360,8 @@ authorize_cert(krb5_context context, certauth_handle *certauth_modules,
+                               &opts, db_ent, &ais);
+         if (ret == 0)
+             accepted = TRUE;
++        else if (ret == KRB5_CERTAUTH_HWAUTH)
++            accepted = hwauth = TRUE;
+         else if (ret != KRB5_PLUGIN_NO_HANDLE)
+             goto cleanup;
+ 
+@@ -374,6 +377,7 @@ authorize_cert(krb5_context context, certauth_handle *certauth_modules,
+         }
+     }
+ 
++    *hwauth_out = hwauth;
+     ret = accepted ? 0 : KRB5KDC_ERR_CLIENT_NAME_MISMATCH;
+ 
+ cleanup:
+@@ -430,7 +434,7 @@ pkinit_server_verify_padata(krb5_context context,
+     int is_signed = 1;
+     krb5_pa_data **e_data = NULL;
+     krb5_kdcpreauth_modreq modreq = NULL;
+-    krb5_boolean valid_freshness_token = FALSE;
++    krb5_boolean valid_freshness_token = FALSE, hwauth = FALSE;
+     char **sp;
+ 
+     pkiDebug("pkinit_verify_padata: entered!\n");
+@@ -494,7 +498,7 @@ pkinit_server_verify_padata(krb5_context context,
+     }
+     if (is_signed) {
+         retval = authorize_cert(context, moddata->certauth_modules, plgctx,
+-                                reqctx, cb, rock, request->client);
++                                reqctx, cb, rock, request->client, &hwauth);
+         if (retval)
+             goto cleanup;
+ 
+@@ -613,6 +617,8 @@ pkinit_server_verify_padata(krb5_context context,
+ 
+     /* remember to set the PREAUTH flag in the reply */
+     enc_tkt_reply->flags |= TKT_FLG_PRE_AUTH;
++    if (hwauth)
++        enc_tkt_reply->flags |= TKT_FLG_HW_AUTH;
+     modreq = (krb5_kdcpreauth_modreq)reqctx;
+     reqctx = NULL;
+ 
+@@ -1044,7 +1050,9 @@ pkinit_server_get_flags(krb5_context kcontext, krb5_preauthtype patype)
+ {
+     if (patype == KRB5_PADATA_PKINIT_KX)
+         return PA_INFO;
+-    return PA_SUFFICIENT | PA_REPLACES_KEY | PA_TYPED_E_DATA;
++    /* PKINIT does not normally set the hw-authent ticket flag, but a
++     * certauth module can cause it to do so. */
++    return PA_SUFFICIENT | PA_REPLACES_KEY | PA_TYPED_E_DATA | PA_HARDWARE;
+ }
+ 
+ static krb5_preauthtype supported_server_pa_types[] = {
+diff --git a/src/tests/t_certauth.py b/src/tests/t_certauth.py
+index 9c7094525..0fe0fdb4a 100644
+--- a/src/tests/t_certauth.py
++++ b/src/tests/t_certauth.py
+@@ -43,4 +43,17 @@ out = realm.kinit("user2@KRBTEST.COM",
+                   expected_code=1,
+                   expected_msg='kinit: Certificate mismatch')
+ 
++# Test the KRB5_CERTAUTH_HWAUTH return code.
++mark('hw-authent flag tests')
++# First test +requires_hwauth without causing the hw-authent ticket
++# flag to be set.  This currently results in a preauth loop.
++realm.run([kadminl, 'modprinc', '+requires_hwauth', realm.user_princ])
++realm.kinit(realm.user_princ,
++            flags=['-X', 'X509_user_identity=%s' % file_identity],
++            expected_code=1, expected_msg='Looping detected')
++# Cause the test2 module to return KRB5_CERTAUTH_HWAUTH and try again.
++realm.run([kadminl, 'setstr', realm.user_princ, 'hwauth', 'x'])
++realm.kinit(realm.user_princ,
++            flags=['-X', 'X509_user_identity=%s' % file_identity])
++
+ success("certauth tests")

@@ -1,0 +1,182 @@
+percona: detach RH downstream FIPS/KDF hooks from OpenSSL for builtin-crypto builds
+
+This krb5 package is rebuilt with --with-crypto-impl=builtin so that the
+krb5-libs shared objects bundled into the Percona PostgreSQL binary
+tarball (EL8 / ssl1.1 variant) carry no libcrypto/libssl dependency.
+Red Hat's openssl-crypto build references symbol version nodes such as
+EVP_KDF_ctrl@OPENSSL_1_1_1b that exist only in the RHEL OpenSSL 1.1.1
+fork, so those libraries fail to load on stock OpenSSL 1.1 hosts
+(proven on Debian 11).
+
+Applied on top of the full RHEL 8 patch series, this change confines
+the downstream OpenSSL hooks that live in backend-independent code:
+
+ * configure.ac: the EVP_KDF_* check (added by
+   rhel-Use-backported-version-of-OpenSSL-3-KDF-interfa.patch) hard-fails
+   when the backported KDFs are absent; run it only for the openssl
+   crypto impl. Without OSSL_KDFS, derive.c falls back to the upstream
+   backend-independent KDF code path.
+ * lib/crypto/krb/derive.c and plugins/preauth/pkinit
+   (pkinit_crypto_openssl.c): drop the '#error "Refusing to build
+   without OpenSSL KDFs!"' guards the same RH patch added — the #else
+   branches contain the full upstream KDF implementation. pkinit.so
+   itself stays linked against the build root's OpenSSL; it ships in
+   the separate krb5-pkinit subpackage, which is never bundled.
+ * lib/crypto/krb/prng.c: drop the FIPS_mode()/RAND_bytes() OS-entropy
+   override (would link libcrypto into libk5crypto.so.3).
+ * lib/krad/internal.h: kr_use_fips() always returns false instead of
+   consulting FIPS_mode() (would link libcrypto into libkrad.so.0).
+   Non-FIPS behaviour equals the upstream default (RADIUS MD5 allowed).
+ * plugins/preauth/spake: drop the FIPS_mode() gate (would link
+   libcrypto into spake.so, which ships in krb5-libs).
+
+FIPS mode is a Red Hat OpenSSL concept; the tarball's relocatable
+PostgreSQL distribution does not claim FIPS validation, so losing these
+FIPS-only refusals has no effect on its supported use.
+
+diff --git a/src/configure.ac b/src/configure.ac
+index 2a48aa8..0acc097 100644
+--- a/src/configure.ac
++++ b/src/configure.ac
+@@ -282,9 +282,13 @@ AC_SUBST(CRYPTO_IMPL)
+ AC_SUBST(CRYPTO_IMPL_CFLAGS)
+ AC_SUBST(CRYPTO_IMPL_LIBS)
+ 
++dnl Percona: the EVP_KDF_* backports exist only in Red Hat OpenSSL 1.1.1;
++dnl require them only when actually building against OpenSSL.
++if test "$CRYPTO_IMPL" = openssl; then
+ AC_CHECK_FUNCS(EVP_KDF_CTX_new_id EVP_KDF_ctrl EVP_KDF_derive,
+                AC_DEFINE(OSSL_KDFS, 1, [Define if using OpenSSL KDFs]),
+                AC_MSG_ERROR([backported OpenSSL KDFs not found]))
++fi
+ 
+ AC_ARG_WITH([prng-alg],
+ AC_HELP_STRING([--with-prng-alg=ALG], [use specified PRNG algorithm. @<:@fortuna@:>@]),
+diff --git a/src/lib/crypto/krb/prng.c b/src/lib/crypto/krb/prng.c
+index f0e9984..026ab2a 100644
+--- a/src/lib/crypto/krb/prng.c
++++ b/src/lib/crypto/krb/prng.c
+@@ -26,8 +26,6 @@
+ 
+ #include "crypto_int.h"
+ 
+-#include <openssl/rand.h>
+-
+ krb5_error_code KRB5_CALLCONV
+ krb5_c_random_seed(krb5_context context, krb5_data *data)
+ {
+@@ -103,13 +101,6 @@ k5_get_os_entropy(unsigned char *buf, size_t len, int strong)
+     const char *device;
+     int r;
+ 
+-    /* A wild FIPS mode appeared! */
+-    if (FIPS_mode()) {
+-        /* The return codes on this API are not good */
+-        r = RAND_bytes(buf, len);
+-        return r == 1;
+-    }
+-
+ #if defined(__linux__) && defined(SYS_getrandom)
+     while (len > 0) {
+         /*
+diff --git a/src/lib/krad/internal.h b/src/lib/krad/internal.h
+index f3e4a1d..8665c1c 100644
+--- a/src/lib/krad/internal.h
++++ b/src/lib/krad/internal.h
+@@ -39,7 +39,6 @@
+ #include <sys/socket.h>
+ #include <netdb.h>
+ 
+-#include <openssl/crypto.h>
+ 
+ #ifndef UCHAR_MAX
+ #define UCHAR_MAX 255
+@@ -173,14 +172,10 @@ gai_error_code(int err)
+ static inline krb5_boolean
+ kr_use_fips(krb5_context ctx)
+ {
+-    int val = 0;
+-
+-    if (!FIPS_mode())
+-        return 0;
+-
+-    profile_get_boolean(ctx->profile, "libdefaults",
+-                        "radius_md5_fips_override", NULL, 0, &val);
+-    return !val;
++    /* Percona: built with the builtin crypto impl (no OpenSSL); FIPS
++     * mode is a Red Hat OpenSSL concept and never applies here. */
++    (void)ctx;
++    return 0;
+ }
+ 
+ #endif /* INTERNAL_H_ */
+diff --git a/src/plugins/preauth/spake/spake_client.c b/src/plugins/preauth/spake/spake_client.c
+index a3ce22b..ee5afb3 100644
+--- a/src/plugins/preauth/spake/spake_client.c
++++ b/src/plugins/preauth/spake/spake_client.c
+@@ -38,7 +38,6 @@
+ #include "groups.h"
+ #include <krb5/clpreauth_plugin.h>
+ 
+-#include <openssl/crypto.h>
+ 
+ typedef struct reqstate_st {
+     krb5_pa_spake *msg;         /* set in prep_questions, used in process */
+@@ -378,9 +377,6 @@ clpreauth_spake_initvt(krb5_context context, int maj_ver, int min_ver,
+     if (maj_ver != 1)
+         return KRB5_PLUGIN_VER_NOTSUPP;
+ 
+-    if (FIPS_mode())
+-        return KRB5_CRYPTO_INTERNAL;
+-
+     vt = (krb5_clpreauth_vtable)vtable;
+     vt->name = "spake";
+     vt->pa_type_list = pa_types;
+diff --git a/src/plugins/preauth/spake/spake_kdc.c b/src/plugins/preauth/spake/spake_kdc.c
+index c7df039..f25d2b6 100644
+--- a/src/plugins/preauth/spake/spake_kdc.c
++++ b/src/plugins/preauth/spake/spake_kdc.c
+@@ -41,7 +41,6 @@
+ 
+ #include <krb5/kdcpreauth_plugin.h>
+ 
+-#include <openssl/crypto.h>
+ 
+ /*
+  * The SPAKE kdcpreauth module uses a secure cookie containing the following
+@@ -574,9 +573,6 @@ kdcpreauth_spake_initvt(krb5_context context, int maj_ver, int min_ver,
+     if (maj_ver != 1)
+         return KRB5_PLUGIN_VER_NOTSUPP;
+ 
+-    if (FIPS_mode())
+-        return KRB5_CRYPTO_INTERNAL;
+-
+     vt = (krb5_kdcpreauth_vtable)vtable;
+     vt->name = "spake";
+     vt->pa_type_list = pa_types;
+diff --git a/src/lib/crypto/krb/derive.c b/src/lib/crypto/krb/derive.c
+index 915a173..b8e5524 100644
+--- a/src/lib/crypto/krb/derive.c
++++ b/src/lib/crypto/krb/derive.c
+@@ -30,8 +30,6 @@
+ #ifdef OSSL_KDFS
+ #include <openssl/evp.h>
+ #include <openssl/kdf.h>
+-#else
+-#error "Refusing to build without OpenSSL KDFs!"
+ #endif
+ 
+ static krb5_key
+diff --git a/src/plugins/preauth/pkinit/pkinit_crypto_openssl.c b/src/plugins/preauth/pkinit/pkinit_crypto_openssl.c
+index 638971f..8859934 100644
+--- a/src/plugins/preauth/pkinit/pkinit_crypto_openssl.c
++++ b/src/plugins/preauth/pkinit/pkinit_crypto_openssl.c
+@@ -41,8 +41,6 @@
+ #ifdef OSSL_KDFS
+ #include <openssl/evp.h>
+ #include <openssl/kdf.h>
+-#else
+-#error "Refusing to build without OpenSSL KDFs!"
+ #endif
+ 
+ static krb5_error_code pkinit_init_pkinit_oids(pkinit_plg_crypto_context );

@@ -1,0 +1,94 @@
+From e2cc7a04f0dbfbf1a8bc6cd70f639c56a203af28 Mon Sep 17 00:00:00 2001
+From: Greg Hudson <ghudson@mit.edu>
+Date: Mon, 23 Mar 2020 19:10:03 -0400
+Subject: [PATCH] Eliminate redundant PKINIT responder invocation
+
+In pkinit_client_prep_questions(), only act if the input padata type
+is KRB5_PADATA_PK_AS_REQ.  Otherwise we will ask questions again when
+the KDC issues a ticket.
+
+Commit 7621d2f9a87214327ca3b2594e34dc7cea84596b (ticket 8242)
+unintentionally changed the behavior of pkinit_load_fs_cert_and_key(),
+causing pkinit_client_prep_questions() to do nothing on its first
+call.  Restore the original behavior of returning 0 when prompting is
+deferred.
+
+Modify the existing "FILE identity, password on key (responder)"
+PKINIT test to check that the responder is only invoked once.
+
+ticket: 8885
+(cherry picked from commit f1286842ce7b9e507a4ce0a47f44ab361a98be63)
+(cherry picked from commit 4a05805eb39ba088c07f782fb52a6538ec3f2db6)
+---
+ src/plugins/preauth/pkinit/pkinit_clnt.c           |  5 +++++
+ src/plugins/preauth/pkinit/pkinit_crypto_openssl.c | 13 +++++++------
+ src/tests/t_pkinit.py                              | 11 +++++++----
+ 3 files changed, 19 insertions(+), 10 deletions(-)
+
+diff --git a/src/plugins/preauth/pkinit/pkinit_clnt.c b/src/plugins/preauth/pkinit/pkinit_clnt.c
+index 2f0431991..9b991ffe0 100644
+--- a/src/plugins/preauth/pkinit/pkinit_clnt.c
++++ b/src/plugins/preauth/pkinit/pkinit_clnt.c
+@@ -897,6 +897,11 @@ pkinit_client_prep_questions(krb5_context context,
+     k5_json_object jval = NULL;
+     k5_json_number jflag = NULL;
+ 
++    /* Don't ask questions for the informational padata items or when the
++     * ticket is issued. */
++    if (pa_data->pa_type != KRB5_PADATA_PK_AS_REQ)
++        return 0;
++
+     if (!reqctx->identity_initialized) {
+         pkinit_client_profile(context, plgctx, reqctx, cb, rock,
+                               &request->server->realm);
+diff --git a/src/plugins/preauth/pkinit/pkinit_crypto_openssl.c b/src/plugins/preauth/pkinit/pkinit_crypto_openssl.c
+index dd718c2be..dbb054378 100644
+--- a/src/plugins/preauth/pkinit/pkinit_crypto_openssl.c
++++ b/src/plugins/preauth/pkinit/pkinit_crypto_openssl.c
+@@ -4362,17 +4362,18 @@ pkinit_load_fs_cert_and_key(krb5_context context,
+ 
+     /* Load the certificate. */
+     retval = get_cert(certname, &x);
+-    if (retval != 0 || x == NULL) {
+-        retval = oerr(context, 0, _("Cannot read certificate file '%s'"),
++    if (retval) {
++        retval = oerr(context, retval, _("Cannot read certificate file '%s'"),
+                       certname);
+-        goto cleanup;
+     }
++    if (retval || x == NULL)
++        goto cleanup;
+     /* Load the key. */
+     retval = get_key(context, id_cryptoctx, keyname, fsname, &y, password);
+-    if (retval != 0 || y == NULL) {
+-        retval = oerr(context, 0, _("Cannot read key file '%s'"), fsname);
++    if (retval)
++        retval = oerr(context, retval, _("Cannot read key file '%s'"), fsname);
++    if (retval || y == NULL)
+         goto cleanup;
+-    }
+ 
+     id_cryptoctx->creds[cindex] = malloc(sizeof(struct _pkinit_cred_info));
+     if (id_cryptoctx->creds[cindex] == NULL) {
+diff --git a/src/tests/t_pkinit.py b/src/tests/t_pkinit.py
+index 69daf4987..ecd450e8a 100755
+--- a/src/tests/t_pkinit.py
++++ b/src/tests/t_pkinit.py
+@@ -248,10 +248,13 @@ realm.run(['./adata', realm.host_princ],
+ # supplied by the responder.
+ # Supply the response in raw form.
+ mark('FILE identity, password on key (responder)')
+-realm.run(['./responder', '-x', 'pkinit={"%s": 0}' % file_enc_identity,
+-           '-r', 'pkinit={"%s": "encrypted"}' % file_enc_identity,
+-           '-X', 'X509_user_identity=%s' % file_enc_identity,
+-           realm.user_princ])
++out = realm.run(['./responder', '-x', 'pkinit={"%s": 0}' % file_enc_identity,
++                 '-r', 'pkinit={"%s": "encrypted"}' % file_enc_identity,
++                 '-X', 'X509_user_identity=%s' % file_enc_identity,
++                 realm.user_princ])
++# Regression test for #8885 (password question asked twice).
++if out.count('OK: ') != 1:
++    fail('Wrong number of responder calls')
+ # Supply the response through the convenience API.
+ realm.run(['./responder', '-X', 'X509_user_identity=%s' % file_enc_identity,
+            '-p', '%s=%s' % (file_enc_identity, 'encrypted'), realm.user_princ])

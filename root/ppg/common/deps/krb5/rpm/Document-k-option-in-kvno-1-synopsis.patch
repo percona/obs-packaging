@@ -1,0 +1,39 @@
+From 5c1c391a80edd8ceb9e8bba9f7bdfb6639883ae6 Mon Sep 17 00:00:00 2001
+From: Robbie Harwood <rharwood@redhat.com>
+Date: Tue, 24 Nov 2020 12:52:02 -0500
+Subject: [PATCH] Document -k option in kvno(1) synopsis
+
+becd1ad6830b526d08ddaf5b2b6f213154c6446c attempted to unify the
+synopsis, option descriptions, and xusage(), but missed one option.
+
+(cherry picked from commit d81e76d9ddab9e880bcf54eabf07119af91d28c7)
+(cherry picked from commit 588d964f59356373353dfd31d4fdcba95e508385)
+---
+ doc/user/user_commands/kvno.rst | 1 +
+ src/man/kvno.man                | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/doc/user/user_commands/kvno.rst b/doc/user/user_commands/kvno.rst
+index 65c44e1c0..93a5132b2 100644
+--- a/doc/user/user_commands/kvno.rst
++++ b/doc/user/user_commands/kvno.rst
+@@ -9,6 +9,7 @@ SYNOPSIS
+ **kvno**
+ [**-c** *ccache*]
+ [**-e** *etype*]
++[**-k** *keytab*]
+ [**-q**]
+ [**-u** | **-S** *sname*]
+ [**-P**]
+diff --git a/src/man/kvno.man b/src/man/kvno.man
+index 22318324d..4e5b43b3b 100644
+--- a/src/man/kvno.man
++++ b/src/man/kvno.man
+@@ -35,6 +35,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+ \fBkvno\fP
+ [\fB\-c\fP \fIccache\fP]
+ [\fB\-e\fP \fIetype\fP]
++[\fB\-k\fP \fIkeytab\fP]
+ [\fB\-q\fP]
+ [\fB\-u\fP | \fB\-S\fP \fIsname\fP]
+ [\fB\-P\fP]

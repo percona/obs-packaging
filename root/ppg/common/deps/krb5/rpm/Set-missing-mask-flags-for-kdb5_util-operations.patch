@@ -1,0 +1,61 @@
+From 8c2dbb9260e8beab6ae7d169e9791d8756eb40a2 Mon Sep 17 00:00:00 2001
+From: Julien Rische <jrische@redhat.com>
+Date: Thu, 1 Aug 2024 10:56:07 +0200
+Subject: [PATCH] Set missing mask flags for kdb5_util operations
+
+Set KADM5_TL_DATA for the use_mkey and update_princ_encryption
+commands.  (Commit c877f13c8985d820583b0d7ac1bb4c5dc36e677e did this
+for the add_new_mkey and purge_mkeys commands.)  Set appropriate flags
+for the add_random_key command.
+
+[ghudson@mit.edu: combined two commits; pruned out proposed mask flag
+additions for values represented within key data or tl-data (like
+KADM5_MKVNO), as those flags are currently only used in the kadm5
+protocol, not to communicate with the KDB module]
+
+ticket: 9158 (new)
+(cherry picked from commit 4ed7da378940198cf4415f86d4eb013de6ac6455)
+---
+ src/kadmin/dbutil/kdb5_mkey.c | 4 +++-
+ src/kadmin/dbutil/kdb5_util.c | 3 +++
+ 2 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/src/kadmin/dbutil/kdb5_mkey.c b/src/kadmin/dbutil/kdb5_mkey.c
+index aceb0a9b80..ac5c51d05e 100644
+--- a/src/kadmin/dbutil/kdb5_mkey.c
++++ b/src/kadmin/dbutil/kdb5_mkey.c
+@@ -525,6 +525,8 @@ kdb5_use_mkey(int argc, char *argv[])
+         goto cleanup_return;
+     }
+ 
++    master_entry->mask |= KADM5_TL_DATA;
++
+     if ((retval = krb5_db_put_principal(util_context, master_entry))) {
+         com_err(progname, retval,
+                 _("while adding master key entry to the database"));
+@@ -814,7 +816,7 @@ update_princ_encryption_1(void *cb, krb5_db_entry *ent)
+         goto fail;
+     }
+ 
+-    ent->mask |= KADM5_KEY_DATA;
++    ent->mask |= KADM5_KEY_DATA | KADM5_TL_DATA;
+ 
+     if ((retval = krb5_db_put_principal(util_context, ent))) {
+         com_err(progname, retval, _("while updating principal '%s' key data "
+diff --git a/src/kadmin/dbutil/kdb5_util.c b/src/kadmin/dbutil/kdb5_util.c
+index a720eecf0b..0bb4244681 100644
+--- a/src/kadmin/dbutil/kdb5_util.c
++++ b/src/kadmin/dbutil/kdb5_util.c
+@@ -600,6 +600,9 @@ add_random_key(argc, argv)
+         exit_status++;
+         return;
+     }
++
++    dbent->mask |= KADM5_ATTRIBUTES | KADM5_KEY_DATA | KADM5_TL_DATA;
++
+     ret = krb5_db_put_principal(util_context, dbent);
+     krb5_db_free_principal(util_context, dbent);
+     if (ret) {
+-- 
+2.48.1
+
