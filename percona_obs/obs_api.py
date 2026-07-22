@@ -1121,6 +1121,30 @@ def _disable_project_builds(apiurl: str, obs_project_name: str) -> None:
         _print_update(f"project meta  {obs_project_name}  (builds disabled)")
 
 
+def _filter_meta_repos(
+    repos: "list[dict]", only_repos: "set[str] | None"
+) -> "list[dict]":
+    """Apply the --only-repos project-meta filter.
+
+    Keeps a repository when its name is in ``only_repos``.  SSL-variant tarball
+    repos (``ssl1.1``/``ssl3``/``ssl3.5``) are named by OpenSSL variant, not by
+    distro base, so they never match a label-derived ``--only-repos`` set
+    (``RockyLinux_9``, ``Debian_13``, …).  Without an exemption, any repo label
+    on a PR would strip a simpleimage tarball project's meta down to zero
+    repositories and the tarball would silently never build.  Always keep
+    ``ssl*`` repos regardless of the filter.
+
+    ``only_repos`` of ``None`` is a passthrough (no filtering).
+    """
+    if only_repos is None:
+        return repos
+    return [
+        r
+        for r in repos
+        if r.get("name") in only_repos or (r.get("name") or "").startswith("ssl")
+    ]
+
+
 def _apply_project_config(
     apiurl: str,
     obs_project_name: str,
@@ -1175,8 +1199,7 @@ def _apply_project_config(
     if branch_rootprj is not None:
         build = None
     repos = project_config.get("repositories", [])
-    if only_repos is not None:
-        repos = [r for r in repos if r.get("name") in only_repos]
+    repos = _filter_meta_repos(repos, only_repos)
     meta = build_project_meta(
         obs_project_name,
         project_config.get("title", ""),
