@@ -1,0 +1,53 @@
+From cbdae9a9dc2a6af5551d26b32c8d473e1e0ce773 Mon Sep 17 00:00:00 2001
+From: Greg Hudson <ghudson@mit.edu>
+Date: Mon, 30 Mar 2020 15:26:02 -0400
+Subject: [PATCH] Correctly import "service@" GSS host-based name
+
+The intended way to specify only a service in a GSS host-based name is
+to omit the "@" separator.  Some applications include the separator
+but no hostname, and this happened to yield wildcard hostname behavior
+prior to commit 996353767fe8afa7f67a3b5b465e4d70e18bad7c when
+shortname qualification was added.  To restore this behavior, check in
+parse_hostbased() that at least one character is present after the "@"
+separator before copying the hostname.  Add a test case to t_gssapi.py.
+
+ticket: 8892
+tags: pullup
+target_version: 1.18-next
+
+(cherry picked from commit a2f047af0400ba8080dc26033fae2b17534501e2)
+(cherry picked from commit dd4364d76925ce1fe21c2ab995554d6af3a2ea12)
+---
+ src/lib/gssapi/krb5/import_name.c | 4 ++--
+ src/tests/gssapi/t_gssapi.py      | 3 +++
+ 2 files changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/src/lib/gssapi/krb5/import_name.c b/src/lib/gssapi/krb5/import_name.c
+index da2ab1423..21023dd76 100644
+--- a/src/lib/gssapi/krb5/import_name.c
++++ b/src/lib/gssapi/krb5/import_name.c
+@@ -102,8 +102,8 @@ parse_hostbased(const char *str, size_t len,
+     memcpy(service, str, servicelen);
+     service[servicelen] = '\0';
+ 
+-    /* If present, copy the hostname. */
+-    if (at != NULL) {
++    /* Copy the hostname if present (at least one character after '@'). */
++    if (len - servicelen > 1) {
+         hostlen = len - servicelen - 1;
+         host = malloc(hostlen + 1);
+         if (host == NULL) {
+diff --git a/src/tests/gssapi/t_gssapi.py b/src/tests/gssapi/t_gssapi.py
+index 54d5cf549..ecf982604 100755
+--- a/src/tests/gssapi/t_gssapi.py
++++ b/src/tests/gssapi/t_gssapi.py
+@@ -47,6 +47,9 @@ realm.run(['./t_accname', 'p:service2/calvin', 'h:service2'],
+           expected_msg='service2/calvin')
+ realm.run(['./t_accname', 'p:service2/calvin', 'h:service1'], expected_code=1,
+           expected_msg=' found in keytab but does not match server principal')
++# Regression test for #8892 (trailing @ in name).
++realm.run(['./t_accname', 'p:service1/andrew', 'h:service1@'],
++          expected_msg='service1/abraham')
+ 
+ # Test with acceptor name containing service and host.  Use the
+ # client's un-canonicalized hostname as acceptor input to mirror what

@@ -1,0 +1,28 @@
+From b96983de501f185a06e8b3d2909ef71033bd9e48 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Pavel=20B=C5=99ezina?= <pbrezina@redhat.com>
+Date: Tue, 30 Mar 2021 14:35:28 +0200
+Subject: [PATCH] Make KCM iteration fallback work with sssd-kcm
+
+sssd-kcm returns KRB5_CC_IO if the operation code is not known.
+
+ticket: 8990
+(cherry picked from commit 06afae820a44c1dc96ad88a0b16c3e50bc938b2a)
+(cherry picked from commit 2dbca7e14c945d6394e0e05f285a068dcd541295)
+(cherry picked from commit f7702c5b11bdd186d03fed32568c9a252d049d44)
+---
+ src/lib/krb5/ccache/cc_kcm.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/lib/krb5/ccache/cc_kcm.c b/src/lib/krb5/ccache/cc_kcm.c
+index 4141140c3..dae622feb 100644
+--- a/src/lib/krb5/ccache/cc_kcm.c
++++ b/src/lib/krb5/ccache/cc_kcm.c
+@@ -876,7 +876,7 @@ kcm_start_seq_get(krb5_context context, krb5_ccache cache,
+         ret = kcmreq_get_cred_list(&req, &creds);
+         if (ret)
+             goto cleanup;
+-    } else if (ret == KRB5_FCC_INTERNAL) {
++    } else if (ret == KRB5_FCC_INTERNAL || ret == KRB5_CC_IO) {
+         /* Fall back to GET_CRED_UUID_LIST. */
+         kcmreq_free(&req);
+         kcmreq_init(&req, KCM_OP_GET_CRED_UUID_LIST, cache);

@@ -1,0 +1,31 @@
+From 01b93a5522fd0e402401bf6ed3c1ebfde613965e Mon Sep 17 00:00:00 2001
+From: Robbie Harwood <rharwood@redhat.com>
+Date: Tue, 9 Jun 2020 16:23:37 -0400
+Subject: [PATCH] Improve negoex_parse_token() code hygiene
+
+If the while loop in negoex_parse_token() runs for zero iterations,
+major will be used initialized.  Currently this cannot happen, but
+only because both of the call sites check for zero-length tokens.
+Initialize major for safety.
+
+[ghudson@mit.edu: rewrote commit message]
+
+(cherry picked from commit 4f91b6f8fa6fe1de662b3fdac0d59b7758ec642a)
+(cherry picked from commit c726a72c68244129eb08b840b92144acfa776573)
+---
+ src/lib/gssapi/spnego/negoex_util.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/lib/gssapi/spnego/negoex_util.c b/src/lib/gssapi/spnego/negoex_util.c
+index 700368456..99580fd79 100644
+--- a/src/lib/gssapi/spnego/negoex_util.c
++++ b/src/lib/gssapi/spnego/negoex_util.c
+@@ -454,7 +454,7 @@ negoex_parse_token(OM_uint32 *minor, spnego_gss_ctx_id_t ctx,
+                    gss_const_buffer_t token,
+                    struct negoex_message **messages_out, size_t *count_out)
+ {
+-    OM_uint32 major;
++    OM_uint32 major = GSS_S_COMPLETE;
+     size_t count = 0;
+     struct k5input in;
+     struct negoex_message *messages = NULL, *newptr;

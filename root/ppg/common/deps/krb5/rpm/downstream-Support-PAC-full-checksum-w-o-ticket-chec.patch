@@ -1,0 +1,140 @@
+From 8ded82fb279198f3fa20fb7c836e77290e7bc6f6 Mon Sep 17 00:00:00 2001
+From: Julien Rische <jrische@redhat.com>
+Date: Fri, 24 Mar 2023 16:22:06 +0100
+Subject: [PATCH] [downstream] Support PAC full checksum w/o ticket checksum
+
+---
+ doc/appdev/refs/api/index.rst |  1 +
+ src/include/krb5/krb5.hin     | 38 +++++++++++++++++++++++++++++++++++
+ src/lib/krb5/krb/pac.c        | 10 ++++++++-
+ src/lib/krb5/krb/pac_sign.c   | 17 ++++++++++++++++
+ src/lib/krb5/libkrb5.exports  |  1 +
+ 5 files changed, 66 insertions(+), 1 deletion(-)
+
+diff --git a/doc/appdev/refs/api/index.rst b/doc/appdev/refs/api/index.rst
+index d12be47c3c..ff813108bb 100644
+--- a/doc/appdev/refs/api/index.rst
++++ b/doc/appdev/refs/api/index.rst
+@@ -248,6 +248,7 @@ Rarely used public interfaces
+    krb5_os_localaddr.rst
+    krb5_pac_add_buffer.rst
+    krb5_pac_free.rst
++   krb5_pac_full_sign_compat.rst
+    krb5_pac_get_buffer.rst
+    krb5_pac_get_types.rst
+    krb5_pac_init.rst
+diff --git a/src/include/krb5/krb5.hin b/src/include/krb5/krb5.hin
+index 12a1d441b8..dbe87561c5 100644
+--- a/src/include/krb5/krb5.hin
++++ b/src/include/krb5/krb5.hin
+@@ -8392,6 +8392,44 @@ krb5_pac_sign_ext(krb5_context context, krb5_pac pac, krb5_timestamp authtime,
+                   const krb5_keyblock *privsvr_key, krb5_boolean with_realm,
+                   krb5_data *data);
+ 
++/**
++ * Compatibility function used by IPA if the 1.20 KDB diver API is not
++ * available.  It generates PAC signatures, including the extended KDC one when
++ * relevant.
++ *
++ * It is similar to krb5_kdc_sign_ticket(), except it will not generate the
++ * PAC ticket signature, and therefore does not expect encrypted ticket part as
++ * parameter.
++ *
++ * @param [in]  context         Library context
++ * @param [in]  pac             PAC handle
++ * @param [in]  authtime        Expected timestamp
++ * @param [in]  client_princ    Client principal name (or NULL)
++ * @param [in]  server_princ    Server principal name
++ * @param [in]  server_key      Key for server checksum
++ * @param [in]  privsvr_key     Key for KDC checksum
++ * @param [in]  with_realm      If true, include the realm of @a client_princ
++ * @param [out] data            Signed PAC encoding
++ *
++ * This function signs @a pac using the keys @a server_key and @a privsvr_key
++ * and returns the signed encoding in @a data.  @a pac is modified to include
++ * the server and KDC checksum buffers.  Use krb5_free_data_contents() to free
++ * @a data when it is no longer needed.
++ *
++ * If @a with_realm is true, the PAC_CLIENT_INFO field of the signed PAC will
++ * include the realm of @a client_princ as well as the name.  This flag is
++ * necessary to generate PACs for cross-realm S4U2Self referrals.
++ */
++krb5_error_code KRB5_CALLCONV
++krb5_pac_full_sign_compat(krb5_context context, krb5_pac pac,
++                          krb5_timestamp authtime,
++                          krb5_const_principal client_princ,
++                          krb5_const_principal server_princ,
++                          const krb5_keyblock *server_key,
++                          const krb5_keyblock *privsvr_key,
++                          krb5_boolean with_realm,
++                          krb5_data *data);
++
+ /**
+  * Sign a PAC, possibly including a ticket signature
+  *
+diff --git a/src/lib/krb5/krb/pac.c b/src/lib/krb5/krb/pac.c
+index 9c00178a28..b7fa064100 100644
+--- a/src/lib/krb5/krb/pac.c
++++ b/src/lib/krb5/krb/pac.c
+@@ -757,9 +757,17 @@ krb5_pac_verify_ext(krb5_context context,
+                     krb5_boolean with_realm)
+ {
+     krb5_error_code ret;
++    krb5_boolean has_full_chksum;
+ 
+     if (server != NULL || privsvr != NULL) {
+-        ret = verify_pac_checksums(context, pac, FALSE, server, privsvr);
++        /* Fail only if full checksum is present and invalid.
++         * Proceed if absent.
++         */
++        ret = k5_pac_locate_buffer(context, pac, KRB5_PAC_FULL_CHECKSUM, NULL);
++        has_full_chksum = ret != ENOENT;
++
++        ret = verify_pac_checksums(context, pac, has_full_chksum, server,
++                                   privsvr);
+         if (ret != 0)
+             return ret;
+     }
+diff --git a/src/lib/krb5/krb/pac_sign.c b/src/lib/krb5/krb/pac_sign.c
+index 8ea61ac17b..7c3a86d8eb 100644
+--- a/src/lib/krb5/krb/pac_sign.c
++++ b/src/lib/krb5/krb/pac_sign.c
+@@ -309,6 +309,23 @@ krb5_pac_sign_ext(krb5_context context, krb5_pac pac, krb5_timestamp authtime,
+                     with_realm, FALSE, data);
+ }
+ 
++krb5_error_code KRB5_CALLCONV
++krb5_pac_full_sign_compat(krb5_context context, krb5_pac pac,
++                          krb5_timestamp authtime,
++                          krb5_const_principal client_princ,
++                          krb5_const_principal server_princ,
++                          const krb5_keyblock *server_key,
++                          const krb5_keyblock *privsvr_key,
++                          krb5_boolean with_realm,
++                          krb5_data *data)
++{
++    krb5_boolean is_service_tkt;
++
++    is_service_tkt = k5_pac_should_have_ticket_signature(server_princ);
++    return sign_pac(context, pac, authtime, client_princ, server_key,
++                    privsvr_key, with_realm, is_service_tkt, data);
++}
++
+ /* Add a signature over der_enc_tkt in privsvr to pac.  der_enc_tkt should be
+  * encoded with a dummy PAC authdata element containing a single zero byte. */
+ static krb5_error_code
+diff --git a/src/lib/krb5/libkrb5.exports b/src/lib/krb5/libkrb5.exports
+index 28784ec67c..ac94e0c236 100644
+--- a/src/lib/krb5/libkrb5.exports
++++ b/src/lib/krb5/libkrb5.exports
+@@ -508,6 +508,7 @@ krb5_os_localaddr
+ krb5_overridekeyname
+ krb5_pac_add_buffer
+ krb5_pac_free
++krb5_pac_full_sign_compat
+ krb5_pac_get_buffer
+ krb5_pac_get_types
+ krb5_pac_init
+-- 
+2.40.1
+

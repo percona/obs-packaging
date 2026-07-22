@@ -1,0 +1,27 @@
+title: krb5 rebuilt with builtin crypto for tarball portability
+description: |
+  Rebuild of the Rocky Linux 8 krb5 source package with
+  --with-crypto-impl=builtin instead of openssl, for the EL8-built
+  (ssl1.1) binary tarball. Red Hat's krb5 links libk5crypto.so.3
+  against Red Hat's OpenSSL 1.1.1 fork and needs symbol version nodes
+  (e.g. EVP_KDF_ctrl@OPENSSL_1_1_1b) that exist only in RHEL-family
+  libcrypto.so.1.1, so the bundled library fails to load on stock
+  OpenSSL 1.1 hosts (e.g. Debian 11). With builtin crypto the krb5
+  libraries have no libcrypto dependency at all, matching the official
+  Percona tarball. Binary package names are identical to the distro's;
+  the Release carries a .percona suffix so this EVR wins resolution.
+  RockyLinux_8 only — every other repository uses the distro krb5.
+
+build:
+  RockyLinux_9: false
+  RockyLinux_10: false
+  UBI_8: false
+  UBI_9: false
+  Debian_11: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Leap_16: false
+  openSUSE_Tumbleweed: false

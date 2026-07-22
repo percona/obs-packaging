@@ -1,0 +1,342 @@
+From cc1cd235a6a8c066531a17d5773f601455bedb52 Mon Sep 17 00:00:00 2001
+From: Julien Rische <jrische@redhat.com>
+Date: Thu, 31 Mar 2022 18:24:39 +0200
+Subject: [PATCH] Use newly enforced dejagnu path naming convention
+
+Since version 1.6.3, dejagnu started to enforce a naming convention that
+was already in place, but not mandatory: dejagnu test directories have
+to be named "testsuite". If they don't implicit relative sub-paths
+resolution (e.g. "lib", "config") is not forking.
+
+This commit renames kadm5 library's unit tests directory to match this
+requirement.
+
+Resolves: rhbz#2070879
+
+Signed-off-by: Julien Rische <jrische@redhat.com>
+---
+ src/configure.ac                              |  2 +-
+ src/lib/kadm5/Makefile.in                     |  2 +-
+ .../{unit-test => testsuite}/Makefile.in      | 28 +++++++++----------
+ .../api.2/crte-policy.exp                     |  0
+ .../api.2/get-policy.exp                      |  0
+ .../api.2/mod-policy.exp                      |  0
+ .../api.current/chpass-principal-v2.exp       |  0
+ .../api.current/chpass-principal.exp          |  0
+ .../api.current/crte-policy.exp               |  0
+ .../api.current/crte-principal.exp            |  0
+ .../api.current/destroy.exp                   |  0
+ .../api.current/dlte-policy.exp               |  0
+ .../api.current/dlte-principal.exp            |  0
+ .../api.current/get-policy.exp                |  0
+ .../api.current/get-principal-v2.exp          |  0
+ .../api.current/get-principal.exp             |  0
+ .../api.current/init-v2.exp                   |  0
+ .../api.current/init.exp                      |  0
+ .../api.current/mod-policy.exp                |  0
+ .../api.current/mod-principal-v2.exp          |  0
+ .../api.current/mod-principal.exp             |  0
+ .../api.current/randkey-principal-v2.exp      |  0
+ .../api.current/randkey-principal.exp         |  0
+ .../{unit-test => testsuite}/config/unix.exp  |  0
+ src/lib/kadm5/{unit-test => testsuite}/deps   |  0
+ .../{unit-test => testsuite}/destroy-test.c   |  0
+ .../diff-files/destroy-1                      |  0
+ .../diff-files/no-diffs                       |  0
+ .../{unit-test => testsuite}/handle-test.c    |  0
+ .../{unit-test => testsuite}/init-test.c      |  0
+ .../{unit-test => testsuite}/iter-test.c      |  0
+ .../kadm5/{unit-test => testsuite}/lib/lib.t  |  2 +-
+ .../{unit-test => testsuite}/lock-test.c      |  0
+ .../{unit-test => testsuite}/randkey-test.c   |  0
+ .../{unit-test => testsuite}/setkey-test.c    |  0
+ .../kadm5/{unit-test => testsuite}/site.exp   |  0
+ 36 files changed, 17 insertions(+), 17 deletions(-)
+ rename src/lib/kadm5/{unit-test => testsuite}/Makefile.in (86%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.2/crte-policy.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.2/get-policy.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.2/mod-policy.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.current/chpass-principal-v2.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.current/chpass-principal.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.current/crte-policy.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.current/crte-principal.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.current/destroy.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.current/dlte-policy.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.current/dlte-principal.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.current/get-policy.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.current/get-principal-v2.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.current/get-principal.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.current/init-v2.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.current/init.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.current/mod-policy.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.current/mod-principal-v2.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.current/mod-principal.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.current/randkey-principal-v2.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/api.current/randkey-principal.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/config/unix.exp (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/deps (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/destroy-test.c (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/diff-files/destroy-1 (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/diff-files/no-diffs (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/handle-test.c (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/init-test.c (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/iter-test.c (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/lib/lib.t (99%)
+ rename src/lib/kadm5/{unit-test => testsuite}/lock-test.c (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/randkey-test.c (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/setkey-test.c (100%)
+ rename src/lib/kadm5/{unit-test => testsuite}/site.exp (100%)
+
+diff --git a/src/configure.ac b/src/configure.ac
+index 29be532cb..37e36b76d 100644
+--- a/src/configure.ac
++++ b/src/configure.ac
+@@ -1499,7 +1499,7 @@ V5_AC_OUTPUT_MAKEFILE(.
+ 
+ 	lib/rpc lib/rpc/unit-test
+ 
+-	lib/kadm5 lib/kadm5/clnt lib/kadm5/srv lib/kadm5/unit-test
++	lib/kadm5 lib/kadm5/clnt lib/kadm5/srv lib/kadm5/testsuite
+ 	lib/krad
+ 	lib/apputils
+ 
+diff --git a/src/lib/kadm5/Makefile.in b/src/lib/kadm5/Makefile.in
+index c4eaad38d..76fc4b548 100644
+--- a/src/lib/kadm5/Makefile.in
++++ b/src/lib/kadm5/Makefile.in
+@@ -1,6 +1,6 @@
+ mydir=lib$(S)kadm5
+ BUILDTOP=$(REL)..$(S)..
+-SUBDIRS = clnt srv unit-test
++SUBDIRS = clnt srv testsuite
+ 
+ ##DOSBUILDTOP = ..\..
+ 
+diff --git a/src/lib/kadm5/unit-test/Makefile.in b/src/lib/kadm5/testsuite/Makefile.in
+similarity index 86%
+rename from src/lib/kadm5/unit-test/Makefile.in
+rename to src/lib/kadm5/testsuite/Makefile.in
+index 68fa097ff..5a55b786b 100644
+--- a/src/lib/kadm5/unit-test/Makefile.in
++++ b/src/lib/kadm5/testsuite/Makefile.in
+@@ -1,4 +1,4 @@
+-mydir=lib$(S)kadm5$(S)unit-test
++mydir=lib$(S)kadm5$(S)testsuite
+ BUILDTOP=$(REL)..$(S)..$(S)..
+ KDB_DEP_LIB=$(DL_LIB) $(THREAD_LINKOPTS)
+ 
+@@ -61,7 +61,7 @@ runenv.exp: Makefile
+ 		eval echo "set env\($$i\) \$$$$i"; done > runenv.exp
+ 
+ #
+-# The unit-test targets
++# The testsuite targets
+ #
+ 
+ check: check-@DO_TEST@
+@@ -72,13 +72,13 @@ check-:
+ 	@echo "+++ Either tcl, runtest, or Perl is unavailable."
+ 	@echo "+++"
+ 
+-check-ok unit-test: unit-test-client unit-test-server
++check-ok testsuite: testsuite-client testsuite-server
+ 
+-unit-test-client: unit-test-client-setup unit-test-client-body \
+-	unit-test-client-cleanup
++testsuite-client: testsuite-client-setup testsuite-client-body \
++	testsuite-client-cleanup
+ 
+-unit-test-server: unit-test-server-setup unit-test-server-body \
+-	unit-test-server-cleanup
++testsuite-server: testsuite-server-setup testsuite-server-body \
++	testsuite-server-cleanup
+ 
+ test-randkey: randkey-test
+ 	$(ENV_SETUP) $(VALGRIND) ./randkey-test
+@@ -98,19 +98,19 @@ test-destroy: destroy-test
+ test-setkey-client: client-setkey-test
+ 	$(ENV_SETUP) $(VALGRIND) ./client-setkey-test testkeys admin admin
+ 
+-unit-test-client-setup: runenv.sh
++testsuite-client-setup: runenv.sh
+ 	$(ENV_SETUP) $(VALGRIND) $(START_SERVERS)
+ 
+-unit-test-client-cleanup:
++testsuite-client-cleanup:
+ 	$(ENV_SETUP) $(STOP_SERVERS)
+ 
+-unit-test-server-setup: runenv.sh
++testsuite-server-setup: runenv.sh
+ 	$(ENV_SETUP) $(VALGRIND) $(START_SERVERS_LOCAL)
+ 
+-unit-test-server-cleanup:
++testsuite-server-cleanup:
+ 	$(ENV_SETUP) $(STOP_SERVERS_LOCAL)
+ 
+-unit-test-client-body: site.exp test-noauth test-destroy test-handle-client \
++testsuite-client-body: site.exp test-noauth test-destroy test-handle-client \
+ 	test-setkey-client runenv.exp
+ 	$(ENV_SETUP) $(RUNTEST) --tool api RPC=1 API=$(CLNTTCL) \
+ 		KINIT=$(BUILDTOP)/clients/kinit/kinit \
+@@ -121,7 +121,7 @@ unit-test-client-body: site.exp test-noauth test-destroy test-handle-client \
+ 	-mv api.log capi.log
+ 	-mv api.sum capi.sum
+ 
+-unit-test-server-body: site.exp test-handle-server lock-test 
++testsuite-server-body: site.exp test-handle-server lock-test 
+ 	$(ENV_SETUP) $(RUNTEST) --tool api RPC=0 API=$(SRVTCL) \
+ 		LOCKTEST=./lock-test \
+ 		KADMIN_LOCAL=$(BUILDTOP)/kadmin/cli/kadmin.local \
+@@ -140,4 +140,4 @@ clean:
+ 	$(RM) lock-test lock-test.o
+ 	$(RM) server-iter-test iter-test.o
+ 	$(RM) server-setkey-test client-setkey-test setkey-test.o
+-	$(RM) *.log *.plog *.sum *.psum unit-test-log.* runenv.exp
++	$(RM) *.log *.plog *.sum *.psum testsuite-log.* runenv.exp
+diff --git a/src/lib/kadm5/unit-test/api.2/crte-policy.exp b/src/lib/kadm5/testsuite/api.2/crte-policy.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.2/crte-policy.exp
+rename to src/lib/kadm5/testsuite/api.2/crte-policy.exp
+diff --git a/src/lib/kadm5/unit-test/api.2/get-policy.exp b/src/lib/kadm5/testsuite/api.2/get-policy.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.2/get-policy.exp
+rename to src/lib/kadm5/testsuite/api.2/get-policy.exp
+diff --git a/src/lib/kadm5/unit-test/api.2/mod-policy.exp b/src/lib/kadm5/testsuite/api.2/mod-policy.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.2/mod-policy.exp
+rename to src/lib/kadm5/testsuite/api.2/mod-policy.exp
+diff --git a/src/lib/kadm5/unit-test/api.current/chpass-principal-v2.exp b/src/lib/kadm5/testsuite/api.current/chpass-principal-v2.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.current/chpass-principal-v2.exp
+rename to src/lib/kadm5/testsuite/api.current/chpass-principal-v2.exp
+diff --git a/src/lib/kadm5/unit-test/api.current/chpass-principal.exp b/src/lib/kadm5/testsuite/api.current/chpass-principal.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.current/chpass-principal.exp
+rename to src/lib/kadm5/testsuite/api.current/chpass-principal.exp
+diff --git a/src/lib/kadm5/unit-test/api.current/crte-policy.exp b/src/lib/kadm5/testsuite/api.current/crte-policy.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.current/crte-policy.exp
+rename to src/lib/kadm5/testsuite/api.current/crte-policy.exp
+diff --git a/src/lib/kadm5/unit-test/api.current/crte-principal.exp b/src/lib/kadm5/testsuite/api.current/crte-principal.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.current/crte-principal.exp
+rename to src/lib/kadm5/testsuite/api.current/crte-principal.exp
+diff --git a/src/lib/kadm5/unit-test/api.current/destroy.exp b/src/lib/kadm5/testsuite/api.current/destroy.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.current/destroy.exp
+rename to src/lib/kadm5/testsuite/api.current/destroy.exp
+diff --git a/src/lib/kadm5/unit-test/api.current/dlte-policy.exp b/src/lib/kadm5/testsuite/api.current/dlte-policy.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.current/dlte-policy.exp
+rename to src/lib/kadm5/testsuite/api.current/dlte-policy.exp
+diff --git a/src/lib/kadm5/unit-test/api.current/dlte-principal.exp b/src/lib/kadm5/testsuite/api.current/dlte-principal.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.current/dlte-principal.exp
+rename to src/lib/kadm5/testsuite/api.current/dlte-principal.exp
+diff --git a/src/lib/kadm5/unit-test/api.current/get-policy.exp b/src/lib/kadm5/testsuite/api.current/get-policy.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.current/get-policy.exp
+rename to src/lib/kadm5/testsuite/api.current/get-policy.exp
+diff --git a/src/lib/kadm5/unit-test/api.current/get-principal-v2.exp b/src/lib/kadm5/testsuite/api.current/get-principal-v2.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.current/get-principal-v2.exp
+rename to src/lib/kadm5/testsuite/api.current/get-principal-v2.exp
+diff --git a/src/lib/kadm5/unit-test/api.current/get-principal.exp b/src/lib/kadm5/testsuite/api.current/get-principal.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.current/get-principal.exp
+rename to src/lib/kadm5/testsuite/api.current/get-principal.exp
+diff --git a/src/lib/kadm5/unit-test/api.current/init-v2.exp b/src/lib/kadm5/testsuite/api.current/init-v2.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.current/init-v2.exp
+rename to src/lib/kadm5/testsuite/api.current/init-v2.exp
+diff --git a/src/lib/kadm5/unit-test/api.current/init.exp b/src/lib/kadm5/testsuite/api.current/init.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.current/init.exp
+rename to src/lib/kadm5/testsuite/api.current/init.exp
+diff --git a/src/lib/kadm5/unit-test/api.current/mod-policy.exp b/src/lib/kadm5/testsuite/api.current/mod-policy.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.current/mod-policy.exp
+rename to src/lib/kadm5/testsuite/api.current/mod-policy.exp
+diff --git a/src/lib/kadm5/unit-test/api.current/mod-principal-v2.exp b/src/lib/kadm5/testsuite/api.current/mod-principal-v2.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.current/mod-principal-v2.exp
+rename to src/lib/kadm5/testsuite/api.current/mod-principal-v2.exp
+diff --git a/src/lib/kadm5/unit-test/api.current/mod-principal.exp b/src/lib/kadm5/testsuite/api.current/mod-principal.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.current/mod-principal.exp
+rename to src/lib/kadm5/testsuite/api.current/mod-principal.exp
+diff --git a/src/lib/kadm5/unit-test/api.current/randkey-principal-v2.exp b/src/lib/kadm5/testsuite/api.current/randkey-principal-v2.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.current/randkey-principal-v2.exp
+rename to src/lib/kadm5/testsuite/api.current/randkey-principal-v2.exp
+diff --git a/src/lib/kadm5/unit-test/api.current/randkey-principal.exp b/src/lib/kadm5/testsuite/api.current/randkey-principal.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/api.current/randkey-principal.exp
+rename to src/lib/kadm5/testsuite/api.current/randkey-principal.exp
+diff --git a/src/lib/kadm5/unit-test/config/unix.exp b/src/lib/kadm5/testsuite/config/unix.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/config/unix.exp
+rename to src/lib/kadm5/testsuite/config/unix.exp
+diff --git a/src/lib/kadm5/unit-test/deps b/src/lib/kadm5/testsuite/deps
+similarity index 100%
+rename from src/lib/kadm5/unit-test/deps
+rename to src/lib/kadm5/testsuite/deps
+diff --git a/src/lib/kadm5/unit-test/destroy-test.c b/src/lib/kadm5/testsuite/destroy-test.c
+similarity index 100%
+rename from src/lib/kadm5/unit-test/destroy-test.c
+rename to src/lib/kadm5/testsuite/destroy-test.c
+diff --git a/src/lib/kadm5/unit-test/diff-files/destroy-1 b/src/lib/kadm5/testsuite/diff-files/destroy-1
+similarity index 100%
+rename from src/lib/kadm5/unit-test/diff-files/destroy-1
+rename to src/lib/kadm5/testsuite/diff-files/destroy-1
+diff --git a/src/lib/kadm5/unit-test/diff-files/no-diffs b/src/lib/kadm5/testsuite/diff-files/no-diffs
+similarity index 100%
+rename from src/lib/kadm5/unit-test/diff-files/no-diffs
+rename to src/lib/kadm5/testsuite/diff-files/no-diffs
+diff --git a/src/lib/kadm5/unit-test/handle-test.c b/src/lib/kadm5/testsuite/handle-test.c
+similarity index 100%
+rename from src/lib/kadm5/unit-test/handle-test.c
+rename to src/lib/kadm5/testsuite/handle-test.c
+diff --git a/src/lib/kadm5/unit-test/init-test.c b/src/lib/kadm5/testsuite/init-test.c
+similarity index 100%
+rename from src/lib/kadm5/unit-test/init-test.c
+rename to src/lib/kadm5/testsuite/init-test.c
+diff --git a/src/lib/kadm5/unit-test/iter-test.c b/src/lib/kadm5/testsuite/iter-test.c
+similarity index 100%
+rename from src/lib/kadm5/unit-test/iter-test.c
+rename to src/lib/kadm5/testsuite/iter-test.c
+diff --git a/src/lib/kadm5/unit-test/lib/lib.t b/src/lib/kadm5/testsuite/lib/lib.t
+similarity index 99%
+rename from src/lib/kadm5/unit-test/lib/lib.t
+rename to src/lib/kadm5/testsuite/lib/lib.t
+index 3444775cf..327946849 100644
+--- a/src/lib/kadm5/unit-test/lib/lib.t
++++ b/src/lib/kadm5/testsuite/lib/lib.t
+@@ -226,7 +226,7 @@ proc end_dump_compare {name} {
+     global  RPC
+ 
+     if { ! $RPC } { 
+-#	set file $TOP/admin/lib/unit-test/diff-files/$name
++#	set file $TOP/admin/lib/testsuite/diff-files/$name
+ #	exec $env(SIMPLE_DUMP) > /tmp/dump.after
+ #	exec $env(COMPARE_DUMP) /tmp/dump.before /tmp/dump.after $file
+     }
+diff --git a/src/lib/kadm5/unit-test/lock-test.c b/src/lib/kadm5/testsuite/lock-test.c
+similarity index 100%
+rename from src/lib/kadm5/unit-test/lock-test.c
+rename to src/lib/kadm5/testsuite/lock-test.c
+diff --git a/src/lib/kadm5/unit-test/randkey-test.c b/src/lib/kadm5/testsuite/randkey-test.c
+similarity index 100%
+rename from src/lib/kadm5/unit-test/randkey-test.c
+rename to src/lib/kadm5/testsuite/randkey-test.c
+diff --git a/src/lib/kadm5/unit-test/setkey-test.c b/src/lib/kadm5/testsuite/setkey-test.c
+similarity index 100%
+rename from src/lib/kadm5/unit-test/setkey-test.c
+rename to src/lib/kadm5/testsuite/setkey-test.c
+diff --git a/src/lib/kadm5/unit-test/site.exp b/src/lib/kadm5/testsuite/site.exp
+similarity index 100%
+rename from src/lib/kadm5/unit-test/site.exp
+rename to src/lib/kadm5/testsuite/site.exp
+-- 
+2.35.1
+
