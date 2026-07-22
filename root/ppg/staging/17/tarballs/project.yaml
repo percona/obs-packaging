@@ -2,8 +2,8 @@ title: Percona PostgreSQL %!{PG_MAJOR_VERSION} Tarballs
 description: |
   Binary tarball (simpleimage) builds for Percona Software for PostgreSQL
   %!{PG_MAJOR_VERSION}. Each repository is one SSL variant of the official
-  tarball, built against a different base of ppg:staging:%!{PG_MAJOR_VERSION}:
-  ssl1.1 (RockyLinux 8), ssl3 (Ubuntu 22.04), ssl3.5 (RockyLinux 10).
+  tarball, built against a different EL base of ppg:staging:%!{PG_MAJOR_VERSION}:
+  ssl1.1 (RockyLinux 8), ssl3 (RockyLinux 9).
 
 repositories:
   - name: ssl1.1
@@ -21,34 +21,30 @@ repositories:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
         repository: devel
     archs: [x86_64]
-  # ssl3 is deb-based (Ubuntu 22.04, OpenSSL 3.0.2 / glibc 2.35): the EL9
-  # base could not keep the "ssl3 runs on any OpenSSL 3.0 host" promise —
-  # Rocky 9.8+ ships OpenSSL 3.5.x, so staging-built binaries (pgcrypto.so)
-  # reference OPENSSL_3.4.0 version nodes and the verification gate fails
-  # them. The staging Ubuntu 22.04 debs reference only OPENSSL_3.0.0.
+  # ssl3 is EL9-based again. The original blocker (staging pgcrypto.so built
+  # on Rocky 9.8+ referenced OPENSSL_3.4.0 version nodes — RHEL 9.8 rebased
+  # to OpenSSL 3.5.x — breaking the "ssl3 runs on any OpenSSL 3.0 host"
+  # promise) is now fixed at the source: staging percona-postgresql carries
+  # a pgcrypto patch that avoids the EVP_MD_CTX_get_size_ex() 3.4 API, so
+  # EL9-built pgcrypto stays at OPENSSL_3.0.0. An interim Ubuntu 22.04
+  # deb-based ssl3 was abandoned: the PGDG deb layout is non-relocatable
+  # (multiarch lib paths, /usr/share/postgresql split), unlike the PGDG RPM
+  # /usr/pgsql-NN prefix the tarball layout is derived from.
   - name: ssl3
     paths:
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
-        repository: Ubuntu_22.04
+        repository: RockyLinux_9
       - subproject: ppg:common:deps
-        repository: Ubuntu_22.04
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:22.04
-        repository: universe
-    archs: [x86_64]
-  - name: ssl3.5
-    paths:
-      - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
-        repository: RockyLinux_10
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:10
+        repository: RockyLinux_9
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
         repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
         repository: standard
     archs: [x86_64]
 
 publish:
   ssl1.1: true
   ssl3: true
-  ssl3.5: true
 
 project-config: |
   Type: simpleimage
@@ -78,52 +74,13 @@ project-config: |
   %endif
 
   %if "%_repository" == "ssl3"
-  # Explicit binary format for the deb repo. "Type: simpleimage" above
-  # disables obs-build's recipe-type guessing (staging's Ubuntu_22.04 repo
-  # is guessed as Type dsc from the "debianutils" Preinstall, which implies
-  # binarytype deb), and simpleimage is not one of the image types (kiwi,
-  # docker, ...) for which Build.pm re-derives the binary format from the
-  # Preinstall list. Without this line the repo resolves with binarytype
-  # UNDEFINED, i.e. RPM dependency/conflict semantics applied to the deb
-  # metadata, which breaks the preinstall expansion ("unresolvable:
-  # preinstalls: conflict for providers of perl-base >= 5.20.1-3 needed by
-  # init-system-helpers").
-  Binarytype: deb
-  %endif
-
-  %if "%_repository" == "ssl3.5"
-  # Explicit binary format (see the ssl1.1/ssl3 comments).
+  # Explicit binary format (see the ssl1.1 comment).
   Binarytype: rpm
-  # Same install-time resolution hints as staging RockyLinux_10.
-  Prefer: selinux-policy-targeted
+  # Same choice-resolution as staging RockyLinux_9 (hdf-libs vs hdf both
+  # provide libdf.so.0 — pulled in via the PostGIS/gdal dependency chain).
   Prefer: hdf-libs
-  # python3 is 3.12 on EL10, so the EPEL10/Rocky 10 python3-foo packages
-  # also provide "python3.12-foo" and OBS reports "have choice" between
-  # them and our staging python3.12-foo packages for every percona-patroni
-  # dependency that both sides ship. Prefer our packages.
-  Prefer: python3.12-wcwidth
-  Prefer: python3.12-dateutil
-  Prefer: python3.12-six
-  Prefer: python3.12-click
-  Prefer: python3.12-prettytable
-  Prefer: python3.12-psutil
-  Prefer: python3.12-boto3
-  Prefer: python3.12-dns
-  # Not in the first OBS error report (the resolver stops at the
-  # python3.12-boto3 choice), but EPEL10's python3-botocore also provides
-  # python3.12-botocore, so the same choice surfaces once boto3 resolves.
-  Prefer: python3.12-botocore
-  # boto3/botocore carry rich requires on python3.12dist(jmespath) and
-  # python3.12dist(s3transfer); EPEL10's python3-jmespath/python3-s3transfer
-  # provide those dist names too (python3 = 3.12 on EL10), colliding with
-  # our staging python3.12-jmespath/python3.12-s3transfer packages.
-  Prefer: python3.12-jmespath
-  Prefer: python3.12-s3transfer
-  # Defensive: percona-patroni requires python3.12-psycopg2. Today Rocky
-  # 10's python3-psycopg2 (which also provides python3.12-psycopg2) is
-  # shadowed by our same-named python3-psycopg2 transition package, so
-  # there is no choice, but prefer ours explicitly in case that changes.
-  Prefer: python3.12-psycopg2
-  # No glibc-langpack Prefer needed here: unlike Rocky 8, the EL10 base
-  # configs already carry "Prefer: glibc-langpack-en".
+  # Same glibc-langpack choice as ssl1.1 above: the EL9 base configs carry
+  # only "Ignore: glibc:glibc-langpack" (no Prefer), which image-type
+  # expansion ignores.
+  Prefer: glibc-minimal-langpack
   %endif

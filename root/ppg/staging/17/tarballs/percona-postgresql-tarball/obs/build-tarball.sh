@@ -60,9 +60,11 @@ libpcre2-8.so
 libpcre2-posix.so
 libtinfo.so
 libreadline.so
-libidn2.so
-libunistring.so
-libnghttp2.so
+# libidn2/libunistring/libnghttp2 are deliberately NOT excluded (i.e. they
+# ARE bundled): acceptance testing showed their sonames drift across distro
+# generations (libunistring.so.2 on EL8/EL9 vs .so.5 on current Debian/
+# Ubuntu) and minimal hosts do not ship them at all. Once unexcluded they
+# flow through copy_deps/the NEEDED audit automatically.
 libexpat.so
 libtirpc.so
 "
@@ -187,6 +189,10 @@ elif [ -f /lib64/libreadline.so.7 ]; then
     PLL=/lib64/libreadline.so.7
 elif [ -f /usr/lib/x86_64-linux-gnu/libreadline.so.8 ]; then
     PLL=/usr/lib/x86_64-linux-gnu/libreadline.so.8
+elif [ -f /lib/x86_64-linux-gnu/libreadline.so.8 ]; then
+    PLL=/lib/x86_64-linux-gnu/libreadline.so.8
+elif [ -f /lib/aarch64-linux-gnu/libreadline.so.8 ]; then
+    PLL=/lib/aarch64-linux-gnu/libreadline.so.8
 fi
 if [ -z "$PLL" ]; then
     LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PG_BIN_PATH/../lib "$PG_BIN_PATH/psql.bin" "$@"
@@ -209,6 +215,12 @@ cat > $PG_PREFIX/bin/postgres << EOF
 export PERL5LIB="\${PERL5LIB:+\${PERL5LIB}:}/opt/percona-perl/lib/${PERL_VER}"
 # Set bundled Tcl library path so pltcl can find init.tcl
 export TCL_LIBRARY="/opt/percona-tcl/lib/tcl${TCL_VER}"
+# Point the EMBEDDED python (plpython3) at the bundled stdlib: the
+# interactive /opt/percona-python3/bin/python3 wrapper sets PYTHONHOME
+# itself, but libpython loaded inside the server never runs that wrapper —
+# without this the backend crashes on plpython3 use (acceptance-verified
+# on every variant).
+export PYTHONHOME=/opt/percona-python3
 SELFDIR="\$(cd "\$(dirname "\$0")" && pwd)"
 exec "\$SELFDIR/postgres.real" "\$@"
 EOF
@@ -693,12 +705,8 @@ done
 command -v readelf >/dev/null || { echo "FATAL: readelf missing — SSL-ABI audit impossible" >&2; exit 1; }
 
 # The SSL variant labels follow the official tarball naming and map 1:1 to
-# the EL base of each repository: EL8=ssl1.1, EL10=ssl3.5. EL9 is no longer
-# a tarball base: ssl3 is built from Ubuntu 22.04 by build-tarball-deb.sh
-# (staging EL9 binaries need OPENSSL_3.4 symbol versions — Rocky 9.8+ ships
-# OpenSSL 3.5.x — which breaks the "ssl3 runs on any OpenSSL 3.0 host"
-# promise this gate enforces). Fail loudly on anything unmapped, e.g. a
-# future EL11.
+# the EL base of each repository: EL8=ssl1.1, EL9=ssl3. Fail loudly on
+# anything unmapped, e.g. a future EL10/EL11.
 # The variant is derived here, before the gate, because the OpenSSL
 # host-ABI audit below picks its allowed-symbol policy from it; section 16
 # reuses it for the artifact name.
@@ -710,10 +718,7 @@ if [ -z "$EL_MAJOR" ]; then
 fi
 case "$EL_MAJOR" in
     8)  SSL_VARIANT=ssl1.1 ;;
-    9)  echo "FATAL: EL9 is no longer a tarball base — ssl3 is built from" \
-             "Ubuntu 22.04 (staging EL9 binaries need OPENSSL_3.4)" >&2
-        exit 1 ;;
-    10) SSL_VARIANT=ssl3.5 ;;
+    9)  SSL_VARIANT=ssl3 ;;
     *)  echo "FATAL: unmapped EL major version '$EL_MAJOR'" >&2; exit 1 ;;
 esac
 
@@ -748,8 +753,8 @@ echo "=== Verification: OpenSSL host-ABI audit ($SSL_VARIANT) ==="
 # exclude list above), so every bundled binary resolves them from the HOST
 # at run time. The ssl variant label is therefore a host-compatibility
 # promise: ssl1.1 must run on hosts with OpenSSL 1.1, ssl3 on hosts with
-# any OpenSSL 3.0+, ssl3.5 on hosts with 3.5+. What enforces that promise
-# at the ELF level is the set of versioned symbol references (version
+# any OpenSSL 3.0+. What enforces that promise at the ELF level is the
+# set of versioned symbol references (version
 # NEEDS, e.g. OPENSSL_3.0.0) each binary carries against libssl/libcrypto:
 # the host's loader refuses to start a binary that needs a version node
 # the host libraries do not define. The buildroot may ship a NEWER OpenSSL
@@ -759,14 +764,18 @@ echo "=== Verification: OpenSSL host-ABI audit ($SSL_VARIANT) ==="
 #
 # Per-variant allowed version-node pattern (anchored full-line grep):
 case "$SSL_VARIANT" in
-    # EL8 links openssl 1.1.1: nodes are OPENSSL_1_1_0 / OPENSSL_1_1_1x.
-    ssl1.1) OPENSSL_ALLOWED='OPENSSL_1_1_[0-9a-z]*' ;;
+    # Upstream OpenSSL 1.1 defines exactly two version nodes: OPENSSL_1_1_0
+    # and OPENSSL_1_1_1. Allow ONLY those — Red Hat's 1.1.1 fork adds
+    # private nodes (e.g. OPENSSL_1_1_1b, referenced by EL8's krb5/libssh),
+    # which do not exist on stock-OpenSSL hosts (Debian 11 class), so any
+    # RH-fork leakage into bundled binaries must fail here at build time.
+    ssl1.1) OPENSSL_ALLOWED='OPENSSL_1_1_[01]' ;;
     # Must run on any OpenSSL 3.0 host: only 3.0.x nodes are acceptable.
-    # unreachable — ssl3 is deb-based (Ubuntu 22.04, see build-tarball-deb.sh);
-    # kept only to document the policy.
+    # Achievable on the EL9 base (Rocky 9.8+ ships OpenSSL 3.5) because
+    # staging percona-postgresql patches pgcrypto to avoid the
+    # EVP_MD_CTX_get_size_ex() 3.4 API — without that patch pgcrypto.so
+    # would reference OPENSSL_3.4.0 and fail this gate.
     ssl3)   OPENSSL_ALLOWED='OPENSSL_3\.0\.[0-9]*' ;;
-    # Hosts ship 3.5: any node up to and including 3.5.x is fine.
-    ssl3.5) OPENSSL_ALLOWED='OPENSSL_3\.[0-5]\.[0-9]*' ;;
     *)      echo "FATAL: no SSL-ABI policy for $SSL_VARIANT" >&2; exit 1 ;;
 esac
 # Scan every ELF under /opt EXCEPT the percona-python3 tree: the python
