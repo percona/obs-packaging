@@ -140,40 +140,39 @@ Each package directory contains the packaging sources split by format:
 Binary-tarball builds (OBS `simpleimage` format) for air-gapped / unsupported-distro
 installs, replicating the official Percona tarball layout. One subproject
 (`ppg:staging:<V>:tarballs`) with a single `percona-postgresql-tarball` package,
-built across three repositories — one per SSL variant, each stacked on a different
-base of `ppg:staging:<V>`:
+built across two repositories — one per SSL variant, each stacked on a different
+EL base of `ppg:staging:<V>`:
 
 | Repository | Base | Host ABI targeted |
 |---|---|---|
-| `ssl1.1` | RockyLinux_8 | glibc ≥ 2.28, OpenSSL 1.1 |
-| `ssl3` | Ubuntu_22.04 | glibc ≥ 2.35, OpenSSL 3.0 |
-| `ssl3.5` | RockyLinux_10 | glibc ≥ 2.39, OpenSSL 3.5 |
+| `ssl1.1` | RockyLinux_8 | glibc ≥ 2.28, OpenSSL 1.1 (stock and RHEL-fork hosts) |
+| `ssl3` | RockyLinux_9 | glibc ≥ 2.34, OpenSSL 3.0+ (all 3.x hosts) |
 
-`ssl3` is deliberately deb-based: staging binaries built on EL9 reference
-`OPENSSL_3.4.0` symbol-version nodes (Rocky 9.8+ ships OpenSSL 3.5.x), which
-breaks the "ssl3 runs on any OpenSSL 3.0 host" promise; Ubuntu 22.04 ships
-OpenSSL 3.0.2, so its binaries can only reference 3.0.x nodes.
+The `ssl3` promise ("runs on any OpenSSL 3.0 host") holds on the EL9 base —
+whose own OpenSSL is 3.5.x since Rocky 9.8 — because staging
+`percona-postgresql` patches pgcrypto to avoid an OpenSSL 3.4-only API, so the
+EL9-built binaries reference only `OPENSSL_3.0.0` symbol-version nodes; the
+builder's verification gate enforces exactly that per variant. (An interim
+Ubuntu 22.04 deb-based `ssl3` was tried and abandoned: the PGDG deb layout is
+non-relocatable.)
 
-Per-repository differences (deb vs RPM package names, Python package names,
-prjconf resolution hints) are handled with `%if "%_repository" == "..."`
-conditionals in the `simpleimage` recipe and the project config. The `%build`
-section is a small dispatcher that reads `/etc/os-release` and runs the builder
-matching the buildroot's package universe: `build-tarball.sh` on RPM bases,
-`build-tarball-deb.sh` on deb bases — two section-by-section parallel scripts
-sharing the same layout, bundling rules, and verification gate (unresolved-soname
-audit plus a per-variant OpenSSL host-ABI audit). Each script stages all
-components under `/opt/percona-*` and creates the artifact itself: it derives
+Per-repository differences (prjconf resolution hints) are handled with
+`%if "%_repository" == "..."` conditionals in the project config; the
+`simpleimage` recipe is variant-independent and its `%build` runs the single
+builder script, `build-tarball.sh`. The script stages all components under
+`/opt/percona-*`, runs the verification gate (unresolved-soname audit plus a
+per-variant OpenSSL host-ABI audit) and creates the artifact itself: it derives
 the official tarball name at build time (the SSL variant is mapped from the
-buildroot's identity in `/etc/os-release` — EL major on RPM bases, with a glibc
-`%dist`-tag fallback; distro ID + version on deb bases) and writes it directly
-into the OBS result directory (`/usr/src/packages/OTHER`), bypassing the
-recipe's own fixed-name tar step (`#!NoTarBall`). All three repositories publish
-their results, so the `.tar.gz` files are downloadable from the OBS publish tree.
+buildroot's EL major in `/etc/os-release`, with a glibc `%dist`-tag fallback)
+and writes it directly into the OBS result directory
+(`/usr/src/packages/OTHER`), bypassing the recipe's own fixed-name tar step
+(`#!NoTarBall`). Both repositories publish their results, so the `.tar.gz`
+files are downloadable from the OBS publish tree.
 
-Documented divergence: the bundled Python is the base distro's stack — 3.12 on
-the EL bases (`ssl1.1`/`ssl3.5`), 3.10 on the Ubuntu 22.04 base (`ssl3`) — and
-on the deb base third-party modules live in `lib/python3/dist-packages`
-(Debian's version-agnostic layout) instead of `site-packages`.
+Host prerequisites (beyond the glibc/OpenSSL floors above): a `/run/postgresql`
+directory writable by the postgres user (the default Unix-socket directory),
+tzdata (`/usr/share/zoneinfo` — the server is built with system tzdata), and
+the krb5 client libraries.
 
 ### `devel/<major-version>/`
 
