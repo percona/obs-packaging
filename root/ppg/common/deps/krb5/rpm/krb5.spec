@@ -23,6 +23,9 @@
 #   - krb5-libs no longer Requires openssl-libs.
 #   - Release carries a .percona suffix so this EVR wins over the
 #     distro package inside the OBS build chroots.
+#   - PDF manuals are not regenerated: the prebuilt Source3 tar is
+#     packaged as-is and the TeX Live doc-build BuildRequires are
+#     dropped (unavailable in the ppg:common:deps repo chain).
 # PKINIT is still built against OpenSSL: pkinit.so lives in the separate
 # krb5-pkinit subpackage, which is never bundled into the tarball, and
 # keeping it preserves the distro's binary package set.
@@ -166,7 +169,11 @@ BuildRequires: autoconf, bison, cmake, flex, gawk, gettext, pkgconfig, sed
 BuildRequires: gcc
 BuildRequires: libcom_err-devel, libedit-devel, libss-devel
 BuildRequires: gzip, ncurses-devel
-BuildRequires: python3-sphinx, texlive-pdftex, latexmk
+# PERCONA: texlive-pdftex and latexmk dropped — the PDF manuals are not
+# rebuilt; the prebuilt Source3 tar is used as-is (the ppg:common:deps
+# RockyLinux_8 repository chain carries no TeX Live). python3-sphinx is
+# still needed for the man pages and HTML docs.
+BuildRequires: python3-sphinx
 BuildRequires: libverto-devel
 BuildRequires: openldap-devel
 BuildRequires: python3
@@ -182,32 +189,10 @@ BuildRequires: openssl-devel >= 1:1.1.1c-4
 # For autosetup
 BuildRequires: git
 
-# Originally from \usepackage directives produced by sphinx:
-BuildRequires: tex(babel.sty)
-BuildRequires: tex(bookmark.sty)
-BuildRequires: tex(capt-of.sty)
-BuildRequires: tex(eqparbox.sty)
-BuildRequires: tex(fancybox.sty)
-BuildRequires: tex(fncychap.sty)
-BuildRequires: tex(fontenc.sty)
-BuildRequires: tex(framed.sty)
-BuildRequires: tex(hyperref.sty)
-BuildRequires: tex(ifthen.sty)
-BuildRequires: tex(inputenc.sty)
-BuildRequires: tex(longtable.sty)
-BuildRequires: tex(multirow.sty)
-BuildRequires: tex(needspace.sty)
-BuildRequires: tex(report.cls)
-BuildRequires: tex(tabulary.sty)
-BuildRequires: tex(threeparttable.sty)
-BuildRequires: tex(times.sty)
-BuildRequires: tex(titlesec.sty)
-BuildRequires: tex(upquote.sty)
-BuildRequires: tex(wrapfig.sty)
-
-# Typical fonts, and the commands which we need to have present.
-BuildRequires: texlive, texlive-latex, texlive-texmf-fonts
-BuildRequires: /usr/bin/pdflatex /usr/bin/makeindex
+# PERCONA: the whole TeX toolchain (tex(*.sty) requires, texlive,
+# texlive-latex, texlive-texmf-fonts, /usr/bin/pdflatex,
+# /usr/bin/makeindex) is dropped — the PDF manuals ship prebuilt in
+# Source3 and are never regenerated (see %%build).
 BuildRequires: systemd-units
 
 %ifarch %{ix86} x86_64
@@ -441,13 +426,12 @@ mkdir -p build-man build-html build-pdf
 sphinx-build -a -b man   -t pathsubs doc build-man
 sphinx-build -a -b html  -t pathsubs doc build-html
 rm -fr build-html/_sources
-sphinx-build -a -b latex -t pathsubs doc build-pdf
-# Build the PDFs if we didn't have pre-built ones.
+# PERCONA: no PDF regeneration — build-pdf/ was populated at %%prep time
+# from the prebuilt Source3 tar (%%autosetup -a 3), and the build
+# environment carries no TeX Live. Just assert the expected PDFs exist.
 for pdf in admin appdev basic build plugindev user ; do
-	test -s build-pdf/$pdf.pdf || make -C build-pdf
+	test -s build-pdf/$pdf.pdf || exit 1
 done
-# new krb5-%{version}-pdf
-tar -cf "krb5-%{version}%{prerelease}-pdfs.tar.new" build-pdf/*.pdf
 
 %install
 [ "$RPM_BUILD_ROOT" != '/' ] && rm -rf -- "$RPM_BUILD_ROOT"
@@ -781,6 +765,8 @@ exit 0
   version nodes (EVP_KDF_ctrl@OPENSSL_1_1_1b) that only exist in the
   RHEL OpenSSL 1.1.1 fork, which breaks the Percona PostgreSQL binary
   tarball on stock OpenSSL 1.1 hosts.
+- Ship the prebuilt PDF manuals from Source3 instead of regenerating
+  them; drop the TeX Live doc-build dependencies.
 
 * Tue Apr 28 2026 Julien Rische <jrische@redhat.com> - 1.18.2-34
 - Fix NegoEx parsing vulnerabilities (CVE-2026-40355, CVE-2026-40356)
