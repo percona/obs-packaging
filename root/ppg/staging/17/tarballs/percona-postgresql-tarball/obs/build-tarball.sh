@@ -27,6 +27,14 @@ TCL_PREFIX=/opt/percona-tcl
 # System library exclusion list — these are always on the target
 # system and must NOT be bundled (matches pg_tarballs_builder.sh)
 ###############################################################
+# NOTE: the string literal below is a whitespace-separated token list —
+# every word in it becomes a live glob prefix in is_system_lib, so never
+# put comments inside the quotes.
+# libidn2/libunistring/libnghttp2 are deliberately NOT excluded (i.e. they
+# ARE bundled): acceptance testing showed their sonames drift across distro
+# generations (libunistring.so.2 on EL8/EL9 vs .so.5 on current Debian/
+# Ubuntu) and minimal hosts do not ship them at all. Once unexcluded they
+# flow through copy_deps/the NEEDED audit automatically.
 SYSTEM_LIBS_EXCLUDE="
 libc.so
 libm.so
@@ -60,11 +68,6 @@ libpcre2-8.so
 libpcre2-posix.so
 libtinfo.so
 libreadline.so
-# libidn2/libunistring/libnghttp2 are deliberately NOT excluded (i.e. they
-# ARE bundled): acceptance testing showed their sonames drift across distro
-# generations (libunistring.so.2 on EL8/EL9 vs .so.5 on current Debian/
-# Ubuntu) and minimal hosts do not ship them at all. Once unexcluded they
-# flow through copy_deps/the NEEDED audit automatically.
 libexpat.so
 libtirpc.so
 "
