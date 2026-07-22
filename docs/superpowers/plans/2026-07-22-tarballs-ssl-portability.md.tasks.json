@@ -1,0 +1,37 @@
+{
+  "planPath": "docs/superpowers/plans/2026-07-22-tarballs-ssl-portability.md",
+  "tasks": [
+    {
+      "id": 11,
+      "subject": "Task 11: pgcrypto OpenSSL-3.4 macro patch (staging PG RPM)",
+      "status": "pending",
+      "description": "**Goal:** EL9-built pgcrypto.so references only OPENSSL_3.0.0 nodes.\n\n**Files:**\n- Create: root/ppg/staging/17/percona-postgresql/rpm/<patch>.patch\n- Modify: root/ppg/staging/17/percona-postgresql/rpm/*.spec\n\n**Acceptance Criteria:**\n- Patch forces pre-3.4 EVP_MD_CTX_size expansion in contrib/pgcrypto; behaviorally identical\n- Rebuild evidence: readelf pgcrypto.so -> no nodes beyond OPENSSL_3.0.*\n- Patch header documents why + upstream-flag note\n\n**Verify:** readelf -V pgcrypto.so | grep 'OPENSSL_3.[1-9]' -> empty\n\n```json:metadata\n{\"files\": [\"root/ppg/staging/17/percona-postgresql/rpm/\"], \"verifyCommand\": \"readelf -V pgcrypto.so | grep OPENSSL_3.[1-9] -> empty\", \"acceptanceCriteria\": [\"macro patch minimal\", \"no >3.0 nodes\", \"documented\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 12,
+      "subject": "Task 12: matrix revert to ssl1.1+ssl3(EL9), remove deb builder, script fixes",
+      "status": "pending",
+      "blockedBy": [
+        11
+      ],
+      "description": "**Goal:** Two-variant tree with acceptance-derived fixes and tightened ssl1.1 gate.\n\n**Files:**\n- Modify: root/ppg/staging/17/tarballs/project.yaml (ssl3->Rocky9, drop ssl3.5)\n- Modify: obs/simpleimage (RPM-only, plain %build)\n- Delete: obs/build-tarball-deb.sh\n- Modify: obs/build-tarball.sh (EL map 8/9, tightened ssl1.1 pattern, PYTHONHOME in postgres wrapper, readline multiarch path, bundle libunistring/libnghttp2/libidn2)\n- Modify: root/README.md + spec doc\n\n**Acceptance Criteria:**\n- exactly ssl1.1+ssl3 repos; no deb refs outside history/spec-rationale\n- shellcheck/bash -n/pytest/pyright/black green\n- EL9 container gate GREEN incl. patched pgcrypto\n- isv dry-run clean\n\n**Verify:** container run -> ssl3 artifact, both audits 0 findings\n\n```json:metadata\n{\"files\": [\"root/ppg/staging/17/tarballs/\"], \"verifyCommand\": \"EL9 container validation green\", \"acceptanceCriteria\": [\"two-variant tree\", \"gate green\", \"fixes in\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 13,
+      "subject": "Task 13: EL8 portability pkgs: krb5 builtin-crypto, libssh stock-ssl, build-only openssl11",
+      "status": "pending",
+      "description": "**Goal:** ssl1.1 tarball loads on stock OpenSSL 1.1 hosts; no RH-only symbol needs.\n\n**Files:**\n- Create: root/ppg/common/tarball-deps/ subproject (RockyLinux_8, publish false) with percona-tarball-openssl11 (build-only, unpublished), percona-tarball-krb5 (--with-crypto-impl=builtin), percona-tarball-libssh (vs stock 1.1 headers)\n- Modify: tarballs/project.yaml ssl1.1 chain + Prefers; simpleimage BuildRequires as needed\n\n**Acceptance Criteria:**\n- libk5crypto: NO libcrypto NEEDED\n- libssh: stock nodes only\n- openssl11 never published nor bundled\n- EL8 container gate green under tightened pattern; debian:11 spot-check loads initdb/postgres\n\n**Verify:** readelf -d libk5crypto.so.3 -> no libcrypto; EL8 gate 0 violations\n\n```json:metadata\n{\"files\": [\"root/ppg/common/tarball-deps/\", \"root/ppg/staging/17/tarballs/\"], \"verifyCommand\": \"EL8 container gate + debian:11 spot check\", \"acceptanceCriteria\": [\"krb5 no libcrypto\", \"libssh stock nodes\", \"openssl11 contained\", \"debian11 loads\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 14,
+      "subject": "Task 14: re-validation + PR round 2 + acceptance rerun (USER GATE)",
+      "status": "pending",
+      "blockedBy": [
+        12,
+        13
+      ],
+      "description": "**Goal:** Both variants pass the full acceptance battery on foreign hosts; user merges.\n\n**USER-ORDERED GATE - NON-SKIPPABLE.** Close only after every acceptanceCriteria item is re-validated independently with captured output.\n\n**Files:** none (operational)\n\n**Acceptance Criteria:**\n- User pushed; PR-145 re-synced; both repos succeeded\n- ssl1.1 on debian:11: full battery PASS (initdb, server, psql, pg_tde, pgcrypto digest, plpython3u w/o manual env, plperlu, pltclu, patronictl, patroni_aws)\n- ssl3 on ubuntu:22.04 AND ubuntu:24.04: full battery PASS incl. pgcrypto digest on host OpenSSL 3.0\n- structure-diffs documented; host prerequisites listed for release notes\n\n**Verify:** containerized battery per variant with captured output\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"acceptance battery per variant\", \"acceptanceCriteria\": [\"PR builds succeeded\", \"debian11 ssl1.1 PASS\", \"ubuntu 22.04+24.04 ssl3 PASS\", \"evidence captured\"], \"userGate\": true, \"tags\": [\"user-gate\"], \"requireEvidenceTokens\": [[\"succeeded\"], [\"debian:11\", \"22.04\", \"24.04\"], [\"digest\", \"pgcrypto\"]], \"modelTier\": \"standard\"}\n```"
+    }
+  ],
+  "lastUpdated": "2026-07-22T10:00:00"
+}
