@@ -1,6 +1,9 @@
 # OBS simpleimage Tarballs for Percona PostgreSQL — Design
 
-**Date:** 2026-07-20 (revised same day: real POC supplied, scope expanded to full component set)
+**Date:** 2026-07-20 (revised same day: real POC supplied, scope expanded to full
+component set; revised 2026-07-21: variants as repositories, ssl3 temporarily
+deb-based; revised 2026-07-22: two-variant matrix — ssl3 back on EL9 via the
+staging pgcrypto patch, ssl3.5 dropped, deb builder removed)
 **Status:** Approved design, pending implementation plan
 
 ## Background
@@ -57,7 +60,8 @@ basis for the build script.
 - **Full official component set** (POC scope): server + extensions, pgbouncer,
   pgpool-II, pgbackrest, pgbadger, patroni, etcd, pg_gather, and bundled
   python3/perl/tcl runtimes.
-- Three SSL variants; x86_64 only for now.
+- Two SSL variants (ssl1.1, ssl3; ssl3.5 was dropped — see the 2026-07-22
+  revision note); x86_64 only for now.
 - Tarballs rebuild automatically when any package in their dependency closure changes.
 
 ## Non-Goals (this iteration)
@@ -81,7 +85,7 @@ chain points at a different EL base of `ppg:staging:17`:
 
 ```
 root/ppg/staging/17/tarballs/            → ppg:staging:17:tarballs
-├── project.yaml                          # repos: ssl1.1, ssl3, ssl3.5
+├── project.yaml                          # repos: ssl1.1, ssl3
 └── percona-postgresql-tarball/
     └── obs/
         ├── simpleimage
@@ -93,18 +97,27 @@ Path chains listed explicitly — OBS only expands the last path transitively:
 | Repository | Path chain | Host ABI targeted |
 |---|---|---|
 | `ssl1.1` | `ppg:staging:17/RockyLinux_8` + `ppg:common:deps` + EPEL 8 + Rocky 8 (appstream, baseos, devel) | glibc ≥ 2.28, OpenSSL 1.1 |
-| `ssl3` | `ppg:staging:17/Ubuntu_22.04` + `ppg:common:deps` + Ubuntu 22.04 universe | glibc ≥ 2.35, OpenSSL 3.0 |
-| `ssl3.5` | `ppg:staging:17/RockyLinux_10` + EPEL 10 + Rocky 10 | glibc ≥ 2.39, OpenSSL 3.5 |
+| `ssl3` | `ppg:staging:17/RockyLinux_9` + `ppg:common:deps` + EPEL 9 + Rocky 9 | glibc ≥ 2.34, OpenSSL 3.0+ |
 
 *(Revised 2026-07-21: ssl3 was originally Rocky 9-based, but RHEL 9.8 rebased to
 OpenSSL 3.5 and the EL9 staging `pgcrypto.so` references `OPENSSL_3.4.0` symbols —
-breaking the "OpenSSL 3.0 hosts" promise. Verified: Ubuntu 22.04 staging debs need
-only `OPENSSL_3.0.0`. The ssl3 repo therefore consumes the staging **deb** packages
-via a second builder script, `build-tarball-deb.sh`, selected by a `/etc/os-release`
-dispatcher in `%build`. The verification gate enforces each variant's OpenSSL promise
-via a versioned-symbol-needs audit, so any future drift fails the build loudly.
-Documented divergence: the ssl3 tarball bundles python 3.10 — the Ubuntu 22.04
-distro python — while ssl1.1/ssl3.5 bundle 3.12.)*
+breaking the "OpenSSL 3.0 hosts" promise; ssl3 was moved to an Ubuntu 22.04 deb
+base with a second builder script. The verification gate enforces each variant's
+OpenSSL promise via a versioned-symbol-needs audit, so any future drift fails the
+build loudly.)*
+
+*(Revised 2026-07-22: the Ubuntu-deb ssl3 was abandoned — the PGDG deb layout is
+non-relocatable (multiarch lib paths, split `/usr/share/postgresql` trees, tools
+hardwired to `/usr/lib/postgresql/<V>`; verified against PGDG's own packages), so
+it cannot reproduce the official `/opt/percona-*` tarball layout. ssl3 is back on
+the EL9 base: the `OPENSSL_3.4.0` reference was fixed at the source instead —
+staging `percona-postgresql` now carries a pgcrypto patch avoiding the
+`EVP_MD_CTX_get_size_ex()` OpenSSL-3.4 API, so EL9-built binaries stay at
+`OPENSSL_3.0.0` and the gate's strict `OPENSSL_3\.0\.[0-9]*` policy passes.
+ssl3.5 (RockyLinux_10 base) was dropped as redundant: with the pgcrypto fix, the
+ssl3 tarball already runs on every OpenSSL 3.x host, including 3.5 ones. The deb
+builder `build-tarball-deb.sh` and the `%build` os-release dispatcher were
+removed; see "Rejected alternatives".)*
 
 - Archs: `[x86_64]` on every repo.
 - Single project-config: `Type: simpleimage` globally, plus per-repo
@@ -113,28 +126,19 @@ distro python — while ssl1.1/ssl3.5 bundle 3.12.)*
   `%_repository` in every build config (`BSSched/ProjPacks.pm` prepends
   `%define _repository <repo>`), so the same conditionals also work inside the
   `simpleimage` recipe, which is parsed as an RPM spec.
-- **Publishing: enabled on all three repos** — the produced `.tar.gz` is directly
+- **Publishing: enabled on both repos** — the produced `.tar.gz` is directly
   downloadable from each repo's publish tree.
-- OBS builds the one package once per repository → three artifacts per checkin;
+- OBS builds the one package once per repository → two artifacts per checkin;
   no duplicated package files, no copy-identity test needed.
 
 ### The simpleimage package
 
-One copy of each file. Per-variant differences are expressed with
-`%if "%_repository"` conditionals inside `simpleimage` (the EL10 base has no
-`python3.12` package name — its default `python3` *is* 3.12):
-
-```
-%if "%_repository" == "ssl3.5"
-BuildRequires:  python3
-BuildRequires:  python3-pip
-BuildRequires:  python3-devel
-%else
-BuildRequires:  python3.12
-BuildRequires:  python3.12-pip
-BuildRequires:  python3.12-devel
-%endif
-```
+One copy of each file. Both remaining variants are EL bases with identical
+package naming (the parallel `python3.12` stack exists on EL8 and EL9), so the
+recipe needs no `%if "%_repository"` conditionals at all — per-variant
+differences live only in the project config's prjconf blocks. *(The mechanism
+remains available: OBS defines `%_repository` in the recipe too, and earlier
+revisions used it for the ssl3.5 python naming and the deb branch.)*
 
 `Version:` is plain `%!{PG_VERSION}` — metadata only; it no longer drives the
 artifact name (see below). The `TARBALL_SSL_VARIANT`/`TARBALL_PYTHON_PKG` macros
@@ -204,11 +208,10 @@ Notes:
   `/usr/src/packages/OTHER/` (the directory OBS collects results from) and creates no
   `/.simpleimage.tar.gz` (which makes the recipe's rename step a no-op). The name is
   fully self-derived inside the buildroot: PG version from the installed server
-  package (`rpm -q` / `dpkg-query`), SSL variant mapped from the buildroot's platform
-  (RPM side: EL major from `/etc/os-release` `PLATFORM_ID` with a glibc dist-tag
-  fallback, 8→ssl1.1, 10→ssl3.5, 9→fatal since the ssl3 rebase; deb side:
-  `ubuntu`+`22.04`→ssl3; anything unmapped fails the build loudly), arch from
-  `uname -m`. *(An openssl-version-based mapping was originally specified but is
+  package (`rpm -q`), SSL variant mapped from the buildroot's EL major
+  (`/etc/os-release` `PLATFORM_ID` with a glibc dist-tag fallback: 8→ssl1.1,
+  9→ssl3; anything unmapped fails the build loudly), arch from `uname -m`.
+  *(An openssl-version-based mapping was originally specified but is
   impossible: EL9 and EL10 both ship OpenSSL 3.5 now.)*
 - Version bumps are automatic: `PG_VERSION` derives from `PG_MINOR_VERSION` in
   `staging/17/macros.yaml`, which is already bumped during release prep.
@@ -304,8 +307,10 @@ verbatim with macro expansion (a package is any dir with an `obs/` subdir —
   installed (virtually always true).
 - Tarball binaries are the RPM builds (`--prefix=/usr/pgsql-<V>`); `pg_config` reports
   those original paths even though runtime path resolution is relocatable.
-- OpenSSL versions come from the base distro (EL8 = 1.1.1, EL9 = 3.x, EL10 = 3.5)
-  rather than Percona-pinned source builds (exception: python3's bundled OpenSSL).
+- OpenSSL versions come from the base distro (EL8 = 1.1.1, EL9 = 3.5 since
+  Rocky 9.8) rather than Percona-pinned source builds (exception: python3's
+  bundled OpenSSL). The per-variant symbol-needs gate is what keeps the host
+  promise honest despite the newer buildroot OpenSSL.
 - The PL runtime wrappers hardcode `/opt/percona-{python3,perl,tcl}` (as the official
   tarballs do) — PL/Perl, PL/Python, PL/Tcl require the runtimes to be copied to
   `/opt` per the install docs.
@@ -315,7 +320,9 @@ verbatim with macro expansion (a package is any dir with an `obs/` subdir —
 - Exact `BuildRequires` package names/list — verify against `ppg:staging:17` build
   results per repo and the official tarball structure-diff (pg_cron, pg-telemetry,
   haproxy presence; pgvector/postgis/pgpool RPM naming).
-- Confirm Rocky 10 ships OpenSSL 3.5 (naming of the `ssl3.5` variant depends on it).
+- ~~Confirm Rocky 10 ships OpenSSL 3.5 (naming of the `ssl3.5` variant depends on
+  it).~~ Confirmed (it does), then mooted: the ssl3.5 variant was dropped on
+  2026-07-22 as redundant with the fixed ssl3.
 - Confirm where published simpleimage artifacts land in the publish tree URL layout.
 - Confirm the `obs-pr-sync` workflow correctly creates PR projects for the *brand-new*
   subproject (`ppg:staging:17:tarballs` does not exist in production yet), including
@@ -336,3 +343,14 @@ verbatim with macro expansion (a package is any dir with an `obs/` subdir —
 - **Buildroot pruning via final `rm -rf` (first spec revision):** superseded by the
   POC's `#!NoTarBall` + self-created `/.simpleimage.tar.gz` of `/opt` — strictly safer
   and simpler.
+- **Ubuntu 22.04 deb-based ssl3 (2026-07-21 revision, removed 2026-07-22):** built
+  the ssl3 variant from staging's Ubuntu 22.04 debs (whose OpenSSL 3.0.2 base
+  guaranteed only `OPENSSL_3.0.0` symbol needs) via a parallel
+  `build-tarball-deb.sh` and a `%build` os-release dispatcher. Abandoned because
+  the PGDG deb layout is non-relocatable — multiarch lib dirs
+  (`/usr/lib/x86_64-linux-gnu`), split `/usr/share/postgresql` trees, and tools
+  hardwired to `/usr/lib/postgresql/<V>` (verified against PGDG's own packages) —
+  unlike the PGDG RPM `/usr/pgsql-NN` prefix the official tarball layout derives
+  from. Superseded by fixing the root cause: the staging pgcrypto patch keeps
+  EL9-built binaries at `OPENSSL_3.0.0`, so ssl3 builds honestly from Rocky 9
+  again. The deb builder survives in git history for reference.
