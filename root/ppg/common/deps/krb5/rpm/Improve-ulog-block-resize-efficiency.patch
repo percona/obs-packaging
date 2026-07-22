@@ -1,0 +1,257 @@
+From b77dd295d796893853f69524ee4dbf94331ab847 Mon Sep 17 00:00:00 2001
+From: Zoltan Borbely <Zoltan.Borbely@morganstanley.com>
+Date: Fri, 31 Jan 2025 18:00:17 +0100
+Subject: [PATCH] Improve ulog block resize efficiency
+
+When it is necessary to increase the ulog block size, copy the
+existing entries instead of reinitializing the log.
+
+[ghudson@mit.edu: added test case; renamed and split INDEX() to avoid
+duplication; added sync_ulog() helper; modified copying loop for
+clarity; edited commit message]
+
+ticket: 9161 (new)
+(cherry picked from commit 197ddd4196a3049cd17d29d1c8f0af1424472956)
+---
+ src/include/kdb_log.h | 20 +++++++++----
+ src/kprop/kproplog.c  |  2 +-
+ src/lib/kdb/kdb_log.c | 68 ++++++++++++++++++++++++++++++-------------
+ src/tests/t_iprop.py  | 30 +++++++++++++++++--
+ 4 files changed, 90 insertions(+), 30 deletions(-)
+
+diff --git a/src/include/kdb_log.h b/src/include/kdb_log.h
+index 4239575659..2856859f8e 100644
+--- a/src/include/kdb_log.h
++++ b/src/include/kdb_log.h
+@@ -18,12 +18,6 @@
+ extern "C" {
+ #endif
+ 
+-/*
+- * DB macros
+- */
+-#define INDEX(ulog, i) (kdb_ent_header_t *)(void *)                     \
+-    ((char *)(ulog) + sizeof(kdb_hlog_t) + (i) * ulog->kdb_block)
+-
+ /*
+  * Current DB version #
+  */
+@@ -106,6 +100,20 @@ typedef struct _kdb_log_context {
+     int             ulogfd;
+ } kdb_log_context;
+ 
++/* Return the address of the i'th record in ulog for the given block size. */
++static inline uint8_t *
++ulog_record_ptr(kdb_hlog_t *ulog, size_t i, size_t bsize)
++{
++    return (uint8_t *)ulog + sizeof(*ulog) + i * bsize;
++}
++
++/* Return the i'th update entry header for ulog. */
++static inline kdb_ent_header_t *
++ulog_index(kdb_hlog_t *ulog, size_t i)
++{
++    return (void *)ulog_record_ptr(ulog, i, ulog->kdb_block);
++}
++
+ #ifdef  __cplusplus
+ }
+ #endif
+diff --git a/src/kprop/kproplog.c b/src/kprop/kproplog.c
+index 865b0d68d5..7052dac870 100644
+--- a/src/kprop/kproplog.c
++++ b/src/kprop/kproplog.c
+@@ -330,7 +330,7 @@ print_update(kdb_hlog_t *ulog, uint32_t entry, uint32_t ulogentries,
+     for (i = start_sno; i < ulog->kdb_last_sno; i++) {
+         indx = i % ulogentries;
+ 
+-        indx_log = INDEX(ulog, indx);
++        indx_log = ulog_index(ulog, indx);
+ 
+         /*
+          * Check for corrupt update entry
+diff --git a/src/lib/kdb/kdb_log.c b/src/lib/kdb/kdb_log.c
+index c805ebd988..419beab9e4 100644
+--- a/src/lib/kdb/kdb_log.c
++++ b/src/lib/kdb/kdb_log.c
+@@ -103,13 +103,31 @@ sync_header(kdb_hlog_t *ulog)
+     }
+ }
+ 
++/* Sync memory to disk for the entire ulog. */
++static void
++sync_ulog(kdb_hlog_t *ulog, uint32_t ulogentries)
++{
++    size_t len;
++
++    if (!pagesize)
++        pagesize = getpagesize();
++
++    len = (sizeof(kdb_hlog_t) + ulogentries * ulog->kdb_block +
++           (pagesize - 1)) & ~(pagesize - 1);
++    if (msync(ulog, len, MS_SYNC)) {
++        /* Couldn't sync to disk, let's panic. */
++        syslog(LOG_ERR, _("could not sync the whole ulog to disk"));
++        abort();
++    }
++}
++
+ /* Return true if the ulog entry for sno matches sno and timestamp. */
+ static krb5_boolean
+ check_sno(kdb_log_context *log_ctx, kdb_sno_t sno,
+           const kdbe_time_t *timestamp)
+ {
+     unsigned int indx = (sno - 1) % log_ctx->ulogentries;
+-    kdb_ent_header_t *ent = INDEX(log_ctx->ulog, indx);
++    kdb_ent_header_t *ent = ulog_index(log_ctx->ulog, indx);
+ 
+     return ent->kdb_entry_sno == sno && time_equal(&ent->kdb_time, timestamp);
+ }
+@@ -175,17 +193,16 @@ extend_file_to(int fd, unsigned int new_size)
+     return 0;
+ }
+ 
+-/*
+- * Resize the array elements.  We reinitialize the update log rather than
+- * unrolling the the log and copying it over to a temporary log for obvious
+- * performance reasons.  Replicas will subsequently do a full resync, but the
+- * need for resizing should be very small.
+- */
++/* Resize the array elements of ulog to be at least as large as recsize.  Move
++ * the existing elements into the proper offsets for the new block size. */
+ static krb5_error_code
+ resize(kdb_hlog_t *ulog, uint32_t ulogentries, int ulogfd,
+        unsigned int recsize, const kdb_incr_update_t *upd)
+ {
+-    unsigned int new_block, new_size;
++    size_t old_block = ulog->kdb_block, new_block, new_size;
++    krb5_error_code retval;
++    uint8_t *old_ent, *new_ent;
++    uint32_t i;
+ 
+     if (ulog == NULL)
+         return KRB5_LOG_ERROR;
+@@ -204,16 +221,25 @@ resize(kdb_hlog_t *ulog, uint32_t ulogentries, int ulogfd,
+     if (new_size > MAXLOGLEN)
+         return KRB5_LOG_ERROR;
+ 
+-    /* Reinit log with new block size. */
+-    memset(ulog, 0, sizeof(*ulog));
+-    ulog->kdb_hmagic = KDB_ULOG_HDR_MAGIC;
+-    ulog->db_version_num = KDB_VERSION;
+-    ulog->kdb_state = KDB_STABLE;
+-    ulog->kdb_block = new_block;
+-    sync_header(ulog);
+-
+     /* Expand log considering new block size. */
+-    return extend_file_to(ulogfd, new_size);
++    retval = extend_file_to(ulogfd, new_size);
++    if (retval)
++        return retval;
++
++    /* Copy each record into its new location and zero out the unused areas.
++     * The area is overlapping, so we have to iterate backwards. */
++    for (i = ulogentries; i > 0; i--) {
++        old_ent = ulog_record_ptr(ulog, i - 1, old_block);
++        new_ent = ulog_record_ptr(ulog, i - 1, new_block);
++        memmove(new_ent, old_ent, old_block);
++        memset(new_ent + old_block, 0, new_block - old_block);
++    }
++
++    syslog(LOG_INFO, _("ulog block size has been resized from %lu to %lu"),
++           (unsigned long)old_block, (unsigned long)new_block);
++    ulog->kdb_block = new_block;
++    sync_ulog(ulog, ulogentries);
++    return 0;
+ }
+ 
+ /* Set the ulog to contain only a dummy entry with the given serial number and
+@@ -222,7 +248,7 @@ static void
+ set_dummy(kdb_log_context *log_ctx, kdb_sno_t sno, const kdbe_time_t *kdb_time)
+ {
+     kdb_hlog_t *ulog = log_ctx->ulog;
+-    kdb_ent_header_t *ent = INDEX(ulog, (sno - 1) % log_ctx->ulogentries);
++    kdb_ent_header_t *ent = ulog_index(ulog, (sno - 1) % log_ctx->ulogentries);
+ 
+     memset(ent, 0, sizeof(*ent));
+     ent->kdb_umagic = KDB_ULOG_MAGIC;
+@@ -305,7 +331,7 @@ store_update(kdb_log_context *log_ctx, kdb_incr_update_t *upd)
+     ulog->kdb_state = KDB_UNSTABLE;
+ 
+     i = (upd->kdb_entry_sno - 1) % ulogentries;
+-    indx_log = INDEX(ulog, i);
++    indx_log = ulog_index(ulog, i);
+ 
+     memset(indx_log, 0, ulog->kdb_block);
+     indx_log->kdb_umagic = KDB_ULOG_MAGIC;
+@@ -335,7 +361,7 @@ store_update(kdb_log_context *log_ctx, kdb_incr_update_t *upd)
+     } else {
+         /* We are circling; set kdb_first_sno and time to the next update. */
+         i = upd->kdb_entry_sno % ulogentries;
+-        indx_log = INDEX(ulog, i);
++        indx_log = ulog_index(ulog, i);
+         ulog->kdb_first_sno = indx_log->kdb_entry_sno;
+         ulog->kdb_first_time = indx_log->kdb_time;
+     }
+@@ -593,7 +619,7 @@ ulog_get_entries(krb5_context context, const kdb_last_t *last,
+ 
+     for (; sno < ulog->kdb_last_sno; sno++) {
+         indx = sno % ulogentries;
+-        indx_log = INDEX(ulog, indx);
++        indx_log = ulog_index(ulog, indx);
+ 
+         memset(upd, 0, sizeof(kdb_incr_update_t));
+         xdrmem_create(&xdrs, (char *)indx_log->entry_data,
+diff --git a/src/tests/t_iprop.py b/src/tests/t_iprop.py
+index 371f3a22b6..cfcf4afde3 100755
+--- a/src/tests/t_iprop.py
++++ b/src/tests/t_iprop.py
+@@ -85,8 +85,10 @@ def wait_for_prop(kpropd, full_expected, expected_old, expected_new):
+ # Verify the output of kproplog against the expected number of
+ # entries, first and last serial number, and a list of principal names
+ # for the update entrires.
+-def check_ulog(num, first, last, entries, env=None):
++def check_ulog(num, first, last, entries, env=None, bsize=2048):
+     out = realm.run([kproplog], env=env)
++    if 'Entry block size : ' + str(bsize) + '\n' not in out:
++        fail('Expected block size %d' % bsize)
+     if 'Number of entries : ' + str(num) + '\n' not in out:
+         fail('Expected %d entries' % num)
+     if last:
+@@ -456,8 +458,32 @@ for realm in multidb_realms(kdc_conf=conf, create_user=False,
+     wait_for_prop(kpropd2, True, 6, 1)
+     check_ulog(1, 1, 1, [None], replica2)
+ 
+-    # Stop the kprop daemons so we can test kpropd -t.
++    # Create an update large enough to cause a block resize, and make
++    # sure that it propagates incrementally.
++    mark('block resize')
++    cmd = [kadminl, 'cpw',
++           '-e', 'aes128-sha1,aes256-sha1,aes128-sha2,aes256-sha2',
++           '-randkey', '-keepold', pr2]
++    n = 6
++    for i in range(n):
++        realm.run(cmd)
++    check_ulog(n + 1, 1, n + 1, [None] + n * [pr2], bsize=4096)
++    kpropd1.send_signal(signal.SIGUSR1)
++    wait_for_prop(kpropd1, False, 1, n + 1)
++    check_ulog(n + 1, 1, n + 1, [None] + n * [pr2], replica1, bsize=4096)
++    kpropd2.send_signal(signal.SIGUSR1)
++    wait_for_prop(kpropd2, False, 1, n + 1)
++    check_ulog(n + 1, 1, n + 1, [None] + n * [pr2], replica2, bsize=4096)
++
++    # Reset the ulog again.
++    realm.run([kproplog, '-R'])
++    kpropd1.send_signal(signal.SIGUSR1)
++    wait_for_prop(kpropd1, True, 7, 1)
++    kpropd2.send_signal(signal.SIGUSR1)
++    wait_for_prop(kpropd2, True, 7, 1)
+     realm.stop_kpropd(kpropd1)
++
++    # Stop the kprop daemons so we can test kpropd -t.
+     stop_daemon(kpropd2)
+     stop_daemon(kadmind_proponly)
+     mark('kpropd -t')
+-- 
+2.51.1
+

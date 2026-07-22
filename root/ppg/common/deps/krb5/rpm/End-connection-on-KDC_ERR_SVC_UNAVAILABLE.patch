@@ -1,0 +1,34 @@
+From a68fba22588cc21dcd1dc28550529187dca58331 Mon Sep 17 00:00:00 2001
+From: Greg Hudson <ghudson@mit.edu>
+Date: Fri, 27 Oct 2023 00:44:53 -0400
+Subject: [PATCH] End connection on KDC_ERR_SVC_UNAVAILABLE
+
+In sendto_kdc.c:service_fds(), if a message handler indicates that a
+message should be discarded, kill the connection so we don't continue
+waiting on it for more data.
+
+ticket: 7899
+(cherry picked from commit ca80f64c786341d5871ae1de18142e62af64f7b9)
+---
+ src/lib/krb5/os/sendto_kdc.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/lib/krb5/os/sendto_kdc.c b/src/lib/krb5/os/sendto_kdc.c
+index d76e24ccf0..8e4fcd2a38 100644
+--- a/src/lib/krb5/os/sendto_kdc.c
++++ b/src/lib/krb5/os/sendto_kdc.c
+@@ -1435,7 +1435,10 @@ service_fds(krb5_context context, struct select_state *selstate,
+                 if (msg_handler != NULL) {
+                     krb5_data reply = make_data(state->in.buf, state->in.pos);
+ 
+-                    stop = (msg_handler(context, &reply, msg_handler_data) != 0);
++                    if (!msg_handler(context, &reply, msg_handler_data)) {
++                        kill_conn(context, state, selstate);
++                        stop = 0;
++                    }
+                 }
+ 
+                 if (stop) {
+-- 
+2.44.0
+

@@ -1,0 +1,184 @@
+From b6ada496a285a7b350e28c97b53b6f659a9a94b9 Mon Sep 17 00:00:00 2001
+From: Greg Hudson <ghudson@mit.edu>
+Date: Sat, 11 Dec 2021 01:25:34 -0500
+Subject: [PATCH] Use 14 instead of 9 for unkeyed SHA-1 checksum
+
+Although MIT krb5 had been using the value 9 for unkeyed SHA-1 since
+its 1.0 release in 1996, RFC 3961 instead assigned this value to
+rsa-md5-des3 (likely never used), and assigned the values 10 and 14 to
+SHA-1.  Heimdal and Microsoft use the value 14.  Unkeyed SHA-1 almost
+never appears on the wire, but has been seen in PKINIT asChecksum
+fields in replies from Windows KDCs (despite the field being specified
+as a keyed checksum).
+
+Define a new symbol CKSUMTYPE_SHA1 with the value 14, and use it where
+we currently use CKSUMTYPE_NIST_SHA.  Continue to allow the value 9
+for ABI compatibility.  Remove the pkinit_clnt.c workaround as the
+value 14 will now work without adjustment.
+
+ticket: 9040 (new)
+---
+ doc/appdev/refs/macros/index.rst         |  1 +
+ src/include/krb5/krb5.hin                |  6 ++++++
+ src/lib/crypto/crypto_tests/t_cksums.c   |  2 +-
+ src/lib/crypto/krb/cksumtypes.c          |  6 ++++++
+ src/lib/gssapi/mechglue/g_saslname.c     |  3 +--
+ src/lib/krb5/os/trace.c                  |  2 +-
+ src/plugins/kdb/test/kdb_test.c          |  2 +-
+ src/plugins/preauth/pkinit/pkinit_clnt.c | 11 ++---------
+ src/plugins/preauth/pkinit/pkinit_srv.c  |  4 ++--
+ 9 files changed, 21 insertions(+), 16 deletions(-)
+
+diff --git a/doc/appdev/refs/macros/index.rst b/doc/appdev/refs/macros/index.rst
+index 788d094bff..001fb386a7 100644
+--- a/doc/appdev/refs/macros/index.rst
++++ b/doc/appdev/refs/macros/index.rst
+@@ -42,6 +42,7 @@ Public
+    CKSUMTYPE_RSA_MD4_DES.rst
+    CKSUMTYPE_RSA_MD5.rst
+    CKSUMTYPE_RSA_MD5_DES.rst
++   CKSUMTYPE_SHA1.rst
+    ENCTYPE_AES128_CTS_HMAC_SHA1_96.rst
+    ENCTYPE_AES128_CTS_HMAC_SHA256_128.rst
+    ENCTYPE_AES256_CTS_HMAC_SHA1_96.rst
+diff --git a/src/include/krb5/krb5.hin b/src/include/krb5/krb5.hin
+index d2cf1eba2a..a7060aa733 100644
+--- a/src/include/krb5/krb5.hin
++++ b/src/include/krb5/krb5.hin
+@@ -449,6 +449,11 @@ typedef struct _krb5_crypto_iov {
+ #define ENCTYPE_CAMELLIA256_CTS_CMAC        0x001a /**< RFC 6803 */
+ #define ENCTYPE_UNKNOWN                     0x01ff
+ 
++/*
++ * Historically we used the value 9 for unkeyed SHA-1.  RFC 3961 assigns this
++ * value to rsa-md5-des3, which fortunately is unused.  For ABI compatibility
++ * we allow either 9 or 14 for SHA-1.
++ */
+ #define CKSUMTYPE_CRC32         0x0001
+ #define CKSUMTYPE_RSA_MD4       0x0002
+ #define CKSUMTYPE_RSA_MD4_DES   0x0003
+@@ -459,6 +464,7 @@ typedef struct _krb5_crypto_iov {
+ #define CKSUMTYPE_RSA_MD5_DES   0x0008
+ #define CKSUMTYPE_NIST_SHA      0x0009
+ #define CKSUMTYPE_HMAC_SHA1_DES3      0x000c /* @deprecated removed */
++#define CKSUMTYPE_SHA1          0x000d /**< RFC 3962 */
+ #define CKSUMTYPE_HMAC_SHA1_96_AES128 0x000f /**< RFC 3962. Used with
+                                                 ENCTYPE_AES128_CTS_HMAC_SHA1_96 */
+ #define CKSUMTYPE_HMAC_SHA1_96_AES256 0x0010 /**< RFC 3962. Used with
+diff --git a/src/lib/crypto/crypto_tests/t_cksums.c b/src/lib/crypto/crypto_tests/t_cksums.c
+index 84408fb68a..de5ed3a22b 100644
+--- a/src/lib/crypto/crypto_tests/t_cksums.c
++++ b/src/lib/crypto/crypto_tests/t_cksums.c
+@@ -54,7 +54,7 @@ struct test {
+     },
+     {
+         { KV5M_DATA, 0, "" },
+-        CKSUMTYPE_NIST_SHA, 0, 0, { KV5M_DATA, 0, "" },
++        CKSUMTYPE_SHA1, 0, 0, { KV5M_DATA, 0, "" },
+         { KV5M_DATA, 20,
+           "\xDA\x39\xA3\xEE\x5E\x6B\x4B\x0D\x32\x55\xBF\xEF\x95\x60\x18\x90"
+           "\xAF\xD8\x07\x09" }
+diff --git a/src/lib/crypto/krb/cksumtypes.c b/src/lib/crypto/krb/cksumtypes.c
+index f5fbe8a2a7..25a3ffd2d2 100644
+--- a/src/lib/crypto/krb/cksumtypes.c
++++ b/src/lib/crypto/krb/cksumtypes.c
+@@ -46,6 +46,12 @@ const struct krb5_cksumtypes krb5int_cksumtypes_list[] = {
+       krb5int_unkeyed_checksum, NULL,
+       20, 20, CKSUM_UNKEYED },
+ 
++    { CKSUMTYPE_SHA1,
++      "sha", { 0 }, "SHA-1",
++      NULL, &krb5int_hash_sha1,
++      krb5int_unkeyed_checksum, NULL,
++      20, 20, CKSUM_UNKEYED },
++
+     { CKSUMTYPE_HMAC_MD5_ARCFOUR,
+       "hmac-md5-rc4", { "hmac-md5-enc", "hmac-md5-earcfour" },
+       "Microsoft HMAC MD5",
+diff --git a/src/lib/gssapi/mechglue/g_saslname.c b/src/lib/gssapi/mechglue/g_saslname.c
+index e25f9e0a53..2be0c8a69a 100644
+--- a/src/lib/gssapi/mechglue/g_saslname.c
++++ b/src/lib/gssapi/mechglue/g_saslname.c
+@@ -58,8 +58,7 @@ oidToSaslName(OM_uint32 *minor, const gss_OID mech,
+     iov[2].data.length = sizeof(cksumBuf);
+     iov[2].data.data = (char *)cksumBuf;
+ 
+-    *minor = krb5_k_make_checksum_iov(NULL, CKSUMTYPE_NIST_SHA,
+-                                      NULL, 0, iov, 3);
++    *minor = krb5_k_make_checksum_iov(NULL, CKSUMTYPE_SHA1, NULL, 0, iov, 3);
+     if (*minor != 0)
+         return GSS_S_FAILURE;
+ 
+diff --git a/src/lib/krb5/os/trace.c b/src/lib/krb5/os/trace.c
+index e9b99f4ca0..abb8a3f21b 100644
+--- a/src/lib/krb5/os/trace.c
++++ b/src/lib/krb5/os/trace.c
+@@ -93,7 +93,7 @@ hash_bytes(krb5_context context, const void *ptr, size_t len)
+     krb5_data d = make_data((void *) ptr, len);
+     char *s = NULL;
+ 
+-    if (krb5_k_make_checksum(context, CKSUMTYPE_NIST_SHA, NULL, 0, &d,
++    if (krb5_k_make_checksum(context, CKSUMTYPE_SHA1, NULL, 0, &d,
+                              &cksum) != 0)
+         return NULL;
+     if (cksum.length >= 2)
+diff --git a/src/plugins/kdb/test/kdb_test.c b/src/plugins/kdb/test/kdb_test.c
+index 95a6062e2a..38d371cb86 100644
+--- a/src/plugins/kdb/test/kdb_test.c
++++ b/src/plugins/kdb/test/kdb_test.c
+@@ -205,7 +205,7 @@ make_keyblock(krb5_kvno kvno, krb5_enctype etype, int32_t salttype,
+                  (int)salttype, princstr, (int)realm->length, realm->data) < 0)
+         abort();
+     d = string2data(hashstr);
+-    check(krb5_c_make_checksum(NULL, CKSUMTYPE_NIST_SHA, NULL, 0, &d, &cksum));
++    check(krb5_c_make_checksum(NULL, CKSUMTYPE_SHA1, NULL, 0, &d, &cksum));
+ 
+     /* Make the appropriate number of input bytes from the hash result. */
+     for (pos = 0; pos < keybytes; pos += n) {
+diff --git a/src/plugins/preauth/pkinit/pkinit_clnt.c b/src/plugins/preauth/pkinit/pkinit_clnt.c
+index 9b991ffe05..021e5f0723 100644
+--- a/src/plugins/preauth/pkinit/pkinit_clnt.c
++++ b/src/plugins/preauth/pkinit/pkinit_clnt.c
+@@ -119,8 +119,8 @@ pa_pkinit_gen_req(krb5_context context,
+         goto cleanup;
+     }
+ 
+-    retval = krb5_c_make_checksum(context, CKSUMTYPE_NIST_SHA, NULL, 0,
+-                                  der_req, &cksum);
++    retval = krb5_c_make_checksum(context, CKSUMTYPE_SHA1, NULL, 0, der_req,
++                                  &cksum);
+     if (retval)
+         goto cleanup;
+     TRACE_PKINIT_CLIENT_REQ_CHECKSUM(context, &cksum);
+@@ -701,13 +701,6 @@ pkinit_as_rep_parse(krb5_context context,
+             pkiDebug("failed to decode reply_key_pack\n");
+             goto cleanup;
+         }
+-        /*
+-         * This is hack but Windows sends back SHA1 checksum
+-         * with checksum type of 14. There is currently no
+-         * checksum type of 14 defined.
+-         */
+-        if (key_pack->asChecksum.checksum_type == 14)
+-            key_pack->asChecksum.checksum_type = CKSUMTYPE_NIST_SHA;
+         retval = krb5_c_make_checksum(context,
+                                       key_pack->asChecksum.checksum_type,
+                                       &key_pack->replyKey,
+diff --git a/src/plugins/preauth/pkinit/pkinit_srv.c b/src/plugins/preauth/pkinit/pkinit_srv.c
+index 3ae56c0641..3bff456f8f 100644
+--- a/src/plugins/preauth/pkinit/pkinit_srv.c
++++ b/src/plugins/preauth/pkinit/pkinit_srv.c
+@@ -546,8 +546,8 @@ pkinit_server_verify_padata(krb5_context context,
+         goto cleanup;
+     }
+     der_req = cb->request_body(context, rock);
+-    retval = krb5_c_make_checksum(context, CKSUMTYPE_NIST_SHA, NULL, 0,
+-                                  der_req, &cksum);
++    retval = krb5_c_make_checksum(context, CKSUMTYPE_SHA1, NULL, 0, der_req,
++                                  &cksum);
+     if (retval) {
+         pkiDebug("unable to calculate AS REQ checksum\n");
+         goto cleanup;
+-- 
+2.39.2
+

@@ -1,0 +1,237 @@
+From 00a2ccfeaeac7a0019a73a97cfe33063ba90c7f3 Mon Sep 17 00:00:00 2001
+From: Greg Hudson <ghudson@mit.edu>
+Date: Fri, 26 Mar 2021 23:38:54 -0400
+Subject: [PATCH] Use KCM_OP_RETRIEVE in KCM client
+
+In kcm_retrieve(), try KCM_OP_RETRIEVE.  Fall back to iteration if the
+server doesn't implement it, or if we can an answer incompatible with
+KRB5_TC_SUPPORTED_KTYPES.
+
+In kcmserver.py, implement partial decoding for creds and cred tags so
+that we can do a basic principal name match.
+
+ticket: 8997 (new)
+(cherry picked from commit 795ebba8c039be172ab93cd41105c73ffdba0fdb)
+(cherry picked from commit c56d4b87de0f30a38dc61d374ad225d02d581eb3)
+(cherry picked from commit ac0a117096324fa73afae291ed467f2ea66e279b)
+---
+ src/include/kcm.h            |  2 +-
+ src/lib/krb5/ccache/cc_kcm.c | 52 +++++++++++++++++++++++++++++++++---
+ src/tests/kcmserver.py       | 44 +++++++++++++++++++++++++++---
+ src/tests/t_ccache.py        | 11 +++++---
+ 4 files changed, 99 insertions(+), 10 deletions(-)
+
+diff --git a/src/include/kcm.h b/src/include/kcm.h
+index 9b66f1cbd..85c20d345 100644
+--- a/src/include/kcm.h
++++ b/src/include/kcm.h
+@@ -87,7 +87,7 @@ typedef enum kcm_opcode {
+     KCM_OP_INITIALIZE,          /*          (name, princ) -> ()          */
+     KCM_OP_DESTROY,             /*                 (name) -> ()          */
+     KCM_OP_STORE,               /*           (name, cred) -> ()          */
+-    KCM_OP_RETRIEVE,
++    KCM_OP_RETRIEVE,            /* (name, flags, credtag) -> (cred)      */
+     KCM_OP_GET_PRINCIPAL,       /*                 (name) -> (princ)     */
+     KCM_OP_GET_CRED_UUID_LIST,  /*                 (name) -> (uuid, ...) */
+     KCM_OP_GET_CRED_BY_UUID,    /*           (name, uuid) -> (cred)      */
+diff --git a/src/lib/krb5/ccache/cc_kcm.c b/src/lib/krb5/ccache/cc_kcm.c
+index dae622feb..b600c6f15 100644
+--- a/src/lib/krb5/ccache/cc_kcm.c
++++ b/src/lib/krb5/ccache/cc_kcm.c
+@@ -826,9 +826,55 @@ static krb5_error_code KRB5_CALLCONV
+ kcm_retrieve(krb5_context context, krb5_ccache cache, krb5_flags flags,
+              krb5_creds *mcred, krb5_creds *cred_out)
+ {
+-    /* There is a KCM opcode for retrieving creds, but Heimdal's client doesn't
+-     * use it.  It causes the KCM daemon to actually make a TGS request. */
+-    return k5_cc_retrieve_cred_default(context, cache, flags, mcred, cred_out);
++    krb5_error_code ret;
++    struct kcmreq req = EMPTY_KCMREQ;
++    krb5_creds cred;
++    krb5_enctype *enctypes = NULL;
++
++    memset(&cred, 0, sizeof(cred));
++
++    /* Include KCM_GC_CACHED in flags to prevent Heimdal's sssd from making a
++     * TGS request itself. */
++    kcmreq_init(&req, KCM_OP_RETRIEVE, cache);
++    k5_buf_add_uint32_be(&req.reqbuf, map_tcflags(flags) | KCM_GC_CACHED);
++    k5_marshal_mcred(&req.reqbuf, mcred);
++    ret = cache_call(context, cache, &req);
++
++    /* Fall back to iteration if the server does not support retrieval. */
++    if (ret == KRB5_FCC_INTERNAL || ret == KRB5_CC_IO) {
++        ret = k5_cc_retrieve_cred_default(context, cache, flags, mcred,
++                                          cred_out);
++        goto cleanup;
++    }
++    if (ret)
++        goto cleanup;
++
++    ret = k5_unmarshal_cred(req.reply.ptr, req.reply.len, 4, &cred);
++    if (ret)
++        goto cleanup;
++
++    /* In rare cases we might retrieve a credential with a session key this
++     * context can't support, in which case we must retry using iteration. */
++    if (flags & KRB5_TC_SUPPORTED_KTYPES) {
++        ret = krb5_get_tgs_ktypes(context, cred.server, &enctypes);
++        if (ret)
++            goto cleanup;
++        if (!k5_etypes_contains(enctypes, cred.keyblock.enctype)) {
++            ret = k5_cc_retrieve_cred_default(context, cache, flags, mcred,
++                                              cred_out);
++            goto cleanup;
++        }
++    }
++
++    *cred_out = cred;
++    memset(&cred, 0, sizeof(cred));
++
++cleanup:
++    kcmreq_free(&req);
++    krb5_free_cred_contents(context, &cred);
++    free(enctypes);
++    /* Heimdal's KCM returns KRB5_CC_END if no cred is found. */
++    return (ret == KRB5_CC_END) ? KRB5_CC_NOTFOUND : map_invalid(ret);
+ }
+ 
+ static krb5_error_code KRB5_CALLCONV
+diff --git a/src/tests/kcmserver.py b/src/tests/kcmserver.py
+index 8c5e66ff1..25e6f2bbe 100644
+--- a/src/tests/kcmserver.py
++++ b/src/tests/kcmserver.py
+@@ -40,6 +40,7 @@ class KCMOpcodes(object):
+     INITIALIZE = 4
+     DESTROY = 5
+     STORE = 6
++    RETRIEVE = 7
+     GET_PRINCIPAL = 8
+     GET_CRED_UUID_LIST = 9
+     GET_CRED_BY_UUID = 10
+@@ -54,6 +55,7 @@ class KCMOpcodes(object):
+ 
+ 
+ class KRB5Errors(object):
++    KRB5_CC_NOTFOUND = -1765328243
+     KRB5_CC_END = -1765328242
+     KRB5_CC_NOSUPP = -1765328137
+     KRB5_FCC_NOFILE = -1765328189
+@@ -86,11 +88,29 @@ def get_cache(name):
+     return cache
+ 
+ 
++def unpack_data(argbytes):
++    dlen, = struct.unpack('>L', argbytes[:4])
++    return argbytes[4:dlen+4], argbytes[dlen+4:]
++
++
+ def unmarshal_name(argbytes):
+     offset = argbytes.find(b'\0')
+     return argbytes[0:offset], argbytes[offset+1:]
+ 
+ 
++def unmarshal_princ(argbytes):
++    # Ignore the type at argbytes[0:4].
++    ncomps, = struct.unpack('>L', argbytes[4:8])
++    realm, rest = unpack_data(argbytes[8:])
++    comps = []
++    for i in range(ncomps):
++        comp, rest = unpack_data(rest)
++        comps.append(comp)
++    # Asssume no quoting is needed.
++    princ = b'/'.join(comps) + b'@' + realm
++    return princ, rest
++
++
+ def op_gen_new(argbytes):
+     # Does not actually check for uniqueness.
+     global next_unique
+@@ -126,6 +146,22 @@ def op_store(argbytes):
+     return 0, b''
+ 
+ 
++def op_retrieve(argbytes):
++    name, rest = unmarshal_name(argbytes)
++    # Ignore the flags at rest[0:4] and the header at rest[4:8].
++    # Assume there are client and server creds in the tag and match
++    # only against them.
++    cprinc, rest = unmarshal_princ(rest[8:])
++    sprinc, rest = unmarshal_princ(rest)
++    cache = get_cache(name)
++    for cred in (cache.creds[u] for u in cache.cred_uuids):
++        cred_cprinc, rest = unmarshal_princ(cred)
++        cred_sprinc, rest = unmarshal_princ(rest)
++        if cred_cprinc == cprinc and cred_sprinc == sprinc:
++            return 0, cred
++    return KRB5Errors.KRB5_CC_NOTFOUND, b''
++
++
+ def op_get_principal(argbytes):
+     name, rest = unmarshal_name(argbytes)
+     cache = get_cache(name)
+@@ -199,6 +235,7 @@ ophandlers = {
+     KCMOpcodes.INITIALIZE : op_initialize,
+     KCMOpcodes.DESTROY : op_destroy,
+     KCMOpcodes.STORE : op_store,
++    KCMOpcodes.RETRIEVE : op_retrieve,
+     KCMOpcodes.GET_PRINCIPAL : op_get_principal,
+     KCMOpcodes.GET_CRED_UUID_LIST : op_get_cred_uuid_list,
+     KCMOpcodes.GET_CRED_BY_UUID : op_get_cred_by_uuid,
+@@ -243,10 +280,11 @@ def service_request(s):
+     return True
+ 
+ parser = optparse.OptionParser()
+-parser.add_option('-c', '--credlist', action='store_true', dest='credlist',
+-                  default=False, help='Support KCM_OP_GET_CRED_LIST')
++parser.add_option('-f', '--fallback', action='store_true', dest='fallback',
++                  default=False, help='Do not support RETRIEVE/GET_CRED_LIST')
+ (options, args) = parser.parse_args()
+-if not options.credlist:
++if options.fallback:
++    del ophandlers[KCMOpcodes.RETRIEVE]
+     del ophandlers[KCMOpcodes.GET_CRED_LIST]
+ 
+ server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+diff --git a/src/tests/t_ccache.py b/src/tests/t_ccache.py
+index 90040fb7b..6ea9fb969 100755
+--- a/src/tests/t_ccache.py
++++ b/src/tests/t_ccache.py
+@@ -25,7 +25,7 @@ from k5test import *
+ kcm_socket_path = os.path.join(os.getcwd(), 'testdir', 'kcm')
+ conf = {'libdefaults': {'kcm_socket': kcm_socket_path,
+                         'kcm_mach_service': '-'}}
+-realm = K5Realm(create_host=False, krb5_conf=conf)
++realm = K5Realm(krb5_conf=conf)
+ 
+ keyctl = which('keyctl')
+ out = realm.run([klist, '-c', 'KEYRING:process:abcd'], expected_code=1)
+@@ -71,6 +71,11 @@ def collection_test(realm, ccname):
+     realm.kinit('alice', password('alice'))
+     realm.run([klist], expected_msg='Default principal: alice@')
+     realm.run([klist, '-A', '-s'])
++    realm.run([kvno, realm.host_princ], expected_msg = 'kvno = 1')
++    realm.run([kvno, realm.host_princ], expected_msg = 'kvno = 1')
++    out = realm.run([klist])
++    if out.count(realm.host_princ) != 1:
++        fail('Wrong number of service tickets in cache')
+     realm.run([kdestroy])
+     output = realm.run([klist], expected_code=1)
+     if 'No credentials cache' not in output and 'not found' not in output:
+@@ -126,14 +131,14 @@ def collection_test(realm, ccname):
+ 
+ collection_test(realm, 'DIR:' + os.path.join(realm.testdir, 'cc'))
+ 
+-# Test KCM without and with GET_CRED_LIST support.
++# Test KCM with and without RETRIEVE and GET_CRED_LIST support.
+ kcmserver_path = os.path.join(srctop, 'tests', 'kcmserver.py')
+ kcmd = realm.start_server([sys.executable, kcmserver_path, kcm_socket_path],
+                           'starting...')
+ collection_test(realm, 'KCM:')
+ stop_daemon(kcmd)
+ os.remove(kcm_socket_path)
+-realm.start_server([sys.executable, kcmserver_path, '-c', kcm_socket_path],
++realm.start_server([sys.executable, kcmserver_path, '-f', kcm_socket_path],
+                    'starting...')
+ collection_test(realm, 'KCM:')
+ 

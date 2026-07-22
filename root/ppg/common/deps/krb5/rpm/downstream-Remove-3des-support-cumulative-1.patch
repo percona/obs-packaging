@@ -1,0 +1,239 @@
+From dea76c0b677ae02f59f6e5a796b0cf8c5d2e02f2 Mon Sep 17 00:00:00 2001
+From: Julien Rische <jrische@redhat.com>
+Date: Fri, 4 Apr 2025 15:08:36 +0200
+Subject: [PATCH] [downstream] Remove 3des support (cumulative 1)
+
+Remove mentions for the triple-DES encryption type which were added
+since the previous downstream patch.
+---
+ README                             |  3 +++
+ doc/admin/conf_files/krb5_conf.rst |  6 ------
+ doc/admin/enctypes.rst             | 11 ++---------
+ doc/mitK5features.rst              |  3 +++
+ src/include/k5-int.h               |  2 --
+ src/kdc/kdc_util.c                 |  2 --
+ src/lib/krb5/krb/init_ctx.c        |  5 -----
+ src/man/krb5.conf.man              |  6 ++++++
+ src/tests/gssapi/t_enctypes.py     |  5 ++---
+ src/tests/t_etype_info.py          |  4 ++--
+ src/tests/t_sesskeynego.py         |  8 --------
+ src/util/k5test.py                 |  7 -------
+ 12 files changed, 18 insertions(+), 44 deletions(-)
+
+diff --git a/README b/README
+index 0f39ac2443..b863ef84a3 100644
+--- a/README
++++ b/README
+@@ -168,6 +168,9 @@ Developer experience:
+ 
+ Protocol evolution:
+ 
++* The KDC will no longer issue tickets with RC4 session keys unless
++  explicitly configured with the new allow_rc4 variable.
++
+ * Add KDC support for S4U2Self requests where the user is identified
+   by X.509 certificate.  (Requires support for certificate lookup from
+   a third-party KDB module.)
+diff --git a/doc/admin/conf_files/krb5_conf.rst b/doc/admin/conf_files/krb5_conf.rst
+index c77a9fd46d..54e4780327 100644
+--- a/doc/admin/conf_files/krb5_conf.rst
++++ b/doc/admin/conf_files/krb5_conf.rst
+@@ -95,12 +95,6 @@ Additionally, krb5.conf may include any of the relations described in
+ 
+ The libdefaults section may contain any of the following relations:
+ 
+-**allow_des3**
+-    Permit the KDC to issue tickets with des3-cbc-sha1 session keys.
+-    In future releases, this flag will allow des3-cbc-sha1 to be used
+-    at all.  The default value for this tag is false.  (Added in
+-    release 1.21.)
+-
+ **allow_rc4**
+     Permit the KDC to issue tickets with arcfour-hmac session keys.
+     In future releases, this flag will allow arcfour-hmac to be used
+diff --git a/doc/admin/enctypes.rst b/doc/admin/enctypes.rst
+index 76ef2a2133..90e85309fa 100644
+--- a/doc/admin/enctypes.rst
++++ b/doc/admin/enctypes.rst
+@@ -49,8 +49,8 @@ The KDC chooses the session key enctype by taking the intersection of
+ its **permitted_enctypes** list, the list of long-term keys for the
+ most recent kvno of the service, and the client's requested list of
+ enctypes.  Starting in krb5-1.21, all services are assumed to support
+-aes256-cts-hmac-sha1-96; also, des3-cbc-sha1 and arcfour-hmac session
+-keys will not be issued by default.
++aes256-cts-hmac-sha1-96; also, arcfour-hmac session keys will not be
++issued by default.
+ 
+ Starting in krb5-1.11, it is possible to set a string attribute on a
+ service principal to control what session key enctypes the KDC may
+@@ -90,13 +90,6 @@ affect how enctypes are chosen.
+     acceptable risk for your environment and the weak enctypes are
+     required for backward compatibility.
+ 
+-**allow_des3**
+-    was added in release 1.21 and defaults to *false*.  Unless this
+-    flag is set to *true*, the KDC will not issue tickets with
+-    des3-cbc-sha1 session keys.  In a future release, this flag will
+-    control whether des3-cbc-sha1 is permitted in similar fashion to
+-    weak enctypes.
+-
+ **allow_rc4**
+     was added in release 1.21 and defaults to *false*.  Unless this
+     flag is set to *true*, the KDC will not issue tickets with
+diff --git a/doc/mitK5features.rst b/doc/mitK5features.rst
+index f4594ed137..d7e516861f 100644
+--- a/doc/mitK5features.rst
++++ b/doc/mitK5features.rst
+@@ -501,6 +501,9 @@ Release 1.18
+ 
+ * Protocol evolution:
+ 
++  - The KDC will no longer issue tickets with RC4 session keys unless
++    explicitly configured with the new allow_rc4 variable.
++
+   - Add KDC support for S4U2Self requests where the user is identified
+     by X.509 certificate.  (Requires support for certificate lookup
+     from a third-party KDB module.)
+diff --git a/src/include/k5-int.h b/src/include/k5-int.h
+index c3d081fd30..3c74934f25 100644
+--- a/src/include/k5-int.h
++++ b/src/include/k5-int.h
+@@ -181,7 +181,6 @@ typedef unsigned char   u_char;
+  * matches the variable name.  Keep these alphabetized. */
+ #define KRB5_CONF_ACL_FILE                     "acl_file"
+ #define KRB5_CONF_ADMIN_SERVER                 "admin_server"
+-#define KRB5_CONF_ALLOW_DES3                   "allow_des3"
+ #define KRB5_CONF_ALLOW_RC4                    "allow_rc4"
+ #define KRB5_CONF_ALLOW_WEAK_CRYPTO            "allow_weak_crypto"
+ #define KRB5_CONF_AUTH_TO_LOCAL                "auth_to_local"
+@@ -1261,7 +1260,6 @@ struct _krb5_context {
+     struct _kdb_log_context *kdblog_context;
+ 
+     krb5_boolean allow_weak_crypto;
+-    krb5_boolean allow_des3;
+     krb5_boolean allow_rc4;
+     krb5_boolean ignore_acceptor_hostname;
+     krb5_boolean enforce_ok_as_delegate;
+diff --git a/src/kdc/kdc_util.c b/src/kdc/kdc_util.c
+index b081d8e439..5a2589b0c0 100644
+--- a/src/kdc/kdc_util.c
++++ b/src/kdc/kdc_util.c
+@@ -1046,8 +1046,6 @@ select_session_keytype(kdc_realm_t *kdc_active_realm, krb5_db_entry *server,
+          * unless they are explicitly allowed.  In the future they will be more
+          * comprehensively disabled and eventually removed.
+          */
+-        if (ktype[i] == ENCTYPE_DES3_CBC_SHA1 && !kdc_context->allow_des3)
+-            continue;
+         if (ktype[i] == ENCTYPE_ARCFOUR_HMAC && !kdc_context->allow_rc4)
+             continue;
+ 
+diff --git a/src/lib/krb5/krb/init_ctx.c b/src/lib/krb5/krb/init_ctx.c
+index 4b23738817..980cc0893b 100644
+--- a/src/lib/krb5/krb/init_ctx.c
++++ b/src/lib/krb5/krb/init_ctx.c
+@@ -226,11 +226,6 @@ krb5_init_context_profile(profile_t profile, krb5_flags flags,
+         goto cleanup;
+     ctx->allow_weak_crypto = tmp;
+ 
+-    retval = get_boolean(ctx, KRB5_CONF_ALLOW_DES3, 0, &tmp);
+-    if (retval)
+-        goto cleanup;
+-    ctx->allow_des3 = tmp;
+-
+     retval = get_boolean(ctx, KRB5_CONF_ALLOW_RC4, 0, &tmp);
+     if (retval)
+         goto cleanup;
+diff --git a/src/man/krb5.conf.man b/src/man/krb5.conf.man
+index 067a9cbfe8..1a1c13b1a1 100644
+--- a/src/man/krb5.conf.man
++++ b/src/man/krb5.conf.man
+@@ -178,6 +178,12 @@ kdc.conf(5), but it is not a recommended practice.
+ The libdefaults section may contain any of the following relations:
+ .INDENT 0.0
+ .TP
++\fBallow_rc4\fP
++Permit the KDC to issue tickets with arcfour\-hmac session keys.
++In future releases, this flag will allow arcfour\-hmac to be used
++at all.  The default value for this tag is false.  (Added in
++release 1.21.)
++.TP
+ \fBallow_weak_crypto\fP
+ If this flag is set to false, then weak encryption types (as noted
+ in Encryption_types in kdc.conf(5)) will be filtered
+diff --git a/src/tests/gssapi/t_enctypes.py b/src/tests/gssapi/t_enctypes.py
+index e6bde47afc..1bb8c40b6b 100755
+--- a/src/tests/gssapi/t_enctypes.py
++++ b/src/tests/gssapi/t_enctypes.py
+@@ -10,9 +10,8 @@ d_rc4 = 'DEPRECATED:arcfour-hmac'
+ 
+ # These tests make assumptions about the default enctype lists, so set
+ # them explicitly rather than relying on the library defaults.
+-supp='aes256-cts:normal aes128-cts:normal des3-cbc-sha1:normal rc4-hmac:normal'
+-conf = {'libdefaults': {'permitted_enctypes': 'aes des3 rc4',
+-                        'allow_des3': 'true', 'allow_rc4': 'true'},
++supp='aes256-cts:normal aes128-cts:normal rc4-hmac:normal'
++conf = {'libdefaults': {'permitted_enctypes': 'aes rc4', 'allow_rc4': 'true'},
+         'realms': {'$realm': {'supported_enctypes': supp}}}
+ realm = K5Realm(krb5_conf=conf)
+ shutil.copyfile(realm.ccache, os.path.join(realm.testdir, 'save'))
+diff --git a/src/tests/t_etype_info.py b/src/tests/t_etype_info.py
+index 9ea5ca6228..cfdd6ab83c 100644
+--- a/src/tests/t_etype_info.py
++++ b/src/tests/t_etype_info.py
+@@ -1,7 +1,7 @@
+ from k5test import *
+ 
+-supported_enctypes = 'aes128-cts des3-cbc-sha1 rc4-hmac'
+-conf = {'libdefaults': {'allow_des3': 'true', 'allow_rc4': 'true'},
++supported_enctypes = 'aes128-cts rc4-hmac'
++conf = {'libdefaults': {'allow_rc4': 'true'},
+         'realms': {'$realm': {'supported_enctypes': supported_enctypes}}}
+ realm = K5Realm(create_host=False, get_creds=False, krb5_conf=conf)
+ 
+diff --git a/src/tests/t_sesskeynego.py b/src/tests/t_sesskeynego.py
+index f30d0bc16c..43bdcd5d7e 100755
+--- a/src/tests/t_sesskeynego.py
++++ b/src/tests/t_sesskeynego.py
+@@ -26,7 +26,6 @@ conf3 = {'libdefaults': {
+         'default_tgs_enctypes': 'rc4-hmac,aes128-cts'}}
+ conf4 = {'libdefaults': {'permitted_enctypes': 'aes256-cts'}}
+ conf5 = {'libdefaults': {'allow_rc4': 'true'}}
+-conf6 = {'libdefaults': {'allow_des3': 'true'}}
+ # Test with client request and session_enctypes preferring aes128, but
+ # aes256 long-term key.
+ realm = K5Realm(krb5_conf=conf1, create_host=False, get_creds=False)
+@@ -78,13 +77,6 @@ realm.run([kadminl, 'setstr', 'server', 'session_enctypes', 'rc4-hmac'])
+ test_kvno(realm, 'DEPRECATED:arcfour-hmac', 'aes256-cts-hmac-sha1-96')
+ realm.stop()
+ 
+-# 6: allow_des3 permits negotiation of des3-cbc-sha1 session key.
+-realm = K5Realm(krb5_conf=conf6, create_host=False, get_creds=False)
+-realm.run([kadminl, 'addprinc', '-randkey', '-e', 'aes256-cts', 'server'])
+-realm.run([kadminl, 'setstr', 'server', 'session_enctypes', 'des3-cbc-sha1'])
+-test_kvno(realm, 'DEPRECATED:des3-cbc-sha1', 'aes256-cts-hmac-sha1-96')
+-realm.stop()
+-
+ # 7: default config negotiates aes256-sha1 session key for RC4-only service.
+ realm = K5Realm(create_host=False, get_creds=False)
+ realm.run([kadminl, 'addprinc', '-randkey', '-e', 'rc4-hmac', 'server'])
+diff --git a/src/util/k5test.py b/src/util/k5test.py
+index 96474cc5aa..c3ab63f8e8 100644
+--- a/src/util/k5test.py
++++ b/src/util/k5test.py
+@@ -1299,13 +1299,6 @@ _passes = [
+     # No special settings; exercises AES256.
+     ('default', None, None, None),
+ 
+-    # Exercise the DES3 enctype.
+-    ('des3', None,
+-     {'libdefaults': {'permitted_enctypes': 'des3 aes256-sha1'}},
+-     {'realms': {'$realm': {
+-                    'supported_enctypes': 'des3-cbc-sha1:normal',
+-                    'master_key_type': 'des3-cbc-sha1'}}}),
+-
+     # Exercise the arcfour enctype.
+     ('arcfour', None,
+      {'libdefaults': {'permitted_enctypes': 'rc4 aes256-sha1'}},
+-- 
+2.49.0
+
