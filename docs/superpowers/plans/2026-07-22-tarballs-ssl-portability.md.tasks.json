@@ -10,7 +10,7 @@
     {
       "id": 12,
       "subject": "Task 12: matrix revert to ssl1.1+ssl3(EL9), remove deb builder, script fixes",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         11
       ],
@@ -19,7 +19,7 @@
     {
       "id": 13,
       "subject": "Task 13: EL8 portability: krb5+libssh rebuilds in ppg:common:deps (RL8 only, same names)",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** ssl1.1 tarball loads on stock OpenSSL 1.1 hosts; no RH-only symbol needs.\n\nUSER DECISION 2026-07-22: packages live in ppg:common:deps, RockyLinux_8 ONLY (package.yaml restriction), SAME NAMES as distro originals (krb5, libssh), winning via higher EVR.\n\n**Files:**\n- Create: root/ppg/common/deps/krb5/ (--with-crypto-impl=builtin, no OpenSSL linkage)\n- Create: root/ppg/common/deps/libssh/ (PREFERRED: libgcrypt backend -DWITH_GCRYPT=ON, no OpenSSL; FALLBACK: distinctly-named percona-openssl11-devel build-only package)\n- Verify: tarballs/project.yaml ssl1.1 chain resolution (EVR wins; Prefer only if choice reported)\n\n**Acceptance Criteria:**\n- libk5crypto: NO libcrypto NEEDED\n- libssh: no OpenSSL needs (gcrypt) or stock nodes only (fallback)\n- Shadowing side effect on EL8 staging builds verified and recorded (escalate if problematic)\n- EL8 container gate green under tightened pattern; debian:11 spot-check loads initdb/postgres\n\n**Verify:** readelf -d libk5crypto.so.3 -> no libcrypto; EL8 gate 0 violations\n\n```json:metadata\n{\"files\": [\"root/ppg/common/deps/krb5/\", \"root/ppg/common/deps/libssh/\", \"root/ppg/staging/17/tarballs/\"], \"verifyCommand\": \"EL8 container gate + debian:11 spot check\", \"acceptanceCriteria\": [\"krb5 no libcrypto\", \"libssh no/stock openssl\", \"same names RL8-only in common:deps\", \"staging shadowing verified\", \"debian11 loads\"], \"modelTier\": \"standard\"}\n```"
     },
     {
@@ -33,5 +33,5 @@
       "description": "**Goal:** Both variants pass the full acceptance battery on foreign hosts; user merges.\n\n**USER-ORDERED GATE - NON-SKIPPABLE.** Close only after every acceptanceCriteria item is re-validated independently with captured output.\n\n**Files:** none (operational)\n\n**Acceptance Criteria:**\n- User pushed; PR-145 re-synced; both repos succeeded\n- ssl1.1 on debian:11: full battery PASS (initdb, server, psql, pg_tde, pgcrypto digest, plpython3u w/o manual env, plperlu, pltclu, patronictl, patroni_aws)\n- ssl3 on ubuntu:22.04 AND ubuntu:24.04: full battery PASS incl. pgcrypto digest on host OpenSSL 3.0\n- structure-diffs documented; host prerequisites listed for release notes\n\n**Verify:** containerized battery per variant with captured output\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"acceptance battery per variant\", \"acceptanceCriteria\": [\"PR builds succeeded\", \"debian11 ssl1.1 PASS\", \"ubuntu 22.04+24.04 ssl3 PASS\", \"evidence captured\"], \"userGate\": true, \"tags\": [\"user-gate\"], \"requireEvidenceTokens\": [[\"succeeded\"], [\"debian:11\", \"22.04\", \"24.04\"], [\"digest\", \"pgcrypto\"]], \"modelTier\": \"standard\"}\n```"
     }
   ],
-  "lastUpdated": "2026-07-22T15:30:00"
+  "lastUpdated": "2026-07-22T19:00:00"
 }
