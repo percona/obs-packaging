@@ -4,7 +4,7 @@
     {
       "id": 11,
       "subject": "Task 11: pgcrypto OpenSSL-3.4 macro patch (staging PG RPM)",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** EL9-built pgcrypto.so references only OPENSSL_3.0.0 nodes.\n\n**Files:**\n- Create: root/ppg/staging/17/percona-postgresql/rpm/<patch>.patch\n- Modify: root/ppg/staging/17/percona-postgresql/rpm/*.spec\n\n**Acceptance Criteria:**\n- Patch forces pre-3.4 EVP_MD_CTX_size expansion in contrib/pgcrypto; behaviorally identical\n- Rebuild evidence: readelf pgcrypto.so -> no nodes beyond OPENSSL_3.0.*\n- Patch header documents why + upstream-flag note\n\n**Verify:** readelf -V pgcrypto.so | grep 'OPENSSL_3.[1-9]' -> empty\n\n```json:metadata\n{\"files\": [\"root/ppg/staging/17/percona-postgresql/rpm/\"], \"verifyCommand\": \"readelf -V pgcrypto.so | grep OPENSSL_3.[1-9] -> empty\", \"acceptanceCriteria\": [\"macro patch minimal\", \"no >3.0 nodes\", \"documented\"], \"modelTier\": \"standard\"}\n```"
     },
     {
@@ -33,5 +33,5 @@
       "description": "**Goal:** Both variants pass the full acceptance battery on foreign hosts; user merges.\n\n**USER-ORDERED GATE - NON-SKIPPABLE.** Close only after every acceptanceCriteria item is re-validated independently with captured output.\n\n**Files:** none (operational)\n\n**Acceptance Criteria:**\n- User pushed; PR-145 re-synced; both repos succeeded\n- ssl1.1 on debian:11: full battery PASS (initdb, server, psql, pg_tde, pgcrypto digest, plpython3u w/o manual env, plperlu, pltclu, patronictl, patroni_aws)\n- ssl3 on ubuntu:22.04 AND ubuntu:24.04: full battery PASS incl. pgcrypto digest on host OpenSSL 3.0\n- structure-diffs documented; host prerequisites listed for release notes\n\n**Verify:** containerized battery per variant with captured output\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"acceptance battery per variant\", \"acceptanceCriteria\": [\"PR builds succeeded\", \"debian11 ssl1.1 PASS\", \"ubuntu 22.04+24.04 ssl3 PASS\", \"evidence captured\"], \"userGate\": true, \"tags\": [\"user-gate\"], \"requireEvidenceTokens\": [[\"succeeded\"], [\"debian:11\", \"22.04\", \"24.04\"], [\"digest\", \"pgcrypto\"]], \"modelTier\": \"standard\"}\n```"
     }
   ],
-  "lastUpdated": "2026-07-22T10:30:00"
+  "lastUpdated": "2026-07-22T15:30:00"
 }
