@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- OBS-AddTag: percona-ubi-minimal:8-%RELEASE% percona-ubi-minimal:8 -->
 <!-- OBS-Imagerepo: obsrepositories:/ -->
-<image schemaversion="7.4" name="percona-ubi8-minimal-image">
+<image schemaversion="7.4" name="percona-ubi-minimal-image">
   <description type="system">
     <author>Percona</author>
     <contact>info@percona.com</contact>
@@ -9,7 +9,7 @@
   </description>
   <preferences>
     <type image="docker">
-      <containerconfig name="percona-ubi8-minimal" tag="latest"/>
+      <containerconfig name="percona-ubi-minimal" tag="latest"/>
     </type>
     <version>8.0.0</version>
     <packagemanager>dnf</packagemanager>
