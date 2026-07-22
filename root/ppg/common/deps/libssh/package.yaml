@@ -1,0 +1,27 @@
+title: libssh rebuilt with libgcrypt backend for tarball portability
+description: |
+  Rebuild of the Rocky Linux 8 libssh source package with
+  -DWITH_GCRYPT=ON (libgcrypt crypto backend) instead of OpenSSL, for
+  the EL8-built (ssl1.1) binary tarball. Red Hat's libssh.so.4 links
+  against Red Hat's OpenSSL 1.1.1 fork and needs symbol version nodes
+  (e.g. EVP_KDF_ctrl@OPENSSL_1_1_1b) that exist only in RHEL-family
+  libcrypto.so.1.1, so the bundled library fails to load on stock
+  OpenSSL 1.1 hosts (e.g. Debian 11). With the gcrypt backend libssh
+  has no OpenSSL dependency at all. Binary package names are identical
+  to the distro's; the Release carries a .percona suffix so this EVR
+  wins resolution. RockyLinux_8 only — every other repository uses the
+  distro libssh.
+
+build:
+  RockyLinux_9: false
+  RockyLinux_10: false
+  UBI_8: false
+  UBI_9: false
+  Debian_11: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Leap_16: false
+  openSUSE_Tumbleweed: false
