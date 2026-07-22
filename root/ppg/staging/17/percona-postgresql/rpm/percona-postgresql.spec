@@ -106,6 +106,13 @@ Patch3:         %{sname}-conf.patch
 Patch5:         %{sname}-var-run-socket.patch
 Patch6:         %{sname}-perl-rpath.patch
 Patch7:         llvm_static_linking.patch
+# pgcrypto: OpenSSL >= 3.4 headers remap the EVP_MD_CTX_size() macro to
+# EVP_MD_CTX_get_size_ex() (a function new in 3.4.0), so building on a
+# newer-OpenSSL base adds an OPENSSL_3.4.0 versioned symbol need that makes
+# pgcrypto.so fail to load on OpenSSL 3.0-3.3 hosts.  Restore the 3.0-era
+# macro expansion (identical behavior).  Candidate for upstreaming to
+# PostgreSQL.
+Patch8:         pgcrypto-openssl34-md-ctx-size.patch
 
 %if 0%{?suse_version}
 BuildRequires:  update-alternatives
@@ -594,6 +601,7 @@ benchmarks.
 %patch -P 3 -p0
 %patch -P 5 -p0
 %patch -P 6 -p0
+%patch -P 8 -p0
 
 %{__cp} -p %{SOURCE12} .
 
