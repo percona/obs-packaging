@@ -1,0 +1,1845 @@
+diff --color -ru ../libssh-0.9.6/include/libssh/curve25519.h ./include/libssh/curve25519.h
+--- ../libssh-0.9.6/include/libssh/curve25519.h	2021-03-15 08:11:33.000000000 +0100
++++ ./include/libssh/curve25519.h	2023-04-27 12:21:30.257820636 +0200
+@@ -48,6 +48,7 @@
+ 
+ 
+ int ssh_client_curve25519_init(ssh_session session);
++void ssh_client_curve25519_remove_callbacks(ssh_session session);
+ 
+ #ifdef WITH_SERVER
+ void ssh_server_curve25519_init(ssh_session session);
+diff --color -ru ../libssh-0.9.6/include/libssh/dh-gex.h ./include/libssh/dh-gex.h
+--- ../libssh-0.9.6/include/libssh/dh-gex.h	2021-03-15 08:11:33.000000000 +0100
++++ ./include/libssh/dh-gex.h	2023-04-27 12:21:30.257820636 +0200
+@@ -24,6 +24,7 @@
+ #define SRC_DH_GEX_H_
+ 
+ int ssh_client_dhgex_init(ssh_session session);
++void ssh_client_dhgex_remove_callbacks(ssh_session session);
+ 
+ #ifdef WITH_SERVER
+ void ssh_server_dhgex_init(ssh_session session);
+diff --color -ru ../libssh-0.9.6/include/libssh/dh.h ./include/libssh/dh.h
+--- ../libssh-0.9.6/include/libssh/dh.h	2021-03-15 08:11:33.000000000 +0100
++++ ./include/libssh/dh.h	2023-04-27 12:21:30.257820636 +0200
+@@ -63,8 +63,10 @@
+ ssh_key ssh_dh_get_next_server_publickey(ssh_session session);
+ int ssh_dh_get_next_server_publickey_blob(ssh_session session,
+                                           ssh_string *pubkey_blob);
++int dh_handshake(ssh_session session);
+ 
+ int ssh_client_dh_init(ssh_session session);
++void ssh_client_dh_remove_callbacks(ssh_session session);
+ #ifdef WITH_SERVER
+ void ssh_server_dh_init(ssh_session session);
+ #endif /* WITH_SERVER */
+diff --color -ru ../libssh-0.9.6/include/libssh/ecdh.h ./include/libssh/ecdh.h
+--- ../libssh-0.9.6/include/libssh/ecdh.h	2021-03-15 08:11:33.000000000 +0100
++++ ./include/libssh/ecdh.h	2023-04-27 12:21:30.257820636 +0200
+@@ -45,6 +45,7 @@
+ extern struct ssh_packet_callbacks_struct ssh_ecdh_client_callbacks;
+ /* Backend-specific functions.  */
+ int ssh_client_ecdh_init(ssh_session session);
++void ssh_client_ecdh_remove_callbacks(ssh_session session);
+ int ecdh_build_k(ssh_session session);
+ 
+ #ifdef WITH_SERVER
+diff --color -ru ../libssh-0.9.6/include/libssh/kex.h ./include/libssh/kex.h
+--- ../libssh-0.9.6/include/libssh/kex.h	2021-03-15 08:11:33.000000000 +0100
++++ ./include/libssh/kex.h	2023-04-27 12:21:30.257820636 +0200
+@@ -33,7 +33,7 @@
+ 
+ SSH_PACKET_CALLBACK(ssh_packet_kexinit);
+ 
+-int ssh_send_kex(ssh_session session, int server_kex);
++int ssh_send_kex(ssh_session session);
+ void ssh_list_kex(struct ssh_kex_struct *kex);
+ int ssh_set_client_kex(ssh_session session);
+ int ssh_kex_select_methods(ssh_session session);
+diff --color -ru ../libssh-0.9.6/include/libssh/session.h ./include/libssh/session.h
+--- ../libssh-0.9.6/include/libssh/session.h	2021-08-26 14:27:42.000000000 +0200
++++ ./include/libssh/session.h	2023-04-27 12:24:04.679475777 +0200
+@@ -75,6 +75,11 @@
+ /* Client successfully authenticated */
+ #define SSH_SESSION_FLAG_AUTHENTICATED 2
+ 
++/* The KEXINIT message can be sent first by either of the parties so this flag
++ * indicates that the message was already sent to make sure it is sent and avoid
++ * sending it twice during key exchange to simplify the state machine. */
++#define SSH_SESSION_FLAG_KEXINIT_SENT 4
++
+ /* codes to use with ssh_handle_packets*() */
+ /* Infinite timeout */
+ #define SSH_TIMEOUT_INFINITE -1
+@@ -131,10 +136,8 @@
+     /* Extensions negotiated using RFC 8308 */
+     uint32_t extensions;
+ 
+-    ssh_string banner; /* that's the issue banner from
+-                       the server */
+-    char *discon_msg; /* disconnect message from
+-                         the remote host */
++    ssh_string banner; /* that's the issue banner from the server */
++    char *discon_msg; /* disconnect message from the remote host */
+     ssh_buffer in_buffer;
+     PACKET in_packet;
+     ssh_buffer out_buffer;
+@@ -158,25 +161,33 @@
+         uint32_t current_method;
+     } auth;
+ 
++    /* Sending this flag before key exchange to save one round trip during the
++     * key exchange. This might make sense on high-latency connections.
++     * So far internal only for testing. Usable only on the client side --
++     * there is no key exchange method that would start with server message */
++    bool send_first_kex_follows;
+     /*
+      * RFC 4253, 7.1: if the first_kex_packet_follows flag was set in
+      * the received SSH_MSG_KEXINIT, but the guess was wrong, this
+      * field will be set such that the following guessed packet will
+-     * be ignored.  Once that packet has been received and ignored,
+-     * this field is cleared.
++     * be ignored on the receiving side.  Once that packet has been received and
++     * ignored, this field is cleared.
++     * On the sending side, this is set after we got peer KEXINIT message and we
++     * need to resend the initial message of the negotiated KEX algorithm.
+      */
+-    int first_kex_follows_guess_wrong;
++    bool first_kex_follows_guess_wrong;
+ 
+     ssh_buffer in_hashbuf;
+     ssh_buffer out_hashbuf;
+     struct ssh_crypto_struct *current_crypto;
+-    struct ssh_crypto_struct *next_crypto;  /* next_crypto is going to be used after a SSH2_MSG_NEWKEYS */
++    /* next_crypto is going to be used after a SSH2_MSG_NEWKEYS */
++    struct ssh_crypto_struct *next_crypto;
+ 
+     struct ssh_list *channels; /* linked list of channels */
+     int maxchannel;
+     ssh_agent agent; /* ssh agent */
+ 
+-/* keyb interactive data */
++    /* keyboard interactive data */
+     struct ssh_kbdint_struct *kbdint;
+     struct ssh_gssapi_struct *gssapi;
+ 
+@@ -193,7 +204,8 @@
+ 
+     /* auths accepted by server */
+     struct ssh_list *ssh_message_list; /* list of delayed SSH messages */
+-    int (*ssh_message_callback)( struct ssh_session_struct *session, ssh_message msg, void *userdata);
++    int (*ssh_message_callback)(struct ssh_session_struct *session,
++                                ssh_message msg, void *userdata);
+     void *ssh_message_callback_data;
+     ssh_server_callbacks server_callbacks;
+     void (*ssh_connection_callback)( struct ssh_session_struct *session);
+diff --color -ru ../libssh-0.9.6/src/client.c ./src/client.c
+--- ../libssh-0.9.6/src/client.c	2023-04-27 12:22:39.797925403 +0200
++++ ./src/client.c	2023-04-27 12:24:04.680475778 +0200
+@@ -243,10 +243,13 @@
+  * @warning this function returning is no proof that DH handshake is
+  * completed
+  */
+-static int dh_handshake(ssh_session session) {
+-
++int dh_handshake(ssh_session session)
++{
+   int rc = SSH_AGAIN;
+ 
++  SSH_LOG(SSH_LOG_TRACE, "dh_handshake_state = %d, kex_type = %d",
++          session->dh_handshake_state,  session->next_crypto->kex_type);
++
+   switch (session->dh_handshake_state) {
+     case DH_STATE_INIT:
+       switch(session->next_crypto->kex_type){
+@@ -386,96 +389,102 @@
+ {
+     int rc;
+ 
+-    switch(session->session_state) {
+-        case SSH_SESSION_STATE_NONE:
+-        case SSH_SESSION_STATE_CONNECTING:
+-            break;
+-        case SSH_SESSION_STATE_SOCKET_CONNECTED:
+-            ssh_set_fd_towrite(session);
+-            ssh_send_banner(session, 0);
+-
+-            break;
+-        case SSH_SESSION_STATE_BANNER_RECEIVED:
+-            if (session->serverbanner == NULL) {
+-                goto error;
+-            }
+-            set_status(session, 0.4f);
+-            SSH_LOG(SSH_LOG_DEBUG,
+-                    "SSH server banner: %s", session->serverbanner);
++    SSH_LOG(SSH_LOG_DEBUG, "session_state=%d", session->session_state);
+ 
+-            /* Here we analyze the different protocols the server allows. */
+-            rc = ssh_analyze_banner(session, 0);
+-            if (rc < 0) {
+-                ssh_set_error(session, SSH_FATAL,
+-                        "No version of SSH protocol usable (banner: %s)",
+-                        session->serverbanner);
+-                goto error;
+-            }
++    switch (session->session_state) {
++    case SSH_SESSION_STATE_NONE:
++    case SSH_SESSION_STATE_CONNECTING:
++        break;
++    case SSH_SESSION_STATE_SOCKET_CONNECTED:
++        ssh_set_fd_towrite(session);
++        ssh_send_banner(session, 0);
++
++        break;
++    case SSH_SESSION_STATE_BANNER_RECEIVED:
++        if (session->serverbanner == NULL) {
++            goto error;
++        }
++        set_status(session, 0.4f);
++        SSH_LOG(SSH_LOG_DEBUG,
++                "SSH server banner: %s", session->serverbanner);
++
++        /* Here we analyze the different protocols the server allows. */
++        rc = ssh_analyze_banner(session, 0);
++        if (rc < 0) {
++            ssh_set_error(session, SSH_FATAL,
++                          "No version of SSH protocol usable (banner: %s)",
++                          session->serverbanner);
++            goto error;
++        }
++
++        ssh_packet_register_socket_callback(session, session->socket);
+ 
+-            ssh_packet_register_socket_callback(session, session->socket);
++        ssh_packet_set_default_callbacks(session);
++        session->session_state = SSH_SESSION_STATE_INITIAL_KEX;
++        rc = ssh_set_client_kex(session);
++        if (rc != SSH_OK) {
++            goto error;
++        }
++        rc = ssh_send_kex(session);
++        if (rc < 0) {
++            goto error;
++        }
++        set_status(session, 0.5f);
+ 
+-            ssh_packet_set_default_callbacks(session);
+-            session->session_state = SSH_SESSION_STATE_INITIAL_KEX;
++        break;
++    case SSH_SESSION_STATE_INITIAL_KEX:
++        /* TODO: This state should disappear in favor of get_key handle */
++        break;
++    case SSH_SESSION_STATE_KEXINIT_RECEIVED:
++        set_status(session, 0.6f);
++        ssh_list_kex(&session->next_crypto->server_kex);
++        if ((session->flags & SSH_SESSION_FLAG_KEXINIT_SENT) == 0) {
++            /* in rekeying state if next_crypto client_kex might be empty */
+             rc = ssh_set_client_kex(session);
+             if (rc != SSH_OK) {
+                 goto error;
+             }
+-            rc = ssh_send_kex(session, 0);
++            rc = ssh_send_kex(session);
+             if (rc < 0) {
+                 goto error;
+             }
+-            set_status(session, 0.5f);
++        }
++        if (ssh_kex_select_methods(session) == SSH_ERROR)
++            goto error;
++        set_status(session, 0.8f);
++        session->session_state = SSH_SESSION_STATE_DH;
+ 
+-            break;
+-        case SSH_SESSION_STATE_INITIAL_KEX:
+-            /* TODO: This state should disappear in favor of get_key handle */
+-            break;
+-        case SSH_SESSION_STATE_KEXINIT_RECEIVED:
+-            set_status(session,0.6f);
+-            ssh_list_kex(&session->next_crypto->server_kex);
+-            if (session->next_crypto->client_kex.methods[0] == NULL) {
+-                /* in rekeying state if next_crypto client_kex is empty */
+-                rc = ssh_set_client_kex(session);
+-                if (rc != SSH_OK) {
+-                    goto error;
+-                }
+-                rc = ssh_send_kex(session, 0);
+-                if (rc < 0) {
+-                    goto error;
+-                }
+-            }
+-            if (ssh_kex_select_methods(session) == SSH_ERROR)
+-                goto error;
+-            set_status(session,0.8f);
+-            session->session_state=SSH_SESSION_STATE_DH;
+-            if (dh_handshake(session) == SSH_ERROR) {
+-                goto error;
+-            }
+-            FALL_THROUGH;
+-        case SSH_SESSION_STATE_DH:
+-            if(session->dh_handshake_state==DH_STATE_FINISHED){
+-                set_status(session,1.0f);
+-                session->connected = 1;
+-                if (session->flags & SSH_SESSION_FLAG_AUTHENTICATED)
+-                    session->session_state = SSH_SESSION_STATE_AUTHENTICATED;
+-                else
+-                    session->session_state=SSH_SESSION_STATE_AUTHENTICATING;
+-            }
+-            break;
+-        case SSH_SESSION_STATE_AUTHENTICATING:
+-            break;
+-        case SSH_SESSION_STATE_ERROR:
++        /* If the init packet was already sent in previous step, this will be no
++         * operation */
++        if (dh_handshake(session) == SSH_ERROR) {
+             goto error;
+-        default:
+-            ssh_set_error(session,SSH_FATAL,"Invalid state %d",session->session_state);
++        }
++        FALL_THROUGH;
++    case SSH_SESSION_STATE_DH:
++        if (session->dh_handshake_state == DH_STATE_FINISHED) {
++            set_status(session, 1.0f);
++            session->connected = 1;
++            if (session->flags & SSH_SESSION_FLAG_AUTHENTICATED)
++                session->session_state = SSH_SESSION_STATE_AUTHENTICATED;
++            else
++                session->session_state=SSH_SESSION_STATE_AUTHENTICATING;
++        }
++        break;
++    case SSH_SESSION_STATE_AUTHENTICATING:
++        break;
++    case SSH_SESSION_STATE_ERROR:
++        goto error;
++    default:
++        ssh_set_error(session, SSH_FATAL, "Invalid state %d",
++                      session->session_state);
+     }
+ 
+     return;
+ error:
+     ssh_socket_close(session->socket);
+     session->alive = 0;
+-    session->session_state=SSH_SESSION_STATE_ERROR;
+-    SSH_LOG(SSH_LOG_WARN, "%s", ssh_get_error(session));
++    session->session_state = SSH_SESSION_STATE_ERROR;
++
+ }
+ 
+ /** @internal
+diff --color -ru ../libssh-0.9.6/src/curve25519.c ./src/curve25519.c
+--- ../libssh-0.9.6/src/curve25519.c	2023-04-27 12:22:39.797925403 +0200
++++ ./src/curve25519.c	2023-04-27 12:24:04.680475778 +0200
+@@ -172,6 +172,11 @@
+     return rc;
+ }
+ 
++void ssh_client_curve25519_remove_callbacks(ssh_session session)
++{
++    ssh_packet_remove_callbacks(session, &ssh_curve25519_client_callbacks);
++}
++
+ static int ssh_curve25519_build_k(ssh_session session)
+ {
+     ssh_curve25519_pubkey k;
+@@ -285,7 +290,7 @@
+   (void)type;
+   (void)user;
+ 
+-  ssh_packet_remove_callbacks(session, &ssh_curve25519_client_callbacks);
++  ssh_client_curve25519_remove_callbacks(session);
+ 
+   pubkey_blob = ssh_buffer_get_ssh_string(packet);
+   if (pubkey_blob == NULL) {
+diff --color -ru ../libssh-0.9.6/src/dh.c ./src/dh.c
+--- ../libssh-0.9.6/src/dh.c	2023-04-27 12:22:39.798925404 +0200
++++ ./src/dh.c	2023-04-27 12:24:04.680475778 +0200
+@@ -342,6 +342,11 @@
+   return SSH_ERROR;
+ }
+ 
++void ssh_client_dh_remove_callbacks(ssh_session session)
++{
++    ssh_packet_remove_callbacks(session, &ssh_dh_client_callbacks);
++}
++
+ SSH_PACKET_CALLBACK(ssh_packet_client_dh_reply){
+   struct ssh_crypto_struct *crypto=session->next_crypto;
+   ssh_string pubkey_blob = NULL;
+@@ -351,7 +356,7 @@
+   (void)type;
+   (void)user;
+ 
+-  ssh_packet_remove_callbacks(session, &ssh_dh_client_callbacks);
++  ssh_client_dh_remove_callbacks(session);
+ 
+   rc = ssh_buffer_unpack(packet, "SBS", &pubkey_blob, &server_pubkey,
+           &crypto->dh_server_signature);
+diff --color -ru ../libssh-0.9.6/src/dh-gex.c ./src/dh-gex.c
+--- ../libssh-0.9.6/src/dh-gex.c	2023-04-27 12:22:39.797925403 +0200
++++ ./src/dh-gex.c	2023-04-27 12:24:04.680475778 +0200
+@@ -238,6 +238,11 @@
+     return SSH_PACKET_USED;
+ }
+ 
++void ssh_client_dhgex_remove_callbacks(ssh_session session)
++{
++    ssh_packet_remove_callbacks(session, &ssh_dhgex_client_callbacks);
++}
++
+ static SSH_PACKET_CALLBACK(ssh_packet_client_dhgex_reply)
+ {
+     struct ssh_crypto_struct *crypto=session->next_crypto;
+@@ -248,7 +253,7 @@
+     (void)user;
+     SSH_LOG(SSH_LOG_DEBUG, "SSH_MSG_KEX_DH_GEX_REPLY received");
+ 
+-    ssh_packet_remove_callbacks(session, &ssh_dhgex_client_callbacks);
++    ssh_client_dhgex_remove_callbacks(session);
+     rc = ssh_buffer_unpack(packet,
+                            "SBS",
+                            &pubkey_blob, &server_pubkey,
+diff --color -ru ../libssh-0.9.6/src/ecdh.c ./src/ecdh.c
+--- ../libssh-0.9.6/src/ecdh.c	2023-04-27 12:22:39.798925404 +0200
++++ ./src/ecdh.c	2023-04-27 12:24:04.680475778 +0200
+@@ -43,6 +43,11 @@
+     .user = NULL
+ };
+ 
++void ssh_client_ecdh_remove_callbacks(ssh_session session)
++{
++    ssh_packet_remove_callbacks(session, &ssh_ecdh_client_callbacks);
++}
++
+ /** @internal
+  * @brief parses a SSH_MSG_KEX_ECDH_REPLY packet and sends back
+  * a SSH_MSG_NEWKEYS
+@@ -55,7 +60,7 @@
+   (void)type;
+   (void)user;
+ 
+-  ssh_packet_remove_callbacks(session, &ssh_ecdh_client_callbacks);
++  ssh_client_ecdh_remove_callbacks(session);
+   pubkey_blob = ssh_buffer_get_ssh_string(packet);
+   if (pubkey_blob == NULL) {
+     ssh_set_error(session,SSH_FATAL, "No public key in packet");
+diff --color -ru ../libssh-0.9.6/src/gssapi.c ./src/gssapi.c
+--- ../libssh-0.9.6/src/gssapi.c	2023-04-27 12:22:39.798925404 +0200
++++ ./src/gssapi.c	2023-04-27 12:24:04.681475778 +0200
+@@ -223,6 +223,7 @@
+                              "indicate mechs",
+                              maj_stat,
+                              min_stat);
++        gss_release_oid_set(&min_stat, &both_supported);
+         return SSH_ERROR;
+     }
+ 
+@@ -259,8 +260,10 @@
+         return SSH_OK;
+     }
+     /* from now we have room for context */
+-    if (ssh_gssapi_init(session) == SSH_ERROR)
++    if (ssh_gssapi_init(session) == SSH_ERROR) {
++        gss_release_oid_set(&min_stat, &both_supported);
+         return SSH_ERROR;
++    }
+ 
+     name_buf.value = service_name;
+     name_buf.length = strlen(name_buf.value) + 1;
+@@ -272,6 +275,7 @@
+                              "importing name",
+                              maj_stat,
+                              min_stat);
++        gss_release_oid_set(&min_stat, &both_supported);
+         return -1;
+     }
+ 
+@@ -338,6 +342,7 @@
+                          min_stat);
+     ptr = malloc(buffer.length + 1);
+     if (ptr == NULL) {
++        gss_release_buffer(&min_stat, &buffer);
+         return NULL;
+     }
+     memcpy(ptr, buffer.value, buffer.length);
+@@ -421,6 +426,7 @@
+                              "Gssapi error",
+                              maj_stat,
+                              min_stat);
++        gss_release_buffer(&min_stat, &output_token);
+         ssh_auth_reply_default(session,0);
+         ssh_gssapi_free(session);
+         session->gssapi=NULL;
+@@ -438,6 +444,9 @@
+                         (size_t)output_token.length, output_token.value);
+         ssh_packet_send(session);
+     }
++
++    gss_release_buffer(&min_stat, &output_token);
++
+     if(maj_stat == GSS_S_COMPLETE){
+         session->gssapi->state = SSH_GSSAPI_STATE_RCV_MIC;
+     }
+@@ -638,7 +647,7 @@
+ static int ssh_gssapi_match(ssh_session session, gss_OID_set *valid_oids)
+ {
+     OM_uint32 maj_stat, min_stat, lifetime;
+-    gss_OID_set actual_mechs;
++    gss_OID_set actual_mechs = GSS_C_NO_OID_SET;
+     gss_buffer_desc namebuf;
+     gss_name_t client_id = GSS_C_NO_NAME;
+     gss_OID oid;
+@@ -700,6 +709,7 @@
+     ret = SSH_OK;
+ 
+ end:
++    gss_release_oid_set(&min_stat, &actual_mechs);
+     gss_release_name(&min_stat, &client_id);
+     return ret;
+ }
+@@ -713,7 +723,7 @@
+  */
+ int ssh_gssapi_auth_mic(ssh_session session){
+     size_t i;
+-    gss_OID_set selected; /* oid selected for authentication */
++    gss_OID_set selected = GSS_C_NO_OID_SET; /* oid selected for authentication */
+     ssh_string *oids = NULL;
+     int rc;
+     size_t n_oids = 0;
+@@ -790,6 +800,8 @@
+         SSH_STRING_FREE(oids[i]);
+     }
+     free(oids);
++    gss_release_oid_set(&min_stat, &selected);
++
+     if (rc != SSH_ERROR) {
+         return SSH_AUTH_AGAIN;
+     }
+@@ -893,6 +905,8 @@
+         ssh_packet_send(session);
+         session->auth.state = SSH_AUTH_STATE_GSSAPI_TOKEN;
+     }
++
++    gss_release_buffer(&min_stat, &output_token);
+     return SSH_PACKET_USED;
+ 
+ error:
+@@ -921,8 +935,10 @@
+ 
+     maj_stat = gss_get_mic(&min_stat,session->gssapi->ctx, GSS_C_QOP_DEFAULT,
+                            &mic_buf, &mic_token_buf);
++
++    SSH_BUFFER_FREE(mic_buffer);
++
+     if (GSS_ERROR(maj_stat)){
+-        SSH_BUFFER_FREE(mic_buffer);
+         ssh_gssapi_log_error(SSH_LOG_DEBUG,
+                              "generating MIC",
+                              maj_stat,
+@@ -935,8 +951,10 @@
+                          SSH2_MSG_USERAUTH_GSSAPI_MIC,
+                          mic_token_buf.length,
+                          (size_t)mic_token_buf.length, mic_token_buf.value);
++
++    gss_release_buffer(&min_stat, &mic_token_buf);
++
+     if (rc != SSH_OK) {
+-        SSH_BUFFER_FREE(mic_buffer);
+         ssh_set_error_oom(session);
+         return SSH_ERROR;
+     }
+@@ -1005,6 +1023,8 @@
+         ssh_packet_send(session);
+     }
+ 
++    gss_release_buffer(&min_stat, &output_token);
++
+     if (maj_stat == GSS_S_COMPLETE) {
+         ssh_gssapi_send_mic(session);
+         session->auth.state = SSH_AUTH_STATE_GSSAPI_MIC_SENT;
+diff --color -ru ../libssh-0.9.6/src/kex.c ./src/kex.c
+--- ../libssh-0.9.6/src/kex.c	2023-04-27 12:22:39.798925404 +0200
++++ ./src/kex.c	2023-04-27 12:24:08.450478574 +0200
+@@ -28,6 +28,7 @@
+ #include <stdio.h>
+ #include <stdbool.h>
+ 
++#include "libssh/libssh.h"
+ #include "libssh/priv.h"
+ #include "libssh/buffer.h"
+ #include "libssh/dh.h"
+@@ -305,6 +306,10 @@
+ 
+     int is_wrong = 1;
+ 
++    if (client_str == NULL || server_str == NULL) {
++        return is_wrong;
++    }
++
+     colon = strchr(client_str, ',');
+     if (colon == NULL) {
+         client_kex_len = strlen(client_str);
+@@ -331,6 +336,7 @@
+ SSH_PACKET_CALLBACK(ssh_packet_kexinit)
+ {
+     int i, ok;
++    struct ssh_crypto_struct *crypto = session->next_crypto;
+     int server_kex = session->server;
+     ssh_string str = NULL;
+     char *strings[SSH_KEX_METHODS] = {0};
+@@ -344,35 +350,67 @@
+     (void)type;
+     (void)user;
+ 
++    SSH_LOG(SSH_LOG_TRACE, "KEXINIT received");
++
+     if (session->session_state == SSH_SESSION_STATE_AUTHENTICATED) {
+-        SSH_LOG(SSH_LOG_DEBUG, "Initiating key re-exchange");
++        if (session->dh_handshake_state == DH_STATE_FINISHED) {
++            SSH_LOG(SSH_LOG_DEBUG, "Peer initiated key re-exchange");
++            /* Reset the sent flag if the re-kex was initiated by the peer */
++            session->flags &= ~SSH_SESSION_FLAG_KEXINIT_SENT;
++        } else if (session->flags & SSH_SESSION_FLAG_KEXINIT_SENT &&
++                   session->dh_handshake_state == DH_STATE_INIT_SENT) {
++            /* This happens only when we are sending our-guessed first kex
++             * packet right after our KEXINIT packet. */
++            SSH_LOG(SSH_LOG_DEBUG, "Received peer kexinit answer.");
++        } else if (session->session_state != SSH_SESSION_STATE_INITIAL_KEX) {
++            ssh_set_error(session, SSH_FATAL,
++                          "SSH_KEXINIT received in wrong state");
++            goto error;
++        }
+     } else if (session->session_state != SSH_SESSION_STATE_INITIAL_KEX) {
+-        ssh_set_error(session,SSH_FATAL,"SSH_KEXINIT received in wrong state");
++        ssh_set_error(session, SSH_FATAL,
++                      "SSH_KEXINIT received in wrong state");
+         goto error;
+     }
+ 
+     if (server_kex) {
+-        len = ssh_buffer_get_data(packet,session->next_crypto->client_kex.cookie, 16);
++#ifdef WITH_SERVER
++        len = ssh_buffer_get_data(packet, crypto->client_kex.cookie, 16);
+         if (len != 16) {
+-            ssh_set_error(session, SSH_FATAL, "ssh_packet_kexinit: no cookie in packet");
++            ssh_set_error(session, SSH_FATAL,
++                          "ssh_packet_kexinit: no cookie in packet");
+             goto error;
+         }
+ 
+-        ok = ssh_hashbufin_add_cookie(session, session->next_crypto->client_kex.cookie);
++        ok = ssh_hashbufin_add_cookie(session, crypto->client_kex.cookie);
+         if (ok < 0) {
+-            ssh_set_error(session, SSH_FATAL, "ssh_packet_kexinit: adding cookie failed");
++            ssh_set_error(session, SSH_FATAL,
++                          "ssh_packet_kexinit: adding cookie failed");
++            goto error;
++        }
++
++        ok = server_set_kex(session);
++        if (ok == SSH_ERROR) {
+             goto error;
+         }
++#endif
+     } else {
+-        len = ssh_buffer_get_data(packet,session->next_crypto->server_kex.cookie, 16);
++        len = ssh_buffer_get_data(packet, crypto->server_kex.cookie, 16);
+         if (len != 16) {
+-            ssh_set_error(session, SSH_FATAL, "ssh_packet_kexinit: no cookie in packet");
++            ssh_set_error(session, SSH_FATAL,
++                          "ssh_packet_kexinit: no cookie in packet");
+             goto error;
+         }
+ 
+-        ok = ssh_hashbufin_add_cookie(session, session->next_crypto->server_kex.cookie);
++        ok = ssh_hashbufin_add_cookie(session, crypto->server_kex.cookie);
+         if (ok < 0) {
+-            ssh_set_error(session, SSH_FATAL, "ssh_packet_kexinit: adding cookie failed");
++            ssh_set_error(session, SSH_FATAL,
++                          "ssh_packet_kexinit: adding cookie failed");
++            goto error;
++        }
++
++        ok = ssh_set_client_kex(session);
++        if (ok == SSH_ERROR) {
+             goto error;
+         }
+     }
+@@ -385,7 +423,8 @@
+ 
+         rc = ssh_buffer_add_ssh_string(session->in_hashbuf, str);
+         if (rc < 0) {
+-            ssh_set_error(session, SSH_FATAL, "Error adding string in hash buffer");
++            ssh_set_error(session, SSH_FATAL,
++                          "Error adding string in hash buffer");
+             goto error;
+         }
+ 
+@@ -398,14 +437,14 @@
+         str = NULL;
+     }
+ 
+-    /* copy the server kex info into an array of strings */
++    /* copy the peer kex info into an array of strings */
+     if (server_kex) {
+         for (i = 0; i < SSH_KEX_METHODS; i++) {
+-            session->next_crypto->client_kex.methods[i] = strings[i];
++            crypto->client_kex.methods[i] = strings[i];
+         }
+     } else { /* client */
+         for (i = 0; i < SSH_KEX_METHODS; i++) {
+-            session->next_crypto->server_kex.methods[i] = strings[i];
++            crypto->server_kex.methods[i] = strings[i];
+         }
+     }
+ 
+@@ -419,30 +458,48 @@
+      * that its value is included when computing the session ID (see
+      * 'make_sessionid').
+      */
+-    if (server_kex) {
+-        rc = ssh_buffer_get_u8(packet, &first_kex_packet_follows);
+-        if (rc != 1) {
+-            goto error;
+-        }
++    rc = ssh_buffer_get_u8(packet, &first_kex_packet_follows);
++    if (rc != 1) {
++        goto error;
++    }
+ 
+-        rc = ssh_buffer_add_u8(session->in_hashbuf, first_kex_packet_follows);
+-        if (rc < 0) {
+-            goto error;
+-        }
++    rc = ssh_buffer_add_u8(session->in_hashbuf, first_kex_packet_follows);
++    if (rc < 0) {
++        goto error;
++    }
+ 
+-        rc = ssh_buffer_add_u32(session->in_hashbuf, kexinit_reserved);
+-        if (rc < 0) {
+-            goto error;
+-        }
++    rc = ssh_buffer_add_u32(session->in_hashbuf, kexinit_reserved);
++    if (rc < 0) {
++        goto error;
++    }
++
++    /*
++     * Remember whether 'first_kex_packet_follows' was set and the client
++     * guess was wrong: in this case the next SSH_MSG_KEXDH_INIT message
++     * must be ignored on the server side.
++     * Client needs to start the Key exchange over with the correct method
++     */
++    if (first_kex_packet_follows || session->send_first_kex_follows) {
++        char **client_methods = crypto->client_kex.methods;
++        char **server_methods = crypto->server_kex.methods;
++        session->first_kex_follows_guess_wrong =
++            cmp_first_kex_algo(client_methods[SSH_KEX],
++                               server_methods[SSH_KEX]) ||
++            cmp_first_kex_algo(client_methods[SSH_HOSTKEYS],
++                               server_methods[SSH_HOSTKEYS]);
++            SSH_LOG(SSH_LOG_DEBUG, "The initial guess was %s.",
++                    session->first_kex_follows_guess_wrong ? "wrong" : "right");
++    }
+ 
++    if (server_kex) {
+         /*
+          * If client sent a ext-info-c message in the kex list, it supports
+          * RFC 8308 extension negotiation.
+          */
+-        ok = ssh_match_group(session->next_crypto->client_kex.methods[SSH_KEX],
++        ok = ssh_match_group(crypto->client_kex.methods[SSH_KEX],
+                              KEX_EXTENSION_CLIENT);
+         if (ok) {
+-            const char *hostkeys = NULL;
++            const char *hostkeys = NULL, *wanted_hostkeys = NULL;
+ 
+             /* The client supports extension negotiation */
+             session->extensions |= SSH_EXT_NEGOTIATION;
+@@ -452,14 +509,14 @@
+              * by the client and enable the respective extensions to provide
+              * correct signature in the next packet if RSA is negotiated
+              */
+-            hostkeys = session->next_crypto->client_kex.methods[SSH_HOSTKEYS];
++            hostkeys = crypto->client_kex.methods[SSH_HOSTKEYS];
++            wanted_hostkeys = session->opts.wanted_methods[SSH_HOSTKEYS];
+             ok = ssh_match_group(hostkeys, "rsa-sha2-512");
+             if (ok) {
+                 /* Check if rsa-sha2-512 is allowed by config */
+-                if (session->opts.wanted_methods[SSH_HOSTKEYS] != NULL) {
+-                    char *is_allowed =
+-                        ssh_find_matching(session->opts.wanted_methods[SSH_HOSTKEYS],
+-                                          "rsa-sha2-512");
++                if (wanted_hostkeys != NULL) {
++                    char *is_allowed = ssh_find_matching(wanted_hostkeys,
++                                                         "rsa-sha2-512");
+                     if (is_allowed != NULL) {
+                         session->extensions |= SSH_EXT_SIG_RSA_SHA512;
+                     }
+@@ -469,10 +526,9 @@
+             ok = ssh_match_group(hostkeys, "rsa-sha2-256");
+             if (ok) {
+                 /* Check if rsa-sha2-256 is allowed by config */
+-                if (session->opts.wanted_methods[SSH_HOSTKEYS] != NULL) {
+-                    char *is_allowed =
+-                        ssh_find_matching(session->opts.wanted_methods[SSH_HOSTKEYS],
+-                                          "rsa-sha2-256");
++                if (wanted_hostkeys != NULL) {
++                    char *is_allowed = ssh_find_matching(wanted_hostkeys,
++                                                         "rsa-sha2-256");
+                     if (is_allowed != NULL) {
+                         session->extensions |= SSH_EXT_SIG_RSA_SHA256;
+                     }
+@@ -488,7 +544,7 @@
+                 (session->extensions & SSH_EXT_SIG_RSA_SHA512)) {
+                 session->extensions &= ~(SSH_EXT_SIG_RSA_SHA256 | SSH_EXT_SIG_RSA_SHA512);
+                 rsa_sig_ext = ssh_find_matching("rsa-sha2-512,rsa-sha2-256",
+-                                                session->next_crypto->client_kex.methods[SSH_HOSTKEYS]);
++                                                hostkeys);
+                 if (rsa_sig_ext == NULL) {
+                     goto error; /* should never happen */
+                 } else if (strcmp(rsa_sig_ext, "rsa-sha2-512") == 0) {
+@@ -507,24 +563,16 @@
+                     session->extensions & SSH_EXT_SIG_RSA_SHA256 ? "SHA256" : "",
+                     session->extensions & SSH_EXT_SIG_RSA_SHA512 ? " SHA512" : "");
+         }
+-
+-        /*
+-         * Remember whether 'first_kex_packet_follows' was set and the client
+-         * guess was wrong: in this case the next SSH_MSG_KEXDH_INIT message
+-         * must be ignored.
+-         */
+-        if (first_kex_packet_follows) {
+-          session->first_kex_follows_guess_wrong =
+-            cmp_first_kex_algo(session->next_crypto->client_kex.methods[SSH_KEX],
+-                               session->next_crypto->server_kex.methods[SSH_KEX]) ||
+-            cmp_first_kex_algo(session->next_crypto->client_kex.methods[SSH_HOSTKEYS],
+-                               session->next_crypto->server_kex.methods[SSH_HOSTKEYS]);
+-        }
+     }
+ 
+     /* Note, that his overwrites authenticated state in case of rekeying */
+     session->session_state = SSH_SESSION_STATE_KEXINIT_RECEIVED;
+-    session->dh_handshake_state = DH_STATE_INIT;
++    /* if we already sent our initial key exchange packet, do not reset the
++     * DH state. We will know if we were right with our guess only in
++     * dh_handshake_state() */
++    if (session->send_first_kex_follows == false) {
++        session->dh_handshake_state = DH_STATE_INIT;
++    }
+     session->ssh_connection_callback(session);
+     return SSH_PACKET_USED;
+ 
+@@ -672,14 +720,18 @@
+     int i;
+     size_t kex_len, len;
+ 
++    /* Skip if already set, for example for the rekey or when we do the guessing
++     * it could have been already used to make some protocol decisions. */
++    if (client->methods[0] != NULL) {
++        return SSH_OK;
++    }
++
+     ok = ssh_get_random(client->cookie, 16, 0);
+     if (!ok) {
+         ssh_set_error(session, SSH_FATAL, "PRNG error");
+         return SSH_ERROR;
+     }
+ 
+-    memset(client->methods, 0, SSH_KEX_METHODS * sizeof(char **));
+-
+     /* Set the list of allowed algorithms in order of preference, if it hadn't
+      * been set yet. */
+     for (i = 0; i < SSH_KEX_METHODS; i++) {
+@@ -749,15 +801,89 @@
+     return NULL;
+ }
+ 
++static enum ssh_key_exchange_e
++kex_select_kex_type(const char *kex)
++{
++    if (strcmp(kex, "diffie-hellman-group1-sha1") == 0) {
++        return SSH_KEX_DH_GROUP1_SHA1;
++    } else if (strcmp(kex, "diffie-hellman-group14-sha1") == 0) {
++        return SSH_KEX_DH_GROUP14_SHA1;
++    } else if (strcmp(kex, "diffie-hellman-group14-sha256") == 0) {
++        return SSH_KEX_DH_GROUP14_SHA256;
++    } else if (strcmp(kex, "diffie-hellman-group16-sha512") == 0) {
++        return SSH_KEX_DH_GROUP16_SHA512;
++    } else if (strcmp(kex, "diffie-hellman-group18-sha512") == 0) {
++        return SSH_KEX_DH_GROUP18_SHA512;
++#ifdef WITH_GEX
++    } else if (strcmp(kex, "diffie-hellman-group-exchange-sha1") == 0) {
++        return SSH_KEX_DH_GEX_SHA1;
++    } else if (strcmp(kex, "diffie-hellman-group-exchange-sha256") == 0) {
++        return SSH_KEX_DH_GEX_SHA256;
++#endif /* WITH_GEX */
++    } else if (strcmp(kex, "ecdh-sha2-nistp256") == 0) {
++        return SSH_KEX_ECDH_SHA2_NISTP256;
++    } else if (strcmp(kex, "ecdh-sha2-nistp384") == 0) {
++        return SSH_KEX_ECDH_SHA2_NISTP384;
++    } else if (strcmp(kex, "ecdh-sha2-nistp521") == 0) {
++        return SSH_KEX_ECDH_SHA2_NISTP521;
++    } else if (strcmp(kex, "curve25519-sha256@libssh.org") == 0) {
++        return SSH_KEX_CURVE25519_SHA256_LIBSSH_ORG;
++    } else if (strcmp(kex, "curve25519-sha256") == 0) {
++        return SSH_KEX_CURVE25519_SHA256;
++    }
++    /* should not happen. We should be getting only valid names at this stage */
++    return 0;
++}
++
++
++/** @internal
++ * @brief Reverts guessed callbacks set during the dh_handshake()
++ * @param session session handle
++ * @returns void
++ */
++static void revert_kex_callbacks(ssh_session session)
++{
++    switch (session->next_crypto->kex_type) {
++    case SSH_KEX_DH_GROUP1_SHA1:
++    case SSH_KEX_DH_GROUP14_SHA1:
++    case SSH_KEX_DH_GROUP14_SHA256:
++    case SSH_KEX_DH_GROUP16_SHA512:
++    case SSH_KEX_DH_GROUP18_SHA512:
++        ssh_client_dh_remove_callbacks(session);
++        break;
++#ifdef WITH_GEX
++    case SSH_KEX_DH_GEX_SHA1:
++    case SSH_KEX_DH_GEX_SHA256:
++        ssh_client_dhgex_remove_callbacks(session);
++        break;
++#endif /* WITH_GEX */
++#ifdef HAVE_ECDH
++    case SSH_KEX_ECDH_SHA2_NISTP256:
++    case SSH_KEX_ECDH_SHA2_NISTP384:
++    case SSH_KEX_ECDH_SHA2_NISTP521:
++        ssh_client_ecdh_remove_callbacks(session);
++        break;
++#endif
++#ifdef HAVE_CURVE25519
++    case SSH_KEX_CURVE25519_SHA256:
++    case SSH_KEX_CURVE25519_SHA256_LIBSSH_ORG:
++        ssh_client_curve25519_remove_callbacks(session);
++        break;
++#endif
++    }
++}
++
+ /** @brief Select the different methods on basis of client's and
+  * server's kex messages, and watches out if a match is possible.
+  */
+ int ssh_kex_select_methods (ssh_session session)
+ {
+-    struct ssh_kex_struct *server = &session->next_crypto->server_kex;
+-    struct ssh_kex_struct *client = &session->next_crypto->client_kex;
++    struct ssh_crypto_struct *crypto = session->next_crypto;
++    struct ssh_kex_struct *server = &crypto->server_kex;
++    struct ssh_kex_struct *client = &crypto->client_kex;
+     char *ext_start = NULL;
+     const char *aead_hmac = NULL;
++    enum ssh_key_exchange_e kex_type;
+     int i;
+ 
+     /* Here we should drop the  ext-info-c  from the list so we avoid matching.
+@@ -768,52 +894,41 @@
+     }
+ 
+     for (i = 0; i < SSH_KEX_METHODS; i++) {
+-        session->next_crypto->kex_methods[i]=ssh_find_matching(server->methods[i],client->methods[i]);
++        crypto->kex_methods[i] = ssh_find_matching(server->methods[i],
++                                                   client->methods[i]);
+ 
+         if (i == SSH_MAC_C_S || i == SSH_MAC_S_C) {
+-            aead_hmac = ssh_find_aead_hmac(session->next_crypto->kex_methods[i-2]);
++            aead_hmac = ssh_find_aead_hmac(crypto->kex_methods[i - 2]);
+             if (aead_hmac) {
+-                free(session->next_crypto->kex_methods[i]);
+-                session->next_crypto->kex_methods[i] = strdup(aead_hmac);
++                free(crypto->kex_methods[i]);
++                crypto->kex_methods[i] = strdup(aead_hmac);
+             }
+         }
+-        if (session->next_crypto->kex_methods[i] == NULL && i < SSH_LANG_C_S){
+-            ssh_set_error(session,SSH_FATAL,"kex error : no match for method %s: server [%s], client [%s]",
+-                    ssh_kex_descriptions[i],server->methods[i],client->methods[i]);
++        if (crypto->kex_methods[i] == NULL && i < SSH_LANG_C_S) {
++            ssh_set_error(session, SSH_FATAL,
++                          "kex error : no match for method %s: server [%s], "
++                          "client [%s]", ssh_kex_descriptions[i],
++                          server->methods[i], client->methods[i]);
+             return SSH_ERROR;
+-        } else if ((i >= SSH_LANG_C_S) && (session->next_crypto->kex_methods[i] == NULL)) {
++        } else if ((i >= SSH_LANG_C_S) && (crypto->kex_methods[i] == NULL)) {
+             /* we can safely do that for languages */
+-            session->next_crypto->kex_methods[i] = strdup("");
++            crypto->kex_methods[i] = strdup("");
+         }
+     }
+-    if (strcmp(session->next_crypto->kex_methods[SSH_KEX], "diffie-hellman-group1-sha1") == 0){
+-      session->next_crypto->kex_type=SSH_KEX_DH_GROUP1_SHA1;
+-    } else if (strcmp(session->next_crypto->kex_methods[SSH_KEX], "diffie-hellman-group14-sha1") == 0){
+-      session->next_crypto->kex_type=SSH_KEX_DH_GROUP14_SHA1;
+-    } else if (strcmp(session->next_crypto->kex_methods[SSH_KEX], "diffie-hellman-group14-sha256") == 0){
+-      session->next_crypto->kex_type=SSH_KEX_DH_GROUP14_SHA256;
+-    } else if (strcmp(session->next_crypto->kex_methods[SSH_KEX], "diffie-hellman-group16-sha512") == 0){
+-      session->next_crypto->kex_type=SSH_KEX_DH_GROUP16_SHA512;
+-    } else if (strcmp(session->next_crypto->kex_methods[SSH_KEX], "diffie-hellman-group18-sha512") == 0){
+-      session->next_crypto->kex_type=SSH_KEX_DH_GROUP18_SHA512;
+-#ifdef WITH_GEX
+-    } else if (strcmp(session->next_crypto->kex_methods[SSH_KEX], "diffie-hellman-group-exchange-sha1") == 0){
+-      session->next_crypto->kex_type=SSH_KEX_DH_GEX_SHA1;
+-    } else if (strcmp(session->next_crypto->kex_methods[SSH_KEX], "diffie-hellman-group-exchange-sha256") == 0){
+-        session->next_crypto->kex_type=SSH_KEX_DH_GEX_SHA256;
+-#endif /* WITH_GEX */
+-    } else if (strcmp(session->next_crypto->kex_methods[SSH_KEX], "ecdh-sha2-nistp256") == 0){
+-      session->next_crypto->kex_type=SSH_KEX_ECDH_SHA2_NISTP256;
+-    } else if (strcmp(session->next_crypto->kex_methods[SSH_KEX], "ecdh-sha2-nistp384") == 0){
+-      session->next_crypto->kex_type=SSH_KEX_ECDH_SHA2_NISTP384;
+-    } else if (strcmp(session->next_crypto->kex_methods[SSH_KEX], "ecdh-sha2-nistp521") == 0){
+-      session->next_crypto->kex_type=SSH_KEX_ECDH_SHA2_NISTP521;
+-    } else if (strcmp(session->next_crypto->kex_methods[SSH_KEX], "curve25519-sha256@libssh.org") == 0){
+-      session->next_crypto->kex_type=SSH_KEX_CURVE25519_SHA256_LIBSSH_ORG;
+-    } else if (strcmp(session->next_crypto->kex_methods[SSH_KEX], "curve25519-sha256") == 0){
+-      session->next_crypto->kex_type=SSH_KEX_CURVE25519_SHA256;
++
++    /* We can not set this value directly as the old value is needed to revert
++     * callbacks if we are client */
++    kex_type = kex_select_kex_type(crypto->kex_methods[SSH_KEX]);
++    if (session->client && session->first_kex_follows_guess_wrong) {
++        SSH_LOG(SSH_LOG_DEBUG, "Our guess was wrong. Restarting the KEX");
++        /* We need to remove the wrong callbacks and start kex again */
++        revert_kex_callbacks(session);
++        session->dh_handshake_state = DH_STATE_INIT;
++        session->first_kex_follows_guess_wrong = false;
+     }
+-    SSH_LOG(SSH_LOG_DEBUG, "Negotiated %s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
++    crypto->kex_type = kex_type;
++
++    SSH_LOG(SSH_LOG_DEBUG, "Negotiated %s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
+             session->next_crypto->kex_methods[SSH_KEX],
+             session->next_crypto->kex_methods[SSH_HOSTKEYS],
+             session->next_crypto->kex_methods[SSH_CRYPT_C_S],
+@@ -830,63 +945,116 @@
+ 
+ 
+ /* this function only sends the predefined set of kex methods */
+-int ssh_send_kex(ssh_session session, int server_kex)
++int ssh_send_kex(ssh_session session)
+ {
+-  struct ssh_kex_struct *kex = (server_kex ? &session->next_crypto->server_kex :
+-      &session->next_crypto->client_kex);
+-  ssh_string str = NULL;
+-  int i;
+-  int rc;
+-
+-  rc = ssh_buffer_pack(session->out_buffer,
+-                       "bP",
+-                       SSH2_MSG_KEXINIT,
+-                       16,
+-                       kex->cookie); /* cookie */
+-  if (rc != SSH_OK)
+-    goto error;
+-  if (ssh_hashbufout_add_cookie(session) < 0) {
+-    goto error;
+-  }
++    struct ssh_kex_struct *kex = (session->server ?
++        &session->next_crypto->server_kex :
++        &session->next_crypto->client_kex);
++    ssh_string str = NULL;
++    int i;
++    int rc;
++    int first_kex_packet_follows = 0;
++
++    /* Only client can initiate the handshake methods we implement. If we
++     * already received the peer mechanisms, there is no point in guessing */
++    if (session->client &&
++        session->session_state != SSH_SESSION_STATE_KEXINIT_RECEIVED &&
++        session->send_first_kex_follows) {
++        first_kex_packet_follows = 1;
++    }
++
++    SSH_LOG(SSH_LOG_TRACE,
++            "Sending KEXINIT packet, first_kex_packet_follows = %d",
++            first_kex_packet_follows);
++
++    rc = ssh_buffer_pack(session->out_buffer,
++                         "bP",
++                         SSH2_MSG_KEXINIT,
++                         16,
++                         kex->cookie); /* cookie */
++    if (rc != SSH_OK)
++        goto error;
++    if (ssh_hashbufout_add_cookie(session) < 0) {
++        goto error;
++    }
++
++    ssh_list_kex(kex);
+ 
+-  ssh_list_kex(kex);
++    for (i = 0; i < SSH_KEX_METHODS; i++) {
++        str = ssh_string_from_char(kex->methods[i]);
++        if (str == NULL) {
++            goto error;
++        }
++
++        rc = ssh_buffer_add_ssh_string(session->out_hashbuf, str);
++        if (rc < 0) {
++            goto error;
++        }
++        rc = ssh_buffer_add_ssh_string(session->out_buffer, str);
++        if (rc < 0) {
++            goto error;
++        }
++        SSH_STRING_FREE(str);
++        str = NULL;
++    }
+ 
+-  for (i = 0; i < SSH_KEX_METHODS; i++) {
+-    str = ssh_string_from_char(kex->methods[i]);
+-    if (str == NULL) {
+-      goto error;
++    rc = ssh_buffer_pack(session->out_buffer,
++                         "bd",
++                         first_kex_packet_follows,
++                         0);
++    if (rc != SSH_OK) {
++        goto error;
+     }
+ 
+-    if (ssh_buffer_add_ssh_string(session->out_hashbuf, str) < 0) {
+-      goto error;
++    /* Prepare also the first_kex_packet_follows and reserved to 0 */
++    rc = ssh_buffer_add_u8(session->out_hashbuf, first_kex_packet_follows);
++    if (rc < 0) {
++        goto error;
+     }
+-    if (ssh_buffer_add_ssh_string(session->out_buffer, str) < 0) {
+-      goto error;
++    rc = ssh_buffer_add_u32(session->out_hashbuf, 0);
++    if (rc < 0) {
++        goto error;
+     }
+-    SSH_STRING_FREE(str);
+-    str = NULL;
+-  }
+ 
+-  rc = ssh_buffer_pack(session->out_buffer,
+-                       "bd",
+-                       0,
+-                       0);
+-  if (rc != SSH_OK) {
+-    goto error;
+-  }
++    rc = ssh_packet_send(session);
++    if (rc == SSH_ERROR) {
++        return -1;
++    }
+ 
+-  if (ssh_packet_send(session) == SSH_ERROR) {
+-    return -1;
+-  }
++    session->flags |= SSH_SESSION_FLAG_KEXINIT_SENT;
++    SSH_LOG(SSH_LOG_PACKET, "SSH_MSG_KEXINIT sent");
++
++    /* If we indicated that we are sending the guessed key exchange packet,
++     * do it now. The packet is simple, but we need to do some preparations */
++    if (first_kex_packet_follows) {
++        char *list = kex->methods[SSH_KEX];
++        char *colon = strchr(list, ',');
++        size_t kex_name_len = colon ? (size_t)(colon - list) : strlen(list);
++        char *kex_name = calloc(kex_name_len + 1, 1);
++        if (kex_name == NULL) {
++            ssh_set_error_oom(session);
++            goto error;
++        }
++        snprintf(kex_name, kex_name_len + 1, "%.*s", (int)kex_name_len, list);
++        SSH_LOG(SSH_LOG_TRACE, "Sending the first kex packet for %s", kex_name);
++
++        session->next_crypto->kex_type = kex_select_kex_type(kex_name);
++        free(kex_name);
++
++        /* run the first step of the DH handshake */
++        session->dh_handshake_state = DH_STATE_INIT;
++        if (dh_handshake(session) == SSH_ERROR) {
++            goto error;
++        }
++    }
++    return 0;
+ 
+-  SSH_LOG(SSH_LOG_PACKET, "SSH_MSG_KEXINIT sent");
+-  return 0;
+ error:
+-  ssh_buffer_reinit(session->out_buffer);
+-  ssh_buffer_reinit(session->out_hashbuf);
+-  SSH_STRING_FREE(str);
++    ssh_buffer_reinit(session->out_buffer);
++    ssh_buffer_reinit(session->out_hashbuf);
++    SSH_STRING_FREE(str);
+ 
+-  return -1;
++    return -1;
+ }
+ 
+ /*
+@@ -929,7 +1097,7 @@
+     }
+ 
+     session->dh_handshake_state = DH_STATE_INIT;
+-    rc = ssh_send_kex(session, session->server);
++    rc = ssh_send_kex(session);
+     if (rc < 0) {
+         SSH_LOG(SSH_LOG_PACKET, "Failed to send kex");
+         return rc;
+@@ -1006,33 +1174,6 @@
+         client_hash = session->in_hashbuf;
+     }
+ 
+-    /*
+-     * Handle the two final fields for the KEXINIT message (RFC 4253 7.1):
+-     *
+-     *      boolean      first_kex_packet_follows
+-     *      uint32       0 (reserved for future extension)
+-     */
+-    rc = ssh_buffer_add_u8(server_hash, 0);
+-    if (rc < 0) {
+-        goto error;
+-    }
+-    rc = ssh_buffer_add_u32(server_hash, 0);
+-    if (rc < 0) {
+-        goto error;
+-    }
+-
+-    /* These fields are handled for the server case in ssh_packet_kexinit. */
+-    if (session->client) {
+-        rc = ssh_buffer_add_u8(client_hash, 0);
+-        if (rc < 0) {
+-            goto error;
+-        }
+-        rc = ssh_buffer_add_u32(client_hash, 0);
+-        if (rc < 0) {
+-            goto error;
+-        }
+-    }
+-
+     rc = ssh_dh_get_next_server_publickey_blob(session, &server_pubkey_blob);
+     if (rc != SSH_OK) {
+         goto error;
+diff --color -ru ../libssh-0.9.6/src/packet.c ./src/packet.c
+--- ../libssh-0.9.6/src/packet.c	2023-04-27 12:22:39.811925413 +0200
++++ ./src/packet.c	2023-04-27 12:24:04.682475779 +0200
+@@ -366,6 +366,11 @@
+          * - session->dh_handhsake_state = DH_STATE_NEWKEYS_SENT
+          * */
+ 
++        if (!session->server) {
++            rc = SSH_PACKET_DENIED;
++            break;
++        }
++
+         if (session->session_state != SSH_SESSION_STATE_DH) {
+             rc = SSH_PACKET_DENIED;
+             break;
+@@ -1410,18 +1415,23 @@
+     }
+ }
+ 
+-void ssh_packet_register_socket_callback(ssh_session session, ssh_socket s){
+-	session->socket_callbacks.data=ssh_packet_socket_callback;
+-	session->socket_callbacks.connected=NULL;
+-    session->socket_callbacks.controlflow = ssh_packet_socket_controlflow_callback;
+-	session->socket_callbacks.userdata=session;
+-	ssh_socket_set_callbacks(s,&session->socket_callbacks);
++void ssh_packet_register_socket_callback(ssh_session session, ssh_socket s)
++{
++    struct ssh_socket_callbacks_struct *callbacks = &session->socket_callbacks;
++
++    callbacks->data = ssh_packet_socket_callback;
++    callbacks->connected = NULL;
++    callbacks->controlflow = ssh_packet_socket_controlflow_callback;
++    callbacks->userdata = session;
++    ssh_socket_set_callbacks(s, callbacks);
+ }
+ 
+ /** @internal
+  * @brief sets the callbacks for the packet layer
+  */
+-void ssh_packet_set_callbacks(ssh_session session, ssh_packet_callbacks callbacks){
++void
++ssh_packet_set_callbacks(ssh_session session, ssh_packet_callbacks callbacks)
++{
+     if (session->packet_callbacks == NULL) {
+         session->packet_callbacks = ssh_list_new();
+         if (session->packet_callbacks == NULL) {
+@@ -1435,8 +1445,11 @@
+ /** @internal
+  * @brief remove the callbacks from the packet layer
+  */
+-void ssh_packet_remove_callbacks(ssh_session session, ssh_packet_callbacks callbacks){
++void
++ssh_packet_remove_callbacks(ssh_session session, ssh_packet_callbacks callbacks)
++{
+     struct ssh_iterator *it = NULL;
++
+     it = ssh_list_find(session->packet_callbacks, callbacks);
+     if (it != NULL) {
+         ssh_list_remove(session->packet_callbacks, it);
+@@ -1446,12 +1459,15 @@
+ /** @internal
+  * @brief sets the default packet handlers
+  */
+-void ssh_packet_set_default_callbacks(ssh_session session){
+-	session->default_packet_callbacks.start=1;
+-	session->default_packet_callbacks.n_callbacks=sizeof(default_packet_handlers)/sizeof(ssh_packet_callback);
+-	session->default_packet_callbacks.user=session;
+-	session->default_packet_callbacks.callbacks=default_packet_handlers;
+-	ssh_packet_set_callbacks(session, &session->default_packet_callbacks);
++void ssh_packet_set_default_callbacks(ssh_session session)
++{
++    struct ssh_packet_callbacks_struct *c = &session->default_packet_callbacks;
++
++    c->start = 1;
++    c->n_callbacks = sizeof(default_packet_handlers) / sizeof(ssh_packet_callback);
++    c->user = session;
++    c->callbacks = default_packet_handlers;
++    ssh_packet_set_callbacks(session, c);
+ }
+ 
+ /** @internal
+@@ -1928,7 +1944,7 @@
+         memcpy(session->next_crypto->session_id,
+                session->current_crypto->session_id,
+                session_id_len);
+-	session->next_crypto->session_id_len = session_id_len;
++        session->next_crypto->session_id_len = session_id_len;
+ 
+         return SSH_OK;
+     }
+diff --color -ru ../libssh-0.9.6/src/packet_cb.c ./src/packet_cb.c
+--- ../libssh-0.9.6/src/packet_cb.c	2023-04-27 12:22:39.799925404 +0200
++++ ./src/packet_cb.c	2023-04-27 12:24:04.682475779 +0200
+@@ -156,6 +156,9 @@
+                                   session->next_crypto->digest_len);
+     SSH_SIGNATURE_FREE(sig);
+     if (rc == SSH_ERROR) {
++      ssh_set_error(session,
++                    SSH_FATAL,
++                    "Failed to verify server hostkey signature");
+       goto error;
+     }
+     SSH_LOG(SSH_LOG_DEBUG,"Signature verified and valid");
+diff --color -ru ../libssh-0.9.6/src/server.c ./src/server.c
+--- ../libssh-0.9.6/src/server.c	2023-04-27 12:22:39.800925405 +0200
++++ ./src/server.c	2023-04-27 12:24:04.683475780 +0200
+@@ -92,7 +92,11 @@
+     size_t len;
+     int ok;
+ 
+-    ZERO_STRUCTP(server);
++    /* Skip if already set, for example for the rekey or when we do the guessing
++     * it could have been already used to make some protocol decisions. */
++    if (server->methods[0] != NULL) {
++        return SSH_OK;
++    }
+ 
+     ok = ssh_get_random(server->cookie, 16, 0);
+     if (!ok) {
+@@ -335,117 +339,121 @@
+  * @brief A function to be called each time a step has been done in the
+  * connection.
+  */
+-static void ssh_server_connection_callback(ssh_session session){
++static void ssh_server_connection_callback(ssh_session session)
++{
+     int rc;
+ 
+-    switch(session->session_state){
+-        case SSH_SESSION_STATE_NONE:
+-        case SSH_SESSION_STATE_CONNECTING:
+-        case SSH_SESSION_STATE_SOCKET_CONNECTED:
+-            break;
+-        case SSH_SESSION_STATE_BANNER_RECEIVED:
+-            if (session->clientbanner == NULL) {
++    switch (session->session_state) {
++    case SSH_SESSION_STATE_NONE:
++    case SSH_SESSION_STATE_CONNECTING:
++    case SSH_SESSION_STATE_SOCKET_CONNECTED:
++        break;
++    case SSH_SESSION_STATE_BANNER_RECEIVED:
++        if (session->clientbanner == NULL) {
++            goto error;
++        }
++        set_status(session, 0.4f);
++        SSH_LOG(SSH_LOG_DEBUG,
++                "SSH client banner: %s", session->clientbanner);
++
++        /* Here we analyze the different protocols the server allows. */
++        rc = ssh_analyze_banner(session, 1);
++        if (rc < 0) {
++            ssh_set_error(session, SSH_FATAL,
++                          "No version of SSH protocol usable (banner: %s)",
++                          session->clientbanner);
++            goto error;
++        }
++
++        /* from now, the packet layer is handling incoming packets */
++        session->socket_callbacks.data = ssh_packet_socket_callback;
++        ssh_packet_register_socket_callback(session, session->socket);
++
++        ssh_packet_set_default_callbacks(session);
++        set_status(session, 0.5f);
++        session->session_state = SSH_SESSION_STATE_INITIAL_KEX;
++        if (ssh_send_kex(session) < 0) {
++            goto error;
++        }
++        break;
++    case SSH_SESSION_STATE_INITIAL_KEX:
++        /* TODO: This state should disappear in favor of get_key handle */
++        break;
++    case SSH_SESSION_STATE_KEXINIT_RECEIVED:
++        set_status(session, 0.6f);
++        if ((session->flags & SSH_SESSION_FLAG_KEXINIT_SENT) == 0) {
++            if (server_set_kex(session) == SSH_ERROR)
+                 goto error;
+-            }
+-            set_status(session, 0.4f);
+-            SSH_LOG(SSH_LOG_DEBUG,
+-                    "SSH client banner: %s", session->clientbanner);
+-
+-            /* Here we analyze the different protocols the server allows. */
+-            rc = ssh_analyze_banner(session, 1);
+-            if (rc < 0) {
+-                ssh_set_error(session, SSH_FATAL,
+-                        "No version of SSH protocol usable (banner: %s)",
+-                        session->clientbanner);
++            /* We are in a rekeying, so we need to send the server kex */
++            if (ssh_send_kex(session) < 0)
+                 goto error;
+-            }
++        }
++        ssh_list_kex(&session->next_crypto->client_kex); // log client kex
++        if (ssh_kex_select_methods(session) < 0) {
++            goto error;
++        }
++        if (crypt_set_algorithms_server(session) == SSH_ERROR)
++            goto error;
++        set_status(session, 0.8f);
++        session->session_state = SSH_SESSION_STATE_DH;
++        break;
++    case SSH_SESSION_STATE_DH:
++        if (session->dh_handshake_state == DH_STATE_FINISHED) {
+ 
+-            /* from now, the packet layer is handling incoming packets */
+-            session->socket_callbacks.data=ssh_packet_socket_callback;
+-            ssh_packet_register_socket_callback(session, session->socket);
+-
+-            ssh_packet_set_default_callbacks(session);
+-            set_status(session, 0.5f);
+-            session->session_state=SSH_SESSION_STATE_INITIAL_KEX;
+-            if (ssh_send_kex(session, 1) < 0) {
+-                goto error;
+-            }
+-            break;
+-        case SSH_SESSION_STATE_INITIAL_KEX:
+-            /* TODO: This state should disappear in favor of get_key handle */
+-            break;
+-        case SSH_SESSION_STATE_KEXINIT_RECEIVED:
+-            set_status(session,0.6f);
+-            if(session->next_crypto->server_kex.methods[0]==NULL){
+-                if(server_set_kex(session) == SSH_ERROR)
+-                    goto error;
+-                /* We are in a rekeying, so we need to send the server kex */
+-                if(ssh_send_kex(session, 1) < 0)
+-                    goto error;
+-            }
+-            ssh_list_kex(&session->next_crypto->client_kex); // log client kex
+-            if (ssh_kex_select_methods(session) < 0) {
++            rc = ssh_packet_set_newkeys(session, SSH_DIRECTION_IN);
++            if (rc != SSH_OK) {
+                 goto error;
+             }
+-            if (crypt_set_algorithms_server(session) == SSH_ERROR)
+-                goto error;
+-            set_status(session,0.8f);
+-            session->session_state=SSH_SESSION_STATE_DH;
+-            break;
+-        case SSH_SESSION_STATE_DH:
+-            if(session->dh_handshake_state==DH_STATE_FINISHED){
+-
+-                rc = ssh_packet_set_newkeys(session, SSH_DIRECTION_IN);
+-                if (rc != SSH_OK) {
+-                    goto error;
+-                }
++
++            /*
++             * If the client supports extension negotiation, we will send
++             * our supported extensions now. This is the first message after
++             * sending NEWKEYS message and after turning on crypto.
++             */
++            if (session->extensions & SSH_EXT_NEGOTIATION &&
++                session->session_state != SSH_SESSION_STATE_AUTHENTICATED) {
+ 
+                 /*
+-                 * If the client supports extension negotiation, we will send
+-                 * our supported extensions now. This is the first message after
+-                 * sending NEWKEYS message and after turning on crypto.
++                 * Only send an SSH_MSG_EXT_INFO message the first time the
++                 * client undergoes NEWKEYS.  It is unexpected for this message
++                 * to be sent upon rekey, and may cause clients to log error
++                 * messages.
++                 *
++                 * The session_state can not be used for this purpose because it
++                 * is re-set to SSH_SESSION_STATE_KEXINIT_RECEIVED during rekey.
++                 * So, use the connected flag which transitions from non-zero
++                 * below.
++                 *
++                 * See also:
++                 * - https://bugzilla.mindrot.org/show_bug.cgi?id=2929
+                  */
+-                if (session->extensions & SSH_EXT_NEGOTIATION &&
+-                    session->session_state != SSH_SESSION_STATE_AUTHENTICATED) {
+-
+-                    /*
+-                     * Only send an SSH_MSG_EXT_INFO message the first time the client
+-                     * undergoes NEWKEYS.  It is unexpected for this message to be sent
+-                     * upon rekey, and may cause clients to log error messages.
+-                     *
+-                     * The session_state can not be used for this purpose because it is
+-                     * re-set to SSH_SESSION_STATE_KEXINIT_RECEIVED during rekey.  So,
+-                     * use the connected flag which transitions from non-zero below.
+-                     *
+-                     * See also:
+-                     * - https://bugzilla.mindrot.org/show_bug.cgi?id=2929
+-                     */
+-                    if (session->connected == 0) {
+-                        ssh_server_send_extensions(session);
+-                    }
++                if (session->connected == 0) {
++                    ssh_server_send_extensions(session);
+                 }
++            }
+ 
+-                set_status(session,1.0f);
+-                session->connected = 1;
+-                session->session_state=SSH_SESSION_STATE_AUTHENTICATING;
+-                if (session->flags & SSH_SESSION_FLAG_AUTHENTICATED)
+-                    session->session_state = SSH_SESSION_STATE_AUTHENTICATED;
++            set_status(session, 1.0f);
++            session->connected = 1;
++            session->session_state = SSH_SESSION_STATE_AUTHENTICATING;
++            if (session->flags & SSH_SESSION_FLAG_AUTHENTICATED)
++                session->session_state = SSH_SESSION_STATE_AUTHENTICATED;
+ 
+-            }
+-            break;
+-        case SSH_SESSION_STATE_AUTHENTICATING:
+-            break;
+-        case SSH_SESSION_STATE_ERROR:
+-            goto error;
+-        default:
+-            ssh_set_error(session,SSH_FATAL,"Invalid state %d",session->session_state);
++        }
++        break;
++    case SSH_SESSION_STATE_AUTHENTICATING:
++        break;
++    case SSH_SESSION_STATE_ERROR:
++        goto error;
++    default:
++        ssh_set_error(session, SSH_FATAL, "Invalid state %d",
++                      session->session_state);
+     }
+ 
+     return;
+ error:
+     ssh_socket_close(session->socket);
+     session->alive = 0;
+-    session->session_state=SSH_SESSION_STATE_ERROR;
++    session->session_state = SSH_SESSION_STATE_ERROR;
+ }
+ 
+ /**
+@@ -459,16 +467,17 @@
+  * @param  user is a pointer to session
+  * @returns Number of bytes processed, or zero if the banner is not complete.
+  */
+-static int callback_receive_banner(const void *data, size_t len, void *user) {
+-    char *buffer = (char *) data;
+-    ssh_session session = (ssh_session) user;
++static int callback_receive_banner(const void *data, size_t len, void *user)
++{
++    char *buffer = (char *)data;
++    ssh_session session = (ssh_session)user;
+     char *str = NULL;
+     size_t i;
+     int ret=0;
+ 
+     for (i = 0; i < len; i++) {
+ #ifdef WITH_PCAP
+-        if(session->pcap_ctx && buffer[i] == '\n') {
++        if (session->pcap_ctx && buffer[i] == '\n') {
+             ssh_pcap_context_write(session->pcap_ctx,
+                                    SSH_PCAP_DIR_IN,
+                                    buffer,
+@@ -477,11 +486,11 @@
+         }
+ #endif
+         if (buffer[i] == '\r') {
+-            buffer[i]='\0';
++            buffer[i] = '\0';
+         }
+ 
+         if (buffer[i] == '\n') {
+-            buffer[i]='\0';
++            buffer[i] = '\0';
+ 
+             str = strdup(buffer);
+             /* number of bytes read */
+@@ -494,10 +503,11 @@
+             return ret;
+         }
+ 
+-        if(i > 127) {
++        if (i > 127) {
+             /* Too big banner */
+             session->session_state = SSH_SESSION_STATE_ERROR;
+-            ssh_set_error(session, SSH_FATAL, "Receiving banner: too large banner");
++            ssh_set_error(session, SSH_FATAL,
++                          "Receiving banner: too large banner");
+ 
+             return 0;
+         }
+@@ -525,10 +535,14 @@
+ }
+ 
+ /* Do the banner and key exchange */
+-int ssh_handle_key_exchange(ssh_session session) {
++int ssh_handle_key_exchange(ssh_session session)
++{
+     int rc;
+-    if (session->session_state != SSH_SESSION_STATE_NONE)
+-      goto pending;
++
++    if (session->session_state != SSH_SESSION_STATE_NONE) {
++        goto pending;
++    }
++
+     rc = ssh_send_banner(session, 1);
+     if (rc < 0) {
+         return SSH_ERROR;
+@@ -539,27 +553,28 @@
+     session->ssh_connection_callback = ssh_server_connection_callback;
+     session->session_state = SSH_SESSION_STATE_SOCKET_CONNECTED;
+     ssh_socket_set_callbacks(session->socket,&session->socket_callbacks);
+-    session->socket_callbacks.data=callback_receive_banner;
+-    session->socket_callbacks.exception=ssh_socket_exception_callback;
+-    session->socket_callbacks.userdata=session;
++    session->socket_callbacks.data = callback_receive_banner;
++    session->socket_callbacks.exception = ssh_socket_exception_callback;
++    session->socket_callbacks.userdata = session;
+ 
+     rc = server_set_kex(session);
+     if (rc < 0) {
+         return SSH_ERROR;
+     }
+-    pending:
++pending:
+     rc = ssh_handle_packets_termination(session, SSH_TIMEOUT_USER,
+-        ssh_server_kex_termination,session);
++                                        ssh_server_kex_termination,session);
+     SSH_LOG(SSH_LOG_PACKET, "ssh_handle_key_exchange: current state : %d",
+-        session->session_state);
+-    if (rc != SSH_OK)
+-      return rc;
++            session->session_state);
++    if (rc != SSH_OK) {
++        return rc;
++    }
+     if (session->session_state == SSH_SESSION_STATE_ERROR ||
+         session->session_state == SSH_SESSION_STATE_DISCONNECTED) {
+-      return SSH_ERROR;
++        return SSH_ERROR;
+     }
+ 
+-  return SSH_OK;
++    return SSH_OK;
+ }
+ 
+ /* messages */
+diff --color -ru ../libssh-0.9.6/src/token.c ./src/token.c
+--- ../libssh-0.9.6/src/token.c	2021-03-15 08:11:33.000000000 +0100
++++ ./src/token.c	2023-04-27 12:21:30.260820657 +0200
+@@ -87,7 +87,7 @@
+         return NULL;
+     }
+ 
+-    tokens->buffer= strdup(chain);
++    tokens->buffer = strdup(chain);
+     if (tokens->buffer == NULL) {
+         goto error;
+     }
+diff --color -ru ../libssh-0.9.6/src/wrapper.c ./src/wrapper.c
+--- ../libssh-0.9.6/src/wrapper.c	2021-08-26 14:27:44.000000000 +0200
++++ ./src/wrapper.c	2023-04-27 12:21:30.260820657 +0200
+@@ -147,15 +147,16 @@
+   SAFE_FREE(cipher);
+ }
+ 
+-struct ssh_crypto_struct *crypto_new(void) {
+-   struct ssh_crypto_struct *crypto;
++struct ssh_crypto_struct *crypto_new(void)
++{
++    struct ssh_crypto_struct *crypto;
+ 
+-  crypto = malloc(sizeof(struct ssh_crypto_struct));
+-  if (crypto == NULL) {
+-    return NULL;
+-  }
+-  ZERO_STRUCTP(crypto);
+-  return crypto;
++    crypto = malloc(sizeof(struct ssh_crypto_struct));
++    if (crypto == NULL) {
++        return NULL;
++    }
++    ZERO_STRUCTP(crypto);
++    return crypto;
+ }
+ 
+ void crypto_free(struct ssh_crypto_struct *crypto)
+diff --color -ru ../libssh-0.9.6/tests/client/torture_rekey.c ./tests/client/torture_rekey.c
+--- ../libssh-0.9.6/tests/client/torture_rekey.c	2021-08-26 14:27:44.000000000 +0200
++++ ./tests/client/torture_rekey.c	2023-04-27 12:24:04.684475780 +0200
+@@ -651,6 +651,92 @@
+ #endif /* WITH_SFTP */
+ 
+ 
++static void setup_server_for_good_guess(void *state)
++{
++    const char *default_sshd_config = "KexAlgorithms curve25519-sha256";
++    const char *fips_sshd_config = "KexAlgorithms ecdh-sha2-nistp256";
++    const char *sshd_config = default_sshd_config;
++
++    if (ssh_fips_mode()) {
++        sshd_config = fips_sshd_config;
++    }
++    /* This sets an only supported kex algorithm that we do not have as a first
++    * option */
++    torture_update_sshd_config(state, sshd_config);
++}
++
++static void torture_rekey_guess_send(void **state)
++{
++    struct torture_state *s = *state;
++
++    setup_server_for_good_guess(state);
++
++    /* Make the client send the first_kex_packet_follows flag during key
++     * exchange as well as during the rekey */
++    s->ssh.session->send_first_kex_follows = true;
++
++    torture_rekey_send(state);
++}
++
++static void torture_rekey_guess_wrong_send(void **state)
++{
++    struct torture_state *s = *state;
++    const char *sshd_config = "KexAlgorithms diffie-hellman-group14-sha256";
++
++    /* This sets an only supported kex algorithm that we do not have as a first
++     * option */
++    torture_update_sshd_config(state, sshd_config);
++
++    /* Make the client send the first_kex_packet_follows flag during key
++     * exchange as well as during the rekey */
++    s->ssh.session->send_first_kex_follows = true;
++
++    torture_rekey_send(state);
++}
++
++#ifdef WITH_SFTP
++static void torture_rekey_guess_recv(void **state)
++{
++    struct torture_state *s = *state;
++    int rc;
++
++    setup_server_for_good_guess(state);
++
++    /* Make the client send the first_kex_packet_follows flag during key
++     * exchange as well as during the rekey */
++    s->ssh.session->send_first_kex_follows = true;
++
++    rc = ssh_options_set(s->ssh.session, SSH_OPTIONS_REKEY_DATA, &bytes);
++    assert_ssh_return_code(s->ssh.session, rc);
++
++    session_setup_sftp(state);
++
++    torture_rekey_recv(state);
++}
++
++static void torture_rekey_guess_wrong_recv(void **state)
++{
++    struct torture_state *s = *state;
++    const char *sshd_config = "KexAlgorithms diffie-hellman-group14-sha256";
++    int rc;
++
++    /* This sets an only supported kex algorithm that we do not have as a first
++     * option */
++    torture_update_sshd_config(state, sshd_config);
++
++    /* Make the client send the first_kex_packet_follows flag during key
++     * exchange as well as during the rekey */
++    s->ssh.session->send_first_kex_follows = true;
++
++    rc = ssh_options_set(s->ssh.session, SSH_OPTIONS_REKEY_DATA, &bytes);
++    assert_ssh_return_code(s->ssh.session, rc);
++
++    session_setup_sftp(state);
++
++    torture_rekey_recv(state);
++}
++#endif /* WITH_SFTP */
++
+ int torture_run_tests(void) {
+     int rc;
+     struct CMUnitTest tests[] = {
+@@ -671,19 +757,34 @@
+         cmocka_unit_test_setup_teardown(torture_rekey_different_kex,
+                                         session_setup,
+                                         session_teardown),
+-        /* Note, that this modifies the sshd_config */
++        /* TODO verify the two rekey are possible and the states are not broken after rekey */
++
++        cmocka_unit_test_setup_teardown(torture_rekey_server_different_kex,
++                                        session_setup,
++                                        session_teardown),
++        /* Note, that these tests modify the sshd_config so follow-up tests
++         * might get unexpected behavior if they do not update the server with
++         * torture_update_sshd_config() too */
+         cmocka_unit_test_setup_teardown(torture_rekey_server_send,
+                                         session_setup,
+                                         session_teardown),
++        cmocka_unit_test_setup_teardown(torture_rekey_guess_send,
++                                        session_setup,
++                                        session_teardown),
++        cmocka_unit_test_setup_teardown(torture_rekey_guess_wrong_send,
++                                        session_setup,
++                                        session_teardown),
+ #ifdef WITH_SFTP
+         cmocka_unit_test_setup_teardown(torture_rekey_server_recv,
+                                         session_setup_sftp_server,
+                                         session_teardown),
+-#endif /* WITH_SFTP */
+-        cmocka_unit_test_setup_teardown(torture_rekey_server_different_kex,
++        cmocka_unit_test_setup_teardown(torture_rekey_guess_recv,
+                                         session_setup,
+                                         session_teardown),
+-        /* TODO verify the two rekey are possible and the states are not broken after rekey */
++        cmocka_unit_test_setup_teardown(torture_rekey_guess_wrong_recv,
++                                        session_setup,
++                                        session_teardown),
++#endif /* WITH_SFTP */
+     };
+ 
+     ssh_init();

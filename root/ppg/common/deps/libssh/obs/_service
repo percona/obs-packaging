@@ -1,0 +1,8 @@
+<services>
+  <service name="download_url">
+    <param name="host">www.libssh.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/files/0.9/libssh-0.9.6.tar.xz</param>
+    <param name="filename">libssh-0.9.6.tar.xz</param>
+  </service>
+</services>
