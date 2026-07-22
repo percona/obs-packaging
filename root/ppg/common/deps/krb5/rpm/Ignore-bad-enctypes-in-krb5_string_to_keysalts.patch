@@ -1,0 +1,38 @@
+From 42e29f27ce64fece2839bcce910813e97ca31210 Mon Sep 17 00:00:00 2001
+From: Robbie Harwood <rharwood@redhat.com>
+Date: Wed, 15 Jul 2020 15:42:20 -0400
+Subject: [PATCH] Ignore bad enctypes in krb5_string_to_keysalts()
+
+Fixes a problem where the presence of legacy/unrecognized keysalts in
+supported_enctypes would prevent the kadmin programs from starting.
+
+[ghudson@mit.edu: ideally we would put a warning in the kadmind log,
+but that is difficult to do when the parsing is done inside a library.
+Even adding a trace log is difficult because the kadm5 str_conv
+functions do not accept contexts.]
+
+ticket: 8929 (new)
+(cherry picked from commit be5396ada0e8dabd68bd0aceb733cfca39a609bc)
+(cherry picked from commit 3f873868fb08b77da2d30e164a0ef6c71c17c607)
+---
+ src/lib/kadm5/str_conv.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/src/lib/kadm5/str_conv.c b/src/lib/kadm5/str_conv.c
+index 7cf51d316..798295606 100644
+--- a/src/lib/kadm5/str_conv.c
++++ b/src/lib/kadm5/str_conv.c
+@@ -340,9 +340,10 @@ krb5_string_to_keysalts(const char *string, const char *tupleseps,
+     while ((ksp = strtok_r(p, tseps, &tlasts)) != NULL) {
+         /* Pass a null pointer to subsequent calls to strtok_r(). */
+         p = NULL;
+-        ret = string_to_keysalt(ksp, ksaltseps, &etype, &stype);
+-        if (ret)
+-            goto cleanup;
++
++        /* Discard unrecognized keysalts. */
++        if (string_to_keysalt(ksp, ksaltseps, &etype, &stype) != 0)
++            continue;
+ 
+         /* Ignore duplicate keysalts if caller asks. */
+         if (!dups && krb5_keysalt_is_present(ksalts, nksalts, etype, stype))

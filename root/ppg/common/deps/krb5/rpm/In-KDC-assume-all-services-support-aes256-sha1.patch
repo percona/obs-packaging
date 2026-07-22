@@ -1,0 +1,51 @@
+From 5b67abf41026a420974f2d938c3e42d7f072abe5 Mon Sep 17 00:00:00 2001
+From: Greg Hudson <ghudson@mit.edu>
+Date: Wed, 14 Dec 2022 13:20:46 -0500
+Subject: [PATCH] In KDC, assume all services support aes256-sha1
+
+To facilitate negotiating session keys with acceptable security,
+assume that services support aes256-cts-hmac-sha1 unless a
+session_enctypes string attribute says otherwise.
+
+ticket: 9075
+(cherry picked from commit 2cbd847e0e92bc4e219b65c770ae33f851b22afc)
+---
+ src/kdc/kdc_util.c         | 4 ++++
+ src/tests/t_keyrollover.py | 6 +++---
+ 2 files changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/src/kdc/kdc_util.c b/src/kdc/kdc_util.c
+index e3352f9cc6..23aadb88e9 100644
+--- a/src/kdc/kdc_util.c
++++ b/src/kdc/kdc_util.c
+@@ -1015,6 +1015,10 @@ dbentry_supports_enctype(kdc_realm_t *kdc_active_realm, krb5_db_entry *server,
+     free(etypes_str);
+     free(etypes);
+ 
++    /* Assume every server without a session_enctypes attribute supports
++     * aes256-cts-hmac-sha1-96. */
++    if (enctype == ENCTYPE_AES256_CTS_HMAC_SHA1_96)
++        return TRUE;
+     /* Assume the server supports any enctype it has a long-term key for. */
+     return !krb5_dbe_find_enctype(kdc_context, server, enctype, -1, 0, &datap);
+ }
+diff --git a/src/tests/t_keyrollover.py b/src/tests/t_keyrollover.py
+index f29e0d5500..583c2fa27e 100755
+--- a/src/tests/t_keyrollover.py
++++ b/src/tests/t_keyrollover.py
+@@ -22,9 +22,9 @@ realm.run([kvno, princ1])
+ realm.run([kadminl, 'purgekeys', realm.krbtgt_princ])
+ # Make sure an old TGT fails after purging old TGS key.
+ realm.run([kvno, princ2], expected_code=1)
+-et = "aes128-cts-hmac-sha256-128"
+-msg = 'krbtgt/%s@%s\n\tEtype (skey, tkt): %s, %s' % \
+-    (realm.realm, realm.realm, et, et)
++msg = 'krbtgt/%s@%s\n\tEtype (skey, tkt): ' \
++    'aes256-cts-hmac-sha1-96, aes128-cts-hmac-sha256-128' % \
++    (realm.realm, realm.realm)
+ realm.run([klist, '-e'], expected_msg=msg)
+ 
+ # Check that new key actually works.
+-- 
+2.49.0
+

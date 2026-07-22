@@ -1,0 +1,226 @@
+From 433dd85aaf8d9ed0e923c873f107995232b94422 Mon Sep 17 00:00:00 2001
+From: Greg Hudson <ghudson@mit.edu>
+Date: Thu, 26 Oct 2023 14:20:34 -0400
+Subject: [PATCH] Add request_timeout configuration parameter
+
+Add a parameter to limit the total amount of time taken for a KDC or
+password change request.
+
+ticket: 9106 (new)
+(cherry picked from commit 802318cda963456b3ed7856c836e89da891483be)
+---
+ doc/admin/conf_files/krb5_conf.rst |  9 ++++++
+ src/include/k5-int.h               |  2 ++
+ src/lib/krb5/krb/init_ctx.c        | 14 +++++++-
+ src/lib/krb5/os/sendto_kdc.c       | 51 ++++++++++++++++++++----------
+ 4 files changed, 58 insertions(+), 18 deletions(-)
+
+diff --git a/doc/admin/conf_files/krb5_conf.rst b/doc/admin/conf_files/krb5_conf.rst
+index 315253e378..557094f6a2 100644
+--- a/doc/admin/conf_files/krb5_conf.rst
++++ b/doc/admin/conf_files/krb5_conf.rst
+@@ -357,6 +357,15 @@ The libdefaults section may contain any of the following relations:
+     (:ref:`duration` string.)  Sets the default renewable lifetime
+     for initial ticket requests.  The default value is 0.
+ 
++**request_timeout**
++    (:ref:`duration` string.)  Sets the maximum total time for KDC or
++    password change requests.  This timeout does not affect the
++    intervals between requests, so setting a low timeout may result in
++    fewer requests being attempted and/or some servers not being
++    contacted.  A value of 0 indicates no specific maximum, in which
++    case requests will time out if no server responds after several
++    tries.  The default value is 0.  (New in release 1.22.)
++
+ **spake_preauth_groups**
+     A whitespace or comma-separated list of words which specifies the
+     groups allowed for SPAKE preauthentication.  The possible values
+diff --git a/src/include/k5-int.h b/src/include/k5-int.h
+index 912aaedac4..9d5e41ca2c 100644
+--- a/src/include/k5-int.h
++++ b/src/include/k5-int.h
+@@ -293,6 +293,7 @@ typedef unsigned char   u_char;
+ #define KRB5_CONF_SPAKE_PREAUTH_INDICATOR      "spake_preauth_indicator"
+ #define KRB5_CONF_SPAKE_PREAUTH_KDC_CHALLENGE  "spake_preauth_kdc_challenge"
+ #define KRB5_CONF_SPAKE_PREAUTH_GROUPS         "spake_preauth_groups"
++#define KRB5_CONF_REQUEST_TIMEOUT              "request_timeout"
+ #define KRB5_CONF_TICKET_LIFETIME              "ticket_lifetime"
+ #define KRB5_CONF_UDP_PREFERENCE_LIMIT         "udp_preference_limit"
+ #define KRB5_CONF_UNLOCKITER                   "unlockiter"
+@@ -1218,6 +1219,7 @@ struct _krb5_context {
+     kdb5_dal_handle *dal_handle;
+     /* allowable clock skew */
+     krb5_deltat     clockskew;
++    krb5_deltat     req_timeout;
+     krb5_flags      kdc_default_options;
+     krb5_flags      library_options;
+     krb5_boolean    profile_secure;
+diff --git a/src/lib/krb5/krb/init_ctx.c b/src/lib/krb5/krb/init_ctx.c
+index 9a4741fa64..1a6e0bf672 100644
+--- a/src/lib/krb5/krb/init_ctx.c
++++ b/src/lib/krb5/krb/init_ctx.c
+@@ -163,7 +163,7 @@ krb5_init_context_profile(profile_t profile, krb5_flags flags,
+     } seed_data;
+     krb5_data seed;
+     int tmp;
+-    char *plugin_dir = NULL;
++    char *plugin_dir = NULL, *timeout_str = NULL;
+ 
+     /* Verify some assumptions.  If the assumptions hold and the
+        compiler is optimizing, this should result in no code being
+@@ -257,6 +257,17 @@ krb5_init_context_profile(profile_t profile, krb5_flags flags,
+     get_integer(ctx, KRB5_CONF_CLOCKSKEW, DEFAULT_CLOCKSKEW, &tmp);
+     ctx->clockskew = tmp;
+ 
++    retval = profile_get_string(ctx->profile, KRB5_CONF_LIBDEFAULTS,
++                                KRB5_CONF_REQUEST_TIMEOUT, NULL, NULL,
++                                &timeout_str);
++    if (retval)
++        goto cleanup;
++    if (timeout_str != NULL) {
++        retval = krb5_string_to_deltat(timeout_str, &ctx->req_timeout);
++        if (retval)
++            goto cleanup;
++    }
++
+     get_integer(ctx, KRB5_CONF_KDC_DEFAULT_OPTIONS, KDC_OPT_RENEWABLE_OK,
+                 &tmp);
+     ctx->kdc_default_options = tmp;
+@@ -298,6 +309,7 @@ krb5_init_context_profile(profile_t profile, krb5_flags flags,
+ 
+ cleanup:
+     profile_release_string(plugin_dir);
++    profile_release_string(timeout_str);
+     krb5_free_context(ctx);
+     return retval;
+ }
+diff --git a/src/lib/krb5/os/sendto_kdc.c b/src/lib/krb5/os/sendto_kdc.c
+index 8e4fcd2a38..f57117126e 100644
+--- a/src/lib/krb5/os/sendto_kdc.c
++++ b/src/lib/krb5/os/sendto_kdc.c
+@@ -1390,34 +1390,41 @@ get_endtime(time_ms endtime, struct conn_state *conns)
+ 
+ static krb5_boolean
+ service_fds(krb5_context context, struct select_state *selstate,
+-            time_ms interval, struct conn_state *conns,
++            time_ms interval, time_ms timeout, struct conn_state *conns,
+             struct select_state *seltemp, const krb5_data *realm,
+             int (*msg_handler)(krb5_context, const krb5_data *, void *),
+             void *msg_handler_data, struct conn_state **winner_out)
+ {
+     int e, selret = 0;
+-    time_ms endtime;
++    time_ms curtime, interval_end, endtime;
+     struct conn_state *state;
+ 
+     *winner_out = NULL;
+ 
+-    e = get_curtime_ms(&endtime);
++    e = get_curtime_ms(&curtime);
+     if (e)
+         return TRUE;
+-    endtime += interval;
++    interval_end = curtime + interval;
+ 
+     e = 0;
+     while (selstate->nfds > 0) {
+-        e = cm_select_or_poll(selstate, get_endtime(endtime, conns),
+-                              seltemp, &selret);
++        endtime = get_endtime(interval_end, conns);
++        /* Don't wait longer than the whole request should last. */
++        if (timeout && endtime > timeout)
++            endtime = timeout;
++        e = cm_select_or_poll(selstate, endtime, seltemp, &selret);
+         if (e == EINTR)
+             continue;
+         if (e != 0)
+             break;
+ 
+-        if (selret == 0)
+-            /* Timeout, return to caller.  */
++        if (selret == 0) {
++            /* We timed out.  Stop if we hit the overall request timeout. */
++            if (timeout && (get_curtime_ms(&curtime) || curtime >= timeout))
++                return TRUE;
++            /* Otherwise return to the caller to send the next request. */
+             return FALSE;
++        }
+ 
+         /* Got something on a socket, process it.  */
+         for (state = conns; state != NULL; state = state->next) {
+@@ -1490,7 +1497,7 @@ k5_sendto(krb5_context context, const krb5_data *message,
+           void *msg_handler_data)
+ {
+     int pass;
+-    time_ms delay;
++    time_ms delay, timeout = 0;
+     krb5_error_code retval;
+     struct conn_state *conns = NULL, *state, **tailptr, *next, *winner;
+     size_t s;
+@@ -1500,6 +1507,13 @@ k5_sendto(krb5_context context, const krb5_data *message,
+ 
+     *reply = empty_data();
+ 
++    if (context->req_timeout) {
++        retval = get_curtime_ms(&timeout);
++        if (retval)
++            return retval;
++        timeout += 1000 * context->req_timeout;
++    }
++
+     /* One for use here, listing all our fds in use, and one for
+      * temporary use in service_fds, for the fds of interest.  */
+     sel_state = malloc(2 * sizeof(*sel_state));
+@@ -1527,8 +1541,9 @@ k5_sendto(krb5_context context, const krb5_data *message,
+             if (maybe_send(context, state, message, sel_state, realm,
+                            callback_info))
+                 continue;
+-            done = service_fds(context, sel_state, 1000, conns, seltemp,
+-                               realm, msg_handler, msg_handler_data, &winner);
++            done = service_fds(context, sel_state, 1000, timeout, conns,
++                               seltemp, realm, msg_handler, msg_handler_data,
++                               &winner);
+         }
+     }
+ 
+@@ -1540,13 +1555,13 @@ k5_sendto(krb5_context context, const krb5_data *message,
+         if (maybe_send(context, state, message, sel_state, realm,
+                        callback_info))
+             continue;
+-        done = service_fds(context, sel_state, 1000, conns, seltemp,
++        done = service_fds(context, sel_state, 1000, timeout, conns, seltemp,
+                            realm, msg_handler, msg_handler_data, &winner);
+     }
+ 
+     /* Wait for two seconds at the end of the first pass. */
+     if (!done) {
+-        done = service_fds(context, sel_state, 2000, conns, seltemp,
++        done = service_fds(context, sel_state, 2000, timeout, conns, seltemp,
+                            realm, msg_handler, msg_handler_data, &winner);
+     }
+ 
+@@ -1557,15 +1572,17 @@ k5_sendto(krb5_context context, const krb5_data *message,
+             if (maybe_send(context, state, message, sel_state, realm,
+                            callback_info))
+                 continue;
+-            done = service_fds(context, sel_state, 1000, conns, seltemp,
+-                               realm, msg_handler, msg_handler_data, &winner);
++            done = service_fds(context, sel_state, 1000, timeout, conns,
++                               seltemp, realm, msg_handler, msg_handler_data,
++                               &winner);
+             if (sel_state->nfds == 0)
+                 break;
+         }
+         /* Wait for the delay backoff at the end of this pass. */
+         if (!done) {
+-            done = service_fds(context, sel_state, delay, conns, seltemp,
+-                               realm, msg_handler, msg_handler_data, &winner);
++            done = service_fds(context, sel_state, delay, timeout, conns,
++                               seltemp, realm, msg_handler, msg_handler_data,
++                               &winner);
+         }
+         if (sel_state->nfds == 0)
+             break;
+-- 
+2.44.0
+

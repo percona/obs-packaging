@@ -1,0 +1,69 @@
+From b2b7729d71e7ab2cde9c73b40b8e972c82a875a2 Mon Sep 17 00:00:00 2001
+From: Sumit Bose <sbose@redhat.com>
+Date: Mon, 8 Nov 2021 17:48:50 +0100
+Subject: [PATCH] Support larger RADIUS attributes in libkrad
+
+In kr_attrset_decode(), explicitly treat the length byte as unsigned.
+Otherwise attributes longer than 125 characters will be rejected with
+EBADMSG.
+
+Add a 253-character-long NAS-Identifier attribute to the tests to make
+sure that attributes with the maximal number of characters are working
+as expected.
+
+[ghudson@mit.edu: used uint8_t cast per current practices; edited
+commit message]
+
+ticket: 9036 (new)
+---
+ src/lib/krad/attrset.c  |  2 +-
+ src/lib/krad/t_packet.c | 13 +++++++++++++
+ 2 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/src/lib/krad/attrset.c b/src/lib/krad/attrset.c
+index d89982a13..6ec031e32 100644
+--- a/src/lib/krad/attrset.c
++++ b/src/lib/krad/attrset.c
+@@ -218,7 +218,7 @@ kr_attrset_decode(krb5_context ctx, const krb5_data *in, const char *secret,
+ 
+     for (i = 0; i + 2 < in->length; ) {
+         type = in->data[i++];
+-        tmp = make_data(&in->data[i + 1], in->data[i] - 2);
++        tmp = make_data(&in->data[i + 1], (uint8_t)in->data[i] - 2);
+         i += tmp.length + 1;
+ 
+         retval = (in->length < i) ? EBADMSG : 0;
+diff --git a/src/lib/krad/t_packet.c b/src/lib/krad/t_packet.c
+index 0a92e9cc2..c22489144 100644
+--- a/src/lib/krad/t_packet.c
++++ b/src/lib/krad/t_packet.c
+@@ -57,6 +57,14 @@ make_packet(krb5_context ctx, const krb5_data *username,
+     krb5_error_code retval;
+     const krb5_data *data;
+     int i = 0;
++    krb5_data nas_id;
++
++    nas_id = string2data("12345678901234567890123456789012345678901234567890"
++                         "12345678901234567890123456789012345678901234567890"
++                         "12345678901234567890123456789012345678901234567890"
++                         "12345678901234567890123456789012345678901234567890"
++                         "12345678901234567890123456789012345678901234567890"
++                         "123");
+ 
+     retval = krad_attrset_new(ctx, &set);
+     if (retval != 0)
+@@ -71,6 +79,11 @@ make_packet(krb5_context ctx, const krb5_data *username,
+     if (retval != 0)
+         goto out;
+ 
++    retval = krad_attrset_add(set, krad_attr_name2num("NAS-Identifier"),
++                              &nas_id);
++    if (retval != 0)
++        goto out;
++
+     retval = krad_packet_new_request(ctx, "foo",
+                                      krad_code_name2num("Access-Request"),
+                                      set, iterator, &i, &tmp);
+-- 
+2.35.3
+

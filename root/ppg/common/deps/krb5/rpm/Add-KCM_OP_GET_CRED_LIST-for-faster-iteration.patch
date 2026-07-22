@@ -1,0 +1,360 @@
+From d4a512e571a93318d37cbf7d18a120f317b87e97 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Pavel=20B=C5=99ezina?= <pbrezina@redhat.com>
+Date: Thu, 11 Feb 2021 15:33:10 +0100
+Subject: [PATCH] Add KCM_OP_GET_CRED_LIST for faster iteration
+
+For large caches, one IPC operation per credential dominates the cost
+of iteration.  Instead transfer the whole list of credentials to the
+client in one IPC operation.
+
+Add optional support for the new opcode to the test KCM server to
+allow testing of the main and fallback code paths.
+
+[ghudson@mit.edu: fixed memory leaks and potential memory errors;
+adjusted code style and comments; rewrote commit message; added
+kcmserver.py support and tests]
+
+ticket: 8990 (new)
+(cherry picked from commit 81bdb47d8ded390263d8ee48f71d5c312b4f1736)
+(cherry picked from commit a0ee8b02e56c65e5dcd569caed0e151cef004ef4)
+(cherry picked from commit baf60dbdeceb3cad35cad7d9930782f94b6c8221)
+---
+ src/include/kcm.h            |  12 ++-
+ src/lib/krb5/ccache/cc_kcm.c | 144 ++++++++++++++++++++++++++++++++---
+ src/tests/kcmserver.py       |  28 ++++++-
+ src/tests/t_ccache.py        |  10 ++-
+ 4 files changed, 175 insertions(+), 19 deletions(-)
+
+diff --git a/src/include/kcm.h b/src/include/kcm.h
+index 5ea1447cd..e4140c3a0 100644
+--- a/src/include/kcm.h
++++ b/src/include/kcm.h
+@@ -51,9 +51,9 @@
+  *
+  * All replies begin with a 32-bit big-endian reply code.
+  *
+- * Parameters are appended to the request or reply with no delimiters.  Flags
+- * and time offsets are stored as 32-bit big-endian integers.  Names are
+- * marshalled as zero-terminated strings.  Principals and credentials are
++ * Parameters are appended to the request or reply with no delimiters.  Flags,
++ * time offsets, and lengths are stored as 32-bit big-endian integers.  Names
++ * are marshalled as zero-terminated strings.  Principals and credentials are
+  * marshalled in the v4 FILE ccache format.  UUIDs are 16 bytes.  UUID lists
+  * are not delimited, so nothing can come after them.
+  */
+@@ -89,7 +89,11 @@ typedef enum kcm_opcode {
+     KCM_OP_HAVE_NTLM_CRED,
+     KCM_OP_DEL_NTLM_CRED,
+     KCM_OP_DO_NTLM_AUTH,
+-    KCM_OP_GET_NTLM_USER_LIST
++    KCM_OP_GET_NTLM_USER_LIST,
++
++    /* MIT extensions */
++    KCM_OP_MIT_EXTENSION_BASE = 13000,
++    KCM_OP_GET_CRED_LIST,       /* (name) -> (count, count*{len, cred}) */
+ } kcm_opcode;
+ 
+ #endif /* KCM_H */
+diff --git a/src/lib/krb5/ccache/cc_kcm.c b/src/lib/krb5/ccache/cc_kcm.c
+index a76a285d9..197a10fba 100644
+--- a/src/lib/krb5/ccache/cc_kcm.c
++++ b/src/lib/krb5/ccache/cc_kcm.c
+@@ -61,6 +61,17 @@ struct uuid_list {
+     size_t pos;
+ };
+ 
++struct cred_list {
++    krb5_creds *creds;
++    size_t count;
++    size_t pos;
++};
++
++struct kcm_cursor {
++    struct uuid_list *uuids;
++    struct cred_list *creds;
++};
++
+ struct kcmio {
+     SOCKET fd;
+ #ifdef __APPLE__
+@@ -489,6 +500,69 @@ free_uuid_list(struct uuid_list *uuids)
+     free(uuids);
+ }
+ 
++static void
++free_cred_list(struct cred_list *list)
++{
++    size_t i;
++
++    if (list == NULL)
++        return;
++
++    /* Creds are transferred to the caller as list->pos is incremented, so we
++     * can start freeing there. */
++    for (i = list->pos; i < list->count; i++)
++        krb5_free_cred_contents(NULL, &list->creds[i]);
++    free(list->creds);
++    free(list);
++}
++
++/* Fetch a cred list from req->reply. */
++static krb5_error_code
++kcmreq_get_cred_list(struct kcmreq *req, struct cred_list **creds_out)
++{
++    struct cred_list *list;
++    const unsigned char *data;
++    krb5_error_code ret = 0;
++    size_t count, len, i;
++
++    *creds_out = NULL;
++
++    /* Check a rough bound on the count to prevent very large allocations. */
++    count = k5_input_get_uint32_be(&req->reply);
++    if (count > req->reply.len / 4)
++        return KRB5_KCM_MALFORMED_REPLY;
++
++    list = malloc(sizeof(*list));
++    if (list == NULL)
++        return ENOMEM;
++
++    list->creds = NULL;
++    list->count = count;
++    list->pos = 0;
++    list->creds = k5calloc(count, sizeof(*list->creds), &ret);
++    if (list->creds == NULL) {
++        free(list);
++        return ret;
++    }
++
++    for (i = 0; i < count; i++) {
++        len = k5_input_get_uint32_be(&req->reply);
++        data = k5_input_get_bytes(&req->reply, len);
++        if (data == NULL)
++            break;
++        ret = k5_unmarshal_cred(data, len, 4, &list->creds[i]);
++        if (ret)
++            break;
++    }
++    if (i < count) {
++        free_cred_list(list);
++        return (ret == ENOMEM) ? ENOMEM : KRB5_KCM_MALFORMED_REPLY;
++    }
++
++    *creds_out = list;
++    return 0;
++}
++
+ static void
+ kcmreq_free(struct kcmreq *req)
+ {
+@@ -753,33 +827,53 @@ kcm_start_seq_get(krb5_context context, krb5_ccache cache,
+ {
+     krb5_error_code ret;
+     struct kcmreq req = EMPTY_KCMREQ;
+-    struct uuid_list *uuids;
++    struct uuid_list *uuids = NULL;
++    struct cred_list *creds = NULL;
++    struct kcm_cursor *cursor;
+ 
+     *cursor_out = NULL;
+ 
+     get_kdc_offset(context, cache);
+ 
+-    kcmreq_init(&req, KCM_OP_GET_CRED_UUID_LIST, cache);
++    kcmreq_init(&req, KCM_OP_GET_CRED_LIST, cache);
+     ret = cache_call(context, cache, &req);
+-    if (ret)
++    if (ret == 0) {
++        /* GET_CRED_LIST is available. */
++        ret = kcmreq_get_cred_list(&req, &creds);
++        if (ret)
++            goto cleanup;
++    } else if (ret == KRB5_FCC_INTERNAL) {
++        /* Fall back to GET_CRED_UUID_LIST. */
++        kcmreq_free(&req);
++        kcmreq_init(&req, KCM_OP_GET_CRED_UUID_LIST, cache);
++        ret = cache_call(context, cache, &req);
++        if (ret)
++            goto cleanup;
++        ret = kcmreq_get_uuid_list(&req, &uuids);
++        if (ret)
++            goto cleanup;
++    } else {
+         goto cleanup;
+-    ret = kcmreq_get_uuid_list(&req, &uuids);
+-    if (ret)
++    }
++
++    cursor = k5alloc(sizeof(*cursor), &ret);
++    if (cursor == NULL)
+         goto cleanup;
+-    *cursor_out = (krb5_cc_cursor)uuids;
++    cursor->uuids = uuids;
++    cursor->creds = creds;
++    *cursor_out = (krb5_cc_cursor)cursor;
+ 
+ cleanup:
+     kcmreq_free(&req);
+     return ret;
+ }
+ 
+-static krb5_error_code KRB5_CALLCONV
+-kcm_next_cred(krb5_context context, krb5_ccache cache, krb5_cc_cursor *cursor,
+-              krb5_creds *cred_out)
++static krb5_error_code
++next_cred_by_uuid(krb5_context context, krb5_ccache cache,
++                  struct uuid_list *uuids, krb5_creds *cred_out)
+ {
+     krb5_error_code ret;
+     struct kcmreq req;
+-    struct uuid_list *uuids = (struct uuid_list *)*cursor;
+ 
+     memset(cred_out, 0, sizeof(*cred_out));
+ 
+@@ -797,11 +891,39 @@ kcm_next_cred(krb5_context context, krb5_ccache cache, krb5_cc_cursor *cursor,
+     return map_invalid(ret);
+ }
+ 
++static krb5_error_code KRB5_CALLCONV
++kcm_next_cred(krb5_context context, krb5_ccache cache, krb5_cc_cursor *cursor,
++              krb5_creds *cred_out)
++{
++    struct kcm_cursor *c = (struct kcm_cursor *)*cursor;
++    struct cred_list *list;
++
++    if (c->uuids != NULL)
++        return next_cred_by_uuid(context, cache, c->uuids, cred_out);
++
++    list = c->creds;
++    if (list->pos >= list->count)
++        return KRB5_CC_END;
++
++    /* Transfer memory ownership of one cred to the caller. */
++    *cred_out = list->creds[list->pos];
++    memset(&list->creds[list->pos], 0, sizeof(*list->creds));
++    list->pos++;
++
++    return 0;
++}
++
+ static krb5_error_code KRB5_CALLCONV
+ kcm_end_seq_get(krb5_context context, krb5_ccache cache,
+                 krb5_cc_cursor *cursor)
+ {
+-    free_uuid_list((struct uuid_list *)*cursor);
++    struct kcm_cursor *c = *cursor;
++
++    if (c == NULL)
++        return 0;
++    free_uuid_list(c->uuids);
++    free_cred_list(c->creds);
++    free(c);
+     *cursor = NULL;
+     return 0;
+ }
+diff --git a/src/tests/kcmserver.py b/src/tests/kcmserver.py
+index 57432e5a7..8c5e66ff1 100644
+--- a/src/tests/kcmserver.py
++++ b/src/tests/kcmserver.py
+@@ -23,6 +23,7 @@
+ #         traceback.print_exception(etype, value, tb, file=f)
+ # sys.excepthook = ehook
+ 
++import optparse
+ import select
+ import socket
+ import struct
+@@ -49,12 +50,14 @@ class KCMOpcodes(object):
+     SET_DEFAULT_CACHE = 21
+     GET_KDC_OFFSET = 22
+     SET_KDC_OFFSET = 23
++    GET_CRED_LIST = 13001
+ 
+ 
+ class KRB5Errors(object):
+     KRB5_CC_END = -1765328242
+     KRB5_CC_NOSUPP = -1765328137
+     KRB5_FCC_NOFILE = -1765328189
++    KRB5_FCC_INTERNAL = -1765328188
+ 
+ 
+ def make_uuid():
+@@ -183,6 +186,14 @@ def op_set_kdc_offset(argbytes):
+     return 0, b''
+ 
+ 
++def op_get_cred_list(argbytes):
++    name, rest = unmarshal_name(argbytes)
++    cache = get_cache(name)
++    creds = [cache.creds[u] for u in cache.cred_uuids]
++    return 0, (struct.pack('>L', len(creds)) +
++               b''.join(struct.pack('>L', len(c)) + c for c in creds))
++
++
+ ophandlers = {
+     KCMOpcodes.GEN_NEW : op_gen_new,
+     KCMOpcodes.INITIALIZE : op_initialize,
+@@ -197,7 +208,8 @@ ophandlers = {
+     KCMOpcodes.GET_DEFAULT_CACHE : op_get_default_cache,
+     KCMOpcodes.SET_DEFAULT_CACHE : op_set_default_cache,
+     KCMOpcodes.GET_KDC_OFFSET : op_get_kdc_offset,
+-    KCMOpcodes.SET_KDC_OFFSET : op_set_kdc_offset
++    KCMOpcodes.SET_KDC_OFFSET : op_set_kdc_offset,
++    KCMOpcodes.GET_CRED_LIST : op_get_cred_list
+ }
+ 
+ # Read and respond to a request from the socket s.
+@@ -215,7 +227,11 @@ def service_request(s):
+ 
+     majver, minver, op = struct.unpack('>BBH', req[:4])
+     argbytes = req[4:]
+-    code, payload = ophandlers[op](argbytes)
++
++    if op in ophandlers:
++        code, payload = ophandlers[op](argbytes)
++    else:
++        code, payload = KRB5Errors.KRB5_FCC_INTERNAL, b''
+ 
+     # The KCM response is the code (4 bytes) and the response payload.
+     # The Heimdal IPC response is the length of the KCM response (4
+@@ -226,9 +242,15 @@ def service_request(s):
+     s.sendall(hipc_response)
+     return True
+ 
++parser = optparse.OptionParser()
++parser.add_option('-c', '--credlist', action='store_true', dest='credlist',
++                  default=False, help='Support KCM_OP_GET_CRED_LIST')
++(options, args) = parser.parse_args()
++if not options.credlist:
++    del ophandlers[KCMOpcodes.GET_CRED_LIST]
+ 
+ server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+-server.bind(sys.argv[1])
++server.bind(args[0])
+ server.listen(5)
+ select_input = [server,]
+ sys.stderr.write('starting...\n')
+diff --git a/src/tests/t_ccache.py b/src/tests/t_ccache.py
+index 66804afa5..90040fb7b 100755
+--- a/src/tests/t_ccache.py
++++ b/src/tests/t_ccache.py
+@@ -125,10 +125,18 @@ def collection_test(realm, ccname):
+ 
+ 
+ collection_test(realm, 'DIR:' + os.path.join(realm.testdir, 'cc'))
++
++# Test KCM without and with GET_CRED_LIST support.
+ kcmserver_path = os.path.join(srctop, 'tests', 'kcmserver.py')
+-realm.start_server([sys.executable, kcmserver_path, kcm_socket_path],
++kcmd = realm.start_server([sys.executable, kcmserver_path, kcm_socket_path],
++                          'starting...')
++collection_test(realm, 'KCM:')
++stop_daemon(kcmd)
++os.remove(kcm_socket_path)
++realm.start_server([sys.executable, kcmserver_path, '-c', kcm_socket_path],
+                    'starting...')
+ collection_test(realm, 'KCM:')
++
+ if test_keyring:
+     def cleanup_keyring(anchor, name):
+         out = realm.run(['keyctl', 'list', anchor])

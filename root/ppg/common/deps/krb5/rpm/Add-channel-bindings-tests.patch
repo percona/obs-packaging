@@ -1,0 +1,420 @@
+From 8182f9f08b2593ff8749078ffd3daef9bf39a7fe Mon Sep 17 00:00:00 2001
+From: Isaac Boukris <iboukris@gmail.com>
+Date: Fri, 20 Mar 2020 00:17:28 +0100
+Subject: [PATCH] Add channel bindings tests
+
+[ghudson@mit.edu: adjusted test program to output channel-bound state
+instead of optionally enforcing it; adjusted tests to check program
+output; split out tests into separate Python script; made cosmetic
+changes]
+
+ticket: 8900
+(cherry picked from commit b0b21b6d25b06f3e2b365dfe9dd4c99b3d43bf57)
+[rharwood@redhat.com: .gitignore]
+(cherry picked from commit 3e92520c1417f22447751cd9172d5ab30c2e0ad8)
+---
+ src/plugins/gssapi/negoextest/main.c |  18 +++++
+ src/tests/gssapi/Makefile.in         |  49 ++++++------
+ src/tests/gssapi/common.c            |  25 ++++--
+ src/tests/gssapi/common.h            |   9 +++
+ src/tests/gssapi/deps                |   4 +
+ src/tests/gssapi/t_bindings.c        | 111 +++++++++++++++++++++++++++
+ src/tests/gssapi/t_bindings.py       |  43 +++++++++++
+ src/tests/gssapi/t_negoex.py         |   7 ++
+ 8 files changed, 237 insertions(+), 29 deletions(-)
+ create mode 100644 src/tests/gssapi/t_bindings.c
+ create mode 100644 src/tests/gssapi/t_bindings.py
+
+diff --git a/src/plugins/gssapi/negoextest/main.c b/src/plugins/gssapi/negoextest/main.c
+index 6c340f41b..72fc5273a 100644
+--- a/src/plugins/gssapi/negoextest/main.c
++++ b/src/plugins/gssapi/negoextest/main.c
+@@ -57,6 +57,15 @@ gss_init_sec_context(OM_uint32 *minor_status,
+     const char *envstr;
+     uint8_t hops, mech_last_octet;
+ 
++    envstr = getenv("GSS_INIT_BINDING");
++    if (envstr != NULL) {
++        assert(strlen(envstr) > 0);
++        assert(input_chan_bindings != GSS_C_NO_CHANNEL_BINDINGS);
++        assert(strlen(envstr) == input_chan_bindings->application_data.length);
++        assert(strcmp((char *)input_chan_bindings->application_data.value,
++                      envstr) == 0);
++    }
++
+     if (input_token == GSS_C_NO_BUFFER || input_token->length == 0) {
+         envstr = getenv("HOPS");
+         hops = (envstr != NULL) ? atoi(envstr) : 1;
+@@ -112,6 +121,15 @@ gss_accept_sec_context(OM_uint32 *minor_status, gss_ctx_id_t *context_handle,
+     uint8_t hops, mech_last_octet;
+     const char *envstr;
+ 
++    envstr = getenv("GSS_ACCEPT_BINDING");
++    if (envstr != NULL) {
++        assert(strlen(envstr) > 0);
++        assert(input_chan_bindings != GSS_C_NO_CHANNEL_BINDINGS);
++        assert(strlen(envstr) == input_chan_bindings->application_data.length);
++        assert(strcmp((char *)input_chan_bindings->application_data.value,
++                      envstr) == 0);
++    }
++
+     /*
+      * The unwrapped token sits at the end and is just one byte giving the
+      * remaining number of hops.  The final octet of the mech encoding should
+diff --git a/src/tests/gssapi/Makefile.in b/src/tests/gssapi/Makefile.in
+index 5cc1e0f58..68c132b79 100644
+--- a/src/tests/gssapi/Makefile.in
++++ b/src/tests/gssapi/Makefile.in
+@@ -9,33 +9,33 @@ LOCALINCLUDES = -I$(srcdir)/../../lib/gssapi/mechglue \
+ 	-I../../lib/gssapi/generic
+ 
+ SRCS=	$(srcdir)/ccinit.c $(srcdir)/ccrefresh.c $(srcdir)/common.c \
+-	$(srcdir)/t_accname.c $(srcdir)/t_add_cred.c $(srcdir)/t_ccselect.c \
+-	$(srcdir)/t_ciflags.c $(srcdir)/t_context.c $(srcdir)/t_credstore.c \
+-	$(srcdir)/t_enctypes.c $(srcdir)/t_err.c $(srcdir)/t_export_cred.c \
+-	$(srcdir)/t_export_name.c $(srcdir)/t_gssexts.c \
+-	$(srcdir)/t_imp_cred.c $(srcdir)/t_imp_name.c $(srcdir)/t_invalid.c \
+-	$(srcdir)/t_inq_cred.c $(srcdir)/t_inq_ctx.c \
++	$(srcdir)/t_accname.c $(srcdir)/t_add_cred.c $(srcdir)/t_bindings.c \
++	$(srcdir)/t_ccselect.c $(srcdir)/t_ciflags.c $(srcdir)/t_context.c \
++	$(srcdir)/t_credstore.c $(srcdir)/t_enctypes.c $(srcdir)/t_err.c \
++	$(srcdir)/t_export_cred.c $(srcdir)/t_export_name.c \
++	$(srcdir)/t_gssexts.c $(srcdir)/t_imp_cred.c $(srcdir)/t_imp_name.c \
++	$(srcdir)/t_invalid.c $(srcdir)/t_inq_cred.c $(srcdir)/t_inq_ctx.c \
+ 	$(srcdir)/t_inq_mechs_name.c $(srcdir)/t_iov.c \
+ 	$(srcdir)/t_lifetime.c $(srcdir)/t_namingexts.c $(srcdir)/t_oid.c \
+ 	$(srcdir)/t_pcontok.c $(srcdir)/t_prf.c $(srcdir)/t_s4u.c \
+ 	$(srcdir)/t_s4u2proxy_krb5.c $(srcdir)/t_saslname.c \
+ 	$(srcdir)/t_spnego.c $(srcdir)/t_srcattrs.c
+ 
+-OBJS=	ccinit.o ccrefresh.o common.o t_accname.o t_add_cred.o t_ccselect.o \
+-	t_ciflags.o t_context.o t_credstore.o t_enctypes.o t_err.o \
+-	t_export_cred.o t_export_name.o t_gssexts.o t_imp_cred.o t_imp_name.o \
+-	t_invalid.o t_inq_cred.o t_inq_ctx.o t_inq_mechs_name.o t_iov.o \
+-	t_lifetime.o t_namingexts.o t_oid.o t_pcontok.o t_prf.o t_s4u.o \
+-	t_s4u2proxy_krb5.o t_saslname.o t_spnego.o t_srcattrs.o
++OBJS=	ccinit.o ccrefresh.o common.o t_accname.o t_add_cred.o t_bindings.o \
++	t_ccselect.o t_ciflags.o t_context.o t_credstore.o t_enctypes.o \
++	t_err.o t_export_cred.o t_export_name.o t_gssexts.o t_imp_cred.o \
++	t_imp_name.o t_invalid.o t_inq_cred.o t_inq_ctx.o t_inq_mechs_name.o \
++	t_iov.o t_lifetime.o t_namingexts.o t_oid.o t_pcontok.o t_prf.o \
++	t_s4u.o t_s4u2proxy_krb5.o t_saslname.o t_spnego.o t_srcattrs.o
+ 
+ COMMON_DEPS= common.o $(GSS_DEPLIBS) $(KRB5_BASE_DEPLIBS)
+ COMMON_LIBS= common.o $(GSS_LIBS) $(KRB5_BASE_LIBS)
+ 
+-all: ccinit ccrefresh t_accname t_add_cred t_ccselect t_ciflags t_context \
+-	t_credstore t_enctypes t_err t_export_cred t_export_name t_gssexts \
+-	t_imp_cred t_imp_name t_invalid t_inq_cred t_inq_ctx t_inq_mechs_name \
+-	t_iov t_lifetime t_namingexts t_oid t_pcontok t_prf t_s4u \
+-	t_s4u2proxy_krb5 t_saslname t_spnego t_srcattrs
++all: ccinit ccrefresh t_accname t_add_cred t_bindings t_ccselect t_ciflags \
++	t_context t_credstore t_enctypes t_err t_export_cred t_export_name \
++	t_gssexts t_imp_cred t_imp_name t_invalid t_inq_cred t_inq_ctx \
++	t_inq_mechs_name t_iov t_lifetime t_namingexts t_oid t_pcontok t_prf \
++	t_s4u t_s4u2proxy_krb5 t_saslname t_spnego t_srcattrs
+ 
+ check-unix: t_oid
+ 	$(RUN_TEST) ./t_invalid
+@@ -43,11 +43,12 @@ check-unix: t_oid
+ 	$(RUN_TEST) ./t_prf
+ 	$(RUN_TEST) ./t_imp_name
+ 
+-check-pytests: ccinit ccrefresh t_accname t_add_cred t_ccselect t_ciflags \
+-	t_context t_credstore t_enctypes t_err t_export_cred t_export_name \
+-	t_imp_cred t_inq_cred t_inq_ctx t_inq_mechs_name t_iov t_lifetime \
+-	t_pcontok t_s4u t_s4u2proxy_krb5 t_spnego t_srcattrs
++check-pytests: ccinit ccrefresh t_accname t_add_cred t_bindings t_ccselect \
++	t_ciflags t_context t_credstore t_enctypes t_err t_export_cred \
++	t_export_name t_imp_cred t_inq_cred t_inq_ctx t_inq_mechs_name t_iov \
++	t_lifetime t_pcontok t_s4u t_s4u2proxy_krb5 t_spnego t_srcattrs
+ 	$(RUNPYTEST) $(srcdir)/t_gssapi.py $(PYTESTFLAGS)
++	$(RUNPYTEST) $(srcdir)/t_bindings.py $(PYTESTFLAGS)
+ 	$(RUNPYTEST) $(srcdir)/t_ccselect.py $(PYTESTFLAGS)
+ 	$(RUNPYTEST) $(srcdir)/t_client_keytab.py $(PYTESTFLAGS)
+ 	$(RUNPYTEST) $(srcdir)/t_enctypes.py $(PYTESTFLAGS)
+@@ -64,6 +65,8 @@ t_accname: t_accname.o $(COMMON_DEPS)
+ 	$(CC_LINK) -o $@ t_accname.o $(COMMON_LIBS)
+ t_add_cred: t_add_cred.o $(COMMON_DEPS)
+ 	$(CC_LINK) -o $@ t_add_cred.o $(COMMON_LIBS)
++t_bindings: t_bindings.o $(COMMON_DEPS)
++	$(CC_LINK) -o $@ t_bindings.o $(COMMON_LIBS)
+ t_ccselect: t_ccselect.o $(COMMON_DEPS)
+ 	$(CC_LINK) -o $@ t_ccselect.o $(COMMON_LIBS)
+ t_ciflags: t_ciflags.o $(COMMON_DEPS)
+@@ -118,8 +121,8 @@ t_srcattrs: t_srcattrs.o $(COMMON_DEPS)
+ 	$(CC_LINK) -o $@ t_srcattrs.o $(COMMON_LIBS)
+ 
+ clean:
+-	$(RM) ccinit ccrefresh t_accname t_add_cred t_ccselect t_ciflags
+-	$(RM) t_context t_credstore t_enctypes t_err t_export_cred
++	$(RM) ccinit ccrefresh t_accname t_add_cred t_bindings t_ccselect
++	$(RM) t_ciflags t_context t_credstore t_enctypes t_err t_export_cred
+ 	$(RM) t_export_name t_gssexts t_imp_cred t_imp_name t_invalid
+ 	$(RM) t_inq_cred t_inq_ctx t_inq_mechs_name t_iov t_lifetime
+ 	$(RM) t_namingexts t_oid t_pcontok t_prf t_s4u t_s4u2proxy_krb5
+diff --git a/src/tests/gssapi/common.c b/src/tests/gssapi/common.c
+index 83e9d9bb8..7ba72f7b2 100644
+--- a/src/tests/gssapi/common.c
++++ b/src/tests/gssapi/common.c
+@@ -115,6 +115,20 @@ establish_contexts(gss_OID imech, gss_cred_id_t icred, gss_cred_id_t acred,
+                    gss_name_t tname, OM_uint32 flags, gss_ctx_id_t *ictx,
+                    gss_ctx_id_t *actx, gss_name_t *src_name, gss_OID *amech,
+                    gss_cred_id_t *deleg_cred)
++{
++    return establish_contexts_ex(imech, icred, acred, tname, flags, ictx, actx,
++                                 GSS_C_NO_CHANNEL_BINDINGS,
++                                 GSS_C_NO_CHANNEL_BINDINGS, NULL, src_name,
++                                 amech, deleg_cred);
++}
++
++void
++establish_contexts_ex(gss_OID imech, gss_cred_id_t icred, gss_cred_id_t acred,
++                      gss_name_t tname, OM_uint32 flags, gss_ctx_id_t *ictx,
++                      gss_ctx_id_t *actx, gss_channel_bindings_t icb,
++                      gss_channel_bindings_t acb, OM_uint32 *aret_flags,
++                      gss_name_t *src_name, gss_OID *amech,
++                      gss_cred_id_t *deleg_cred)
+ {
+     OM_uint32 minor, imaj, amaj;
+     gss_buffer_desc itok, atok;
+@@ -126,17 +140,16 @@ establish_contexts(gss_OID imech, gss_cred_id_t icred, gss_cred_id_t acred,
+     for (;;) {
+         (void)gss_release_buffer(&minor, &itok);
+         imaj = gss_init_sec_context(&minor, icred, ictx, tname, imech, flags,
+-                                    GSS_C_INDEFINITE,
+-                                    GSS_C_NO_CHANNEL_BINDINGS, &atok, NULL,
+-                                    &itok, NULL, NULL);
++                                    GSS_C_INDEFINITE, icb, &atok, NULL, &itok,
++                                    NULL, NULL);
+         check_gsserr("gss_init_sec_context", imaj, minor);
+         if (amaj == GSS_S_COMPLETE)
+             break;
+ 
+         (void)gss_release_buffer(&minor, &atok);
+-        amaj = gss_accept_sec_context(&minor, actx, acred, &itok,
+-                                      GSS_C_NO_CHANNEL_BINDINGS, src_name,
+-                                      amech, &atok, NULL, NULL, deleg_cred);
++        amaj = gss_accept_sec_context(&minor, actx, acred, &itok, acb,
++                                      src_name, amech, &atok, aret_flags, NULL,
++                                      deleg_cred);
+         check_gsserr("gss_accept_sec_context", amaj, minor);
+         (void)gss_release_buffer(&minor, &itok);
+         if (imaj == GSS_S_COMPLETE)
+diff --git a/src/tests/gssapi/common.h b/src/tests/gssapi/common.h
+index ae11b51d4..a5c8f87e6 100644
+--- a/src/tests/gssapi/common.h
++++ b/src/tests/gssapi/common.h
+@@ -62,6 +62,15 @@ void establish_contexts(gss_OID imech, gss_cred_id_t icred,
+                         gss_name_t *src_name, gss_OID *amech,
+                         gss_cred_id_t *deleg_cred);
+ 
++/* Establish contexts with channel bindings. */
++void establish_contexts_ex(gss_OID imech, gss_cred_id_t icred,
++                           gss_cred_id_t acred, gss_name_t tname,
++                           OM_uint32 flags, gss_ctx_id_t *ictx,
++                           gss_ctx_id_t *actx, gss_channel_bindings_t icb,
++                           gss_channel_bindings_t acb, OM_uint32 *aret_flags,
++                           gss_name_t *src_name, gss_OID *amech,
++                           gss_cred_id_t *deleg_cred);
++
+ /* Export *cred to a token, then release *cred and replace it by re-importing
+  * the token. */
+ void export_import_cred(gss_cred_id_t *cred);
+diff --git a/src/tests/gssapi/deps b/src/tests/gssapi/deps
+index acd0e96f8..73e4d9a74 100644
+--- a/src/tests/gssapi/deps
++++ b/src/tests/gssapi/deps
+@@ -33,6 +33,10 @@ $(OUTPRE)t_add_cred.$(OBJEXT): $(BUILDTOP)/include/gssapi/gssapi.h \
+   $(BUILDTOP)/include/gssapi/gssapi_ext.h $(BUILDTOP)/include/gssapi/gssapi_krb5.h \
+   $(BUILDTOP)/include/krb5/krb5.h $(COM_ERR_DEPS) $(top_srcdir)/include/krb5.h \
+   common.h t_add_cred.c
++$(OUTPRE)t_bindings.$(OBJEXT): $(BUILDTOP)/include/gssapi/gssapi.h \
++  $(BUILDTOP)/include/gssapi/gssapi_ext.h $(BUILDTOP)/include/gssapi/gssapi_krb5.h \
++  $(BUILDTOP)/include/krb5/krb5.h $(COM_ERR_DEPS) $(top_srcdir)/include/krb5.h \
++  common.h t_bindings.c
+ $(OUTPRE)t_ccselect.$(OBJEXT): $(BUILDTOP)/include/gssapi/gssapi.h \
+   $(BUILDTOP)/include/gssapi/gssapi_ext.h $(BUILDTOP)/include/gssapi/gssapi_krb5.h \
+   $(BUILDTOP)/include/krb5/krb5.h $(COM_ERR_DEPS) $(top_srcdir)/include/krb5.h \
+diff --git a/src/tests/gssapi/t_bindings.c b/src/tests/gssapi/t_bindings.c
+new file mode 100644
+index 000000000..e8906715b
+--- /dev/null
++++ b/src/tests/gssapi/t_bindings.c
+@@ -0,0 +1,111 @@
++/* -*- mode: c; c-basic-offset: 4; indent-tabs-mode: nil -*- */
++/*
++ * Copyright (C) 2020 by Red Hat, Inc.
++ * All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ *
++ * * Redistributions of source code must retain the above copyright
++ *   notice, this list of conditions and the following disclaimer.
++ *
++ * * Redistributions in binary form must reproduce the above copyright
++ *   notice, this list of conditions and the following disclaimer in
++ *   the documentation and/or other materials provided with the
++ *   distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
++ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
++ * COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
++ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
++ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
++ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
++ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
++ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
++ * OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++#include <stdio.h>
++#include <string.h>
++#include <assert.h>
++
++#include "common.h"
++
++/*
++ * Establish contexts (without and with GSS_C_DCE_STYLE) with the default
++ * initiator name, a specified principal name as target name, initiator
++ * bindings, and acceptor bindings.  If any call is unsuccessful, display an
++ * error message.  Output "yes" or "no" to indicate whether the contexts were
++ * reported as channel-bound on the acceptor.  Exit with status 0 if all
++ * operations are successful, or 1 if not.
++ *
++ * Usage: ./t_bindings [-s] targetname icb acb
++ *
++ * An icb or abc value of "-" will not specify channel bindings.
++ */
++
++int
++main(int argc, char *argv[])
++{
++    OM_uint32 minor, flags1, flags2;
++    gss_name_t target_name;
++    gss_ctx_id_t ictx, actx;
++    struct gss_channel_bindings_struct icb_data = {0}, acb_data = {0};
++    gss_channel_bindings_t icb = GSS_C_NO_CHANNEL_BINDINGS;
++    gss_channel_bindings_t acb = GSS_C_NO_CHANNEL_BINDINGS;
++    gss_OID_desc *mech;
++
++    argv++;
++    argc--;
++    if (*argv != NULL && strcmp(*argv, "-s") == 0) {
++        mech = &mech_spnego;
++        argv++;
++        argc--;
++    } else {
++        mech = &mech_krb5;
++    }
++
++    if (argc != 3) {
++        fprintf(stderr, "Usage: t_bindings [-s] targetname icb acb\n");
++        return 1;
++    }
++
++    target_name = import_name(argv[0]);
++
++    if (strcmp(argv[1], "-") != 0) {
++        icb_data.application_data.length = strlen(argv[1]);
++        icb_data.application_data.value = argv[1];
++        icb = &icb_data;
++    }
++
++    if (strcmp(argv[2], "-") != 0) {
++        acb_data.application_data.length = strlen(argv[2]);
++        acb_data.application_data.value = argv[2];
++        acb = &acb_data;
++    }
++
++    establish_contexts_ex(mech, GSS_C_NO_CREDENTIAL, GSS_C_NO_CREDENTIAL,
++                          target_name, 0, &ictx, &actx, icb, acb, &flags1,
++                          NULL, NULL, NULL);
++
++    /* Try again with GSS_C_DCE_STYLE */
++    (void)gss_delete_sec_context(&minor, &ictx, NULL);
++    (void)gss_delete_sec_context(&minor, &actx, NULL);
++
++    establish_contexts_ex(mech, GSS_C_NO_CREDENTIAL, GSS_C_NO_CREDENTIAL,
++                          target_name, GSS_C_DCE_STYLE, &ictx, &actx, icb, acb,
++                          &flags2, NULL, NULL, NULL);
++    assert((flags1 & GSS_C_CHANNEL_BOUND_FLAG) ==
++           (flags2 & GSS_C_CHANNEL_BOUND_FLAG));
++    printf("%s\n", (flags1 & GSS_C_CHANNEL_BOUND_FLAG) ? "yes" : "no");
++
++    (void)gss_delete_sec_context(&minor, &ictx, NULL);
++    (void)gss_delete_sec_context(&minor, &actx, NULL);
++    (void)gss_release_name(&minor, &target_name);
++
++    return 0;
++}
+diff --git a/src/tests/gssapi/t_bindings.py b/src/tests/gssapi/t_bindings.py
+new file mode 100644
+index 000000000..f377977b6
+--- /dev/null
++++ b/src/tests/gssapi/t_bindings.py
+@@ -0,0 +1,43 @@
++from k5test import *
++
++realm = K5Realm()
++server = 'p:' + realm.host_princ
++
++mark('krb5 channel bindings')
++realm.run(['./t_bindings', server, '-', '-'], expected_msg='no')
++realm.run(['./t_bindings', server, 'a', '-'], expected_msg='no')
++realm.run(['./t_bindings', server, 'a', 'a'], expected_msg='yes')
++realm.run(['./t_bindings', server, '-', 'a'], expected_msg='no')
++realm.run(['./t_bindings', server, 'a', 'x'],
++          expected_code=1, expected_msg='Incorrect channel bindings')
++
++mark('SPNEGO channel bindings')
++realm.run(['./t_bindings', '-s', server, '-', '-'], expected_msg='no')
++realm.run(['./t_bindings', '-s', server, 'a', '-'], expected_msg='no')
++realm.run(['./t_bindings', '-s', server, 'a', 'a'], expected_msg='yes')
++realm.run(['./t_bindings', '-s', server, '-', 'a'], expected_msg='no')
++realm.run(['./t_bindings', '-s', server, 'a', 'x'],
++          expected_code=1, expected_msg='Incorrect channel bindings')
++
++client_aware_conf = {'libdefaults': {'client_aware_channel_bindings': 'true'}}
++e = realm.special_env('cb_aware', False, krb5_conf=client_aware_conf)
++
++mark('krb5 client_aware_channel_bindings')
++realm.run(['./t_bindings', server, '-', '-'], env=e, expected_msg='no')
++realm.run(['./t_bindings', server, 'a', '-'], env=e, expected_msg='no')
++realm.run(['./t_bindings', server, 'a', 'a'], env=e, expected_msg='yes')
++realm.run(['./t_bindings', server, '-', 'a'], env=e,
++          expected_code=1, expected_msg='Incorrect channel bindings')
++realm.run(['./t_bindings', server, 'a', 'x'], env=e,
++          expected_code=1, expected_msg='Incorrect channel bindings')
++
++mark('SPNEGO client_aware_channel_bindings')
++realm.run(['./t_bindings', '-s', server, '-', '-'], env=e, expected_msg='no')
++realm.run(['./t_bindings', '-s', server, 'a', '-'], env=e, expected_msg='no')
++realm.run(['./t_bindings', '-s', server, 'a', 'a'], env=e, expected_msg='yes')
++realm.run(['./t_bindings', '-s', server, '-', 'a'], env=e,
++          expected_code=1, expected_msg='Incorrect channel bindings')
++realm.run(['./t_bindings', '-s', server, 'a', 'x'], env=e,
++          expected_code=1, expected_msg='Incorrect channel bindings')
++
++success('channel bindings tests')
+diff --git a/src/tests/gssapi/t_negoex.py b/src/tests/gssapi/t_negoex.py
+index 88470d2fa..a218899c4 100644
+--- a/src/tests/gssapi/t_negoex.py
++++ b/src/tests/gssapi/t_negoex.py
+@@ -139,4 +139,11 @@ msgs = ('sending [3]AP_REQUEST', 'sending [7]CHALLENGE', 'sending [8]VERIFY',
+         'sending [11]CHALLENGE', 'sending [12]VERIFY', 'sending [13]VERIFY')
+ test({'HOPS': '4', 'KEY': 'accept-always'}, expected_trace=())
+ 
++mark('channel bindings')
++e = realm.env.copy()
++e.update({'HOPS': '1', 'GSS_INIT_BINDING': 'a', 'GSS_ACCEPT_BINDING': 'b'})
++# The test mech will verify that the bindings are communicated to the
++# mech, but does not set the channel-bound flag.
++realm.run(['./t_bindings', '-s', 'h:host', 'a', 'b'], env=e, expected_msg='no')
++
+ success('NegoEx tests')
