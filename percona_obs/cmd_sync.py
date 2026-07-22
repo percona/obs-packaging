@@ -101,10 +101,17 @@ _SYNC_MSG_RE = re.compile(r"^sync: [^@]+@([0-9a-f]+) \((.+)\)$")
 # Matches a branch aggregate message: branch: <profile> (<obs_project>/<package>)
 # Group 1 = profile name, group 2 = source OBS project.
 _BRANCH_MSG_RE = re.compile(r"^branch: (\S+) \((.+)/[^/]+\)$")
-# Matches <subproj>-images entries in --only-repos (e.g. "ubi9-images").
+# Matches <flavor>-images entries in --only-repos (e.g. "ubi9-images").
+# A <flavor>-images label maps to two layouts that coexist during the
+# containers restructure:
+#   old — a dedicated ":containers:<flavor>" subproject whose built image repo
+#         is literally named "images" (still used by ppg 15/16/17/18).
+#   new — a single ":containers" subproject with per-flavor image repos named
+#         after the flavor, e.g. "ubi8"/"ubi9" (ppg 14 onward).
 _IMAGES_REPO_RE = re.compile(r"^(.+)-images$")
-# Matches leaf container subproject names in OBS project names.
-# e.g. "ppg:17:containers:ubi9" → group 1 = "ubi9"
+# Matches leaf container subproject names in OBS project names (old layout).
+# e.g. "ppg:17:containers:ubi9" → group 1 = "ubi9".  The new single-subproject
+# layout ("…:containers") intentionally does not match and is never filtered.
 _CONTAINER_SUBPROJ_RE = re.compile(r":containers:([^:]+)$")
 
 
@@ -970,7 +977,12 @@ def cmd_sync(args):
                 if container_subprojs is None:
                     container_subprojs = set()
                 container_subprojs.add(_m.group(1))
+                # Old layout: one image repo literally named "images" per
+                # ":containers:<flavor>" subproject.
                 effective_only_repos.add("images")
+                # New layout: a single ":containers" subproject whose built
+                # image repos are named after the flavor (e.g. "ubi8"/"ubi9").
+                effective_only_repos.add(_m.group(1))
             else:
                 effective_only_repos.add(_entry)
     if container_subprojs is not None:
