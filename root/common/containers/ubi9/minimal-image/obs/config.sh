@@ -10,6 +10,11 @@ echo "Configure UBI image: [$kiwi_iname]..."
 rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
 rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-beta
 
+# openssl-fips-provider-so is not properly obsoleted by the newer openssl-fips-provider
+# (el9_7+), causing a file conflict on /usr/lib64/ossl-modules/fips.so during dnf update.
+# Force-remove it with rpm --nodeps so the subsequent dnf update can install the replacement.
+rpm -e --nodeps openssl-fips-provider-so
+
 microdnf clean all || true
 
 rm -rf {/target,}/usr/share/doc

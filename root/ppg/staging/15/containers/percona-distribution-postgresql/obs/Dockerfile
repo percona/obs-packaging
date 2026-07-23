@@ -31,14 +31,6 @@ ENV PGDATA /data/db
 ENV PGROOT="/usr/pgsql-${PPG_MAJOR_VERSION}"
 ENV PATH="/pgdata:${PGROOT}/bin:${PATH}"
 
-# openssl-fips-provider-so is not properly obsoleted by the newer openssl-fips-provider
-# (el9_7+), causing a file conflict on /usr/lib64/ossl-modules/fips.so during dnf update.
-# Force-remove it with rpm --nodeps so the subsequent dnf update can install the replacement.
-RUN if [[ "$RHEL_VER" == "el9" ]]; then rpm -e --nodeps openssl-fips-provider-so; fi
-
-# Remove unused perl modules in RHEL8 pulled in by the perl metapackage
-RUN if [[ "$RHEL_VER" == "el8" ]]; then rpm -e --nodeps perl-Archive-Tar perl-IO-Compress; fi
-
 RUN microdnf -y update
 
 RUN microdnf -y install \

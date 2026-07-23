@@ -19,11 +19,6 @@ LABEL release="%!{PPG_RELEASE}"
 ARG PPG_REPO
 ARG RHEL_VER
 
-# openssl-fips-provider-so is not properly obsoleted by the newer openssl-fips-provider
-# (el9_7+), causing a file conflict on /usr/lib64/ossl-modules/fips.so during dnf update.
-# Force-remove it with rpm --nodeps so the subsequent dnf update can install the replacement.
-RUN if [[ "$RHEL_VER" == "el9" ]]; then rpm -e --nodeps openssl-fips-provider-so; fi
-
 RUN microdnf -y update
 RUN microdnf -y install \
     glibc-langpack-en systemd-rpm-macros file \

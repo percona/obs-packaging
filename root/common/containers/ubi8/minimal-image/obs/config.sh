@@ -7,6 +7,9 @@ test -f /.profile && . /.profile
 
 echo "Configure UBI image: [$kiwi_iname]..."
 
+# Remove unused perl modules pulled in by the perl metapackage
+rpm -e --nodeps perl-Archive-Tar perl-IO-Compress
+
 microdnf clean all || true
 
 rm -rf {/target,}/usr/share/doc
