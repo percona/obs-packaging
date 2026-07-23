@@ -5,6 +5,7 @@ Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  mawk,
  meson,
+ cmake,
  ninja-build,
  pkg-config,
  debhelper (>= 9),
