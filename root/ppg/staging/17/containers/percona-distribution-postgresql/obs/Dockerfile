@@ -5,7 +5,7 @@
 #!BuildTag: percona-distribution-postgresql:%!{PG_VERSION}
 #!BuildTag: percona-distribution-postgresql:%!{PG_MAJOR_VERSION}
 
-FROM percona-ubi8-minimal:latest
+FROM percona-ubi-minimal:latest
 
 LABEL name="Percona Distribution for PostgreSQL" \
       description="Essential / key PostgreSQL%!{PG_MAJOR_VERSION} components. Percona Distribution for PostgreSQL features core components, tools and add-ons from the community, tested to work together in demanding enterprise environments." \
@@ -16,43 +16,49 @@ LABEL name="Percona Distribution for PostgreSQL" \
 LABEL version="%!{PG_VERSION}-%!{PPG_RELEASE}"
 LABEL release="%!{PPG_RELEASE}"
 
-RUN microdnf -y update
-RUN microdnf -y install glibc-langpack-en systemd-rpm-macros file
-
-ARG PPG_REPO=testing
+ARG PPG_REPO
+ARG RHEL_VER
 
 ENV PPG_VERSION %!{PG_VERSION}-%!{PPG_RELEASE}
 ENV PPG_MAJOR_VERSION %!{PG_MAJOR_VERSION}
 ENV PPG_MINOR_VERSION %!{PG_MINOR_VERSION}
-ENV OS_VER el8
+ENV OS_VER ${RHEL_VER}
 ENV FULL_PERCONA_VERSION "${PPG_VERSION}.${OS_VER}"
 ENV PPG_REPO ${PPG_REPO}
 ENV PPG_REPO_VERSION "${PPG_MAJOR_VERSION}.${PPG_MINOR_VERSION}"
-
-RUN microdnf -y install \
-        pkg-config \
-        bind-utils \
-        gettext \
-        hostname \
-        tar \
-        bzip2 \
-        lz4 \
-        procps-ng
-RUN microdnf -y install  \
-        nss_wrapper \
-        shadow-utils \
-        libpq \
-        libedit
- 
-RUN microdnf -y reinstall tzdata; \
-    microdnf clean all
 
 ENV PGDATA /data/db
 ENV PGROOT="/usr/pgsql-${PPG_MAJOR_VERSION}"
 ENV PATH="/pgdata:${PGROOT}/bin:${PATH}"
 
-RUN set -ex; \
-    microdnf install -y \
+# openssl-fips-provider-so is not properly obsoleted by the newer openssl-fips-provider
+# (el9_7+), causing a file conflict on /usr/lib64/ossl-modules/fips.so during dnf update.
+# Force-remove it with rpm --nodeps so the subsequent dnf update can install the replacement.
+RUN if [[ "$RHEL_VER" == "el9" ]]; then rpm -e --nodeps openssl-fips-provider-so; fi
+
+RUN microdnf -y update
+
+RUN microdnf -y install \
+        glibc-langpack-en \
+        systemd-rpm-macros \
+        file \
+        pkgconfig \
+        bind-utils \
+        gettext \
+        hostname \
+        perl \
+        tar \
+        bzip2 \
+        lz4 \
+        procps-ng \
+        nss_wrapper \
+        shadow-utils \
+        libpq \
+        libedit \
+        gosu \
+        tzdata
+
+RUN microdnf install -y \
         percona-postgresql${PPG_MAJOR_VERSION}-server \
         percona-postgresql${PPG_MAJOR_VERSION}-contrib \
         percona-postgresql-common \
@@ -65,34 +71,20 @@ RUN set -ex; \
         percona-pgvector_${PPG_MAJOR_VERSION} \
         percona-postgresql${PPG_MAJOR_VERSION}-llvmjit \
         percona-pgvector_${PPG_MAJOR_VERSION}-llvmjit \
-        python3-etcd \
         percona-wal2json${PPG_MAJOR_VERSION} \
-        percona-pg_cron_${PPG_MAJOR_VERSION}; \
-    microdnf clean all; \
-    rm -rf /var/cache/dnf /var/cache/yum $PGDATA && mkdir -p $PGDATA /docker-entrypoint-initdb.d; \
-    chown -R postgres:postgres $PGDATA docker-entrypoint-initdb.d
+        percona-pg_cron_${PPG_MAJOR_VERSION} \
+        percona-patroni
 
-
-RUN set -ex; \
-    microdnf -y update; \
-    microdnf install -y python3.12-click percona-patroni; \
-    microdnf clean all
-
-# Remove unused perl modules pulled in by the perl metapackage
-RUN set -ex; \
-    rpm -e --nodeps perl-Archive-Tar perl-IO-Compress
-
-RUN set -ex; \
-    sed -ri "s!^#?(listen_addresses)\s*=\s*\S+.*!\1 = '*'!" /usr/pgsql-${PPG_MAJOR_VERSION}/share/postgresql.conf.sample; \
-    grep -F "listen_addresses = '*'" /usr/pgsql-${PPG_MAJOR_VERSION}/share/postgresql.conf.sample
+RUN microdnf clean all && rm -rf /var/cache/dnf /var/cache/yum
+    
+RUN rm -rf $PGDATA && mkdir -p $PGDATA /docker-entrypoint-initdb.d
+RUN chown -R postgres:postgres $PGDATA docker-entrypoint-initdb.d
+RUN sed -ri "s!^#?(listen_addresses)\s*=\s*\S+.*!\1 = '*'!" /usr/pgsql-${PPG_MAJOR_VERSION}/share/postgresql.conf.sample
+RUN grep -F "listen_addresses = '*'" /usr/pgsql-${PPG_MAJOR_VERSION}/share/postgresql.conf.sample
 
 COPY LICENSE /licenses/LICENSE.Dockerfile
 RUN cp /usr/share/doc/percona-postgresql${PPG_MAJOR_VERSION}/COPYRIGHT /licenses/COPYRIGHT.PostgreSQL
     
-RUN set -eux; \
-    microdnf install -y gosu; \
-    microdnf clean all
-
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
