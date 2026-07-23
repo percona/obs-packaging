@@ -33,7 +33,7 @@ License:        PostgreSQL
 URL:            https://github.com/percona/pg_tde
 Source0:        %{sname}-%{version}.tar.gz
 
-BuildRequires:  %{pg_name}-devel chrpath openssl-devel libcurl-devel zlib-devel libzstd-devel libxml2-devel libxslt-devel libselinux-devel pam-devel krb5-devel readline-devel
+BuildRequires:  %{pg_name}-devel chrpath openssl-devel libcurl-devel zlib-devel libzstd-devel libxml2-devel libxslt-devel libselinux-devel pam-devel krb5-devel readline-devel meson
 %if 0%{?gts_version}
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
 %endif
@@ -80,11 +80,12 @@ Development and testing support files for pg_tde, including Perl test modules.
 %if 0%{?gts_version}
 source /opt/rh/gcc-toolset-%{gts_version}/enable
 %endif
-USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make}
+%meson -Dpg_config=%{pginstdir}/bin/pg_config
+%meson_build
 
 %install
 %{__rm} -rf %{buildroot}
-USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags} install DESTDIR=%{buildroot}
+%meson_install
 find %{buildroot}%{pginstdir} -type f \( -name '*.so' -o -name 'pg_tde_*' \) -exec chrpath --delete {} \; 2>/dev/null || true
 mkdir -p %{buildroot}/%{pginstdir}/lib/pgxs/src/test/perl/PostgreSQL/Test
 install -m 644 ci_scripts/perl/PostgreSQL/Test/TdeCluster.pm %{buildroot}/%{pginstdir}/lib/pgxs/src/test/perl/PostgreSQL/Test/
@@ -95,18 +96,6 @@ install -m 644 ci_scripts/perl/PostgreSQL/Test/TdeCluster.pm %{buildroot}/%{pgin
 %dir %{pginstdir}
 %dir %{pginstdir}/bin
 %dir %{pginstdir}/lib
-%dir %{pginstdir}/lib/bitcode
-%dir %{pginstdir}/lib/bitcode/pg_tde
-%dir %{pginstdir}/lib/bitcode/pg_tde/src
-%dir %{pginstdir}/lib/bitcode/pg_tde/src/access
-%dir %{pginstdir}/lib/bitcode/pg_tde/src/catalog
-%dir %{pginstdir}/lib/bitcode/pg_tde/src/common
-%dir %{pginstdir}/lib/bitcode/pg_tde/src/encryption
-%dir %{pginstdir}/lib/bitcode/pg_tde/src/keyring
-%dir %{pginstdir}/lib/bitcode/pg_tde/src/libkmip
-%dir %{pginstdir}/lib/bitcode/pg_tde/src/libkmip/libkmip
-%dir %{pginstdir}/lib/bitcode/pg_tde/src/libkmip/libkmip/src
-%dir %{pginstdir}/lib/bitcode/pg_tde/src/smgr
 %dir %{pginstdir}/share
 %dir %{pginstdir}/share/extension
 %{pginstdir}/bin/pg_tde_change_key_provider
@@ -121,31 +110,6 @@ install -m 644 ci_scripts/perl/PostgreSQL/Test/TdeCluster.pm %{buildroot}/%{pgin
 %{pginstdir}/bin/pg_tde_rewind
 %{pginstdir}/bin/pg_tde_waldump
 %{pginstdir}/bin/pg_tde_upgrade
-%{pginstdir}/lib/bitcode/pg_tde.index.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/access/pg_tde_tdemap.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/access/pg_tde_xlog.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/access/pg_tde_xlog_keys.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/access/pg_tde_xlog_smgr.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/catalog/tde_keyring.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/catalog/tde_keyring_parse_opts.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/catalog/tde_principal_key.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/common/pg_tde_utils.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/encryption/enc_aes.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/encryption/enc_tde.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/keyring/keyring_api.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/keyring/keyring_curl.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/keyring/keyring_file.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/keyring/keyring_kmip.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/keyring/keyring_kmip_impl.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/keyring/keyring_vault.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/libkmip/libkmip/src/kmip.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/libkmip/libkmip/src/kmip_bio.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/libkmip/libkmip/src/kmip_locate.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/libkmip/libkmip/src/kmip_memset.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/pg_tde.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/pg_tde_event_capture.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/pg_tde_guc.bc
-%{pginstdir}/lib/bitcode/pg_tde/src/smgr/pg_tde_smgr.bc
 
 %files devel
 %dir %{pginstdir}/lib/pgxs/src/test/perl

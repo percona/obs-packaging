@@ -3,7 +3,7 @@
 include /usr/share/postgresql-common/pgxs_debian_control.mk
 
 %:
-	dh $@
+	dh $@ --buildsystem=meson
 
 override_dh_builddeb:
 	dh_builddeb -- -Zgzip
@@ -20,28 +20,11 @@ override_dh_builddeb:
 	  sed -i 's/\(-dbgsym_[^ ]*\)\.ddeb/\1.deb/g' debian/files; \
 	fi
 
-override_dh_auto_clean:
-	rm -rf build
-
 override_dh_auto_configure:
-
-override_dh_auto_build:
-	make USE_PGXS=1 \
-	CFLAGS="$(pkg-config --cflags openssl) $$CFLAGS" \
-	LDFLAGS_EX="$$LDFLAGS_EX -L/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib \
-	/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib/libpgcommon.a \
-	/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib/libpgport.a \
-	/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib/libpgfeutils.a \
-	-lpq -lcurl $$(pkg-config --libs openssl)"
+	dh_auto_configure -- -Dpg_config=/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_config
 
 override_dh_auto_install:
-	make USE_PGXS=1 install DESTDIR=$(CURDIR)/debian/tmp \
-	CFLAGS="$(pkg-config --cflags openssl) $$CFLAGS" \
-	LDFLAGS_EX="$$LDFLAGS_EX -L/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib \
-	/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib/libpgcommon.a \
-	/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib/libpgport.a \
-	/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib/libpgfeutils.a \
-	-lpq -lcurl $$(pkg-config --libs openssl)"
+	dh_auto_install
 	mkdir -p $(CURDIR)/debian/tmp/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib/pgxs/src/test/perl/PostgreSQL/Test
 	install -m 644 ci_scripts/perl/PostgreSQL/Test/TdeCluster.pm $(CURDIR)/debian/tmp/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib/pgxs/src/test/perl/PostgreSQL/Test/
 

@@ -6,6 +6,10 @@ Version: 1.0.0
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 9),
+ meson,
+ ninja-build,
+ chrpath,
+ pkg-config,
  percona-postgresql-server-dev-all (>= 153~),
  clang,
  libcurl4-openssl-dev,
