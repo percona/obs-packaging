@@ -4,7 +4,7 @@
 #!BuildTag: percona-pgbouncer:<VERSION>
 #!BuildTag: percona-pgbouncer:latest
 
-FROM percona-ubi8-minimal:latest
+FROM percona-ubi-minimal:latest
 
 LABEL name="Percona PgBouncer" \
       description="PgBouncer is a lightweight connection pooler for PostgreSQL that offers various pooling modes (session, transaction, statement), low memory usage, support for multiple backend hosts, and the ability to reconfigure or restart it online without downtime." \
@@ -21,32 +21,27 @@ ARG PG_VERSION=%!{PG_VERSION}
 ENV PG_VERSION=${PG_VERSION}
 
 RUN microdnf -y update
-RUN microdnf -y install shadow-utils
 
-RUN groupadd -g 1001 pgbouncer; \
-    useradd -u 1001 -r -g 1001 -s /sbin/nologin \
-        -c "Default Application User" pgbouncer
-
-RUN set -ex; \
-    microdnf -y install \
-        shadow-utils \
+RUN microdnf -y install \
         file \
         perl \
         tar \
         pkgconfig \
-        c-ares
-
-RUN set -ex; \
-    microdnf -y install \
+        c-ares \
         procps-ng \
-        percona-pgbouncer; \
-    microdnf clean all; \
-    rm -rf /var/cache/dnf /var/cache/yum
+        shadow-utils
+
+RUN groupadd -g 1001 pgbouncer
+RUN useradd -u 1001 -r -g 1001 -s /sbin/nologin -c "Default Application User" pgbouncer
+
+RUN microdnf -y install percona-pgbouncer
+
+RUN microdnf clean all && rm -rf /var/cache/dnf /var/cache/yum
 
 COPY LICENSE /licenses/LICENSE.Dockerfile
 
-RUN touch /etc/pgbouncer/userlist.txt && \
-    chown -R 1001 /var/log/pgbouncer /var/run/pgbouncer /etc/pgbouncer
+RUN touch /etc/pgbouncer/userlist.txt
+RUN chown -R 1001 /var/log/pgbouncer /var/run/pgbouncer /etc/pgbouncer
 
 COPY --chown=1001 ["entrypoint.sh", "/"]
 USER 1001

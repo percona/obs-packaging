@@ -5,7 +5,7 @@
 #!BuildTag: percona-distribution-postgresql-upgrade:%!{PG_VERSION}-17
 #!BuildTag: percona-distribution-postgresql-upgrade:%!{PG_MAJOR_VERSION}-17
 
-FROM percona-ubi9-minimal:latest
+FROM percona-ubi-minimal:latest
 
 LABEL name="Percona Distribution for PostgreSQL Upgrade" \
       description="Upgrade container for Percona Distribution for PostgreSQL. Facilitates major version upgrades from PostgreSQL 17 to %!{PG_MAJOR_VERSION} using pg_upgrade." \
@@ -16,10 +16,14 @@ LABEL name="Percona Distribution for PostgreSQL Upgrade" \
 LABEL version="%!{PG_VERSION}-%!{PPG_RELEASE}"
 LABEL release="%!{PPG_RELEASE}"
 
+ARG PPG_REPO
+ARG RHEL_VER
+
 # openssl-fips-provider-so is not properly obsoleted by the newer openssl-fips-provider
 # (el9_7+), causing a file conflict on /usr/lib64/ossl-modules/fips.so during dnf update.
 # Force-remove it with rpm --nodeps so the subsequent dnf update can install the replacement.
-RUN rpm -e --nodeps openssl-fips-provider-so
+RUN if [[ "$RHEL_VER" == "el9" ]]; then rpm -e --nodeps openssl-fips-provider-so; fi
+
 RUN microdnf -y update
 RUN microdnf -y install \
     glibc-langpack-en systemd-rpm-macros file \
@@ -27,7 +31,7 @@ RUN microdnf -y install \
 
 ENV PPG_VERSION %!{PG_VERSION}-%!{PPG_RELEASE}
 ENV PPG_MAJOR_VERSION %!{PG_MAJOR_VERSION}
-ENV OS_VER el9
+ENV OS_VER ${RHEL_VER}
 
 RUN microdnf -y install \
         bind-utils \
