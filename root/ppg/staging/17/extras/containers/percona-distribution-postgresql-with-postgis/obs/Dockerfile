@@ -16,15 +16,6 @@ LABEL name="Percona Distribution for PostgreSQL" \
 LABEL version="%!{PG_VERSION}-%!{PPG_RELEASE}"
 LABEL release="%!{PPG_RELEASE}"
 
-RUN microdnf -y update
-RUN microdnf -y install \
-           glibc-langpack-en \
-           systemd-rpm-macros \
-           file \
-           mariadb-connector-c-config \
-           crypto-policies-scripts \
-           pkgconfig
-
 ARG PPG_REPO
 ARG RHEL_VER
 
@@ -36,10 +27,19 @@ ENV FULL_PERCONA_VERSION "${PPG_VERSION}.${OS_VER}"
 ENV PPG_REPO ${PPG_REPO}
 ENV PPG_REPO_VERSION "${PPG_MAJOR_VERSION}.${PPG_MINOR_VERSION}"
 
-RUN set -ex; \
-    microdnf -y update;
+ENV PGDATA /data/db
+ENV PGROOT="/usr/pgsql-${PPG_MAJOR_VERSION}"
+ENV PATH="/pgdata:${PGROOT}/bin:${PATH}"
+
+RUN microdnf -y update
 
 RUN microdnf -y install \
+        glibc-langpack-en \
+        systemd-rpm-macros \
+        file \
+        mariadb-connector-c-config \
+        crypto-policies-scripts \
+        pkgconfig \
         bind-utils \
         gettext \
         hostname \
@@ -47,22 +47,15 @@ RUN microdnf -y install \
         tar \
         bzip2 \
         lz4 \
-        procps-ng
-RUN microdnf -y install  \
+        procps-ng \
         nss_wrapper \
         shadow-utils \
         libpq \
-        libedit
+        libedit \
+        tzdata \
+        gosu
 
-RUN microdnf -y reinstall tzdata; \
-    microdnf clean all
-
-ENV PGDATA /data/db
-ENV PGROOT="/usr/pgsql-${PPG_MAJOR_VERSION}"
-ENV PATH="/pgdata:${PGROOT}/bin:${PATH}"
-
-RUN set -ex; \
-    microdnf install -y \
+RUN microdnf install -y \
         percona-postgresql${PPG_MAJOR_VERSION}-server \
         percona-postgresql${PPG_MAJOR_VERSION}-contrib \
         percona-postgresql${PPG_MAJOR_VERSION}-llvmjit \
@@ -92,27 +85,18 @@ RUN set -ex; \
         percona-postgresql_anonymizer_${PPG_MAJOR_VERSION} \
         percona-pg_partman_${PPG_MAJOR_VERSION} \
         percona-pgrouting_${PPG_MAJOR_VERSION} \
-        percona-pgvectorscale_${PPG_MAJOR_VERSION}; \
-    microdnf clean all; \
-    rm -rf /var/cache/dnf /var/cache/yum $PGDATA && mkdir -p $PGDATA /docker-entrypoint-initdb.d; \
-    chown -R postgres:postgres $PGDATA docker-entrypoint-initdb.d
+        percona-pgvectorscale_${PPG_MAJOR_VERSION} \
+        percona-patroni
 
+RUN microdnf clean all && rm -rf /var/cache/dnf /var/cache/yum 
 
-RUN set -ex; \
-    microdnf -y update; \
-    microdnf install -y percona-patroni; \
-    microdnf clean all
-
-RUN set -ex; \
-    sed -ri "s!^#?(listen_addresses)\s*=\s*\S+.*!\1 = '*'!" /usr/pgsql-${PPG_MAJOR_VERSION}/share/postgresql.conf.sample; \
-    grep -F "listen_addresses = '*'" /usr/pgsql-${PPG_MAJOR_VERSION}/share/postgresql.conf.sample
+RUN rm -rf $PGDATA && mkdir -p $PGDATA /docker-entrypoint-initdb.d
+RUN chown -R postgres:postgres $PGDATA docker-entrypoint-initdb.d
+RUN sed -ri "s!^#?(listen_addresses)\s*=\s*\S+.*!\1 = '*'!" /usr/pgsql-${PPG_MAJOR_VERSION}/share/postgresql.conf.sample
+RUN grep -F "listen_addresses = '*'" /usr/pgsql-${PPG_MAJOR_VERSION}/share/postgresql.conf.sample
 
 COPY LICENSE /licenses/LICENSE.Dockerfile
 RUN cp /usr/share/doc/percona-postgresql${PPG_MAJOR_VERSION}/COPYRIGHT /licenses/COPYRIGHT.PostgreSQL
-
-RUN set -eux; \
-    microdnf install -y gosu; \
-    microdnf clean all
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
