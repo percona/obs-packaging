@@ -77,6 +77,10 @@ RUN set -ex; \
     microdnf install -y python3.12-click percona-patroni; \
     microdnf clean all
 
+# Remove unused perl modules pulled in by the perl metapackage
+RUN set -ex; \
+    rpm -e --nodeps perl-Archive-Tar perl-IO-Compress
+
 RUN set -ex; \
     sed -ri "s!^#?(listen_addresses)\s*=\s*\S+.*!\1 = '*'!" /usr/pgsql-${PPG_MAJOR_VERSION}/share/postgresql.conf.sample; \
     grep -F "listen_addresses = '*'" /usr/pgsql-${PPG_MAJOR_VERSION}/share/postgresql.conf.sample
