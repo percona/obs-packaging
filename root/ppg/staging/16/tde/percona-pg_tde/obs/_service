@@ -2,8 +2,9 @@
   <service name="obs_scm">
     <param name="url">https://github.com/percona/pg_tde.git</param>
     <param name="scm">git</param>
-    <param name="revision">release-%!{PG_TDE_MAJOR}</param>
-    <param name="version">%!{PG_TDE_VERSION}</param>
+    <param name="revision">release-%!{PG_TDE_VERSION}</param>
+    <param name="versionformat">@PARENT_TAG@</param>
+    <param name="versionrewrite-pattern">release-(.*)</param>
     <param name="filename">percona-pg_tde%!{PG_MAJOR_VERSION}</param>
   </service>
   <service mode="buildtime" name="tar" />
