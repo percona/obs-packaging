@@ -5,7 +5,7 @@
 #!BuildTag: percona-distribution-postgresql-with-postgis:%!{PG_VERSION}
 #!BuildTag: percona-distribution-postgresql-with-postgis:%!{PG_MAJOR_VERSION}
 
-FROM percona-ubi9-minimal:latest
+FROM percona-ubi-minimal:latest
 
 LABEL name="Percona Distribution for PostgreSQL" \
       description="Essential / key PostgreSQL%!{PG_MAJOR_VERSION} components with PostGIS. Percona Distribution for PostgreSQL features core components, tools and add-ons from the community, tested to work together in demanding enterprise environments." \
@@ -78,7 +78,6 @@ RUN set -ex; \
         percona-pgbackrest \
         percona-pgvector_${PPG_MAJOR_VERSION} \
         percona-pgvector_${PPG_MAJOR_VERSION}-llvmjit \
-        python3-etcd \
         percona-postgis35_${PPG_MAJOR_VERSION} \
         percona-postgis35_${PPG_MAJOR_VERSION}-client \
         percona-postgis35_${PPG_MAJOR_VERSION}-gui \
@@ -104,7 +103,7 @@ RUN set -ex; \
 
 RUN set -ex; \
     microdnf -y update; \
-    microdnf install -y python3-click percona-patroni; \
+    microdnf install -y percona-patroni; \
     microdnf clean all
 
 RUN set -ex; \
