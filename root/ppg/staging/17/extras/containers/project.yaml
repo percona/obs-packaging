@@ -27,6 +27,8 @@ project-config: |
   %if "%_repository" == "ubi9"
   Type: docker
   BuildEngine: podman
+  BuildFlags: dockerarg:PPG_REPO=staging
+  BuildFlags: dockerarg:RHEL_VER=el9
 
   Preinstall: skopeo
 
