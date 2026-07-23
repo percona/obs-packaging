@@ -3,7 +3,7 @@ description: |
   This project contains UBI-9 based container custom images for Percona Software for PostgreSQL %!{PG_MAJOR_VERSION}.
 
 repositories:
-  - name: images
+  - name: ubi9
     paths:
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}:extras
         repository: UBI_9
@@ -24,7 +24,7 @@ repositories:
     archs: [x86_64, aarch64]
 
 project-config: |
-  %if "%_repository" == "images"
+  %if "%_repository" == "ubi9"
   Type: docker
   BuildEngine: podman
 
@@ -51,7 +51,7 @@ qa:
       DOCKER_TAG: %!{PG_MAJOR_VERSION}
       SERVER_VERSION: %!{PG_VERSION}
       TESTING_BRANCH: ricardo-work
-      REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/16/extras/containers/ubi9/images
+      REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/16/extras/containers/ubi9
       WITH_POSTGIS:
         - true
         - false
@@ -60,9 +60,9 @@ qa:
 
   - pipeline: ppg-obs-upgrade
     parameters:
-      REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/16/extras/containers/ubi9/images
+      REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/16/extras/containers/ubi9
       OLD_SERVER_VERSION: "15.18"
       NEW_SERVER_VERSION: %!{PG_VERSION}
       UPGRADE_DOCKER_TAG: %!{PG_MAJOR_VERSION}-%!{PG_PREV_MAJOR_VERSION}
-      OLD_DOCKER_REPOSITORY: registry.opensuse.org/isv/percona/ppg/staging/%!{PG_PREV_MAJOR_VERSION}/extras/containers/ubi9/images
+      OLD_DOCKER_REPOSITORY: registry.opensuse.org/isv/percona/ppg/staging/%!{PG_PREV_MAJOR_VERSION}/extras/containers/ubi9
       TESTING_BRANCH: ricardo-work
