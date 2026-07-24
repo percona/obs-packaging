@@ -193,11 +193,13 @@ override_dh_auto_install:
 		done \
 	done)
 
-#	Compile and install docs (skip images-install: ImageMagick security
-#	policy blocks @file reads; images are removed in execute_before_dh_install anyway)
-	$(MAKE) -C doc html-install man-install \
+#	Install man pages only. The HTML docs are not shipped (they are
+#	removed in execute_before_dh_install), and upstream's html target now
+#	requires visual-example manifests (make -C regress visual-examples)
+#	that cannot be generated in a package build. man-install is independent
+#	of the html target, so build only that.
+	$(MAKE) -C doc man-install \
 		DESTDIR=$(CURDIR)/debian/tmp \
-		PGSQL_DOCDIR=/usr/share/doc \
 	        PGSQL_MANDIR=/usr/share/man
 
 #	Move binaries from the NEWEST_POSTGRES_VERSION build to the
