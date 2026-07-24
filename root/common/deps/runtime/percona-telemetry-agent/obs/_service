@@ -2,9 +2,13 @@
   <service name="obs_scm">
     <param name="url">https://github.com/percona/telemetry-agent.git</param>
     <param name="scm">git</param>
-    <param name="revision">v%!{TELEMETRY_AGENT_VERSION}</param>
+    <param name="revision">v%!{TELEMETRY_AGENT_VERSION}-2</param>
+    <param name="version">%!{TELEMETRY_AGENT_VERSION}</param>
+    <!-- Hacking version rewrite because of v1.0.15-2 version string, which is invalid in debian. RESTORE THIS WHEN BUMPING TO UPPER VERSION -->
+    <!--
     <param name="versionformat">@PARENT_TAG@</param>
     <param name="versionrewrite-pattern">v(.*)</param>
+    -->
     <param name="filename">percona-telemetry-agent</param>
   </service>
   <service mode="buildtime" name="tar" />
