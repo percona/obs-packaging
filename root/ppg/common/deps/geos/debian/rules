@@ -22,12 +22,13 @@ execute_after_dh_auto_build:
 	$(MAKE) -C build docs
 
 override_dh_auto_test:
-# test_docs is excluded (matches the RPM packaging); test failures are only
-# ignored on the architectures known to be problematic upstream.
+# Run ctest directly (the cmake buildsystem's dh_auto_test invokes `make test`
+# and would pass -E to make, not ctest). test_docs is excluded to match the
+# RPM packaging; failures are only tolerated on problematic architectures.
 ifneq (,$(filter $(DEB_BUILD_ARCH),arm64 armhf i386 ppc64el riscv64 s390x alpha hppa hurd-i386 powerpc ppc64 sparc64))
-	dh_auto_test -- -E test_docs || echo "Ignoring test failures"
+	cd build && ctest --output-on-failure -E test_docs || echo "Ignoring test failures"
 else
-	dh_auto_test -- -E test_docs
+	cd build && ctest --output-on-failure -E test_docs
 endif
 
 override_dh_install:
