@@ -1584,7 +1584,19 @@ def _upload_obs_files(
                 ["source", obs_project_name, package_name, obs_name],
                 query={"rev": "upload"},
             )
-            osc.connection.http_DELETE(url)
+            try:
+                osc.connection.http_DELETE(url)
+            except urllib.error.HTTPError as e:
+                # A 404 means the file is already gone — the desired end state
+                # (absent) already holds, so treat the delete as a no-op. This
+                # keeps syncs of moving-ref packages (whose tarball is renamed
+                # on every tag-offset bump) idempotent when the superseded
+                # tarball has already been removed on the server.
+                if e.code != 404:
+                    raise
+                logger.debug(
+                    f"{obs_name} already absent on OBS (404 on delete) — skipping"
+                )
 
     certain = new_files + updated_files + removed
     if not certain:
