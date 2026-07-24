@@ -75,7 +75,12 @@ jobs:
       # refresh the README "## Development Projects" section.  GITHUB_EVENT_BEFORE is
       # omitted so the script regenerates all version lists (appropriate for a
       # tag-triggered run where there is no meaningful "before" SHA).
+      # Disabled: this step git-pushes regenerated docs/versions/*.md and
+      # README.md directly to main, which is blocked once main is protected
+      # against direct pushes. Re-enable once a PR-based or badges-branch
+      # publishing path is in place.
       - name: Update version lists
+        if: false
         env:
           OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
           OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}

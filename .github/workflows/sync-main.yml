@@ -200,8 +200,12 @@ jobs:
       # Update docs/versions/<dist>.md for each distribution project touched
       # since the last successful run, and refresh the README "## Development
       # Projects" section.  Only runs when OBS builds all succeed.
+      # Disabled: this step git-pushes regenerated docs/versions/*.md and
+      # README.md directly to main, which is blocked once main is protected
+      # against direct pushes. Re-enable (restore the poll-outcome guard) once
+      # a PR-based or badges-branch publishing path is in place.
       - name: Update version lists
-        if: steps.poll.outcome == 'success'
+        if: false
         env:
           GITHUB_EVENT_BEFORE: ${{ steps.base.outputs.sha }}
           OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}

@@ -209,7 +209,12 @@ jobs:
     name: Aggregate QA badges
     needs: [detect, qa]
     runs-on: ubuntu-latest
-    if: always() && needs.detect.outputs.has_matrix == 'true'
+    # Disabled: QA status is now surfaced by an external web dashboard, so we
+    # no longer publish qa-badge-*.json to the badges branch nor rewrite the
+    # README QA column (the latter pushes directly to main, blocked once main
+    # is protected). Re-enable (restore the has_matrix guard) if in-repo QA
+    # badges are needed again.
+    if: false
     permissions:
       # Required to push qa-badge-*.json to the badges branch.
       contents: write

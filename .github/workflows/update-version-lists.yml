@@ -13,6 +13,11 @@ on:
 jobs:
   update:
     name: Regenerate all version list files
+    # Disabled: this job git-pushes regenerated docs/versions/*.md and
+    # README.md directly to main, which is blocked once main is protected
+    # against direct pushes. Re-enable once a PR-based or badges-branch
+    # publishing path is in place.
+    if: false
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     permissions:
