@@ -24,7 +24,6 @@ Version:        1.0.0
 Release:        1%{?dist}
 License:	AGPLv3
 Source0:	%{sname}-%{version}.tar.gz
-Patch0:		pg_cron-no-lintl.patch
 URL:		https://github.com/citusdata/pg_cron
 BuildRequires:	percona-postgresql%{pgmajorversion}-devel libxml2-devel
 %if 0%{?gts_version}
@@ -77,7 +76,6 @@ This packages provides JIT support for pg_cron
 
 %prep
 %setup -q -n %{sname}-%{version}
-%patch -P 0 -p1
 
 %build
 %if 0%{?gts_version}
