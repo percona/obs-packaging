@@ -167,6 +167,41 @@ for d in /usr/share/doc/percona-postgresql${PG_MAJOR}*; do
 done
 
 ###############################################################
+# 2a. postgresql.conf.sample: revert RPM logging customizations
+#     to upstream defaults and enable a /tmp unix socket
+###############################################################
+# The percona-postgresql RPM applies postgresql-conf.patch, which activates
+# Red-Hat log-management defaults (logging_collector=on, log_directory='log',
+# day-of-week rotation, ...) that assume the RPM's systemd-managed layout.
+# The official from-source tarball ships the STOCK upstream sample, so revert
+# those directives here (comment them back / restore upstream values).
+#
+# The /tmp unix socket is NOT set here: initdb unconditionally rewrites the
+# unix_socket_directories line in the generated postgresql.conf to its
+# compiled-in default (/run/postgresql for the RPM build), so a sample edit
+# has no effect. The bundled initdb wrapper (section 2b) sets it post-initdb
+# instead. (The official from-source tarball needs neither: it compiles with
+# the stock DEFAULT_PGSOCKET_DIR=/tmp.)
+CONF=$PG_PREFIX/share/postgresql.conf.sample
+sed -i \
+    -e "s|^log_destination = 'stderr'|#log_destination = 'stderr'|" \
+    -e "s|^logging_collector = on|#logging_collector = off|" \
+    -e "s|^log_directory = 'log'|#log_directory = 'log'|" \
+    -e "s|^log_filename = 'postgresql-%a.log'|#log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'|" \
+    -e "s|^log_rotation_age = 1d|#log_rotation_age = 1d|" \
+    -e "s|^log_rotation_size = 0|#log_rotation_size = 10MB|" \
+    -e "s|^log_truncate_on_rotation = on|#log_truncate_on_rotation = off|" \
+    -e "s|^log_line_prefix = '%m \[%p\] '|#log_line_prefix = '%m [%p] '|" \
+    "$CONF"
+# Fail the build loudly if the RPM's sample changed shape so the reverts above
+# no longer matched — otherwise we would silently re-ship the RH log-management
+# defaults. All eight logging directives must end up commented.
+if grep -qE "^(log_destination|logging_collector|log_directory|log_filename|log_rotation_age|log_rotation_size|log_truncate_on_rotation|log_line_prefix)[[:space:]]*=" "$CONF"; then
+    echo "FATAL: an RH logging directive is still active in postgresql.conf.sample" >&2
+    exit 1
+fi
+
+###############################################################
 # 2b. PostgreSQL cleanup + psql wrapper + gather.sql
 ###############################################################
 # Remove RPM service helpers that don't belong in the tarball
@@ -230,6 +265,13 @@ fi
 if [ -n "$RL8" ] && [ ! -e "$PG_LIB_PATH/libreadline.so.7" ]; then
     ln -sf "$RL8" "$PG_LIB_PATH/libreadline.so.7" 2>/dev/null || true
 fi
+# Default the client socket dir to /tmp so plain `psql` (no -h) connects to a
+# cluster created by the bundled initdb wrapper, which sets
+# unix_socket_directories='/tmp'. libpq's compiled-in default is
+# /run/postgresql, which a non-root tarball user usually cannot create. An
+# explicit PGHOST or -h still overrides. (Other bundled libpq clients —
+# pg_dump, pg_isready, … — are not wrapped; set PGHOST=/tmp for those.)
+export PGHOST="${PGHOST:-/tmp}"
 if [ -z "$PLL" ]; then
     LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PG_BIN_PATH/../lib "$PG_BIN_PATH/psql.bin" "$@"
 else
@@ -237,6 +279,43 @@ else
 fi
 EOF
 chmod +x $PG_PREFIX/bin/psql
+
+# initdb wrapper: our RPM-built binaries have DEFAULT_PGSOCKET_DIR=/run/postgresql
+# compiled in (the official from-source tarball uses the stock /tmp). initdb
+# rewrites unix_socket_directories in the generated postgresql.conf to that
+# compiled default, so it cannot be changed via the shipped sample. Wrap initdb
+# to run the real binary and then set unix_socket_directories='/tmp' in the new
+# cluster's postgresql.conf, so a non-root user can start the server without
+# creating root-owned /run/postgresql. Pairs with the psql wrapper's PGHOST=/tmp.
+mv $PG_PREFIX/bin/initdb $PG_PREFIX/bin/initdb.bin
+cat > $PG_PREFIX/bin/initdb << 'EOF'
+#!/bin/bash
+SELFDIR="$(cd "$(dirname "$0")" && pwd)"
+"$SELFDIR/initdb.bin" "$@"
+rc=$?
+[ "$rc" -eq 0 ] || exit "$rc"
+# Locate the data directory from -D/--pgdata (any form) or $PGDATA.
+PGDATA_DIR=""
+prev=""
+for arg in "$@"; do
+    case "$prev" in
+        -D|--pgdata) PGDATA_DIR="$arg" ;;
+    esac
+    case "$arg" in
+        --pgdata=*) PGDATA_DIR="${arg#--pgdata=}" ;;
+        -D?*) PGDATA_DIR="${arg#-D}" ;;
+    esac
+    prev="$arg"
+done
+[ -n "$PGDATA_DIR" ] || PGDATA_DIR="$PGDATA"
+CONF="$PGDATA_DIR/postgresql.conf"
+# Only touch a real, freshly-generated conf (skips --help/--version/dry runs).
+if [ -n "$PGDATA_DIR" ] && [ -f "$CONF" ]; then
+    printf '\n# Percona tarball: use a /tmp unix socket so non-root installs work\n# without the compiled-in default /run/postgresql (which needs root).\nunix_socket_directories = '"'"'/tmp'"'"'\n' >> "$CONF"
+fi
+exit 0
+EOF
+chmod +x $PG_PREFIX/bin/initdb
 
 ###############################################################
 # 2c. Wrap postgres binary to set PL/Perl and PL/Tcl runtime paths
