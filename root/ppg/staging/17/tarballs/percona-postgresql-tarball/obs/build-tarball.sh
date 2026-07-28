@@ -176,12 +176,12 @@ done
 # The official from-source tarball ships the STOCK upstream sample, so revert
 # those directives here (comment them back / restore upstream values).
 #
-# The /tmp unix socket is NOT set here: initdb unconditionally rewrites the
-# unix_socket_directories line in the generated postgresql.conf to its
-# compiled-in default (/run/postgresql for the RPM build), so a sample edit
-# has no effect. The bundled initdb wrapper (section 2b) sets it post-initdb
-# instead. (The official from-source tarball needs neither: it compiles with
-# the stock DEFAULT_PGSOCKET_DIR=/tmp.)
+# The /tmp unix socket is NOT handled here: initdb unconditionally rewrites
+# the unix_socket_directories line in the generated postgresql.conf to its
+# COMPILED-IN default, so a sample edit would have no effect. Section 14a
+# instead patches that compiled default (/run/postgresql -> /tmp) inside
+# every bundled ELF, matching the official from-source tarball's stock
+# DEFAULT_PGSOCKET_DIR=/tmp.
 CONF=$PG_PREFIX/share/postgresql.conf.sample
 sed -i \
     -e "s|^log_destination = 'stderr'|#log_destination = 'stderr'|" \
@@ -265,13 +265,6 @@ fi
 if [ -n "$RL8" ] && [ ! -e "$PG_LIB_PATH/libreadline.so.7" ]; then
     ln -sf "$RL8" "$PG_LIB_PATH/libreadline.so.7" 2>/dev/null || true
 fi
-# Default the client socket dir to /tmp so plain `psql` (no -h) connects to a
-# cluster created by the bundled initdb wrapper, which sets
-# unix_socket_directories='/tmp'. libpq's compiled-in default is
-# /run/postgresql, which a non-root tarball user usually cannot create. An
-# explicit PGHOST or -h still overrides. (Other bundled libpq clients —
-# pg_dump, pg_isready, … — are not wrapped; set PGHOST=/tmp for those.)
-export PGHOST="${PGHOST:-/tmp}"
 if [ -z "$PLL" ]; then
     LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PG_BIN_PATH/../lib "$PG_BIN_PATH/psql.bin" "$@"
 else
@@ -279,43 +272,6 @@ else
 fi
 EOF
 chmod +x $PG_PREFIX/bin/psql
-
-# initdb wrapper: our RPM-built binaries have DEFAULT_PGSOCKET_DIR=/run/postgresql
-# compiled in (the official from-source tarball uses the stock /tmp). initdb
-# rewrites unix_socket_directories in the generated postgresql.conf to that
-# compiled default, so it cannot be changed via the shipped sample. Wrap initdb
-# to run the real binary and then set unix_socket_directories='/tmp' in the new
-# cluster's postgresql.conf, so a non-root user can start the server without
-# creating root-owned /run/postgresql. Pairs with the psql wrapper's PGHOST=/tmp.
-mv $PG_PREFIX/bin/initdb $PG_PREFIX/bin/initdb.bin
-cat > $PG_PREFIX/bin/initdb << 'EOF'
-#!/bin/bash
-SELFDIR="$(cd "$(dirname "$0")" && pwd)"
-"$SELFDIR/initdb.bin" "$@"
-rc=$?
-[ "$rc" -eq 0 ] || exit "$rc"
-# Locate the data directory from -D/--pgdata (any form) or $PGDATA.
-PGDATA_DIR=""
-prev=""
-for arg in "$@"; do
-    case "$prev" in
-        -D|--pgdata) PGDATA_DIR="$arg" ;;
-    esac
-    case "$arg" in
-        --pgdata=*) PGDATA_DIR="${arg#--pgdata=}" ;;
-        -D?*) PGDATA_DIR="${arg#-D}" ;;
-    esac
-    prev="$arg"
-done
-[ -n "$PGDATA_DIR" ] || PGDATA_DIR="$PGDATA"
-CONF="$PGDATA_DIR/postgresql.conf"
-# Only touch a real, freshly-generated conf (skips --help/--version/dry runs).
-if [ -n "$PGDATA_DIR" ] && [ -f "$CONF" ]; then
-    printf '\n# Percona tarball: use a /tmp unix socket so non-root installs work\n# without the compiled-in default /run/postgresql (which needs root).\nunix_socket_directories = '"'"'/tmp'"'"'\n' >> "$CONF"
-fi
-exit 0
-EOF
-chmod +x $PG_PREFIX/bin/initdb
 
 ###############################################################
 # 2c. Wrap postgres binary to set PL/Perl and PL/Tcl runtime paths
@@ -812,6 +768,69 @@ find $PG_PREFIX/lib -name '*.so*' -type f | while read f; do
 done
 
 ###############################################################
+# 14a. Compiled socket-dir default: /run/postgresql -> /tmp
+###############################################################
+# The RPM build compiles the /run/postgresql socket dir into the binaries
+# as TWO distinct NUL-terminated C string constants:
+#
+#  * "/run/postgresql"        — DEFAULT_PGSOCKET_DIR: libpq's client-side
+#    connection default (psql, pgbench, pg_dump, pg_isready, ...) and the
+#    value initdb writes into the generated postgresql.conf.
+#  * "/run/postgresql, /tmp"  — the server's unix_socket_directories GUC
+#    boot value (Red Hat patches postgres to LISTEN on both directories);
+#    with the conf line left at its commented default, startup would try
+#    to create a socket in /run/postgresql and FATAL on hosts where a
+#    non-root user cannot create it.
+#
+# The official from-source tarball compiles the stock /tmp for both.
+# Rewrite each constant in place in every bundled ELF: the old bytes
+# (string + NUL) become "/tmp\0" NUL-padded to the SAME length. C string
+# readers stop at the first NUL, so the padding is invisible, and the
+# identical length means no ELF offsets, section sizes or relocations
+# change — a safe in-place edit. Result: the server listens on /tmp,
+# initdb writes '/tmp' into the generated postgresql.conf (both -D and
+# positional-DATADIR forms), and every client connects to /tmp by default
+# — ZERO wrappers or environment variables, byte-level behavioral parity
+# with the official tarball's compiled defaults. Must run AFTER all
+# staging and RPATH work so no later step re-introduces an unpatched copy
+# (the section-15 gate asserts exactly that).
+"$PY_BIN" - <<'PYEOF'
+import os
+
+REPLACEMENTS = []
+for old in (b"/run/postgresql\0", b"/run/postgresql, /tmp\0"):
+    new = b"/tmp\0".ljust(len(old), b"\0")
+    assert len(old) == len(new)
+    REPLACEMENTS.append((old, new))
+patched = 0
+for dirpath, _dirs, files in os.walk("/opt"):
+    for name in files:
+        p = os.path.join(dirpath, name)
+        # Regular files only: symlinks are reached via their target.
+        if os.path.islink(p) or not os.path.isfile(p):
+            continue
+        with open(p, "rb") as f:
+            if f.read(4) != b"\x7fELF":
+                continue
+            data = b"\x7fELF" + f.read()
+        new_data = data
+        for old, new in REPLACEMENTS:
+            new_data = new_data.replace(old, new)
+        if new_data == data:
+            continue
+        with open(p, "wb") as f:
+            f.write(new_data)
+        patched += 1
+        print("  socket-dir patched: %s" % p)
+# At minimum postgres, initdb and the bundled libpq copies must match; zero
+# hits means the RPMs no longer compile /run/postgresql in and this section
+# (plus its gate) needs a human look — fail loudly rather than drift.
+if patched == 0:
+    raise SystemExit("FATAL: no ELF contained /run/postgresql — patch is a no-op")
+print("socket-dir patch: %d ELF files patched" % patched)
+PYEOF
+
+###############################################################
 # 15. Verification gate — fail the build on any breakage
 ###############################################################
 # readelf is required by the OpenSSL host-ABI audit below. Assert it exists:
@@ -930,6 +949,37 @@ done > /tmp/ssl-abi-audit.txt
 if [ -s /tmp/ssl-abi-audit.txt ]; then
     cat /tmp/ssl-abi-audit.txt
     echo "FATAL: OpenSSL symbol-version needs exceed the $SSL_VARIANT promise" >&2
+    exit 1
+fi
+
+echo "=== Verification: compiled socket-dir audit ==="
+# Section 14a rewrote the compiled DEFAULT_PGSOCKET_DIR in every bundled
+# ELF. Assert NO ELF under /opt still carries the plain byte string
+# /run/postgresql: this both proves the patch actually ran and catches any
+# future binary (new component, re-staged copy) that sneaks the RPM default
+# back in. Text files are out of scope — only compiled-in defaults have
+# runtime effect.
+if ! "$PY_BIN" - <<'PYEOF'
+import os, sys
+
+BAD = b"/run/postgresql"
+bad = 0
+for dirpath, _dirs, files in os.walk("/opt"):
+    for name in files:
+        p = os.path.join(dirpath, name)
+        if os.path.islink(p) or not os.path.isfile(p):
+            continue
+        with open(p, "rb") as f:
+            if f.read(4) != b"\x7fELF":
+                continue
+            data = b"\x7fELF" + f.read()
+        if BAD in data:
+            bad += 1
+            print("SOCKET-DIR: %s still contains /run/postgresql" % p)
+sys.exit(1 if bad else 0)
+PYEOF
+then
+    echo "FATAL: bundled ELF files still reference /run/postgresql (section 14a patch incomplete)" >&2
     exit 1
 fi
 
