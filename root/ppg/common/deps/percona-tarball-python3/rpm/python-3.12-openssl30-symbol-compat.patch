@@ -1,0 +1,77 @@
+PERCONA: keep _ssl/_hashlib at OpenSSL 3.0 versioned symbols.
+
+Built against OpenSSL >= 3.3 headers (Rocky 9.8 ships 3.5), two CPython
+extension modules silently pick up versioned symbol needs newer than
+3.0.0, so they fail to load on OpenSSL 3.0 hosts (Ubuntu 22.04/24.04,
+Debian 12) whenever the HOST libcrypto/libssl is already mapped and
+soname dedup wins over the tarball's bundled copies — exactly what
+happens inside a postgres backend using plpython3u:
+
+ - Modules/_ssl.c: upstream carries a lock-and-deep-copy polyfill of
+   X509_STORE_get1_objects (gh-114572) but compiles it only for
+   OPENSSL_VERSION_NUMBER < 3.3, taking the library function (symbol
+   version OPENSSL_3.3.0) on newer headers. Compile the polyfill
+   unconditionally, renamed so it cannot clash with the library
+   declaration on >= 3.3 headers. The polyfill is upstream's own code
+   with the same semantics as the library function.
+
+ - Modules/_hashopenssl.c: OpenSSL 3.4 redefines the EVP_MD_CTX_size()
+   compatibility macro to call EVP_MD_CTX_get_size_ex(), a function
+   introduced in 3.4.0 (symbol version OPENSSL_3.4.0). Restore the
+   3.0-era expansion (identical behavior for the fixed-size digests
+   CPython queries). Same fix as our pgcrypto OpenSSL-3.4 patch.
+
+Both changes are inert when building against OpenSSL 1.1.1 headers
+(EL8): the _ssl polyfill was already compiled there (only its static
+symbol name changes) and the _hashopenssl remap is version-guarded.
+Upstream note: gh-121249 tracks the same class of problem; nothing to
+flag upstream — this is a distribution choice to build on new headers
+while staying loadable on 3.0 hosts, which upstream binaries make by
+building against older OpenSSL instead.
+
+--- a/Modules/_hashopenssl.c
++++ b/Modules/_hashopenssl.c
+@@ -37,6 +37,17 @@
+ #include <openssl/objects.h>
+ #include <openssl/err.h>
+ 
++/*
++ * PERCONA: OpenSSL 3.4 remaps EVP_MD_CTX_size() to
++ * EVP_MD_CTX_get_size_ex() (OPENSSL_3.4.0 symbol version). Use the
++ * 3.0-era expansion so the module stays loadable on OpenSSL 3.0 hosts.
++ * No-op below 3.4 (EL8 builds against 1.1.1).
++ */
++#if OPENSSL_VERSION_NUMBER >= 0x30400000L
++#undef EVP_MD_CTX_size
++#define EVP_MD_CTX_size(ctx) EVP_MD_get_size(EVP_MD_CTX_get0_md(ctx))
++#endif
++
+ 
+ #ifndef OPENSSL_THREADS
+ #  error "OPENSSL_THREADS is not defined, Python requires thread-safe OpenSSL"
+
+--- a/Modules/_ssl.c
++++ b/Modules/_ssl.c
+@@ -4485,7 +4485,13 @@
+     return 0;
+ }
+ 
+-#if OPENSSL_VERSION_NUMBER < 0x30300000L
++/*
++ * PERCONA: always use upstream's polyfill instead of the library's
++ * X509_STORE_get1_objects (OPENSSL_3.3.0 symbol version), so the module
++ * stays loadable on OpenSSL 3.0 hosts. Renamed to avoid clashing with
++ * the library declaration when building against >= 3.3 headers.
++ */
++#define X509_STORE_get1_objects _percona_X509_STORE_get1_objects
+ static X509_OBJECT *x509_object_dup(const X509_OBJECT *obj)
+ {
+     int ok;
+@@ -4527,7 +4533,6 @@
+     X509_STORE_unlock(store);
+     return ret;
+ }
+-#endif
+ 
+ PyDoc_STRVAR(PySSLContext_sni_callback_doc,
+ "Set a callback that will be called when a server name is provided by the SSL/TLS client in the SNI extension.\n\
