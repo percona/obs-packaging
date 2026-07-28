@@ -1,0 +1,24 @@
+title: /opt-prefixed Perl runtime for the PPG binary tarball
+description: |
+  Perl built from upstream source with every install path compiled to
+  /opt/percona-perl, so the RPM-built plperl.so bundled into the Percona
+  PostgreSQL binary tarball resolves libperl and its @INC (strict.pm,
+  POSIX.pm, ...) with zero environment variables. The version MUST match
+  the distro perl of each build base (5.26.3 on EL8, 5.32.1 on EL9):
+  plperl.so is ABI-tied to the libperl it was compiled against
+  (DT_NEEDED libperl.so.5.26 / libperl.so.5.32). Installs only under
+  /opt/percona-perl — nothing shadows system packages. RockyLinux_8 and
+  RockyLinux_9 only: these are the tarball build bases (ssl1.1 / ssl3).
+
+build:
+  RockyLinux_10: false
+  UBI_8: false
+  UBI_9: false
+  Debian_11: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Leap_16: false
+  openSUSE_Tumbleweed: false
