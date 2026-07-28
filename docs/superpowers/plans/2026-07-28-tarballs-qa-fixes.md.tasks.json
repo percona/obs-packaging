@@ -4,19 +4,19 @@
     {
       "id": 15,
       "subject": "Task 15: compiled /tmp socket defaults via ELF string patch",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Every bundled PG binary/libpq copy defaults to /tmp unix socket (server, initdb, all clients) with no wrappers.\n\n**Files:**\n- Modify: root/ppg/staging/17/tarballs/percona-postgresql-tarball/obs/build-tarball.sh\n\n**Acceptance Criteria:**\n- ELF sweep replaces /run/postgresql\\0 with /tmp\\0+padding (same length) in all bundled ELFs\n- initdb wrapper DELETED; psql PGHOST export DELETED\n- Gate asserts zero ELFs contain /run/postgresql (negative control demonstrated)\n- Container e2e: POSITIONAL initdb form, pgbench/pg_dump/pg_isready connect with no env\n\n**Verify:** container gate green incl. string assertion; strings on postgres/libpq clean\n\n```json:metadata\n{\"files\": [\"root/ppg/staging/17/tarballs/percona-postgresql-tarball/obs/build-tarball.sh\"], \"verifyCommand\": \"container e2e: positional initdb + unwrapped clients connect via /tmp\", \"acceptanceCriteria\": [\"same-length string patch all ELFs\", \"wrappers deleted\", \"gate assertion + negative control\", \"QA flows pass\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 16,
       "subject": "Task 16: /opt-prefixed runtime packages (perl, tcl, python)",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** From-source runtimes in ppg:common:deps installing under /opt/percona-{perl,tcl,python3} with compiled /opt paths so plperl/pltcl/plpython3 work with ZERO env vars.\n\n**Files:**\n- Create: root/ppg/common/deps/percona-tarball-perl/ (5.26.3 RL8 / 5.32.1 RL9 via %if, Rocky Configure flags minus paths, flat lib/<ver> layout, libperl at lib/<ver>/CORE/)\n- Create: root/ppg/common/deps/percona-tarball-tcl/ (one 8.6.x, prefix /opt/percona-tcl)\n- Create: root/ppg/common/deps/percona-tarball-python3/ (3.12.x, --enable-shared, prefix /opt/percona-python3)\n- package.yaml each: RL8+RL9 only\n\n**Acceptance Criteria:**\n- Builds on rocky8+rocky9; compiled @INC/paths show /opt\n- QA repro with NO env vars: bare `postgres -D` start, plperl use strict + pltcl + plpython3u functions all work on both bases\n- isv dry-runs clean\n\n**Verify:** bare-postgres PL test green on both bases\n\nHIGHEST RISK: perl ABI match with distro-built plperl.so — replicate Rocky Configure flags exactly; escalate rather than ship mismatched libperl.\n\n```json:metadata\n{\"files\": [\"root/ppg/common/deps/percona-tarball-perl/\", \"root/ppg/common/deps/percona-tarball-tcl/\", \"root/ppg/common/deps/percona-tarball-python3/\"], \"verifyCommand\": \"bare postgres -D + PL functions, no env vars, both bases\", \"acceptanceCriteria\": [\"3 packages RL8+RL9\", \"compiled /opt paths\", \"perl ABI matches plperl.so\", \"PL QA repro passes\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 17,
       "subject": "Task 17: rewrite runtime staging + haproxy + .pyc strip",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         15,
         16
@@ -43,5 +43,5 @@
       "description": "**Goal:** Full battery with QA flows as regression targets.\n\n**USER-ORDERED GATE - NON-SKIPPABLE.** Captured output for every criterion.\n\n**Files:** none (operational)\n\n**Acceptance Criteria:**\n- positional initdb -> /tmp socket; pgbench/pg_dump/pg_isready zero-env\n- bare `postgres -D` start: plperl use strict + pltclu + plpython3u all work\n- zero .pyc; 11 components; haproxy -v runs; bundled perl @INC shows /opt\n- carried-over regressions green (pgcrypto digest, pg_tde, patroni, psql debian:11, OPENSSL sweeps)\n- debian:11 (ssl1.1) + ubuntu:22.04 + ubuntu:24.04 (ssl3)\n\n**Verify:** containerized battery per variant with captured output\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"battery on 3 hosts\", \"acceptanceCriteria\": [\"QA flows pass\", \"carried-over regressions green\", \"evidence captured\"], \"userGate\": true, \"tags\": [\"user-gate\"], \"requireEvidenceTokens\": [[\"positional\", \"pgbench\"], [\"bare postgres\", \"use strict\"], [\"haproxy\"]], \"modelTier\": \"standard\"}\n```"
     }
   ],
-  "lastUpdated": "2026-07-28T09:00:00"
+  "lastUpdated": "2026-07-28T15:40:00"
 }
