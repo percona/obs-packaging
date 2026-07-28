@@ -1,0 +1,8 @@
+<services>
+  <service name="download_url">
+    <param name="host">www.python.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/ftp/python/3.12.13/Python-3.12.13.tar.xz</param>
+    <param name="filename">Python-3.12.13.tar.xz</param>
+  </service>
+</services>

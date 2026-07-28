@@ -1,0 +1,26 @@
+title: /opt-prefixed CPython runtime for the PPG binary tarball
+description: |
+  CPython 3.12 built from upstream source with
+  --prefix=/opt/percona-python3 and --enable-shared, so
+  libpython3.12.so.1.0's compiled-in prefix points the embedded
+  interpreter (plpython3.so inside the postgres backend) at the bundled
+  stdlib with zero environment variables. One version for both bases:
+  the staging percona-postgresql17 builds plpython against python3.12 on
+  EL8 and EL9 alike, the embedding ABI is stable within 3.12, and the
+  cp312 site-packages staged for patroni remain compatible. Installs
+  only under /opt/percona-python3 — nothing shadows system packages.
+  RockyLinux_8 and RockyLinux_9 only: these are the tarball build bases
+  (ssl1.1 / ssl3).
+
+build:
+  RockyLinux_10: false
+  UBI_8: false
+  UBI_9: false
+  Debian_11: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Leap_16: false
+  openSUSE_Tumbleweed: false
