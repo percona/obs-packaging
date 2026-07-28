@@ -50,11 +50,18 @@
 
 Name:           percona-tarball-python3
 Version:        3.12.13
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        CPython runtime under /opt/percona-python3 for the Percona PostgreSQL binary tarball
 License:        Python-2.0.1
 URL:            https://www.python.org/
 Source0:        Python-%{version}.tar.xz
+# PERCONA: built against OpenSSL >= 3.3 headers (Rocky 9 ships 3.5),
+# _ssl/_hashlib would need OPENSSL_3.3.0/OPENSSL_3.4.0 symbol versions
+# and fail to load inside a postgres backend on OpenSSL 3.0 hosts
+# (Ubuntu 22.04/24.04, Debian 12) where the host libcrypto wins soname
+# dedup. Force CPython's own 3.0-compatible fallbacks; inert on EL8
+# (OpenSSL 1.1.1 headers). The %%check below pins the promise.
+Patch0:         python-3.12-openssl30-symbol-compat.patch
 
 BuildRequires:  gcc
 BuildRequires:  gcc-c++
@@ -84,6 +91,7 @@ installation.
 
 %prep
 %setup -q -n Python-%{version}
+%patch0 -p1
 
 %build
 ./configure \
@@ -98,11 +106,50 @@ make %{?_smp_mflags}
 %install
 make install DESTDIR=%{buildroot}
 
+%check
+# PERCONA: pin the OpenSSL symbol-version promise at the source. The
+# OpenSSL-linking extension modules must not need symbol versions newer
+# than the tarball's runtime floor: no OPENSSL_3.[1-9]* on EL9 (OpenSSL
+# 3.0 hosts: Ubuntu 22.04/24.04, Debian 12) and no RHEL-only
+# OPENSSL_1_1_1[a-z] version nodes on EL8 (stock OpenSSL 1.1 hosts:
+# Debian 11). Everything else in lib-dynload must not link OpenSSL at
+# all. Loud rpmbuild failure otherwise.
+fail=0
+dynload=%{buildroot}%{py_prefix}/lib/python%{py_major}/lib-dynload
+for so in "$dynload"/_ssl.cpython-*.so "$dynload"/_hashlib.cpython-*.so; do
+    echo "checking OpenSSL symbol versions: $so"
+%if 0%{?rhel} == 8
+    bad=$(readelf -W --dyn-syms "$so" | grep -E '@OPENSSL_1_1_1[a-z]' || true)
+%else
+    bad=$(readelf -W --dyn-syms "$so" | grep -E '@OPENSSL_3\.[1-9]' || true)
+%endif
+    if [ -n "$bad" ]; then
+        echo "FATAL: $so needs post-baseline OpenSSL symbol versions:"
+        echo "$bad"
+        fail=1
+    fi
+done
+for so in "$dynload"/*.so; do
+    case "$(basename "$so")" in _ssl.cpython-*|_hashlib.cpython-*) continue ;; esac
+    if readelf -d "$so" | grep -qE 'NEEDED.*lib(ssl|crypto)'; then
+        echo "FATAL: unexpected OpenSSL linkage in $so"
+        fail=1
+    fi
+done
+[ "$fail" -eq 0 ]
+
 %files
 %license LICENSE
 %{py_prefix}
 
 %changelog
+* Tue Jul 28 2026 Percona Build/Release Team <eng-build@percona.com> - 3.12.13-2
+- Keep _ssl/_hashlib at OpenSSL 3.0 versioned symbols: force CPython's
+  X509_STORE_get1_objects polyfill and the pre-3.4 EVP_MD_CTX_size
+  expansion so plpython3u's import ssl/hashlib works on OpenSSL 3.0
+  hosts where the postgres backend has the host libcrypto mapped.
+  Add a %%check gate asserting the symbol-version floor per base.
+
 * Tue Jul 28 2026 Percona Build/Release Team <eng-build@percona.com> - 3.12.13-1
 - Initial /opt/percona-python3 runtime for the Percona PostgreSQL binary
   tarball: CPython 3.12.13 built from upstream source with the prefix
