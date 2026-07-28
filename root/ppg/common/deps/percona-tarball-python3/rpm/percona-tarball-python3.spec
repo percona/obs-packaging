@@ -117,6 +117,10 @@ make install DESTDIR=%{buildroot}
 fail=0
 dynload=%{buildroot}%{py_prefix}/lib/python%{py_major}/lib-dynload
 for so in "$dynload"/_ssl.cpython-*.so "$dynload"/_hashlib.cpython-*.so; do
+    # Guard the unmatched-glob case: if a module silently failed to build,
+    # $so is the literal pattern, readelf errors and the || true below
+    # would swallow it into a false PASS.
+    [ -e "$so" ] || { echo "FATAL: expected module missing: $so"; fail=1; continue; }
     echo "checking OpenSSL symbol versions: $so"
 %if 0%{?rhel} == 8
     bad=$(readelf -W --dyn-syms "$so" | grep -E '@OPENSSL_1_1_1[a-z]' || true)
