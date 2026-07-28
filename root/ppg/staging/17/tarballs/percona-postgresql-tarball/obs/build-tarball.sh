@@ -17,7 +17,10 @@ PG_MAJOR=$(basename "$(ls -d /usr/pgsql-*)" | sed 's/^pgsql-//')
 # interpreter); /usr/bin/python3 is the fallback. The bundled
 # /opt/percona-python3 interpreter is deliberately not used here: it is
 # itself part of the patched payload.
-PY_BIN=$(command -v python3.12 || command -v python3)
+# (|| true inside the substitution: under set -e, both lookups failing
+# would abort the assignment itself and the FATAL below — with its useful
+# message — would never run.)
+PY_BIN=$(command -v python3.12 || command -v python3 || true)
 [ -n "$PY_BIN" ] || { echo "FATAL: no chroot python3 for the ELF patch helper" >&2; exit 1; }
 
 PG_PREFIX=/opt/percona-postgresql${PG_MAJOR}
@@ -42,7 +45,11 @@ PY_VER=$(basename "$(ls -d $PYTHON_PREFIX/lib/python3.*)" | sed 's/^python//')
 PERL_VER=$(basename "$(ls -d $PERL_PREFIX/lib/5.*)")
 TCL_VER=$(basename "$(ls -d $TCL_PREFIX/lib/tcl8.*)" | sed 's/^tcl//')
 PERL_CORE_DIR=$PERL_PREFIX/lib/${PERL_VER}/CORE
+# bin/pip3 is asserted because section 7 later symlinks bin/pip -> pip3:
+# if ensurepip ever stops running in the runtime RPM, catch it here rather
+# than ship a dangling symlink.
 for f in "$PYTHON_PREFIX/bin/python3" \
+         "$PYTHON_PREFIX/bin/pip3" \
          "$PYTHON_PREFIX/lib/libpython${PY_VER}.so.1.0" \
          "$PERL_PREFIX/bin/perl" \
          "$PERL_CORE_DIR/libperl.so" \
