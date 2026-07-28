@@ -3,8 +3,44 @@
 **Date:** 2026-07-20 (revised same day: real POC supplied, scope expanded to full
 component set; revised 2026-07-21: variants as repositories, ssl3 temporarily
 deb-based; revised 2026-07-22: two-variant matrix — ssl3 back on EL9 via the
-staging pgcrypto patch, ssl3.5 dropped, deb builder removed)
-**Status:** Approved design, pending implementation plan
+staging pgcrypto patch, ssl3.5 dropped, deb builder removed; revised
+2026-07-28: QA round — see the revision note below)
+**Status:** Implemented (branch `tarballs-simpleimage`)
+
+## Revision note — 2026-07-28 QA round
+
+A QA pass against the built artifacts drove six changes; the design sections
+below have been updated where they described the superseded mechanisms:
+
+1. **Compiled `/tmp` socket defaults** (d11e9c8, 1170e11): the builder
+   rewrites the RPM-compiled `/run/postgresql` socket-dir C string constants
+   to `/tmp` in place in every bundled ELF (same-length NUL-padded), so the
+   server, `initdb`'s generated config (any invocation form) and every libpq
+   client default to a `/tmp` unix socket — no wrappers, no `PGHOST`,
+   matching the official binaries' compiled defaults. Gates: zero-match
+   FATAL, a residual byte-string audit over all bundled ELFs, and a
+   longest-first replacement-pattern table.
+2. **Zero-env PL languages** (c4beb06, 4ce65ba, 5fe49b2, e08a04f):
+   from-source `/opt`-prefixed runtime packages in `ppg:common:deps` —
+   `percona-tarball-perl` (5.26.3 EL8 / 5.32.1 EL9), `percona-tarball-tcl`
+   (8.6.10), `percona-tarball-python3` (3.12.13) — with every path compiled
+   to the `/opt` prefix; plperl/pltcl/plpython3 resolve them via RUNPATHs, so
+   all three PLs work under a bare `postgres -D` start from an empty
+   environment. The postgres/initdb/psql-`PGHOST`/python3/tclsh wrappers are
+   all gone (psql retains only the readline shim).
+3. **Perl version constraint — documented, not fixed** (user decision):
+   `plperl.so` is ABI-tied to the distro libperl the PG RPM was built
+   against, so the bundled perl must be 5.26.3 (ssl1.1) / 5.32.1 (ssl3). The
+   official tarball ships 5.38 because it builds PostgreSQL against its own
+   perl — replicating that would change the shipped RPM product.
+4. **haproxy component added** (e08a04f): eleven components now,
+   file-for-file official layout parity.
+5. **Python bytecode stripped** (e08a04f): zero `.pyc`/`__pycache__` in the
+   artifact (official also ships none); gate-enforced.
+6. **`import ssl` on ALL OpenSSL 3.x hosts** (84e3ec1, beats official
+   parity): `percona-tarball-python3` patches CPython's `_ssl`/`_hashlib` to
+   stay at `OPENSSL_3.0.0` versioned symbols; a spec `%check` gate pins the
+   promise. The official tarball's python fails `import ssl` on 3.0 hosts.
 
 ## Background
 
@@ -59,7 +95,8 @@ basis for the build script.
   staging RPMs.
 - **Full official component set** (POC scope): server + extensions, pgbouncer,
   pgpool-II, pgbackrest, pgbadger, patroni, etcd, pg_gather, and bundled
-  python3/perl/tcl runtimes.
+  python3/perl/tcl runtimes. *(2026-07-28: haproxy added — eleven components,
+  full official layout parity.)*
 - Two SSL variants (ssl1.1, ssl3; ssl3.5 was dropped — see the 2026-07-22
   revision note); x86_64 only for now.
 - Tarballs rebuild automatically when any package in their dependency closure changes.
@@ -70,8 +107,9 @@ basis for the build script.
 - Bit-identical parity with the official from-source tarballs (behavioral/layout parity
   is the target, not identical binaries).
 - Debian-based tarball variants.
-- haproxy (present in the official tarball; not in the POC BuildRequires — added later
-  if the structure-diff shows it is required for parity).
+- ~~haproxy (present in the official tarball; not in the POC BuildRequires — added later
+  if the structure-diff shows it is required for parity)~~ *(added 2026-07-28:
+  the QA structure-diff showed it is required for parity — see revision note.)*
 
 ## Design
 
@@ -196,6 +234,11 @@ exec bash /usr/src/packages/SOURCES/build-tarball.sh
 
 Notes:
 
+- *(2026-07-28: the distro `perl`/`perl-libs`/`perl-devel`/`tcl`/`tcl-devel`
+  runtime BuildRequires shown above were replaced by
+  `percona-tarball-{perl,tcl,python3}`, and `percona-haproxy` was added — the
+  synced `obs/simpleimage` is the current list; the block above is kept as the
+  original design snapshot.)*
 - The exact RPM names above (`percona-pgvector_…`, `percona-postgis35_…`,
   `percona-pgpool-II-pg…`, extension list vs the official tarball contents, e.g.
   pg_cron / pg-telemetry) are **verified against staging:17 build results and the
@@ -239,10 +282,16 @@ after OBS installs the BuildRequires closure:
      `site-packages` (staging's `python3-*` packages are built for python 3.12, so
      compiled extensions match the bundled runtime).
    - `percona-etcd`: static Go binaries, no `lib/`.
-   - `percona-python3`, `percona-perl`, `percona-tcl`: full runtime bundling with
-     portable-execution fixes — python wrapped with `PYTHONHOME` (+ `lib64` symlink for
-     `sys.platlibdir`), libperl copied into `CORE/` and `perl` RPATH-pointed at it,
-     `tclsh` wrapper exporting `TCL_LIBRARY`/`TCLLIBPATH`.
+   - `percona-python3`, `percona-perl`, `percona-tcl`: *(revised 2026-07-28)*
+     installed directly into `/opt` by the `percona-tarball-{python3,perl,tcl}`
+     BuildRequires — from-source builds whose every path (`sys.prefix`, `@INC`,
+     `TCL_LIBRARY`) is compiled to the `/opt` prefix, so no flattening from
+     system locations and no env-var wrappers. The script only asserts the
+     trees, adds a few utility scripts (syncobj_admin, jp.py, ydiff, pip
+     symlink), copies patroni's site-packages in, and bundles libcrypt next to
+     libperl. *(The POC mechanism — `PYTHONHOME` wrapper, libperl copied from
+     the distro tree, `TCL_LIBRARY` wrapper — is superseded; see Rejected
+     alternatives.)*
 2. **Bundle shared libraries** via the POC's 3-pass `ldd` walk (`bundle_deps`), copying
    symlink families into each component's `lib/`, filtered by the **official system-lib
    exclusion list** (matches `pg_tarballs_builder.sh`): glibc family, `ld-linux`,
@@ -251,24 +300,41 @@ after OBS installs the BuildRequires closure:
    **tinfo/readline**, idn2, unistring, nghttp2, expat, tirpc. These stay
    host-provided. Exception: OpenSSL **is** bundled into `percona-python3/lib`
    (python's `_hashlib` is compiled against the build-env OpenSSL; POC behavior).
-3. **Wrappers matching the official tarball:**
-   - `psql` → `psql.bin` + wrapper that LD_PRELOADs host readline (falls back to
-     bundled libedit behavior when absent).
-   - `postgres` → `postgres.real` + wrapper exporting `PERL5LIB` and `TCL_LIBRARY`
-     pointing at `/opt/percona-perl` / `/opt/percona-tcl` (docs install flow copies
-     the runtimes to `/opt`).
-4. **Patch RPATHs** (`patch_rpath` + POC step 14): `'$ORIGIN/../lib'` for `bin/`,
-   `'$ORIGIN'` for `lib/`; `postgres`/`postmaster` and `plperl.so`/`plpython3.so`/
-   `pltcl.so` additionally get `/opt/percona-python3/lib`, the perl `CORE` dir, and
-   `/opt/percona-tcl/lib` appended (matching official RUNPATHs).
+3. **Wrapper matching the official tarball** *(revised 2026-07-28 — one left)*:
+   - `psql` → `psql.bin` + wrapper that LD_PRELOADs host readline (with a
+     `libreadline.so.7` symlink fallback for the EL8-built binary).
+   - `postgres`, `initdb` and every other binary ship REAL — the former
+     `postgres` env wrapper (`PERL5LIB`/`TCL_LIBRARY`/`PYTHONHOME`) and the
+     initdb wrapper are gone (see Rejected alternatives); the PL `.so`
+     RUNPATHs plus the compiled-in `/opt` runtime paths and the compiled
+     `/tmp` socket default (step 4a) replace them.
+4. **Patch RPATHs** (`patch_rpath` + step 14): `'$ORIGIN/../lib'` for `bin/`,
+   `'$ORIGIN'` for `lib/`; `plperl.so`/`plpython3.so`/`pltcl.so` get RUNPATHs
+   pointing at the perl `CORE` dir, `/opt/percona-python3/lib` and
+   `/opt/percona-tcl/lib` (matching official RUNPATHs). *(Revised 2026-07-28:
+   the `postgres` binary itself needs only `$ORIGIN/../lib` — the loader
+   resolves a dlopened PL's NEEDED libs through the PL's own RUNPATH.)*
+   **4a. Compiled socket-dir patch** *(added 2026-07-28, step 14a)*: rewrite
+   the RPM-compiled `/run/postgresql` socket-dir C string constants (all four
+   spellings, longest-first) to `/tmp` in place in every bundled ELF —
+   same-length NUL-padded, so no ELF offsets change. Zero patched files is a
+   FATAL (the RPMs stopped compiling the string in → human look needed).
 5. **Pre-tar verification (build fails on error — addition over the POC):**
    - DT_NEEDED soname audit over `/opt` (`patchelf --print-needed`): every needed
      soname must pass the exclusion list or be bundled (dangling symlinks rejected).
      (Replaced the originally-specified `ldd` audit, which is blind inside a fully
      populated buildroot — missing libs still resolve from `/usr/lib64`.)
-   - Smoke: `bin/initdb --version`, `bin/postgres.real --version`,
-     `percona-python3/bin/python3 -c 'import ssl, yaml'`,
-     `percona-patroni/bin/patronictl version` — all with RPATH/wrapper resolution only.
+   - Per-variant OpenSSL host-ABI audit (versioned symbol needs against
+     libssl/libcrypto; the percona-python3 tree is exempt — it bundles its
+     own OpenSSL copy).
+   - Residual socket-dir audit: no bundled ELF may still contain the byte
+     string `/run/postgresql` (proves 4a ran and catches re-staged copies).
+   - Component inventory: exactly the eleven expected `/opt/percona-*` dirs.
+   - Python bytecode audit: zero `.pyc`/`.pyo`/`__pycache__` under `/opt`.
+   - Smoke: `bin/initdb --version`, `bin/postgres --version`, and — under
+     `env -i`, proving the zero-env promise — the bundled python
+     (`import ssl, yaml`, `import patroni`), perl (`use strict`) and tclsh,
+     plus `haproxy -v`.
 6. **Create the artifact ourselves, with the official name:** derive the full name
    inside the buildroot (PG version from the server RPM, SSL variant from
    `openssl-libs`, arch from `uname -m`) and
@@ -304,16 +370,29 @@ verbatim with macro expansion (a package is any dir with an `obs/` subdir —
 ## Known caveats (documented, accepted)
 
 - RPM builds use `--with-system-tzdata=/usr/share/zoneinfo`: the host must have tzdata
-  installed (virtually always true).
+  installed (virtually always true, but absent on some minimal images).
 - Tarball binaries are the RPM builds (`--prefix=/usr/pgsql-<V>`); `pg_config` reports
   those original paths even though runtime path resolution is relocatable.
 - OpenSSL versions come from the base distro (EL8 = 1.1.1, EL9 = 3.5 since
   Rocky 9.8) rather than Percona-pinned source builds (exception: python3's
-  bundled OpenSSL). The per-variant symbol-needs gate is what keeps the host
-  promise honest despite the newer buildroot OpenSSL.
-- The PL runtime wrappers hardcode `/opt/percona-{python3,perl,tcl}` (as the official
-  tarballs do) — PL/Perl, PL/Python, PL/Tcl require the runtimes to be copied to
-  `/opt` per the install docs.
+  bundled OpenSSL). The per-variant symbol-needs gate — plus the pgcrypto and
+  CPython `_ssl`/`_hashlib` source patches that pin EL9-built binaries at
+  `OPENSSL_3.0.0` — is what keeps the host promise honest despite the newer
+  buildroot OpenSSL.
+- The PL `.so` RUNPATHs and the runtimes' compiled-in paths hardcode
+  `/opt/percona-{python3,perl,tcl}` (as the official tarballs do) — PL/Perl,
+  PL/Python, PL/Tcl require the runtimes to be copied to `/opt` per the
+  install docs. *(2026-07-28: this replaced the env-var wrappers; the old
+  PYTHONHOME-leaks-into-server-children caveat is obsolete — no environment
+  variables are set anywhere.)*
+- The bundled perl is the distro-matched 5.26.3 (ssl1.1) / 5.32.1 (ssl3), not
+  the official tarball's 5.38: `plperl.so` is ABI-tied to the distro libperl
+  the PG RPM was built against. Shipping 5.38 would require building the PG
+  RPM itself against a custom perl — a product change, out of scope.
+- Host prerequisites beyond the glibc/OpenSSL floors: a non-root OS user for
+  the server, host readline for interactive psql
+  (`libreadline8`/`libreadline8t64`), tzdata, and the `/opt` copy step above.
+  No `/run/postgresql` directory and no environment variables.
 
 ## Open questions for implementation
 
@@ -354,3 +433,16 @@ verbatim with macro expansion (a package is any dir with an `obs/` subdir —
   from. Superseded by fixing the root cause: the staging pgcrypto patch keeps
   EL9-built binaries at `OPENSSL_3.0.0`, so ssl3 builds honestly from Rocky 9
   again. The deb builder survives in git history for reference.
+- **`postgres` env wrapper (`PERL5LIB`/`TCL_LIBRARY`/`PYTHONHOME`) for the PLs
+  (original design, removed 2026-07-28):** broke whenever the server was
+  started without the wrapper (bare `postgres -D` — the QA repro), and its
+  `PYTHONHOME` leaked into every server child (`archive_command` etc.).
+  Superseded by the `/opt`-prefixed `percona-tarball-*` runtimes with
+  compiled-in paths.
+- **initdb wrapper + psql `PGHOST` export for the `/tmp` socket (removed
+  2026-07-28):** the initdb wrapper missed the positional `initdb DATADIR`
+  form and only two of the many libpq clients were covered. Superseded by
+  patching the compiled `DEFAULT_PGSOCKET_DIR` string in every bundled ELF.
+- **python3/tclsh env wrappers (removed 2026-07-28):** same class — any
+  wrapper bypass (and the embedded interpreter case, which never runs the
+  wrapper) broke; compiled-in prefixes need no wrapper.
