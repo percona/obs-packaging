@@ -1,0 +1,24 @@
+title: /opt-prefixed Tcl runtime for the PPG binary tarball
+description: |
+  Tcl 8.6 built from upstream source with --prefix=/opt/percona-tcl, so
+  the compiled-in TCL_LIBRARY default is /opt/percona-tcl/lib/tcl8.6 and
+  the RPM-built pltcl.so bundled into the Percona PostgreSQL binary
+  tarball initializes its interpreter with zero environment variables.
+  One version for both bases: pltcl.so links the unversioned SONAME
+  libtcl8.6.so and Tcl is ABI-stable within 8.6 (EL8 ships 8.6.8, EL9
+  8.6.10 — we build 8.6.10). Installs only under /opt/percona-tcl —
+  nothing shadows system packages. RockyLinux_8 and RockyLinux_9 only:
+  these are the tarball build bases (ssl1.1 / ssl3).
+
+build:
+  RockyLinux_10: false
+  UBI_8: false
+  UBI_9: false
+  Debian_11: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Leap_16: false
+  openSUSE_Tumbleweed: false
