@@ -32,12 +32,25 @@ BuildRequires:  percona-pgbackrest
 BuildRequires:  percona-pgbadger
 BuildRequires:  percona-patroni
 BuildRequires:  percona-patroni-aws
+BuildRequires:  percona-haproxy
 BuildRequires:  etcd
 BuildRequires:  python3-pysyncobj
-# Language runtimes
-BuildRequires:  python3.12
-BuildRequires:  python3.12-pip
-BuildRequires:  python3.12-devel
+# Language runtimes: from-source /opt-prefixed builds from ppg:common:deps.
+# Each installs a COMPLETE tree under /opt/percona-{perl,tcl,python3} with
+# every path compiled to the /opt prefix, so the RPM-built plperl.so/
+# pltcl.so/plpython3.so resolve interpreter + stdlib with ZERO environment
+# variables (tarball QA items 3-5). The distro perl/tcl/python3.12 runtime
+# BuildRequires that used to feed the deleted flatten-from-system staging
+# are gone; the python3.12 interpreter still reaches the chroot
+# transitively (the python3.12-* site-packages packages below require it),
+# which is what build-tarball.sh's own ELF-patch helper runs on.
+BuildRequires:  percona-tarball-perl
+BuildRequires:  percona-tarball-tcl
+BuildRequires:  percona-tarball-python3
+# python3.12-* DEPENDENCY packages are kept: they install patroni's
+# site-packages under /usr/lib{,64}/python3.12/site-packages regardless of
+# which interpreter ships in the tarball (section 8 of build-tarball.sh
+# copies them into /opt/percona-python3's site-packages).
 # jmespath/s3transfer must be named explicitly: on the EL8 parallel-python
 # stack the python3.12dist(...) rich-require generators do not run, so
 # python3.12-boto3 carries no dependency that would pull them into the
@@ -46,11 +59,6 @@ BuildRequires:  python3.12-devel
 # run time.
 BuildRequires:  python3.12-jmespath
 BuildRequires:  python3.12-s3transfer
-BuildRequires:  perl
-BuildRequires:  perl-libs
-BuildRequires:  perl-devel
-BuildRequires:  tcl
-BuildRequires:  tcl-devel
 # Build tools (binutils provides readelf for the verification gate)
 BuildRequires:  patchelf
 BuildRequires:  file
