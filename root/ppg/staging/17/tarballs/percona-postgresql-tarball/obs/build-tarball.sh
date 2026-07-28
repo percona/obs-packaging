@@ -781,6 +781,9 @@ done
 #    with the conf line left at its commented default, startup would try
 #    to create a socket in /run/postgresql and FATAL on hosts where a
 #    non-root user cannot create it.
+#  * "/var/run/postgresql[, /tmp]" — older spellings of the same two
+#    defaults (some builds/components use the pre-/run path); mapped to
+#    /tmp likewise.
 #
 # The official from-source tarball compiles the stock /tmp for both.
 # Rewrite each constant in place in every bundled ELF: the old bytes
@@ -797,11 +800,28 @@ done
 "$PY_BIN" - <<'PYEOF'
 import os
 
+# LONGEST-FIRST is load-bearing: bytes.replace matches mid-string, so a
+# shorter pattern can TAIL-MATCH inside a longer spelling and mangle it —
+# e.g. "/run/postgresql\0" applied to an ELF embedding the older
+# "/var/run/postgresql\0" spelling would consume its tail and leave
+# "/var/tmp" (wrong semantics), with no "/run/postgresql" bytes left for
+# the section-15 residual gate to catch. Listing the /var forms first
+# consumes them intentionally (they too must become plain "/tmp") before
+# the shorter patterns get a chance to tail-match.
 REPLACEMENTS = []
-for old in (b"/run/postgresql\0", b"/run/postgresql, /tmp\0"):
+for old in (
+    b"/var/run/postgresql, /tmp\0",
+    b"/run/postgresql, /tmp\0",
+    b"/var/run/postgresql\0",
+    b"/run/postgresql\0",
+):
     new = b"/tmp\0".ljust(len(old), b"\0")
     assert len(old) == len(new)
     REPLACEMENTS.append((old, new))
+# Guard the longest-first invariant against future edits.
+assert [len(o) for o, _ in REPLACEMENTS] == sorted(
+    (len(o) for o, _ in REPLACEMENTS), reverse=True
+)
 patched = 0
 for dirpath, _dirs, files in os.walk("/opt"):
     for name in files:
