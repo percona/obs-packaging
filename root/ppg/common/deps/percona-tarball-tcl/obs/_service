@@ -1,0 +1,8 @@
+<services>
+  <service name="download_url">
+    <param name="host">prdownloads.sourceforge.net</param>
+    <param name="protocol">https</param>
+    <param name="path">/tcl/tcl8.6.10-src.tar.gz</param>
+    <param name="filename">tcl8.6.10-src.tar.gz</param>
+  </service>
+</services>
