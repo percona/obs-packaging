@@ -138,47 +138,86 @@ Each package directory contains the packaging sources split by format:
 #### `tarballs/`
 
 Binary-tarball builds (OBS `simpleimage` format) for air-gapped / unsupported-distro
-installs, replicating the official Percona tarball layout. One subproject
-(`ppg:staging:<V>:tarballs`) with a single `percona-postgresql-tarball` package,
-built across two repositories — one per SSL variant, each stacked on a different
-EL base of `ppg:staging:<V>`:
+installs, replicating the official Percona tarball layout file for file. One
+subproject (`ppg:staging:<V>:tarballs`) with a single `percona-postgresql-tarball`
+package, built across two repositories — one per SSL variant, each stacked on a
+different EL base of `ppg:staging:<V>`:
 
 | Repository | Base | Host ABI targeted |
 |---|---|---|
 | `ssl1.1` | RockyLinux_8 | glibc ≥ 2.28, OpenSSL 1.1 (stock and RHEL-fork hosts) |
-| `ssl3` | RockyLinux_9 | glibc ≥ 2.34, OpenSSL 3.0+ (all 3.x hosts) |
+| `ssl3` | RockyLinux_9 | glibc ≥ 2.34, ALL OpenSSL 3.x hosts |
 
 The `ssl3` promise ("runs on any OpenSSL 3.0 host") holds on the EL9 base —
-whose own OpenSSL is 3.5.x since Rocky 9.8 — because staging
-`percona-postgresql` patches pgcrypto to avoid an OpenSSL 3.4-only API, so the
-EL9-built binaries reference only `OPENSSL_3.0.0` symbol-version nodes; the
-builder's verification gate enforces exactly that per variant. (An interim
-Ubuntu 22.04 deb-based `ssl3` was tried and abandoned: the PGDG deb layout is
-non-relocatable.)
+whose own OpenSSL is 3.5.x since Rocky 9.8 — because the built binaries are
+pinned to `OPENSSL_3.0.0` symbol-version nodes at the source: staging
+`percona-postgresql` patches pgcrypto to avoid an OpenSSL 3.4-only API, and
+`percona-tarball-python3` patches CPython's `_ssl`/`_hashlib` the same way, so
+`plpython3u`'s `import ssl` works on every 3.x host (the official tarball's
+own python fails that on 3.0 hosts). The builder's verification gate enforces
+exactly that per variant. (An interim Ubuntu 22.04 deb-based `ssl3` was tried
+and abandoned: the PGDG deb layout is non-relocatable.)
+
+Each artifact contains eleven top-level components, matching the official
+layout: `percona-postgresql<V>`, `percona-patroni`, `percona-pgbackrest`,
+`percona-pgbouncer`, `percona-pgpool-II`, `percona-pgbadger`, `percona-etcd`,
+`percona-haproxy`, and the bundled `percona-python3` / `percona-perl` /
+`percona-tcl` language runtimes.
 
 Per-repository differences (prjconf resolution hints) are handled with
 `%if "%_repository" == "..."` conditionals in the project config; the
 `simpleimage` recipe is variant-independent and its `%build` runs the single
 builder script, `build-tarball.sh`. The script stages all components under
-`/opt/percona-*`, runs the verification gate (unresolved-soname audit plus a
-per-variant OpenSSL host-ABI audit) and creates the artifact itself: it derives
-the official tarball name at build time (the SSL variant is mapped from the
-buildroot's EL major in `/etc/os-release`, with a glibc `%dist`-tag fallback)
-and writes it directly into the OBS result directory
-(`/usr/src/packages/OTHER`), bypassing the recipe's own fixed-name tar step
-(`#!NoTarBall`). Both repositories publish their results, so the `.tar.gz`
-files are downloadable from the OBS publish tree.
+`/opt/percona-*`, runs the verification gate (unresolved-soname audit, a
+per-variant OpenSSL host-ABI audit, a compiled-socket-dir byte-string audit,
+a python-bytecode audit, the 11-component inventory and zero-env smoke
+probes) and creates the artifact itself: it derives the official tarball name
+at build time (the SSL variant is mapped from the buildroot's EL major in
+`/etc/os-release`, with a glibc `%dist`-tag fallback) and writes it directly
+into the OBS result directory (`/usr/src/packages/OTHER`), bypassing the
+recipe's own fixed-name tar step (`#!NoTarBall`). Both repositories publish
+their results, so the `.tar.gz` files are downloadable from the OBS publish
+tree.
 
-Host prerequisites (beyond the glibc/OpenSSL floors above): a `/run/postgresql`
-directory writable by the postgres user (the default Unix-socket directory),
-tzdata (`/usr/share/zoneinfo` — the server is built with system tzdata), and,
-for GSSAPI/Kerberos authentication only, host krb5 *configuration*
-(`/etc/krb5.conf`) — the krb5 libraries themselves are bundled.
-Note: the `postgres` wrapper exports `PYTHONHOME=/opt/percona-python3` (needed
-by the embedded PL/Python) and every child the server spawns inherits it, so
-host-python commands launched by the server (`archive_command`,
-`restore_command`, backup hooks) must strip it, e.g.
-`archive_command = 'env -u PYTHONHOME ...'`.
+Behavioral parity with the official from-source tarball — no wrappers, no
+environment variables:
+
+- **Compiled `/tmp` socket defaults.** The builder rewrites the RPM-compiled
+  `/run/postgresql` socket-dir C string constants to `/tmp` in place in every
+  bundled ELF (same-length NUL-padded, so no offsets change) — the server,
+  `initdb`'s generated config (any invocation form) and every libpq client
+  (psql, pgbench, pg_dump, pg_isready, ...) default to a `/tmp` unix socket,
+  exactly like the official binaries. No `PGHOST`, no `/run/postgresql`.
+- **Zero-env PL languages.** `plperl.so`/`pltcl.so`/`plpython3.so` carry
+  RUNPATHs pointing at from-source `/opt`-prefixed runtimes built in
+  `ppg:common:deps` (`root/ppg/common/deps/`): `percona-tarball-perl`,
+  `percona-tarball-tcl` (8.6.10) and `percona-tarball-python3` (3.12.13).
+  Every path (`@INC`, `TCL_LIBRARY`, `sys.prefix`) is compiled into those
+  runtimes, so all three PLs work even under a bare `postgres -D` start from
+  an empty environment. The only wrapper left in the artifact is psql's
+  host-readline shim (the official tarball ships the same one).
+- **Perl version constraint (documented, accepted).** The bundled perl is
+  5.26.3 (`ssl1.1`) / 5.32.1 (`ssl3`), not the official tarball's 5.38:
+  `plperl.so` is ABI-tied to the distro libperl the PG RPM was built against
+  (DT_NEEDED `libperl.so.5.26`/`.5.32` plus the distro perl's config), so the
+  bundled runtime must match it exactly. The official tarball ships 5.38
+  because it builds PostgreSQL itself against its own perl — doing that here
+  would change the shipped RPM product.
+- **No python bytecode.** The artifact ships zero `.pyc`/`__pycache__` files
+  (the official tarball ships none either); gate-enforced.
+
+Host prerequisites (beyond the glibc/OpenSSL floors above): a non-root OS
+user to run the server (conventionally `postgres`); host readline for
+interactive psql (`libreadline8`/`libreadline8t64` on Debian-family hosts —
+the psql wrapper LD_PRELOADs it); tzdata (`/usr/share/zoneinfo` — the server
+is built with system tzdata; absent on some minimal images); the documented
+install step of copying `percona-{python3,perl,tcl}` to `/opt` (the PL
+RUNPATHs and the runtimes' compiled-in paths point there — unchanged from the
+official docs); and, for GSSAPI/Kerberos authentication only, host krb5
+*configuration* (`/etc/krb5.conf`) — the krb5 libraries themselves are
+bundled. No `/run/postgresql` directory and no environment variables are
+needed.
+
 Operational note: if the `ssl1.1` SSL-ABI audit ever fires on
 `OPENSSL_1_1_1b`-class version nodes via libkrb5/libgssapi/libssh, the EL8
 distro has rebased krb5/libssh past the percona `-NN.percona` rebuilds in
