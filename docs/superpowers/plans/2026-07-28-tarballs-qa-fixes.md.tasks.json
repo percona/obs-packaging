@@ -26,7 +26,7 @@
     {
       "id": 18,
       "subject": "Task 18: docs/spec/release notes (incl. perl-version stance)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         17,
         20
@@ -47,9 +47,9 @@
     {
       "id": 20,
       "subject": "Task 20: _ssl/_hashlib OpenSSL-3.0 symbol patch in percona-tarball-python3",
-      "status": "in_progress",
+      "status": "completed",
       "description": "**Goal:** plpython3u `import ssl` works on OpenSSL-3.0 hosts (ssl3 variant) — CPython source patch (pgcrypto-Patch8 technique) forcing pre-3.3/pre-3.4 fallbacks so _ssl/_hashlib carry only OPENSSL_3.0.0 needs; spec %check pins it.\n\nUSER DECISION 2026-07-28: fix (option 2) rather than accept official-parity failure.\n\n**Files:**\n- Modify: root/ppg/common/deps/percona-tarball-python3/ (patch + spec)\n\n**Acceptance Criteria:**\n- EL9 _ssl/_hashlib readelf: no OPENSSL_3.[1-9] needs; EL8 unchanged\n- ubuntu:22.04 bare-postgres plpython3u DO import ssl: fails before, passes after\n- spec-level readelf assertion (loud rpmbuild failure on drift)\n\n**Verify:** before/after readelf + the ubuntu:22.04 e2e\n\n```json:metadata\n{\"files\": [\"root/ppg/common/deps/percona-tarball-python3/\"], \"verifyCommand\": \"ubuntu:22.04 plpython3u import ssl e2e\", \"acceptanceCriteria\": [\"3.0-only needs on EL9\", \"EL8 unchanged\", \"spec check pins promise\", \"e2e passes\"], \"modelTier\": \"standard\"}\n```"
     }
   ],
-  "lastUpdated": "2026-07-28T16:10:00"
+  "lastUpdated": "2026-07-28T19:30:00"
 }
