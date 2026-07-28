@@ -10,18 +10,54 @@ set -e
 PG_MAJOR=$(basename "$(ls -d /usr/pgsql-*)" | sed 's/^pgsql-//')
 [ -n "$PG_MAJOR" ] || { echo "FATAL: no /usr/pgsql-* tree found" >&2; exit 1; }
 
-# Prefer the parallel 3.12 stack (EL8/EL9); fall back to the default python3 (EL10+).
+# Python used by THIS SCRIPT ONLY (the section-14a ELF string patcher and
+# its section-15 gate) — NOT the python shipped in the tarball. python3.12
+# is no longer a direct BuildRequires, but it still reaches the chroot
+# transitively (patroni's python3.12-* site-packages deps require the
+# interpreter); /usr/bin/python3 is the fallback. The bundled
+# /opt/percona-python3 interpreter is deliberately not used here: it is
+# itself part of the patched payload.
 PY_BIN=$(command -v python3.12 || command -v python3)
-PY_VER=$("$PY_BIN" -c 'import sys; print("%d.%d" % sys.version_info[:2])')
-
-# Interpreter versions discovered up front (used in wrappers below).
-PERL_VER=$(perl -e 'printf "%vd", $^V')
-TCL_VER=$(echo 'puts $tcl_version' | tclsh)
+[ -n "$PY_BIN" ] || { echo "FATAL: no chroot python3 for the ELF patch helper" >&2; exit 1; }
 
 PG_PREFIX=/opt/percona-postgresql${PG_MAJOR}
 PYTHON_PREFIX=/opt/percona-python3
 PERL_PREFIX=/opt/percona-perl
 TCL_PREFIX=/opt/percona-tcl
+HAPROXY_PREFIX=/opt/percona-haproxy
+
+###############################################################
+# 0. Language runtimes installed by the percona-tarball-* RPMs
+###############################################################
+# The percona-tarball-{perl,tcl,python3} BuildRequires install COMPLETE
+# from-source runtime trees at /opt/percona-{perl,tcl,python3} with every
+# path compiled to the /opt prefix. That is what makes plperl/pltcl/
+# plpython3 work with ZERO environment variables (QA items 3-5): the PL
+# .so RUNPATHs set in section 14 point at these trees, and the trees'
+# compiled-in defaults (@INC, TCL_LIBRARY, sys.prefix) already say /opt.
+# Assert the trees are present and derive the version strings FROM the
+# installed trees — the distro interpreters that used to answer these
+# questions are no longer in the chroot by design.
+PY_VER=$(basename "$(ls -d $PYTHON_PREFIX/lib/python3.*)" | sed 's/^python//')
+PERL_VER=$(basename "$(ls -d $PERL_PREFIX/lib/5.*)")
+TCL_VER=$(basename "$(ls -d $TCL_PREFIX/lib/tcl8.*)" | sed 's/^tcl//')
+PERL_CORE_DIR=$PERL_PREFIX/lib/${PERL_VER}/CORE
+for f in "$PYTHON_PREFIX/bin/python3" \
+         "$PYTHON_PREFIX/lib/libpython${PY_VER}.so.1.0" \
+         "$PERL_PREFIX/bin/perl" \
+         "$PERL_CORE_DIR/libperl.so" \
+         "$TCL_PREFIX/bin/tclsh${TCL_VER}" \
+         "$TCL_PREFIX/lib/libtcl${TCL_VER}.so" \
+         "$TCL_PREFIX/lib/tcl${TCL_VER}/init.tcl"; do
+    [ -e "$f" ] || { echo "FATAL: runtime file $f missing — percona-tarball-* RPM not installed?" >&2; exit 1; }
+done
+# patroni's site-packages come from the distro python3.12-* packages
+# (section 8) and are only compatible if their X.Y equals the bundled
+# interpreter's.
+[ -d "/usr/lib/python${PY_VER}/site-packages" ] || {
+    echo "FATAL: /usr/lib/python${PY_VER}/site-packages missing — bundled python ${PY_VER} vs distro python3.12-* stack mismatch" >&2
+    exit 1
+}
 
 ###############################################################
 # System library exclusion list — these are always on the target
@@ -126,19 +162,23 @@ bundle_deps() {
     mkdir -p "$libdir"
     for pass in 1 2 3; do
         {
-            find "$prefix/bin" "$libdir" -maxdepth 1 -type f 2>/dev/null
-            [ $# -gt 0 ] && find "$@" -type f -name '*.so*' 2>/dev/null
+            # sbin/ exists only for haproxy. find still walks the paths
+            # that DO exist but exits non-zero on the missing one — the
+            # || true keeps set -e from killing this subshell before the
+            # extra-dirs find below has run.
+            find "$prefix/bin" "$prefix/sbin" "$libdir" -maxdepth 1 -type f 2>/dev/null || true
+            if [ $# -gt 0 ]; then find "$@" -type f -name '*.so*' 2>/dev/null; fi
         } | while read f; do
             file "$f" 2>/dev/null | grep -q ELF && copy_deps "$f" "$libdir" || true
         done
     done
 }
 
-# patchelf all ELF files in bin/ and lib/ to given RPATH
+# patchelf all ELF files in bin/, sbin/ and lib/ to given RPATH
 patch_rpath() {
     local prefix="$1"
     local rpath="${2:-\$ORIGIN/../lib}"
-    find "$prefix/bin" "$prefix/lib" -maxdepth 1 -type f 2>/dev/null | while read f; do
+    find "$prefix/bin" "$prefix/sbin" "$prefix/lib" -maxdepth 1 -type f 2>/dev/null | while read f; do
         file "$f" 2>/dev/null | grep -q ELF && \
             patchelf --set-rpath "$rpath" "$f" 2>/dev/null || true
     done
@@ -147,9 +187,13 @@ patch_rpath() {
 ###############################################################
 # 1. Create isolated prefix directories
 ###############################################################
+# Only the SCRIPT-STAGED components are created here. The three language
+# runtimes (percona-python3, percona-perl, percona-tcl) are installed into
+# /opt by their percona-tarball-* RPMs (asserted in section 0) — creating
+# them here would mask a missing runtime package.
 for tool in percona-postgresql${PG_MAJOR} percona-pgbouncer percona-pgpool-II \
             percona-pgbackrest percona-pgbadger percona-patroni \
-            percona-python3 percona-perl percona-tcl percona-etcd; do
+            percona-etcd percona-haproxy; do
     mkdir -p /opt/${tool}/{bin,lib}
 done
 
@@ -273,29 +317,12 @@ fi
 EOF
 chmod +x $PG_PREFIX/bin/psql
 
-###############################################################
-# 2c. Wrap postgres binary to set PL/Perl and PL/Tcl runtime paths
-###############################################################
-# Paths match docs install: extract to /opt/pgdistro/, then:
-#   cp -r /opt/pgdistro/percona-perl /opt/
-#   cp -r /opt/pgdistro/percona-tcl  /opt/
-mv $PG_PREFIX/bin/postgres $PG_PREFIX/bin/postgres.real
-cat > $PG_PREFIX/bin/postgres << EOF
-#!/bin/sh
-# Set bundled PL/Perl stdlib path (libperl.so @INC points to system paths by default)
-export PERL5LIB="\${PERL5LIB:+\${PERL5LIB}:}/opt/percona-perl/lib/${PERL_VER}"
-# Set bundled Tcl library path so pltcl can find init.tcl
-export TCL_LIBRARY="/opt/percona-tcl/lib/tcl${TCL_VER}"
-# Point the EMBEDDED python (plpython3) at the bundled stdlib: the
-# interactive /opt/percona-python3/bin/python3 wrapper sets PYTHONHOME
-# itself, but libpython loaded inside the server never runs that wrapper —
-# without this the backend crashes on plpython3 use (acceptance-verified
-# on every variant).
-export PYTHONHOME=/opt/percona-python3
-SELFDIR="\$(cd "\$(dirname "\$0")" && pwd)"
-exec "\$SELFDIR/postgres.real" "\$@"
-EOF
-chmod +x $PG_PREFIX/bin/postgres
+# NOTE: postgres is shipped as the REAL binary — no env wrapper. The
+# PERL5LIB/TCL_LIBRARY/PYTHONHOME exports the old wrapper carried are now
+# compiled into the /opt runtime trees themselves (percona-tarball-* RPMs,
+# see section 0), and QA proved any wrapper bypass (pg_ctl-less starts,
+# bare `postgres -D`) broke all three PLs. Section 14 gives the PL .so
+# files RUNPATHs that point at those trees.
 
 ###############################################################
 # 3. pgBouncer
@@ -353,6 +380,11 @@ done
 # 6. pgBadger -- flat layout (matches reference)
 ###############################################################
 cp /usr/bin/pgbadger /opt/percona-pgbadger/pgbadger
+# Point pgbadger at the bundled perl: the RPM script says /usr/bin/perl,
+# which need not exist on a tarball target host. (The official tarball
+# leaves this at `#!/usr/bin/env perl` — relying on a host perl being on
+# PATH; the bundled interpreter is strictly more self-contained.)
+sed -i "1s|^#!.*perl.*|#!/opt/percona-perl/bin/perl|" /opt/percona-pgbadger/pgbadger
 rmdir /opt/percona-pgbadger/bin /opt/percona-pgbadger/lib 2>/dev/null || true
 # Man page
 find /usr/share/man -name 'pgbadger.1*' -exec sh -c 'f="{}"; case "$f" in *.gz) gunzip -c "$f" > /opt/percona-pgbadger/pgbadger.1p ;; *) cp "$f" /opt/percona-pgbadger/pgbadger.1p ;; esac' \; 2>/dev/null || true
@@ -367,59 +399,20 @@ for d in /usr/share/doc/percona-pgbadger* /usr/share/licenses/percona-pgbadger*;
 done
 
 ###############################################################
-# 7. Bundle Python -> /opt/percona-python3
+# 7. Python -> /opt/percona-python3 (tree installed by RPM)
 ###############################################################
-cp "$PY_BIN" "$PYTHON_PREFIX/bin/python${PY_VER}"
-
-# Copy standard library (pure Python) and compiled extension modules into lib/
-[ -d /usr/lib/python${PY_VER} ] && cp -rp /usr/lib/python${PY_VER} $PYTHON_PREFIX/lib/ || true
-[ -d /usr/lib64/python${PY_VER} ] && cp -rp /usr/lib64/python${PY_VER}/. $PYTHON_PREFIX/lib/python${PY_VER}/ 2>/dev/null || true
-
-# Python binary has sys.platlibdir='lib64' compiled in, so it searches lib64/pythonX.Y/
-# Create a symlink so PYTHONHOME lookup via lib64 resolves to our lib/ tree
-mkdir -p $PYTHON_PREFIX/lib64
-ln -sf ../lib/python${PY_VER} $PYTHON_PREFIX/lib64/python${PY_VER}
-
-# Copy libpython shared lib with symlinks
-LIBPYTHON_DIR=/usr/lib64
-cp -a ${LIBPYTHON_DIR}/libpython${PY_VER}*.so* $PYTHON_PREFIX/lib/ 2>/dev/null || true
-cp -a ${LIBPYTHON_DIR}/libpython3.so $PYTHON_PREFIX/lib/ 2>/dev/null || true
-ln -sf libpython${PY_VER}.so.1.0 $PYTHON_PREFIX/lib/libpython${PY_VER}.so 2>/dev/null || true
-ln -sf libpython${PY_VER}.so $PYTHON_PREFIX/lib/libpython3.so 2>/dev/null || true
-
-# Copy libffi (reference bundles it)
-cp -a /usr/lib64/libffi.so* $PYTHON_PREFIX/lib/ 2>/dev/null || true
-
-# include/
-[ -d /usr/include/python${PY_VER} ] && \
-    mkdir -p $PYTHON_PREFIX/include && \
-    cp -rp /usr/include/python${PY_VER} $PYTHON_PREFIX/include/ || true
-
-# pkgconfig
-mkdir -p $PYTHON_PREFIX/lib/pkgconfig
-cp /usr/lib64/pkgconfig/python-${PY_VER}*.pc $PYTHON_PREFIX/lib/pkgconfig/ 2>/dev/null || true
-
-# share/man (reference ships the python man page uncompressed + python3.1 alias)
-mkdir -p $PYTHON_PREFIX/share/man/man1
-for m in /usr/share/man/man1/python${PY_VER}.1*; do
-    [ -e "$m" ] || continue
-    case "$m" in
-        *.gz) gunzip -c "$m" > $PYTHON_PREFIX/share/man/man1/python${PY_VER}.1 ;;
-        *)    cp -p "$m" $PYTHON_PREFIX/share/man/man1/ ;;
-    esac
-done
-[ -f $PYTHON_PREFIX/share/man/man1/python${PY_VER}.1 ] && \
-    ln -sf python${PY_VER}.1 $PYTHON_PREFIX/share/man/man1/python3.1 || true
-
-# Copy Python utility scripts and update shebangs to bundled python
-# Note: with PY_VER=X.Y, pip3.${PY_VER#*.} = pip3.Y and 2to3-${PY_VER} = 2to3-X.Y
-for script in pip pip3 pip3.${PY_VER#*.} 2to3 2to3-${PY_VER} \
-              idle3 idle${PY_VER} pydoc3 pydoc${PY_VER} \
-              python3-config python${PY_VER}-config \
-              syncobj_admin jp.py; do
+# The percona-tarball-python3 RPM already installed the complete runtime
+# (bin/python3.12 + python3, full stdlib incl. lib-dynload, libpython,
+# include/, pkgconfig/, share/man, and a real pip via ensurepip — all
+# shebangs and compiled paths already say /opt/percona-python3). The old
+# flatten-from-system staging is gone. What remains here is the handful of
+# utility scripts that come from OTHER packages in the chroot and ship in
+# the official tarball's percona-python3/bin.
+for script in syncobj_admin jp.py; do
     [ -f "/usr/bin/$script" ] && cp "/usr/bin/$script" $PYTHON_PREFIX/bin/ || true
 done
 # ydiff is a Python module with no /usr/bin script; create a wrapper
+# (ydiff.py itself is copied into site-packages by section 8)
 if [ -f /usr/lib/python${PY_VER}/site-packages/ydiff.py ]; then
     cat > $PYTHON_PREFIX/bin/ydiff << 'WEOF'
 #!/opt/percona-python3/bin/python3
@@ -429,16 +422,13 @@ sys.exit(main())
 WEOF
     chmod +x $PYTHON_PREFIX/bin/ydiff
 fi
-for script in $PYTHON_PREFIX/bin/pip $PYTHON_PREFIX/bin/pip3 \
-              $PYTHON_PREFIX/bin/pip${PY_VER} \
-              $PYTHON_PREFIX/bin/syncobj_admin $PYTHON_PREFIX/bin/ydiff \
-              $PYTHON_PREFIX/bin/jp.py $PYTHON_PREFIX/bin/2to3 \
-              $PYTHON_PREFIX/bin/2to3-${PY_VER} $PYTHON_PREFIX/bin/pydoc3 \
-              $PYTHON_PREFIX/bin/pydoc${PY_VER} $PYTHON_PREFIX/bin/idle3 \
-              $PYTHON_PREFIX/bin/idle${PY_VER}; do
+for script in $PYTHON_PREFIX/bin/syncobj_admin $PYTHON_PREFIX/bin/jp.py; do
     [ -f "$script" ] && \
         sed -i "1s|^#!.*python.*|#!/opt/percona-python3/bin/python3|" "$script" || true
 done
+# ensurepip creates pip3/pip3.12 but no plain `pip`; the official tarball
+# ships one.
+[ -e "$PYTHON_PREFIX/bin/pip" ] || ln -sf pip3 "$PYTHON_PREFIX/bin/pip"
 
 ###############################################################
 # 8. Patroni -- copy from RPM-installed location into bundled Python
@@ -446,37 +436,42 @@ done
 SITE_DEST=$PYTHON_PREFIX/lib/python${PY_VER}/site-packages
 mkdir -p "$SITE_DEST"
 
-# Patroni may be installed under a different Python version (e.g. system python3.9).
-# Search ALL Python site-packages directories to find the packages.
-# Pure Python packages work across any Python version; compiled .so extensions
-# that match the bundled Python version will also be usable.
+# The distro python3.12-* packages install these under
+# /usr/lib{,64}/python3.12/site-packages; the bundled interpreter is the
+# same X.Y (asserted in section 0), so pure-python packages and cp312 C
+# extensions are both usable. Package metadata ships as *.dist-info or
+# *.egg-info depending on how each RPM was built — copy whichever form
+# exists (this list is now load-bearing: the bundled python tree comes
+# from our RPM, there is no wholesale distro site-packages copy anymore).
 for pkg in patroni patroni-*.dist-info patroni-*.egg-info \
-           click click-*.dist-info \
-           dateutil python_dateutil-*.dist-info \
+           click click-*.dist-info click-*.egg-info \
+           dateutil python_dateutil-*.dist-info python_dateutil-*.egg-info \
            psutil psutil-*.dist-info psutil-*.egg-info \
-           urllib3 urllib3-*.dist-info \
-           six.py six-*.dist-info \
-           certifi certifi-*.dist-info \
-           dns dnspython-*.dist-info \
-           pysyncobj pysyncobj-*.dist-info \
-           kazoo kazoo-*.dist-info \
+           urllib3 urllib3-*.dist-info urllib3-*.egg-info \
+           six.py six-*.dist-info six-*.egg-info \
+           certifi certifi-*.dist-info certifi-*.egg-info \
+           dns dnspython-*.dist-info dnspython-*.egg-info \
+           pysyncobj pysyncobj-*.dist-info pysyncobj-*.egg-info \
+           kazoo kazoo-*.dist-info kazoo-*.egg-info \
            etcd python_etcd-*.dist-info python_etcd-*.egg-info \
-           boto3 boto3-*.dist-info botocore botocore-*.dist-info \
+           boto3 boto3-*.dist-info boto3-*.egg-info \
+           botocore botocore-*.dist-info botocore-*.egg-info \
            jmespath jmespath-*.dist-info jmespath-*.egg-info \
            s3transfer s3transfer-*.dist-info s3transfer-*.egg-info \
            psycopg2 psycopg2-*.dist-info psycopg2-*.egg-info \
-           consul py_consul-*.dist-info \
-           prettytable prettytable-*.dist-info \
-           packaging packaging-*.dist-info \
-           typing_extensions typing_extensions-*.dist-info \
-           requests requests-*.dist-info \
-           charset_normalizer charset_normalizer-*.dist-info \
-           idna idna-*.dist-info \
-           yaml PyYAML-*.dist-info _yaml \
-           wcwidth wcwidth-*.dist-info \
-           cryptography cryptography-*.dist-info \
-           cffi cffi-*.dist-info _cffi_backend* \
-           pycparser pycparser-*.dist-info; do
+           consul py_consul-*.dist-info py_consul-*.egg-info \
+           prettytable prettytable-*.dist-info prettytable-*.egg-info \
+           packaging packaging-*.dist-info packaging-*.egg-info \
+           typing_extensions typing_extensions-*.dist-info typing_extensions-*.egg-info \
+           requests requests-*.dist-info requests-*.egg-info \
+           charset_normalizer charset_normalizer-*.dist-info charset_normalizer-*.egg-info \
+           idna idna-*.dist-info idna-*.egg-info \
+           yaml PyYAML-*.dist-info PyYAML-*.egg-info _yaml \
+           wcwidth wcwidth-*.dist-info wcwidth-*.egg-info \
+           cryptography cryptography-*.dist-info cryptography-*.egg-info \
+           cffi cffi-*.dist-info cffi-*.egg-info _cffi_backend* \
+           pycparser pycparser-*.dist-info pycparser-*.egg-info \
+           ydiff.py ydiff-*.dist-info ydiff-*.egg-info; do
     for sitedir in /usr/lib/python${PY_VER}/site-packages /usr/lib64/python${PY_VER}/site-packages; do
         [ -d "$sitedir" ] || continue
         for match in "$sitedir"/$pkg; do
@@ -514,218 +509,133 @@ done
 rmdir /opt/percona-etcd/lib 2>/dev/null || true
 
 ###############################################################
-# 10. Bundle Perl -> /opt/percona-perl
+# 10. Perl -> /opt/percona-perl (tree installed by RPM)
 ###############################################################
-PERL_ARCH=$(perl -MConfig -e 'print $Config{archname}')
-
-cp /usr/bin/perl $PERL_PREFIX/bin/
-[ -f "/usr/bin/perl${PERL_VER}" ] && cp "/usr/bin/perl${PERL_VER}" $PERL_PREFIX/bin/ || true
-
-# Core modules (arch-specific with CORE/ containing libperl.so)
-mkdir -p $PERL_PREFIX/lib/${PERL_VER}
-[ -d /usr/lib64/perl5/${PERL_VER} ] && \
-    cp -rp /usr/lib64/perl5/${PERL_VER}/. $PERL_PREFIX/lib/${PERL_VER}/ || true
-# Also check non-versioned path
-[ -d /usr/lib64/perl5 ] && [ ! -d /usr/lib64/perl5/${PERL_VER} ] && \
-    cp -rp /usr/lib64/perl5/. $PERL_PREFIX/lib/${PERL_VER}/ || true
-
-# Pure-perl modules
-[ -d /usr/share/perl5/${PERL_VER} ] && \
-    cp -rp /usr/share/perl5/${PERL_VER}/. $PERL_PREFIX/lib/${PERL_VER}/ || true
-[ -d /usr/share/perl5 ] && [ ! -d /usr/share/perl5/${PERL_VER} ] && \
-    cp -rp /usr/share/perl5/. $PERL_PREFIX/lib/${PERL_VER}/ || true
-
-# Vendor modules
-[ -d /usr/lib64/perl5/vendor_perl ] && \
-    cp -rp /usr/lib64/perl5/vendor_perl/. $PERL_PREFIX/lib/${PERL_VER}/ || true
-[ -d /usr/share/perl5/vendor_perl ] && \
-    cp -rp /usr/share/perl5/vendor_perl/. $PERL_PREFIX/lib/${PERL_VER}/ || true
-
-# site_perl
-mkdir -p $PERL_PREFIX/lib/site_perl
-[ -d /usr/local/lib64/perl5 ] && cp -rp /usr/local/lib64/perl5/. $PERL_PREFIX/lib/site_perl/ || true
-[ -d /usr/local/share/perl5 ] && cp -rp /usr/local/share/perl5/. $PERL_PREFIX/lib/site_perl/ || true
-
-# Prune Net::SSLeay from the staged tree. The official Percona tarball does
-# not ship it, and its XS module (auto/Net/SSLeay/SSLeay.so) links the HOST
-# libssl/libcrypto with OPENSSL_3.2.0 version needs — that would violate
-# the ssl variant host-ABI promise enforced by the verification gate
-# (section 15). The copies above can land it in several places (vendor_perl
-# is copied both as a subtree and flattened), so sweep the whole prefix:
-# both the XS dirs (*/auto/Net/SSLeay) and the pure-perl parts
-# (Net/SSLeay.pm + Net/SSLeay.pod + Net/SSLeay/ support dir). Note: the
-# path patterns are anchored under Net/ so the unrelated
-# Software::License::SSLeay module is left alone.
-find "$PERL_PREFIX" -type d -path '*/Net/SSLeay' -prune -exec rm -rf {} +
-find "$PERL_PREFIX" -type f \( -path '*/Net/SSLeay.pm' -o -path '*/Net/SSLeay.pod' \) -delete
-# Prune IO::Socket::SSL as well: it is pure perl (no host-ABI impact) but
-# hard-requires the Net::SSLeay XS module pruned above, so it could never
-# load — and the official tarball's percona-perl tree does not ship it
-# either (the only IO/Socket/SSL in the official artifact sits inside
-# pgbackrest's private bin/vendor_perl bundle, which we do not stage).
-find "$PERL_PREFIX" -type d -path '*/IO/Socket/SSL' -prune -exec rm -rf {} +
-find "$PERL_PREFIX" -type f \( -path '*/IO/Socket/SSL.pm' -o -path '*/IO/Socket/SSL.pod' \) -delete
-
-# Copy libcrypt into Perl CORE dir (reference does this)
-CORE_DIR=$(find $PERL_PREFIX -name "CORE" -type d | head -1)
-if [ -n "$CORE_DIR" ] && [ -d "$CORE_DIR" ]; then
-    cp -a /usr/lib64/libcrypt.so* "$CORE_DIR/" 2>/dev/null || true
-    cp -a /usr/lib64/libxcrypt.so* "$CORE_DIR/" 2>/dev/null || true
+# The percona-tarball-perl RPM already installed the complete runtime
+# (bin/perl + every core utility script with /opt shebangs, the full core
+# module set at lib/<ver> with CORE/libperl, man pages) with the distro-
+# matched version and ABI (5.26.3 on EL8, 5.32.1 on EL9 — the version
+# plperl.so's libperl DT_NEEDED demands). The old flatten-from-system
+# staging is gone.
+#
+# The old Net::SSLeay/IO::Socket::SSL prune is OBSOLETE: those are CPAN
+# modules the distro shipped as vendor packages, and a from-source core
+# perl build contains no OpenSSL bindings at all. Assert that stays true —
+# an SSLeay XS module would link the BUILDROOT libssl and violate the ssl
+# variant host-ABI promise (section 15), so its appearance must fail loudly
+# rather than slip through.
+if find "$PERL_PREFIX" \( -path '*/Net/SSLeay*' -o -path '*/IO/Socket/SSL*' \) | grep .; then
+    echo "FATAL: OpenSSL perl bindings found under $PERL_PREFIX (core perl must not ship Net::SSLeay/IO::Socket::SSL)" >&2
+    exit 1
 fi
 
-# Man pages
-mkdir -p $PERL_PREFIX/man/man1 $PERL_PREFIX/man/man3
-cp /usr/share/man/man1/perl*.1* $PERL_PREFIX/man/man1/ 2>/dev/null || true
-
-# Copy Perl utility scripts from /usr/bin/
-for script in corelist cpan enc2xs encguess h2ph h2xs instmodsh json_pp \
-              libnetcfg perlbug perldoc perlivp perlthanks piconv pl2pm \
-              pod2html pod2man pod2text pod2usage podchecker prove ptar \
-              ptardiff ptargrep shasum splain streamzip xsubpp zipdetails; do
-    [ -f "/usr/bin/$script" ] && cp "/usr/bin/$script" $PERL_PREFIX/bin/ || true
-done
-# Update shebangs on Perl scripts to use bundled perl
-for script in $PERL_PREFIX/bin/corelist $PERL_PREFIX/bin/cpan \
-              $PERL_PREFIX/bin/enc2xs $PERL_PREFIX/bin/json_pp \
-              $PERL_PREFIX/bin/pod2html $PERL_PREFIX/bin/pod2man \
-              $PERL_PREFIX/bin/pod2text $PERL_PREFIX/bin/pod2usage \
-              $PERL_PREFIX/bin/perldoc $PERL_PREFIX/bin/prove \
-              $PERL_PREFIX/bin/ptar $PERL_PREFIX/bin/ptardiff \
-              $PERL_PREFIX/bin/ptargrep $PERL_PREFIX/bin/shasum \
-              $PERL_PREFIX/bin/instmodsh $PERL_PREFIX/bin/piconv \
-              $PERL_PREFIX/bin/pl2pm $PERL_PREFIX/bin/podchecker \
-              $PERL_PREFIX/bin/splain $PERL_PREFIX/bin/streamzip \
-              $PERL_PREFIX/bin/xsubpp $PERL_PREFIX/bin/zipdetails; do
-    [ -f "$script" ] && \
-        sed -i "1s|^#!.*perl.*|#!/opt/percona-perl/bin/perl|" "$script" || true
-done
+# libperl.so links libcrypt (libcrypt.so.2 on EL9 — a soname many target
+# hosts do NOT provide, e.g. Debian/Ubuntu ship libcrypt.so.1), so the
+# host copy cannot be relied on: bundle the buildroot's libcrypt family
+# into CORE/ next to libperl (the official tarball does the same) and give
+# libperl an $ORIGIN RPATH so it finds it there — RUNPATH is not
+# transitive, plperl.so's RUNPATH does not help libperl's own NEEDED.
+# bin/perl needs no patchelf: its compiled-in RPATH already points at
+# CORE/, where both libperl and the bundled libcrypt live.
+cp -a /usr/lib64/libcrypt.so* "$PERL_CORE_DIR/" 2>/dev/null || true
+cp -a /usr/lib64/libxcrypt.so* "$PERL_CORE_DIR/" 2>/dev/null || true
+LIBPERL_REAL=$(find "$PERL_CORE_DIR" -maxdepth 1 -name 'libperl.so.*' -not -type l | head -1)
+[ -n "$LIBPERL_REAL" ] || { echo "FATAL: no libperl.so.* in $PERL_CORE_DIR" >&2; exit 1; }
+patchelf --set-rpath '$ORIGIN' "$LIBPERL_REAL"
 
 ###############################################################
-# 11. Bundle Tcl -> /opt/percona-tcl
+# 11. Tcl -> /opt/percona-tcl (tree installed by RPM)
 ###############################################################
-cp /usr/bin/tclsh${TCL_VER} $TCL_PREFIX/bin/
-ln -sf tclsh${TCL_VER} $TCL_PREFIX/bin/tclsh
+# The percona-tarball-tcl RPM already installed the complete runtime
+# (bin/tclsh8.6 with a compiled RPATH to /opt/percona-tcl/lib, the
+# libtcl8.6.so whose compiled TCL_LIBRARY default is
+# /opt/percona-tcl/lib/tcl8.6, the stdlib, and the bundled pkgs incl.
+# sqlite3/tdbc/itcl/thread and bin/sqlite3_analyzer). Nothing to stage and
+# no TCL_LIBRARY wrapper anymore: bin/tclsh is the RPM's plain symlink to
+# the real tclsh8.6. Section 0 asserted the load-bearing files; section 13
+# runs the generic bundle_deps/patch_rpath pass over this prefix.
 
-# Copy libtcl shared lib
-cp -a /usr/lib64/libtcl${TCL_VER}.so $TCL_PREFIX/lib/ 2>/dev/null || true
-cp -a /usr/lib64/libtclstub${TCL_VER}.a $TCL_PREFIX/lib/ 2>/dev/null || true
-
-# Tcl library directories (stdlib is in /usr/share/tclX.Y/, arch files in /usr/lib64/tclX.Y/)
-mkdir -p $TCL_PREFIX/lib/tcl${TCL_VER}
-[ -d /usr/share/tcl${TCL_VER} ] && cp -rp /usr/share/tcl${TCL_VER}/. $TCL_PREFIX/lib/tcl${TCL_VER}/ || true
-[ -d /usr/lib64/tcl${TCL_VER} ] && cp -rp /usr/lib64/tcl${TCL_VER}/. $TCL_PREFIX/lib/tcl${TCL_VER}/ 2>/dev/null || true
-cp -rp /usr/lib64/tcl8 $TCL_PREFIX/lib/ 2>/dev/null || true
-
-# Tcl extension packages
-for ext in /usr/lib64/itcl* /usr/lib64/tdbc* /usr/lib64/thread* /usr/lib64/sqlite*; do
-    [ -e "$ext" ] && cp -rp "$ext" $TCL_PREFIX/lib/ || true
+###############################################################
+# 12. haproxy -> /opt/percona-haproxy
+###############################################################
+# Stage from the percona-haproxy RPM, mirroring the official tarball's
+# component layout: sbin/haproxy, bin/{halog,iprange}, etc/haproxy/,
+# etc/logrotate.d/haproxy.logrotate, etc/sysconfig/haproxy/
+# haproxy.sysconfig (a DIRECTORY holding the file — official quirk),
+# share/ = errorfiles + README, share/man/man1/{haproxy.1,halog.1}
+# uncompressed. Systemd unit files stay out (not a tarball concern).
+mkdir -p $HAPROXY_PREFIX/sbin
+cp /usr/sbin/haproxy $HAPROXY_PREFIX/sbin/
+for b in halog iprange; do
+    [ -f "/usr/bin/$b" ] && cp "/usr/bin/$b" $HAPROXY_PREFIX/bin/ || true
 done
-
-# tclConfig.sh
-cp /usr/lib64/tclConfig.sh $TCL_PREFIX/lib/ 2>/dev/null || true
-cp /usr/lib64/tclooConfig.sh $TCL_PREFIX/lib/ 2>/dev/null || true
-
-# pkgconfig
-mkdir -p $TCL_PREFIX/lib/pkgconfig
-cp /usr/lib64/pkgconfig/tcl.pc $TCL_PREFIX/lib/pkgconfig/ 2>/dev/null || true
-
-# include/
-mkdir -p $TCL_PREFIX/include
-cp /usr/include/tcl*.h $TCL_PREFIX/include/ 2>/dev/null || true
-cp /usr/include/tclDecls.h $TCL_PREFIX/include/ 2>/dev/null || true
-
-# man pages
-mkdir -p $TCL_PREFIX/man/man1 $TCL_PREFIX/man/man3 $TCL_PREFIX/man/mann
-cp /usr/share/man/man1/tclsh*.1* $TCL_PREFIX/man/man1/ 2>/dev/null || true
-cp /usr/share/man/man3/Tcl*.3* $TCL_PREFIX/man/man3/ 2>/dev/null || true
-cp /usr/share/man/mann/*.n* $TCL_PREFIX/man/mann/ 2>/dev/null || true
-
-# sqlite3_analyzer (Tcl-based SQLite analysis tool)
-for f in /usr/bin/sqlite3_analyzer /usr/lib64/sqlite3_analyzer \
-          /usr/lib64/sqlite3/sqlite3_analyzer; do
-    [ -f "$f" ] && cp "$f" $TCL_PREFIX/bin/ && break || true
+mkdir -p $HAPROXY_PREFIX/etc/haproxy $HAPROXY_PREFIX/etc/logrotate.d \
+         $HAPROXY_PREFIX/etc/sysconfig/haproxy
+cp -rp /etc/haproxy/. $HAPROXY_PREFIX/etc/haproxy/
+[ -f /etc/logrotate.d/haproxy ] && \
+    cp /etc/logrotate.d/haproxy $HAPROXY_PREFIX/etc/logrotate.d/haproxy.logrotate || true
+[ -f /etc/sysconfig/haproxy ] && \
+    cp /etc/sysconfig/haproxy $HAPROXY_PREFIX/etc/sysconfig/haproxy/haproxy.sysconfig || true
+mkdir -p $HAPROXY_PREFIX/share/man/man1
+[ -d /usr/share/haproxy ] && cp -rp /usr/share/haproxy/. $HAPROXY_PREFIX/share/ || true
+# haproxy links BOTH libpcre2-8 and libpcre2-posix. Both sit on the global
+# system-exclude list (host-provided by design for every other component),
+# but while libpcre2-8.so.0 really is everywhere (libselinux needs it),
+# libpcre2-posix is NOT installed on default Debian/Ubuntu hosts — haproxy
+# would fail to load (acceptance-verified on ubuntu:24.04). The official
+# tarball bundles the pcre2 pair into percona-haproxy/lib; do the same.
+# copy_deps won't (exclude list), so copy the symlink families explicitly.
+cp -a /usr/lib64/libpcre2-8.so* /usr/lib64/libpcre2-posix.so* $HAPROXY_PREFIX/lib/
+for m in /usr/share/man/man1/haproxy.1* /usr/share/man/man1/halog.1*; do
+    [ -e "$m" ] || continue
+    case "$m" in
+        *.gz) gunzip -c "$m" > "$HAPROXY_PREFIX/share/man/man1/$(basename "${m%.gz}")" ;;
+        *)    cp -p "$m" $HAPROXY_PREFIX/share/man/man1/ ;;
+    esac
 done
 
 ###############################################################
-# 12. Fix Perl, Tcl, Python for portable execution
+# 12a. Strip python bytecode (QA item 6)
 ###############################################################
-
-# --- Perl ---
-# libperl.so.X.Y.Z lives in /usr/lib64, not inside perl5/ tree; copy into CORE
-CORE_DIR=$(find $PERL_PREFIX -name "CORE" -type d | head -1)
-if [ -n "$CORE_DIR" ]; then
-    # Copy only the real file (not symlinks) from /usr/lib64
-    LIBPERL_REAL_PATH=$(find /usr/lib64 -maxdepth 1 -name "libperl.so.*" -not -type l | head -1)
-    LIBPERL_REAL=$(basename "$LIBPERL_REAL_PATH")
-    cp -p "$LIBPERL_REAL_PATH" "$CORE_DIR/"
-    # Recreate SONAME symlink and unversioned symlink pointing to real file
-    ln -sf "$LIBPERL_REAL" "$CORE_DIR/libperl.so.${PERL_VER%.*}"  # e.g. libperl.so.5.32
-    ln -sf "$LIBPERL_REAL" "$CORE_DIR/libperl.so"
-    # RPATH libperl itself: RUNPATH is not transitive, so libperl.so must be
-    # able to find its own deps (libcrypt copied into CORE/ above).
-    patchelf --set-rpath '$ORIGIN' "$CORE_DIR/$LIBPERL_REAL"
-fi
-# patchelf perl binary so dynamic linker finds libperl in CORE at $ORIGIN
-patchelf --set-rpath "\$ORIGIN/../lib/${PERL_VER}/CORE" "$PERL_PREFIX/bin/perl"
-
-# --- Tcl ---
-# patchelf tclsh so it finds libtclX.Y.so in $PREFIX/lib
-patchelf --set-rpath '$ORIGIN/../lib' "$TCL_PREFIX/bin/tclsh${TCL_VER}"
-# Replace tclsh symlink with wrapper that sets TCL_LIBRARY at runtime
-rm -f "$TCL_PREFIX/bin/tclsh"
-cat > "$TCL_PREFIX/bin/tclsh" << EOF
-#!/bin/sh
-SELFDIR="\$(cd "\$(dirname "\$0")" && pwd)"
-PREFIX="\$(dirname "\$SELFDIR")"
-export TCL_LIBRARY="\$PREFIX/lib/tcl${TCL_VER}"
-export TCLLIBPATH="\$PREFIX/lib"
-exec "\$SELFDIR/tclsh${TCL_VER}" "\$@"
-EOF
-chmod 755 "$TCL_PREFIX/bin/tclsh"
-
-# --- Python ---
-# The RPM python3 binary has sys.prefix=/usr hardcoded; wrap it with PYTHONHOME
-rm -f "$PYTHON_PREFIX/bin/python3"
-cat > "$PYTHON_PREFIX/bin/python3" << EOF
-#!/bin/sh
-SELFDIR="\$(cd "\$(dirname "\$0")" && pwd)"
-PREFIX="\$(dirname "\$SELFDIR")"
-export PYTHONHOME="\$PREFIX"
-# Prepend bundled lib/ so compiled extensions (e.g. _hashlib) find our OpenSSL
-export LD_LIBRARY_PATH="\$PREFIX/lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
-exec "\$SELFDIR/python${PY_VER}" "\$@"
-EOF
-chmod 755 "$PYTHON_PREFIX/bin/python3"
-ln -sf python3 "$PYTHON_PREFIX/bin/python" 2>/dev/null || true
+# The RPM's `make install` byte-compiles the stdlib and the distro
+# python3.12-* site-packages RPMs ship __pycache__ too (copied in section
+# 8). The official tarball ships ZERO .pyc/__pycache__; strip them all —
+# python regenerates bytecode at run time when it can write, and runs fine
+# without it when it cannot. Must run after all python staging (sections
+# 7/8); section 15 gates on the count staying zero.
+find "$PYTHON_PREFIX" -type d -name '__pycache__' -prune -exec rm -rf {} +
+find "$PYTHON_PREFIX" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
 
 ###############################################################
 # 13. Bundle .so deps and patchelf RPATH for ELF prefixes
 ###############################################################
 for prefix in $PG_PREFIX /opt/percona-pgbouncer \
-              /opt/percona-pgpool-II /opt/percona-pgbackrest; do
+              /opt/percona-pgpool-II /opt/percona-pgbackrest \
+              $TCL_PREFIX $HAPROXY_PREFIX; do
     bundle_deps "$prefix"
     patch_rpath "$prefix"
 done
+# (tclsh8.6's compiled /opt/percona-tcl/lib RPATH becomes the equivalent
+# $ORIGIN/../lib via patch_rpath above; haproxy's sbin/ is covered by the
+# sbin-aware bundle_deps/patch_rpath, bundling e.g. liblua/libcrypt.)
 # Python: also walk the whole lib/pythonX.Y tree (lib-dynload/ C extensions,
 # site-packages extensions like psycopg2/_psycopg) so their NEEDED libs
-# (libsqlite3, libncursesw, libuuid, libgdbm, libpq, ...) are bundled into
+# (libsqlite3, libncursesw, libuuid, libpq, ...) are bundled into
 # $PYTHON_PREFIX/lib.
 bundle_deps $PYTHON_PREFIX "$PYTHON_PREFIX/lib/python${PY_VER}"
 patch_rpath $PYTHON_PREFIX
-# RPATH the C extensions at the bundled lib dir: the python3 wrapper sets
-# LD_LIBRARY_PATH, but embedded interpreters (plpython3 inside postgres.real)
-# don't run through the wrapper, and the executable's RUNPATH does not apply
-# to dlopened extensions' own deps.
+# RPATH the C extensions at the bundled lib dir: the interpreter's own
+# RUNPATH does not apply to dlopened extensions' own deps — and the
+# embedded case (plpython3 inside postgres) never even runs bin/python3.
 find "$PYTHON_PREFIX/lib/python${PY_VER}" -type f -name '*.so*' | while read -r f; do
     file "$f" 2>/dev/null | grep -q ELF || continue
     patchelf --set-rpath '/opt/percona-python3/lib:$ORIGIN' "$f"
 done
-# Perl: walk the lib tree so XS-module deps (libdb for DB_File, libsombok
-# for Unicode::LineBreak, ...) are bundled, then point the XS modules at
-# the bundled libs (absolute /opt path — same convention as LANG_RPATH;
-# depth under auto/ varies so $ORIGIN-relative paths won't work).
-# Note: percona-perl/percona-tcl RPATHs for bin/ were already set in
-# section 12 and bundle_deps does not touch RPATHs.
+# Perl: walk the lib tree so XS-module deps (libdb for DB_File, ...) are
+# bundled, then point the XS modules at the bundled libs (absolute /opt
+# path — depth under auto/ varies so $ORIGIN-relative paths won't work).
+# bin/perl keeps its compiled CORE RPATH (section 10) and bundle_deps does
+# not touch RPATHs, so the perl prefix deliberately skips patch_rpath.
 bundle_deps $PERL_PREFIX "$PERL_PREFIX/lib"
 find "$PERL_PREFIX/lib" -type f -name '*.so' -path '*/auto/*' | while read -r f; do
     patchelf --set-rpath '/opt/percona-perl/lib:$ORIGIN' "$f"
@@ -733,31 +643,34 @@ done
 # Note: etcd (Go static), pgbadger (Perl script), patroni (Python) -- no bundling needed
 
 # Bundle OpenSSL into percona-python3 explicitly.
-# _hashlib.cpython-*.so is compiled against the build env's OpenSSL (3.4+) which may
-# be newer than what's on the target system. Bundling ensures Python works portably.
+# _ssl/_hashlib.cpython-*.so are compiled against the buildroot's OpenSSL
+# (3.5.x on current EL9), which may reference newer symbol-version nodes
+# than the variant's host promise; the python tree resolves OpenSSL from
+# its own lib/ (extension RPATHs above) and is excluded from the section-15
+# host-ABI audit for exactly this reason. (EL8's OpenSSL is 1.1 — the .so.3
+# glob finds nothing there and the extensions use the host 1.1 libs, same
+# as every previous ssl1.1 artifact.)
 for f in /usr/lib64/libssl.so.3* /usr/lib64/libcrypto.so.3*; do
     [ -f "$f" ] && cp -pn "$f" $PYTHON_PREFIX/lib/ 2>/dev/null || true
 done
 
 ###############################################################
-# 14. Fix PostgreSQL RPATH to include language runtime paths
+# 14. PL extension RPATHs -> the /opt language runtimes
 ###############################################################
-# Find the actual CORE directory path dynamically
-PERL_CORE_DIR=$(find $PERL_PREFIX -name "CORE" -type d | head -1)
-PERL_CORE_REL=${PERL_CORE_DIR#/opt/}  # e.g., percona-perl/lib/5.32.1/CORE
-LANG_RPATH='$ORIGIN/../lib:/opt/percona-python3/lib:/opt/'"${PERL_CORE_REL}"':/opt/percona-tcl/lib'
-LANG_RPATH_LIB='$ORIGIN:/opt/percona-python3/lib:/opt/'"${PERL_CORE_REL}"':/opt/percona-tcl/lib'
-
-# Patch the real postgres binary ($PG_PREFIX/bin/postgres is the shell wrapper
-# created in section 2c; postmaster no longer exists in PG >= 16). Mandatory —
-# fail loudly if patchelf cannot rewrite it.
-patchelf --set-rpath "$LANG_RPATH" "$PG_PREFIX/bin/postgres.real"
-
-# Patch PL language extension .so files
-for ext in plperl.so plpython3.so pltcl.so; do
-    [ -f "$PG_PREFIX/lib/$ext" ] && \
-        patchelf --set-rpath "$LANG_RPATH_LIB" "$PG_PREFIX/lib/$ext" 2>/dev/null || true
+# THE zero-env-var mechanism for the PLs (QA items 3-5): each PL .so
+# carries a RUNPATH pointing at its /opt runtime tree, so its interpreter
+# library (with /opt paths compiled in — section 0) resolves no matter how
+# the server was started. The postgres binary itself needs only the plain
+# $ORIGIN/../lib set by section 13's patch_rpath — the loader resolves a
+# dlopened PL's NEEDED libs through the PL's OWN RUNPATH, not through the
+# executable's. All mandatory: fail loudly if a PL .so is missing or
+# patchelf cannot rewrite it.
+for ext in plperl plpython3 pltcl; do
+    [ -f "$PG_PREFIX/lib/$ext.so" ] || { echo "FATAL: $PG_PREFIX/lib/$ext.so missing" >&2; exit 1; }
 done
+patchelf --set-rpath "/opt/percona-perl/lib/${PERL_VER}/CORE:\$ORIGIN" "$PG_PREFIX/lib/plperl.so"
+patchelf --set-rpath '/opt/percona-python3/lib:$ORIGIN' "$PG_PREFIX/lib/plpython3.so"
+patchelf --set-rpath '/opt/percona-tcl/lib:$ORIGIN' "$PG_PREFIX/lib/pltcl.so"
 
 # All other PostgreSQL lib/ .so files get $ORIGIN
 find $PG_PREFIX/lib -name '*.so*' -type f | while read f; do
@@ -1003,13 +916,56 @@ then
     exit 1
 fi
 
+echo "=== Verification: component inventory ==="
+# The artifact must contain exactly these ELEVEN top-level components
+# (QA item 8 added percona-haproxy). A missing dir means a staging section
+# silently did nothing; an extra dir means something leaked into /opt.
+cat > /tmp/expected-components.txt << EOF
+percona-etcd
+percona-haproxy
+percona-patroni
+percona-perl
+percona-pgbackrest
+percona-pgbadger
+percona-pgbouncer
+percona-pgpool-II
+percona-postgresql${PG_MAJOR}
+percona-python3
+percona-tcl
+EOF
+ls /opt | sort > /tmp/actual-components.txt
+if ! diff -u /tmp/expected-components.txt /tmp/actual-components.txt; then
+    echo "FATAL: /opt component set does not match the expected 11 components" >&2
+    exit 1
+fi
+
 echo "=== Verification: smoke commands ==="
+# The interpreter probes run under env -i: the whole point of the /opt
+# runtimes is that they need ZERO environment variables (QA items 3-5) —
+# a probe that only passes with inherited env would be lying. python runs
+# with -B: this build stage is root, so a bare import would re-litter the
+# tree with the very __pycache__ dirs section 12a stripped (the bytecode
+# audit below runs AFTER these probes to catch exactly that).
 env -u LD_LIBRARY_PATH "$PG_PREFIX/bin/initdb" --version
-env -u LD_LIBRARY_PATH "$PG_PREFIX/bin/postgres.real" --version
-"$PYTHON_PREFIX/bin/python3" -c 'import ssl, yaml; print("python OK")'
-"$PYTHON_PREFIX/bin/python3" -c 'import patroni; print("patroni import OK")'
-"$PERL_PREFIX/bin/perl" -e 'print "perl OK\n"'
-echo 'puts "tcl OK"' | "$TCL_PREFIX/bin/tclsh"
+env -u LD_LIBRARY_PATH "$PG_PREFIX/bin/postgres" --version
+env -i "$PYTHON_PREFIX/bin/python3" -B -c 'import ssl, yaml; print("python OK")'
+env -i "$PYTHON_PREFIX/bin/python3" -B -c 'import patroni; print("patroni import OK")'
+env -i "$PERL_PREFIX/bin/perl" -e 'use strict; print "perl OK\n"'
+echo 'puts "tcl OK"' | env -i "$TCL_PREFIX/bin/tclsh${TCL_VER}"
+env -u LD_LIBRARY_PATH "$HAPROXY_PREFIX/sbin/haproxy" -v
+
+echo "=== Verification: python bytecode audit ==="
+# Section 12a stripped all bytecode; the official tarball ships none
+# (QA item 6). Sweep ALL of /opt so a future component cannot sneak any
+# in. Deliberately the LAST gate before the artifact is created: anything
+# that imports python modules during the build (e.g. the smoke probes
+# above, when run without -B) regenerates __pycache__ as root.
+find /opt \( -name '*.pyc' -o -name '*.pyo' -o \( -type d -name '__pycache__' \) \) > /tmp/pyc-audit.txt
+if [ -s /tmp/pyc-audit.txt ]; then
+    cat /tmp/pyc-audit.txt
+    echo "FATAL: python bytecode found in the artifact (section 12a strip incomplete)" >&2
+    exit 1
+fi
 
 ###############################################################
 # 16. Create the final artifact with the official tarball name
