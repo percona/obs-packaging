@@ -1,0 +1,26 @@
+PERCONA: build perl 5.26.3 against libxcrypt's crypt.h (EL8).
+
+glibc's historical struct crypt_data had a current_saltbits member that
+perl 5.26 zeroes as a glibc-2.2.5 bug workaround. EL8 ships crypt.h from
+libxcrypt, whose struct crypt_data keeps `initialized` for ABI
+compatibility but has no current_saltbits, so pp.c fails to compile:
+  pp.c:3741: error: 'struct crypt_data' has no member named 'current_saltbits'
+Skip the workaround when crypt.h is libxcrypt's (CRYPT_OUTPUT_SIZE is
+defined there and not in glibc's crypt.h; EL8's libxcrypt 4.1.1 predates
+the XCRYPT_VERSION_NUM macro). Upstream perl dropped this code entirely
+in 5.28, and the EL8 distro perl carries the same class of fix; 5.32.1
+(EL9) is unaffected.
+
+--- a/pp.c
++++ b/pp.c
+@@ -3737,8 +3737,10 @@ PP(pp_crypt)
+ #if defined(__GLIBC__) || defined(__EMX__)
+ 	if (PL_reentrant_buffer->_crypt_struct_buffer) {
+ 	    PL_reentrant_buffer->_crypt_struct_buffer->initialized = 0;
++#if !defined(CRYPT_OUTPUT_SIZE)
+ 	    /* work around glibc-2.2.5 bug */
+ 	    PL_reentrant_buffer->_crypt_struct_buffer->current_saltbits = 0;
++#endif
+ 	}
+ #endif
+     }
