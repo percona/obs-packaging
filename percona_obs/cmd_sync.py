@@ -94,7 +94,12 @@ from .services import (
     _run_local_services,
     upstream_scm_refs,
 )
-from .targets import _iter_project_chain, _resolve_targets, is_dockerfile_image
+from .targets import (
+    _iter_project_chain,
+    _resolve_targets,
+    image_dep_query_repos,
+    is_dockerfile_image,
+)
 
 # Matches the standard sync commit message: sync: <branch>@<sha> (<detail>)
 _SYNC_MSG_RE = re.compile(r"^sync: [^@]+@([0-9a-f]+) \((.+)\)$")
@@ -1265,15 +1270,20 @@ def cmd_sync(args):
             image_pkgs: dict[str, list[tuple[str, str, str]]] = {}
             for _ip_proj, _ip_path in targets:
                 if is_dockerfile_image(_ip_path):
-                    image_pkgs.setdefault(_ip_path.name, []).append(
-                        (
-                            _compute_branch_project(
-                                _ip_proj, args.rootprj, branch_rootprj
-                            ),
-                            "images",
-                            "x86_64",
-                        )
+                    _ip_branch = _compute_branch_project(
+                        _ip_proj, args.rootprj, branch_rootprj
                     )
+                    for _ip_repo in sorted(
+                        image_dep_query_repos(
+                            _ip_path,
+                            env_vars,
+                            effective_only_repos,
+                            _target_repos_cache,
+                        )
+                    ):
+                        image_pkgs.setdefault(_ip_path.name, []).append(
+                            (_ip_branch, _ip_repo, "x86_64")
+                        )
             fwd_deps = _fetch_combined_depinfo(
                 branch_apiurl,
                 dep_projects,
@@ -1303,9 +1313,14 @@ def cmd_sync(args):
                 else:
                     _ia = apiurl or ""
                     _proj = obs_project
-                image_pkg_by_apiurl_sync.setdefault(_ia, {}).setdefault(
-                    pkg_path.name, []
-                ).append((_proj, "images", "x86_64"))
+                for _img_repo in sorted(
+                    image_dep_query_repos(
+                        pkg_path, env_vars, effective_only_repos, _target_repos_cache
+                    )
+                ):
+                    image_pkg_by_apiurl_sync.setdefault(_ia, {}).setdefault(
+                        pkg_path.name, []
+                    ).append((_proj, _img_repo, "x86_64"))
             all_fwd_deps: dict[tuple[str, str], set[tuple[str, str]]] = {}
             for q_apiurl, q_projects in src_projects_by_apiurl.items():
                 _img = image_pkg_by_apiurl_sync.get(q_apiurl, {})

@@ -4,6 +4,7 @@ from pathlib import Path
 from .common import (
     REPO_ROOT,
     _is_release_dir,
+    _load_project_config_with_inheritance,
     find_packages,
     is_package,
     load_project_yaml,
@@ -20,6 +21,36 @@ def _has_direct_packages(path: Path) -> bool:
 def is_dockerfile_image(package_path: Path) -> bool:
     """Return True if package_path is a Dockerfile-based container image package."""
     return (package_path / "obs" / "Dockerfile").is_file()
+
+
+def image_dep_query_repos(
+    package_path: Path,
+    env_vars: "dict[str, str] | None" = None,
+    only_repos: "set[str] | None" = None,
+    cache: "dict[Path, set[str]] | None" = None,
+) -> set[str]:
+    """Repository names to query for a container image's _buildinfo dep edges.
+
+    The built-image repo name depends on the containers layout: the old
+    ":containers:<flavor>" subprojects expose a single repo literally named
+    "images", while the restructured single ":containers" subproject names
+    its image repos after the flavor (e.g. "ubi8"/"ubi9").  Derive the names
+    from the image's own project config rather than assuming "images".
+
+    *only_repos* (the effective --only-repos set) filters the result when
+    given; an empty return means no image repo of this package is in scope.
+    *cache* maps project_path → repo names across images in the same project.
+    """
+    project_path = package_path.parent
+    repos = cache.get(project_path) if cache is not None else None
+    if repos is None:
+        config = _load_project_config_with_inheritance(project_path, env_vars)
+        repos = {r["name"] for r in config.get("repositories", []) if r.get("name")}
+        if cache is not None:
+            cache[project_path] = repos
+    if only_repos is not None:
+        repos = repos & only_repos
+    return repos
 
 
 def _resolve_targets(args) -> list[tuple[str, Path]]:
