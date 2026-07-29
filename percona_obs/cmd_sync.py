@@ -90,6 +90,7 @@ from .obs_api import (
 )
 from .services import (
     _copy_local_packaging,
+    _has_cargo_vendor_service,
     _has_runnable_services,
     _run_local_services,
     upstream_scm_refs,
@@ -118,6 +119,9 @@ _IMAGES_REPO_RE = re.compile(r"^(.+)-images$")
 # e.g. "ppg:17:containers:ubi9" → group 1 = "ubi9".  The new single-subproject
 # layout ("…:containers") intentionally does not match and is never filtered.
 _CONTAINER_SUBPROJ_RE = re.compile(r":containers:([^:]+)$")
+
+# Matches the vendored-crates archive produced by the cargo_vendor service.
+_VENDOR_TAR_RE = re.compile(r"^vendor\.tar\.[a-z0-9]+$")
 
 
 _OBS_SUBSTITUTABLE = {"_service", "_aggregate", "_link"}
@@ -435,6 +439,34 @@ def _is_link_package(obs_dir: Path) -> bool:
     return (obs_dir / "_link").is_file()
 
 
+def _content_mismatches(
+    local_md5s: dict[str, str],
+    obs_md5s: dict[str, str],
+    ignore_vendor: bool,
+) -> list[str]:
+    """Return the file names whose content differs between local and OBS.
+
+    With *ignore_vendor*, a vendor.tar.* present on both sides is compared by
+    presence only, never by bytes.  cargo_vendor output is a function of the
+    other uploaded files plus the crates.io state at generation time: upstream
+    projects without a committed Cargo.lock (e.g. pgvectorscale) re-resolve
+    the crate graph on every run, so its bytes drift between machines and
+    dates even when no real input changed.  A vendor-only difference must
+    therefore not flip a branch decision to promote.  A vendor archive
+    missing from either side is still a mismatch.
+    """
+    mismatches = [name for name, md5 in local_md5s.items() if obs_md5s.get(name) != md5]
+    mismatches += [name for name in obs_md5s if name not in local_md5s]
+    if ignore_vendor:
+        both = set(local_md5s) & set(obs_md5s)
+        mismatches = [
+            name
+            for name in mismatches
+            if not (_VENDOR_TAR_RE.match(name) and name in both)
+        ]
+    return sorted(mismatches)
+
+
 def _content_matches_branch(
     apiurl: str,
     branch_project: str,
@@ -515,21 +547,17 @@ def _content_matches_branch(
             if f.is_file():
                 local_md5s[f.name] = hashlib.md5(f.read_bytes()).hexdigest()
 
-        for fname, local_md5 in sorted(local_md5s.items()):
-            if obs_md5s.get(fname) != local_md5:
-                logger.debug(
-                    f"content check: {fname} differs  {branch_project}/{package_name}"
-                )
-                return False
-
-        for fname in obs_md5s:
-            if fname not in local_md5s:
-                logger.debug(
-                    f"content check: {fname} in OBS but not local  {branch_project}/{package_name}"
-                )
-                return False
-
-        return True
+        mismatches = _content_mismatches(
+            local_md5s,
+            obs_md5s,
+            ignore_vendor=run_services and _has_cargo_vendor_service(service_file),
+        )
+        for fname in mismatches:
+            detail = "differs" if fname in local_md5s else "in OBS but not local"
+            logger.debug(
+                f"content check: {fname} {detail}  {branch_project}/{package_name}"
+            )
+        return not mismatches
     finally:
         shutil.rmtree(combined, ignore_errors=True)
         if workdir is not None:

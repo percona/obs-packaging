@@ -76,6 +76,15 @@ def _has_runnable_services(service_file: Path) -> bool:
     )
 
 
+def _has_cargo_vendor_service(service_file: Path) -> bool:
+    """Return True if *service_file* declares a cargo_vendor service."""
+    try:
+        root = ET.parse(service_file).getroot()
+    except (ET.ParseError, OSError):
+        return False
+    return any(svc.get("name") == "cargo_vendor" for svc in root.findall("service"))
+
+
 def _get_upstream_obs_scm_info(
     service_file: Path,
 ) -> tuple[str, str, str] | None:
