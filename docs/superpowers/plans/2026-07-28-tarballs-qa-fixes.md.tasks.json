@@ -36,13 +36,16 @@
     {
       "id": 19,
       "subject": "Task 19: acceptance battery round 5 (USER GATE)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         17,
         18,
         20
       ],
-      "description": "**Goal:** Full battery with QA flows as regression targets.\n\n**USER-ORDERED GATE - NON-SKIPPABLE.** Captured output for every criterion.\n\n**Files:** none (operational)\n\n**Acceptance Criteria:**\n- positional initdb -> /tmp socket; pgbench/pg_dump/pg_isready zero-env\n- bare `postgres -D` start: plperl use strict + pltclu + plpython3u all work\n- zero .pyc; 11 components; haproxy -v runs; bundled perl @INC shows /opt\n- carried-over regressions green (pgcrypto digest, pg_tde, patroni, psql debian:11, OPENSSL sweeps)\n- debian:11 (ssl1.1) + ubuntu:22.04 + ubuntu:24.04 (ssl3)\n\n**Verify:** containerized battery per variant with captured output\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"battery on 3 hosts\", \"acceptanceCriteria\": [\"QA flows pass\", \"carried-over regressions green\", \"evidence captured\"], \"userGate\": true, \"tags\": [\"user-gate\"], \"requireEvidenceTokens\": [[\"positional\", \"pgbench\"], [\"bare postgres\", \"use strict\"], [\"haproxy\"]], \"modelTier\": \"standard\"}\n```"
+      "description": "**Goal:** Full battery with QA flows as regression targets.\n\n**USER-ORDERED GATE - NON-SKIPPABLE.** Captured output for every criterion.\n\n**Files:** none (operational)\n\n**Acceptance Criteria:**\n- positional initdb -> /tmp socket; pgbench/pg_dump/pg_isready zero-env\n- bare `postgres -D` start: plperl use strict + pltclu + plpython3u all work\n- zero .pyc; 11 components; haproxy -v runs; bundled perl @INC shows /opt\n- carried-over regressions green (pgcrypto digest, pg_tde, patroni, psql debian:11, OPENSSL sweeps)\n- debian:11 (ssl1.1) + ubuntu:22.04 + ubuntu:24.04 (ssl3)\n\n**Verify:** containerized battery per variant with captured output\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"battery on 3 hosts\", \"acceptanceCriteria\": [\"QA flows pass\", \"carried-over regressions green\", \"evidence captured\"], \"userGate\": true, \"tags\": [\"user-gate\"], \"requireEvidenceTokens\": [[\"positional\", \"pgbench\"], [\"bare postgres\", \"use strict\"], [\"haproxy\"]], \"modelTier\": \"standard\"}\n```",
+      "notes": [
+        "Round-5 battery PASS 3/3 (debian:11 ssl1.1, ubuntu 22.04+24.04 ssl3): positional initdb, zero-env clients, BARE-postgres PL battery incl. plpython3u import ssl on host OpenSSL 3.0.2, haproxy, 0 bytecode, /run/postgresql never needed. Evidence in scratchpad pr2-round5/."
+      ]
     },
     {
       "id": 20,
@@ -51,5 +54,5 @@
       "description": "**Goal:** plpython3u `import ssl` works on OpenSSL-3.0 hosts (ssl3 variant) — CPython source patch (pgcrypto-Patch8 technique) forcing pre-3.3/pre-3.4 fallbacks so _ssl/_hashlib carry only OPENSSL_3.0.0 needs; spec %check pins it.\n\nUSER DECISION 2026-07-28: fix (option 2) rather than accept official-parity failure.\n\n**Files:**\n- Modify: root/ppg/common/deps/percona-tarball-python3/ (patch + spec)\n\n**Acceptance Criteria:**\n- EL9 _ssl/_hashlib readelf: no OPENSSL_3.[1-9] needs; EL8 unchanged\n- ubuntu:22.04 bare-postgres plpython3u DO import ssl: fails before, passes after\n- spec-level readelf assertion (loud rpmbuild failure on drift)\n\n**Verify:** before/after readelf + the ubuntu:22.04 e2e\n\n```json:metadata\n{\"files\": [\"root/ppg/common/deps/percona-tarball-python3/\"], \"verifyCommand\": \"ubuntu:22.04 plpython3u import ssl e2e\", \"acceptanceCriteria\": [\"3.0-only needs on EL9\", \"EL8 unchanged\", \"spec check pins promise\", \"e2e passes\"], \"modelTier\": \"standard\"}\n```"
     }
   ],
-  "lastUpdated": "2026-07-28T19:30:00"
+  "lastUpdated": "2026-07-29T10:30:00"
 }
