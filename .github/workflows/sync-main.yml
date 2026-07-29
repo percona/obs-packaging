@@ -42,6 +42,18 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
 
+      # Packages synced before the migration to percona/obs-packaging carry
+      # OBS sync comments whose SHAs come from the legacy repo's history and
+      # do not resolve in this clone, which forces --skip-unchanged off the
+      # cheap git gate into services + upload comparison for every such
+      # package.  Fetch the legacy history so those SHAs resolve; drop this
+      # step once all packages have been re-synced with percona SHAs.
+      - name: Fetch legacy repo history (pre-migration sync SHAs)
+        run: |
+          git fetch https://github.com/rjd15372/percona-obs-packaging.git \
+            'refs/heads/*:refs/remotes/legacy/*' \
+            || echo "::warning::legacy repo unreachable; sync falls back to content checks"
+
       # Persists the content-addressed .cache/ tree across runs, split in
       # two entries:
       #
