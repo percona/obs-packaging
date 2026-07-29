@@ -4,7 +4,7 @@
 #!BuildTag: percona-distribution-postgresql:<VERSION>
 #!BuildTag: percona-distribution-postgresql:%!{PG_VERSION}
 #!BuildTag: percona-distribution-postgresql:%!{PG_MAJOR_VERSION}
-
+#making this comment just to trigger this images build
 FROM percona-ubi-minimal:latest
 
 LABEL name="Percona Distribution for PostgreSQL" \
