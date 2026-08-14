@@ -8,8 +8,8 @@ name: OBS Nightly QA
 # (qa-badge-ppg-staging-18.json, ...) on the `badges` branch.
 
 on:
-  schedule:
-    - cron: '0 23 * * *'     # 23:00 UTC nightly
+  #schedule:
+    #- cron: '0 23 * * *'     # 23:00 UTC nightly
   workflow_dispatch: {}
 
 jobs:
