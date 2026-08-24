@@ -1,6 +1,12 @@
-golang-1.26 (%!{GOLANG_VERSION}-1) unstable; urgency=low
+golang-1.26 (%!{GOLANG_VERSION}-1) unstable; urgency=high
 
-  * Package Go %!{GOLANG_VERSION} binary distribution for Debian 13, Ubuntu 24.04, and UBI-9.
+  * Package Go %!{GOLANG_VERSION} binary distribution for Debian 13, Ubuntu 24.04, and UBI-9 (CVE fixes).
+
+ -- Percona Development Team <info@percona.com>  Mon, 24 Aug 2026 10:00:11 +0100
+
+golang-1.26 (1.26.5-1) unstable; urgency=low
+
+  * Package Go 1.26.5 binary distribution for Debian 13, Ubuntu 24.04, and UBI-9.
 
  -- Percona Development Team <info@percona.com>  Mon, 13 Jul 2026 10:00:11 +0100
 

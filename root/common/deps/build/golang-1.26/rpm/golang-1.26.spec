@@ -44,8 +44,11 @@ ln -sf /usr/local/go/bin/gofmt %{buildroot}%{_bindir}/gofmt
 %{_bindir}/gofmt
 
 %changelog
-* Mon Jul 13 2026 Percona Development Team <info@percona.com> - %!{GOLANG_VERSION}-1
-- Package Go %!{GOLANG_VERSION} binary distribution for RHEL based distributions
+* Mon Aug 24 2026 Percona Development Team <info@percona.com> - %!{GOLANG_VERSION}-1
+- Package Go %!{GOLANG_VERSION} binary distribution for RHEL based distributions (CVE fixes)
+
+* Mon Jul 13 2026 Percona Development Team <info@percona.com> - 1.26.5-1
+- Package Go 1.26.5 binary distribution for RHEL based distributions
 
 * Mon Jun 08 2026 Percona Development Team <info@percona.com> - 1.26.4-1
 - Package Go 1.26.4 binary distribution for RHEL based distributions
