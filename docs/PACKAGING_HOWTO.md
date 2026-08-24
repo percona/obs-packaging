@@ -452,6 +452,85 @@ OBS will show the package as `aggregate` in its package list and serve the binar
 
 ---
 
+## Bumping a Pinned Build-Dependency Tool Version (e.g. golang)
+
+Some build-dependency packages under `root/common/deps/build/` (e.g. `golang-1.26`) install a
+binary toolchain release rather than building from source. Their version is driven by a single
+macro in [`root/macros.yaml`](../root/macros.yaml) (e.g. `GOLANG_VERSION`), referenced everywhere
+else in the package as `%!{GOLANG_VERSION}` — `package.yaml`, `obs/_service` (download URL),
+`rpm/<name>.spec` (`Version:`, `Source0`/`Source1`, `%description`), and the Debian
+`control`/`debian.dsc`/`rules` files. Bumping the version (e.g. for a CVE fix) only requires
+touching two things:
+
+**1. Bump the macro:**
+
+```yaml
+# root/macros.yaml
+- GOLANG_VERSION: 1.26.6   # was 1.26.5
+```
+
+Every file that references `%!{GOLANG_VERSION}` picks up the new version automatically — no
+other packaging file needs a version edit.
+
+**2. Update the changelog files:**
+
+The RPM `%changelog` and Debian `changelog` each keep their **current** top entry written with
+the macro (`%!{GOLANG_VERSION}`) so it always reflects whatever version `macros.yaml` currently
+points at. Every older entry is frozen to a literal version number. When bumping:
+
+- Freeze the existing top entry: replace its `%!{GOLANG_VERSION}` text with the literal version
+  being replaced (e.g. `1.26.5`).
+- Add a new top entry above it, dated today, still using `%!{GOLANG_VERSION}`, describing the
+  reason for the bump (e.g. "CVE fixes").
+
+```rpmspec
+%changelog
+* Mon Aug 24 2026 Percona Development Team <info@percona.com> - %!{GOLANG_VERSION}-1
+- Package Go %!{GOLANG_VERSION} binary distribution for RHEL based distributions (CVE fixes)
+
+* Mon Jul 13 2026 Percona Development Team <info@percona.com> - 1.26.5-1
+- Package Go 1.26.5 binary distribution for RHEL based distributions
+```
+
+```
+golang-1.26 (%!{GOLANG_VERSION}-1) unstable; urgency=high
+
+  * Package Go %!{GOLANG_VERSION} binary distribution for Debian 13, Ubuntu 24.04, and UBI-9 (CVE fixes).
+
+ -- Percona Development Team <info@percona.com>  Mon, 24 Aug 2026 10:00:11 +0100
+
+golang-1.26 (1.26.5-1) unstable; urgency=low
+
+  * Package Go 1.26.5 binary distribution for Debian 13, Ubuntu 24.04, and UBI-9.
+
+ -- Percona Development Team <info@percona.com>  Mon, 13 Jul 2026 10:00:11 +0100
+```
+
+Use `urgency=high` for security-driven bumps.
+
+**3. Commit the changes and open a PR:**
+
+```bash
+git add root/macros.yaml root/common/deps/build/golang-1.26/rpm/golang-1.26.spec \
+        root/common/deps/build/golang-1.26/debian/changelog
+git commit -s -m "golang-1.26: bump to 1.26.6 (CVE fixes)"
+```
+
+OBS is not synced directly from a local checkout — syncing happens through a PR against
+[percona/obs-packaging](https://github.com/percona/obs-packaging). Push the branch and open a PR
+against `main`; the CI/sync automation on that PR pushes the change to OBS and triggers the
+rebuild.
+
+**4. Check downstream consumers before rebuilding them.**
+
+Packages that `BuildRequires`/`Build-Depends` on the tool (e.g. `percona-telemetry-agent`, `etcd`)
+typically pin only a floor version (`golang >= 1.26`), so they do not need a source change —
+only a rebuild once the new `golang-1.26` package is available, so they pick up the bumped
+toolchain. Grep for the package name across `root/` to confirm no consumer hardcodes an exact
+version before assuming this.
+
+---
+
 ## Quick Reference: File Checklist
 
 | File | Required | Notes |
