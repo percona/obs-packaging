@@ -32,7 +32,6 @@ BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c+
 BuildRequires: chrpath
 %endif
 
-Requires:       percona-telemetry-agent
 Conflicts:      %{sname}%{pgrel}
 Obsoletes:      %{sname}%{pgrel} <= %{version}-%{release}
 Epoch:          1
@@ -80,11 +79,10 @@ if [ $1 == 1 ]; then
 fi
 
 %post -n %{sname}%{pgrel}
-if getent group percona-telemetry > /dev/null 2>&1; then
-  usermod -a -G percona-telemetry postgres || :
-  install -d -m 2775 -o postgres -g percona-telemetry /usr/local/percona/telemetry/pg || :
-else
-  install -d -m 2775 -o postgres -g postgres /usr/local/percona/telemetry/pg || :
+# Transitional cleanup: percona-pg-telemetry <= 1.1 managed this dir for the
+# telemetry-agent. The extension no longer uses it. Remove in a future release.
+if [ -d /usr/local/percona/telemetry/pg ] && [ -z "$(ls -A /usr/local/percona/telemetry/pg 2>/dev/null)" ]; then
+    rmdir /usr/local/percona/telemetry/pg 2>/dev/null || :
 fi
 %if 0%{?suse_version}
 # Update dynamic linker cache for new library path
@@ -92,7 +90,6 @@ fi
 %endif
 
 %postun -n %{sname}%{pgrel}
-rm -rf /usr/local/percona/telemetry/pg
 %if 0%{?suse_version}
 # Update dynamic linker cache after package removal
 /sbin/ldconfig

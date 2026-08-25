@@ -17,11 +17,11 @@ BuildRequires:	gcc openssl-devel zlib-devel percona-postgresql%{pgmajorversion}-
 BuildRequires:	libzstd-devel libxml2-devel libyaml-devel meson
 
 %if 0%{?suse_version} >= 1500
-Requires:	libopenssl3
+Requires:	libopenssl3 libsystemd0
 BuildRequires:	libopenssl-3-devel
 %endif
 %if 0%{?fedora} >= 42 || 0%{?rhel} >= 8
-Requires:	openssl-libs >= 1.1.1k
+Requires:	openssl-libs >= 1.1.1k systemd-libs
 BuildRequires:	openssl-devel
 %endif
 
@@ -30,7 +30,7 @@ Requires:	lz4-libs libzstd
 BuildRequires:	lz4-devel bzip2-devel ninja-build
 %endif
 %if 0%{?suse_version} && 0%{?suse_version} >= 1500
-Requires:	liblz4-1 libzstd1
+Requires:	liblz4-1 libzstd1 libsystemd0
 BuildRequires:	liblz4-devel libbz2-devel ninja
 %endif
 
