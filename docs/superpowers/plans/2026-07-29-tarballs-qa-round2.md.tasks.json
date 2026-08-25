@@ -10,13 +10,13 @@
     {
       "id": 22,
       "subject": "Task 22: percona-gdal + percona-proj (lean, /opt, RL8+RL9)",
-      "status": "in_progress",
+      "status": "completed",
       "description": "**Goal:** Lean from-source GDAL (3.0.4 EL8 / 3.4.3 EL9, sonames .26/.30) and PROJ (6.3.2 / 9.6.0, sonames .15/.25) with official's driver set and compiled /opt data paths; drop-in for EPEL libs inside the tarball.\n\n**Files:**\n- Create: root/ppg/common/deps/percona-proj/, root/ppg/common/deps/percona-gdal/\n\n**Acceptance Criteria:**\n- NEEDED surface ~ official (no armadillo/flexiblas/hdf/netcdf/dap/poppler/mariadb/odbc/kml/xerces/tirpc)\n- compiled data paths; proj.db present; dlopen smoke OK from env -i\n- ABI drop-in: postgis + postgis_raster load; ST_Transform works (both bases)\n- dry-runs clean\n\n**Verify:** rocky8/rocky9 containers: CREATE EXTENSION postgis_raster + ST_Transform green\n\n```json:metadata\n{\"files\": [\"root/ppg/common/deps/percona-gdal/\", \"root/ppg/common/deps/percona-proj/\"], \"verifyCommand\": \"postgis_raster load + ST_Transform on both bases\", \"acceptanceCriteria\": [\"lean NEEDED\", \"data paths compiled\", \"ABI drop-in proven\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 23,
       "subject": "Task 23: build-tarball.sh: consume gdal/proj/psql, baseline exclusions, dlopen gate",
-      "status": "pending",
+      "status": "in_progress",
       "blockedBy": [
         21,
         22
@@ -43,5 +43,5 @@
       "description": "**Goal:** After user pushes and pr-2 rebuilds: Task-24 battery on full matrix; QA's three flows explicitly green; carried-over regressions green.\n\n**USER-ORDERED GATE - NON-SKIPPABLE.** Captured output for every criterion.\n\n**Files:** none\n\n**Acceptance Criteria:**\n- every extension loads on every host (debian 11/12, ubuntu 22.04/24.04, rocky9/10-minimal)\n- postgis_raster loads RHEL-family + Debian-family; no crash Rocky 9/10; psql works Debian 11 w/o readline\n- carried-over regressions green\n\n**Verify:** battery evidence\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"tools/tarball-acceptance.sh on matrix\", \"acceptanceCriteria\": [\"all extensions load\", \"QA flows green\", \"regressions green\"], \"userGate\": true, \"tags\": [\"user-gate\"], \"requireEvidenceTokens\": [[\"postgis_raster\"], [\"debian:11\", \"psql\"], [\"minimal\"]], \"modelTier\": \"standard\"}\n```"
     }
   ],
-  "lastUpdated": "2026-07-29T13:30:00"
+  "lastUpdated": "2026-07-29T15:00:00"
 }
