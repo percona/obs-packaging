@@ -110,7 +110,11 @@ done
 # If this fires, some package still pulls a distro GDAL/PROJ in by name — the
 # rpm -qf / --whatrequires output below names it, and it needs its own
 # Ignore: line.
-stray_gis=$(ls /usr/lib64/libgdal.so.* /usr/lib64/libproj.so.* 2>/dev/null)
+# (|| true inside the substitution: with no match the globs stay literal
+# and ls exits 2, which under set -e would abort the assignment itself —
+# i.e. every CLEAN build would die here, silently. Same trap as PY_BIN
+# above. The `if` below is the only gate.)
+stray_gis=$(ls /usr/lib64/libgdal.so.* /usr/lib64/libproj.so.* 2>/dev/null || true)
 if [ -n "$stray_gis" ]; then
     echo "FATAL: a distro GDAL/PROJ runtime is installed in the chroot — it must be replaced by percona-gdal/percona-proj (prjconf Prefer:/Ignore:, see the comment above this check)" >&2
     for f in $stray_gis; do
