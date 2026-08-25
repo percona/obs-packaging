@@ -41,7 +41,7 @@ override_dh_auto_build:
 	# doc/resource/exe.cache; upstream only refreshes the cache at release
 	# time, so on main the cache keys go stale (--cache-only forbids a
 	# reset). Exclude it like backlog.
-	perl $(CURDIR)/doc/doc.pl --out=man --out=html --cache-only \
+	python3 $(CURDIR)/doc/doc.py --out=man --out=html --cache-only \
 	  --var=project-url-root=index.html --exclude=backlog \
 	  --exclude=user-guide
 	txt2man \
