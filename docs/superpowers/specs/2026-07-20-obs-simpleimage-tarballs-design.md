@@ -470,7 +470,9 @@ verbatim with macro expansion (a package is any dir with an `obs/` subdir —
    2026-07-29)*. It runs the PR-project artifact on the variant's **minimal**
    images (`debian:11-slim`/`ubuntu:20.04` for ssl1.1;
    `debian:12-slim`, `ubuntu:22.04`, `ubuntu:24.04`,
-   `rockylinux:9-minimal`, `rockylinux:10-minimal` for ssl3) installing
+   `rockylinux/rockylinux:9-minimal`, `rockylinux/rockylinux:10-minimal` for
+   ssl3 — the fully-qualified Docker Hub names; the short `rockylinux:` repo
+   stops at 9) installing
    nothing but the two documented prerequisites, follows the docs install flow
    (copy **all** `percona-*` dirs to `/opt`, non-root user), starts a bare
    `postgres -D` under `env -i`, and then sweeps `CREATE EXTENSION` over
