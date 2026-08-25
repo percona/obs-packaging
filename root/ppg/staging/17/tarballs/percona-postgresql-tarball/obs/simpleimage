@@ -23,6 +23,30 @@ BuildRequires:  percona-pgvector_%!{PG_MAJOR_VERSION}
 BuildRequires:  percona-postgis35_%!{PG_MAJOR_VERSION}
 BuildRequires:  percona-pg-telemetry%!{PG_MAJOR_VERSION}
 BuildRequires:  percona-pg_gather
+# Tarball-only helper packages (2026-07 QA round).
+#
+# percona-psql: the psql client rebuilt from the same PostgreSQL source with
+# --with-libedit-preferred, so it links BSD libedit instead of the host's
+# GNU readline. build-tarball.sh copies /usr/libexec/percona-psql/psql over
+# the server RPM's bin/psql (a non-conflicting path, so both RPMs coexist
+# here) and the tarball's readline LD_PRELOAD/symlink wrapper is gone. Built
+# in THIS project's RockyLinux_8/RockyLinux_9 repos, which each ssl repo
+# lists as its first path, so it always matches the tarball's EL base.
+#
+# percona-gdal / percona-proj (ppg:common:deps): lean, /opt-prefixed GDAL and
+# PROJ runtimes for the bundled PostGIS libraries. They satisfy PostGIS's
+# libgdal.so.NN()(64bit) / libproj.so.NN()(64bit) Requires instead of EPEL's
+# gdal-libs/proj — that is a "have choice" for the expander, resolved by the
+# `Prefer: percona-gdal` / `Prefer: percona-proj` lines in this project's
+# project-config. EPEL's chain dragged ~70 surplus shared objects into the
+# artifact (armadillo/BLAS, whose FlexiBLAS ELF constructor abort()s on
+# Rocky hosts, plus hdf/netcdf/OPeNDAP/poppler/xerces/ODBC/mariadb and
+# libtirpc/libexpat/libpcre2-posix) and compiled its resource paths to
+# /usr/share/{gdal,proj}, which no tarball host has. build-tarball.sh
+# section 0a fails the build if either EPEL package is in the chroot anyway.
+BuildRequires:  percona-psql
+BuildRequires:  percona-gdal
+BuildRequires:  percona-proj
 # Companion tools
 BuildRequires:  percona-pgbouncer
 BuildRequires:  percona-pgpool-II-pg%!{PG_MAJOR_VERSION}
