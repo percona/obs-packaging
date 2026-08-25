@@ -22,8 +22,8 @@ below have been updated where they described the superseded mechanisms:
    longest-first replacement-pattern table.
 2. **Zero-env PL languages** (c4beb06, 4ce65ba, 5fe49b2, e08a04f):
    from-source `/opt`-prefixed runtime packages in `ppg:common:deps` —
-   `percona-tarball-perl` (5.26.3 EL8 / 5.32.1 EL9), `percona-tarball-tcl`
-   (8.6.10), `percona-tarball-python3` (3.12.13) — with every path compiled
+   `percona-perl` (5.26.3 EL8 / 5.32.1 EL9), `percona-tcl`
+   (8.6.10), `percona-python3` (3.12.13) — with every path compiled
    to the `/opt` prefix; plperl/pltcl/plpython3 resolve them via RUNPATHs, so
    all three PLs work under a bare `postgres -D` start from an empty
    environment. The postgres/initdb/psql-`PGHOST`/python3/tclsh wrappers are
@@ -38,7 +38,7 @@ below have been updated where they described the superseded mechanisms:
 5. **Python bytecode stripped** (e08a04f): zero `.pyc`/`__pycache__` in the
    artifact (official also ships none); gate-enforced.
 6. **`import ssl` on ALL OpenSSL 3.x hosts** (84e3ec1, beats official
-   parity): `percona-tarball-python3` patches CPython's `_ssl`/`_hashlib` to
+   parity): `percona-python3` patches CPython's `_ssl`/`_hashlib` to
    stay at `OPENSSL_3.0.0` versioned symbols; a spec `%check` gate pins the
    promise. The official tarball's python fails `import ssl` on 3.0 hosts.
 
@@ -236,7 +236,7 @@ Notes:
 
 - *(2026-07-28: the distro `perl`/`perl-libs`/`perl-devel`/`tcl`/`tcl-devel`
   runtime BuildRequires shown above were replaced by
-  `percona-tarball-{perl,tcl,python3}`, and `percona-haproxy` was added — the
+  `percona-{perl,tcl,python3}`, and `percona-haproxy` was added — the
   synced `obs/simpleimage` is the current list; the block above is kept as the
   original design snapshot.)*
 - The exact RPM names above (`percona-pgvector_…`, `percona-postgis35_…`,
@@ -283,7 +283,7 @@ after OBS installs the BuildRequires closure:
      compiled extensions match the bundled runtime).
    - `percona-etcd`: static Go binaries, no `lib/`.
    - `percona-python3`, `percona-perl`, `percona-tcl`: *(revised 2026-07-28)*
-     installed directly into `/opt` by the `percona-tarball-{python3,perl,tcl}`
+     installed directly into `/opt` by the `percona-{python3,perl,tcl}`
      BuildRequires — from-source builds whose every path (`sys.prefix`, `@INC`,
      `TCL_LIBRARY`) is compiled to the `/opt` prefix, so no flattening from
      system locations and no env-var wrappers. The script only asserts the
@@ -437,7 +437,7 @@ verbatim with macro expansion (a package is any dir with an `obs/` subdir —
   (original design, removed 2026-07-28):** broke whenever the server was
   started without the wrapper (bare `postgres -D` — the QA repro), and its
   `PYTHONHOME` leaked into every server child (`archive_command` etc.).
-  Superseded by the `/opt`-prefixed `percona-tarball-*` runtimes with
+  Superseded by the `/opt`-prefixed `percona-*` runtimes with
   compiled-in paths.
 - **initdb wrapper + psql `PGHOST` export for the `/tmp` socket (removed
   2026-07-28):** the initdb wrapper missed the positional `initdb DATADIR`
