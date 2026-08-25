@@ -728,11 +728,23 @@ elif ! out=$(q "$GIS_DB" "CREATE EXTENSION postgis CASCADE; CREATE EXTENSION pos
     server_alive || { stop_server; start_server >/dev/null 2>&1 || true; }
 else
     gis_fail=""
+    gis_warn=""
     full=$(q "$GIS_DB" "SELECT postgis_full_version();")
+    # PostGIS only appends the "DATABASE_PATH=" suffix to the PROJ version it
+    # reports above a PROJ version floor (it comes from proj_context_get_
+    # database_path(), PROJ >= 7). ssl1.1 links PROJ 6.3.2, so the suffix is
+    # legitimately absent there — that is a WARN, not a failure. What is NOT
+    # acceptable is the suffix naming some OTHER proj.db: that means PostGIS
+    # found a distro PROJ database instead of the bundled one.
     case "$full" in
-        *"DATABASE_PATH=/opt/percona-proj/share/proj/proj.db"*) ;;
-        *) gis_fail="$gis_fail full_version-proj-db"
-           failure postgis proj-db "postgis_full_version() lacks DATABASE_PATH=/opt/percona-proj/share/proj/proj.db: $full" ;;
+        *"DATABASE_PATH=/opt/percona-proj/share/proj/proj.db"*)
+            ;;
+        *DATABASE_PATH=*)
+            gis_fail="$gis_fail full_version-proj-db"
+            failure postgis proj-db "postgis_full_version() reports a DATABASE_PATH outside /opt/percona-proj: $full" ;;
+        *)
+            gis_warn="$gis_warn no-proj-db-path"
+            say "NOTE: postgis_full_version() prints no DATABASE_PATH= (PROJ too old to report it) — ST_Transform below is the proj.db proof" ;;
     esac
     case "$full" in
         *GDAL*) ;;
@@ -773,6 +785,8 @@ else
 
     if [ -n "$gis_fail" ]; then
         result postgis FAIL "$gis_fail"
+    elif [ -n "$gis_warn" ]; then
+        result postgis PASS "full_version+ST_Transform+raster+GDAL_DATA (warn:$gis_warn)"
     else
         result postgis PASS "full_version+ST_Transform+raster+GDAL_DATA"
     fi
@@ -813,26 +827,91 @@ if ! out=$(echo '\conninfo' | tmo 60 env -i "$BIN/psql" -X -d postgres 2>&1) || 
     psql_fail="$psql_fail pipe"
     failure psql pipe "$(echo "$out" | tr '\n' ' ' | cut -c1-250)"
 fi
+# A pty is what makes psql initialise its line editor; this is the check that
+# proves libedit works with NO readline installed on the host — precisely the
+# thing rockylinux:*-minimal (util-linux-core, i.e. no script(1)) most needs
+# proving. So when script(1) is missing, fall back to a pty driven by the
+# artifact's OWN bundled python (host python3 is absent from minimal images
+# too), and only degrade the cell if that fails as well.
+PTY_MODE=""
+pty_run() {
+    # The query is 41+1, not 42, on purpose: a pty echoes whatever is written
+    # to it, so the *input* line comes back in the captured output too. Only
+    # the computed "42" proves psql actually ran the statement through its
+    # interactive line editor.
+    printf '\\conninfo\nSELECT 41+1 AS pty_check;\n\\q\n' | tmo 90 "$@" 2>&1
+}
+pty_ran() { echo "$1" | tr -d '\r' | grep -qE '^[[:space:]]*42[[:space:]]*$'; }
+PY_BUNDLED=$OPT/percona-python3/bin/python3
 if command -v script >/dev/null 2>&1; then
-    # A pty is what makes psql initialise its line editor; this is the check
-    # that proves libedit works with NO readline installed on the host.
-    out=$(printf '\\conninfo\nSELECT 42 AS pty_check;\n\\q\n' | \
-          tmo 90 env -i TERM=xterm script -q -c "$BIN/psql -X -P pager=off -d postgres" /dev/null 2>&1)
-    if ! echo "$out" | grep -q 'pty_check'; then
-        psql_fail="$psql_fail pty"
-        failure psql pty "interactive psql under a pty did not run the query: $(echo "$out" | tr '\n' ' ' | cut -c1-250)"
-    fi
+    PTY_MODE="script"
+    out=$(pty_run env -i TERM=xterm script -q -c "$BIN/psql -X -P pager=off -d postgres" /dev/null)
+elif [ -x "$PY_BUNDLED" ]; then
+    PTY_MODE="bundled-python"
+    # Feeds stdin through a real pty and echoes everything psql writes back.
+    cat > "$WORK/pty_psql.py" <<'PYEOF'
+import os, pty, select, sys, time
+argv = sys.argv[1:]
+data = sys.stdin.buffer.read()
+pid, fd = pty.fork()
+if pid == 0:
+    os.environ.clear()
+    os.environ["TERM"] = "xterm"
+    os.execv(argv[0], argv)
+os.write(fd, data)
+out = b""
+deadline = time.time() + 60
+while time.time() < deadline:
+    try:
+        r = select.select([fd], [], [], 1)[0]
+    except OSError:
+        break
+    if r:
+        try:
+            chunk = os.read(fd, 4096)
+        except OSError:
+            break
+        if not chunk:
+            break
+        out += chunk
+    else:
+        try:
+            if os.waitpid(pid, os.WNOHANG)[0]:
+                break
+        except ChildProcessError:
+            break
+try:
+    os.waitpid(pid, 0)
+except (ChildProcessError, OSError):
+    pass
+sys.stdout.buffer.write(out)
+PYEOF
+    say "NOTE: 'script' absent from this image — driving the pty with the artifact's own python3"
+    out=$(pty_run env -i "$PY_BUNDLED" "$WORK/pty_psql.py" \
+              "$BIN/psql" -X -P pager=off -d postgres)
 else
-    say "NOTE: 'script' absent from this image — interactive (pty) psql check skipped"
-    psql_fail="$psql_fail pty-skipped"
+    PTY_MODE="none"
+    out=""
+    say "NOTE: no pty driver in this image (no script(1), no bundled python3) — interactive psql check skipped"
 fi
+case "$PTY_MODE" in
+    none)
+        psql_fail="$psql_fail pty-skipped" ;;
+    *)
+        if ! pty_ran "$out"; then
+            psql_fail="$psql_fail pty"
+            failure psql pty "interactive psql under a pty ($PTY_MODE) did not run the query: $(echo "$out" | tr '\n' ' ' | cut -c1-250)"
+        fi ;;
+esac
 if [ -n "$psql_fail" ]; then
     case "$psql_fail" in
-        " pty-skipped") result psql PASS "pipe mode OK (pty check unavailable in this image)" ;;
+        # "PASS*" (not plain PASS) so the matrix cell itself says the pty leg
+        # of this check never ran; the host side prints the legend line.
+        " pty-skipped") result psql "PASS*" "pipe mode OK (no pty driver available in this image)" ;;
         *) result psql FAIL "failed:$psql_fail" ;;
     esac
 else
-    result psql PASS "pipe + pty, no host readline"
+    result psql PASS "pipe + pty ($PTY_MODE), no host readline"
 fi
 
 # --- bundled clients and tools, zero env ---------------------------------
@@ -1121,6 +1200,12 @@ while IFS='|' read -r h server psql ext gis pls clients; do
     printf '%-46s %-9s %-9s %-13s %-9s %-9s %-9s\n' \
         "$h" "$server" "$psql" "$ext" "$gis" "$pls" "$clients"
 done < "$MATRIX"
+# A "PASS*" cell is a pass whose pty leg could not be exercised (see the
+# guest battery's psql section): neither script(1) nor the artifact's bundled
+# python3 was usable as a pty driver on that image.
+if grep -q 'PASS\*' "$MATRIX"; then
+    echo "  * pty check unavailable on this image (no script(1) and no usable bundled python3 pty driver)"
+fi
 echo
 echo "host checks: components=$RES_COMPONENTS psql-link=$RES_PSQL_LINK needed=$RES_NEEDED surplus=$RES_SURPLUS"
 echo "logs: $WORKDIR"

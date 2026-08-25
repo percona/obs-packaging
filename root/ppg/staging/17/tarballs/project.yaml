@@ -122,6 +122,19 @@ project-config: |
   # host has. build-tarball.sh asserts EPEL's are absent from the chroot.
   Prefer: percona-gdal
   Prefer: percona-proj
+  # ...but `Prefer:` only breaks TIES between providers of the SAME symbol.
+  # PostGIS also requires the distro GDAL/PROJ *by name* (rpmspec -P on
+  # root/ppg/staging/%!{PG_MAJOR_VERSION}/percona-postgis/rpm/percona-postgis.spec:
+  # `Requires: gdal-libs >= 3.0.4`, `Requires: gdal-libs` and
+  # `Requires: geos proj libgeotiff` on EL8; `gdal3.4-libs` on EL9 — all in
+  # the main percona-postgis35_%!{PG_MAJOR_VERSION} package, no subpackage).
+  # A by-name Requires has exactly one provider, so there is no choice for
+  # Prefer to resolve and EPEL's fat gdal-libs/proj land in the chroot
+  # regardless — where copy_deps is free to bundle them and where
+  # build-tarball.sh section 0a aborts the build. Drop those specific edges
+  # instead; the soname Requires above (resolved by the Prefer: lines) still
+  # pull a real GDAL/PROJ in, namely ours.
+  Ignore: percona-postgis35_%!{PG_MAJOR_VERSION}:gdal-libs,proj
   # glibc requires the virtual "glibc-langpack"; every glibc-langpack-*
   # (plus glibc-all-langpacks and glibc-minimal-langpack) provides it, and
   # image-type expansion resolves the full runtime closure while ignoring
@@ -135,17 +148,33 @@ project-config: |
   Type: simpleimage
   # Explicit binary format (see the ssl1.1 comment).
   Binarytype: rpm
-  # Same choice-resolution as staging RockyLinux_9 (hdf-libs vs hdf both
-  # provide libdf.so.0 — pulled in via the PostGIS/gdal dependency chain).
-  # Kept, but expected to be inert now: percona-gdal (below) is built
-  # --without-hdf4/hdf5, so nothing should pull the hdf chain into this
-  # chroot any more. A Prefer for a choice that never arises costs nothing.
+  # Same choice-resolution as staging RockyLinux_9: hdf-libs and hdf both
+  # provide libdf.so.0. This is LIVE, not a leftover — percona-gdal is built
+  # --without-hdf4/hdf5 so the gdal chain no longer drags hdf in, but PostGIS
+  # itself carries `Requires: hdf5` by name, and hdf5 requires libdf.so.0.
+  # Without this line the ssl3 chroot fails to resolve with "have choice for
+  # libdf.so.0()(64bit) needed by hdf5". (hdf5 is small and is NOT worth an
+  # Ignore: rule — nothing in the tarball bundles it, section 0a only guards
+  # the GDAL/PROJ names.)
   Prefer: hdf-libs
   # See the ssl1.1 block: our lean /opt GDAL+PROJ must win the
   # libgdal.so.NN()(64bit)/libproj.so.NN()(64bit) choice over EPEL's
   # gdal-libs/proj.
   Prefer: percona-gdal
   Prefer: percona-proj
+  # ...but `Prefer:` only breaks TIES between providers of the SAME symbol.
+  # PostGIS also requires the distro GDAL/PROJ *by name* (rpmspec -P on
+  # root/ppg/staging/%!{PG_MAJOR_VERSION}/percona-postgis/rpm/percona-postgis.spec:
+  # `Requires: gdal-libs >= 3.0.4`, `Requires: gdal-libs` and
+  # `Requires: geos proj libgeotiff` on EL8; `gdal3.4-libs` on EL9 — all in
+  # the main percona-postgis35_%!{PG_MAJOR_VERSION} package, no subpackage).
+  # A by-name Requires has exactly one provider, so there is no choice for
+  # Prefer to resolve and EPEL's fat gdal-libs/proj land in the chroot
+  # regardless — where copy_deps is free to bundle them and where
+  # build-tarball.sh section 0a aborts the build. Drop those specific edges
+  # instead; the soname Requires above (resolved by the Prefer: lines) still
+  # pull a real GDAL/PROJ in, namely ours.
+  Ignore: percona-postgis35_%!{PG_MAJOR_VERSION}:gdal3.4-libs,proj
   # Same glibc-langpack choice as ssl1.1 above: the EL9 base configs carry
   # only "Ignore: glibc:glibc-langpack" (no Prefer), which image-type
   # expansion ignores.

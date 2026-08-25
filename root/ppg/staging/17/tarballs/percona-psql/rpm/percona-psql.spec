@@ -23,6 +23,20 @@
 # simpleimage chroot.  build-tarball.sh copies this one over it.
 %global psqldir        %{_libexecdir}/percona-psql
 
+# PERCONA: drop the automatic libpq.so.5()(64bit) dependency.
+#
+# In the ssl1.1/ssl3 simpleimage chroots that symbol has TWO providers —
+# percona-postgresql%%{pgmajorversion}-libs and Rocky's own `libpq` — which
+# makes the auto-requires a "have choice" the expander cannot resolve without
+# yet another prjconf Prefer:.  Excluding it is correct rather than merely
+# convenient: this binary is never installed for its own sake, it is copied
+# into the tarball (which bundles its libpq next to it, with psql's RUNPATH
+# rewritten to $ORIGIN/../lib), and the only chroot that ever installs the
+# RPM already has percona-postgresql%%{pgmajorversion}-libs in it via the
+# tarball recipe's explicit BuildRequires.  The %%check section below still
+# asserts the NEEDED entry is there, so the link itself stays verified.
+%global __requires_exclude ^libpq\\.so
+
 Summary:        PostgreSQL interactive terminal linked against libedit
 Name:           percona-psql
 # Placeholder: rewritten by the OBS set_version source service (see obs/_service).
