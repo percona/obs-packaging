@@ -49,9 +49,9 @@
 **Goal:** Three from-source packages in `ppg:common:deps` installing complete runtimes under `/opt/percona-{perl,tcl,python3}` with compiled-in `/opt` paths, so `plperl.so`/`pltcl.so`/`plpython3.so` (RPM-built, unmodified) resolve their interpreter + stdlib without any environment variables.
 
 **Files:**
-- Create: `root/ppg/common/deps/percona-tarball-perl/{obs/_service,rpm/*.spec,package.yaml}`
-- Create: `root/ppg/common/deps/percona-tarball-tcl/{...}`
-- Create: `root/ppg/common/deps/percona-tarball-python3/{...}`
+- Create: `root/ppg/common/deps/percona-perl/{obs/_service,rpm/*.spec,package.yaml}`
+- Create: `root/ppg/common/deps/percona-tcl/{...}`
+- Create: `root/ppg/common/deps/percona-python3/{...}`
 
 **Design constraints (load-bearing):**
 - **perl:** version MUST equal the distro perl per base — 5.26.3 (RL8) / 5.32.1 (RL9) — because `plperl.so` links the distro libperl ABI. Both upstream tarballs as Sources (download_url); spec `%if 0%{?rhel}` selects. Configure with **Rocky's own Configure flags minus path flags** (copy from the Rocky perl SRPM spec: usethreads, useshrplib, 64bitint, etc. — ABI must match what plperl.so was compiled against), overriding `-Dprefix=/opt/percona-perl -Dprivlib=/opt/percona-perl/lib/%{pver} -Darchlib=/opt/percona-perl/lib/%{pver}` (flat layout → `libperl.so` lands at `/opt/percona-perl/lib/<ver>/CORE/`, exactly where plperl.so's existing RUNPATH points).
@@ -71,7 +71,7 @@
 **Goal:** Tarball consumes the new /opt runtime packages; env-var wrappers gone; haproxy component added; no bytecode litter.
 
 **Files:**
-- Modify: `obs/simpleimage` (BuildRequires: + percona-tarball-{perl,tcl,python3}, + percona-haproxy; drop distro `perl`/`tcl`/`python3.12` runtime BuildRequires that only served the flatten logic — KEEP the `python3.12-*` dep packages for patroni's site-packages and keep `-devel` only if the gate/tools need it)
+- Modify: `obs/simpleimage` (BuildRequires: + percona-{perl,tcl,python3}, + percona-haproxy; drop distro `perl`/`tcl`/`python3.12` runtime BuildRequires that only served the flatten logic — KEEP the `python3.12-*` dep packages for patroni's site-packages and keep `-devel` only if the gate/tools need it)
 - Modify: `obs/build-tarball.sh`
 
 **Changes:**

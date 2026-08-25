@@ -152,7 +152,7 @@ The `ssl3` promise ("runs on any OpenSSL 3.0 host") holds on the EL9 base —
 whose own OpenSSL is 3.5.x since Rocky 9.8 — because the built binaries are
 pinned to `OPENSSL_3.0.0` symbol-version nodes at the source: staging
 `percona-postgresql` patches pgcrypto to avoid an OpenSSL 3.4-only API, and
-`percona-tarball-python3` patches CPython's `_ssl`/`_hashlib` the same way, so
+`percona-python3` patches CPython's `_ssl`/`_hashlib` the same way, so
 `plpython3u`'s `import ssl` works on every 3.x host (the official tarball's
 own python fails that on 3.0 hosts). The builder's verification gate enforces
 exactly that per variant. (An interim Ubuntu 22.04 deb-based `ssl3` was tried
@@ -190,8 +190,8 @@ environment variables:
   exactly like the official binaries. No `PGHOST`, no `/run/postgresql`.
 - **Zero-env PL languages.** `plperl.so`/`pltcl.so`/`plpython3.so` carry
   RUNPATHs pointing at from-source `/opt`-prefixed runtimes built in
-  `ppg:common:deps` (`root/ppg/common/deps/`): `percona-tarball-perl`,
-  `percona-tarball-tcl` (8.6.10) and `percona-tarball-python3` (3.12.13).
+  `ppg:common:deps` (`root/ppg/common/deps/`): `percona-perl`,
+  `percona-tcl` (8.6.10) and `percona-python3` (3.12.13).
   Every path (`@INC`, `TCL_LIBRARY`, `sys.prefix`) is compiled into those
   runtimes, so all three PLs work even under a bare `postgres -D` start from
   an empty environment. The only wrapper left in the artifact is psql's

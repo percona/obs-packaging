@@ -48,7 +48,7 @@
 %global _python_bytecompile_extra 0
 %global _python_bytecompile_errors_terminate_build 0
 
-Name:           percona-tarball-python3
+Name:           percona-python3
 Version:        3.12.13
 Release:        2%{?dist}
 Summary:        CPython runtime under /opt/percona-python3 for the Percona PostgreSQL binary tarball

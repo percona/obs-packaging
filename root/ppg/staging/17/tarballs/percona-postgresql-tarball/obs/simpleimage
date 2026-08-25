@@ -44,9 +44,9 @@ BuildRequires:  python3-pysyncobj
 # are gone; the python3.12 interpreter still reaches the chroot
 # transitively (the python3.12-* site-packages packages below require it),
 # which is what build-tarball.sh's own ELF-patch helper runs on.
-BuildRequires:  percona-tarball-perl
-BuildRequires:  percona-tarball-tcl
-BuildRequires:  percona-tarball-python3
+BuildRequires:  percona-perl
+BuildRequires:  percona-tcl
+BuildRequires:  percona-python3
 # python3.12-* DEPENDENCY packages are kept: they install patroni's
 # site-packages under /usr/lib{,64}/python3.12/site-packages regardless of
 # which interpreter ships in the tarball (section 8 of build-tarball.sh

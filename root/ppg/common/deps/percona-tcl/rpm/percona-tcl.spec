@@ -32,7 +32,7 @@
 # PERCONA: keep /opt shebangs untouched.
 %undefine __brp_mangle_shebangs
 
-Name:           percona-tarball-tcl
+Name:           percona-tcl
 Version:        8.6.10
 Release:        1%{?dist}
 Summary:        Tcl runtime under /opt/percona-tcl for the Percona PostgreSQL binary tarball

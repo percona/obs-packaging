@@ -30,9 +30,9 @@ TCL_PREFIX=/opt/percona-tcl
 HAPROXY_PREFIX=/opt/percona-haproxy
 
 ###############################################################
-# 0. Language runtimes installed by the percona-tarball-* RPMs
+# 0. Language runtimes installed by the percona-* RPMs
 ###############################################################
-# The percona-tarball-{perl,tcl,python3} BuildRequires install COMPLETE
+# The percona-{perl,tcl,python3} BuildRequires install COMPLETE
 # from-source runtime trees at /opt/percona-{perl,tcl,python3} with every
 # path compiled to the /opt prefix. That is what makes plperl/pltcl/
 # plpython3 work with ZERO environment variables (QA items 3-5): the PL
@@ -56,7 +56,7 @@ for f in "$PYTHON_PREFIX/bin/python3" \
          "$TCL_PREFIX/bin/tclsh${TCL_VER}" \
          "$TCL_PREFIX/lib/libtcl${TCL_VER}.so" \
          "$TCL_PREFIX/lib/tcl${TCL_VER}/init.tcl"; do
-    [ -e "$f" ] || { echo "FATAL: runtime file $f missing — percona-tarball-* RPM not installed?" >&2; exit 1; }
+    [ -e "$f" ] || { echo "FATAL: runtime file $f missing — percona-* RPM not installed?" >&2; exit 1; }
 done
 # patroni's site-packages come from the distro python3.12-* packages
 # (section 8) and are only compatible if their X.Y equals the bundled
@@ -196,7 +196,7 @@ patch_rpath() {
 ###############################################################
 # Only the SCRIPT-STAGED components are created here. The three language
 # runtimes (percona-python3, percona-perl, percona-tcl) are installed into
-# /opt by their percona-tarball-* RPMs (asserted in section 0) — creating
+# /opt by their percona-* RPMs (asserted in section 0) — creating
 # them here would mask a missing runtime package.
 for tool in percona-postgresql${PG_MAJOR} percona-pgbouncer percona-pgpool-II \
             percona-pgbackrest percona-pgbadger percona-patroni \
@@ -326,7 +326,7 @@ chmod +x $PG_PREFIX/bin/psql
 
 # NOTE: postgres is shipped as the REAL binary — no env wrapper. The
 # PERL5LIB/TCL_LIBRARY/PYTHONHOME exports the old wrapper carried are now
-# compiled into the /opt runtime trees themselves (percona-tarball-* RPMs,
+# compiled into the /opt runtime trees themselves (percona-* RPMs,
 # see section 0), and QA proved any wrapper bypass (pg_ctl-less starts,
 # bare `postgres -D`) broke all three PLs. Section 14 gives the PL .so
 # files RUNPATHs that point at those trees.
@@ -408,7 +408,7 @@ done
 ###############################################################
 # 7. Python -> /opt/percona-python3 (tree installed by RPM)
 ###############################################################
-# The percona-tarball-python3 RPM already installed the complete runtime
+# The percona-python3 RPM already installed the complete runtime
 # (bin/python3.12 + python3, full stdlib incl. lib-dynload, libpython,
 # include/, pkgconfig/, share/man, and a real pip via ensurepip — all
 # shebangs and compiled paths already say /opt/percona-python3). The old
@@ -518,7 +518,7 @@ rmdir /opt/percona-etcd/lib 2>/dev/null || true
 ###############################################################
 # 10. Perl -> /opt/percona-perl (tree installed by RPM)
 ###############################################################
-# The percona-tarball-perl RPM already installed the complete runtime
+# The percona-perl RPM already installed the complete runtime
 # (bin/perl + every core utility script with /opt shebangs, the full core
 # module set at lib/<ver> with CORE/libperl, man pages) with the distro-
 # matched version and ABI (5.26.3 on EL8, 5.32.1 on EL9 — the version
@@ -553,7 +553,7 @@ patchelf --set-rpath '$ORIGIN' "$LIBPERL_REAL"
 ###############################################################
 # 11. Tcl -> /opt/percona-tcl (tree installed by RPM)
 ###############################################################
-# The percona-tarball-tcl RPM already installed the complete runtime
+# The percona-tcl RPM already installed the complete runtime
 # (bin/tclsh8.6 with a compiled RPATH to /opt/percona-tcl/lib, the
 # libtcl8.6.so whose compiled TCL_LIBRARY default is
 # /opt/percona-tcl/lib/tcl8.6, the stdlib, and the bundled pkgs incl.

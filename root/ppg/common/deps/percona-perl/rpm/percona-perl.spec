@@ -73,7 +73,7 @@
 # PERCONA: keep our /opt/percona-perl/bin/perl shebangs untouched.
 %undefine __brp_mangle_shebangs
 
-Name:           percona-tarball-perl
+Name:           percona-perl
 Version:        %{perl_version}
 Release:        1%{?dist}
 Summary:        Perl runtime under /opt/percona-perl for the Percona PostgreSQL binary tarball
