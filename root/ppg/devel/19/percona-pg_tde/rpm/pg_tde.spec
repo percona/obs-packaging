@@ -28,6 +28,7 @@ URL:		https://github.com/%{sname}/%{sname}/
 Source0:	%{name}-%{version}.tar.gz
 
 BuildRequires:  meson
+BuildRequires:  cmake
 BuildRequires:	percona-postgresql%{pgmajorversion}-devel chrpath openssl-devel libcurl-devel zlib-devel libxml2-devel libxslt-devel libselinux-devel pam-devel krb5-devel readline-devel
 BuildRequires:	percona-postgresql%{pgmajorversion}-static
 %if 0%{?gts_version}
@@ -38,6 +39,11 @@ BuildRequires:	json-c-devel lz4-devel libzstd-devel numactl-devel
 %endif
 %if 0%{?suse_version}
 BuildRequires:	libjson-c-devel liblz4-devel libzstd-devel >= 1.4.0 libnuma-devel
+# The C++ KMIP client needs a C++ compiler. Without gcc-c++ in the chroot
+# meson falls back to clang++ (pulled in via the llvmjit BuildRequires) while
+# C is compiled by gcc; with SUSE's default -flto=auto the mixed toolchain
+# produces archives/objects the linker cannot combine.
+BuildRequires:	gcc-c++
 %endif
 Requires:	postgresql%{pgmajorversion}-server curl openssl
 
