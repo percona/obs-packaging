@@ -5,9 +5,48 @@ description: |
   tarball, built against a different EL base of ppg:staging:%!{PG_MAJOR_VERSION}:
   ssl1.1 (RockyLinux 8), ssl3 (RockyLinux 9).
 
+  The RockyLinux_8/RockyLinux_9 repositories are plain RPM build repos (not
+  simpleimage): they build the tarball-only helper packages that must be
+  compiled against the very same EL base as the tarball that bundles them
+  (percona-psql — psql linked against BSD libedit instead of the host's
+  libreadline). They are unpublished; the ssl variants consume them through
+  the same-project sibling path below.
+
 repositories:
+  - name: RockyLinux_8
+    paths:
+      - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
+        repository: RockyLinux_8
+      - subproject: ppg:common:deps
+        repository: RockyLinux_8
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:8
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: appstream
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: baseos
+      # libedit-devel lives in PowerTools == RockyLinux:8/devel.
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: devel
+    archs: [x86_64]
+  - name: RockyLinux_9
+    paths:
+      - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
+        repository: RockyLinux_9
+      - subproject: ppg:common:deps
+        repository: RockyLinux_9
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+        repository: standard
+      # libedit-devel is in CRB, part of RockyLinux:9/standard.
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+        repository: standard
+    archs: [x86_64]
   - name: ssl1.1
     paths:
+      # First path: this project's own RockyLinux_8 build repo, so the
+      # simpleimage chroot can BuildRequire percona-psql built on the same base.
+      - subproject: ppg:staging:%!{PG_MAJOR_VERSION}:tarballs
+        repository: RockyLinux_8
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
         repository: RockyLinux_8
       - subproject: ppg:common:deps
@@ -32,6 +71,9 @@ repositories:
   # /usr/pgsql-NN prefix the tarball layout is derived from.
   - name: ssl3
     paths:
+      # See the ssl1.1 comment: own RockyLinux_9 build repo first.
+      - subproject: ppg:staging:%!{PG_MAJOR_VERSION}:tarballs
+        repository: RockyLinux_9
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
         repository: RockyLinux_9
       - subproject: ppg:common:deps
@@ -43,13 +85,19 @@ repositories:
     archs: [x86_64]
 
 publish:
+  # Helper-RPM build repos: consumed only through the sibling path above,
+  # never shipped as a repository.
+  RockyLinux_8: false
+  RockyLinux_9: false
   ssl1.1: true
   ssl3: true
 
 project-config: |
-  Type: simpleimage
-
+  # "Type:" is repo-scoped: only the ssl* repositories build simpleimage
+  # recipes. The RockyLinux_* repos build ordinary RPM specs and must keep
+  # obs-build's default recipe-type detection.
   %if "%_repository" == "ssl1.1"
+  Type: simpleimage
   # Explicit binary format: "Type: simpleimage" above disables obs-build's
   # recipe-type guessing (which would have derived it from the Preinstall
   # list), and simpleimage is not one of the image types (kiwi, docker, ...)
@@ -74,6 +122,7 @@ project-config: |
   %endif
 
   %if "%_repository" == "ssl3"
+  Type: simpleimage
   # Explicit binary format (see the ssl1.1 comment).
   Binarytype: rpm
   # Same choice-resolution as staging RockyLinux_9 (hdf-libs vs hdf both
