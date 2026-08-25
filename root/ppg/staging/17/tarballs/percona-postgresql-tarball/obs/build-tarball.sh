@@ -28,10 +28,11 @@ PYTHON_PREFIX=/opt/percona-python3
 PERL_PREFIX=/opt/percona-perl
 TCL_PREFIX=/opt/percona-tcl
 HAPROXY_PREFIX=/opt/percona-haproxy
-# Lean /opt GDAL+PROJ runtimes (percona-gdal / percona-proj RPMs). Like the
-# language runtimes these are installed by their RPMs, ship as their own
-# top-level tarball components, and carry their resource directories at the
-# path compiled into the libraries.
+# Lean /opt GDAL+PROJ runtimes (percona-gdal / percona-proj RPMs). Installed
+# by their RPMs like the language runtimes, and shipped as two DATA-ONLY
+# top-level components (section 13a): what the artifact needs from them is
+# the resource directory whose path is compiled into the libraries. The
+# libraries themselves are bundled into $PG_PREFIX/lib by section 13.
 GDAL_PREFIX=/opt/percona-gdal
 PROJ_PREFIX=/opt/percona-proj
 
@@ -650,40 +651,6 @@ find "$PYTHON_PREFIX" -type d -name '__pycache__' -prune -exec rm -rf {} +
 find "$PYTHON_PREFIX" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
 
 ###############################################################
-# 12b. GDAL/PROJ: prune the /opt trees to the lean tarball layout
-###############################################################
-# percona-gdal/percona-proj are already installed AT their final tarball
-# location (/opt/percona-{gdal,proj}) — nothing to stage, unlike every other
-# component. They ship a full development tree though (include/, bin/ CLI
-# tools, man pages, pkgconfig/cmake files); the tarball wants only what the
-# runtime needs, matching the lean layout of the official artifact and of
-# our other /opt components: lib/ plus the resource directory whose path is
-# compiled into the library (share/gdal, share/proj with proj.db).
-#
-# These two are top-level components of their own (13 in total) rather than
-# being flattened into percona-postgresql${PG_MAJOR}: the data paths are
-# compiled as /opt/percona-{gdal,proj}/share/..., so they resolve with ZERO
-# environment variables once the documented install step copies the
-# components to /opt — the same mechanism as percona-perl/tcl/python3. The
-# PostGIS libraries do NOT load these copies: section 13 bundles
-# libgdal/libproj (and their lean deps) into percona-postgresql${PG_MAJOR}/lib,
-# where postgis_raster's $ORIGIN RUNPATH finds them, and those bundled
-# copies carry the very same compiled share paths.
-for d in $GDAL_PREFIX $PROJ_PREFIX; do
-    [ -d "$d/lib" ] || { echo "FATAL: $d/lib missing" >&2; exit 1; }
-    # ${d:?} — a defensive brake on an rm -rf built from a variable.
-    rm -rf "${d:?}/include" "${d:?}/bin" "${d:?}/lib/pkgconfig" "${d:?}/lib/cmake"
-    find "$d/lib" -name '*.la' -delete
-    # Keep only the compiled-in resource dirs under share/ (drops man/,
-    # doc/, bash-completion/, ...).
-    find "$d/share" -mindepth 1 -maxdepth 1 \
-         ! -name gdal ! -name proj -exec rm -rf {} +
-done
-# The prunes above must not have removed what the libraries look for.
-[ -f "$GDAL_PREFIX/share/gdal/gdalicon.png" ] || { echo "FATAL: $GDAL_PREFIX/share/gdal emptied by the prune" >&2; exit 1; }
-[ -f "$PROJ_PREFIX/share/proj/proj.db" ] || { echo "FATAL: $PROJ_PREFIX/share/proj/proj.db emptied by the prune" >&2; exit 1; }
-
-###############################################################
 # 13. Bundle .so deps and patchelf RPATH for ELF prefixes
 ###############################################################
 # copy_deps resolves deps with ldd, i.e. through the system loader, and
@@ -744,6 +711,48 @@ done
 # as every previous ssl1.1 artifact.)
 for f in /usr/lib64/libssl.so.3* /usr/lib64/libcrypto.so.3*; do
     [ -f "$f" ] && cp -pn "$f" $PYTHON_PREFIX/lib/ 2>/dev/null || true
+done
+
+###############################################################
+# 13a. GDAL/PROJ: reduce the two components to DATA ONLY
+###############################################################
+# percona-gdal/percona-proj are already installed AT their final tarball
+# location (/opt/percona-{gdal,proj}) — nothing to stage, unlike every other
+# component. What the ARTIFACT needs from them is only their resource
+# directories: libgdal/libproj have those paths (/opt/percona-gdal/share/gdal,
+# /opt/percona-proj/share/proj) compiled in, which is the whole zero-env-var
+# mechanism, and it is why these are top-level components of their own rather
+# than being folded into percona-postgresql${PG_MAJOR}.
+#
+# The LIBRARIES are not shipped here: the working copies are the ones
+# bundle_deps_lean just put into $PG_PREFIX/lib, where postgis_raster's
+# $ORIGIN RUNPATH finds libgdal and libgdal's own $ORIGIN rpath entry (added
+# by percona-gdal's spec) finds libproj right next to it. Keeping the
+# originals too would ship a second, DEAD copy of both libraries: unloadable
+# (their libspatialite/libgeos/... deps live only in $PG_PREFIX/lib), several
+# MB, and extra surface for the OpenSSL host-ABI audit. So lib/ goes as well,
+# together with the development tree (include/, bin/ CLI tools, man pages,
+# pkgconfig/cmake).
+#
+# ORDERING IS LOAD-BEARING: this runs AFTER section 13, because
+# bundle_deps_lean resolves libgdal/libproj THROUGH these very lib/ dirs
+# (LD_LIBRARY_PATH). Moving it earlier would silently leave both libraries
+# unbundled. $GDAL_LIB/$PROJ_LIB are only used for their basenames from here
+# on (the section-15 dlopen gate), so the paths going away is fine.
+for d in $GDAL_PREFIX $PROJ_PREFIX; do
+    [ -d "$d" ] || { echo "FATAL: $d missing" >&2; exit 1; }
+    # ${d:?} — a defensive brake on an rm -rf built from a variable.
+    rm -rf "${d:?}/lib" "${d:?}/include" "${d:?}/bin"
+    # Keep only the compiled-in resource dirs under share/ (drops man/,
+    # doc/, bash-completion/, ...).
+    find "$d/share" -mindepth 1 -maxdepth 1 \
+         ! -name gdal ! -name proj -exec rm -rf {} +
+done
+# What must remain, and what must NOT.
+[ -f "$GDAL_PREFIX/share/gdal/gdalicon.png" ] || { echo "FATAL: $GDAL_PREFIX/share/gdal emptied by the prune" >&2; exit 1; }
+[ -f "$PROJ_PREFIX/share/proj/proj.db" ] || { echo "FATAL: $PROJ_PREFIX/share/proj/proj.db emptied by the prune" >&2; exit 1; }
+for d in $GDAL_PREFIX $PROJ_PREFIX; do
+    [ -e "$d/lib" ] && { echo "FATAL: $d/lib still present — these components are data-only" >&2; exit 1; } || true
 done
 
 ###############################################################
@@ -952,10 +961,15 @@ echo "=== Verification: host-baseline gate ==="
 #  1. No formerly-excluded soname may be matched by is_system_lib again —
 #     catches a token being pasted back into SYSTEM_LIBS_EXCLUDE, or a new
 #     token whose glob prefix happens to cover one of them.
-#  2. Any ELF NEEDING one of them must find it inside the artifact. Scope is
-#     all of /opt, the same as the NEEDED audit above: RUNPATHs point at the
-#     component lib dirs, and a component (percona-gdal) may deliberately
-#     rely on a copy bundled in another one.
+#  2. Any ELF NEEDING one of them must find it WHERE THAT ELF CAN ACTUALLY
+#     LOAD IT FROM, which is per component, not artifact-wide: every RUNPATH
+#     this script sets is either the ELF's own component lib/ dir
+#     ($ORIGIN/../lib, /opt/percona-<comp>/lib) or the ELF's own directory
+#     ($ORIGIN — e.g. libperl.so in perl's CORE/). A libexpat.so.1 sitting in
+#     percona-python3/lib does NOT satisfy a NEED from
+#     percona-haproxy/sbin/haproxy, and accepting it would reproduce QA
+#     finding 1 one component over. The generic NEEDED audit above is the
+#     artifact-wide check; this one is deliberately stricter.
 : > /tmp/baseline-audit.txt
 for tok in $FORMERLY_EXCLUDED_LIBS; do
     if is_system_lib "$tok"; then
@@ -964,12 +978,18 @@ for tok in $FORMERLY_EXCLUDED_LIBS; do
 done
 find /opt -type f \( -perm -u+x -o -name '*.so*' \) | while read -r f; do
     file "$f" 2>/dev/null | grep -q ELF || continue
+    # /opt/<component>/... -> the two directories the loader can reach
+    # through the RUNPATHs this script sets.
+    comp_lib=$(echo "$f" | awk -F/ 'NF >= 3 { print "/opt/" $3 "/lib" }')
+    own_dir=$(dirname "$f")
     patchelf --print-needed "$f" 2>/dev/null | while read -r soname; do
         for tok in $FORMERLY_EXCLUDED_LIBS; do
             case "$soname" in
                 ${tok}*)
-                    grep -qxF "$soname" /tmp/bundled-sonames.txt || \
-                        echo "BASELINE: $f needs $soname, which is neither bundled nor host-universal"
+                    # -e is false for a dangling symlink, so a broken
+                    # symlink family cannot pass as bundled.
+                    [ -e "$comp_lib/$soname" ] || [ -e "$own_dir/$soname" ] || \
+                        echo "BASELINE: $f needs $soname, which is neither in $comp_lib nor next to it, nor host-universal"
                     ;;
             esac
         done
@@ -1159,27 +1179,63 @@ echo "=== Verification: extension dlopen smoke ==="
 # symbols that only exist inside the running server, so lazy binding is what
 # makes the probe possible at all. Function symbols stay unbound while the
 # library chain loads; data-symbol relocations are still resolved eagerly, so
-# some modules legitimately fail with "undefined symbol: <backend symbol>" —
-# that is a PASS (logged as such). Anything else — a missing library, a
-# failing constructor, an abort — is FATAL.
+# some modules legitimately fail with "undefined symbol: <backend symbol>".
+# That is a PASS only when the symbol really is a POSTGRES-INTERNAL one: the
+# probe looks the name up in the backend's own dynamic symbol table
+# (postgres is linked --export-dynamic precisely so extensions resolve
+# against it). An undefined symbol that postgres does NOT define means a
+# bundled dependency has the wrong ABI — e.g. "undefined symbol: GEOSDensify"
+# from a libgeos_c older than the PostGIS that was built against it — and
+# that is FATAL, as is anything else: a missing library, a failing
+# constructor, an abort.
+#
+# NOTE the mode constant: RTLD_LAZY lives in `os`, NOT in `ctypes` (which
+# exports only RTLD_GLOBAL/RTLD_LOCAL) — ctypes.RTLD_LAZY is an
+# AttributeError that would fail every single probe.
 #
 # Runs LAST of the functional gates, after section 14a's ELF string patch and
 # all RUNPATH work, so what is probed is the exact final state of the files.
-# Must run AFTER section 12b/13 for the same reason.
+# Must run AFTER section 13/13a for the same reason.
+#
+# The backend symbol table, computed once. If nm is unavailable the file
+# stays empty and the probe says so instead of silently accepting every
+# undefined symbol (binutils is a BuildRequires, so this is a guard, not a
+# supported mode).
+: > /tmp/postgres-symbols.txt
+if command -v nm >/dev/null 2>&1; then
+    # sub(/@.*/): nm prints versioned symbols as name@@VERS. The backend has
+    # no version script, so this is belt-and-braces — but a versioned entry
+    # would never match the loader's plain symbol name.
+    nm -D --defined-only "$PG_PREFIX/bin/postgres" 2>/dev/null \
+        | awk '{ n = $NF; sub(/@.*/, "", n); if (n != "") print n }' \
+        | sort -u > /tmp/postgres-symbols.txt
+fi
+[ -s /tmp/postgres-symbols.txt ] || \
+    echo "  WARNING: no postgres symbol table — undefined-symbol classification degraded"
 dlopen_probe() {
-    local so="$1" out rc
+    local so="$1" out rc sym
     out=$(env -i "$PY_BIN" -B -c \
-        'import ctypes,sys; ctypes.CDLL(sys.argv[1], mode=ctypes.RTLD_LAZY)' \
+        'import ctypes, os, sys; ctypes.CDLL(sys.argv[1], mode=os.RTLD_LAZY)' \
         "$so" 2>&1) && rc=0 || rc=$?
     if [ "$rc" -eq 0 ]; then
         echo "  dlopen OK: $so"
         return 0
     fi
-    # Unresolved postgres backend symbols are expected for server modules.
     if echo "$out" | grep -q 'undefined symbol'; then
-        echo "  dlopen OK (unresolved backend symbol, expected): $so"
-        echo "$out" | grep 'undefined symbol' | sed 's/^/      /'
-        return 0
+        # "<path>: undefined symbol: <name>" — the loader reports the first
+        # unresolved symbol only, which is all we need to classify.
+        sym=$(echo "$out" | sed -n 's/.*undefined symbol: *\([A-Za-z0-9_.]*\).*/\1/p' | head -1)
+        if [ -n "$sym" ] && grep -qxF "$sym" /tmp/postgres-symbols.txt; then
+            echo "  dlopen OK (unresolved postgres backend symbol '$sym', expected): $so"
+            return 0
+        fi
+        if [ ! -s /tmp/postgres-symbols.txt ]; then
+            echo "  dlopen OK (unresolved symbol '$sym', UNVERIFIED — no postgres symbol table): $so"
+            return 0
+        fi
+        echo "DLOPEN-FAIL ($rc): $so — undefined symbol '$sym' is NOT a postgres backend symbol (bundled-dependency ABI mismatch?)"
+        echo "$out" | sed 's/^/    /'
+        return 1
     fi
     echo "DLOPEN-FAIL ($rc): $so"
     echo "$out" | sed 's/^/    /'
@@ -1229,8 +1285,11 @@ fi
 # bundled libgdal/libproj have no unresolved symbols, so probing them
 # directly does run every constructor in the GDAL dependency chain — the
 # FlexiBLAS abort() case — and at the same time asserts that section 13
-# really bundled both libraries into the PostgreSQL component, which is what
-# lets postgis_raster's $ORIGIN RUNPATH find them with no environment.
+# really bundled both libraries into the PostgreSQL component. Those copies
+# are the ONLY ones in the artifact (section 13a keeps percona-gdal/
+# percona-proj data-only), and postgis_raster's $ORIGIN RUNPATH plus
+# libgdal's own $ORIGIN rpath entry is what makes them load with no
+# environment at all.
 for lib in "$(basename "$GDAL_LIB")" "$(basename "$PROJ_LIB")"; do
     bundled="$PG_PREFIX/lib/$lib"
     [ -e "$bundled" ] || {
