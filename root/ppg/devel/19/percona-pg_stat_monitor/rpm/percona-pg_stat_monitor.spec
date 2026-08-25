@@ -75,7 +75,8 @@ USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags} install DESTDIR
 %{pginstdir}/share/extension/pg_stat_monitor.control
 %{pginstdir}/lib/bitcode/pg_stat_monitor*.bc
 %dir %{pginstdir}/lib/bitcode/pg_stat_monitor
-%{pginstdir}/lib/bitcode/pg_stat_monitor/*.bc
+%dir %{pginstdir}/lib/bitcode/pg_stat_monitor/src
+%{pginstdir}/lib/bitcode/pg_stat_monitor/src/*.bc
 
 
 %changelog
