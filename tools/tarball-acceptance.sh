@@ -786,7 +786,10 @@ else
     if [ -n "$gis_fail" ]; then
         result postgis FAIL "$gis_fail"
     elif [ -n "$gis_warn" ]; then
-        result postgis PASS "full_version+ST_Transform+raster+GDAL_DATA (warn:$gis_warn)"
+        # "PASS*", like the psql cell: the host only prints $status into the
+        # matrix, so a warn kept in the detail alone would never be seen.
+        # The existing legend line covers the asterisk.
+        result postgis "PASS*" "full_version+ST_Transform+raster+GDAL_DATA (warn:$gis_warn)"
     else
         result postgis PASS "full_version+ST_Transform+raster+GDAL_DATA"
     fi
@@ -1200,11 +1203,13 @@ while IFS='|' read -r h server psql ext gis pls clients; do
     printf '%-46s %-9s %-9s %-13s %-9s %-9s %-9s\n' \
         "$h" "$server" "$psql" "$ext" "$gis" "$pls" "$clients"
 done < "$MATRIX"
-# A "PASS*" cell is a pass whose pty leg could not be exercised (see the
-# guest battery's psql section): neither script(1) nor the artifact's bundled
-# python3 was usable as a pty driver on that image.
+# A "PASS*" cell is a pass with one leg of the check unexercised: for PSQL,
+# neither script(1) nor the artifact's bundled python3 was usable as a pty
+# driver on that image; for POSTGIS, postgis_full_version() printed no
+# DATABASE_PATH= (PROJ below the version floor that reports it). The RESULT
+# detail in the per-image log spells out which.
 if grep -q 'PASS\*' "$MATRIX"; then
-    echo "  * pty check unavailable on this image (no script(1) and no usable bundled python3 pty driver)"
+    echo "  * passed with one leg unexercised (PSQL: no pty driver in this image; POSTGIS: PROJ too old to report DATABASE_PATH) — see the log"
 fi
 echo
 echo "host checks: components=$RES_COMPONENTS psql-link=$RES_PSQL_LINK needed=$RES_NEEDED surplus=$RES_SURPLUS"
