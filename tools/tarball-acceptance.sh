@@ -68,6 +68,10 @@ Options:
   --no-install       Install nothing at all in the images: an image without
                      tzdata or without an OpenSSL of the variant's generation
                      is reported and skipped instead.
+  --host-timeout N   Wall-clock budget in seconds for the in-container battery
+                     of ONE image (default 1200, or $TARBALL_ACCEPTANCE_HOST_TIMEOUT).
+                     A host that exceeds it is reported as timed out; the run
+                     continues with the next image.
   --keep             Keep the workdir and the containers on exit.
   --list-images      Print the default matrix for both variants and exit.
   -h, --help         This text.
@@ -126,6 +130,24 @@ libcrypto.so
 libtinfo.so
 "
 
+# Sonames that were on the builder's exclude list before the 2026-07 QA round
+# and must now always be BUNDLED. Copied verbatim from build-tarball.sh's
+# FORMERLY_EXCLUDED_LIBS (read live from the builder when reachable, see
+# load_baseline). These get the STRICT per-component reachability rule, the
+# same asymmetry the builder has: everything else only has to be bundled
+# somewhere in the artifact, because RUNPATHs legitimately point across
+# components (plperl.so -> percona-perl's CORE dir, plpython3.so ->
+# percona-python3/lib, pltcl.so -> percona-tcl/lib).
+FORMERLY_EXCLUDED_FALLBACK="
+libtirpc.so
+libnsl.so
+libeconf.so
+libpcre2-8.so
+libpcre2-posix.so
+libexpat.so
+libreadline.so
+"
+
 # The 13 top-level components of the artifact, as gated by build-tarball.sh's
 # component-inventory check. percona-postgresql<major> is templated.
 EXPECTED_COMPONENTS="
@@ -152,6 +174,7 @@ ONLY_EXTENSIONS=0
 HOST_ONLY=0
 KEEP=0
 INSTALL_OK=1
+HOST_TIMEOUT=${TARBALL_ACCEPTANCE_HOST_TIMEOUT:-1200}
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -161,6 +184,7 @@ while [ $# -gt 0 ]; do
         --only-extensions) ONLY_EXTENSIONS=1; shift ;;
         --host-only)  HOST_ONLY=1; shift ;;
         --no-install) INSTALL_OK=0; shift ;;
+        --host-timeout) HOST_TIMEOUT=${2:?--host-timeout needs a value}; shift 2 ;;
         --keep)       KEEP=1; shift ;;
         --list-images)
             echo "ssl1.1: $(echo "$IMAGES_SSL11" | tr ' ' ',')"
@@ -203,6 +227,14 @@ if [ "$HOST_ONLY" -eq 0 ]; then
     fi
     [ -n "$ENGINE" ] || { echo "$PROG: neither podman nor docker found (use --host-only)" >&2; exit 2; }
     command -v "$ENGINE" >/dev/null 2>&1 || { echo "$PROG: $ENGINE not found" >&2; exit 2; }
+fi
+
+# timeout(1) bounds the whole per-image battery. Absent (or a variant that
+# does not take "timeout SECS CMD"), the run is unbounded — say so rather than
+# pretending otherwise.
+TIMEOUT_BIN=""
+if command -v timeout >/dev/null 2>&1 && timeout 5 true >/dev/null 2>&1; then
+    TIMEOUT_BIN=$(command -v timeout)
 fi
 
 if [ -z "$WORKDIR" ]; then
@@ -303,12 +335,20 @@ fi
 # ---------------------------------------------------------------------------
 # Host-side check 3: NEEDED-soname closure against the universal baseline
 #
-# Same contract as build-tarball.sh section 15, checked per component: an ELF
-# may resolve a soname from the host only if it is on the universal baseline;
-# otherwise the soname must sit where the ELF's RUNPATHs can reach it, i.e.
-# in its own component's lib/ or next to the ELF itself. A soname that exists
-# only in ANOTHER component is reported too — that is QA finding 1 one
-# component over.
+# Same two-tier contract as build-tarball.sh section 15. An ELF may resolve a
+# soname from the host only if it is on the universal baseline. Otherwise:
+#
+#   * artifact-wide rule (default): the soname must be bundled SOMEWHERE in
+#     the tarball. Cross-component RUNPATHs are legitimate and deliberate —
+#     builder section 14 points plperl.so at /opt/percona-perl/lib/<ver>/CORE,
+#     plpython3.so at /opt/percona-python3/lib and pltcl.so at
+#     /opt/percona-tcl/lib, and libperl/libpython3.12/libtcl8.6 live only in
+#     those components.
+#   * strict per-component rule, for the FORMERLY_EXCLUDED sonames only: those
+#     must sit in the NEEDing ELF's own component lib/ or next to the ELF,
+#     because that is all its RUNPATH can reach. A copy in another component
+#     would reproduce QA finding 1 one component over, so it is reported as
+#     MISPLACED.
 # ---------------------------------------------------------------------------
 load_baseline() {
     # Prefer the builder's own list, so the two literally cannot drift.
@@ -317,12 +357,14 @@ load_baseline() {
     builder=$here/../root/ppg/staging/$PG_MAJOR/tarballs/percona-postgresql-tarball/obs/build-tarball.sh
     if [ -r "$builder" ]; then
         BASELINE=$(sed -n '/^SYSTEM_LIBS_EXCLUDE="$/,/^"$/p' "$builder" | sed '1d;$d')
-        if [ -n "$BASELINE" ]; then
+        FORMERLY_EXCLUDED=$(sed -n '/^FORMERLY_EXCLUDED_LIBS="$/,/^"$/p' "$builder" | sed '1d;$d')
+        if [ -n "$BASELINE" ] && [ -n "$FORMERLY_EXCLUDED" ]; then
             BASELINE_SRC="build-tarball.sh"
             return
         fi
     fi
     BASELINE=$BASELINE_FALLBACK
+    FORMERLY_EXCLUDED=$FORMERLY_EXCLUDED_FALLBACK
     BASELINE_SRC="embedded copy"
 }
 load_baseline
@@ -330,6 +372,14 @@ load_baseline
 is_baseline() {
     local libname=$1 pattern
     for pattern in $BASELINE; do
+        case "$libname" in ${pattern}*) return 0 ;; esac
+    done
+    return 1
+}
+
+is_formerly_excluded() {
+    local libname=$1 pattern
+    for pattern in $FORMERLY_EXCLUDED; do
         case "$libname" in ${pattern}*) return 0 ;; esac
     done
     return 1
@@ -350,13 +400,18 @@ else
         own_dir=$(dirname "$f")
         readelf -d "$f" 2>/dev/null | sed -n 's/.*NEEDED.*\[\(.*\)\].*/\1/p' | while read -r soname; do
             is_baseline "$soname" && continue
-            [ -e "$comp_lib/$soname" ] && continue
-            [ -e "$own_dir/$soname" ] && continue
-            if grep -qxF "$soname" "$WORKDIR/bundled-sonames.txt"; then
-                echo "MISPLACED: $rel needs $soname — present in the artifact but not reachable from this component"
-            else
-                echo "UNRESOLVED: $rel needs $soname — not bundled and not on the universal host baseline"
+            if is_formerly_excluded "$soname"; then
+                [ -e "$comp_lib/$soname" ] && continue
+                [ -e "$own_dir/$soname" ] && continue
+                if grep -qxF "$soname" "$WORKDIR/bundled-sonames.txt"; then
+                    echo "MISPLACED: $rel needs $soname — in the artifact but not in this component's lib/ nor next to the ELF, so its RUNPATH cannot reach it"
+                else
+                    echo "UNRESOLVED: $rel needs $soname — not bundled and not on the universal host baseline"
+                fi
+                continue
             fi
+            grep -qxF "$soname" "$WORKDIR/bundled-sonames.txt" && continue
+            echo "UNRESOLVED: $rel needs $soname — not bundled and not on the universal host baseline"
         done
     done > "$WORKDIR/needed-audit.txt"
     if [ -s "$WORKDIR/needed-audit.txt" ]; then
@@ -432,9 +487,24 @@ result()  { echo "RESULT|$1|$2|$3"; }
 failure() { echo "FAILURE|$1|$2|$3"; }
 say()     { echo "-- $*"; }
 
+# Per-step timeouts: one wedged client must not hang the battery. timeout(1)
+# is coreutils and present on every target image (verified on debian 11/12-slim,
+# ubuntu 20.04 and rockylinux 9-minimal), but check that the plain
+# "timeout SECS CMD" form works rather than assuming the variant.
+TMO=""
+if command -v timeout >/dev/null 2>&1 && timeout 5 true >/dev/null 2>&1; then
+    TMO=$(command -v timeout)
+else
+    echo "-- NOTE: no usable timeout(1) in this image — per-step timeouts disabled"
+fi
+tmo() {
+    local secs=$1; shift
+    if [ -n "$TMO" ]; then "$TMO" "$secs" "$@"; else "$@"; fi
+}
+
 # Every invocation of a bundled binary goes through env -i: the artifact's
 # zero-environment promise is the thing under test.
-pg() { local c=$1; shift; env -i "$BIN/$c" "$@"; }
+pg() { local c=$1; shift; tmo 120 env -i "$BIN/$c" "$@"; }
 
 SRV=""
 start_server() {
@@ -466,7 +536,7 @@ say "components: $(cd "$OPT" && ls | tr '\n' ' ')"
 say "user: $(id)"
 
 # --- initdb + bare server start, from an empty environment ----------------
-if ! env -i "$BIN/initdb" -D "$DATA" -A trust > "$WORK/initdb.log" 2>&1; then
+if ! tmo 300 env -i "$BIN/initdb" -D "$DATA" -A trust > "$WORK/initdb.log" 2>&1; then
     result server FAIL "initdb failed: $(tail -3 "$WORK/initdb.log" | tr '\n' ' ' | cut -c1-300)"
     failure server initdb "$(tail -5 "$WORK/initdb.log" | tr '\n' ' ')"
     exit 1
@@ -520,8 +590,12 @@ try_ext() {
         echo "createdb-failed: $out"
         return 1
     fi
-    out=$(env -i "$BIN/psql" -X -q -d "$db" -v ON_ERROR_STOP=1 \
+    out=$(tmo 180 env -i "$BIN/psql" -X -q -d "$db" -v ON_ERROR_STOP=1 \
               -c "CREATE EXTENSION \"$name\" CASCADE" 2>&1) && rc=0 || rc=$?
+    if [ "$rc" -eq 124 ]; then
+        echo "TIMEOUT: CREATE EXTENSION did not finish within 180s"
+        return 1
+    fi
     if [ "$rc" -eq 0 ]; then
         return 0
     fi
@@ -642,7 +716,7 @@ if [ "$ONLY_EXTENSIONS" = "1" ]; then
 fi
 
 # --- PostGIS / GDAL / PROJ deep checks -------------------------------------
-q() { env -i "$BIN/psql" -X -q -A -t -d "$1" -v ON_ERROR_STOP=1 -c "$2" 2>&1; }
+q() { tmo 180 env -i "$BIN/psql" -X -q -A -t -d "$1" -v ON_ERROR_STOP=1 -c "$2" 2>&1; }
 
 GIS_DB=acc_gis
 pg dropdb --if-exists -f "$GIS_DB" >/dev/null 2>&1
@@ -734,7 +808,7 @@ fi
 
 # --- psql: pipe mode and pty (interactive) mode, no host readline ---------
 psql_fail=""
-if ! out=$(echo '\conninfo' | env -i "$BIN/psql" -X -d postgres 2>&1) || \
+if ! out=$(echo '\conninfo' | tmo 60 env -i "$BIN/psql" -X -d postgres 2>&1) || \
    ! echo "$out" | grep -q 'You are connected'; then
     psql_fail="$psql_fail pipe"
     failure psql pipe "$(echo "$out" | tr '\n' ' ' | cut -c1-250)"
@@ -743,7 +817,7 @@ if command -v script >/dev/null 2>&1; then
     # A pty is what makes psql initialise its line editor; this is the check
     # that proves libedit works with NO readline installed on the host.
     out=$(printf '\\conninfo\nSELECT 42 AS pty_check;\n\\q\n' | \
-          env -i TERM=xterm script -q -c "$BIN/psql -X -P pager=off -d postgres" /dev/null 2>&1)
+          tmo 90 env -i TERM=xterm script -q -c "$BIN/psql -X -P pager=off -d postgres" /dev/null 2>&1)
     if ! echo "$out" | grep -q 'pty_check'; then
         psql_fail="$psql_fail pty"
         failure psql pty "interactive psql under a pty did not run the query: $(echo "$out" | tr '\n' ' ' | cut -c1-250)"
@@ -766,7 +840,7 @@ cl_fail=""
 check() {
     local label=$1; shift
     local out
-    if ! out=$(env -i "$@" 2>&1); then
+    if ! out=$(tmo 300 env -i "$@" 2>&1); then
         cl_fail="$cl_fail $label"
         failure clients "$label" "$(echo "$out" | tr '\n' ' ' | cut -c1-250)"
     fi
@@ -859,9 +933,11 @@ have_ssl() {
     done
     return 1
 }
+SSL_ATTEMPTED=0
 if ! have_ssl; then
     if [ "$INSTALL_OK" = "1" ]; then
         echo "-- installing the distro OpenSSL runtime ($SSL_SONAME absent from this image)"
+        SSL_ATTEMPTED=1
         if command -v apt-get >/dev/null 2>&1; then
             pkg_install "$DEB_SSL_PKG" || true
         else
@@ -869,10 +945,15 @@ if ! have_ssl; then
         fi
     fi
 fi
+# Three distinct outcomes, because "the image ships none" and "the install
+# failed" (no network, no repo metadata) need different verdicts: the first is
+# a skip, the second is a failure of this host, not a silent loss of coverage.
 if have_ssl; then
-    echo "ACC_OPENSSL=ok"
+    echo "ACC_OPENSSL=present"
+elif [ "$SSL_ATTEMPTED" = "1" ]; then
+    echo "ACC_OPENSSL=missing-after-install-attempt"
 else
-    echo "ACC_OPENSSL=missing"
+    echo "ACC_OPENSSL=missing-install-disabled"
 fi
 
 # A non-root OS user to run the server (the documented prerequisite). No
@@ -952,15 +1033,35 @@ run_image() {
 
     # An image with no OpenSSL of the variant's generation is not a host of
     # the class the variant label promises: skip it loudly rather than
-    # reporting an artifact failure.
-    if grep -q '^ACC_OPENSSL=missing' "$log"; then
-        echo "  SKIP: this image ships no OpenSSL for $VARIANT (and installing it was disabled)"
+    # reporting an artifact failure. An OpenSSL install that was ATTEMPTED and
+    # failed is a different thing — an environment problem that must not pass
+    # as a skip.
+    if grep -q '^ACC_OPENSSL=missing-install-disabled' "$log"; then
+        echo "  SKIP: this image ships no OpenSSL for $VARIANT and installing it is disabled"
         echo "$image|NO-OPENSSL|-|-|-|-|-" >> "$MATRIX"
         SKIPPED=$((SKIPPED + 1))
         return 0
     fi
+    if grep -q '^ACC_OPENSSL=missing-after-install-attempt' "$log"; then
+        note_fail "$image: installing the distro OpenSSL runtime failed (no network? no repo metadata?) — see $log"
+        echo "$image|SSL-INSTALL-FAIL|-|-|-|-|-" >> "$MATRIX"
+        return 1
+    fi
 
-    "$ENGINE" exec --user "$uid:0" "$cid" /bin/bash /battery.sh "$ONLY_EXTENSIONS" 2>&1 | tee -a "$log"
+    local guest_rc=0
+    if [ -n "$TIMEOUT_BIN" ]; then
+        "$TIMEOUT_BIN" "$HOST_TIMEOUT" \
+            "$ENGINE" exec --user "$uid:0" "$cid" /bin/bash /battery.sh "$ONLY_EXTENSIONS" \
+            > "$WORKDIR/guest-$safe.out" 2>&1 || guest_rc=$?
+    else
+        echo "  NOTE: no usable timeout(1) on this host — the battery runs unbounded"
+        "$ENGINE" exec --user "$uid:0" "$cid" /bin/bash /battery.sh "$ONLY_EXTENSIONS" \
+            > "$WORKDIR/guest-$safe.out" 2>&1 || guest_rc=$?
+    fi
+    tee -a "$log" < "$WORKDIR/guest-$safe.out"
+    if [ "$guest_rc" -eq 124 ]; then
+        note_fail "$image: the battery exceeded the ${HOST_TIMEOUT}s host budget and was killed (--host-timeout)"
+    fi
 
     # Parse the guest's RESULT/FAILURE lines.
     local row="" key
@@ -1005,7 +1106,9 @@ run_image() {
     fi
 }
 
+IMAGE_COUNT=0
 for image in $IMAGES; do
+    IMAGE_COUNT=$((IMAGE_COUNT + 1))
     run_image "$image"
 done
 
@@ -1023,9 +1126,19 @@ echo "host checks: components=$RES_COMPONENTS psql-link=$RES_PSQL_LINK needed=$R
 echo "logs: $WORKDIR"
 
 [ "$SKIPPED" -eq 0 ] || echo "images skipped (no host OpenSSL of this variant): $SKIPPED"
-if [ "$FAILURES" -eq 0 ]; then
-    echo "ACCEPTANCE PASSED"
-    exit 0
+if [ "$FAILURES" -ne 0 ]; then
+    echo "ACCEPTANCE FAILED ($FAILURES failing check(s))"
+    exit 1
 fi
-echo "ACCEPTANCE FAILED ($FAILURES failing check(s))"
-exit 1
+# Nothing failed — but a run in which no image was actually exercised has
+# proved nothing about the artifact on a host, so it is not a pass.
+if [ "$IMAGE_COUNT" -gt 0 ] && [ "$SKIPPED" -eq "$IMAGE_COUNT" ]; then
+    echo "ACCEPTANCE INCOMPLETE (all $IMAGE_COUNT image(s) skipped — no host was exercised; host-side checks passed)"
+    exit 3
+fi
+if [ "$SKIPPED" -eq 0 ]; then
+    echo "ACCEPTANCE PASSED"
+else
+    echo "ACCEPTANCE PASSED ($SKIPPED of $IMAGE_COUNT image(s) skipped)"
+fi
+exit 0
