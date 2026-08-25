@@ -112,6 +112,16 @@ project-config: |
   ExpandFlags: module:perl-libwww-perl-6.34
   Prefer: python3-devel
   Prefer: selinux-policy-targeted
+  # PostGIS's libgdal.so.NN()(64bit)/libproj.so.NN()(64bit) Requires are a
+  # "have choice" between EPEL's gdal-libs/proj and our /opt-prefixed
+  # percona-gdal/percona-proj (ppg:common:deps deliberately keeps those
+  # auto-Provides). Ours must win: EPEL's fully-optioned libgdal drags ~70
+  # surplus shared objects into the tarball — including the armadillo/BLAS
+  # chain whose FlexiBLAS ELF constructor abort()s on Rocky hosts — and has
+  # its data directory compiled to /usr/share/{gdal,proj}, a path no tarball
+  # host has. build-tarball.sh asserts EPEL's are absent from the chroot.
+  Prefer: percona-gdal
+  Prefer: percona-proj
   # glibc requires the virtual "glibc-langpack"; every glibc-langpack-*
   # (plus glibc-all-langpacks and glibc-minimal-langpack) provides it, and
   # image-type expansion resolves the full runtime closure while ignoring
@@ -127,7 +137,15 @@ project-config: |
   Binarytype: rpm
   # Same choice-resolution as staging RockyLinux_9 (hdf-libs vs hdf both
   # provide libdf.so.0 — pulled in via the PostGIS/gdal dependency chain).
+  # Kept, but expected to be inert now: percona-gdal (below) is built
+  # --without-hdf4/hdf5, so nothing should pull the hdf chain into this
+  # chroot any more. A Prefer for a choice that never arises costs nothing.
   Prefer: hdf-libs
+  # See the ssl1.1 block: our lean /opt GDAL+PROJ must win the
+  # libgdal.so.NN()(64bit)/libproj.so.NN()(64bit) choice over EPEL's
+  # gdal-libs/proj.
+  Prefer: percona-gdal
+  Prefer: percona-proj
   # Same glibc-langpack choice as ssl1.1 above: the EL9 base configs carry
   # only "Ignore: glibc:glibc-langpack" (no Prefer), which image-type
   # expansion ignores.

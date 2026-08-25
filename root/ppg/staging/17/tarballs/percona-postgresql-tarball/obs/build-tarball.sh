@@ -28,6 +28,12 @@ PYTHON_PREFIX=/opt/percona-python3
 PERL_PREFIX=/opt/percona-perl
 TCL_PREFIX=/opt/percona-tcl
 HAPROXY_PREFIX=/opt/percona-haproxy
+# Lean /opt GDAL+PROJ runtimes (percona-gdal / percona-proj RPMs). Like the
+# language runtimes these are installed by their RPMs, ship as their own
+# top-level tarball components, and carry their resource directories at the
+# path compiled into the libraries.
+GDAL_PREFIX=/opt/percona-gdal
+PROJ_PREFIX=/opt/percona-proj
 
 ###############################################################
 # 0. Language runtimes installed by the percona-* RPMs
@@ -67,17 +73,80 @@ done
 }
 
 ###############################################################
-# System library exclusion list — these are always on the target
-# system and must NOT be bundled (matches pg_tarballs_builder.sh)
+# 0a. GDAL/PROJ runtimes + psql client from the helper RPMs
 ###############################################################
+# percona-gdal/percona-proj (ppg:common:deps) replace EPEL's gdal-libs/proj
+# for the PostGIS libraries the tarball bundles. EPEL's cost us ~70 surplus
+# shared objects (armadillo/BLAS -> a FlexiBLAS ELF constructor that
+# abort()s on Rocky hosts, hdf/netcdf/OPeNDAP/poppler/xerces/ODBC/mariadb,
+# and libtirpc/libexpat/libpcre2-posix) and compiled their resource paths
+# to /usr/share/{gdal,proj}, which does not exist on a tarball host.
+# Ours are lean and have those paths compiled to /opt/percona-*/share.
+GDAL_LIB=$(ls "$GDAL_PREFIX"/lib/libgdal.so.[0-9]* 2>/dev/null | head -1)
+PROJ_LIB=$(ls "$PROJ_PREFIX"/lib/libproj.so.[0-9]* 2>/dev/null | head -1)
+[ -n "$GDAL_LIB" ] || { echo "FATAL: no $GDAL_PREFIX/lib/libgdal.so.* — percona-gdal not installed?" >&2; exit 1; }
+[ -n "$PROJ_LIB" ] || { echo "FATAL: no $PROJ_PREFIX/lib/libproj.so.* — percona-proj not installed?" >&2; exit 1; }
+for f in "$GDAL_PREFIX/share/gdal/gdalicon.png" "$PROJ_PREFIX/share/proj/proj.db"; do
+    [ -f "$f" ] || { echo "FATAL: resource file $f missing — percona-gdal/percona-proj data dir not at the compiled path" >&2; exit 1; }
+done
+# The prjconf `Prefer: percona-gdal` / `Prefer: percona-proj` lines are what
+# make PostGIS's libgdal.so.NN()(64bit)/libproj.so.NN()(64bit) Requires
+# resolve to ours. If some other package Requires the EPEL packages BY NAME,
+# Prefer cannot help and both libgdal flavours would sit in the chroot — with
+# copy_deps free to bundle the fat one. Fail the build so we find out.
+for epel in gdal gdal-libs proj proj-libs; do
+    if rpm -q "$epel" >/dev/null 2>&1; then
+        echo "FATAL: EPEL $epel is installed in the chroot ($(rpm -q "$epel")) — it must be replaced by percona-gdal/percona-proj (prjconf Prefer:)" >&2
+        exit 1
+    fi
+done
+# percona-psql (this project's RockyLinux_8/RockyLinux_9 build repos): psql
+# linked against BSD libedit instead of the host's libreadline. Section 2b
+# copies it over the server RPM's psql, which is what let the readline
+# LD_PRELOAD/symlink wrapper be deleted.
+PSQL_LIBEDIT=/usr/libexec/percona-psql/psql
+[ -f "$PSQL_LIBEDIT" ] || { echo "FATAL: $PSQL_LIBEDIT missing — percona-psql not installed?" >&2; exit 1; }
+
+###############################################################
+# Universal host baseline — the ONLY libraries taken from the
+# target system; everything else must be bundled
+###############################################################
+# CONTRACT: every token below names a library that is present on EVERY
+# supported minimal host, so a tarball binary may resolve it from the host
+# instead of carrying a copy. Verified 2026-07-29 against debian:12,
+# ubuntu:24.04 and rockylinux:9-minimal (the three probe images):
+#
+#   * glibc family + the dynamic loader (libc/libm/libpthread/libdl/librt/
+#     libresolv/libnss_*/ld-linux) and libgcc_s/libstdc++ — the toolchain
+#     runtime of any Linux userland.
+#   * libz/libbz2/liblz4/liblzma/libzstd — pulled in by dpkg/rpm, systemd
+#     and coreutils on every one of the three images.
+#   * libsystemd/libselinux/libpam*/libaudit/libcap*/libgcrypt/libgpg-error
+#     — the pam/systemd stack every image ships (and which the tarball only
+#     ever touches through the distro's own binaries).
+#   * libtinfo — bash links it, so it exists wherever a shell does; needed
+#     by libedit (bin/psql) and by python's readline extension.
+#   * libssl/libcrypto — deliberately host-provided: that is exactly what
+#     the ssl1.1/ssl3 variant labels promise, and the section-15 OpenSSL
+#     host-ABI audit turns the promise into a tested guarantee.
+#
+# NOT on this list, i.e. BUNDLED (each one an acceptance-testing finding):
+#   * libidn2/libunistring/libnghttp2 — sonames drift across distro
+#     generations (libunistring.so.2 on EL8/EL9 vs .so.5 on current
+#     Debian/Ubuntu) and minimal hosts do not ship them at all.
+#   * libtirpc/libnsl/libeconf/libpcre2-8/libpcre2-posix/libexpat/
+#     libreadline — all were excluded until the 2026-07 QA round, all are
+#     ABSENT from at least one probe image (libpcre2-posix on default
+#     Debian/Ubuntu, libtirpc/libnsl on debian:12-slim, libreadline on
+#     every minimal image), and libreadline additionally has the EL8 .so.7
+#     vs modern .so.8 soname split that forced the old psql wrapper. Once
+#     unexcluded they flow through copy_deps/the NEEDED audit
+#     automatically; the section-15 baseline gate asserts they never
+#     silently come back.
+#
 # NOTE: the string literal below is a whitespace-separated token list —
 # every word in it becomes a live glob prefix in is_system_lib, so never
 # put comments inside the quotes.
-# libidn2/libunistring/libnghttp2 are deliberately NOT excluded (i.e. they
-# ARE bundled): acceptance testing showed their sonames drift across distro
-# generations (libunistring.so.2 on EL8/EL9 vs .so.5 on current Debian/
-# Ubuntu) and minimal hosts do not ship them at all. Once unexcluded they
-# flow through copy_deps/the NEEDED audit automatically.
 SYSTEM_LIBS_EXCLUDE="
 libc.so
 libm.so
@@ -86,7 +155,6 @@ libdl.so
 librt.so
 libresolv.so
 libnss_
-libnsl.so
 ld-linux
 libgcc_s.so
 libstdc++.so
@@ -102,17 +170,27 @@ libpam_misc.so
 libaudit.so
 libcap.so
 libcap-ng.so
-libeconf.so
 libgcrypt.so
 libgpg-error.so
 libssl.so
 libcrypto.so
+libtinfo.so
+"
+
+# Sonames that were on the exclude list before the 2026-07 QA round and must
+# now always be BUNDLED (see the contract above). The section-15 baseline
+# gate uses this list twice: no token may be matched by is_system_lib, and
+# no bundled ELF may NEED one of them without the artifact carrying it.
+# Deliberately NOT a second copy of the baseline: one literal list, one
+# removed-tokens list, no third place to keep in sync.
+FORMERLY_EXCLUDED_LIBS="
+libtirpc.so
+libnsl.so
+libeconf.so
 libpcre2-8.so
 libpcre2-posix.so
-libtinfo.so
-libreadline.so
 libexpat.so
-libtirpc.so
+libreadline.so
 "
 
 is_system_lib() {
@@ -253,7 +331,7 @@ if grep -qE "^(log_destination|logging_collector|log_directory|log_filename|log_
 fi
 
 ###############################################################
-# 2b. PostgreSQL cleanup + psql wrapper + gather.sql
+# 2b. PostgreSQL cleanup + libedit psql + gather.sql
 ###############################################################
 # Remove RPM service helpers that don't belong in the tarball
 rm -f $PG_PREFIX/bin/postgresql-${PG_MAJOR}-* 2>/dev/null || true
@@ -265,64 +343,21 @@ for f in /usr/pgsql-${PG_MAJOR}/share/contrib/gather.sql \
     [ -f "$f" ] && cp "$f" $PG_PREFIX/bin/ && break || true
 done
 
-# psql wrapper: rename real binary to psql.bin, create wrapper (matches reference tarball)
-mv $PG_PREFIX/bin/psql $PG_PREFIX/bin/psql.bin
-cat > $PG_PREFIX/bin/psql << 'EOF'
-#!/bin/bash
-# psql wrapper (mirrors the official Percona tarball wrapper).
-#
-# psql.bin is built against libreadline, which is deliberately NOT bundled
-# (system exclude list) — the HOST copy is used at run time. Two mechanisms:
-#
-#  * LD_PRELOAD of the host libreadline: covers the case where psql.bin's
-#    DT_NEEDED soname matches a host library (e.g. the EL9-built ssl3
-#    binary needs libreadline.so.8, present on all modern hosts).
-#
-#  * libreadline.so.7 symlink fallback: the EL8-built (ssl1.1) psql.bin
-#    carries "NEEDED libreadline.so.7", but current hosts ship only
-#    libreadline.so.8 — and LD_PRELOAD can NOT satisfy a missing NEEDED
-#    soname, the loader still refuses to start. So when the host offers
-#    only .so.8, create a libreadline.so.7 -> <host .so.8> symlink inside
-#    the artifact's own lib dir, which the loader reaches through
-#    psql.bin's RUNPATH ($ORIGIN/../lib). readline 7 -> 8 is compatible
-#    for everything psql uses; the official wrapper does exactly this.
-#    The symlink write into the extraction dir is best-effort (|| true):
-#    on a read-only install it fails silently and we still exec psql.bin
-#    (which then only matters for the .so.7-needing binary anyway).
-PG_BIN_PATH=`dirname "$0"`
-PG_LIB_PATH=$PG_BIN_PATH/../lib
-PLL=""
-RL8=""
-if [ -f /lib64/libreadline.so.7 ]; then
-    # Host still ships .so.7: satisfies the EL8-built binary directly.
-    PLL=/lib64/libreadline.so.7
-elif [ -f /lib64/libreadline.so.8 ]; then
-    PLL=/lib64/libreadline.so.8
-    RL8=$PLL
-elif [ -f /usr/lib/x86_64-linux-gnu/libreadline.so.8 ]; then
-    PLL=/usr/lib/x86_64-linux-gnu/libreadline.so.8
-    RL8=$PLL
-elif [ -f /lib/x86_64-linux-gnu/libreadline.so.8 ]; then
-    PLL=/lib/x86_64-linux-gnu/libreadline.so.8
-    RL8=$PLL
-elif [ -f /lib/aarch64-linux-gnu/libreadline.so.8 ]; then
-    PLL=/lib/aarch64-linux-gnu/libreadline.so.8
-    RL8=$PLL
-fi
-# Symlink fallback: host has only .so.8 and no .so.7 is reachable yet in
-# our lib dir — link .so.7 to the host .so.8 so an EL8-built psql.bin's
-# NEEDED entry resolves. Harmless for the .so.8-linked (EL9) binary: the
-# extra symlink is simply never looked up.
-if [ -n "$RL8" ] && [ ! -e "$PG_LIB_PATH/libreadline.so.7" ]; then
-    ln -sf "$RL8" "$PG_LIB_PATH/libreadline.so.7" 2>/dev/null || true
-fi
-if [ -z "$PLL" ]; then
-    LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PG_BIN_PATH/../lib "$PG_BIN_PATH/psql.bin" "$@"
-else
-    LD_PRELOAD=$PLL LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PG_BIN_PATH/../lib "$PG_BIN_PATH/psql.bin" "$@"
-fi
-EOF
-chmod +x $PG_PREFIX/bin/psql
+# psql: the libedit-linked client from percona-psql replaces the server
+# RPM's readline-linked one. The RPM build links psql against the
+# buildroot's GNU readline, which minimal target hosts do not ship at all —
+# and the EL8 build needs the long-gone libreadline.so.7 soname. The old
+# tarball worked around that with a psql.bin + shell-wrapper pair that
+# LD_PRELOADed the host readline and, failing that, symlinked
+# libreadline.so.7 at a host .so.8 inside the extraction dir. That whole
+# machinery is GONE: percona-psql is the same PostgreSQL source configured
+# --with-libedit-preferred, so bin/psql NEEDs libedit.so.0 (bundled by
+# section 13's copy_deps, libedit itself needs only host-baseline
+# libtinfo) and no readline is involved on any host. bin/psql is the REAL
+# binary now, like every other tarball binary; section 13's patch_rpath
+# rewrites its RUNPATH to $ORIGIN/../lib and section 15 asserts the link
+# surface (libedit in, libreadline out).
+install -m 0755 "$PSQL_LIBEDIT" $PG_PREFIX/bin/psql
 
 # NOTE: postgres is shipped as the REAL binary — no env wrapper. The
 # PERL5LIB/TCL_LIBRARY/PYTHONHOME exports the old wrapper carried are now
@@ -585,13 +620,14 @@ cp -rp /etc/haproxy/. $HAPROXY_PREFIX/etc/haproxy/
     cp /etc/sysconfig/haproxy $HAPROXY_PREFIX/etc/sysconfig/haproxy/haproxy.sysconfig || true
 mkdir -p $HAPROXY_PREFIX/share/man/man1
 [ -d /usr/share/haproxy ] && cp -rp /usr/share/haproxy/. $HAPROXY_PREFIX/share/ || true
-# haproxy links BOTH libpcre2-8 and libpcre2-posix. Both sit on the global
-# system-exclude list (host-provided by design for every other component),
-# but while libpcre2-8.so.0 really is everywhere (libselinux needs it),
-# libpcre2-posix is NOT installed on default Debian/Ubuntu hosts — haproxy
-# would fail to load (acceptance-verified on ubuntu:24.04). The official
-# tarball bundles the pcre2 pair into percona-haproxy/lib; do the same.
-# copy_deps won't (exclude list), so copy the symlink families explicitly.
+# haproxy links BOTH libpcre2-8 and libpcre2-posix, and libpcre2-posix is
+# NOT installed on default Debian/Ubuntu hosts — haproxy would fail to load
+# (acceptance-verified on ubuntu:24.04). The official tarball bundles the
+# pcre2 pair into percona-haproxy/lib. Since the 2026-07 QA round the pcre2
+# sonames are off the host baseline, so section 13's copy_deps bundles them
+# anyway; this explicit copy is kept because it brings the COMPLETE symlink
+# family in one step and does not depend on ldd resolving them. cp -a runs
+# before section 13, whose copy_deps uses cp -pn, so the two never fight.
 cp -a /usr/lib64/libpcre2-8.so* /usr/lib64/libpcre2-posix.so* $HAPROXY_PREFIX/lib/
 for m in /usr/share/man/man1/haproxy.1* /usr/share/man/man1/halog.1*; do
     [ -e "$m" ] || continue
@@ -614,12 +650,61 @@ find "$PYTHON_PREFIX" -type d -name '__pycache__' -prune -exec rm -rf {} +
 find "$PYTHON_PREFIX" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
 
 ###############################################################
+# 12b. GDAL/PROJ: prune the /opt trees to the lean tarball layout
+###############################################################
+# percona-gdal/percona-proj are already installed AT their final tarball
+# location (/opt/percona-{gdal,proj}) — nothing to stage, unlike every other
+# component. They ship a full development tree though (include/, bin/ CLI
+# tools, man pages, pkgconfig/cmake files); the tarball wants only what the
+# runtime needs, matching the lean layout of the official artifact and of
+# our other /opt components: lib/ plus the resource directory whose path is
+# compiled into the library (share/gdal, share/proj with proj.db).
+#
+# These two are top-level components of their own (13 in total) rather than
+# being flattened into percona-postgresql${PG_MAJOR}: the data paths are
+# compiled as /opt/percona-{gdal,proj}/share/..., so they resolve with ZERO
+# environment variables once the documented install step copies the
+# components to /opt — the same mechanism as percona-perl/tcl/python3. The
+# PostGIS libraries do NOT load these copies: section 13 bundles
+# libgdal/libproj (and their lean deps) into percona-postgresql${PG_MAJOR}/lib,
+# where postgis_raster's $ORIGIN RUNPATH finds them, and those bundled
+# copies carry the very same compiled share paths.
+for d in $GDAL_PREFIX $PROJ_PREFIX; do
+    [ -d "$d/lib" ] || { echo "FATAL: $d/lib missing" >&2; exit 1; }
+    # ${d:?} — a defensive brake on an rm -rf built from a variable.
+    rm -rf "${d:?}/include" "${d:?}/bin" "${d:?}/lib/pkgconfig" "${d:?}/lib/cmake"
+    find "$d/lib" -name '*.la' -delete
+    # Keep only the compiled-in resource dirs under share/ (drops man/,
+    # doc/, bash-completion/, ...).
+    find "$d/share" -mindepth 1 -maxdepth 1 \
+         ! -name gdal ! -name proj -exec rm -rf {} +
+done
+# The prunes above must not have removed what the libraries look for.
+[ -f "$GDAL_PREFIX/share/gdal/gdalicon.png" ] || { echo "FATAL: $GDAL_PREFIX/share/gdal emptied by the prune" >&2; exit 1; }
+[ -f "$PROJ_PREFIX/share/proj/proj.db" ] || { echo "FATAL: $PROJ_PREFIX/share/proj/proj.db emptied by the prune" >&2; exit 1; }
+
+###############################################################
 # 13. Bundle .so deps and patchelf RPATH for ELF prefixes
 ###############################################################
+# copy_deps resolves deps with ldd, i.e. through the system loader, and
+# /opt/percona-{gdal,proj}/lib are not in ld.so.cache — so
+# postgis_raster-3.so's NEEDED libgdal.so.NN/libproj.so.NN would come back
+# "not found" and never be bundled (before the 2026-07 QA round they
+# resolved to EPEL's fat gdal-libs from /usr/lib64 instead). Run the
+# bundling passes with those two directories on LD_LIBRARY_PATH. The
+# variable is exported inside a SUBSHELL function body, so it applies to
+# the bundling only and never leaks into patch_rpath, the ELF patcher, the
+# gates or the smoke probes (the dlopen smoke in particular must resolve
+# through RUNPATHs alone). Neither directory holds anything but
+# libgdal/libproj, so no other dependency can be shadowed by it.
+bundle_deps_lean() (
+    export LD_LIBRARY_PATH="$GDAL_PREFIX/lib:$PROJ_PREFIX/lib"
+    bundle_deps "$@"
+)
 for prefix in $PG_PREFIX /opt/percona-pgbouncer \
               /opt/percona-pgpool-II /opt/percona-pgbackrest \
               $TCL_PREFIX $HAPROXY_PREFIX; do
-    bundle_deps "$prefix"
+    bundle_deps_lean "$prefix"
     patch_rpath "$prefix"
 done
 # (tclsh8.6's compiled /opt/percona-tcl/lib RPATH becomes the equivalent
@@ -822,6 +907,96 @@ if [ -s /tmp/needed-audit.txt ]; then
     exit 1
 fi
 
+echo "=== Verification: surplus dependency-chain audit ==="
+# The EPEL gdal-libs/proj chain (replaced by percona-gdal/percona-proj) is
+# what made this gate necessary: it dragged ~70 shared objects into the
+# artifact, among them libflexiblas, whose ELF CONSTRUCTOR abort()s when its
+# dlopen'ed BLAS backend plugin is absent — i.e. on every host that is not
+# the buildroot. None of the libraries below has any business in a
+# PostgreSQL tarball; their presence means a fat dependency chain crept back
+# in (a new BuildRequires, a lost prjconf Prefer:, a re-optioned percona-gdal).
+# Checked two ways: no bundled file may BE one of them, and no bundled ELF
+# may NEED one of them (which would also fail the NEEDED audit above, but
+# with a much less specific message).
+# (libdf/libmfhdf are hdf4's two libraries — they do NOT start with
+# "libhdf", which is hdf5's prefix, so both are named explicitly. libdf.so.0
+# is the very library the ssl3 `Prefer: hdf-libs` line existed for.)
+SURPLUS_LIBS="libflexiblas libarmadillo libhdf libdf libmfhdf libnetcdf libdap
+libpoppler libmariadb libodbc libkml libxerces libarpack libsuperlu"
+: > /tmp/surplus-audit.txt
+for bad in $SURPLUS_LIBS; do
+    find /opt -name "${bad}*" -printf 'SURPLUS-FILE: %p\n' >> /tmp/surplus-audit.txt
+done
+find /opt -type f \( -perm -u+x -o -name '*.so*' \) | while read -r f; do
+    file "$f" 2>/dev/null | grep -q ELF || continue
+    patchelf --print-needed "$f" 2>/dev/null | while read -r soname; do
+        for bad in $SURPLUS_LIBS; do
+            case "$soname" in
+                ${bad}*) echo "SURPLUS-NEEDED: $f needs $soname" ;;
+            esac
+        done
+    done
+done >> /tmp/surplus-audit.txt
+if [ -s /tmp/surplus-audit.txt ]; then
+    cat /tmp/surplus-audit.txt
+    echo "FATAL: surplus dependency chain present in the artifact" >&2
+    exit 1
+fi
+
+echo "=== Verification: host-baseline gate ==="
+# Two-part self-consistency check on the universal host baseline (see the
+# CONTRACT at the top of this script). QA finding 1 was exactly this: three
+# libraries the artifact needed (libtirpc, libexpat, libpcre2-posix) were on
+# the exclude list although minimal hosts do not ship them, so nothing
+# bundled them and nothing complained.
+#  1. No formerly-excluded soname may be matched by is_system_lib again —
+#     catches a token being pasted back into SYSTEM_LIBS_EXCLUDE, or a new
+#     token whose glob prefix happens to cover one of them.
+#  2. Any ELF NEEDING one of them must find it inside the artifact. Scope is
+#     all of /opt, the same as the NEEDED audit above: RUNPATHs point at the
+#     component lib dirs, and a component (percona-gdal) may deliberately
+#     rely on a copy bundled in another one.
+: > /tmp/baseline-audit.txt
+for tok in $FORMERLY_EXCLUDED_LIBS; do
+    if is_system_lib "$tok"; then
+        echo "BASELINE: $tok is back on the host baseline — it is NOT present on every minimal host" >> /tmp/baseline-audit.txt
+    fi
+done
+find /opt -type f \( -perm -u+x -o -name '*.so*' \) | while read -r f; do
+    file "$f" 2>/dev/null | grep -q ELF || continue
+    patchelf --print-needed "$f" 2>/dev/null | while read -r soname; do
+        for tok in $FORMERLY_EXCLUDED_LIBS; do
+            case "$soname" in
+                ${tok}*)
+                    grep -qxF "$soname" /tmp/bundled-sonames.txt || \
+                        echo "BASELINE: $f needs $soname, which is neither bundled nor host-universal"
+                    ;;
+            esac
+        done
+    done
+done >> /tmp/baseline-audit.txt
+if [ -s /tmp/baseline-audit.txt ]; then
+    cat /tmp/baseline-audit.txt
+    echo "FATAL: host-baseline contract violated" >&2
+    exit 1
+fi
+
+echo "=== Verification: psql link audit ==="
+# bin/psql must be the percona-psql (libedit) build, never the server RPM's
+# readline one: the readline soname split (EL8 .so.7 vs modern .so.8) and
+# readline's absence from minimal hosts is what the deleted psql wrapper
+# used to paper over.
+readelf -d "$PG_PREFIX/bin/psql" | grep NEEDED || true
+if readelf -d "$PG_PREFIX/bin/psql" | grep -q 'libreadline'; then
+    echo "FATAL: $PG_PREFIX/bin/psql links libreadline — percona-psql was not staged over the RPM psql" >&2
+    exit 1
+fi
+readelf -d "$PG_PREFIX/bin/psql" | grep -q 'NEEDED.*libedit\.so\.0' || {
+    echo "FATAL: $PG_PREFIX/bin/psql does not need libedit.so.0" >&2
+    exit 1
+}
+[ -e "$PG_PREFIX/bin/psql.bin" ] && { echo "FATAL: psql.bin present — the readline wrapper machinery is supposed to be gone" >&2; exit 1; } || true
+
 echo "=== Verification: OpenSSL host-ABI audit ($SSL_VARIANT) ==="
 # libssl/libcrypto are deliberately NOT bundled (they are on the system
 # exclude list above), so every bundled binary resolves them from the HOST
@@ -924,11 +1099,15 @@ then
 fi
 
 echo "=== Verification: component inventory ==="
-# The artifact must contain exactly these ELEVEN top-level components
-# (QA item 8 added percona-haproxy). A missing dir means a staging section
-# silently did nothing; an extra dir means something leaked into /opt.
+# The artifact must contain exactly these THIRTEEN top-level components
+# (QA item 8 added percona-haproxy; the 2026-07 QA round added percona-gdal
+# and percona-proj, whose resource paths are compiled as
+# /opt/percona-{gdal,proj}/share/... and therefore have to be components of
+# their own). A missing dir means a staging section silently did nothing; an
+# extra dir means something leaked into /opt.
 cat > /tmp/expected-components.txt << EOF
 percona-etcd
+percona-gdal
 percona-haproxy
 percona-patroni
 percona-perl
@@ -937,12 +1116,13 @@ percona-pgbadger
 percona-pgbouncer
 percona-pgpool-II
 percona-postgresql${PG_MAJOR}
+percona-proj
 percona-python3
 percona-tcl
 EOF
-ls /opt | sort > /tmp/actual-components.txt
+ls /opt | LC_ALL=C sort > /tmp/actual-components.txt
 if ! diff -u /tmp/expected-components.txt /tmp/actual-components.txt; then
-    echo "FATAL: /opt component set does not match the expected 11 components" >&2
+    echo "FATAL: /opt component set does not match the expected 13 components" >&2
     exit 1
 fi
 
@@ -960,6 +1140,108 @@ env -i "$PYTHON_PREFIX/bin/python3" -B -c 'import patroni; print("patroni import
 env -i "$PERL_PREFIX/bin/perl" -e 'use strict; print "perl OK\n"'
 echo 'puts "tcl OK"' | env -i "$TCL_PREFIX/bin/tclsh${TCL_VER}"
 env -u LD_LIBRARY_PATH "$HAPROXY_PREFIX/sbin/haproxy" -v
+# psql runs under a fully EMPTY environment: it must find libedit and libpq
+# through its own RUNPATH ($ORIGIN/../lib) with no readline anywhere.
+env -i "$PG_PREFIX/bin/psql" --version
+
+echo "=== Verification: extension dlopen smoke ==="
+# THE gate for QA finding 1. Every PostgreSQL extension/plugin module in
+# lib/ is dlopen()ed exactly the way the backend does it, from an EMPTY
+# environment so that only the module's own RUNPATH chain is used. That
+# exercises three things at once: the NEEDED closure really is complete and
+# reachable, every dependency's own NEEDED closure resolves too (RUNPATH is
+# not inherited, so this catches a bundled lib the loader cannot satisfy),
+# and every ELF CONSTRUCTOR in the chain runs — which is how the FlexiBLAS
+# abort() that EPEL's gdal chain introduced would have failed the build
+# instead of the user's server.
+#
+# RTLD_LAZY, not RTLD_NOW: extension modules reference postgres backend
+# symbols that only exist inside the running server, so lazy binding is what
+# makes the probe possible at all. Function symbols stay unbound while the
+# library chain loads; data-symbol relocations are still resolved eagerly, so
+# some modules legitimately fail with "undefined symbol: <backend symbol>" —
+# that is a PASS (logged as such). Anything else — a missing library, a
+# failing constructor, an abort — is FATAL.
+#
+# Runs LAST of the functional gates, after section 14a's ELF string patch and
+# all RUNPATH work, so what is probed is the exact final state of the files.
+# Must run AFTER section 12b/13 for the same reason.
+dlopen_probe() {
+    local so="$1" out rc
+    out=$(env -i "$PY_BIN" -B -c \
+        'import ctypes,sys; ctypes.CDLL(sys.argv[1], mode=ctypes.RTLD_LAZY)' \
+        "$so" 2>&1) && rc=0 || rc=$?
+    if [ "$rc" -eq 0 ]; then
+        echo "  dlopen OK: $so"
+        return 0
+    fi
+    # Unresolved postgres backend symbols are expected for server modules.
+    if echo "$out" | grep -q 'undefined symbol'; then
+        echo "  dlopen OK (unresolved backend symbol, expected): $so"
+        echo "$out" | grep 'undefined symbol' | sed 's/^/      /'
+        return 0
+    fi
+    echo "DLOPEN-FAIL ($rc): $so"
+    echo "$out" | sed 's/^/    /'
+    return 1
+}
+# Modules are identified by the PG_MODULE_MAGIC block's Pg_magic_func
+# symbol. binutils (nm) is a BuildRequires; the fallback probes every .so
+# directly in lib/ instead, which is a superset (libpq and the bundled
+# dependencies are dlopen-clean anyway) and never silently probes nothing.
+command -v nm >/dev/null 2>&1 || echo "  NOTE: nm unavailable — probing every lib/*.so"
+DLOPEN_TESTED=""
+DLOPEN_COUNT=0
+DLOPEN_FAILED=0
+for so in "$PG_PREFIX"/lib/*.so; do
+    [ -f "$so" ] || continue
+    if command -v nm >/dev/null 2>&1; then
+        nm -D --defined-only "$so" 2>/dev/null | grep -q 'Pg_magic_func' || continue
+    fi
+    DLOPEN_COUNT=$((DLOPEN_COUNT + 1))
+    DLOPEN_TESTED="$DLOPEN_TESTED $(basename "$so")"
+    dlopen_probe "$so" || DLOPEN_FAILED=$((DLOPEN_FAILED + 1))
+done
+echo "dlopen smoke: $DLOPEN_COUNT extension modules probed, $DLOPEN_FAILED failed"
+if [ "$DLOPEN_FAILED" -ne 0 ]; then
+    echo "FATAL: $DLOPEN_FAILED extension module(s) could not be dlopen'ed" >&2
+    exit 1
+fi
+# A vacuous pass is the failure mode this gate must not have: postgis_raster
+# is the module the whole GDAL/PROJ work exists for, so require it by name
+# (glob-tolerant: the suffix tracks the PostGIS major version).
+case "$DLOPEN_TESTED" in
+    *postgis_raster*) ;;
+    *) echo "FATAL: postgis_raster was not among the dlopen-probed modules ($DLOPEN_TESTED)" >&2; exit 1 ;;
+esac
+# 20-odd modules ship in lib/ (contrib + the Percona extensions + the 3
+# PLs); a handful would mean nm found almost nothing.
+if [ "$DLOPEN_COUNT" -lt 10 ]; then
+    echo "FATAL: only $DLOPEN_COUNT modules probed — module detection is broken" >&2
+    exit 1
+fi
+
+# Constructor-coverage caveat, and why the two probes below are not
+# redundant: the loader resolves eager (data) relocations BEFORE running any
+# constructor, so for a module that legitimately reports "undefined symbol"
+# against a backend data symbol (CurrentMemoryContext & co.) the chain is
+# mapped and its libraries relocated, but the constructors do not run. The
+# bundled libgdal/libproj have no unresolved symbols, so probing them
+# directly does run every constructor in the GDAL dependency chain — the
+# FlexiBLAS abort() case — and at the same time asserts that section 13
+# really bundled both libraries into the PostgreSQL component, which is what
+# lets postgis_raster's $ORIGIN RUNPATH find them with no environment.
+for lib in "$(basename "$GDAL_LIB")" "$(basename "$PROJ_LIB")"; do
+    bundled="$PG_PREFIX/lib/$lib"
+    [ -e "$bundled" ] || {
+        echo "FATAL: $bundled missing — copy_deps did not bundle it (LD_LIBRARY_PATH bundling pass broken?)" >&2
+        exit 1
+    }
+    dlopen_probe "$bundled" || {
+        echo "FATAL: $bundled cannot be dlopen'ed from an empty environment" >&2
+        exit 1
+    }
+done
 
 echo "=== Verification: python bytecode audit ==="
 # Section 12a stripped all bytecode; the official tarball ships none
