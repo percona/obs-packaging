@@ -1,0 +1,5 @@
+build:
+  # Plain RPM package: it is a build input for the simpleimage recipes, so it
+  # must not build on the ssl* (Type: simpleimage) repositories.
+  ssl1.1: false
+  ssl3: false
