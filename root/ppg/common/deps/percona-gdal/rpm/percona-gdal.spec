@@ -46,13 +46,29 @@
 %global gdal_prefix /opt/percona-gdal
 %global proj_prefix /opt/percona-proj
 
+# PERCONA: no link-time optimization. RHEL 9's %%optflags carry -flto=auto,
+# and libgdal is big enough that the final link degenerates into
+# "lto-wrapper: using serial compilation of 128 LTRANS jobs" — minutes of
+# single-threaded work that risks an OBS build timeout for no benefit.
+# Upstream's own --enable-lto is off by default and the autotools build is
+# not LTO-tested. (RHEL 8's optflags do not enable LTO, so this is a no-op
+# there.)
+%global _lto_cflags %{nil}
+
 # PERCONA: base-specific upstream version + which Source to unpack.
 %if 0%{?rhel} == 8
 %global gdal_version 3.0.4
 %global gdal_srcidx 0
+# GDAL 3.0.4 uses --datadir verbatim as the GDAL data dir.
+%global gdal_datadir %{gdal_prefix}/share/gdal
 %else
 %global gdal_version 3.4.3
 %global gdal_srcidx 1
+# GDAL 3.4.3 APPENDS "/gdal" to --datadir (3.0.4 does not), so passing
+# <prefix>/share/gdal here would install to — and compile INST_DATA as —
+# <prefix>/share/gdal/gdal. Self-consistent, but a path nobody expects;
+# pass the parent so both bases land on <prefix>/share/gdal.
+%global gdal_datadir %{gdal_prefix}/share
 %endif
 
 Name:           percona-gdal
@@ -124,9 +140,9 @@ intended for standalone installation.
 # the RPM has to work on its own for the dlopen smoke test).
 export LDFLAGS="%{?__global_ldflags} -Wl,-rpath,%{proj_prefix}/lib"
 
-# --datadir: the whole point of the /opt prefix — GDAL bakes
-#   -DINST_DATA=\"<datadir>\" verbatim into libgdal (its --datadir IS the
-#   GDAL data dir, not its parent), so the resource files
+# --datadir: the whole point of the /opt prefix — GDAL bakes an
+#   -DINST_DATA=\"...\" into libgdal (see %%{gdal_datadir} above: 3.0.4
+#   takes --datadir verbatim, 3.4.3 appends "/gdal"), so the resource files
 #   (gdal_datum.csv, pcs.csv, gt_datum.csv, ...) are found with no
 #   GDAL_DATA in the environment.
 # --with-proj: our /opt PROJ, not the distro's.
@@ -151,7 +167,7 @@ export LDFLAGS="%{?__global_ldflags} -Wl,-rpath,%{proj_prefix}/lib"
 ./configure \
     --prefix=%{gdal_prefix} \
     --libdir=%{gdal_prefix}/lib \
-    --datadir=%{gdal_prefix}/share/gdal \
+    --datadir=%{gdal_datadir} \
     --disable-static \
     --enable-shared \
     --disable-rpath \
@@ -257,8 +273,11 @@ find %{buildroot}%{gdal_prefix} -name '*.la' -delete
 # libraries the official tarball's libgdal does without.
 # (the resource files must actually BE in the directory libgdal was told
 # about — GDAL also carries a <prefix>/share/gdal fallback string, so
-# grepping the library alone would pass even with a wrong --datadir)
+# grepping the library alone would pass even with a wrong --datadir. The
+# second test catches the <prefix>/share/gdal/gdal doubling that
+# GDAL 3.4.3's extra "/gdal" produces if --datadir is set like 3.0.4's.)
 test -s %{buildroot}%{gdal_prefix}/share/gdal/gdalicon.png
+test ! -d %{buildroot}%{gdal_prefix}/share/gdal/gdal
 grep -q '%{gdal_prefix}/share/gdal' %{buildroot}%{gdal_prefix}/lib/libgdal.so.*.*.*
 for bad in libarmadillo libflexiblas libpoppler libhdf5 libmfhdf libnetcdf \
            libdap libxerces libkmlbase libodbc libmariadb libcfitsio libogdi \
