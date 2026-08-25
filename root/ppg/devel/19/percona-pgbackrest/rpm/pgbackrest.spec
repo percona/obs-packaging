@@ -21,6 +21,12 @@ Source3:	pgbackrest.logrotate
 Source4:	pgbackrest.service
 BuildRequires:	gcc openssl-devel zlib-devel percona-postgresql%{pgmajorversion}-devel
 BuildRequires:	libzstd-devel libxml2-devel libyaml-devel meson
+%if !0%{?suse_version}
+BuildRequires:	python3-pyyaml
+%endif
+%if 0%{?suse_version} >= 1500
+BuildRequires:	python3-PyYAML
+%endif
 %if 0%{?rhel} >= 8 || 0%{?fedora} >= 42
 BuildRequires:	libssh2-devel
 %endif

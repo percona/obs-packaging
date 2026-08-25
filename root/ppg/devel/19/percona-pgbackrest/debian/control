@@ -20,6 +20,7 @@ Build-Depends: mawk,
                perl,
                pkgconf,
                python3 (>= 3.10) | python3-distutils,
+               python3-yaml,
                txt2man,
                zlib1g-dev
 Standards-Version: 4.7.2
