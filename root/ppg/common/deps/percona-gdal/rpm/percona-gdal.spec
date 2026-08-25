@@ -79,6 +79,12 @@ Release:        1%{?dist}
 Summary:        GDAL runtime under /opt/percona-gdal for the Percona PostgreSQL binary tarball
 License:        MIT
 URL:            https://gdal.org/
+# PERCONA: x86_64 only. This package exists solely to feed the binary
+# tarball (ppg:staging:NN:tarballs), which is published for x86_64 only,
+# but ppg:common:deps inherits aarch64 from root/project.yaml — without
+# this the aarch64 build is dead weight (and a red build) for an artifact
+# nobody consumes.
+ExcludeArch:    aarch64
 # PERCONA: both tarballs are always fetched by the _service; %%prep
 # unpacks only the one that matches the base being built.
 Source0:        gdal-3.0.4.tar.xz

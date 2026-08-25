@@ -90,17 +90,39 @@ PROJ_LIB=$(ls "$PROJ_PREFIX"/lib/libproj.so.[0-9]* 2>/dev/null | head -1)
 for f in "$GDAL_PREFIX/share/gdal/gdalicon.png" "$PROJ_PREFIX/share/proj/proj.db"; do
     [ -f "$f" ] || { echo "FATAL: resource file $f missing — percona-gdal/percona-proj data dir not at the compiled path" >&2; exit 1; }
 done
-# The prjconf `Prefer: percona-gdal` / `Prefer: percona-proj` lines are what
-# make PostGIS's libgdal.so.NN()(64bit)/libproj.so.NN()(64bit) Requires
-# resolve to ours. If some other package Requires the EPEL packages BY NAME,
-# Prefer cannot help and both libgdal flavours would sit in the chroot — with
-# copy_deps free to bundle the fat one. Fail the build so we find out.
-for epel in gdal gdal-libs proj proj-libs; do
-    if rpm -q "$epel" >/dev/null 2>&1; then
-        echo "FATAL: EPEL $epel is installed in the chroot ($(rpm -q "$epel")) — it must be replaced by percona-gdal/percona-proj (prjconf Prefer:)" >&2
-        exit 1
-    fi
-done
+# No distro GDAL/PROJ runtime may be in the chroot: ours live under
+# /opt/percona-{gdal,proj}/lib, so any libgdal/libproj in the system library
+# directory is a foreign one, and copy_deps would be free to bundle the fat
+# flavour. This is deliberately a PROPERTY check on the files rather than a
+# list of package names — the package name differs per base (gdal-libs on
+# EL8, gdal3.4-libs on EL9) and a name list silently stops protecting us the
+# moment EPEL renames or a new provider appears.
+#
+# Two prjconf mechanisms keep it clean (root/ppg/staging/NN/tarballs/
+# project.yaml, both ssl blocks):
+#   * `Prefer: percona-gdal` / `Prefer: percona-proj` win the "have choice"
+#     for PostGIS's automatic libgdal.so.NN()(64bit)/libproj.so.NN()(64bit)
+#     soname Requires;
+#   * `Ignore: percona-postgis35_NN:gdal-libs,proj` (gdal3.4-libs on EL9)
+#     drops PostGIS's BY-NAME Requires on the distro packages, which Prefer
+#     cannot redirect (a by-name dep has a single provider, so there is no
+#     choice to resolve).
+# If this fires, some package still pulls a distro GDAL/PROJ in by name — the
+# rpm -qf / --whatrequires output below names it, and it needs its own
+# Ignore: line.
+stray_gis=$(ls /usr/lib64/libgdal.so.* /usr/lib64/libproj.so.* 2>/dev/null)
+if [ -n "$stray_gis" ]; then
+    echo "FATAL: a distro GDAL/PROJ runtime is installed in the chroot — it must be replaced by percona-gdal/percona-proj (prjconf Prefer:/Ignore:, see the comment above this check)" >&2
+    for f in $stray_gis; do
+        owners=$(rpm -qf "$f" 2>/dev/null) || owners=""
+        [ -n "$owners" ] || owners="<no owning package>"
+        for o in $owners; do
+            echo "  $f  <-  $o" >&2
+            rpm -q --whatrequires "$o" 2>/dev/null | sed "s|^|      required by: |" >&2
+        done
+    done
+    exit 1
+fi
 # percona-psql (this project's RockyLinux_8/RockyLinux_9 build repos): psql
 # linked against BSD libedit instead of the host's libreadline. Section 2b
 # copies it over the server RPM's psql, which is what let the readline
