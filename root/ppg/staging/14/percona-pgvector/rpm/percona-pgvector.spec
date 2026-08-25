@@ -43,32 +43,26 @@ inner product, and cosine distance
 %package llvmjit
 Summary:	Just-in-time compilation support for pgvector
 Requires:	%{name}%{?_isa} = %{version}-%{release}
-#%%if 0%%{?rhel} && 0%%{?rhel} == 7
-#%%ifarch aarch64
-#Requires:	llvm-toolset-7.0-llvm >= 7.0.1
-#%%else
-#Requires:	llvm5.0 >= 5.0
-#%%endif
-#%%endif
+
 %if 0%{?suse_version} >= 1315 && 0%{?suse_version} <= 1499
 BuildRequires:	llvm6-devel clang6-devel
-#Requires:	llvm6
+Requires:	llvm6
 %endif
 %if 0%{?suse_version} >= 1500 && 0%{?suse_version} < 1600
 BuildRequires:	llvm17-devel clang17-devel clang17 llvm17
-#Requires:	llvm17
+Requires:	llvm17
 %endif
 %if 0%{?suse_version} == 1600
 BuildRequires:	llvm19-devel clang19-devel clang19 llvm19
-#Requires:	llvm19
+Requires:	llvm19
 %endif
 %if 0%{?suse_version} > 1600
 BuildRequires:	llvm-devel clang-devel clang llvm
-#Requires:	llvm
+Requires:	llvm
 %endif
 %if 0%{?fedora} || 0%{?rhel} >= 8
 BuildRequires:	llvm-devel >= 19.0 clang-devel >= 19.0
-#Requires:	llvm >= 13.0
+Requires:	llvm >= 19.0
 %endif
 
 %description llvmjit

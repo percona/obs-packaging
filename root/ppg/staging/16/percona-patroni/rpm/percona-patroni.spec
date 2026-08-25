@@ -1,22 +1,17 @@
 
 %global         debug_package %{nil}
 
-%if 0%{?fedora} && 0%{?fedora} == 43
+%if 0%{?fedora} && 0%{?fedora} == 45
+%global __ospython %{_bindir}/python3.15
+%global python3_pkgversion 3.15
+%global python3_pkgprefix python3
+%endif
+%if 0%{?fedora} && 0%{?fedora} <= 44
 %global __ospython %{_bindir}/python3.14
 %global python3_pkgversion 3.14
 %global python3_pkgprefix python3
 %endif
-%if 0%{?fedora} && 0%{?fedora} <= 42
-%global __ospython %{_bindir}/python3.13
-%global python3_pkgversion 3.13
-%global python3_pkgprefix python3
-%endif
-%if 0%{?rhel} && 0%{?rhel} == 8
-%global __ospython %{_bindir}/python3
-%global python3_pkgversion 3.12
-%global python3_pkgprefix python3.12
-%endif
-%if 0%{?rhel} && 0%{?rhel} >= 9
+%if 0%{?rhel} && 0%{?rhel} <= 10
 %global __ospython %{_bindir}/python3.12
 %global python3_pkgversion 3.12
 %global python3_pkgprefix python3.12
@@ -51,12 +46,13 @@ BuildRequires:  python%{python3_pkgversion}-devel
 
 Requires:       %{python3_pkgprefix}-six
 Requires:       %{python3_pkgprefix}-dateutil
+Requires:       %{python3_pkgprefix}-systemd
 Requires:       %{python3_pkgprefix}-ydiff < 1.5
 Requires:       %{python3_pkgprefix}-ydiff >= 1.4.2
 Requires:       %{name}-etcd
 
 
-%if !0%{?suse_version}
+%if !0%{?suse_version} && 0%{?rhel} != 10
 Requires:        %{python3_pkgprefix}-click
 Requires:        %{python3_pkgprefix}-cryptography >= 1.4
 Requires:        %{python3_pkgprefix}-prettytable
@@ -65,6 +61,17 @@ Requires:        %{python3_pkgprefix}-psycopg2
 Requires:        %{python3_pkgprefix}-pyyaml
 Requires:        %{python3_pkgprefix}-urllib3 >= 1.19.1
 Requires:        %{python3_pkgprefix}-wcwidth
+%endif
+
+%if 0%{?rhel} && 0%{?rhel} == 10
+Requires:        python3-click
+Requires:        python%{python3_pkgversion}-cryptography >= 1.4
+Requires:        python3-prettytable
+Requires:        python%{python3_pkgversion}-pyyaml
+Requires:        python3-psutil
+Requires:        python%{python3_pkgversion}-urllib3 >= 1.19.1
+Requires:        python3-psycopg2
+Requires:        python3-wcwidth
 %endif
 
 %if 0%{?suse_version} >= 1500
@@ -100,18 +107,28 @@ Summary:        Related components to use patroni with Consul
 Requires:        %{name} = %{epoch}:%{version}-%{release}
 Requires:        consul
 Requires:        %{python3_pkgprefix}-py-consul >= 1.6.0
+%if 0%{?rhel} != 10
 Requires:        %{python3_pkgprefix}-requests
+%endif
+%if 0%{?rhel} && 0%{?rhel} == 10
+Requires:        python3-requests
+%endif
 %description -n %{name}-consul
 Meta package to pull consul related dependencies for patroni
 
 %package -n %{name}-etcd
 Summary:        Related components to use patroni with etcd
 Requires:        %{name} = %{epoch}:%{version}-%{release}
-%if !0%{?suse_version}
+%if !0%{?suse_version} && 0%{?rhel} != 10
 Requires:        %{python3_pkgprefix}-etcd >= 0.4.3
 Requires:        %{python3_pkgprefix}-dns
 %endif
+%if 0%{?rhel} && 0%{?rhel} == 10
+Requires:        python3-etcd >= 0.4.3
+Requires:        python3-dns
+%endif
 %if 0%{?suse_version} >= 1500
+Requires:        %{python3_pkgprefix}-etcd >= 0.4.3
 Requires:        %{python3_pkgprefix}-dnspython
 %endif
 %description -n %{name}-etcd
@@ -120,14 +137,24 @@ Meta package to pull etcd related dependencies for patroni
 %package -n %{name}-aws
 Summary:        Related components to use patroni on AWS
 Requires:        %{name} = %{epoch}:%{version}-%{release}
+%if 0%{?rhel} != 10
 Requires:        %{python3_pkgprefix}-boto3
+%endif
+%if 0%{?rhel} && 0%{?rhel} == 10
+Requires:        python3-boto3
+%endif
 %description -n %{name}-aws
 Meta package to pull AWS related dependencies for patroni
 
 %package -n %{name}-zookeeper
 Summary:        Related components to use patroni with Zookeeper
 Requires:        %{name} = %{epoch}:%{version}-%{release}
+%if 0%{?rhel} != 10
 Requires:        %{python3_pkgprefix}-kazoo >= 1.3.1
+%endif
+%if 0%{?rhel} && 0%{?rhel} == 10
+Requires:        python3-kazoo >= 1.3.1
+%endif
 %description -n %{name}-zookeeper
 Meta package to pull zookeeper related dependencies for patroni
 
