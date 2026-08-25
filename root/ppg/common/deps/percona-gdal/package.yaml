@@ -1,0 +1,35 @@
+title: /opt-prefixed lean GDAL runtime for the PPG binary tarball
+description: |
+  GDAL built from upstream source with the install prefix
+  /opt/percona-gdal and only the driver set the official Percona
+  PostgreSQL tarball's libgdal links, so the binary tarball carries a
+  handful of shared objects instead of the ~70 that EPEL's
+  fully-optioned gdal-libs drags in (armadillo/FlexiBLAS — whose ELF
+  constructor abort()s on Rocky hosts — poppler, hdf4/hdf5, netcdf,
+  OPeNDAP, xerces, libkml, unixODBC, mariadb, cfitsio, ogdi, ...). The
+  GDAL data directory is compiled to /opt/percona-gdal/share/gdal and
+  PROJ comes from percona-proj, so both resolve their resource files
+  with zero environment variables.
+
+  Version is chosen per base so the SONAME matches the GDAL that the
+  shipped PostGIS RPMs linked against: RHEL 8 -> GDAL 3.0.4
+  (libgdal.so.26), RHEL 9 -> GDAL 3.4.3 (libgdal.so.30). That makes it a
+  drop-in replacement for EPEL's libgdal inside the binary tarball only —
+  the shipped PostGIS RPMs keep resolving to EPEL's package on user
+  systems.
+
+  RockyLinux_8 and RockyLinux_9 only: these are the tarball build bases
+  (ssl1.1 / ssl3).
+
+build:
+  RockyLinux_10: false
+  UBI_8: false
+  UBI_9: false
+  Debian_11: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Leap_16: false
+  openSUSE_Tumbleweed: false
