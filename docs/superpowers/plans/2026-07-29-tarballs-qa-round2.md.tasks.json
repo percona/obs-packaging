@@ -4,13 +4,13 @@
     {
       "id": 21,
       "subject": "Task 21: percona-psql (libedit) + tarballs project build repos",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** libedit-linked psql from PG 17.10 source, built in the tarballs project on new RL8/RL9 build repos; simpleimage repos consume it via sibling path.\n\n**Files:**\n- Modify: root/ppg/staging/17/tarballs/project.yaml (add RockyLinux_8/9 build repos; scope Type: simpleimage to ssl repos; sibling paths; Prefer lines)\n- Create: root/ppg/staging/17/tarballs/percona-postgresql-tarball/package.yaml (disable build repos)\n- Create: root/ppg/staging/17/tarballs/percona-psql/{obs/_service,rpm/percona-psql.spec,package.yaml}\n\n**Acceptance Criteria:**\n- psql NEEDS libedit.so.0 + libpq.so.5, zero libreadline (%check)\n- rpmbuild green rocky8+rocky9; psql works on minimal debian:12 with no readline\n- dry-runs clean; scoped prjconf loader-valid\n\n**Verify:** readelf -d psql; minimal-host psql session\n\n```json:metadata\n{\"files\": [\"root/ppg/staging/17/tarballs/project.yaml\", \"root/ppg/staging/17/tarballs/percona-psql/\", \"root/ppg/staging/17/tarballs/percona-postgresql-tarball/package.yaml\"], \"verifyCommand\": \"readelf -d psql (libedit, no readline); minimal debian psql e2e\", \"acceptanceCriteria\": [\"libedit-linked psql\", \"build repos + scoped Type\", \"dry-runs clean\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 22,
       "subject": "Task 22: percona-gdal + percona-proj (lean, /opt, RL8+RL9)",
-      "status": "pending",
+      "status": "in_progress",
       "description": "**Goal:** Lean from-source GDAL (3.0.4 EL8 / 3.4.3 EL9, sonames .26/.30) and PROJ (6.3.2 / 9.6.0, sonames .15/.25) with official's driver set and compiled /opt data paths; drop-in for EPEL libs inside the tarball.\n\n**Files:**\n- Create: root/ppg/common/deps/percona-proj/, root/ppg/common/deps/percona-gdal/\n\n**Acceptance Criteria:**\n- NEEDED surface ~ official (no armadillo/flexiblas/hdf/netcdf/dap/poppler/mariadb/odbc/kml/xerces/tirpc)\n- compiled data paths; proj.db present; dlopen smoke OK from env -i\n- ABI drop-in: postgis + postgis_raster load; ST_Transform works (both bases)\n- dry-runs clean\n\n**Verify:** rocky8/rocky9 containers: CREATE EXTENSION postgis_raster + ST_Transform green\n\n```json:metadata\n{\"files\": [\"root/ppg/common/deps/percona-gdal/\", \"root/ppg/common/deps/percona-proj/\"], \"verifyCommand\": \"postgis_raster load + ST_Transform on both bases\", \"acceptanceCriteria\": [\"lean NEEDED\", \"data paths compiled\", \"ABI drop-in proven\"], \"modelTier\": \"standard\"}\n```"
     },
     {
@@ -43,5 +43,5 @@
       "description": "**Goal:** After user pushes and pr-2 rebuilds: Task-24 battery on full matrix; QA's three flows explicitly green; carried-over regressions green.\n\n**USER-ORDERED GATE - NON-SKIPPABLE.** Captured output for every criterion.\n\n**Files:** none\n\n**Acceptance Criteria:**\n- every extension loads on every host (debian 11/12, ubuntu 22.04/24.04, rocky9/10-minimal)\n- postgis_raster loads RHEL-family + Debian-family; no crash Rocky 9/10; psql works Debian 11 w/o readline\n- carried-over regressions green\n\n**Verify:** battery evidence\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"tools/tarball-acceptance.sh on matrix\", \"acceptanceCriteria\": [\"all extensions load\", \"QA flows green\", \"regressions green\"], \"userGate\": true, \"tags\": [\"user-gate\"], \"requireEvidenceTokens\": [[\"postgis_raster\"], [\"debian:11\", \"psql\"], [\"minimal\"]], \"modelTier\": \"standard\"}\n```"
     }
   ],
-  "lastUpdated": "2026-07-29T12:00:00"
+  "lastUpdated": "2026-07-29T13:30:00"
 }
