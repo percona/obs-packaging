@@ -59,11 +59,13 @@
 %if 0%{?rhel} == 8
 %global gdal_version 3.0.4
 %global gdal_srcidx 0
+%global gdal_soname 26
 # GDAL 3.0.4 uses --datadir verbatim as the GDAL data dir.
 %global gdal_datadir %{gdal_prefix}/share/gdal
 %else
 %global gdal_version 3.4.3
 %global gdal_srcidx 1
+%global gdal_soname 30
 # GDAL 3.4.3 APPENDS "/gdal" to --datadir (3.0.4 does not), so passing
 # <prefix>/share/gdal here would install to — and compile INST_DATA as —
 # <prefix>/share/gdal/gdal. Self-consistent, but a path nobody expects;
@@ -81,6 +83,16 @@ URL:            https://gdal.org/
 # unpacks only the one that matches the base being built.
 Source0:        gdal-3.0.4.tar.xz
 Source1:        gdal-3.4.3.tar.xz
+
+# PERCONA: an EXPLICIT dependency on our own PROJ, not just the automatic
+# libproj.so.NN()(64bit) ELF requires. That auto-requires is ambiguous:
+# EPEL's proj-libs provides the very same symbol on both bases (6.3.2 ->
+# libproj.so.15, 9.6.0 -> libproj.so.25), so a plain `dnf install
+# percona-gdal` could satisfy it with proj-libs, leaving
+# /opt/percona-proj/lib absent, libgdal's rpath dead and the whole
+# compiled-in-data-path mechanism broken. The point of this package is
+# *our* libproj, not any libproj with a matching SONAME.
+Requires:       percona-proj
 
 BuildRequires:  gcc
 BuildRequires:  gcc-c++
@@ -135,10 +147,18 @@ intended for standalone installation.
 %setup -q -T -b %{gdal_srcidx} -n gdal-%{version}
 
 %build
-# PERCONA: rpath to %%{proj_prefix}/lib so libgdal finds our libproj from
-# a plain install (the tarball flattens everything into one lib dir, but
-# the RPM has to work on its own for the dlopen smoke test).
-export LDFLAGS="%{?__global_ldflags} -Wl,-rpath,%{proj_prefix}/lib"
+# PERCONA: TWO rpath entries so libgdal can find our libproj either way.
+#   %%{proj_prefix}/lib — the RPM install layout, and the tarball layout if
+#     task 23 materialises /opt/percona-proj like it does /opt/percona-perl.
+#   $ORIGIN — libgdal's own directory, for a tarball that instead flattens
+#     libproj into the same lib/ dir as libgdal.
+# The second one is not redundant: postgis_raster-3.so's own RUNPATH
+# $ORIGIN does NOT help here, because DT_RUNPATH is not inherited down the
+# load chain — it applies only to that object's own NEEDED entries, so
+# libgdal's NEEDED libproj.so.NN is resolved against libgdal's rpath, not
+# postgis_raster's. \$ORIGIN is escaped so the literal $ORIGIN (not an
+# empty shell expansion) reaches the linker.
+export LDFLAGS="%{?__global_ldflags} -Wl,-rpath,%{proj_prefix}/lib -Wl,-rpath,\$ORIGIN"
 
 # --datadir: the whole point of the /opt prefix — GDAL bakes an
 #   -DINST_DATA=\"...\" into libgdal (see %%{gdal_datadir} above: 3.0.4
@@ -268,21 +288,30 @@ make install DESTDIR=%{buildroot}
 # PERCONA: libtool .la files hardcode buildroot paths.
 find %{buildroot}%{gdal_prefix} -name '*.la' -delete
 
-# PERCONA: hard gates on the two properties this package exists for —
-# the compiled-in data path, and a driver surface with none of the
-# libraries the official tarball's libgdal does without.
-# (the resource files must actually BE in the directory libgdal was told
-# about — GDAL also carries a <prefix>/share/gdal fallback string, so
-# grepping the library alone would pass even with a wrong --datadir. The
-# second test catches the <prefix>/share/gdal/gdal doubling that
-# GDAL 3.4.3's extra "/gdal" produces if --datadir is set like 3.0.4's.)
+# PERCONA: hard gates on the three properties this package exists for.
+#
+# 1. SONAME parity. The package is only useful as a drop-in for the libgdal
+#    the shipped PostGIS RPMs linked against, so assert the SONAME we
+#    promised for this base actually came out. Without this, a source-URL
+#    bump — or this spec being built on an unexpected %%{?rhel} where the
+#    %%if picks the wrong branch — would silently produce a library that is
+#    no longer ABI-compatible with postgis_raster.
+test -e %{buildroot}%{gdal_prefix}/lib/libgdal.so.%{gdal_soname}
+# 2. The compiled-in data path. The resource files must actually BE in the
+#    directory libgdal was told about: GDAL also carries an independent
+#    <prefix>/share/gdal fallback string, so grepping the library alone
+#    would pass even with a wrong --datadir. The third test catches the
+#    <prefix>/share/gdal/gdal doubling that GDAL 3.4.3's extra "/gdal"
+#    produces if --datadir is set the way 3.0.4 needs it.
+grep -q '%{gdal_prefix}/share/gdal' %{buildroot}%{gdal_prefix}/lib/libgdal.so.%{gdal_soname}
 test -s %{buildroot}%{gdal_prefix}/share/gdal/gdalicon.png
 test ! -d %{buildroot}%{gdal_prefix}/share/gdal/gdal
-grep -q '%{gdal_prefix}/share/gdal' %{buildroot}%{gdal_prefix}/lib/libgdal.so.*.*.*
+# 3. A driver surface with none of the libraries the official tarball's
+#    libgdal does without.
 for bad in libarmadillo libflexiblas libpoppler libhdf5 libmfhdf libnetcdf \
            libdap libxerces libkmlbase libodbc libmariadb libcfitsio libogdi \
            libjasper libopenjp2 libtirpc libwebp libgta libpq; do
-    if readelf -d %{buildroot}%{gdal_prefix}/lib/libgdal.so.*.*.* | grep -q "$bad"; then
+    if readelf -d %{buildroot}%{gdal_prefix}/lib/libgdal.so.%{gdal_soname} | grep -q "$bad"; then
         echo "ERROR: libgdal links $bad — driver set is not lean" >&2
         exit 1
     fi

@@ -47,9 +47,11 @@
 %if 0%{?rhel} == 8
 %global proj_version 6.3.2
 %global proj_srcidx 0
+%global proj_soname 15
 %else
 %global proj_version 9.6.0
 %global proj_srcidx 1
+%global proj_soname 25
 %endif
 
 Name:           percona-proj
@@ -147,10 +149,18 @@ find %{buildroot}%{proj_prefix} -name '*.la' -delete
 make -C build install DESTDIR=%{buildroot}
 %endif
 
-# PERCONA: fail the build rather than ship a libproj that cannot find its
-# database — this is the one property the whole package exists for.
+# PERCONA: hard gates on the two properties the whole package exists for.
+#
+# 1. SONAME parity. The package is only useful as a drop-in for the libproj
+#    the shipped PostGIS RPMs linked against, so assert the SONAME we
+#    promised for this base actually came out. Without this, a source-URL
+#    bump — or this spec being built on an unexpected %%{?rhel} where the
+#    %%if picks the wrong branch — would silently produce a library that is
+#    no longer ABI-compatible with PostGIS.
+test -e %{buildroot}%{proj_prefix}/lib/libproj.so.%{proj_soname}
+# 2. The compiled-in data path, and a proj.db sitting at it.
 test -f %{buildroot}%{proj_prefix}/share/proj/proj.db
-grep -q '%{proj_prefix}/share/proj' %{buildroot}%{proj_prefix}/lib/libproj.so.*.*
+grep -q '%{proj_prefix}/share/proj' %{buildroot}%{proj_prefix}/lib/libproj.so.%{proj_soname}
 
 %files
 %license COPYING
