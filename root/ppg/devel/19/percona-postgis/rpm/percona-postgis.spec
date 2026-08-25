@@ -540,7 +540,7 @@ fi
 %if %utils
 %files utils
 %defattr(-,root,root)
-%doc utils/README
+%doc utils/README.md
 %dir %{_datadir}/%{name}
 %attr(755,root,root) %{_datadir}/%{name}/*.pl
 %endif
