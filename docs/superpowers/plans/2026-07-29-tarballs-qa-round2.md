@@ -94,3 +94,28 @@ Run Task 24's battery against the rebuilt pr-2 artifacts on the full matrix; eve
 - Order: Task 21 ∥ Task 22 (disjoint) → Task 23 → Task 24 → Task 25 (gate).
 - Standing rules: `git commit -s`, no AI attribution, never push/create PRs (user does), `-P isv` writes only with `--dry-run`.
 - Highest-risk items: (a) same-soname Prefer resolution in the ssl chroots (EPEL gdal-libs vs ours) — verify with `osc buildinfo` after the first sync; (b) GDAL 3.0.4 (2020) building on modern EL8 toolchain (expect minor patches); (c) the same-project sibling repo path in project.yaml — confirm percona-obs handles it (containers precedent).
+
+---
+
+## Execution status — 2026-07-29
+
+Tasks 21–24 implemented, each with spec+quality review, fix loop and scoped
+re-review; final whole-round review (44ad255..HEAD) clean after one fix wave +
+one follow-up. Commits: 181033a (rename) · 25b4047 (T21) · c3bd8ad 4af2766
+c19a45b 4528249 (T22) · c1dc500 9e01256 (T23) · a6242ae 49a0312 66e14cb (T24) ·
+b90ac24 ef347bc (final-review fixes: scoped `Ignore:` for PostGIS's by-name
+GDAL/PROJ deps, property-based §0a assert, libpq requires-exclude, battery
+warn/pty visibility, `ExcludeArch: aarch64`).
+
+Validation moved to OBS mid-round (user decision): no local builds after Task 21;
+compiled-artifact criteria are verified on OBS-built RPMs/tarballs in Task 25.
+
+**Task 25 (user gate) — pending:** user syncs, OBS builds, then
+`tools/tarball-acceptance.sh` on the downloaded ssl1.1/ssl3 artifacts.
+First-build watch list (ordered by likelihood): §0a stray GDAL/PROJ (is the
+scoped `Ignore:` honoured under `Type: simpleimage`? fallback = global
+`Ignore:` lines in the ssl blocks) · percona-gdal EL9 `share/gdal` layout +
+`gdalicon.png` gates · repo-scoped `Type:` on RockyLinux_8/9 · sibling path
+delivering percona-psql · perl-5.26 module ExpandFlags inheritance on
+RockyLinux_8 · dlopen gate count/postgis_raster · bundled-lib count drop ·
+ssl3 SSL-ABI audit on libgdal (low).
