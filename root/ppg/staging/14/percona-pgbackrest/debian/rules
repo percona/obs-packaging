@@ -44,6 +44,9 @@ override_dh_auto_build:
 	  ${MANTEMPLATE} > ${CURDIR}/doc/output/man/pgbackrest.1
 	dh_auto_build
 
+override_dh_auto_test:
+	# nothing to do here, see debian/tests/* instead
+
 override_dh_auto_clean:
 	! [ -f src/Makefile ] || $(MAKE) -C src clean-all
 
