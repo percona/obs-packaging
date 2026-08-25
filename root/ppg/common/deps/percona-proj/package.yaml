@@ -1,0 +1,27 @@
+title: /opt-prefixed PROJ runtime for the PPG binary tarball
+description: |
+  PROJ built from upstream source with the install prefix
+  /opt/percona-proj, so libproj's compiled-in PROJ_DATA default is
+  /opt/percona-proj/share/proj and proj.db is found with zero
+  environment variables. Version is chosen per base so the SONAME
+  matches the PROJ that the shipped PostGIS RPMs linked against:
+  RHEL 8 -> PROJ 6.3.2 (libproj.so.15), RHEL 9 -> PROJ 9.6.0
+  (libproj.so.25). That makes it a drop-in replacement for EPEL's
+  libproj inside the binary tarball only — the shipped PostGIS RPMs
+  keep resolving to EPEL's package on user systems.
+
+  RockyLinux_8 and RockyLinux_9 only: these are the tarball build bases
+  (ssl1.1 / ssl3).
+
+build:
+  RockyLinux_10: false
+  UBI_8: false
+  UBI_9: false
+  Debian_11: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Leap_16: false
+  openSUSE_Tumbleweed: false

@@ -1,0 +1,21 @@
+<services>
+  <!-- PERCONA: two upstream tarballs, one per tarball base. The RPM spec
+       picks Source0 on RHEL 8 (PROJ 6.3.2, SONAME libproj.so.15) and
+       Source1 on RHEL 9 (PROJ 9.6.0, SONAME libproj.so.25) so our library
+       is a drop-in for the PROJ that PostGIS linked against on each base.
+       download.osgeo.org is upstream's own release archive; the GitHub
+       release assets for these tags redirect to a signed CDN URL that OBS
+       cannot pin. -->
+  <service name="download_url">
+    <param name="host">download.osgeo.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/proj/proj-6.3.2.tar.gz</param>
+    <param name="filename">proj-6.3.2.tar.gz</param>
+  </service>
+  <service name="download_url">
+    <param name="host">download.osgeo.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/proj/proj-9.6.0.tar.gz</param>
+    <param name="filename">proj-9.6.0.tar.gz</param>
+  </service>
+</services>
