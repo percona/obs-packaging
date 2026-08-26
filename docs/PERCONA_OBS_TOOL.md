@@ -150,6 +150,7 @@ tarball into `node_modules.obscpio`, writing `SourceNNNNN:` lines to `node_modul
 serves the tarballs to `npm` at build time). All three files are uploaded to OBS and cached
 under `.cache/services/<upstream commit>/` — the lockfile is a function of the upstream commit
 plus registry state, so `--no-cache` is the way to deliberately refresh the vendored set.
+`npm_lockfile` also accepts an optional `npm-flags` param (default `--legacy-peer-deps --ignore-scripts`; a given value replaces the default set) for upstreams that need different npm resolution flags.
 
 Two rules in `percona-obs` make this work:
 
