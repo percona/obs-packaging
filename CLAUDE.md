@@ -51,6 +51,7 @@ Always use `git commit -s` (signed-off-by). Do not add `Co-Authored-By: Claude` 
 | `percona_obs/targets.py` | Target resolution helpers |
 | `percona_obs/services.py` | Local OBS service execution + caching |
 | `percona_obs/git_utils.py` | Git helpers |
+| `tools/obs-services/` | Repo-owned OBS source services run locally by `sync` (e.g. `npm_lockfile`); baked into the obs-tools image |
 | `requirements.txt` | Runtime + dev dependencies (`osc`, `pyyaml`, `black`, `pyright`) |
 | `pyrightconfig.json` | Pyright config pointing at `venv/` and `percona_obs/` |
 | `root/` | All packaging content (project hierarchy mirrors OBS) |
