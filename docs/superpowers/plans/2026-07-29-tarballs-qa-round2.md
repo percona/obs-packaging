@@ -119,3 +119,18 @@ scoped `Ignore:` honoured under `Type: simpleimage`? fallback = global
 delivering percona-psql · perl-5.26 module ExpandFlags inheritance on
 RockyLinux_8 · dlopen gate count/postgis_raster · bundled-lib count drop ·
 ssl3 SSL-ABI audit on libgdal (low).
+
+## Gate result — 2026-08-26 (Task 25, PASS)
+
+First OBS build failed at §0a: OBS does not apply prjconf `Ignore:` rules to
+image-type (`simpleimage`) expansion, so EPEL GDAL/PROJ stayed in the chroot.
+Fixed with the `percona-gis-compat` shim (da1e31c, c255628 — `Provides:` the
+by-name deps, `Prefer:`'d; EL8 rpm has no `%elif`). Second build: both variants
+green, all in-chroot gates passed (103 modules dlopen-tested).
+`tools/tarball-acceptance.sh` on the pr-2 artifacts: **ACCEPTANCE PASSED** —
+ssl1.1 (debian:11-slim, ubuntu:20.04) and ssl3 (debian:12-slim, ubuntu:22.04,
+ubuntu:24.04, rockylinux 9/10-minimal); 7 hosts × 76/76 extensions; QA flows:
+postgis_raster loads on Debian- and RHEL-family minimal hosts, no backend crash
+on Rocky 9/10, psql (libedit) works with no host readline on all 7 hosts;
+/tmp socket, PLs, ST_Transform, clients, `import ssl` all PASS. PG `lib/`
+shrank 326→238 (ssl1.1) / 320→233 (ssl3); zero surplus libraries.

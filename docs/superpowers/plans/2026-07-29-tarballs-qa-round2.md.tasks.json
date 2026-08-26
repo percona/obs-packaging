@@ -35,7 +35,7 @@
     {
       "id": 25,
       "subject": "Task 25: acceptance gate round 6 (USER GATE)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         23,
         24
@@ -43,5 +43,5 @@
       "description": "**Goal:** After user pushes and pr-2 rebuilds: Task-24 battery on full matrix; QA's three flows explicitly green; carried-over regressions green.\n\n**USER-ORDERED GATE - NON-SKIPPABLE.** Captured output for every criterion.\n\n**Files:** none\n\n**Acceptance Criteria:**\n- every extension loads on every host (debian 11/12, ubuntu 22.04/24.04, rocky9/10-minimal)\n- postgis_raster loads RHEL-family + Debian-family; no crash Rocky 9/10; psql works Debian 11 w/o readline\n- carried-over regressions green\n\n**Verify:** battery evidence\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"tools/tarball-acceptance.sh on matrix\", \"acceptanceCriteria\": [\"all extensions load\", \"QA flows green\", \"regressions green\"], \"userGate\": true, \"tags\": [\"user-gate\"], \"requireEvidenceTokens\": [[\"postgis_raster\"], [\"debian:11\", \"psql\"], [\"minimal\"]], \"modelTier\": \"standard\"}\n```"
     }
   ],
-  "lastUpdated": "2026-07-29T19:00:00"
+  "lastUpdated": "2026-08-26T14:00:00"
 }
