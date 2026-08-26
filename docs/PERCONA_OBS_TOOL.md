@@ -150,6 +150,9 @@ tarball into `node_modules.obscpio`, writing `SourceNNNNN:` lines to `node_modul
 serves the tarballs to `npm` at build time). All three files are uploaded to OBS and cached
 under `.cache/services/<upstream commit>/` — the lockfile is a function of the upstream commit
 plus registry state, so `--no-cache` is the way to deliberately refresh the vendored set.
+Each new upstream commit of an npm-vendored package adds a cache entry of roughly the
+`.obscpio`'s size (~220 MB for pgAdmin); this is bounded locally by `prune_cache`, which
+removes entries unused for 7 days, and in CI additionally by the `actions/cache` size limits.
 `npm_lockfile` also accepts an optional `npm-flags` param (default `--legacy-peer-deps --ignore-scripts`; a given value replaces the default set) for upstreams that need different npm resolution flags.
 
 Two rules in `percona-obs` make this work:
@@ -164,6 +167,15 @@ Two rules in `percona-obs` make this work:
   |---|---|
   | `cargo_vendor` | `vendor.tar.*` |
   | `node_modules` | `node_modules.obscpio`, `node_modules.spec.inc`, `*package-lock.json` (names follow the `cpio`/`output`/`input` params) |
+
+  Drift tolerance only affects the `--branch-from` content check's changed/unchanged
+  decision — it does not affect what gets uploaded. A sync that is not skipped (no
+  matching `--skip-unchanged` manifest entry, or run with `--force`) still uploads
+  whatever the local service run produced, so a regenerated drift-tolerant artifact
+  (for pgAdmin, a ~220 MB `node_modules.obscpio`) is re-PUT to OBS and commits a new
+  revision, triggering a rebuild even though nothing meaningful changed. `--skip-unchanged`
+  avoids this in the normal CI path because tag-pinned packages are skipped outright before
+  any service reruns; `--no-cache` is the deliberate way to force that refresh.
 
 ### Sync all packages under a subproject
 
