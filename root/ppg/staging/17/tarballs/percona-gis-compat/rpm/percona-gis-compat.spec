@@ -68,17 +68,21 @@ BuildArch:      noarch
 # percona-gdal/rpm/percona-gdal.spec (%%global gdal_version) for the same
 # base.  PostGIS carries a VERSIONED `Requires: gdal*-libs >= 3.0.4`, so a
 # Provides: below that floor would leave the chroot unresolvable.
+# Nested %%if/%%else rather than %%elif: EL8 ships rpm 4.14, which has no
+# %%elif (added in rpm 4.15, i.e. EL9) and fails with "Unknown tag: %%elif".
 %if 0%{?rhel} == 8
 # percona-proj 6.3.2, percona-gdal 3.0.4 on EL8.
 Provides:       proj = 6.3.2
 Provides:       gdal-libs = 3.0.4
-%elif 0%{?rhel} == 9
+%else
+%if 0%{?rhel} == 9
 # percona-proj 9.6.0, percona-gdal 3.4.3 on EL9.  The distro name is
 # gdal3.4-libs here (EPEL 9's compat GDAL for PostGIS).
 Provides:       proj = 9.6.0
 Provides:       gdal3.4-libs = 3.4.3
 %else
 %{error:percona-gis-compat: unsupported base (rhel=%{?rhel}); only EL8 and EL9 tarball chroots are defined}
+%endif
 %endif
 
 # The real runtimes this shim stands in for.
