@@ -67,6 +67,7 @@ def unpack(archive: Path, dest: Path) -> Path:
                         "--make-directories",
                         "--unconditional",
                         "--quiet",
+                        "--no-absolute-filenames",
                     ],
                     stdin=fh,
                     cwd=dest,
@@ -116,7 +117,13 @@ def run_npm(pkg_dir: Path, npm_flags: list[str], npm_cache: Path) -> None:
     except FileNotFoundError:
         die("npm not found in PATH (install nodejs/npm)")
     if result.returncode != 0:
-        die(f"npm exited with {result.returncode} (command: {' '.join(cmd)})")
+        message = f"npm exited with {result.returncode} (command: {' '.join(cmd)})"
+        tail = "\n".join(
+            [line for line in result.stdout.splitlines() if line.strip()][-5:]
+        )
+        if tail:
+            message += f"; last output:\n{tail}"
+        die(message)
 
 
 def validate_lockfile(lockfile: Path) -> None:
