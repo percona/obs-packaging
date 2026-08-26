@@ -497,13 +497,14 @@ Options:
 
 ### Local service execution
 
-If a package's `obs/_service` contains any service with `mode="manual"`, `sync` automatically runs all non-buildtime services locally before uploading. This is required for packages like Go services that use `go_modules` (mode=manual) to vendor dependencies.
+If a package's `obs/_service` contains any service with `mode="manual"`, `sync` automatically runs all non-buildtime services locally before uploading. This is required for packages like Go services that use `go_modules` (mode=manual) or npm frontends that use `npm_lockfile` + `node_modules` (mode=manual) to vendor dependencies.
 
 **Execution order and file handling:**
 1. All services with `mode` not in `{buildtime, serveronly, disabled}` are run in XML declaration order.
 2. Each service binary is invoked from `/usr/lib/obs/service/<name>` with its `<param>` values and `--outdir`.
 3. Service outputs are merged into a shared work directory so later services can consume earlier outputs (e.g. `go_modules` consuming `obs_scm` tarballs).
 4. Only files produced by `mode="manual"` services are committed to OBS. Files produced by no-mode services (e.g. obs_scm source tarballs) are used locally but **not** uploaded — OBS regenerates those on its server.
+5. `.obscpio` files produced by `mode="manual"` services (e.g. `node_modules.obscpio`) are kept and uploaded; only `obs_scm` archives are extracted locally.
 
 If a service binary is missing from `/usr/lib/obs/service/`, a warning is logged and the service is skipped. A non-zero service exit code aborts the entire `sync` run.
 
@@ -540,6 +541,8 @@ Before invoking each `download_url` service binary, `percona-obs` computes `para
 **Atomic writes**: all levels write to a temporary directory inside the cache directory (ensuring same filesystem), then rename it into place, preventing partial or corrupt cache entries.
 
 **`--no-cache`**: pass to `sync` to bypass all cache levels unconditionally for that run.
+
+**Drift-tolerant artifacts** (`services.drift_tolerant_patterns`): outputs whose bytes depend on an external registry's state at generation time — `cargo_vendor` → `vendor.tar.*`; `node_modules` → `node_modules.obscpio`, `node_modules.spec.inc`, `*package-lock.json` — are compared by presence only in the `--branch-from` content check (`cmd_sync._content_mismatches`). A file missing on either side is still a mismatch.
 
 When targeting a specific package (`sync <project> <package>`), the ancestor project chain is only walked if the target project does not yet exist on OBS (fast path avoids redundant GET calls otherwise).
 
@@ -959,6 +962,8 @@ When branching is involved, always confirm which OBS instance is being queried:
 | Third-party infrastructure service | `ppg/staging/17/etcd/` |
 | OBS aggregate (mirrors another OBS project) | `obs-service-tar_scm/` |
 | Root project config | `root/project.yaml` |
+| Repo-owned OBS service (npm lockfile generation) | `tools/obs-services/npm_lockfile` |
+| Version-independent devel project (pgAdmin) | `root/ppg/devel/pgadmin/project.yaml` |
 | Management script | `percona-obs` (commands: `sync push`, `sync delete`, `sync promote`, `build trigger`, `build status`, `build dependency`, `profile create`, `profile list`, `project verify`) |
 
 ---
