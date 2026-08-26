@@ -101,7 +101,8 @@ def test_reason_when_inherited_macros_changed(monkeypatch):
         lambda *a: "sync: main@abc1234 (git@github.com:x/y.git)",
     )
     assert (
-        _clean_sync_check("http://obs", "prj", "pkg", PKG) == "inherited macros changed"
+        _clean_sync_check("http://obs", "prj", "pkg", PKG)
+        == "referenced macros changed"
     )
 
 

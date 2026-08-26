@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 import percona_obs.cmd_sync as cmd_sync
-from percona_obs.cmd_sync import _content_matches_branch
+from percona_obs.cmd_sync import _content_matches_branch, _resolve_branch_decision
 
 
 def _patch_static(monkeypatch, obs_md5s):
@@ -81,6 +81,29 @@ def test_service_failing_once_is_retried_and_comparison_completes(
         _content_matches_branch("http://obs", "prod:ppg:17", "pkg", _obs_dir(tmp_path))
         is True
     )
+    assert len(calls) == 2
+
+
+def test_branch_decision_never_promotes_on_service_failure(monkeypatch, tmp_path):
+    # End to end through the decision layer with the real content check:
+    # the fallback path (no trusted sync comment) must surface the service
+    # failure as an error, not as a "promote" (False) decision.
+    obs_dir = _obs_dir(tmp_path)
+    (obs_dir.parent / "package.yaml").write_text("title: t\ndescription: d\n")
+    _patch_static(monkeypatch, {"foo": FOO_MD5})
+    monkeypatch.setattr(
+        cmd_sync, "_fetch_obs_package_meaningful_comment", lambda *a: None
+    )
+    monkeypatch.setattr(
+        cmd_sync,
+        "_fetch_obs_package_meta_bytes",
+        lambda *a: b'<package name="pkg" project="prod:ppg:17"/>',
+    )
+    stub, calls = _make_service_stub(tmp_path, fail_times=2)
+    monkeypatch.setattr(cmd_sync, "_run_local_services", stub)
+
+    with pytest.raises(SystemExit):
+        _resolve_branch_decision("http://obs", "prod:ppg:17", "pkg", obs_dir.parent)
     assert len(calls) == 2
 
 
