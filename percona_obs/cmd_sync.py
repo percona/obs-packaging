@@ -467,6 +467,39 @@ def _content_mismatches(
     return sorted(mismatches)
 
 
+def _run_services_for_check(
+    obs_dir: Path,
+    label: str,
+    check_vars: dict[str, str] | None,
+    pkg_macros: dict[str, str],
+) -> Path:
+    """Run the package services for the content check; retry once, then abort.
+
+    A failed service run (e.g. a transient ``obs_scm`` clone error) says
+    nothing about whether the content matches, so it must never be turned
+    into a "content differs" verdict — that promoted unchanged packages on
+    unrelated PRs.  One retry absorbs short network blips; a second failure
+    aborts the whole sync with the service's error so nothing is decided on
+    unverifiable input.
+    """
+    try:
+        return _run_local_services(
+            obs_dir, pkg_label=label, cache=True, env_vars=check_vars, macros=pkg_macros
+        )
+    except SystemExit as first:
+        logger.warning(f"content check: service run failed, retrying once  {label}")
+        logger.debug(f"content check: first failure  {label}: {first}")
+    try:
+        return _run_local_services(
+            obs_dir, pkg_label=label, cache=True, env_vars=check_vars, macros=pkg_macros
+        )
+    except SystemExit as second:
+        raise SystemExit(
+            f"error: --branch-from content check for {label} failed twice while "
+            f"running services; cannot decide aggregate vs promote.\n{second}"
+        ) from None
+
+
 def _content_matches_branch(
     apiurl: str,
     branch_project: str,
@@ -510,19 +543,12 @@ def _content_matches_branch(
     workdir: Path | None = None
     try:
         if run_services:
-            try:
-                workdir = _run_local_services(
-                    obs_dir,
-                    pkg_label=f"{branch_project}/{package_name}",
-                    cache=True,
-                    env_vars=check_vars,
-                    macros=pkg_macros,
-                )
-            except SystemExit:
-                logger.debug(
-                    f"content check: service run failed  {branch_project}/{package_name}"
-                )
-                return False
+            workdir = _run_services_for_check(
+                obs_dir,
+                f"{branch_project}/{package_name}",
+                check_vars,
+                pkg_macros,
+            )
             if obs_dir.is_dir():
                 for f in obs_dir.iterdir():
                     if f.is_file() and f.name != "_service":

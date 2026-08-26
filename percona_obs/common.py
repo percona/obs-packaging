@@ -203,35 +203,39 @@ def apply_macro_substitution(
     return _MACRO_RE.sub(_replace, text)
 
 
-def load_macros(project_path: Path) -> dict[str, str]:
-    """Load and resolve macros from macros.yaml files in the directory hierarchy.
+def _macros_chain_files(project_path: Path) -> list[Path]:
+    """Return the candidate macros.yaml paths from REPO_ROOT down to *project_path*.
 
-    Walks from REPO_ROOT down to *project_path*, collecting macros.yaml files.
-    Entries are processed in declaration order; inner directories override outer
-    ones by redefining the same key.  ``%!{VAR}`` references in values are
-    resolved against previously-declared macros so forward references within a
-    single file work as long as the referenced macro was declared earlier.
+    Outermost (REPO_ROOT) first.  Paths are returned whether or not the file
+    exists so callers can resolve the same chain against another git tree.
     """
     chain: list[Path] = []
     p = project_path
     while True:
-        chain.append(p)
+        chain.append(p / "macros.yaml")
         if p == REPO_ROOT or not p.is_relative_to(REPO_ROOT):
             break
         p = p.parent
-    chain.reverse()  # outermost (REPO_ROOT) first
+    chain.reverse()
+    return chain
 
+
+def resolve_macros(sources: list[tuple[Path, str]]) -> dict[str, str]:
+    """Resolve macros from ``(macro_file, text)`` pairs ordered outermost first.
+
+    Entries are processed in declaration order; inner files override outer
+    ones by redefining the same key.  ``%!{VAR}`` references in values are
+    resolved against previously-declared macros so forward references within a
+    single file work as long as the referenced macro was declared earlier.
+    *macro_file* is used only for error messages, so the text may come from
+    the working tree or from a historical git revision.
+    """
     entries: list[tuple[str, str, Path]] = []
-    for path in chain:
-        macro_file = path / "macros.yaml"
-        if not macro_file.exists():
-            continue
+    for macro_file, text in sources:
         # Parse with a simple line scanner instead of yaml.safe_load because
         # values may contain %!{...} references and PyYAML rejects bare % at
         # the start of a scalar (it is reserved for YAML directives).
-        for lineno, line in enumerate(
-            macro_file.read_text("utf-8").splitlines(), start=1
-        ):
+        for lineno, line in enumerate(text.splitlines(), start=1):
             line = line.rstrip()
             if not line or line.lstrip().startswith("#"):
                 continue
@@ -248,6 +252,22 @@ def load_macros(project_path: Path) -> dict[str, str]:
             raw_value, resolved, source=source_file
         )
     return resolved
+
+
+def load_macros(project_path: Path) -> dict[str, str]:
+    """Load and resolve macros from macros.yaml files in the directory hierarchy.
+
+    Walks from REPO_ROOT down to *project_path*, collecting the macros.yaml
+    files that exist in the working tree, and resolves them with
+    ``resolve_macros``.
+    """
+    return resolve_macros(
+        [
+            (f, f.read_text("utf-8"))
+            for f in _macros_chain_files(project_path)
+            if f.exists()
+        ]
+    )
 
 
 def load_yaml(path: Path) -> dict:

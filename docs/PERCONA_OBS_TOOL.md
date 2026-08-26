@@ -280,7 +280,9 @@ venv/bin/python -m percona_obs -P main sync push --skip-unchanged --report-json 
 Skips packages whose latest OBS revision comment records a clean
 `sync: <branch>@<sha> (...)` from a git SHA with no changes since. "No changes since"
 is checked locally against three inputs: commits touching the package directory,
-uncommitted edits in it, and inherited ancestor `macros.yaml` values. A skipped
+uncommitted edits in it, and the rendered values of the `%!{NAME}` macros the package
+references (compared between the SHA and the working tree — moving a macro between
+ancestor `macros.yaml` files or bumping a macro the package never uses is not a change). A skipped
 package runs no services and uploads nothing — it costs one API call (the
 revision-history fetch), or **zero** when the sync-state manifest is warm (see below).
 Skipped packages are printed as `= skip <project>/<package> (unchanged)`.
@@ -314,7 +316,7 @@ Caveats:
 mapping `project/package` → last-synced git SHA, keyed by `(apiurl, rootprj)` so
 different profiles and instances never share entries. When the manifest entry for a
 package is present and the same local checks pass — package-directory tree diff
-against the recorded SHA, uncommitted edits, inherited `macros.yaml` — the package is
+against the recorded SHA, uncommitted edits, referenced macro values — the package is
 skipped with **zero** API calls, without even fetching the OBS revision history.
 
 Entries are recorded only for uploads made from a **pushed, clean** HEAD: an unpushed
