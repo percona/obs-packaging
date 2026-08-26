@@ -42,7 +42,7 @@ Additional products (e.g. `psmdb/` for Percona Server for MongoDB) follow the sa
 
 ## Common projects
 
-- **`common/deps/build/`** — build-time dependencies shared across all products (Go toolchain, OBS source
+- **`common/deps/build/`** — build-time dependencies shared across all products (Go toolchain, `local-npm-registry`, OBS source
   services such as `obs-service-tar_scm`). Product projects declare a path dependency on this project so
   its packages are available at build time.
 - **`common/deps/runtime/`** — runtime packages required by product packages across all products
