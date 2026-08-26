@@ -173,6 +173,16 @@ Graduation: when a development cycle concludes and a new release tag is cut, the
 `obs/_service` revision is bumped to the new tag (staging always builds from tags), and the devel
 entry (Class A or B) is removed — or repointed at the next development branch if work continues.
 
+### `devel/pgadmin/` — a version-independent devel project
+
+`ppg:devel:pgadmin` is the one devel project that is not a PG-major subset: it holds
+`percona-pgadmin4` and its Python 3.12 / Node.js dependency stack, which do not depend on
+the PostgreSQL major version. Its `project.yaml` declares a single `UBI_9` repository
+(pgAdmin is built for UBI 9 only), so no per-package `build:` flags are needed, and adds
+`ExpandFlags: module:nodejs:22` for the frontend build. Packages there follow the
+normal `rpm/` + `obs/_service` layout; the npm dependencies are vendored at sync time by
+the `npm_lockfile` → `node_modules` service pair (see `docs/PERCONA_OBS_TOOL.md`).
+
 ## project.yaml
 
 Each project directory may contain a `project.yaml` file that defines the OBS project metadata,
