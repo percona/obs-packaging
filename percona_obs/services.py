@@ -749,7 +749,9 @@ def _run_local_services(
                     are restored from cache.
       Phase 2 — manual services (go_modules etc.): run on a cache miss.
                 Results are stored to the service cache on success.
-      Extraction — ``.obscpio`` archives are extracted via ``cpio``.
+      Extraction — ``.obscpio`` archives produced by Phase 1 are extracted via
+                   ``cpio``; ``.obscpio`` files produced by manual services
+                   (e.g. node_modules.obscpio) are kept for upload.
       Local packaging — debian/ and rpm/ files are copied from the local
                         package directory.
       Phase 3 — buildtime services (tar, recompress, set_version): always
@@ -983,6 +985,12 @@ def _run_local_services(
     # directories, not .obscpio files.  The OBS build script extracts
     # these before running buildtime services; we replicate that here.
     for obscpio in sorted(workdir.glob("*.obscpio")):
+        if obscpio.name in manual_artifacts:
+            # Produced by a mode="manual" service (e.g. node_modules.obscpio).
+            # It is a source artifact in its own right — OBS unpacks it into
+            # SOURCES at build time — so it must reach the upload set intact.
+            logger.debug(f"keeping manual artifact {obscpio.name}")
+            continue
         logger.debug(f"extracting {obscpio.name}")
         result = subprocess.run(
             [
@@ -1060,7 +1068,7 @@ def _run_local_services(
     for child in list(workdir.iterdir()):
         if child.is_dir():
             shutil.rmtree(child, ignore_errors=True)
-        elif child.suffix == ".obscpio":
+        elif child.suffix == ".obscpio" and child.name not in manual_artifacts:
             child.unlink()
 
     return workdir
