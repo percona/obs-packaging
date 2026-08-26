@@ -1,6 +1,7 @@
 import socket
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 _REPO_DIR = Path(__file__).parent.parent
@@ -182,40 +183,97 @@ def _inherited_macros_files(package_path: Path) -> list[Path]:
     return files
 
 
-def _macros_changed_since(short_sha: str, package_path: Path) -> bool:
-    """Return True if any macros.yaml inherited by package_path changed.
+# Memo of ``git show <sha>:<path>`` results keyed (repo, sha, path): the Phase 1
+# decision threads resolve the same handful of ancestor macros.yaml files for
+# every package under them.  A pinned SHA's content never changes, so entries
+# are valid for the life of the process.
+_git_show_cache: dict[tuple[str, str, str], str | None] = {}
+_git_show_lock = threading.Lock()
 
-    Inherited (ancestor) macros are substituted into the package's uploaded
-    content, so a change to one alters what would be uploaded even when no file
-    inside package_path moved.  Considers both committed changes since short_sha
-    and uncommitted working-tree edits, because the upload is built from the
-    working tree rather than from committed history.
 
-    Returns True (treat as changed) on git error (safe default).  A macros.yaml
-    inside package_path is intentionally excluded — it is covered by the
-    package-directory change checks.
-    """
-    files = _inherited_macros_files(package_path)
-    if not files:
-        return False
+def _git_show_at(short_sha: str, rel_path: str) -> str | None:
+    """Return the content of *rel_path* at *short_sha*, or None when absent."""
+    key = (str(_REPO_DIR), short_sha, rel_path)
+    with _git_show_lock:
+        if key in _git_show_cache:
+            return _git_show_cache[key]
     result = subprocess.run(
-        [
-            "git",
-            "diff",
-            "--name-only",
-            f"{short_sha}..HEAD",
-            "--",
-            *(str(f) for f in files),
-        ],
+        ["git", "show", f"{short_sha}:{rel_path}"],
         capture_output=True,
         text=True,
         cwd=_REPO_DIR,
     )
-    if result.returncode != 0:
-        return True  # unknown SHA or git error — safe default
-    if result.stdout.strip():
+    text = result.stdout if result.returncode == 0 else None
+    with _git_show_lock:
+        _git_show_cache[key] = text
+    return text
+
+
+def _commit_exists(short_sha: str) -> bool:
+    """Return True when *short_sha* names a commit in this repository."""
+    result = subprocess.run(
+        ["git", "cat-file", "-e", f"{short_sha}^{{commit}}"],
+        capture_output=True,
+        cwd=_REPO_DIR,
+    )
+    return result.returncode == 0
+
+
+def _referenced_macros(package_path: Path) -> set[str]:
+    """Return the ``%!{NAME}`` macro names referenced by files under *package_path*.
+
+    Every UTF-8 file in the package directory (obs/, debian/, rpm/) receives
+    macro substitution on upload, so this is exactly the set of macros whose
+    values can alter the uploaded content.  Built-in date macros are resolved
+    from commit time, not macros.yaml, and are excluded.
+    """
+    from .common import _FILE_DATE_BUILTINS, _MACRO_RE
+
+    names: set[str] = set()
+    for f in package_path.rglob("*"):
+        if not f.is_file():
+            continue
+        try:
+            text = f.read_text("utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        names.update(_MACRO_RE.findall(text))
+    return names - _FILE_DATE_BUILTINS
+
+
+def _macros_changed_since(short_sha: str, package_path: Path) -> bool:
+    """Return True if a macro the package references renders differently now than at short_sha.
+
+    Macros are substituted into the package's uploaded content, so a value
+    change alters the upload even when no file inside package_path moved.
+    The comparison is by *rendered value of referenced macros*, not by which
+    macros.yaml files were touched: moving a macro between ancestor files
+    with the same value, or bumping a macro this package never uses, must
+    not count as a change (each such false positive costs a full
+    service-running content check).  The working-tree side includes
+    uncommitted edits, because the upload is built from the working tree.
+
+    Returns True (treat as changed) when the SHA is unknown or a macros.yaml
+    on either side cannot be parsed (safe default).
+    """
+    from .common import _macros_chain_files, load_macros, resolve_macros
+
+    referenced = _referenced_macros(package_path)
+    if not referenced:
+        return False
+    if not _commit_exists(short_sha):
         return True
-    return _is_path_dirty(*files)
+    sources: list[tuple[Path, str]] = []
+    for macro_file in _macros_chain_files(package_path):
+        text = _git_show_at(short_sha, macro_file.relative_to(_REPO_DIR).as_posix())
+        if text is not None:
+            sources.append((macro_file, text))
+    try:
+        then = resolve_macros(sources)
+        now = load_macros(package_path)
+    except SystemExit:
+        return True
+    return any(then.get(name) != now.get(name) for name in referenced)
 
 
 def _generate_sync_message() -> str:

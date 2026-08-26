@@ -307,7 +307,9 @@ The corresponding branch OBS project is derived by substituting the current `roo
 2. Match it against the sync message pattern `sync: <branch>@<sha> (<detail>)`.
 3. If the message matches and the detail does **not** start with `"local changes on"` (i.e. was synced from a pushed branch):
    - Call `git log` to check whether any commits touching `<package_path>` exist since `<sha>`.
-   - **No commits** → aggregate (package unchanged). **Commits exist** → upload sources.
+   - Check for uncommitted edits inside `<package_path>`.
+   - Check whether any macro the package references (`%!{NAME}` tokens in its obs/, debian/, rpm/ files) renders to a different value now than at `<sha>` (`_macros_changed_since`). The comparison is by rendered value, not by which `macros.yaml` files were touched: moving a macro between ancestor files with the same value, or bumping a macro this package never uses, is not a change.
+   - **Nothing changed** → aggregate (package unchanged). **Otherwise** → fall back to the content check.
 
 #### Fallback — content check
 
@@ -315,6 +317,9 @@ The content check is used when the revision comment cannot be trusted:
 - No comment on the branch (new project, never synced)
 - Comment doesn't match the `sync:` format (e.g. manual commit, older format)
 - Sync message says `"local changes on <hostname>"` (HEAD was not pushed to any remote)
+- The SHA is valid but something feeding the upload changed since it (see above)
+
+If the local service run needed to build the comparison fails (e.g. a transient `obs_scm` clone error), it is retried once; a second failure **aborts the whole sync** with the service's error. A failed run says nothing about whether the content matches, so it is never reported as "content differs" — that would promote an unchanged package.
 
 Content check (`_content_matches_branch`) performs two sub-checks:
 
@@ -872,6 +877,7 @@ Key things to look for in verbose output:
 | `branch decision: git-log  <pkg>  (…)` | Git-based unchanged check for a package |
 | `branch decision: content check  <pkg>  (…)` | MD5/obsinfo fallback check for a package |
 | `branch decision: aggregate  <pkg>  (content matches)` | Package was classified as aggregate |
+| `content check: service run failed, retrying once  <pkg>` | (warning) a local service failed during the content check; a second failure aborts the sync instead of promoting |
 | `planning: checking build dependencies (N project(s))` | Phase 2 started; N = number of projects queried |
 | `dep-promote: builddepinfo covers N local packages` | How many packages the dep query returned data for |
 | `dep-promote: <pkg> promoted by dep on <other>` | A package was cascade-promoted by Phase 2 |
