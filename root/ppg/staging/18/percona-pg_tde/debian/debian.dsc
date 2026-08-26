@@ -19,6 +19,7 @@ Build-Depends:
  libzstd-dev,
  mawk,
  meson,
+ cmake,
  ninja-build,
  pkg-config,
  percona-postgresql-server-dev-all (>= 153~),
