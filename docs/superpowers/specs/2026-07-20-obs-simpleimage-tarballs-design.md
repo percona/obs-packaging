@@ -78,6 +78,33 @@ psql in pipe and pty mode, and every bundled client. `readelf`-based checks
 run host-side against the extracted tree, so no image ever gets binutils
 installed.
 
+**2026-08-26 — `Ignore:` is not applied to image-type expansion.** Finding 2
+above assumed a package-scoped prjconf `Ignore:` rule could drop
+`percona-postgis35_<V>`'s BY-NAME `Requires` on the distro GDAL/PROJ
+(`gdal-libs`/`proj` on EL8, `gdal3.4-libs`/`proj` on EL9) — the edges
+`Prefer:` cannot redirect, because a by-name dependency has a single provider
+and therefore no choice to resolve. The first OBS build of the `ssl1.1`/`ssl3`
+repositories disproved it: the effective project config carried both `Ignore:`
+lines, yet EPEL's `gdal-libs`/`gdal3.4-libs` and Rocky's `proj` were installed
+in the chroot anyway and `build-tarball.sh` section 0a FATALed as designed —
+**OBS does not honour `Ignore:` when expanding image-type recipes**, while
+`Prefer:` *is* honoured (proven by `Prefer: hdf-libs` and by
+`percona-gdal`/`percona-proj`/`percona-psql` all landing in the chroot).
+Fix: a new payload-free **`percona-gis-compat`** package in the tarballs
+project (built only in its unpublished `RockyLinux_8`/`RockyLinux_9` RPM
+repositories, so its deliberately fake `Provides:` stay invisible to every
+other project). It `Provides:` the distro names itself — versioned to track
+`percona-proj`/`percona-gdal` (EL8 `proj = 6.3.2`, `gdal-libs = 3.0.4`; EL9
+`proj = 9.6.0`, `gdal3.4-libs = 3.4.3`), since PostGIS's `Requires` is
+versioned (`>= 3.0.4`) — and `Requires: percona-gdal percona-proj`, so each
+by-name edge becomes a genuine have-choice that `Prefer: percona-gis-compat`
+resolves. The shim is also an explicit `BuildRequires` of the `simpleimage`
+recipe, making its presence deterministic rather than dependent on the choice
+alone; the inert `Ignore:` lines are removed. The section 0a check itself is
+unchanged (it is property-based, on files, not package names), but its
+diagnostic now queries `rpm --whatrequires` with a capability/name instead of
+the full NEVRA, which had made it report "no package requires …".
+
 ## Revision note — 2026-07-28 QA round
 
 A QA pass against the built artifacts drove six changes; the design sections

@@ -139,21 +139,29 @@ Each package directory contains the packaging sources split by format:
 
 Binary-tarball builds (OBS `simpleimage` format) for air-gapped / unsupported-distro
 installs, replicating the official Percona tarball layout file for file. One
-subproject (`ppg:staging:<V>:tarballs`) with two packages —
-`percona-postgresql-tarball` (the `simpleimage` recipe and its builder script)
-and `percona-psql` (an ordinary RPM: the psql client rebuilt from the same
+subproject (`ppg:staging:<V>:tarballs`) with three packages —
+`percona-postgresql-tarball` (the `simpleimage` recipe and its builder script),
+`percona-psql` (an ordinary RPM: the psql client rebuilt from the same
 PostgreSQL source with `--with-libedit-preferred`, so it links BSD libedit and
-the tarball needs no readline on the host) — built across four repositories:
+the tarball needs no readline on the host) and `percona-gis-compat` (a
+payload-free shim that `Provides:` the distro GDAL/PROJ package names
+`percona-postgis35_<V>` requires *by name*, so the project config's
+`Prefer: percona-gis-compat` can redirect those edges to the lean
+`/opt`-prefixed `percona-gdal`/`percona-proj` instead of EPEL's fully-optioned
+GDAL; needed because OBS does not apply prjconf `Ignore:` rules when expanding
+image-type recipes) — built across four repositories:
 
 | Repository | Type | Base | Purpose |
 |---|---|---|---|
 | `ssl1.1` | simpleimage, published | RockyLinux_8 | tarball for glibc ≥ 2.28, OpenSSL 1.1 hosts (stock and RHEL-fork) |
 | `ssl3` | simpleimage, published | RockyLinux_9 | tarball for glibc ≥ 2.34, ALL OpenSSL 3.x hosts |
-| `RockyLinux_8` | RPM, unpublished | RockyLinux_8 | `percona-psql` for the `ssl1.1` chroot |
-| `RockyLinux_9` | RPM, unpublished | RockyLinux_9 | `percona-psql` for the `ssl3` chroot |
+| `RockyLinux_8` | RPM, unpublished | RockyLinux_8 | `percona-psql`, `percona-gis-compat` for the `ssl1.1` chroot |
+| `RockyLinux_9` | RPM, unpublished | RockyLinux_9 | `percona-psql`, `percona-gis-compat` for the `ssl3` chroot |
 
 The two RPM repositories exist because `percona-psql` must be compiled against
-the very same EL base as the tarball that bundles it; the `ssl*` repositories
+the very same EL base as the tarball that bundles it (and because keeping
+`percona-gis-compat` there, unpublished, is what hides its deliberately fake
+`Provides:` from every other project); the `ssl*` repositories
 consume them through a same-project sibling repository path, and never publish
 them. `Type: simpleimage` is therefore repo-scoped in the project config.
 
