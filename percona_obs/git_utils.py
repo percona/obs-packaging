@@ -253,6 +253,11 @@ def _macros_changed_since(short_sha: str, package_path: Path) -> bool:
     service-running content check).  The working-tree side includes
     uncommitted edits, because the upload is built from the working tree.
 
+    The referenced set is taken from the working tree, so callers must first
+    establish that the package directory itself is unchanged since short_sha
+    (``_has_package_changes_since``/``_has_package_content_changes_since``
+    plus ``_is_path_dirty``) — both existing callers do.
+
     Returns True (treat as changed) when the SHA is unknown or a macros.yaml
     on either side cannot be parsed (safe default).
     """

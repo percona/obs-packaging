@@ -494,9 +494,10 @@ def _run_services_for_check(
             obs_dir, pkg_label=label, cache=True, env_vars=check_vars, macros=pkg_macros
         )
     except SystemExit as second:
+        cause = str(second).removeprefix("error: ")
         raise SystemExit(
             f"error: --branch-from content check for {label} failed twice while "
-            f"running services; cannot decide aggregate vs promote.\n{second}"
+            f"running services; cannot decide aggregate vs promote.\n  {cause}"
         ) from None
 
 
@@ -631,8 +632,8 @@ def _clean_sync_check(
     (skip decision): trusts the 'sync: <branch>@<sha> (...)' revision comment
     recorded by _generate_sync_message, then checks locally (no further API
     calls) that nothing feeding the package's uploaded content changed since
-    that SHA: package directory commits, uncommitted edits, and inherited
-    ancestor macros.yaml values.
+    that SHA: package directory commits, uncommitted edits, and the rendered
+    values of the macros the package references.
     """
     comment = _fetch_obs_package_meaningful_comment(apiurl, obs_project, package_name)
     if not comment:
@@ -649,7 +650,7 @@ def _clean_sync_check(
     if _is_path_dirty(package_path):
         return "uncommitted changes in package directory"
     if _macros_changed_since(short_sha, package_path):
-        return "inherited macros changed"
+        return "referenced macros changed"
     return None
 
 
@@ -1232,16 +1233,23 @@ def cmd_sync(args):
 
     with ThreadPoolExecutor(max_workers=8) as _pool:
         _futures = [_pool.submit(_decide_package, op, pp) for op, pp in targets]
-        for _fut in _futures:
-            _result = _fut.result()
-            if _result is None:
-                continue
-            _key, _decision, _bp, _profile = _result
-            decisions[_key] = _decision
-            if _bp is not None:
-                branch_project_for[_key] = _bp
-            if _profile is not None:
-                branch_profile_for[_key] = _profile
+        try:
+            for _fut in _futures:
+                _result = _fut.result()
+                if _result is None:
+                    continue
+                _key, _decision, _bp, _profile = _result
+                decisions[_key] = _decision
+                if _bp is not None:
+                    branch_project_for[_key] = _bp
+                if _profile is not None:
+                    branch_profile_for[_key] = _profile
+        except BaseException:
+            # A decision failed (e.g. the content check's service run failed
+            # twice).  Drop the queued decisions so the error surfaces now
+            # instead of after every remaining package has run its services.
+            _pool.shutdown(wait=False, cancel_futures=True)
+            raise
 
     # Persist ref classifications gathered during Phase 1 (single-threaded
     # point — the decision pool has completed).
