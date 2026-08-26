@@ -323,8 +323,32 @@ dev OBS with only `UBI_9`.
 
 | Item | Where verified |
 |---|---|
-| npm honours pgAdmin's Yarn-berry `yarn.lock` as a resolution hint | 9.2 dry-run |
-| `tar` buildtime service ignores `node_modules.obscpio` | 9.2 dry-run |
-| ~220 MB `http_PUT` completes under current timeouts | 9.2 real push (dev) |
+| npm honours pgAdmin's Yarn-berry `yarn.lock` as a resolution hint | **No** — verified 2026-08-26 against the real pgAdmin `REL-9_9` (commit `91ad54d17bbf`) and the real npm registry via `isv-pr --dry-run`. Only 1/5 sampled packages matched `web/yarn.lock`: `react` 18.3.1==18.3.1; `webpack` 5.109.2 vs 5.102.0; `@babel/core` 7.29.7 vs 7.28.4; `eslint` 9.39.5 vs 9.37.0; `axios` 1.20.0 vs 1.12.2 (yarn↔generated). Root cause: `npm_lockfile` runs plain `npm install` against `web/package.json`'s caret ranges (`^5.101.0`, `^18.2.0`, `^7.28.3`, `^9.37.0`, `^1.12.0`) with no reference to `yarn.lock` at all — every mismatched version still satisfies its caret range, so npm is resolving fresh against the registry, not reading the Yarn lockfile. This is a genuine reproducibility gap (vendored versions drift from what upstream tested with Yarn), not a tooling bug — flagged for SP4 to decide whether to pin via `--npm-flags`/an explicit resolutions step or accept the drift. |
+| `tar` buildtime service ignores `node_modules.obscpio` | Yes — verified 2026-08-26: the `tar` service's own output was exactly `['percona-pgadmin4-9.9.tar']`; `node_modules.obscpio` was routed through the "keeping manual artifact" path and never touched by `tar`. |
+| ~220 MB `http_PUT` completes under current timeouts | **7b pending** — dev OBS (`http://192.168.1.103:3000`) was unreachable on 2026-08-26 (`No route to host`); real push deferred. Local artifact confirmed present and correctly sized: `node_modules.obscpio` = 206,769,648 bytes (~197 MB), md5 `b8f0fcdd8cdf5e2251362a835ce00e07`, cached at `.cache/services/91ad54d17bbf82ae0efa277ceb88f30a3189ce4e/`. |
 | UBI-9 AppStream subset actually carries `python3.12-*` extras and `nodejs:22` | SP3/SP4 first builds |
 | `ua-parser-builtins` has no openSUSE:Factory package | SP3 |
+
+**SP1 verification run (2026-08-26, isv-pr `--dry-run` only, per the "never write ops with `-P isv` without `--dry-run`" rule; dev OBS was down so the brief's `-P dev` command was substituted with `-P isv-pr --dry-run`):**
+
+- Scratch `_service` (obs_scm → pgAdmin `REL-9_9` / npm_lockfile / node_modules) under
+  `root/ppg/devel/pgadmin/percona-pgadmin4/obs/` ran end to end against the real upstream
+  and the real npm registry: `obs_scm` resolved `REL-9_9` (annotated tag `8308c7f7`) to
+  commit `91ad54d17bbf82ae0efa277ceb88f30a3189ce4e`, `versionrewrite-pattern
+  REL-(\d+)_(\d+)` correctly produced `version: 9.9` in the obsinfo; `npm_lockfile`
+  produced `package-lock.json` (`lockfileVersion` 3, 1550 `packages` entries);
+  `node_modules` produced exactly `node_modules.obscpio` (207 MB) and
+  `node_modules.spec.inc` (1439 `Source` lines) — cloning one git-hosted dependency
+  (`react-data-grid`) directly rather than downloading a tarball. Final dry-run file
+  list was exactly the 5 expected files, all `+`, no `error:` lines.
+- Artifact-set gate (`_node_modules_patterns` in `percona_obs/services.py`): the
+  `node_modules` service produced **only** the three tolerated names
+  (`node_modules.obscpio`, `node_modules.spec.inc`, and `package-lock.json` matching
+  the `*<input>` suffix pattern) — no `node_modules.sums`, no loose `.tgz`, no extra
+  manifest. The drift-tolerant table needs no correction.
+- `/usr/lib/obs/service/node_modules --help` confirms the parameter names the table's
+  `_node_modules_patterns` comment assumes: `-i/--input FILE` (lockfile, default
+  `package-lock.json`), `-o/--output FILE`, `--cpio ARCHIVE` — all match.
+- Second dry-run showed `= service npm_lockfile … (cached)` and `= service node_modules
+  … (cached)` and finished in ~37 s total (vs. the first run's several minutes for the
+  ~1400-tarball/git-clone download), confirming the cache path.
