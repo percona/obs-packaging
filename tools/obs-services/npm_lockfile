@@ -59,19 +59,22 @@ def unpack(archive: Path, dest: Path) -> Path:
     """Unpack *archive* into *dest*; return its single top-level directory."""
     if archive.name.endswith(CPIO_SUFFIX):
         with archive.open("rb") as fh:
-            result = subprocess.run(
-                [
-                    "cpio",
-                    "--extract",
-                    "--make-directories",
-                    "--unconditional",
-                    "--quiet",
-                ],
-                stdin=fh,
-                cwd=dest,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
+            try:
+                result = subprocess.run(
+                    [
+                        "cpio",
+                        "--extract",
+                        "--make-directories",
+                        "--unconditional",
+                        "--quiet",
+                    ],
+                    stdin=fh,
+                    cwd=dest,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+            except FileNotFoundError:
+                die("cpio not found in PATH (install cpio)")
         if result.returncode != 0:
             die(f"cpio extract of {archive.name} failed: {result.stderr.strip()}")
     else:
@@ -174,7 +177,10 @@ def main(argv: list[str]) -> int:
         run_npm(pkg_dir, args.npm_flags.split(), npm_cache)
         lockfile = pkg_dir / LOCKFILE
         validate_lockfile(lockfile)
-        shutil.copyfile(lockfile, outdir / LOCKFILE)
+        try:
+            shutil.copyfile(lockfile, outdir / LOCKFILE)
+        except OSError as exc:
+            die(f"cannot write {LOCKFILE} to {outdir}: {exc}")
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
         shutil.rmtree(npm_cache, ignore_errors=True)
