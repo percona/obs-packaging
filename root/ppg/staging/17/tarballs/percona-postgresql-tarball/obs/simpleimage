@@ -44,9 +44,21 @@ BuildRequires:  percona-pg_gather
 # libtirpc/libexpat/libpcre2-posix) and compiled its resource paths to
 # /usr/share/{gdal,proj}, which no tarball host has. build-tarball.sh
 # section 0a fails the build if either EPEL package is in the chroot anyway.
+#
+# percona-gis-compat (this project's RockyLinux_8/RockyLinux_9 repos): a
+# payload-free shim that Provides the distro GDAL/PROJ *names* PostGIS
+# requires by name (gdal-libs/proj on EL8, gdal3.4-libs/proj on EL9), so the
+# expander sees a have-choice that `Prefer: percona-gis-compat` resolves in
+# our favour, and Requires percona-gdal/percona-proj. Needed because OBS does
+# NOT apply prjconf `Ignore:` rules when expanding image-type recipes (proven
+# 2026-08-26: the effective prjconf had the Ignore lines, EPEL's GDAL and
+# Rocky's proj were installed anyway). Listed here explicitly so the shim's
+# presence in the chroot is deterministic instead of resting on the Prefer:
+# choice alone.
 BuildRequires:  percona-psql
 BuildRequires:  percona-gdal
 BuildRequires:  percona-proj
+BuildRequires:  percona-gis-compat
 # Companion tools
 BuildRequires:  percona-pgbouncer
 BuildRequires:  percona-pgpool-II-pg%!{PG_MAJOR_VERSION}

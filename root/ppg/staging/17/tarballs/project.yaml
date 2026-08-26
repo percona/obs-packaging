@@ -129,12 +129,29 @@ project-config: |
   # `Requires: geos proj libgeotiff` on EL8; `gdal3.4-libs` on EL9 — all in
   # the main percona-postgis35_%!{PG_MAJOR_VERSION} package, no subpackage).
   # A by-name Requires has exactly one provider, so there is no choice for
-  # Prefer to resolve and EPEL's fat gdal-libs/proj land in the chroot
-  # regardless — where copy_deps is free to bundle them and where
-  # build-tarball.sh section 0a aborts the build. Drop those specific edges
-  # instead; the soname Requires above (resolved by the Prefer: lines) still
-  # pull a real GDAL/PROJ in, namely ours.
-  Ignore: percona-postgis35_%!{PG_MAJOR_VERSION}:gdal-libs,proj
+  # Prefer to resolve.
+  #
+  # PROVEN 2026-08-26 (first OBS build of these repos): a package-scoped
+  # `Ignore:` rule dropping those edges does NOT help — OBS does not apply
+  # `Ignore:` rules when expanding image-type recipes. The effective prjconf
+  # carried the lines, yet EPEL's gdal-libs/gdal3.4-libs and Rocky's proj
+  # were still installed and build-tarball.sh section 0a FATALed as
+  # designed. `Prefer:` IS honoured for image-type expansion (`Prefer:
+  # hdf-libs`, and percona-gdal/percona-proj/percona-psql all landing in the
+  # chroot). Those inert Ignore: lines are therefore gone.
+  #
+  # Instead, the payload-free percona-gis-compat shim (this project,
+  # RockyLinux_8/RockyLinux_9 repos only) Provides those distro NAMES
+  # itself, which turns each by-name Requires into a real have-choice that
+  # the Prefer: below resolves; the shim Requires percona-gdal/percona-proj
+  # so the runtimes PostGIS needs still come in. The simpleimage recipe also
+  # BuildRequires it explicitly, so its presence does not hinge on the
+  # choice alone.
+  #
+  # PostGIS's `Requires: hdf5` (also by name) is left alone: hdf5 is small,
+  # nothing in the tarball bundles it, and the surplus gate is
+  # artifact-based, not chroot-based.
+  Prefer: percona-gis-compat
   # glibc requires the virtual "glibc-langpack"; every glibc-langpack-*
   # (plus glibc-all-langpacks and glibc-minimal-langpack) provides it, and
   # image-type expansion resolves the full runtime closure while ignoring
@@ -169,12 +186,29 @@ project-config: |
   # `Requires: geos proj libgeotiff` on EL8; `gdal3.4-libs` on EL9 — all in
   # the main percona-postgis35_%!{PG_MAJOR_VERSION} package, no subpackage).
   # A by-name Requires has exactly one provider, so there is no choice for
-  # Prefer to resolve and EPEL's fat gdal-libs/proj land in the chroot
-  # regardless — where copy_deps is free to bundle them and where
-  # build-tarball.sh section 0a aborts the build. Drop those specific edges
-  # instead; the soname Requires above (resolved by the Prefer: lines) still
-  # pull a real GDAL/PROJ in, namely ours.
-  Ignore: percona-postgis35_%!{PG_MAJOR_VERSION}:gdal3.4-libs,proj
+  # Prefer to resolve.
+  #
+  # PROVEN 2026-08-26 (first OBS build of these repos): a package-scoped
+  # `Ignore:` rule dropping those edges does NOT help — OBS does not apply
+  # `Ignore:` rules when expanding image-type recipes. The effective prjconf
+  # carried the lines, yet EPEL's gdal-libs/gdal3.4-libs and Rocky's proj
+  # were still installed and build-tarball.sh section 0a FATALed as
+  # designed. `Prefer:` IS honoured for image-type expansion (`Prefer:
+  # hdf-libs`, and percona-gdal/percona-proj/percona-psql all landing in the
+  # chroot). Those inert Ignore: lines are therefore gone.
+  #
+  # Instead, the payload-free percona-gis-compat shim (this project,
+  # RockyLinux_8/RockyLinux_9 repos only) Provides those distro NAMES
+  # itself, which turns each by-name Requires into a real have-choice that
+  # the Prefer: below resolves; the shim Requires percona-gdal/percona-proj
+  # so the runtimes PostGIS needs still come in. The simpleimage recipe also
+  # BuildRequires it explicitly, so its presence does not hinge on the
+  # choice alone.
+  #
+  # PostGIS's `Requires: hdf5` (also by name) is left alone: hdf5 is small,
+  # nothing in the tarball bundles it, and the surplus gate is
+  # artifact-based, not chroot-based.
+  Prefer: percona-gis-compat
   # Same glibc-langpack choice as ssl1.1 above: the EL9 base configs carry
   # only "Ignore: glibc:glibc-langpack" (no Prefer), which image-type
   # expansion ignores.

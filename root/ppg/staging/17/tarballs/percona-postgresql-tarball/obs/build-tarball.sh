@@ -98,32 +98,53 @@ done
 # EL8, gdal3.4-libs on EL9) and a name list silently stops protecting us the
 # moment EPEL renames or a new provider appears.
 #
-# Two prjconf mechanisms keep it clean (root/ppg/staging/NN/tarballs/
-# project.yaml, both ssl blocks):
-#   * `Prefer: percona-gdal` / `Prefer: percona-proj` win the "have choice"
-#     for PostGIS's automatic libgdal.so.NN()(64bit)/libproj.so.NN()(64bit)
+# Two mechanisms keep it clean:
+#   * `Prefer: percona-gdal` / `Prefer: percona-proj` (root/ppg/staging/NN/
+#     tarballs/project.yaml, both ssl blocks) win the "have choice" for
+#     PostGIS's automatic libgdal.so.NN()(64bit)/libproj.so.NN()(64bit)
 #     soname Requires;
-#   * `Ignore: percona-postgis35_NN:gdal-libs,proj` (gdal3.4-libs on EL9)
-#     drops PostGIS's BY-NAME Requires on the distro packages, which Prefer
-#     cannot redirect (a by-name dep has a single provider, so there is no
-#     choice to resolve).
-# If this fires, some package still pulls a distro GDAL/PROJ in by name — the
-# rpm -qf / --whatrequires output below names it, and it needs its own
-# Ignore: line.
+#   * percona-gis-compat (this project, RockyLinux_8/RockyLinux_9 repos; a
+#     BuildRequires of the simpleimage recipe) is a payload-free shim that
+#     Provides the distro NAMES PostGIS requires by name — gdal-libs/proj on
+#     EL8, gdal3.4-libs/proj on EL9 — turning each single-provider by-name
+#     Requires into a real have-choice that `Prefer: percona-gis-compat`
+#     resolves. A prjconf `Ignore:` rule CANNOT do this job: proven
+#     2026-08-26 that OBS does not apply Ignore rules when expanding
+#     image-type recipes (the effective prjconf carried them and the distro
+#     packages were installed anyway).
+# If this fires, some package still pulls a distro GDAL/PROJ in — the
+# rpm -qf / --whatrequires output below names the requirer, and either
+# percona-gis-compat needs another Provides: or that package needs handling
+# of its own.
 # (|| true inside the substitution: with no match the globs stay literal
 # and ls exits 2, which under set -e would abort the assignment itself —
 # i.e. every CLEAN build would die here, silently. Same trap as PY_BIN
 # above. The `if` below is the only gate.)
 stray_gis=$(ls /usr/lib64/libgdal.so.* /usr/lib64/libproj.so.* 2>/dev/null || true)
 if [ -n "$stray_gis" ]; then
-    echo "FATAL: a distro GDAL/PROJ runtime is installed in the chroot — it must be replaced by percona-gdal/percona-proj (prjconf Prefer:/Ignore:, see the comment above this check)" >&2
+    echo "FATAL: a distro GDAL/PROJ runtime is installed in the chroot — it must be replaced by percona-gdal/percona-proj (prjconf Prefer: + the percona-gis-compat shim, see the comment above this check)" >&2
+    # Diagnostics only — every substitution keeps a `|| true`/fallback so a
+    # failing rpm query cannot abort the script before `exit 1` below (same
+    # set -e trap as PY_BIN at the top of this file).
+    #
+    # `rpm -q --whatrequires` needs a CAPABILITY, not a NEVRA: passing the
+    # full `proj-6.3.2-4.el8.x86_64` that `rpm -qf` prints made it answer
+    # "no package requires ..." and hid the real requirer. Query the bare
+    # package NAME and the soname capability instead.
     for f in $stray_gis; do
-        owners=$(rpm -qf "$f" 2>/dev/null) || owners=""
+        owners=$(rpm -qf --qf '%{NAME}\n' "$f" 2>/dev/null || true)
         [ -n "$owners" ] || owners="<no owning package>"
         for o in $owners; do
-            echo "  $f  <-  $o" >&2
-            rpm -q --whatrequires "$o" 2>/dev/null | sed "s|^|      required by: |" >&2
+            nevra=$(rpm -q "$o" 2>/dev/null || true)
+            echo "  $f  <-  $o  (${nevra:-not installed})" >&2
+            rpm -q --whatrequires "$o" 2>/dev/null | sed "s|^|      required by name: |" >&2 || true
         done
+        # The soname capability, e.g. libgdal.so.26()(64bit): this is what
+        # PostGIS's automatic dependency actually asks for.
+        soname="$(basename "$f")()(64bit)"
+        echo "      capability: $soname" >&2
+        rpm -q --whatprovides "$soname" 2>/dev/null | sed "s|^|      provided by: |" >&2 || true
+        rpm -q --whatrequires "$soname" 2>/dev/null | sed "s|^|      required by soname: |" >&2 || true
     done
     exit 1
 fi
