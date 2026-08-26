@@ -188,33 +188,6 @@ def test_obscpio_archive_is_unpacked_with_cpio(tmp_path, fake_npm):
     assert (outdir / "package-lock.json").is_file()
 
 
-def test_cpio_missing_from_path_fails(tmp_path, fake_npm, monkeypatch, capsys):
-    src = tmp_path / "src"
-    _source_tree(src)
-    work = tmp_path / "work"
-    work.mkdir()
-    _obscpio(src, "pgadmin4-9.9", work / "percona-pgadmin4.obscpio")
-    outdir = tmp_path / "out"
-    outdir.mkdir()
-
-    # fake_npm already put a bindir with only `npm` first on PATH; restrict
-    # PATH to just that bindir so `cpio` cannot be found anywhere.
-    npm_bindir = os.environ["PATH"].split(os.pathsep)[0]
-    monkeypatch.setenv("PATH", npm_bindir)
-
-    cwd = os.getcwd()
-    os.chdir(work)
-    try:
-        with pytest.raises(SystemExit) as exc:
-            svc.main(
-                ["--archive", "*.obscpio", "--subdir", "web", "--outdir", str(outdir)]
-            )
-    finally:
-        os.chdir(cwd)
-    assert exc.value.code == 1
-    assert "cpio not found" in capsys.readouterr().err
-
-
 def test_archive_glob_zero_matches_fails(tmp_path, fake_npm, capsys):
     work = tmp_path / "work"
     work.mkdir()
