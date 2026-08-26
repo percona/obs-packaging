@@ -1,0 +1,23 @@
+title: local-npm-registry build tool
+description: |
+  local-npm-registry %!{LOCAL_NPM_REGISTRY_VERSION} — openSUSE's localhost-only
+  npm registry (github.com/openSUSE/npm-localhost-proxy). At build time it
+  serves the npm tarballs unpacked from a node_modules.obscpio so that
+  `npm install` works inside the network-less OBS build root. Consumed by
+  percona-pgadmin4 (ppg:devel:pgadmin) via `BuildRequires: local-npm-registry`.
+  RPM-only, noarch; built for UBI 9 only because pgAdmin 4 is a UBI-9-only
+  product and the package needs the nodejs:22 module stream.
+
+build:
+  RockyLinux_8: false
+  RockyLinux_9: false
+  RockyLinux_10: false
+  UBI_8: false
+  Debian_11: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Leap_16: false
+  openSUSE_Tumbleweed: false
