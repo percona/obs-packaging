@@ -69,15 +69,21 @@ Directory names are `python3-<name>`; the RPM name is `%{python3_pkgprefix}-<nam
 - `bidict` 0.24 needs the Rust `uv_build` backend; `pyotp` 2.10 needs `hatch-vcs`;
   `ua-parser` 1.0 needs `ua-parser-builtins` (wheel-only, no Factory package).
 - `trove-classifiers` uses `calver` at build time (`use_calver=` in `setup.py`).
-- `hatchling` 1.25.0 runs on `packaging >= 23.2` / `pluggy >= 1.0` (RHEL's); 1.26+ needs
-  `packaging >= 24.2`.
+- **RHEL's build backends are too old for current PEP 639 metadata** (`license = "…"`
+  string + `license-files`, used by Flask, Werkzeug, Pygments and most 2025 releases):
+  flit-core 3.9.0 aborts with `license field should be dict`; hatchling < 1.27 likewise.
+  Current backends need `packaging >= 24.2` (RHEL: 23.2). Verified locally (2026-08-26):
+  **pip 23.2.1 (RHEL's) + flit-core 3.12.0 / hatchling 1.28.0 / packaging 25.0** builds
+  Flask 3.1.3 and Pygments 2.21.0 sdists into Metadata-Version 2.4 wheels and installs them
+  with `pip install --root` — so the shared stack must carry current flit-core, hatchling
+  and packaging, and pip itself is fine.
 
 ## 3. Decisions taken during brainstorming
 
 | Topic | Decision |
 |---|---|
 | Version policy | **Reuse existing packages where the libraries' real minimums are met**, even where pgAdmin's `requirements.txt` pins newer: RHEL's cryptography 41.0.7, urllib3 1.26.19, setuptools 68.2.2, cffi, idna, pycparser; common:deps' psutil 6.1.1, click 8.1.7, six, dateutil. openSUSE and Debian ship pgAdmin against distro versions the same way. SP4 relaxes the pins. Consequence: no maturin/Rust for cryptography; no replacement of RHEL packages. |
-| dnspython | **Bump `python3-dns` in `ppg:common:deps` to 2.8.0 for everyone**, keeping the package/RPM name, and add a **shared hatchling build stack** to `ppg:common:deps` (hatchling 1.25.0, pathspec, trove-classifiers) for EL8/EL9/UBI; EL10 and openSUSE use their distro `python3-hatchling`. `python3-etcd` and `percona-patroni` need no source change (dnspython 2 keeps `dns.resolver.query()`); they are dep-cascade rebuilt. |
+| dnspython | **Bump `python3-dns` in `ppg:common:deps` to 2.8.0 for everyone**, keeping the package/RPM name, and add a **shared build-backend stack** to `ppg:common:deps` for EL8/EL9/UBI: flit-core 3.12.0, packaging 25.0, pathspec 0.12.1, trove-classifiers, hatchling 1.28.0 (§2.4: RHEL's flit-core 3.9 / packaging 23.2 cannot build PEP 639 metadata). EL10 and openSUSE use their distro `python3-hatchling`/`python3-flit-core`. `python3-etcd` and `percona-patroni` need no source change (dnspython 2 keeps `dns.resolver.query()`); they are dep-cascade rebuilt. |
 | setuptools ≥ 77 packages | Pin down to the last releases that build with setuptools 68: keyring 25.2.1, jaraco.context 6.0.1, jaraco.functools 4.1.0, importlib-resources 6.5.2, Pillow 11.1.0 (all still satisfy pgAdmin's and their consumers' ranges). |
 | Other backend avoidance | bidict 0.23.1 (setuptools), pyotp 2.9.0 (setuptools), ua-parser 0.18.0 (self-contained; `user-agents` needs ≥ 0.10) — `ua-parser-builtins` dropped. |
 | Build tools packaged | `python3-cython` 3.1.3, `python3-poetry-core` 2.2.1, `python3-pdm-backend` 2.4.5 in `ppg:devel:pgadmin`; hatchling stack in `ppg:common:deps`. `setuptools_scm` from EPEL 9. |
@@ -172,9 +178,11 @@ Directory names are `python3-<name>`; the RPM name is `%{python3_pkgprefix}-<nam
 | Directory | PyPI | Version | Build family | Builds on | Notes |
 |---|---|---|---|---|---|
 | `python3-dns` | dnspython | 2.8.0 | hatchling | all RPM repos (as today) | bump 1.15.0 → 2.8.0, name kept; `_service` moves to `download_url`; consumers `python3-etcd`, `percona-patroni` ×6 rebuilt by dep-cascade |
-| `python3-hatchling` | hatchling | 1.25.0 | self-hosting | RockyLinux_8/9, UBI_8/9 | `build:` disables RockyLinux_10, openSUSE_Leap_16, openSUSE_Tumbleweed (distro hatchling there) |
+| `python3-flit-core` | flit-core | 3.12.0 | self-hosting (`PYTHONPATH=.`) | RockyLinux_8/9, UBI_8/9 | `build:` disables RockyLinux_10, openSUSE_Leap_16, openSUSE_Tumbleweed (distro backends there); newer than CRB's 3.9.0 by version |
+| `python3-packaging` | packaging | 25.0 | flit | RockyLinux_8/9, UBI_8/9 | same build flags; newer than CRB's 23.2 by version |
 | `python3-pathspec` | pathspec | 0.12.1 | flit | RockyLinux_8/9, UBI_8/9 | same build flags |
 | `python3-trove-classifiers` | trove-classifiers | 2025.9.11.17 | setuptools | RockyLinux_8/9, UBI_8/9 | same build flags; patch: drop `calver`, set version literally |
+| `python3-hatchling` | hatchling | 1.28.0 | self-hosting (`PYTHONPATH=src`) | RockyLinux_8/9, UBI_8/9 | same build flags; Requires packaging ≥ 24.2 (ours), pathspec, trove-classifiers, RHEL pluggy |
 
 ### 4.3 Reused, not built
 
@@ -243,12 +251,16 @@ Requires:       %{python3_pkgprefix}-blinker >= 1.9
 Requires:       %{python3_pkgprefix}-markupsafe
 ```
 
-Backend BuildRequires per family: `-flit-core` (RHEL CRB); `-hatchling` behind the
-conditional below; `-poetry-core` / `-pdm-backend` (ours); `-setuptools_scm` where the
-sdist's `[build-system] requires` lists it; `-setuptools-rust` + `cargo` + `rust`
-(bcrypt); `-cython` (gssapi, sqlalchemy); `gcc`/`gcc-c++` and `-devel` libraries for
-native packages. Runtime `Requires:` are the closure edges with the minimum PyPI
-declares; reused distro packages are named verbatim (`python3.12-cryptography`).
+Backend BuildRequires per family: `-flit-core` (ours on EL8/9, §4.2); `-hatchling`
+behind the conditional below; `-poetry-core` / `-pdm-backend` (ours); `-setuptools_scm`
+where the sdist's `[build-system] requires` lists it; `-setuptools-rust` + `cargo` +
+`rust` (bcrypt); `-cython` (gssapi, sqlalchemy); `gcc`/`gcc-c++` and `-devel` libraries
+for native packages. Runtime `Requires:` are the closure edges with the minimum PyPI
+declares; reused distro packages are named verbatim (`python3.12-cryptography`) and
+never carry a floor (RHEL's versions are older than several upstream floors but work,
+§3). **Every runtime `Requires:` is also emitted as a `BuildRequires:`** so the `%check`
+import test can run in the build root (standard Python packaging practice; OBS orders the
+builds accordingly).
 
 ```rpmspec
 %if 0%{?rhel} == 8 || 0%{?rhel} == 9
@@ -281,7 +293,9 @@ buildroot only ever holds this package, so the glob is exact. RHEL's
 `python3-rpm-generators` add `python3.12dist(<name>) = <version>` Provides from the
 `.dist-info`.
 
-`%check`: `%{__ospython} -c "import <module>[, <module2>]"`.
+`%check`: `PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -c "import <module>[; import <module2>]"`
+(from the installed buildroot — src-layout packages are not importable from the source
+directory; `%{python3_sitearch}` for arch packages).
 
 `%changelog`: one entry, `* <Day Mon DD YYYY> Percona Development Team <info@percona.com> - <version>-1`.
 
@@ -348,14 +362,15 @@ still run to show nothing else moved.
 3. `ppg:devel:pgadmin`: the rest (OBS orders builds by `BuildRequires`).
 
 **Acceptance for SP3:** all 71 pgadmin packages `succeeded` on UBI_9 x86_64 and aarch64;
-the 4 common:deps packages `succeeded` on every repo they build for; `local-npm-registry`
-and every other package in the PR project unchanged.
+the 6 common:deps packages (`python3-dns` and the five build-backend packages) `succeeded`
+on every repo they build for; `local-npm-registry` and every other package in the PR
+project unchanged.
 
 ## 8. Risks and mitigations
 
 | Risk | Mitigation |
 |---|---|
-| RHEL pip 23.2.1 rejects Metadata-Version 2.4 wheels emitted by flit/hatchling | Verified by the first pgadmin build; fallback `python3.12 -m installer` (one extra pure package) or unzip-based install in the template. |
+| RHEL pip 23.2.1 rejects Metadata-Version 2.4 wheels emitted by flit/hatchling | **Retired** — reproduced locally with pip 23.2.1 + flit-core 3.12.0 / hatchling 1.28.0: Flask and Pygments build and install fine (§2.4). |
 | `setuptools_scm` (EPEL) cannot determine the version from a sdist | sdists ship `PKG-INFO`, which it reads; else `SETUPTOOLS_SCM_PRETEND_VERSION=%{version}` in `%build`. |
 | Pillow 11.1 configure picks up codecs UBI-9 lacks | Build with only jpeg/zlib enabled (`-C jpeg=enable -C zlib=enable -C ...=disable`) via `PIP_CONFIG_SETTINGS`/`--config-settings`. |
 | bcrypt cargo goes online | `cargo_vendor` tarball + its `.cargo/config`; `CARGO_NET_OFFLINE=true`; `setuptools-rust` 1.7 from CRB. |
