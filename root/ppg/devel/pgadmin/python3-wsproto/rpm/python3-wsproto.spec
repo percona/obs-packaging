@@ -40,6 +40,8 @@ Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmi
 
 %prep
 %autosetup -p1 -n wsproto-1.3.2
+# setuptools 68 (RHEL 9) cannot parse PEP 639 licence metadata: use the table form, drop license-files
+sed -i -e 's/^license = "\(.*\)"$/license = {text = "\1"}/' -e '/^license-files = \[$/,/^\]$/d' -e '/^license-files = \[.*\]$/d' pyproject.toml
 
 %build
 %{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir dist .
