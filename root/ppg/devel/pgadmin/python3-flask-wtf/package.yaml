@@ -1,0 +1,5 @@
+title: Flask-WTF 1.2.2 for Python 3.12
+description: |
+  Form rendering, validation, and CSRF protection for Flask with WTForms. RPM-only python3.12-* build from the PyPI sdist,
+  consumed by pgAdmin 4 (percona-pgadmin4). Bump by editing obs/_service (sdist URL) and
+  rpm/*.spec (Version + changelog).
