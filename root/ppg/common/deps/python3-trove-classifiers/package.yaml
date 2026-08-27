@@ -1,0 +1,11 @@
+title: trove-classifiers 2025.9.11.17 for Python 3.12
+description: |
+  Canonical source for classifiers on PyPI (pypi.org). RPM-only python3.12-* build from the PyPI sdist,
+  consumed by Percona PostgreSQL packages. Bump by editing obs/_service (sdist URL) and
+  rpm/*.spec (Version + changelog).
+
+# EL10 and openSUSE ship python3-hatchling & friends; only EL8/EL9/UBI need ours.
+build:
+  RockyLinux_10: false
+  openSUSE_Leap_16: false
+  openSUSE_Tumbleweed: false
