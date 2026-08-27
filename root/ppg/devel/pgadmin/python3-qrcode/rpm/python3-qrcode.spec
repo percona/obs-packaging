@@ -37,6 +37,8 @@ Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmi
 
 %prep
 %autosetup -p1 -n qrcode-8.2
+# console_scripts.py is a module, not a script: drop its ambiguous #!/usr/bin/env python shebang
+sed -i '1{/^#!\/usr\/bin\/env python$/d}' qrcode/console_scripts.py
 
 %build
 %{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir dist .
