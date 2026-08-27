@@ -8,7 +8,7 @@
 %global python3_pkgprefix python3
 %global python3_buildversion 3
 %endif
-%{expand: %%global py3ver %(echo `%{__ospython} -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
+%{expand: %%global py3ver %(echo `%{__ospython} -P -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
 %global python3_sitearch %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('platlib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
 Name:           %{python3_pkgprefix}-cython
@@ -44,7 +44,7 @@ Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmi
 find %{buildroot}%{python3_sitearch} -mindepth 1 -type d | sed "s|%{buildroot}||" | sed 's/^/%dir /' >> INSTALLED_FILES
 
 %check
-PYTHONPATH=%{buildroot}%{python3_sitearch} %{__ospython} -c "import Cython"
+PYTHONPATH=%{buildroot}%{python3_sitearch} %{__ospython} -P -c "import Cython"
 
 %files -f INSTALLED_FILES
 %defattr(-,root,root)
