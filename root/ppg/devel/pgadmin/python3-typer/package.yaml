@@ -1,0 +1,5 @@
+title: typer 0.19.2 for Python 3.12
+description: |
+  Typer, build great CLIs. Easy to code. Based on Python type hints. RPM-only python3.12-* build from the PyPI sdist,
+  consumed by pgAdmin 4 (percona-pgadmin4). Bump by editing obs/_service (sdist URL) and
+  rpm/*.spec (Version + changelog).

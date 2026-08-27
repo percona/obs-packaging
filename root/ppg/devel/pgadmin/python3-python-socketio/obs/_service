@@ -1,0 +1,5 @@
+<services>
+  <service name="download_url">
+    <param name="url">https://files.pythonhosted.org/packages/source/p/python-socketio/python_socketio-5.16.4.tar.gz</param>
+  </service>
+</services>
