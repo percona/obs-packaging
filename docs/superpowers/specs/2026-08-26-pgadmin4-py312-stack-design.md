@@ -104,7 +104,7 @@ Directory names are `python3-<name>`; the RPM name is `%{python3_pkgprefix}-<nam
 | `python3-alembic` | alembic | 1.19.1 | setuptools | noarch | flask-migrate |  |
 | `python3-authlib` | Authlib | 1.6.12 | setuptools | noarch |  |  |
 | `python3-babel` | babel | 2.18.0 | setuptools | noarch | flask-babel |  |
-| `python3-backports-zstd` | backports.zstd | 1.7.0 | setuptools | arch |  | libzstd-devel |
+| `python3-backports-zstd` | backports.zstd | 1.7.0 | setuptools | arch | flask-compress | libzstd-devel |
 | `python3-bcrypt` | bcrypt | 5.0.0 | setuptools | arch | paramiko | Rust: setuptools-rust (CRB), cargo/rust; `cargo_vendor` with `cargotoml=src/_bcrypt/Cargo.toml` |
 | `python3-bidict` | bidict | 0.23.1 | setuptools | noarch | python-socketio | pinned down from 0.24.1 (uv_build) |
 | `python3-blinker` | blinker | 1.9.0 | flit | noarch | flask, flask-mail, flask-principal |  |
@@ -169,7 +169,7 @@ Directory names are `python3-<name>`; the RPM name is `%{python3_pkgprefix}-<nam
 | `python3-werkzeug` | Werkzeug | 3.1.8 | flit | noarch | flask, flask-login |  |
 | `python3-wsproto` | wsproto | 1.3.2 | setuptools | noarch | simple-websocket |  |
 | `python3-wtforms` | WTForms | 3.2.2 | hatchling | noarch | flask-security-too, flask-wtf |  |
-| `python3-cython` | Cython | 3.1.3 | build tool (setup.py) | arch | build-time only (gssapi, sqlalchemy) | overrides CRB's 0.29 by version within the project |
+| `python3-cython` | Cython | 3.1.3 | build tool (setup.py) | arch | build-time only (gssapi, sqlalchemy) | distinct from CRB's `python3.12-Cython` 0.29 (different case, different RPM); gssapi/sqlalchemy BuildRequire ours by name |
 | `python3-poetry-core` | poetry-core | 2.2.1 | build tool (self-hosting) | noarch | build-time only (flask-babel, qrcode, rich) | `PYTHONPATH=src` |
 | `python3-pdm-backend` | pdm-backend | 2.4.5 | build tool (self-hosting) | noarch | build-time only (typer) | `PYTHONPATH=src` |
 
@@ -260,7 +260,9 @@ declares; reused distro packages are named verbatim (`python3.12-cryptography`) 
 never carry a floor (RHEL's versions are older than several upstream floors but work,
 §3). **Every runtime `Requires:` is also emitted as a `BuildRequires:`** so the `%check`
 import test can run in the build root (standard Python packaging practice; OBS orders the
-builds accordingly).
+builds accordingly). One exception: `python3-psycopg` Requires `psycopg-c` without the
+BuildRequires mirror, because `python3-psycopg-c` BuildRequires `psycopg` for its own
+`%check` (a mirror would be a cycle).
 
 ```rpmspec
 %if 0%{?rhel} == 8 || 0%{?rhel} == 9
@@ -386,7 +388,7 @@ project unchanged.
 | bcrypt cargo goes online | Occurred: `cargo_vendor` places `vendor/` and `.cargo/config.toml` under `src/_bcrypt/`, not the sdist root; fixed by `CARGO_HOME=$PWD/src/_bcrypt/.cargo` (`fce0164`). |
 | gssapi needs exactly Cython 3.1.3 | Cython 3.1.3 resolved correctly; the failure was `%check` importing the source tree instead of the buildroot (fixed by `%{__ospython} -P -c "import ..."`, `52d93bc`). |
 | dnspython 2 changes break python-etcd / patroni at runtime | Not exercised in PR #12 (label `no-dep-cascade`; PR project is UBI_9-only) — the cascade rebuild happens on merge; `python3-dns` 2.8.0 itself built successfully on UBI_9. |
-| A package's first OBS build fails for a reason not foreseen here | Occurred, 12 packages failed the first build (9 on x86_64: backports-zstd, bcrypt, flask-principal, greenlet, gssapi, markupsafe, psycopg-c, qrcode, secretstorage; 3 only on aarch64: psycopg, ua-parser, wsproto); fixed by 10 commits over 3 rounds: RHEL setuptools 68 rejects PEP 639 `license = "…"` + `license-files` in 7 setuptools-family packages (alembic, backports-zstd, greenlet, mako, markupsafe, secretstorage, wsproto) → `%prep` sed to `license = {text = "…"}` (`176d706`); `%check` shadowed by the source tree for all 77 specs → `%{__ospython} -P` (`52d93bc`); flask-principal's PyPI metadata omits Flask/blinker → added as BuildRequires/Requires (`4441f17`); psycopg needs libpq at import → BuildRequires/Requires libpq (`2b65469`); psycopg-c refuses import unless psycopg is imported first → BuildRequires python3.12-psycopg, `%check` imports psycopg then psycopg_c (`3a385e0`); qrcode's `console_scripts.py` has an ambiguous shebang → removed in `%prep` (`d8ade24`); ua-parser's `setup_requires=["pyyaml"]` tries a live PyPI fetch → BuildRequires python3.12-pyyaml, drop `setup_requires` (`9836542`); bcrypt cargo_vendor path (see above, `fce0164`); greenlet's wheel installs an unpackaged `greenlet.h` header → added to `%files` (`abdc615`); WTForms' hatch build hook needs Babel to compile translations → BuildRequires python3.12-babel (`5498b3e`). |
+| A package's first OBS build fails for a reason not foreseen here | Occurred, 12 packages failed the first build (9 on x86_64: backports-zstd, bcrypt, flask-principal, greenlet, gssapi, markupsafe, psycopg-c, qrcode, secretstorage; 3 only on aarch64: psycopg, ua-parser, wsproto); fixed by 10 commits over 3 rounds: RHEL setuptools 68 rejects PEP 639 `license = "…"` + `license-files` in 7 setuptools-family packages (alembic, backports-zstd, greenlet, mako, markupsafe, secretstorage, wsproto) → `%prep` sed to `license = {text = "…"}` (`176d706`); `%check` shadowed by the source tree for all 77 specs → `%{__ospython} -P` (`52d93bc`); flask-principal's PyPI metadata omits Flask/blinker → added as BuildRequires/Requires (`4441f17`); psycopg needs libpq at import → BuildRequires/Requires libpq (`2b65469`); psycopg-c refuses import unless psycopg is imported first → BuildRequires python3.12-psycopg, `%check` imports psycopg then psycopg_c (`3a385e0`); qrcode's `console_scripts.py` has an ambiguous shebang → removed in `%prep` (`d8ade24`); ua-parser's `setup_requires=["pyyaml"]` tries a live PyPI fetch → BuildRequires python3.12-pyyaml, drop `setup_requires` (`9836542`); bcrypt cargo_vendor path (see above, `fce0164`); greenlet's wheel installs an unpackaged `greenlet.h` header → added to `%files` (`abdc615`); WTForms' hatch build hook needs Babel to compile translations → BuildRequires python3.12-babel (`5498b3e`). (wsproto's failure was the arch-independent PEP 639 error; it showed only on aarch64 in the first snapshot because the x86_64 scheduler was behind.) |
 | OBS rebuild storms from download-on-demand path-repo refreshes ("meta change") on a slow x86_64 scheduler | New: after the fixes, both PR projects rebuilt three more times with `_jobhistory` reason "meta change" (Rocky 9 / EPEL 9 DoD repos refreshing) — roughly 4 hours from first push to a settled board, not caused by our pushes (every sync logged `= project meta/config`); expect the same behaviour on merge, nothing to fix in our packages. |
 
 ## 9. Out of scope
