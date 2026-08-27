@@ -29,6 +29,10 @@ BuildRequires:  python%{python3_buildversion}-pip
 BuildRequires:  python%{python3_buildversion}-setuptools
 BuildRequires:  python%{python3_buildversion}-wheel
 BuildRequires:  %{python3_pkgprefix}-poetry-core
+# runtime dependencies, also needed by the %check import test
+BuildRequires:  %{python3_pkgprefix}-pillow
+
+Requires:       %{python3_pkgprefix}-pillow
 
 %description
 QR Code image generator.
