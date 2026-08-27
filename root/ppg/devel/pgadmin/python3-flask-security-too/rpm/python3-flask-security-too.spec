@@ -37,7 +37,6 @@ BuildRequires:  %{python3_pkgprefix}-flask-wtf >= 1.1.2
 BuildRequires:  %{python3_pkgprefix}-email-validator >= 2.0.0
 BuildRequires:  %{python3_pkgprefix}-markupsafe >= 2.1.0
 BuildRequires:  %{python3_pkgprefix}-passlib >= 1.7.4
-BuildRequires:  python3.12-setuptools
 BuildRequires:  %{python3_pkgprefix}-wtforms >= 3.0.0
 BuildRequires:  %{python3_pkgprefix}-importlib-resources >= 5.10.0
 
