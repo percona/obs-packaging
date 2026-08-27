@@ -1,0 +1,5 @@
+title: greenlet 3.5.5 for Python 3.12
+description: |
+  Lightweight in-process concurrent programming. RPM-only python3.12-* build from the PyPI sdist,
+  consumed by pgAdmin 4 (percona-pgadmin4). Bump by editing obs/_service (sdist URL) and
+  rpm/*.spec (Version + changelog).

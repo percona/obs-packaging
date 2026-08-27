@@ -1,0 +1,5 @@
+title: Flask-Principal 0.4.0 for Python 3.12
+description: |
+  Identity management for flask. RPM-only python3.12-* build from the PyPI sdist,
+  consumed by pgAdmin 4 (percona-pgadmin4). Bump by editing obs/_service (sdist URL) and
+  rpm/*.spec (Version + changelog).

@@ -1,0 +1,5 @@
+title: email-validator 2.3.0 for Python 3.12
+description: |
+  A robust email address syntax and deliverability validation library. RPM-only python3.12-* build from the PyPI sdist,
+  consumed by pgAdmin 4 (percona-pgadmin4). Bump by editing obs/_service (sdist URL) and
+  rpm/*.spec (Version + changelog).
