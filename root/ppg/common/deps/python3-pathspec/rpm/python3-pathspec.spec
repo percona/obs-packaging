@@ -12,13 +12,13 @@
 %{expand: %%global py3ver %(echo `%{__ospython} -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
-Name:           %{python3_pkgprefix}-dns
-Version:        2.8.0
+Name:           %{python3_pkgprefix}-pathspec
+Version:        0.12.1
 Release:        1%{?dist}
-Summary:        DNS toolkit
-License:        ISC
-URL:            https://pypi.org/project/dnspython/
-Source0:        https://files.pythonhosted.org/packages/source/d/dnspython/dnspython-2.8.0.tar.gz
+Summary:        Utility library for gitignore style pattern matching of file paths
+License:        MPL-2.0
+URL:            https://pypi.org/project/pathspec/
+Source0:        https://files.pythonhosted.org/packages/source/p/pathspec/pathspec-0.12.1.tar.gz
 BuildArch:      noarch
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
@@ -28,19 +28,15 @@ BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip
 BuildRequires:  python%{python3_buildversion}-setuptools
 BuildRequires:  python%{python3_buildversion}-wheel
-%if 0%{?rhel} == 8 || 0%{?rhel} == 9
-BuildRequires:  %{python3_pkgprefix}-hatchling
-%else
-BuildRequires:  python3-hatchling
-%endif
+BuildRequires:  python%{python3_buildversion}-flit-core
 
 %description
-DNS toolkit.
+Utility library for gitignore style pattern matching of file paths.
 
 Built for Python 3.12 from the PyPI sdist; a Python 3.12 build/runtime dependency shared by Percona PostgreSQL packages.
 
 %prep
-%autosetup -p1 -n dnspython-2.8.0
+%autosetup -p1 -n pathspec-0.12.1
 
 %build
 %{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir dist .
@@ -49,14 +45,11 @@ Built for Python 3.12 from the PyPI sdist; a Python 3.12 build/runtime dependenc
 %{__ospython} -m pip install --no-deps --no-index --root %{buildroot} --prefix %{_prefix} dist/*.whl
 
 %check
-PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -c "import dns"
+PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -c "import pathspec"
 
 %files
 %{python3_sitelib}/*
 
 %changelog
-* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 2.8.0-1
-- Package dnspython 2.8.0 for Python 3.12 (bump to 2.8.0 (email-validator needs >= 2.0); built with hatchling)
-
-* Mon Mar 30 2026 Percona Build/Release Team <eng-build@percona.com> - 1.15.0-1
-- Initial build of python3-dns 1.15.0
+* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 0.12.1-1
+- Package pathspec 0.12.1 for Python 3.12 (shared Python 3.12 build stack)

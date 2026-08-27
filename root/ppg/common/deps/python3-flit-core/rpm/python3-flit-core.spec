@@ -12,13 +12,13 @@
 %{expand: %%global py3ver %(echo `%{__ospython} -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
-Name:           %{python3_pkgprefix}-dns
-Version:        2.8.0
+Name:           %{python3_pkgprefix}-flit-core
+Version:        3.12.0
 Release:        1%{?dist}
-Summary:        DNS toolkit
-License:        ISC
-URL:            https://pypi.org/project/dnspython/
-Source0:        https://files.pythonhosted.org/packages/source/d/dnspython/dnspython-2.8.0.tar.gz
+Summary:        Distribution-building parts of Flit. See flit package for more information
+License:        BSD-3-Clause
+URL:            https://github.com/pypa/flit
+Source0:        https://files.pythonhosted.org/packages/source/f/flit-core/flit_core-3.12.0.tar.gz
 BuildArch:      noarch
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
@@ -28,35 +28,28 @@ BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip
 BuildRequires:  python%{python3_buildversion}-setuptools
 BuildRequires:  python%{python3_buildversion}-wheel
-%if 0%{?rhel} == 8 || 0%{?rhel} == 9
-BuildRequires:  %{python3_pkgprefix}-hatchling
-%else
-BuildRequires:  python3-hatchling
-%endif
 
 %description
-DNS toolkit.
+Distribution-building parts of Flit. See flit package for more information.
 
 Built for Python 3.12 from the PyPI sdist; a Python 3.12 build/runtime dependency shared by Percona PostgreSQL packages.
 
 %prep
-%autosetup -p1 -n dnspython-2.8.0
+%autosetup -p1 -n flit_core-3.12.0
 
 %build
+export PYTHONPATH=$PWD/.
 %{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir dist .
 
 %install
 %{__ospython} -m pip install --no-deps --no-index --root %{buildroot} --prefix %{_prefix} dist/*.whl
 
 %check
-PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -c "import dns"
+PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -c "import flit_core.buildapi"
 
 %files
 %{python3_sitelib}/*
 
 %changelog
-* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 2.8.0-1
-- Package dnspython 2.8.0 for Python 3.12 (bump to 2.8.0 (email-validator needs >= 2.0); built with hatchling)
-
-* Mon Mar 30 2026 Percona Build/Release Team <eng-build@percona.com> - 1.15.0-1
-- Initial build of python3-dns 1.15.0
+* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 3.12.0-1
+- Package flit-core 3.12.0 for Python 3.12 (shared Python 3.12 build stack)
