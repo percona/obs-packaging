@@ -28,6 +28,8 @@ BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip
 BuildRequires:  python%{python3_buildversion}-setuptools
 BuildRequires:  python%{python3_buildversion}-wheel
+# setup.py's build_py compiles regexes.yaml with PyYAML
+BuildRequires:  python3.12-pyyaml
 
 %description
 Python port of Browserscope's user agent parser.
@@ -36,6 +38,8 @@ Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmi
 
 %prep
 %autosetup -p1 -n ua-parser-0.18.0
+# PyYAML comes from the build root; stop setuptools from fetching it
+sed -i '/^\s*setup_requires=\["pyyaml"\],$/d' setup.py
 
 %build
 %{__ospython} setup.py build
