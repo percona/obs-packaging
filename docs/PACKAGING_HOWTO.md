@@ -407,7 +407,8 @@ everything under `root/ppg/devel/pgadmin/python3-*` and the build-backend stack 
 
 **Reuse before you build.** RHEL 9 already ships `python3.12-{cffi,cryptography,idna,
 pycparser,urllib3,setuptools,pip,wheel}` (AppStream) and `python3.12-{packaging 23.2,
-pluggy,pytest,setuptools-rust,flit-core 3.9,Cython 0.29}` (CRB); `ppg:common:deps` has
+pluggy,pytest,setuptools-rust,flit-core 3.9,Cython 0.29 (RPM name `python3.12-Cython`,
+capital C)}` (CRB); `ppg:common:deps` has
 `six`, `dateutil`, `psutil`, `click`, `dns`. Depend on those by their RPM name — without a
 version floor, since RHEL's versions are often older than upstream's declared minimum but
 work — and only package what is missing. RHEL's *build backends* are too old for current
@@ -437,7 +438,7 @@ PEP 639 metadata; use ours from `ppg:common:deps` (see the conditional below).
 %global python3_pkgprefix python3
 %global python3_buildversion 3
 %endif
-%{expand: %%global py3ver %(echo `%{__ospython} -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
+%{expand: %%global py3ver %(echo `%{__ospython} -P -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 # extensions: python3_sitearch with 'platlib' instead
 
@@ -480,17 +481,27 @@ Every runtime `Requires:` is also a `BuildRequires:` so `%check` can import the 
 %{__ospython} -m pip install --no-deps --no-index --root %{buildroot} --prefix %{_prefix} dist/*.whl
 
 %check
-PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -c "import flask"
+PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -P -c "import flask"
 
 %files
 %{python3_sitelib}/*
 %{_bindir}/flask
 ```
 
+The `-P` flag stops Python from putting the source directory first on `sys.path`;
+without it the smoke test imports the unpacked source tree instead of the installed
+package (and fails for C extensions).
+
 Self-hosting backends (hatchling, poetry-core, pdm-backend, flit-core) add
 `export PYTHONPATH=$PWD/src` (flit-core: `$PWD/.`) before `pip wheel`. Rust extensions
 (bcrypt) add a `cargo_vendor` service (`cargotoml` pointing at the crate's `Cargo.toml`),
 `Source1: vendor.tar.gz`, `%autosetup -a1`, `CARGO_NET_OFFLINE=true`.
+
+**PEP 639 licence metadata with setuptools 68.** Sdists whose `pyproject.toml` has
+`license = "SPDX-ID"` (a string) and/or `license-files = [...]` fail on RHEL's setuptools 68
+(`project.license must be valid exactly by one definition`). Add to `%prep`, after
+`%autosetup`: `sed -i -e 's/^license = "\(.*\)"$/license = {text = "\1"}/' -e '/^license-files = \[$/,/^\]$/d' -e '/^license-files = \[.*\]$/d' pyproject.toml`
+(see `root/ppg/devel/pgadmin/python3-greenlet/rpm/python3-greenlet.spec`).
 
 **Build/install — legacy `setup.py`-only packages** (no `pyproject.toml`): keep the
 `%{__ospython} setup.py build` / `setup.py install --single-version-externally-managed -O1
