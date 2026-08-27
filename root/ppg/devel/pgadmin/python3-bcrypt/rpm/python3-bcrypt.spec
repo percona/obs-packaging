@@ -42,7 +42,8 @@ Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmi
 
 %build
 export CARGO_NET_OFFLINE=true
-export CARGO_HOME=$PWD/.cargo
+# cargo_vendor put vendor/ and .cargo/config.toml next to src/_bcrypt/Cargo.toml
+export CARGO_HOME=$PWD/src/_bcrypt/.cargo
 %{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir dist .
 
 %install
