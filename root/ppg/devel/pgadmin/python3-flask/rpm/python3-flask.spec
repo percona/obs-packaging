@@ -9,7 +9,7 @@
 %global python3_pkgprefix python3
 %global python3_buildversion 3
 %endif
-%{expand: %%global py3ver %(echo `%{__ospython} -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
+%{expand: %%global py3ver %(echo `%{__ospython} -P -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
 Name:           %{python3_pkgprefix}-flask
@@ -59,7 +59,7 @@ Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmi
 %{__ospython} -m pip install --no-deps --no-index --root %{buildroot} --prefix %{_prefix} dist/*.whl
 
 %check
-PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -c "import flask"
+PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -P -c "import flask"
 
 %files
 %{python3_sitelib}/*

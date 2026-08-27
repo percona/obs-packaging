@@ -8,7 +8,7 @@
 %global python3_pkgprefix python3
 %global python3_buildversion 3
 %endif
-%{expand: %%global py3ver %(echo `%{__ospython} -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
+%{expand: %%global py3ver %(echo `%{__ospython} -P -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
 %global python3_sitearch %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('platlib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
 Name:           %{python3_pkgprefix}-bcrypt
@@ -49,7 +49,7 @@ export CARGO_HOME=$PWD/.cargo
 %{__ospython} -m pip install --no-deps --no-index --root %{buildroot} --prefix %{_prefix} dist/*.whl
 
 %check
-PYTHONPATH=%{buildroot}%{python3_sitearch} %{__ospython} -c "import bcrypt"
+PYTHONPATH=%{buildroot}%{python3_sitearch} %{__ospython} -P -c "import bcrypt"
 
 %files
 %{python3_sitearch}/*
