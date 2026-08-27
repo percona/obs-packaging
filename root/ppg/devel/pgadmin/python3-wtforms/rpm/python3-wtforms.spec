@@ -33,6 +33,8 @@ BuildRequires:  %{python3_pkgprefix}-hatchling
 %else
 BuildRequires:  python3-hatchling
 %endif
+# the hatch build hook compiles the translation catalogs with Babel
+BuildRequires:  %{python3_pkgprefix}-babel
 # runtime dependencies, also needed by the %check import test
 BuildRequires:  %{python3_pkgprefix}-markupsafe >= 1.1.1
 
