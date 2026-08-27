@@ -49,6 +49,7 @@ PYTHONPATH=%{buildroot}%{python3_sitearch} %{__ospython} -P -c "import greenlet"
 
 %files
 %{python3_sitearch}/*
+%{_includedir}/python%{py3ver}/greenlet/
 
 %changelog
 * Thu Aug 27 2026 Percona Development Team <info@percona.com> - 3.5.5-1
