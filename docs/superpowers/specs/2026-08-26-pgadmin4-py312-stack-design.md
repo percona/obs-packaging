@@ -293,9 +293,13 @@ buildroot only ever holds this package, so the glob is exact. RHEL's
 `python3-rpm-generators` add `python3.12dist(<name>) = <version>` Provides from the
 `.dist-info`.
 
-`%check`: `PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -c "import <module>[; import <module2>]"`
+`%check`: `PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -P -c "import <module>[; import <module2>]"`
 (from the installed buildroot — src-layout packages are not importable from the source
-directory; `%{python3_sitearch}` for arch packages).
+directory; `%{python3_sitearch}` for arch packages). The `-P` flag is load-bearing: without
+it Python prepends the current working directory (the source tree, not the buildroot) to
+`sys.path`, so native-extension packages import the pure-Python source instead of the
+installed build (e.g. gssapi's `No module named gssapi.raw.creds`); this was the single
+fix applied across all 77 specs in the first build round (`52d93bc`).
 
 `%changelog`: one entry, `* <Day Mon DD YYYY> Percona Development Team <info@percona.com> - <version>-1`.
 
@@ -304,6 +308,12 @@ directory; `%{python3_sitearch}` for arch packages).
 Only what a build needs: `trove-classifiers` (two `sed`s in `%prep`: remove `calver` from
 `pyproject.toml`'s `requires`, replace `use_calver=...` with `version="%{version}"`);
 anything a first build reveals is fixed in that package's spec.
+
+Second standing patch, added during the build loop: for the 7 setuptools-family packages
+(alembic, backports-zstd, greenlet, mako, markupsafe, secretstorage, wsproto) RHEL
+setuptools 68 rejects PEP 639's `license = "…"` SPDX-expression form plus `license-files`
+— a `%prep` `sed` rewrites `license = "…"` to the legacy `license = {text = "…"}` table
+and drops the `license-files` key, rather than shipping a newer setuptools (`176d706`).
 
 ### 5.4 `package.yaml` and `obs/_service`
 
@@ -368,15 +378,16 @@ project unchanged.
 
 ## 8. Risks and mitigations
 
-| Risk | Mitigation |
+| Risk | Mitigation / observed outcome |
 |---|---|
 | RHEL pip 23.2.1 rejects Metadata-Version 2.4 wheels emitted by flit/hatchling | **Retired** — reproduced locally with pip 23.2.1 + flit-core 3.12.0 / hatchling 1.28.0: Flask and Pygments build and install fine (§2.4). |
-| `setuptools_scm` (EPEL) cannot determine the version from a sdist | sdists ship `PKG-INFO`, which it reads; else `SETUPTOOLS_SCM_PRETEND_VERSION=%{version}` in `%build`. |
-| Pillow 11.1 configure picks up codecs UBI-9 lacks | Build with only jpeg/zlib enabled (`-C jpeg=enable -C zlib=enable -C ...=disable`) via `PIP_CONFIG_SETTINGS`/`--config-settings`. |
-| bcrypt cargo goes online | `cargo_vendor` tarball + its `.cargo/config`; `CARGO_NET_OFFLINE=true`; `setuptools-rust` 1.7 from CRB. |
-| gssapi needs exactly Cython 3.1.3 | our `python3.12-cython` 3.1.3 wins over CRB 0.29.35 within the project's path order. |
-| dnspython 2 changes break python-etcd / patroni at runtime | `dns.resolver.query()` still exists in 2.8 (deprecated alias); patroni's own dnspython usage is via python-etcd. Watch the cascade rebuilds and, in SP4/QA, a patroni smoke test. |
-| A package's first OBS build fails for a reason not foreseen here | Fixed per package in its spec (patch, BuildRequires, disabled feature) — routine packaging work, not a design change. |
+| `setuptools_scm` (EPEL) cannot determine the version from a sdist | Did not occur: keyring, jaraco.*, importlib-resources, Flask-Compress built from PKG-INFO without `SETUPTOOLS_SCM_PRETEND_VERSION`. |
+| Pillow 11.1 configure picks up codecs UBI-9 lacks | Did not occur: built with the jpeg/zlib-only `-C` flags as planned. |
+| bcrypt cargo goes online | Occurred: `cargo_vendor` places `vendor/` and `.cargo/config.toml` under `src/_bcrypt/`, not the sdist root; fixed by `CARGO_HOME=$PWD/src/_bcrypt/.cargo` (`fce0164`). |
+| gssapi needs exactly Cython 3.1.3 | Cython 3.1.3 resolved correctly; the failure was `%check` importing the source tree instead of the buildroot (fixed by `%{__ospython} -P -c "import ..."`, `52d93bc`). |
+| dnspython 2 changes break python-etcd / patroni at runtime | Not exercised in PR #12 (label `no-dep-cascade`; PR project is UBI_9-only) — the cascade rebuild happens on merge; `python3-dns` 2.8.0 itself built successfully on UBI_9. |
+| A package's first OBS build fails for a reason not foreseen here | Occurred, 12 failures across 3 fix rounds: RHEL setuptools 68 rejects PEP 639 `license = "…"` + `license-files` in 7 setuptools-family packages (alembic, backports-zstd, greenlet, mako, markupsafe, secretstorage, wsproto) → `%prep` sed to `license = {text = "…"}` (`176d706`); `%check` shadowed by the source tree for all 77 specs → `%{__ospython} -P` (`52d93bc`); flask-principal's PyPI metadata omits Flask/blinker → added as BuildRequires/Requires (`4441f17`); psycopg needs libpq at import → BuildRequires/Requires libpq (`2b65469`); psycopg-c refuses import unless psycopg is imported first → BuildRequires python3.12-psycopg, `%check` imports psycopg then psycopg_c (`3a385e0`); qrcode's `console_scripts.py` has an ambiguous shebang → removed in `%prep` (`d8ade24`); ua-parser's `setup_requires=["pyyaml"]` tries a live PyPI fetch → BuildRequires python3.12-pyyaml, drop `setup_requires` (`9836542`); bcrypt cargo_vendor path (see above, `fce0164`); greenlet's wheel installs an unpackaged `greenlet.h` header → added to `%files` (`abdc615`); WTForms' hatch build hook needs Babel to compile translations → BuildRequires python3.12-babel (`5498b3e`). |
+| OBS rebuild storms from download-on-demand path-repo refreshes ("meta change") on a slow x86_64 scheduler | New: after the fixes, both PR projects rebuilt three more times with `_jobhistory` reason "meta change" (Rocky 9 / EPEL 9 DoD repos refreshing) — roughly 4 hours from first push to a settled board, not caused by our pushes (every sync logged `= project meta/config`); expect the same behaviour on merge, nothing to fix in our packages. |
 
 ## 9. Out of scope
 
