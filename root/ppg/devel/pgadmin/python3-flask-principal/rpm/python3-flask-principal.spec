@@ -28,6 +28,12 @@ BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip
 BuildRequires:  python%{python3_buildversion}-setuptools
 BuildRequires:  python%{python3_buildversion}-wheel
+# runtime dependencies, also needed by the %check import test
+BuildRequires:  %{python3_pkgprefix}-flask
+BuildRequires:  %{python3_pkgprefix}-blinker
+
+Requires:       %{python3_pkgprefix}-flask
+Requires:       %{python3_pkgprefix}-blinker
 
 %description
 Identity management for flask.
