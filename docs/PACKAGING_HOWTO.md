@@ -396,6 +396,112 @@ After fixing packaging files, trigger a rebuild (the `_service` file has not cha
 
 ---
 
+## Python 3.12 packages (pyproject builds)
+
+RPM-only Python libraries for RHEL-family targets are built for `/usr/bin/python3.12`
+and named `python3.12-<name>` (`%{python3_pkgprefix}-<name>`; plain `python3-<name>` on
+openSUSE). The directory is `python3-<PyPI name lower-cased, `.`/`_` → `-`>`. Examples:
+everything under `root/ppg/devel/pgadmin/python3-*` and the build-backend stack in
+`root/ppg/common/deps/` (`python3-flit-core`, `python3-packaging`, `python3-pathspec`,
+`python3-trove-classifiers`, `python3-hatchling`).
+
+**Reuse before you build.** RHEL 9 already ships `python3.12-{cffi,cryptography,idna,
+pycparser,urllib3,setuptools,pip,wheel}` (AppStream) and `python3.12-{packaging 23.2,
+pluggy,pytest,setuptools-rust,flit-core 3.9,Cython 0.29}` (CRB); `ppg:common:deps` has
+`six`, `dateutil`, `psutil`, `click`, `dns`. Depend on those by their RPM name — without a
+version floor, since RHEL's versions are often older than upstream's declared minimum but
+work — and only package what is missing. RHEL's *build backends* are too old for current
+PEP 639 metadata; use ours from `ppg:common:deps` (see the conditional below).
+
+**Source:** the PyPI sdist via `download_url`, literal version:
+
+```xml
+<services>
+  <service name="download_url">
+    <param name="url">https://files.pythonhosted.org/packages/source/f/flask/flask-3.1.3.tar.gz</param>
+  </service>
+</services>
+```
+
+**Spec header** (identical in every package; copy from `root/ppg/devel/pgadmin/python3-flask/rpm/python3-flask.spec`):
+
+```rpmspec
+%global debug_package %{nil}          # noarch only; drop for C/Rust extensions
+%if 0%{?rhel} && 0%{?rhel} >= 8
+%global __ospython        %{_bindir}/python3.12
+%global python3_pkgprefix python3.12
+%global python3_buildversion 3.12
+%global __requires_exclude ^python3\\.12dist
+%else
+%global __ospython        %{_bindir}/python3
+%global python3_pkgprefix python3
+%global python3_buildversion 3
+%endif
+%{expand: %%global py3ver %(echo `%{__ospython} -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
+%global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
+# extensions: python3_sitearch with 'platlib' instead
+
+Name:           %{python3_pkgprefix}-flask
+Version:        3.1.3
+Release:        1%{?dist}
+Source0:        https://files.pythonhosted.org/packages/source/f/flask/flask-3.1.3.tar.gz
+BuildArch:      noarch
+Epoch:          1
+BuildRequires:  python%{python3_buildversion}-devel
+BuildRequires:  python%{python3_buildversion}-pip
+BuildRequires:  python%{python3_buildversion}-setuptools
+BuildRequires:  python%{python3_buildversion}-wheel
+```
+
+Then the backend the sdist's `[build-system]` names — `python%{python3_buildversion}-flit-core`,
+`%{python3_pkgprefix}-poetry-core`, `%{python3_pkgprefix}-pdm-backend`, `%{python3_pkgprefix}-setuptools_scm`
+(EPEL) when `setuptools_scm` is listed — and for hatchling the distro/ours switch:
+
+```rpmspec
+%if 0%{?rhel} == 8 || 0%{?rhel} == 9
+BuildRequires:  %{python3_pkgprefix}-hatchling      # ours, ppg:common:deps
+%else
+BuildRequires:  python3-hatchling                    # EL10 CRB / openSUSE
+%endif
+```
+
+Every runtime `Requires:` is also a `BuildRequires:` so `%check` can import the module.
+
+**Build/install — pyproject packages** (setuptools, flit, hatchling, poetry, pdm):
+
+```rpmspec
+%prep
+%autosetup -p1 -n flask-%{version}
+
+%build
+%{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir dist .
+
+%install
+%{__ospython} -m pip install --no-deps --no-index --root %{buildroot} --prefix %{_prefix} dist/*.whl
+
+%check
+PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -c "import flask"
+
+%files
+%{python3_sitelib}/*
+%{_bindir}/flask
+```
+
+Self-hosting backends (hatchling, poetry-core, pdm-backend, flit-core) add
+`export PYTHONPATH=$PWD/src` (flit-core: `$PWD/.`) before `pip wheel`. Rust extensions
+(bcrypt) add a `cargo_vendor` service (`cargotoml` pointing at the crate's `Cargo.toml`),
+`Source1: vendor.tar.gz`, `%autosetup -a1`, `CARGO_NET_OFFLINE=true`.
+
+**Build/install — legacy `setup.py`-only packages** (no `pyproject.toml`): keep the
+`%{__ospython} setup.py build` / `setup.py install --single-version-externally-managed -O1
+--root=%{buildroot} --record=INSTALLED_FILES` recipe and `%files -f INSTALLED_FILES`, as in
+`root/ppg/common/deps/python3-click`.
+
+**Bumping:** edit the sdist URL in `obs/_service`, `Version:` in the spec, add a
+`%changelog` entry. Nothing is generated.
+
+---
+
 ## Adding a Package as an Aggregate in a Subproject
 
 When a package is built in one subproject (e.g. `common:deps:runtime`) and consumed by
@@ -545,6 +651,7 @@ version before assuming this.
 | `debian/patches/` | if needed | Quilt patches applied to upstream source |
 | `debian/*.install` | if needed | File installation lists for binary packages |
 | `rpm/<name>.spec` | yes | `Version: 1.0.0`; `Release: 1%{?dist}`; no `Source0` file in `rpm/` |
+| `rpm/python3-<name>.spec` | Python 3.12 libs | Template in "Python 3.12 packages"; `Version:` literal; runtime deps also `BuildRequires` |
 | `rpm/<extra-sources>` | if needed | Only files referenced as `Source1`, `Source2`, … in the spec |
 | `obs/_service` | yes | Use env-var template for packaging services; customise only the upstream service |
 | `obs/_aggregate` | aggregates only | Replaces `_service`; references pre-built binaries from another project |

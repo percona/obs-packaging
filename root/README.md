@@ -180,8 +180,13 @@ entry (Class A or B) is removed — or repointed at the next development branch 
 the PostgreSQL major version. Its `project.yaml` declares a single `UBI_9` repository
 (pgAdmin is built for UBI 9 only), so no per-package `build:` flags are needed, and adds
 `ExpandFlags: module:nodejs:22` for the frontend build. Packages there follow the
-normal `rpm/` + `obs/_service` layout; the npm dependencies are vendored at sync time by
-the `npm_lockfile` → `node_modules` service pair (see `docs/PERCONA_OBS_TOOL.md`).
+normal `rpm/` + `obs/_service` layout. The Python side is the ~70 `python3-*` directories
+(pgAdmin's Python 3.12 closure, built from PyPI sdists — see "Python 3.12 packages" in
+`docs/PACKAGING_HOWTO.md`); the npm dependencies are vendored at sync time by the
+`npm_lockfile` → `node_modules` service pair (see `docs/PERCONA_OBS_TOOL.md`). The shared
+Python build-backend stack (`python3-flit-core`, `python3-packaging`, `python3-pathspec`,
+`python3-trove-classifiers`, `python3-hatchling`) lives in `ppg/common/deps/` because
+other products' Python packages need it too.
 
 ## project.yaml
 
