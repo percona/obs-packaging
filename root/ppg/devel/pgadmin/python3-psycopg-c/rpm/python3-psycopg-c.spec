@@ -28,6 +28,8 @@ BuildRequires:  python%{python3_buildversion}-setuptools
 BuildRequires:  python%{python3_buildversion}-wheel
 BuildRequires:  libpq-devel
 BuildRequires:  gcc
+# for the %check import (psycopg_c must be imported after psycopg)
+BuildRequires:  %{python3_pkgprefix}-psycopg
 
 %description
 PostgreSQL database adapter for Python -- C optimisation distribution.
@@ -44,7 +46,7 @@ Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmi
 %{__ospython} -m pip install --no-deps --no-index --root %{buildroot} --prefix %{_prefix} dist/*.whl
 
 %check
-PYTHONPATH=%{buildroot}%{python3_sitearch} %{__ospython} -P -c "import psycopg_c"
+PYTHONPATH=%{buildroot}%{python3_sitearch} %{__ospython} -P -c "import psycopg; import psycopg_c"
 
 %files
 %{python3_sitearch}/*
