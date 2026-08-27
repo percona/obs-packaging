@@ -1,0 +1,5 @@
+<services>
+  <service name="download_url">
+    <param name="url">https://files.pythonhosted.org/packages/source/s/simple-websocket/simple_websocket-1.1.0.tar.gz</param>
+  </service>
+</services>

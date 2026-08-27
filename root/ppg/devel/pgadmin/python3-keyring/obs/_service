@@ -1,0 +1,5 @@
+<services>
+  <service name="download_url">
+    <param name="url">https://files.pythonhosted.org/packages/source/k/keyring/keyring-25.2.1.tar.gz</param>
+  </service>
+</services>

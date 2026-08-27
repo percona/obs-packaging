@@ -1,0 +1,5 @@
+title: Mako 1.4.1 for Python 3.12
+description: |
+  A super-fast templating language that borrows the best ideas from the existing templating languages. RPM-only python3.12-* build from the PyPI sdist,
+  consumed by pgAdmin 4 (percona-pgadmin4). Bump by editing obs/_service (sdist URL) and
+  rpm/*.spec (Version + changelog).
