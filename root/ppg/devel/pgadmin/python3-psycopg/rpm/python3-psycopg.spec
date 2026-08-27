@@ -30,8 +30,10 @@ BuildRequires:  python%{python3_buildversion}-setuptools
 BuildRequires:  python%{python3_buildversion}-wheel
 # runtime dependencies, also needed by the %check import test
 BuildRequires:  %{python3_pkgprefix}-typing-extensions >= 4.6
+BuildRequires:  libpq
 
 Requires:       %{python3_pkgprefix}-typing-extensions >= 4.6
+Requires:       libpq
 
 %description
 PostgreSQL database adapter for Python.
