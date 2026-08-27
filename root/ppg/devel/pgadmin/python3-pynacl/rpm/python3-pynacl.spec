@@ -26,7 +26,6 @@ BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip
 BuildRequires:  python%{python3_buildversion}-setuptools
 BuildRequires:  python%{python3_buildversion}-wheel
-BuildRequires:  python3.12-cffi
 BuildRequires:  libffi-devel
 BuildRequires:  make
 BuildRequires:  gcc
