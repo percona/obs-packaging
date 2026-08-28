@@ -1,0 +1,26 @@
+<services>
+  <service name="obs_scm">
+    <param name="scm">git</param>
+    <param name="url">https://github.com/pgadmin-org/pgadmin4.git</param>
+    <param name="revision">REL-9_17</param>
+    <param name="versionformat">@PARENT_TAG@</param>
+    <param name="versionrewrite-pattern">REL-(\d+)_(\d+)</param>
+    <param name="versionrewrite-replacement">\1.\2</param>
+    <param name="filename">percona-pgadmin4</param>
+  </service>
+  <service name="npm_lockfile" mode="manual">
+    <param name="archive">percona-pgadmin4*.obscpio</param>
+    <param name="subdir">web</param>
+  </service>
+  <service name="node_modules" mode="manual">
+    <param name="cpio">node_modules.obscpio</param>
+    <param name="output">node_modules.spec.inc</param>
+    <param name="source-offset">10000</param>
+  </service>
+  <service name="tar" mode="buildtime"/>
+  <service name="recompress" mode="buildtime">
+    <param name="file">*.tar</param>
+    <param name="compression">gz</param>
+  </service>
+  <service name="set_version" mode="buildtime"/>
+</services>
