@@ -682,7 +682,8 @@ BuildRequires:  local-npm-registry
 BuildRequires:  nodejs >= 20
 BuildRequires:  npm
 BuildRequires:  systemd-rpm-macros
-# runtime stack, needed for the %%check import
+# runtime stack, needed for the %%check import (cloud SDKs — boto3, azure-*, google-* — are
+# not packaged; Patch2 makes the cloud deployment module tolerate their absence)
 BuildRequires:  %{python3_pkgprefix}-flask
 BuildRequires:  %{python3_pkgprefix}-flask-babel
 BuildRequires:  %{python3_pkgprefix}-flask-compress
@@ -718,13 +719,6 @@ BuildRequires:  %{python3_pkgprefix}-pytz
 BuildRequires:  %{python3_pkgprefix}-certifi
 BuildRequires:  %{python3_pkgprefix}-dateutil
 BuildRequires:  %{python3_pkgprefix}-psutil
-BuildRequires:  %{python3_pkgprefix}-boto3
-BuildRequires:  %{python3_pkgprefix}-azure-identity
-BuildRequires:  %{python3_pkgprefix}-azure-mgmt-rdbms
-BuildRequires:  %{python3_pkgprefix}-azure-mgmt-resource
-BuildRequires:  %{python3_pkgprefix}-azure-mgmt-subscription
-BuildRequires:  %{python3_pkgprefix}-google-api-python-client
-BuildRequires:  %{python3_pkgprefix}-google-auth-oauthlib
 BuildRequires:  python%{python3_buildversion}-cryptography
 BuildRequires:  python%{python3_buildversion}-urllib3
 
@@ -763,13 +757,6 @@ Requires:       %{python3_pkgprefix}-pytz
 Requires:       %{python3_pkgprefix}-certifi
 Requires:       %{python3_pkgprefix}-dateutil
 Requires:       %{python3_pkgprefix}-psutil
-Requires:       %{python3_pkgprefix}-boto3
-Requires:       %{python3_pkgprefix}-azure-identity
-Requires:       %{python3_pkgprefix}-azure-mgmt-rdbms
-Requires:       %{python3_pkgprefix}-azure-mgmt-resource
-Requires:       %{python3_pkgprefix}-azure-mgmt-subscription
-Requires:       %{python3_pkgprefix}-google-api-python-client
-Requires:       %{python3_pkgprefix}-google-auth-oauthlib
 Requires:       python%{python3_buildversion}-cryptography
 Requires:       python%{python3_buildversion}-setuptools
 Requires:       python%{python3_buildversion}-urllib3
