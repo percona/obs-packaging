@@ -38,8 +38,10 @@ Build-Depends:
     libldap2-dev,
     percona-postgresql-common-dev,
     liblz4-dev,
+    lz4 | liblz4-tool,
     libpam0g-dev | libpam-dev,
     libperl-dev,
+    libpq-dev <pkg.postgresql.nolibpkgs>,
     libreadline-dev,
     libselinux1-dev [linux-any],
     libssl-dev,
@@ -60,6 +62,7 @@ Build-Depends:
     libcurl4,
     libcurl4-openssl-dev,
     curl | libz-dev,
-    libzstd-dev
+    libzstd-dev,
+    zstd (>= 1.4.0)
 Debtransform-Release: 1
 Debtransform-Files-Tar: debian.tar.gz
