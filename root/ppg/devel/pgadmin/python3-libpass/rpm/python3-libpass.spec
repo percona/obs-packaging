@@ -12,13 +12,13 @@
 %{expand: %%global py3ver %(echo `%{__ospython} -P -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
-Name:           %{python3_pkgprefix}-passlib
-Version:        1.7.4
+Name:           %{python3_pkgprefix}-libpass
+Version:        1.9.3
 Release:        1%{?dist}
-Summary:        comprehensive password hashing framework supporting over 30 schemes
-License:        BSD-3-Clause
-URL:            https://passlib.readthedocs.io
-Source0:        https://files.pythonhosted.org/packages/source/p/passlib/passlib-1.7.4.tar.gz
+Summary:        Fork of passlib, a comprehensive password hashing framework supporting over 30 schemes
+License:        BSD
+URL:            https://github.com/notypecheck/passlib
+Source0:        https://files.pythonhosted.org/packages/source/l/libpass/libpass-1.9.3.tar.gz
 BuildArch:      noarch
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
@@ -28,28 +28,34 @@ BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip
 BuildRequires:  python%{python3_buildversion}-setuptools
 BuildRequires:  python%{python3_buildversion}-wheel
+%if 0%{?rhel} == 8 || 0%{?rhel} == 9
+BuildRequires:  %{python3_pkgprefix}-hatchling
+%else
+BuildRequires:  python3-hatchling
+%endif
+Provides:       %{python3_pkgprefix}-passlib = %{version}
+Conflicts:      %{python3_pkgprefix}-passlib < 1.9
 
 %description
-comprehensive password hashing framework supporting over 30 schemes.
+Fork of passlib, a comprehensive password hashing framework supporting over 30 schemes.
 
 Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmin4) dependency stack.
 
 %prep
-%autosetup -p1 -n passlib-1.7.4
+%autosetup -p1 -n libpass-1.9.3
 
 %build
-%{__ospython} setup.py build
+%{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir dist .
 
 %install
-%{__ospython} setup.py install --single-version-externally-managed -O1 --root=%{buildroot} --record=INSTALLED_FILES
-find %{buildroot}%{python3_sitelib} -mindepth 1 -type d | sed "s|%{buildroot}||" | sed 's/^/%dir /' >> INSTALLED_FILES
+%{__ospython} -m pip install --no-deps --no-index --root %{buildroot} --prefix %{_prefix} dist/*.whl
 
 %check
 PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -P -c "import passlib"
 
-%files -f INSTALLED_FILES
-%defattr(-,root,root)
+%files
+%{python3_sitelib}/*
 
 %changelog
-* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 1.7.4-1
-- Package passlib 1.7.4 for Python 3.12 (pgAdmin 4 dependency stack)
+* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 1.9.3-1
+- Package libpass 1.9.3 for Python 3.12 (pgAdmin 4 dependency stack)
