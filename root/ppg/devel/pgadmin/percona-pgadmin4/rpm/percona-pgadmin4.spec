@@ -85,6 +85,7 @@ BuildRequires:  %{python3_pkgprefix}-sshtunnel
 BuildRequires:  %{python3_pkgprefix}-paramiko
 BuildRequires:  %{python3_pkgprefix}-keyring
 BuildRequires:  %{python3_pkgprefix}-typer
+BuildRequires:  %{python3_pkgprefix}-typing-extensions
 BuildRequires:  %{python3_pkgprefix}-jsonformatter
 BuildRequires:  %{python3_pkgprefix}-libgravatar
 BuildRequires:  %{python3_pkgprefix}-user-agents
@@ -123,6 +124,7 @@ Requires:       %{python3_pkgprefix}-sshtunnel
 Requires:       %{python3_pkgprefix}-paramiko
 Requires:       %{python3_pkgprefix}-keyring
 Requires:       %{python3_pkgprefix}-typer
+Requires:       %{python3_pkgprefix}-typing-extensions
 Requires:       %{python3_pkgprefix}-jsonformatter
 Requires:       %{python3_pkgprefix}-libgravatar
 Requires:       %{python3_pkgprefix}-user-agents
@@ -185,9 +187,11 @@ links there.
 %autosetup -p1 -n %{name}-%{version}
 
 # The git tag is exported without .git: record the upstream commit the way
-# pkg/src/build.sh does, and neutralise the "git:hash" npm script.
+# pkg/src/build.sh does. (The "git:hash" npm script is never invoked -- %build
+# runs npx webpack directly, not the bundle/git:hash scripts -- so it is left
+# alone rather than rewritten with a sed that cannot safely match upstream's
+# escaped-quote value.)
 awk '/^commit:/ {print $2}' %{_sourcedir}/%{name}.obsinfo > web/commit_hash
-sed -i 's/"git:hash": "[^"]*"/"git:hash": "exit 0"/' web/package.json
 # Upstream pins Yarn via "packageManager"; npm refuses to run with it set.
 sed -i -z 's/,\n *"packageManager": "[^"]*"//' web/package.json
 # Executable bits and shebangs on files that end up in site-packages
@@ -205,14 +209,39 @@ NODE_ENV=production NODE_OPTIONS=--max-old-space-size=3072 npx webpack --config 
 rm -rf node_modules
 popd
 
-# Wheel (upstream's pip packaging helper; produces pgadmin4-<ver>-py3-none-any.whl)
-pushd pkg/pip
-%{__ospython} setup_pip.py bdist_wheel
+# Wheel (upstream's pip packaging helper; produces pgadmin4-<ver>-py3-none-any.whl).
+# pkg/pip/setup_pip.py must run from a pip-build/ staging directory at the tree
+# root -- it reads ../requirements.txt and ../web/ relative to its own cwd, and
+# packages "pgadmin4" as a copy of web/ living next to that cwd (see
+# pkg/pip/build.sh, which drives it the same way). build.sh itself needs .git,
+# yarn and syft, none of which are available/needed here, so its file
+# operations are reproduced directly instead of invoking the script:
+#   build.sh:44-58  stage web/ (minus regression/) as pip-build/pgadmin4/ -- our
+#                   cp -a already picks up commit_hash (build.sh:65-67) and the
+#                   webpack-generated pgadmin/static/js/generated/* files
+#                   (build.sh:69-73), since both already exist on disk here,
+#                   unlike a bare git checkout where git ls-files would miss them
+#   build.sh:75-89  also stages docs/ into the wheel -- skipped: the -doc
+#                   subpackage already ships docs/en_US and duplicating ~39 MB
+#                   of rst inside %{pgadmin_dir} is pointless
+#   build.sh:92-97  copy LICENSE/README.md from the tree root into pip-build/pgadmin4/
+#   build.sh:100-105 SBOM generation via syft -- skipped: not available/needed
+#   build.sh:108-110 write a stub config_distro.py -- skipped: %install installs
+#                   our own config_distro.py over whatever setup_pip.py packaged
+#   build.sh:113-114 MANIFEST.in -- needed, so setuptools includes the non-.py
+#                   package data (html/css/js/rst) in the wheel
+mkdir -p pip-build/pgadmin4
+cp -a web/. pip-build/pgadmin4/
+rm -rf pip-build/pgadmin4/regression
+cp -a LICENSE README.md pip-build/pgadmin4/
+echo 'recursive-include pgadmin4 *' > pip-build/MANIFEST.in
+pushd pip-build
+%{__ospython} ../pkg/pip/setup_pip.py bdist_wheel
 popd
 
 %install
 %{__ospython} -m pip install --root %{buildroot} --no-deps --no-index --no-warn-script-location \
-    pkg/pip/dist/pgadmin4-*.whl
+    pip-build/dist/pgadmin4-*.whl
 
 # The launcher and httpd conf hard-code the site-packages path: assert it.
 test "%{python3_sitelib}" = "%{_prefix}/lib/python%{python3_buildversion}/site-packages"
@@ -222,7 +251,9 @@ install -m 0644 %{SOURCE1} %{buildroot}%{pgadmin_dir}/config_distro.py
 install -m 0644 %{SOURCE2} %{buildroot}%{pgadmin_dir}/run_pgadmin.py
 install -m 0644 %{SOURCE3} %{buildroot}%{pgadmin_dir}/gunicorn_config.py
 
-# The wheel installs upstream's CLI entry point as pgadmin4-cli; keep it.
+# The wheel installs two console scripts (pkg/pip/setup_pip.py entry_points):
+# pgadmin4 (pgadmin4.pgAdmin4:main) and pgadmin4-cli (pgadmin4.setup:main); both
+# are packaged below in %files.
 # Data, log and configuration directories
 install -d -m 0750 %{buildroot}%{pgadmin_data}
 install -d -m 0755 %{buildroot}%{pgadmin_data}/storage
@@ -257,7 +288,9 @@ rm -f %{buildroot}%{_docdir}/%{name}/en_US/Makefile.sphinx \
       %{buildroot}%{_docdir}/%{name}/en_US/build_code_snippet.py \
       %{buildroot}%{_docdir}/%{name}/en_US/.gitignore
 find %{buildroot}%{_docdir}/%{name}/en_US -name '*.excalidraw' -delete
-install -m 0644 LICENSE README.md %{buildroot}%{_docdir}/%{name}/
+# LICENSE/README.md are not installed separately under %{_docdir}: both are
+# already covered by %license/%doc from the tree root in %files (a second copy
+# under %{_docdir}/%{name}/ would match no %files entry and fail as unpackaged).
 
 # byte-compile with the interpreter that runs the app
 %{__ospython} -m compileall -q -s %{buildroot} -p / %{buildroot}%{pgadmin_dir}
@@ -284,6 +317,7 @@ PYTHONPATH=%{buildroot}%{pgadmin_dir} PGADMIN_CONFIG_HELP_PATH=/nonexistent \
 %doc README.md
 %{pgadmin_dir}/
 %{python3_sitelib}/pgadmin4-*.dist-info/
+%{_bindir}/pgadmin4
 %{_bindir}/pgadmin4-cli
 %{_sysusersdir}/%{name}.conf
 %dir %attr(0750,%{pgadmin_user},%{pgadmin_user}) %{pgadmin_data}
