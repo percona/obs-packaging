@@ -33,19 +33,12 @@ Requires:	postgresql%{pgmajorversion}-server
 Requires(post):	%{_sbindir}/update-alternatives
 Requires(postun):	%{_sbindir}/update-alternatives
 
-%if 0%{?suse_version} >= 1315 && 0%{?suse_version} <= 1499
-Requires:	libopenssl1_0_0
-%else
 %if 0%{?suse_version} >= 1500
-Requires:	libopenssl1_1
-%else
-Requires:	openssl-libs >= 1.0.2k
+Requires:	libopenssl3
+BuildRequires:	libopenssl-3-devel
 %endif
-%endif
-
-%if 0%{?suse_version} >= 1315 && 0%{?suse_version} <= 1499
-BuildRequires:	libopenssl-devel
-%else
+%if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
+Requires:	openssl-libs >= 1.1.1k
 BuildRequires:	openssl-devel
 %endif
 

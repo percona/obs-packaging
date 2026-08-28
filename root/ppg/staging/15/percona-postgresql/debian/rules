@@ -103,7 +103,7 @@ ifeq ($(call version_ge,11),y)
   endif
 endif
 
-ifeq ($(call version_ge,16),y)
+ifeq ($(call version_ge,15),y)
   CONFIGURE_FLAGS += --with-lz4
 endif
 
