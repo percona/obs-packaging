@@ -11,6 +11,8 @@ name: Build obs-tools Docker image
 # versions the golang-1.26 OBS package, so a Go bump updates both in one
 # commit and the toolchain that vendors go modules in CI can never drift
 # from the one OBS builds against.
+#
+# tools/obs-services/ holds repo-owned OBS services baked into the image.
 
 on:
   push:
@@ -19,6 +21,7 @@ on:
       - '.github/docker/obs-tools/Dockerfile'
       - 'requirements.txt'
       - 'root/macros.yaml'
+      - 'tools/obs-services/**'
   workflow_dispatch: {}
 
 jobs:
