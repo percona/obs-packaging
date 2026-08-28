@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: percona-pgbackrest
 Binary: percona-pgbackrest, percona-pgbackrest-doc
 Architecture: any all
-Version: 2.58.0-1
+Version: 1.0.0
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  mawk,
