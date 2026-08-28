@@ -1,0 +1,18 @@
+From: Percona Development Team <https://jira.percona.com>
+Subject: Help menu: link "Online Help" to the upstream docs for this release
+
+The package ships the documentation sources only (-doc); the rendered
+manual lives at https://www.pgadmin.org/docs/pgadmin4/<release>/.
+
+--- a/web/pgadmin/help/__init__.py
++++ b/web/pgadmin/help/__init__.py
+@@ -34,7 +34,8 @@
+                      priority=100,
+                      target='pgadmin_help',
+                      icon='fa fa-question',
+-                     url=url_for('help.static', filename='index.html')),
++                     url='https://www.pgadmin.org/docs/pgadmin4/%s.%s/' % (
++                         config.APP_RELEASE, config.APP_REVISION)),
+ 
+             MenuItem(name='mnu_pgadmin_website',
+                      label=gettext('pgAdmin Website'),
