@@ -13,12 +13,12 @@
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
 Name:           %{python3_pkgprefix}-flask-security-too
-Version:        5.6.2
+Version:        5.8.2
 Release:        1%{?dist}
 Summary:        Quickly add security features to your Flask application
 License:        MIT
 URL:            https://github.com/pallets-eco/flask-security
-Source0:        https://files.pythonhosted.org/packages/source/F/Flask-Security-Too/flask_security_too-5.6.2.tar.gz
+Source0:        https://files.pythonhosted.org/packages/source/F/Flask-Security-Too/flask_security_too-5.8.2.tar.gz
 BuildArch:      noarch
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
@@ -30,26 +30,23 @@ BuildRequires:  python%{python3_buildversion}-setuptools
 BuildRequires:  python%{python3_buildversion}-wheel
 BuildRequires:  python%{python3_buildversion}-flit-core
 # runtime dependencies, also needed by the %check import test
-BuildRequires:  %{python3_pkgprefix}-flask >= 3.0.0
+BuildRequires:  %{python3_pkgprefix}-flask >= 3.1.1
 BuildRequires:  %{python3_pkgprefix}-flask-login >= 0.6.3
 BuildRequires:  %{python3_pkgprefix}-flask-principal >= 0.4.0
 BuildRequires:  %{python3_pkgprefix}-flask-wtf >= 1.1.2
-BuildRequires:  %{python3_pkgprefix}-email-validator >= 2.0.0
+BuildRequires:  %{python3_pkgprefix}-email-validator >= 2.3.0
 BuildRequires:  %{python3_pkgprefix}-markupsafe >= 2.1.0
-BuildRequires:  %{python3_pkgprefix}-passlib >= 1.7.4
+BuildRequires:  %{python3_pkgprefix}-libpass >= 1.9.3
 BuildRequires:  %{python3_pkgprefix}-wtforms >= 3.0.0
-BuildRequires:  %{python3_pkgprefix}-importlib-resources >= 5.10.0
 
-Requires:       %{python3_pkgprefix}-flask >= 3.0.0
+Requires:       %{python3_pkgprefix}-flask >= 3.1.1
 Requires:       %{python3_pkgprefix}-flask-login >= 0.6.3
 Requires:       %{python3_pkgprefix}-flask-principal >= 0.4.0
 Requires:       %{python3_pkgprefix}-flask-wtf >= 1.1.2
-Requires:       %{python3_pkgprefix}-email-validator >= 2.0.0
+Requires:       %{python3_pkgprefix}-email-validator >= 2.3.0
 Requires:       %{python3_pkgprefix}-markupsafe >= 2.1.0
-Requires:       %{python3_pkgprefix}-passlib >= 1.7.4
-Requires:       python3.12-setuptools
+Requires:       %{python3_pkgprefix}-libpass >= 1.9.3
 Requires:       %{python3_pkgprefix}-wtforms >= 3.0.0
-Requires:       %{python3_pkgprefix}-importlib-resources >= 5.10.0
 
 %description
 Quickly add security features to your Flask application.
@@ -57,7 +54,7 @@ Quickly add security features to your Flask application.
 Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmin4) dependency stack.
 
 %prep
-%autosetup -p1 -n flask_security_too-5.6.2
+%autosetup -p1 -n flask_security_too-5.8.2
 
 %build
 %{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir dist .
@@ -72,5 +69,5 @@ PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -P -c "import flask_secu
 %{python3_sitelib}/*
 
 %changelog
-* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 5.6.2-1
-- Package Flask-Security-Too 5.6.2 for Python 3.12 (pgAdmin 4 dependency stack)
+* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 5.8.2-1
+- Package Flask-Security-Too 5.8.2 for Python 3.12 (pgAdmin 4 dependency stack)

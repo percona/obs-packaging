@@ -1,5 +1,5 @@
 <services>
   <service name="download_url">
-    <param name="url">https://files.pythonhosted.org/packages/source/p/psycopg/psycopg-3.2.10.tar.gz</param>
+    <param name="url">https://files.pythonhosted.org/packages/source/p/psycopg/psycopg-3.3.4.tar.gz</param>
   </service>
 </services>

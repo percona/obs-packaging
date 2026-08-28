@@ -13,12 +13,12 @@
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
 Name:           %{python3_pkgprefix}-pytz
-Version:        2025.2
+Version:        2026.3.post1
 Release:        1%{?dist}
 Summary:        World timezone definitions, modern and historical
 License:        MIT
 URL:            http://pythonhosted.org/pytz
-Source0:        https://files.pythonhosted.org/packages/source/p/pytz/pytz-2025.2.tar.gz
+Source0:        https://files.pythonhosted.org/packages/source/p/pytz/pytz-2026.3.post1.tar.gz
 BuildArch:      noarch
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
@@ -35,7 +35,7 @@ World timezone definitions, modern and historical.
 Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmin4) dependency stack.
 
 %prep
-%autosetup -p1 -n pytz-2025.2
+%autosetup -p1 -n pytz-2026.3.post1
 
 %build
 %{__ospython} setup.py build
@@ -51,5 +51,5 @@ PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -P -c "import pytz"
 %defattr(-,root,root)
 
 %changelog
-* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 2025.2-1
-- Package pytz 2025.2 for Python 3.12 (pgAdmin 4 dependency stack)
+* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 2026.3.post1-1
+- Package pytz 2026.3.post1 for Python 3.12 (pgAdmin 4 dependency stack)

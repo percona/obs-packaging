@@ -12,12 +12,12 @@
 %global python3_sitearch %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('platlib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
 Name:           %{python3_pkgprefix}-cython
-Version:        3.1.3
+Version:        3.2.4
 Release:        1%{?dist}
 Summary:        The Cython compiler for writing C extensions in the Python language
 License:        Apache-2.0
 URL:            https://cython.org/
-Source0:        https://files.pythonhosted.org/packages/source/C/Cython/cython-3.1.3.tar.gz
+Source0:        https://files.pythonhosted.org/packages/source/C/Cython/cython-3.2.4.tar.gz
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
 Epoch:          1
@@ -34,7 +34,7 @@ The Cython compiler for writing C extensions in the Python language.
 Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmin4) dependency stack.
 
 %prep
-%autosetup -p1 -n cython-3.1.3
+%autosetup -p1 -n cython-3.2.4
 
 %build
 %{__ospython} setup.py build
@@ -53,5 +53,5 @@ PYTHONPATH=%{buildroot}%{python3_sitearch} %{__ospython} -P -c "import Cython"
 %{_bindir}/cythonize
 
 %changelog
-* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 3.1.3-1
-- Package Cython 3.1.3 for Python 3.12 (pgAdmin 4 dependency stack)
+* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 3.2.4-1
+- Package Cython 3.2.4 for Python 3.12 (pgAdmin 4 dependency stack)
