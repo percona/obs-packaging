@@ -70,6 +70,10 @@ jobs:
       # regenerate vendor tarballs with new file mtimes and needlessly
       # re-upload them.  Entries are content-addressed so a partial hit via
       # restore-keys is always safe: unused SHA-keyed subdirs are ignored.
+      # The deps `path` list MUST stay identical to the one in obs-pr-check.yml:
+      # actions/cache hashes the path list into the cache *version*, and
+      # restore-keys only match entries with the same version.  A divergence
+      # silently hides main's deps cache from PR runs.
       - name: Restore percona-obs deps cache
         uses: actions/cache@v4
         with:

@@ -96,6 +96,9 @@ jobs:
     needs: [resolve]
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    # Backstop for stalled source services / OBS API hangs; a healthy sync
+    # job finishes in well under 30 minutes.
+    timeout-minutes: 120
     if: needs.resolve.outputs.has_trigger_label == 'true'
     permissions:
       # Required to post/update the PR comment.
@@ -151,6 +154,11 @@ jobs:
       # different MD5s and needless re-uploads.  Entries are content-
       # addressed so a partial hit via restore-keys is always safe: unused
       # SHA-keyed subdirs are ignored.
+      # The deps `path` list MUST stay identical to the one in sync-main.yml:
+      # actions/cache hashes the path list into the cache *version*, and
+      # restore-keys only match entries with the same version.  A divergence
+      # silently hides main's deps cache from PR runs, which then re-download
+      # every download_url source (and re-vendor every crate) on every run.
       - name: Restore percona-obs deps cache
         uses: actions/cache@v4
         with:
@@ -158,6 +166,7 @@ jobs:
             .cache/download_url
             .cache/cargo_vendor
             .cache/services
+            .cache/sync_state
           key: percona-obs-deps-${{ runner.os }}-${{ needs.resolve.outputs.head_sha }}
           restore-keys: |
             percona-obs-deps-${{ runner.os }}-
