@@ -33,12 +33,17 @@ License:        PostgreSQL
 URL:            https://github.com/percona/pg_tde
 Source0:        %{sname}-%{version}.tar.gz
 
-BuildRequires:  %{pg_name}-devel chrpath openssl-devel libcurl-devel zlib-devel libzstd-devel libxml2-devel libxslt-devel libselinux-devel pam-devel krb5-devel readline-devel meson
+BuildRequires:  %{pg_name}-devel chrpath openssl-devel libcurl-devel zlib-devel libzstd-devel libxml2-devel libxslt-devel libselinux-devel pam-devel krb5-devel readline-devel meson cmake
 %if 0%{?gts_version}
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
 %endif
 %if 0%{?suse_version} >= 1500
 BuildRequires:  libjson-c-devel liblz4-devel
+# The C++ KMIP client needs a C++ compiler. Without gcc-c++ in the chroot
+# meson falls back to clang++ (pulled in via the llvm BuildRequires) while
+# C is compiled by gcc; with SUSE's default -flto=auto the mixed toolchain
+# produces archives/objects the linker cannot combine.
+BuildRequires:  gcc-c++
 %else
 BuildRequires:  json-c-devel lz4-devel
 %endif

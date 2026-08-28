@@ -7,6 +7,7 @@ Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 9),
  meson,
+ cmake,
  ninja-build,
  chrpath,
  pkg-config,
