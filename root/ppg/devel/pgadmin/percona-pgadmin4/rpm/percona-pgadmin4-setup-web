@@ -1,0 +1,62 @@
+#!/bin/bash
+# percona-pgadmin4-setup-web — one-time host setup for the httpd (mod_wsgi) deployment.
+#
+#   1. creates the pgAdmin configuration database and the initial admin user
+#      (prompts unless PGADMIN_SETUP_EMAIL and PGADMIN_SETUP_PASSWORD are set)
+#   2. fixes ownership of /var/lib/pgadmin and /var/log/pgadmin
+#   3. on SELinux hosts, allows httpd network access and labels the data directories
+#   4. enables and restarts httpd (skip with --no-service or when not booted with systemd)
+set -euo pipefail
+
+NO_SERVICE=0
+for arg in "$@"; do
+    case "$arg" in
+        --no-service) NO_SERVICE=1 ;;
+        -h|--help) sed -n '2,8p' "$0"; exit 0 ;;
+        *) echo "unknown option: $arg" >&2; exit 2 ;;
+    esac
+done
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "percona-pgadmin4-setup-web must run as root" >&2
+    exit 1
+fi
+
+PGADMIN_DIR=/usr/lib/python3.12/site-packages/pgadmin4
+DATA_DIR=/var/lib/pgadmin
+LOG_DIR=/var/log/pgadmin
+
+echo "Setting up pgAdmin 4 in web mode (httpd + mod_wsgi)..."
+mkdir -p "${DATA_DIR}/sessions" "${DATA_DIR}/storage" "${LOG_DIR}"
+chown -R pgadmin:pgadmin "${DATA_DIR}" "${LOG_DIR}"
+
+if [ ! -e "${DATA_DIR}/pgadmin4.db" ]; then
+    echo "Creating configuration database..."
+    (cd "${PGADMIN_DIR}" && runuser -u pgadmin -- /usr/bin/python3.12 setup.py setup-db)
+    chmod 0600 "${DATA_DIR}/pgadmin4.db"
+fi
+
+if command -v getenforce >/dev/null 2>&1 && [ "$(getenforce)" != "Disabled" ]; then
+    echo "Configuring SELinux..."
+    setsebool -P httpd_can_network_connect 1 || true
+    setsebool -P httpd_can_network_connect_db 1 || true
+    if command -v semanage >/dev/null 2>&1; then
+        semanage fcontext -a -t httpd_var_lib_t "${DATA_DIR}(/.*)?" 2>/dev/null || \
+            semanage fcontext -m -t httpd_var_lib_t "${DATA_DIR}(/.*)?"
+        semanage fcontext -a -t httpd_log_t "${LOG_DIR}(/.*)?" 2>/dev/null || \
+            semanage fcontext -m -t httpd_log_t "${LOG_DIR}(/.*)?"
+        restorecon -R "${DATA_DIR}" "${LOG_DIR}"
+    else
+        echo "warning: semanage not found (install policycoreutils-python-utils); skipping file contexts" >&2
+    fi
+fi
+
+if [ "${NO_SERVICE}" -eq 0 ] && [ -d /run/systemd/system ]; then
+    echo "Enabling and restarting httpd..."
+    systemctl enable --now httpd
+    systemctl restart httpd
+else
+    echo "Skipping the httpd service step (--no-service or no systemd)."
+fi
+
+echo "pgAdmin 4 is available at http://$(hostname -f 2>/dev/null || hostname)/pgadmin4"
