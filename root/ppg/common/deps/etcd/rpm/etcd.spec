@@ -111,6 +111,10 @@ getent passwd %{name} >/dev/null || useradd -r -g %{name} -d %{_sharedstatedir}/
 %attr(755, root, root) %{_bindir}/etcdutl
 
 %changelog
+* Fri Aug 28 2026 Percona Development Team <info@percona.com> - 3.5.33-1
+- Update to upstream version 3.5.33, per changes described at:
+  https://github.com/etcd-io/etcd/blob/main/CHANGELOG/CHANGELOG-3.5.md#v3533-2026-07-23
+
 * Tue May 15 2026 Percona Development Team <info@percona.com> - 3.5.30-1
 - Update to upstream version 3.5.30, per changes described at:
   https://github.com/etcd-io/etcd/blob/main/CHANGELOG/CHANGELOG-3.5.md#v3530-2026-05-01
