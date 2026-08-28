@@ -1,0 +1,47 @@
+#!/bin/bash
+# percona-pgadmin4-gunicorn — run pgAdmin 4 under gunicorn.
+#
+# Environment (all optional):
+#   PGADMIN_LISTEN_ADDRESS   bind address            (default 127.0.0.1)
+#   PGADMIN_LISTEN_PORT      bind port               (default 5050)
+#   PGADMIN_ENABLE_TLS       "true" to serve HTTPS using /certs/server.cert + /certs/server.key
+#   GUNICORN_ACCESS_LOGFILE  access log target       (default "-" = stdout)
+#   GUNICORN_THREADS         threads per worker      (default 25)
+#   GUNICORN_LIMIT_REQUEST_LINE  (default 8190)
+#   PGADMIN_CONFIG_<SETTING> any pgAdmin setting, applied by config_distro.py
+#   PGADMIN_DEFAULT_EMAIL / PGADMIN_DEFAULT_PASSWORD
+#                            create the initial admin user when no configuration
+#                            database exists yet (same names as the upstream image).
+# The systemd unit runs this script as user pgadmin; containers run it as their
+# unprivileged user with /var/lib/pgadmin and /var/log/pgadmin writable.
+set -euo pipefail
+
+PGADMIN_DIR=/usr/lib/python3.12/site-packages/pgadmin4
+: "${PGADMIN_LISTEN_ADDRESS:=127.0.0.1}"
+: "${PGADMIN_LISTEN_PORT:=5050}"
+: "${GUNICORN_ACCESS_LOGFILE:=-}"
+: "${GUNICORN_THREADS:=25}"
+: "${GUNICORN_LIMIT_REQUEST_LINE:=8190}"
+
+cd "${PGADMIN_DIR}"
+
+# First start: create the configuration database and the initial user.
+if [ ! -e "${PGADMIN_CONFIG_SQLITE_PATH:-/var/lib/pgadmin/pgadmin4.db}" ] && \
+   [ -n "${PGADMIN_DEFAULT_EMAIL:-}" ] && [ -n "${PGADMIN_DEFAULT_PASSWORD:-}" ]; then
+    PGADMIN_SETUP_EMAIL="${PGADMIN_DEFAULT_EMAIL}" \
+    PGADMIN_SETUP_PASSWORD="${PGADMIN_DEFAULT_PASSWORD}" \
+        /usr/bin/python3.12 setup.py setup-db
+fi
+
+TLS_ARGS=()
+if [ "${PGADMIN_ENABLE_TLS:-}" = "true" ]; then
+    TLS_ARGS=(--certfile /certs/server.cert --keyfile /certs/server.key)
+fi
+
+exec /usr/bin/gunicorn \
+    --bind "${PGADMIN_LISTEN_ADDRESS}:${PGADMIN_LISTEN_PORT}" \
+    --workers 1 --threads "${GUNICORN_THREADS}" \
+    --limit-request-line "${GUNICORN_LIMIT_REQUEST_LINE}" \
+    --access-logfile "${GUNICORN_ACCESS_LOGFILE}" \
+    "${TLS_ARGS[@]}" \
+    -c gunicorn_config.py run_pgadmin:app
