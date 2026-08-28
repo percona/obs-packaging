@@ -102,6 +102,7 @@ Directory names are `python3-<name>`; the RPM name is `%{python3_pkgprefix}-<nam
 | Directory | PyPI | Version | Build family | Arch | Required by (closure) | Notes |
 |---|---|---|---|---|---|---|
 | `python3-alembic` | alembic | 1.19.1 | setuptools | noarch | flask-migrate |  |
+| `python3-annotated-doc` | annotated-doc | 0.0.5 | pdm | noarch | typer |  |
 | `python3-authlib` | Authlib | 1.6.12 | setuptools | noarch |  |  |
 | `python3-babel` | babel | 2.18.0 | setuptools | noarch | flask-babel |  |
 | `python3-backports-zstd` | backports.zstd | 1.7.0 | setuptools | arch | flask-compress | libzstd-devel |
@@ -109,6 +110,7 @@ Directory names are `python3-<name>`; the RPM name is `%{python3_pkgprefix}-<nam
 | `python3-bidict` | bidict | 0.23.1 | setuptools | noarch | python-socketio | pinned down from 0.24.1 (uv_build) |
 | `python3-blinker` | blinker | 1.9.0 | flit | noarch | flask, flask-mail, flask-principal |  |
 | `python3-brotli` | brotli | 1.2.0 | setuptools | arch | flask-compress | gcc-c++ |
+| `python3-certifi` | certifi | 2026.6.17 | setuptools | noarch |  |  |
 | `python3-decorator` | decorator | 5.3.1 | setuptools | noarch | gssapi |  |
 | `python3-email-validator` | email-validator | 2.3.0 | setuptools | noarch | flask-security-too | Requires python3.12-dns ≥ 2.0 (common:deps) and RHEL idna |
 | `python3-flask` | Flask | 3.1.3 | flit | noarch | flask-babel, flask-compress, flask-login, flask-mail, flask-migrate, flask-paranoid, flask-principal, flask-security-too, flask-socketio, flask-sqlalchemy, flask-wtf | Requires common:deps click |
@@ -119,14 +121,14 @@ Directory names are `python3-<name>`; the RPM name is `%{python3_pkgprefix}-<nam
 | `python3-flask-migrate` | Flask-Migrate | 4.1.0 | setuptools | noarch |  |  |
 | `python3-flask-paranoid` | Flask-Paranoid | 0.3.0 | setuptools | noarch |  |  |
 | `python3-flask-principal` | Flask-Principal | 0.4.0 | setup.py | noarch | flask-security-too |  |
-| `python3-flask-security-too` | Flask-Security-Too | 5.6.2 | flit | noarch |  | Factory name `python-Flask-Security` |
-| `python3-flask-socketio` | Flask-SocketIO | 5.5.1 | setuptools | noarch |  |  |
+| `python3-flask-security-too` | Flask-Security-Too | 5.8.2 | flit | noarch |  | Factory name `python-Flask-Security` |
+| `python3-flask-socketio` | Flask-SocketIO | 5.6.1 | setuptools | noarch |  |  |
 | `python3-flask-sqlalchemy` | Flask-SQLAlchemy | 3.1.1 | flit | noarch | flask-migrate |  |
-| `python3-flask-wtf` | Flask-WTF | 1.2.2 | hatchling | noarch | flask-security-too |  |
+| `python3-flask-wtf` | Flask-WTF | 1.3.0 | hatchling | noarch | flask-security-too |  |
 | `python3-greenlet` | greenlet | 3.5.5 | setuptools | arch | sqlalchemy | gcc-c++ |
-| `python3-gssapi` | gssapi | 1.10.1 | setuptools | arch |  | krb5-devel; build: python3.12-cython 3.1.3 (ours) |
+| `python3-gssapi` | gssapi | 1.11.1 | setuptools | arch |  | krb5-devel; build: python3.12-cython 3.1.3 (ours) |
+| `python3-gunicorn` | gunicorn | 26.2.0 | setuptools | noarch | percona-pgadmin4 | container runtime (SP4); scripts gunicorn, gunicornc |
 | `python3-h11` | h11 | 0.16.0 | setuptools | noarch | wsproto |  |
-| `python3-importlib-resources` | importlib-resources | 6.5.2 | setuptools | noarch | flask-security-too | pinned down from 7.1.0; build: setuptools_scm |
 | `python3-itsdangerous` | itsdangerous | 2.2.0 | flit | noarch | flask, flask-wtf |  |
 | `python3-jaraco-classes` | jaraco.classes | 3.4.0 | setuptools | noarch | keyring | build: setuptools_scm |
 | `python3-jaraco-context` | jaraco.context | 6.0.1 | setuptools | noarch | keyring | pinned down from 6.1.2; build: setuptools_scm |
@@ -137,23 +139,23 @@ Directory names are `python3-<name>`; the RPM name is `%{python3_pkgprefix}-<nam
 | `python3-keyring` | keyring | 25.2.1 | setuptools | noarch |  | pinned down from 25.7.0; build: setuptools_scm |
 | `python3-ldap3` | ldap3 | 2.9.1 | setup.py | noarch |  |  |
 | `python3-libgravatar` | libgravatar | 1.0.4 | setup.py | noarch |  |  |
+| `python3-libpass` | libpass | 1.9.3 | hatchling | noarch | flask-security-too | replaces passlib; Provides/Conflicts python3.12-passlib |
 | `python3-mako` | Mako | 1.4.1 | setuptools | noarch | alembic |  |
 | `python3-markdown-it-py` | markdown-it-py | 4.2.0 | flit | noarch | rich |  |
 | `python3-markupsafe` | MarkupSafe | 3.0.3 | setuptools | arch | flask, flask-security-too, jinja2, mako, werkzeug, wtforms | C speedups |
 | `python3-mdurl` | mdurl | 0.1.2 | flit | noarch | markdown-it-py |  |
 | `python3-more-itertools` | more-itertools | 11.1.0 | flit | noarch | jaraco-classes, jaraco-functools |  |
 | `python3-paramiko` | paramiko | 3.5.1 | setup.py | noarch | sshtunnel | Requires RHEL cryptography |
-| `python3-passlib` | passlib | 1.7.4 | setup.py | noarch | flask-security-too |  |
 | `python3-pillow` | pillow | 11.1.0 | setuptools (in-tree backend) | arch | qrcode | libjpeg-turbo-devel, zlib-devel; other codecs disabled; pinned down from 12.3.0 |
-| `python3-psycopg` | psycopg | 3.2.10 | setuptools | noarch |  |  |
-| `python3-psycopg-c` | psycopg-c | 3.2.10 | setuptools (in-tree cython_backend, ships C) | arch | psycopg | libpq-devel |
+| `python3-psycopg` | psycopg | 3.3.4 | setuptools | noarch |  |  |
+| `python3-psycopg-c` | psycopg-c | 3.3.4 | setuptools (in-tree cython_backend, ships C) | arch | psycopg | libpq-devel |
 | `python3-pyasn1` | pyasn1 | 0.6.4 | setuptools | noarch | ldap3 |  |
 | `python3-pygments` | Pygments | 2.21.0 | hatchling | noarch | rich |  |
 | `python3-pynacl` | PyNaCl | 1.6.2 | setuptools | arch | paramiko | bundled libsodium; RHEL cffi |
 | `python3-pyotp` | PyOTP | 2.9.0 | setuptools | noarch |  | pinned down from 2.10.0 (hatch-vcs) |
 | `python3-python-engineio` | python-engineio | 4.13.5 | setuptools | noarch | python-socketio |  |
 | `python3-python-socketio` | python-socketio | 5.16.4 | setuptools | noarch | flask-socketio |  |
-| `python3-pytz` | pytz | 2025.2 | setup.py | noarch | flask-babel |  |
+| `python3-pytz` | pytz | 2026.3.post1 | setup.py | noarch | flask-babel |  |
 | `python3-qrcode` | qrcode | 8.2 | poetry | noarch |  |  |
 | `python3-rich` | rich | 15.0.0 | poetry | noarch | typer |  |
 | `python3-secretstorage` | SecretStorage | 3.5.0 | setuptools | noarch | keyring | Requires RHEL cryptography |
@@ -162,16 +164,18 @@ Directory names are `python3-<name>`; the RPM name is `%{python3_pkgprefix}-<nam
 | `python3-sqlalchemy` | SQLAlchemy | 2.0.52 | setuptools | arch | alembic, flask-sqlalchemy | C speedups via python3.12-cython (ours) |
 | `python3-sqlparse` | sqlparse | 0.6.0 | hatchling | noarch |  |  |
 | `python3-sshtunnel` | sshtunnel | 0.4.0 | setuptools | noarch |  |  |
-| `python3-typer` | typer | 0.19.2 | pdm | noarch |  | Requires common:deps click |
+| `python3-typer` | typer | 0.26.8 | pdm | noarch |  | Requires common:deps click |
 | `python3-typing-extensions` | typing-extensions | 4.16.0 | flit | noarch | alembic, psycopg, sqlalchemy, typer |  |
 | `python3-ua-parser` | ua-parser | 0.18.0 | setup.py | noarch | user-agents | self-contained 0.18 (replaces 1.0 + ua-parser-builtins) |
 | `python3-user-agents` | user-agents | 2.2.0 | setup.py | noarch |  |  |
 | `python3-werkzeug` | Werkzeug | 3.1.8 | flit | noarch | flask, flask-login |  |
 | `python3-wsproto` | wsproto | 1.3.2 | setuptools | noarch | simple-websocket |  |
 | `python3-wtforms` | WTForms | 3.2.2 | hatchling | noarch | flask-security-too, flask-wtf |  |
-| `python3-cython` | Cython | 3.1.3 | build tool (setup.py) | arch | build-time only (gssapi, sqlalchemy) | distinct from CRB's `python3.12-Cython` 0.29 (different case, different RPM); gssapi/sqlalchemy BuildRequire ours by name |
+| `python3-cython` | Cython | 3.2.4 | build tool (setup.py) | arch | build-time only (gssapi, sqlalchemy) | distinct from CRB's `python3.12-Cython` 0.29 (different case, different RPM); gssapi/sqlalchemy BuildRequire ours by name |
 | `python3-poetry-core` | poetry-core | 2.2.1 | build tool (self-hosting) | noarch | build-time only (flask-babel, qrcode, rich) | `PYTHONPATH=src` |
 | `python3-pdm-backend` | pdm-backend | 2.4.5 | build tool (self-hosting) | noarch | build-time only (typer) | `PYTHONPATH=src` |
+
+> **9.17 update (SP4, 2026-08-28).** pgAdmin moved from REL-9_9 to REL-9_17; the closure changed as follows: bumps Flask-Security-Too 5.8.2, Flask-SocketIO 5.6.1, Flask-WTF 1.3.0, gssapi 1.11.1 (Cython 3.2.4), psycopg/psycopg-c 3.3.4, pytz 2026.3.post1, typer 0.26.8; additions annotated-doc 0.0.5, certifi 2026.6.17, libpass 1.9.3 (replaces passlib; `Provides/Conflicts python3.12-passlib`), gunicorn 26.2.0 (container runtime, SP4 §3); removals passlib, importlib-resources. Not adopted: Authlib 1.7.x (ruling: stay on 1.6.12), joserfc 1.7.4 (needs cryptography ≥ 45; RHEL 9 ships 41).
 
 ### 4.2 `ppg:common:deps` (`root/ppg/common/deps/`)
 

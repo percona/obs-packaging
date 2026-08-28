@@ -1,5 +1,0 @@
-<services>
-  <service name="download_url">
-    <param name="url">https://files.pythonhosted.org/packages/source/i/importlib-resources/importlib_resources-6.5.2.tar.gz</param>
-  </service>
-</services>

@@ -1,0 +1,5 @@
+<services>
+  <service name="download_url">
+    <param name="url">https://files.pythonhosted.org/packages/source/l/libpass/libpass-1.9.3.tar.gz</param>
+  </service>
+</services>

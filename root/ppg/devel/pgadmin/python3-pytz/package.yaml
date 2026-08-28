@@ -1,4 +1,4 @@
-title: pytz 2025.2 for Python 3.12
+title: pytz 2026.3.post1 for Python 3.12
 description: |
   World timezone definitions, modern and historical. RPM-only python3.12-* build from the PyPI sdist,
   consumed by pgAdmin 4 (percona-pgadmin4). Bump by editing obs/_service (sdist URL) and
