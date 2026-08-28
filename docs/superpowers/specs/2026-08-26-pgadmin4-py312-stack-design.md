@@ -110,7 +110,7 @@ Directory names are `python3-<name>`; the RPM name is `%{python3_pkgprefix}-<nam
 | `python3-bidict` | bidict | 0.23.1 | setuptools | noarch | python-socketio | pinned down from 0.24.1 (uv_build) |
 | `python3-blinker` | blinker | 1.9.0 | flit | noarch | flask, flask-mail, flask-principal |  |
 | `python3-brotli` | brotli | 1.2.0 | setuptools | arch | flask-compress | gcc-c++ |
-| `python3-certifi` | certifi | 2026.6.17 | setuptools | noarch |  |  |
+| `python3-certifi` | certifi | 2026.6.17 | setuptools | noarch | percona-pgadmin4 (requirements.txt pins certifi directly) |  |
 | `python3-decorator` | decorator | 5.3.1 | setuptools | noarch | gssapi |  |
 | `python3-email-validator` | email-validator | 2.3.0 | setuptools | noarch | flask-security-too | Requires python3.12-dns ≥ 2.0 (common:deps) and RHEL idna |
 | `python3-flask` | Flask | 3.1.3 | flit | noarch | flask-babel, flask-compress, flask-login, flask-mail, flask-migrate, flask-paranoid, flask-principal, flask-security-too, flask-socketio, flask-sqlalchemy, flask-wtf | Requires common:deps click |
@@ -126,7 +126,7 @@ Directory names are `python3-<name>`; the RPM name is `%{python3_pkgprefix}-<nam
 | `python3-flask-sqlalchemy` | Flask-SQLAlchemy | 3.1.1 | flit | noarch | flask-migrate |  |
 | `python3-flask-wtf` | Flask-WTF | 1.3.0 | hatchling | noarch | flask-security-too |  |
 | `python3-greenlet` | greenlet | 3.5.5 | setuptools | arch | sqlalchemy | gcc-c++ |
-| `python3-gssapi` | gssapi | 1.11.1 | setuptools | arch |  | krb5-devel; build: python3.12-cython 3.1.3 (ours) |
+| `python3-gssapi` | gssapi | 1.11.1 | setuptools | arch |  | krb5-devel; build: python3.12-cython 3.2.4 (ours) |
 | `python3-gunicorn` | gunicorn | 26.2.0 | setuptools | noarch | percona-pgadmin4 | container runtime (SP4); scripts gunicorn, gunicornc |
 | `python3-h11` | h11 | 0.16.0 | setuptools | noarch | wsproto |  |
 | `python3-itsdangerous` | itsdangerous | 2.2.0 | flit | noarch | flask, flask-wtf |  |
@@ -164,7 +164,7 @@ Directory names are `python3-<name>`; the RPM name is `%{python3_pkgprefix}-<nam
 | `python3-sqlalchemy` | SQLAlchemy | 2.0.52 | setuptools | arch | alembic, flask-sqlalchemy | C speedups via python3.12-cython (ours) |
 | `python3-sqlparse` | sqlparse | 0.6.0 | hatchling | noarch |  |  |
 | `python3-sshtunnel` | sshtunnel | 0.4.0 | setuptools | noarch |  |  |
-| `python3-typer` | typer | 0.26.8 | pdm | noarch |  | Requires common:deps click |
+| `python3-typer` | typer | 0.26.8 | pdm | noarch |  | Requires rich >= 13.8.0, shellingham >= 1.3.0, annotated-doc >= 0.0.2 |
 | `python3-typing-extensions` | typing-extensions | 4.16.0 | flit | noarch | alembic, psycopg, sqlalchemy, typer |  |
 | `python3-ua-parser` | ua-parser | 0.18.0 | setup.py | noarch | user-agents | self-contained 0.18 (replaces 1.0 + ua-parser-builtins) |
 | `python3-user-agents` | user-agents | 2.2.0 | setup.py | noarch |  |  |
