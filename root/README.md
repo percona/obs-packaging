@@ -188,6 +188,14 @@ Python build-backend stack (`python3-flit-core`, `python3-packaging`, `python3-p
 `python3-trove-classifiers`, `python3-hatchling`) lives in `ppg/common/deps/` because
 other products' Python packages need it too.
 
+`percona-pgadmin4` is the application package (pgAdmin 4 in server mode, built from the
+upstream git tag through `obs_scm` → `npm_lockfile` → `node_modules`, with webpack served by
+`local-npm-registry`). It ships `-gunicorn` (launcher + systemd unit; the runtime a container
+image uses), `-httpd` (Apache + `python3.12-mod_wsgi`) and `-doc` (rst sources). The
+`python3-*` packages are its Python 3.12 dependency stack; `python3-click`, `python3-six`,
+`python3-dateutil`, `python3-psutil` and `python3-dns` are `_aggregate`s of `ppg:common:deps`
+so the project repository installs on its own. UBI_9 only.
+
 ## project.yaml
 
 Each project directory may contain a `project.yaml` file that defines the OBS project metadata,

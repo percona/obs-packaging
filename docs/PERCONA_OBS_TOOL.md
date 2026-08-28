@@ -155,6 +155,13 @@ Each new upstream commit of an npm-vendored package adds a cache entry of roughl
 removes entries unused for 7 days, and in CI additionally by the `actions/cache` size limits.
 `npm_lockfile` also accepts an optional `npm-flags` param (default `--legacy-peer-deps --ignore-scripts`; a given value replaces the default set) for upstreams that need different npm resolution flags.
 
+`root/ppg/devel/pgadmin/percona-pgadmin4/obs/_service` is the reference user of this chain:
+`obs_scm` (tag `REL-9_17`, `versionrewrite-pattern REL-(\d+)_(\d+)` → `9.17`) →
+`npm_lockfile` (`subdir web`) → `node_modules` (`source-offset 10000`) → `tar`/`recompress`/
+`set_version` at build time. A `sync push --dry-run` of that package runs the whole chain
+locally and takes several minutes (it downloads every npm tarball once; later runs hit the
+service cache).
+
 Two rules in `percona-obs` make this work:
 
 - `.obscpio` files produced by **manual** services are uploaded as-is (OBS unpacks them into
