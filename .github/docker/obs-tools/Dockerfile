@@ -33,9 +33,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 # perl: required by obs-service-set-version (Perl script)
 # build-essential: C compiler/headers for any pip packages that compile C extensions
 # libssl3t64/libzstd1: runtime libs the cargo_vendor binary links against
+# cpio: percona-obs extracts obs_scm .obscpio archives locally, and the
+#       npm_lockfile service unpacks them before running npm
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
-        ca-certificates curl gnupg git jq sudo \
+        ca-certificates curl gnupg git jq sudo cpio \
         python3 python3-venv python3-pip \
         libarchive13t64 build-essential perl wget \
         libssl3t64 libzstd1 \
@@ -76,6 +78,9 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 
 # openSUSE Tools repo → OBS service binaries
 # obs-service-recompress pulls in its own compression library deps via apt.
+# obs-service-node-modules: vendors npm dependencies (node_modules.obscpio +
+# node_modules.spec.inc) from a package-lock.json; runs under /usr/bin/python3
+# and needs python3-lxml.
 RUN . /etc/os-release && \
     REPO_URL="https://download.opensuse.org/repositories/openSUSE:/Tools/xUbuntu_${VERSION_ID}" && \
     curl -fsSL "${REPO_URL}/Release.key" | gpg --dearmor > /usr/share/keyrings/obs-tools.gpg && \
@@ -85,6 +90,7 @@ RUN . /etc/os-release && \
     apt-get install -y --no-install-recommends \
         obs-service-tar-scm obs-service-recompress \
         obs-service-set-version obs-service-download-url \
+        obs-service-node-modules python3-lxml \
     && rm -rf /var/lib/apt/lists/*
 
 # obs-service-go_modules (Python script, not packaged for Ubuntu)
@@ -92,6 +98,25 @@ RUN TMP=$(mktemp -d) && \
     git clone --depth=1 https://github.com/openSUSE/obs-service-go_modules.git "$TMP" && \
     install -m 755 "$TMP/go_modules" /usr/lib/obs/service/go_modules && \
     rm -rf "$TMP"
+
+# Node.js 22 + npm — required by the repo-owned npm_lockfile service
+# (tools/obs-services), which generates package-lock.json for packages whose
+# frontend dependencies are vendored with node_modules (pgAdmin 4).  Major 22
+# matches the nodejs:22 module stream those packages build against on UBI_9
+# (ExpandFlags in root/ppg/devel/pgadmin/project.yaml) — bump both together.
+RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+      | gpg --dearmor -o /usr/share/keyrings/nodesource.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
+      > /etc/apt/sources.list.d/nodesource.list && \
+    apt-get update -qq && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/* && \
+    node --version && npm --version
+
+# npm_lockfile — repo-owned OBS-style service (tools/obs-services/README.md).
+# Stdlib-only Python; its #!/usr/bin/env python3 resolves to the venv below.
+COPY --chmod=755 tools/obs-services/npm_lockfile /usr/lib/obs/service/npm_lockfile
+COPY --chmod=644 tools/obs-services/npm_lockfile.service /usr/lib/obs/service/npm_lockfile.service
 
 # Python venv with all percona-obs dependencies
 # Baked at /opt/obs-tools/venv; obs-setup symlinks $GITHUB_WORKSPACE/venv here

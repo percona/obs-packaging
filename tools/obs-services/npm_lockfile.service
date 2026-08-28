@@ -1,0 +1,21 @@
+<service name="npm_lockfile">
+  <summary>Generate package-lock.json from an upstream source archive</summary>
+  <description>
+    Unpacks the obs_scm/tar_scm source archive, runs
+    "npm install --package-lock-only" in the directory holding package.json
+    and writes package-lock.json to the output directory, so that the
+    node_modules service can vendor npm dependencies for projects that ship
+    no npm lockfile (e.g. Yarn-based upstreams). Run with mode="manual"
+    ahead of node_modules.
+  </description>
+  <parameter name="archive">
+    <description>Glob matching the source archive (.obscpio, .tar, .tar.gz/.tgz, .tar.bz2, .tar.xz). Exactly one file must match.</description>
+    <required/>
+  </parameter>
+  <parameter name="subdir">
+    <description>Directory inside the unpacked source that holds package.json (default: ".").</description>
+  </parameter>
+  <parameter name="npm-flags">
+    <description>Flags appended to "npm install --package-lock-only". Default: "--legacy-peer-deps --ignore-scripts". A given value replaces the default set.</description>
+  </parameter>
+</service>

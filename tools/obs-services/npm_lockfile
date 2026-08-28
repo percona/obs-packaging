@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+"""OBS source service: generate ``package-lock.json`` from an upstream archive.
+
+Upstream projects that use Yarn (e.g. pgAdmin 4) ship no npm lockfile, but the
+OBS ``node_modules`` service needs one (lockfileVersion >= 2) to vendor the
+frontend dependencies for offline builds.  This service unpacks the source
+archive produced by ``obs_scm``/``tar_scm``, runs
+``npm install --package-lock-only`` in the directory holding ``package.json``
+and writes the resulting ``package-lock.json`` to ``--outdir``.
+
+Declared ``mode="manual"`` ahead of ``node_modules`` in ``_service``::
+
+    <service name="npm_lockfile" mode="manual">
+      <param name="archive">*percona-pgadmin4*.obscpio</param>
+      <param name="subdir">web</param>
+    </service>
+
+percona-obs runs manual services in XML order into one shared work directory,
+so ``node_modules`` (which globs ``*package-lock.json`` in its cwd) picks the
+file up in the next step.  Nothing here is pgAdmin-specific.
+
+Only the Python standard library is used; ``npm`` and ``cpio`` are external.
+"""
+
+import argparse
+import glob
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+from pathlib import Path
+
+DEFAULT_NPM_FLAGS = "--legacy-peer-deps --ignore-scripts"
+CPIO_SUFFIX = ".obscpio"
+LOCKFILE = "package-lock.json"
+MIN_LOCKFILE_VERSION = 2
+
+
+def die(message: str) -> None:
+    """Print a one-line cause on stderr and exit 1 (the OBS service contract)."""
+    print(f"npm_lockfile: {message}", file=sys.stderr)
+    sys.exit(1)
+
+
+def resolve_archive(pattern: str) -> Path:
+    """Return the single file matching *pattern* (relative to cwd)."""
+    matches = sorted(p for p in glob.glob(pattern) if os.path.isfile(p))
+    if not matches:
+        die(f"no file matches --archive {pattern!r} in {os.getcwd()}")
+    if len(matches) > 1:
+        die(f"--archive {pattern!r} matches {len(matches)} files: {matches}")
+    return Path(matches[0])
+
+
+def unpack(archive: Path, dest: Path) -> Path:
+    """Unpack *archive* into *dest*; return its single top-level directory."""
+    if archive.name.endswith(CPIO_SUFFIX):
+        with archive.open("rb") as fh:
+            try:
+                result = subprocess.run(
+                    [
+                        "cpio",
+                        "--extract",
+                        "--make-directories",
+                        "--unconditional",
+                        "--quiet",
+                        "--no-absolute-filenames",
+                    ],
+                    stdin=fh,
+                    cwd=dest,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+            except FileNotFoundError:
+                die("cpio not found in PATH (install cpio)")
+        if result.returncode != 0:
+            die(f"cpio extract of {archive.name} failed: {result.stderr.strip()}")
+    else:
+        try:
+            with tarfile.open(archive) as tar:
+                # The 'data' filter (PEP 706) refuses absolute paths and
+                # traversal; available on every Python we run on (>= 3.11.4).
+                kwargs = {"filter": "data"} if hasattr(tarfile, "data_filter") else {}
+                tar.extractall(dest, **kwargs)
+        except (tarfile.TarError, OSError) as exc:
+            die(f"cannot unpack {archive.name}: {exc}")
+
+    entries = list(dest.iterdir())
+    if len(entries) != 1 or not entries[0].is_dir():
+        names = sorted(e.name for e in entries)
+        die(f"{archive.name}: expected exactly one top-level directory, found {names}")
+    return entries[0]
+
+
+def run_npm(pkg_dir: Path, npm_flags: list[str], npm_cache: Path) -> None:
+    """Run ``npm install --package-lock-only`` in *pkg_dir*.
+
+    A private ``npm_config_cache`` keeps the maintainer's ``~/.npm`` out of the
+    resolution; notifier/fund/audit are silenced so stderr only carries real
+    diagnostics.  npm's stderr is passed through for diagnosability.
+    """
+    env = dict(os.environ)
+    env.update(
+        npm_config_cache=str(npm_cache),
+        npm_config_update_notifier="false",
+        npm_config_fund="false",
+        npm_config_audit="false",
+    )
+    cmd = ["npm", "install", "--package-lock-only", *npm_flags]
+    try:
+        result = subprocess.run(
+            cmd, cwd=pkg_dir, env=env, stdout=subprocess.PIPE, text=True
+        )
+    except FileNotFoundError:
+        die("npm not found in PATH (install nodejs/npm)")
+    if result.returncode != 0:
+        message = f"npm exited with {result.returncode} (command: {' '.join(cmd)})"
+        tail = "\n".join(
+            [line for line in result.stdout.splitlines() if line.strip()][-5:]
+        )
+        if tail:
+            message += f"; last output:\n{tail}"
+        die(message)
+
+
+def validate_lockfile(lockfile: Path) -> None:
+    """Require an npm lockfile with lockfileVersion >= 2 (node_modules' minimum)."""
+    if not lockfile.is_file():
+        die(f"npm did not produce {lockfile.name}")
+    try:
+        version = json.loads(lockfile.read_text("utf-8")).get("lockfileVersion")
+    except (ValueError, OSError) as exc:
+        die(f"{lockfile.name} is not valid JSON: {exc}")
+    if not isinstance(version, int) or version < MIN_LOCKFILE_VERSION:
+        die(
+            f"{lockfile.name} has lockfileVersion={version!r}; "
+            f"node_modules needs >= {MIN_LOCKFILE_VERSION} (use npm >= 7)"
+        )
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="npm_lockfile",
+        description="Generate package-lock.json from an upstream source archive.",
+    )
+    parser.add_argument(
+        "--archive",
+        required=True,
+        help="glob matching the source archive (.obscpio, .tar, .tar.gz/.tgz, "
+        ".tar.bz2, .tar.xz); exactly one file must match",
+    )
+    parser.add_argument(
+        "--subdir",
+        default=".",
+        help="directory inside the unpacked source that holds package.json",
+    )
+    parser.add_argument(
+        "--npm-flags",
+        default=DEFAULT_NPM_FLAGS,
+        help="flags appended to 'npm install --package-lock-only' "
+        f"(default: {DEFAULT_NPM_FLAGS!r}; a given value replaces the default)",
+    )
+    parser.add_argument("--outdir", required=True, help="output directory (OBS)")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str]) -> int:
+    args = parse_args(argv)
+    outdir = Path(args.outdir)
+    if not outdir.is_dir():
+        die(f"--outdir {args.outdir!r} is not a directory")
+
+    archive = resolve_archive(args.archive)
+    workdir = Path(tempfile.mkdtemp(prefix="npm_lockfile-src-"))
+    npm_cache = Path(tempfile.mkdtemp(prefix="npm_lockfile-cache-"))
+    try:
+        top = unpack(archive, workdir)
+        pkg_dir = top / args.subdir
+        if not (pkg_dir / "package.json").is_file():
+            die(f"no package.json in {top.name}/{args.subdir}")
+        run_npm(pkg_dir, args.npm_flags.split(), npm_cache)
+        lockfile = pkg_dir / LOCKFILE
+        validate_lockfile(lockfile)
+        try:
+            shutil.copyfile(lockfile, outdir / LOCKFILE)
+        except OSError as exc:
+            die(f"cannot write {LOCKFILE} to {outdir}: {exc}")
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+        shutil.rmtree(npm_cache, ignore_errors=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
