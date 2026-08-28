@@ -48,3 +48,16 @@ runs:
         with open(p, 'w') as f:
             c.write(f)
         PYEOF
+
+    # OBS source services (download_url, …) shell out to wget with its
+    # defaults: 20 tries with a multi-minute connect timeout each, so a host
+    # that refuses the runner's IP (ftp.gnu.org has done this to cloud
+    # ranges) burns ~45 min per attempt before the service even reports
+    # failure.  Cap it: 3 tries, 30 s to connect, 120 s stalled read.  wget
+    # honours $WGETRC; the venv inherits the job env, so every service run
+    # by percona-obs picks it up.
+    - name: Fail fast on unreachable download hosts
+      shell: bash
+      run: |
+        printf 'tries = 3\nconnect_timeout = 30\nread_timeout = 120\n' > "$RUNNER_TEMP/wgetrc"
+        echo "WGETRC=$RUNNER_TEMP/wgetrc" >> "$GITHUB_ENV"
