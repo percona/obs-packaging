@@ -13,12 +13,12 @@
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
 Name:           %{python3_pkgprefix}-flask-wtf
-Version:        1.2.2
+Version:        1.3.0
 Release:        1%{?dist}
 Summary:        Form rendering, validation, and CSRF protection for Flask with WTForms
 License:        BSD-3-Clause
 URL:            https://pypi.org/project/Flask-WTF/
-Source0:        https://files.pythonhosted.org/packages/source/F/Flask-WTF/flask_wtf-1.2.2.tar.gz
+Source0:        https://files.pythonhosted.org/packages/source/F/Flask-WTF/flask_wtf-1.3.0.tar.gz
 BuildArch:      noarch
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
@@ -48,7 +48,7 @@ Form rendering, validation, and CSRF protection for Flask with WTForms.
 Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmin4) dependency stack.
 
 %prep
-%autosetup -p1 -n flask_wtf-1.2.2
+%autosetup -p1 -n flask_wtf-1.3.0
 
 %build
 %{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir dist .
@@ -63,5 +63,5 @@ PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -P -c "import flask_wtf"
 %{python3_sitelib}/*
 
 %changelog
-* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 1.2.2-1
-- Package Flask-WTF 1.2.2 for Python 3.12 (pgAdmin 4 dependency stack)
+* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 1.3.0-1
+- Package Flask-WTF 1.3.0 for Python 3.12 (pgAdmin 4 dependency stack)
