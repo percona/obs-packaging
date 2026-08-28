@@ -15,7 +15,7 @@
 %global sname percona-pg_oidc_validator%{pgmajorversion}
 
 Name:           %{sname}
-Version:        1.0
+Version:        1.0.0
 Release:        1%{?dist}
 Summary:        PostgreSQL OAuth/OIDC token validator extension
 
