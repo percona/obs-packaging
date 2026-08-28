@@ -29,13 +29,25 @@ DEFAULT_BINARY_PATHS = {
     "pg-18": "/usr/pgsql-18/bin",
 }
 
-_PREFIX = 'PGADMIN_CONFIG_'
-for _key, _value in os.environ.items():
-    if not _key.startswith(_PREFIX) or len(_key) == len(_PREFIX):
-        continue
-    _literal = {'true': 'True', 'false': 'False'}.get(_value.strip().lower(), _value)
-    try:
-        globals()[_key[len(_PREFIX):]] = ast.literal_eval(_literal)
-    except (ValueError, SyntaxError):
-        globals()[_key[len(_PREFIX):]] = _value
-del _PREFIX, _key, _value, _literal
+
+def _apply_env_overrides():
+    """Apply every PGADMIN_CONFIG_<NAME> environment variable as setting <NAME>.
+
+    Kept in a function (rather than bare module-level statements) so that no
+    loop variable is ever left unbound: with zero matching variables the
+    ``for`` body never executes and there is nothing to clean up, so the
+    module always imports successfully.
+    """
+    prefix = 'PGADMIN_CONFIG_'
+    for key, value in os.environ.items():
+        if not key.startswith(prefix) or len(key) == len(prefix):
+            continue
+        literal = {'true': 'True', 'false': 'False'}.get(value.strip().lower(), value)
+        try:
+            globals()[key[len(prefix):]] = ast.literal_eval(literal)
+        except (ValueError, SyntaxError):
+            globals()[key[len(prefix):]] = value
+
+
+_apply_env_overrides()
+del _apply_env_overrides
