@@ -13,12 +13,12 @@
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
 Name:           %{python3_pkgprefix}-psycopg
-Version:        3.2.10
+Version:        3.3.4
 Release:        1%{?dist}
 Summary:        PostgreSQL database adapter for Python
 License:        LGPL-3.0-only
 URL:            https://psycopg.org/
-Source0:        https://files.pythonhosted.org/packages/source/p/psycopg/psycopg-3.2.10.tar.gz
+Source0:        https://files.pythonhosted.org/packages/source/p/psycopg/psycopg-3.3.4.tar.gz
 BuildArch:      noarch
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
@@ -34,7 +34,7 @@ BuildRequires:  libpq
 
 Requires:       %{python3_pkgprefix}-typing-extensions >= 4.6
 Requires:       libpq
-# not mirrored as BuildRequires: psycopg-c itself BuildRequires psycopg for its %check (cycle)
+# not mirrored as BuildRequires: the dependency BuildRequires this package for its %check
 Requires:       %{python3_pkgprefix}-psycopg-c
 
 %description
@@ -43,7 +43,9 @@ PostgreSQL database adapter for Python.
 Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmin4) dependency stack.
 
 %prep
-%autosetup -p1 -n psycopg-3.2.10
+%autosetup -p1 -n psycopg-3.3.4
+# setuptools 68 (RHEL 9) cannot parse PEP 639 licence metadata: use the table form, drop license-files
+sed -i -e 's/^license = "\(.*\)"$/license = {text = "\1"}/' -e '/^license-files = \[$/,/^\]$/d' -e '/^license-files = \[.*\]$/d' pyproject.toml
 
 %build
 %{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir dist .
@@ -58,5 +60,5 @@ PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -P -c "import psycopg"
 %{python3_sitelib}/*
 
 %changelog
-* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 3.2.10-1
-- Package psycopg 3.2.10 for Python 3.12 (pgAdmin 4 dependency stack)
+* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 3.3.4-1
+- Package psycopg 3.3.4 for Python 3.12 (pgAdmin 4 dependency stack)

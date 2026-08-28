@@ -1,0 +1,5 @@
+<services>
+  <service name="download_url">
+    <param name="url">https://files.pythonhosted.org/packages/source/a/annotated-doc/annotated_doc-0.0.5.tar.gz</param>
+  </service>
+</services>

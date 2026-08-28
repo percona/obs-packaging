@@ -13,12 +13,12 @@
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
 Name:           %{python3_pkgprefix}-flask-socketio
-Version:        5.5.1
+Version:        5.6.1
 Release:        1%{?dist}
 Summary:        Socket.IO integration for Flask applications
 License:        MIT
 URL:            https://github.com/miguelgrinberg/flask-socketio
-Source0:        https://files.pythonhosted.org/packages/source/F/Flask-SocketIO/flask_socketio-5.5.1.tar.gz
+Source0:        https://files.pythonhosted.org/packages/source/F/Flask-SocketIO/flask_socketio-5.6.1.tar.gz
 BuildArch:      noarch
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
@@ -29,11 +29,19 @@ BuildRequires:  python%{python3_buildversion}-pip
 BuildRequires:  python%{python3_buildversion}-setuptools
 BuildRequires:  python%{python3_buildversion}-wheel
 # runtime dependencies, also needed by the %check import test
-BuildRequires:  %{python3_pkgprefix}-flask >= 0.9
+BuildRequires:  %{python3_pkgprefix}-blinker
+BuildRequires:  %{python3_pkgprefix}-click
+BuildRequires:  %{python3_pkgprefix}-flask >= 2.1.0
+BuildRequires:  %{python3_pkgprefix}-jinja2
 BuildRequires:  %{python3_pkgprefix}-python-socketio >= 5.12.0
+BuildRequires:  %{python3_pkgprefix}-werkzeug
 
-Requires:       %{python3_pkgprefix}-flask >= 0.9
+Requires:       %{python3_pkgprefix}-blinker
+Requires:       %{python3_pkgprefix}-click
+Requires:       %{python3_pkgprefix}-flask >= 2.1.0
+Requires:       %{python3_pkgprefix}-jinja2
 Requires:       %{python3_pkgprefix}-python-socketio >= 5.12.0
+Requires:       %{python3_pkgprefix}-werkzeug
 
 %description
 Socket.IO integration for Flask applications.
@@ -41,7 +49,7 @@ Socket.IO integration for Flask applications.
 Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmin4) dependency stack.
 
 %prep
-%autosetup -p1 -n flask_socketio-5.5.1
+%autosetup -p1 -n flask_socketio-5.6.1
 
 %build
 %{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir dist .
@@ -56,5 +64,5 @@ PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -P -c "import flask_sock
 %{python3_sitelib}/*
 
 %changelog
-* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 5.5.1-1
-- Package Flask-SocketIO 5.5.1 for Python 3.12 (pgAdmin 4 dependency stack)
+* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 5.6.1-1
+- Package Flask-SocketIO 5.6.1 for Python 3.12 (pgAdmin 4 dependency stack)

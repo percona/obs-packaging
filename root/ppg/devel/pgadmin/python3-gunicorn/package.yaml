@@ -1,5 +1,5 @@
-title: importlib-resources 6.5.2 for Python 3.12
+title: gunicorn 26.2.0 for Python 3.12
 description: |
-  Read resources from Python packages. RPM-only python3.12-* build from the PyPI sdist,
+  WSGI HTTP Server for UNIX. RPM-only python3.12-* build from the PyPI sdist,
   consumed by pgAdmin 4 (percona-pgadmin4). Bump by editing obs/_service (sdist URL) and
   rpm/*.spec (Version + changelog).

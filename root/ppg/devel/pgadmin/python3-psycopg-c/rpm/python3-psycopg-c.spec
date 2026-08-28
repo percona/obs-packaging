@@ -12,12 +12,12 @@
 %global python3_sitearch %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('platlib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
 Name:           %{python3_pkgprefix}-psycopg-c
-Version:        3.2.10
+Version:        3.3.4
 Release:        1%{?dist}
 Summary:        PostgreSQL database adapter for Python -- C optimisation distribution
 License:        LGPL-3.0-only
 URL:            https://psycopg.org/
-Source0:        https://files.pythonhosted.org/packages/source/p/psycopg-c/psycopg_c-3.2.10.tar.gz
+Source0:        https://files.pythonhosted.org/packages/source/p/psycopg-c/psycopg_c-3.3.4.tar.gz
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
 Epoch:          1
@@ -28,7 +28,7 @@ BuildRequires:  python%{python3_buildversion}-setuptools
 BuildRequires:  python%{python3_buildversion}-wheel
 BuildRequires:  libpq-devel
 BuildRequires:  gcc
-# for the %check import (psycopg_c must be imported after psycopg)
+# for the %check import
 BuildRequires:  %{python3_pkgprefix}-psycopg
 
 %description
@@ -37,7 +37,9 @@ PostgreSQL database adapter for Python -- C optimisation distribution.
 Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmin4) dependency stack.
 
 %prep
-%autosetup -p1 -n psycopg_c-3.2.10
+%autosetup -p1 -n psycopg_c-3.3.4
+# setuptools 68 (RHEL 9) cannot parse PEP 639 licence metadata: use the table form, drop license-files
+sed -i -e 's/^license = "\(.*\)"$/license = {text = "\1"}/' -e '/^license-files = \[$/,/^\]$/d' -e '/^license-files = \[.*\]$/d' pyproject.toml
 
 %build
 %{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir dist .
@@ -52,5 +54,5 @@ PYTHONPATH=%{buildroot}%{python3_sitearch} %{__ospython} -P -c "import psycopg; 
 %{python3_sitearch}/*
 
 %changelog
-* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 3.2.10-1
-- Package psycopg-c 3.2.10 for Python 3.12 (pgAdmin 4 dependency stack)
+* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 3.3.4-1
+- Package psycopg-c 3.3.4 for Python 3.12 (pgAdmin 4 dependency stack)

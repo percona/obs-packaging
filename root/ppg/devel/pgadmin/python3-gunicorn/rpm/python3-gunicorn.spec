@@ -12,13 +12,13 @@
 %{expand: %%global py3ver %(echo `%{__ospython} -P -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
-Name:           %{python3_pkgprefix}-importlib-resources
-Version:        6.5.2
+Name:           %{python3_pkgprefix}-gunicorn
+Version:        26.2.0
 Release:        1%{?dist}
-Summary:        Read resources from Python packages
-License:        Apache-2.0
-URL:            https://github.com/python/importlib_resources
-Source0:        https://files.pythonhosted.org/packages/source/i/importlib-resources/importlib_resources-6.5.2.tar.gz
+Summary:        WSGI HTTP Server for UNIX
+License:        MIT
+URL:            https://gunicorn.org
+Source0:        https://files.pythonhosted.org/packages/source/g/gunicorn/gunicorn-26.2.0.tar.gz
 BuildArch:      noarch
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
@@ -28,15 +28,16 @@ BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip
 BuildRequires:  python%{python3_buildversion}-setuptools
 BuildRequires:  python%{python3_buildversion}-wheel
-BuildRequires:  %{python3_pkgprefix}-setuptools_scm
 
 %description
-Read resources from Python packages.
+WSGI HTTP Server for UNIX.
 
 Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmin4) dependency stack.
 
 %prep
-%autosetup -p1 -n importlib_resources-6.5.2
+%autosetup -p1 -n gunicorn-26.2.0
+# setuptools 68 (RHEL 9) cannot parse PEP 639 licence metadata: use the table form, drop license-files
+sed -i -e 's/^license = "\(.*\)"$/license = {text = "\1"}/' -e '/^license-files = \[$/,/^\]$/d' -e '/^license-files = \[.*\]$/d' pyproject.toml
 
 %build
 %{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir dist .
@@ -45,11 +46,13 @@ Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmi
 %{__ospython} -m pip install --no-deps --no-index --root %{buildroot} --prefix %{_prefix} dist/*.whl
 
 %check
-PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -P -c "import importlib_resources"
+PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -P -c "import gunicorn"
 
 %files
 %{python3_sitelib}/*
+%{_bindir}/gunicorn
+%{_bindir}/gunicornc
 
 %changelog
-* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 6.5.2-1
-- Package importlib-resources 6.5.2 for Python 3.12 (pgAdmin 4 dependency stack)
+* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 26.2.0-1
+- Package gunicorn 26.2.0 for Python 3.12 (pgAdmin 4 dependency stack)
