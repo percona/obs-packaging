@@ -1,6 +1,6 @@
 <services>
   <service name="obs_scm">
-    <param name="url">https://git.postgresql.org/git/postgresql.git</param>
+    <param name="url">https://github.com/postgres/postgres.git</param>
     <param name="scm">git</param>
     <param name="revision">REL_%!{PG_MAJOR_VERSION}_%!{PG_MINOR_VERSION}</param>
     <param name="version">%!{PG_VERSION}</param>
