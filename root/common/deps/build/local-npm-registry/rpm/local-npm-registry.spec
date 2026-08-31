@@ -10,9 +10,11 @@ Source0:  local_npm_registry-v%!{LOCAL_NPM_REGISTRY_VERSION}.tar.gz
 
 BuildArch: noarch
 
-# The launcher runs on /usr/bin/node; both come from the nodejs:22 module
-# stream enabled in the consuming projects (EL has no npm-default package).
-Requires: nodejs >= 20
+# The launcher runs on /usr/bin/node; both come from this repository's own
+# nodejs package (the CS9 nodejs:22 module port — module streams are not
+# exposed in OBS DoD repos). The epoch is mandatory: EL9's nodejs carries
+# Epoch 1, so a bare ">= 20" is satisfied by 1:16.20.2.
+Requires: nodejs >= 1:22
 Requires: npm
 
 %description
