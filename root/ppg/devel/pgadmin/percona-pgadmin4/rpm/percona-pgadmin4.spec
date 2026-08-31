@@ -206,6 +206,37 @@ cp %{SOURCE20} web/package-lock.json
 fa_ver=$(%{__ospython} -c "import json; print(json.load(open('web/package-lock.json'))['packages']['node_modules/@fortawesome/fontawesome-free']['version'])")
 sed -i "s|\"@fortawesome/fontawesome-free\": \"latest\"|\"@fortawesome/fontawesome-free\": \"${fa_ver}\"|" web/package.json
 grep -q "\"@fortawesome/fontawesome-free\": \"${fa_ver}\"" web/package.json
+# react-data-grid is a git dependency (github…#<commit>): npm fetches git deps
+# from codeload.github.com directly, bypassing the registry, and the build VM
+# has no network (ENOTFOUND at %%build). The node_modules service vendors the
+# pinned commit as react-data-grid-<commit>.tgz (git archive, package/ prefix,
+# i.e. a valid npm tarball): rewrite the dependency to that file in both
+# package.json and the lockfile. The stale git integrity hash is dropped — npm
+# recomputes it for file: tarballs.
+rdg_tgz=$(ls %{_sourcedir}/react-data-grid-*.tgz)
+test -f "${rdg_tgz}"
+%{__ospython} - "${rdg_tgz}" <<'PYEOF'
+import json
+import sys
+
+tgz = "file:" + sys.argv[1]
+
+with open("web/package.json") as f:
+    pj = json.load(f)
+assert "react-data-grid" in pj["dependencies"]
+pj["dependencies"]["react-data-grid"] = tgz
+with open("web/package.json", "w") as f:
+    json.dump(pj, f, indent=2)
+
+with open("web/package-lock.json") as f:
+    lk = json.load(f)
+lk["packages"][""]["dependencies"]["react-data-grid"] = tgz
+entry = lk["packages"]["node_modules/react-data-grid"]
+entry["resolved"] = tgz
+entry.pop("integrity", None)
+with open("web/package-lock.json", "w") as f:
+    json.dump(lk, f, indent=2)
+PYEOF
 
 %build
 # Frontend
