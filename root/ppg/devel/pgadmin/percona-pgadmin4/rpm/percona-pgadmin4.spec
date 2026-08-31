@@ -200,6 +200,12 @@ sed -i '1{/^#!/d}' web/pgadmin/misc/cloud/*.py web/pgadmin/misc/cloud/utils/*.py
 find web/pgadmin -name '*.py' -perm /111 -exec chmod -x {} +
 # Vendored npm dependencies: package-lock.json + tarballs served by local-npm-registry
 cp %{SOURCE20} web/package-lock.json
+# npm resolves dist-tags ("latest") against registry packument metadata that
+# local-npm-registry's offline packuments do not carry (ETARGET at %%build):
+# pin the one dist-tag range in package.json to the version the lockfile chose.
+fa_ver=$(%{__ospython} -c "import json; print(json.load(open('web/package-lock.json'))['packages']['node_modules/@fortawesome/fontawesome-free']['version'])")
+sed -i "s|\"@fortawesome/fontawesome-free\": \"latest\"|\"@fortawesome/fontawesome-free\": \"${fa_ver}\"|" web/package.json
+grep -q "\"@fortawesome/fontawesome-free\": \"${fa_ver}\"" web/package.json
 
 %build
 # Frontend
