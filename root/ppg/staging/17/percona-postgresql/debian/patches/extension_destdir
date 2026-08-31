@@ -189,15 +189,16 @@
  		pfree(full);
 --- a/src/backend/utils/misc/postgresql.conf.sample
 +++ b/src/backend/utils/misc/postgresql.conf.sample
-@@ -757,6 +757,8 @@
+@@ -757,7 +757,9 @@
  # - Other Defaults -
- 
+
  #dynamic_library_path = '$libdir'
 +#extension_destdir = ''			# prepend path when loading extensions
 +					# and shared objects (added by Debian)
  #gin_fuzzy_search_limit = 0
  #output_plugin_libraries = 'pgoutput, test_decoding'  # approved plugins for logical decoding
- 
+
+
 --- a/src/backend/utils/misc/guc_tables.c
 +++ b/src/backend/utils/misc/guc_tables.c
 @@ -538,6 +538,7 @@ char	   *ConfigFileName;

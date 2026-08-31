@@ -27,11 +27,11 @@ BuildRequires:	libssh2-devel
 BuildRequires:	libcurl-devel
 
 %if 0%{?suse_version} >= 1500
-Requires:	libopenssl3
+Requires:	libopenssl3 libsystemd0
 BuildRequires:	libopenssl-3-devel
 %endif
 %if 0%{?fedora} >= 42 || 0%{?rhel} >= 8
-Requires:	openssl-libs >= 1.1.1k
+Requires:	openssl-libs >= 1.1.1k systemd-libs
 BuildRequires:	openssl-devel
 %endif
 
@@ -43,7 +43,7 @@ Requires:	lz4-libs libzstd
 Requires:	libssh2
 %endif
 %if 0%{?suse_version} && 0%{?suse_version} >= 1500
-Requires:	liblz4-1 libzstd1 libssh2-1
+Requires:	liblz4-1 libzstd1 libssh2-1 libsystemd0
 BuildRequires:	liblz4-devel libbz2-devel libssh2-devel ninja
 %endif
 

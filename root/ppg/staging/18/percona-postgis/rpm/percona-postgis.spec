@@ -322,14 +322,14 @@ LDFLAGS="$LDFLAGS -L%{geosinstdir}/lib64 -lgeos_c -L%{projinstdir}/lib64 -L%{gda
 CFLAGS="$CFLAGS -I%{gdalinstdir}/include"; export CFLAGS
 export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:%{projinstdir}/lib64/pkgconfig
 export PATH=/usr/bin:$PATH
-%if 0%{?gts_version}
-source /opt/rh/gcc-toolset-%{gts_version}/enable
-%endif
 export ACLOCAL=aclocal
 export AUTOMAKE=automake
 export AUTOCONF=autoconf
 sh -x autogen.sh
 autoconf
+%if 0%{?gts_version}
+source /opt/rh/gcc-toolset-%{gts_version}/enable
+%endif
 
 %configure --with-pgconfig=%{pginstdir}/bin/pg_config \
         --bindir=%{pginstdir}/bin/ \

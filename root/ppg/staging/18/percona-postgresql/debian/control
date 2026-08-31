@@ -36,6 +36,7 @@ Build-Depends:
  libxslt1-dev,
  libzstd-dev (>= 1.4.0),
  llvm-dev | llvm-21-dev [amd64 arm64 mips64el ppc64 ppc64el s390x],
+ lz4 | liblz4-tool,
  mawk,
  openssl,
  perl (>= 5.8),
