@@ -40,6 +40,32 @@ Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmi
 %autosetup -p1 -n psycopg_c-3.3.4
 # setuptools 68 (RHEL 9) cannot parse PEP 639 licence metadata: use the table form, drop license-files
 sed -i -e 's/^license = "\(.*\)"$/license = {text = "\1"}/' -e '/^license-files = \[$/,/^\]$/d' -e '/^license-files = \[.*\]$/d' pyproject.toml
+# setuptools 68 also predates [[tool.setuptools.ext-modules]] (added in 74.1):
+# move the extension declarations into a setup.py shim (the 3.2.x layout).
+# The single range spans both ext-modules tables (the end pattern only occurs
+# in the second one); cmdclass moves into setup.py with them.
+sed -i -e '/^\[\[tool\.setuptools\.ext-modules\]\]$/,/^sources = \["psycopg_c\/pq\.c"\]$/d' \
+       -e '/^\[tool\.setuptools\.cmdclass\]$/,/^build_ext = /d' pyproject.toml
+cat > setup.py <<'PYEOF'
+import sys
+
+sys.path.insert(0, "build_backend")
+
+from setuptools import Extension, setup
+
+from psycopg_build_ext import psycopg_build_ext
+
+setup(
+    ext_modules=[
+        Extension(
+            "psycopg_c._psycopg",
+            ["psycopg_c/_psycopg.c", "psycopg_c/types/numutils.c"],
+        ),
+        Extension("psycopg_c.pq", ["psycopg_c/pq.c"]),
+    ],
+    cmdclass={"build_ext": psycopg_build_ext},
+)
+PYEOF
 
 %build
 %{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir dist .
