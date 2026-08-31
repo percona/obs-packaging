@@ -1,0 +1,20 @@
+<services>
+  <!-- The stripped Node.js tarball (bundled OpenSSL removed for legal
+       reasons) exactly as RHEL builds the nodejs:22 EL9 module from it,
+       fetched from the public CentOS Stream 9 lookaside cache. The URL is
+       content-addressed (sha512), so a version bump means a new URL: take
+       hash and filename from the `sources` file on the matching
+       stream-nodejs-22-rhel-* branch of
+       https://gitlab.com/redhat/centos-stream/rpms/nodejs -->
+  <service name="download_url">
+    <param name="url">https://sources.stream.centos.org/sources/rpms/nodejs/node-v22.23.1-stripped.tar.gz/sha512/e499eadc7dbac4bb73cd53deddb7612d9381cad90d19ea3542d89dcc7bfe57803871b07debf87ced2dbf27e548274ae612ba4284d7a6c0716f07bac143102f79/node-v22.23.1-stripped.tar.gz</param>
+  </service>
+  <!-- ICU 78.2 data binaries (big/little endian) for full-icu support;
+       versions must match tools/icu/current_ver.dep in the Node tarball -->
+  <service name="download_url">
+    <param name="url">https://github.com/unicode-org/icu/releases/download/release-78.2/icu4c-78.2-data-bin-b.zip</param>
+  </service>
+  <service name="download_url">
+    <param name="url">https://github.com/unicode-org/icu/releases/download/release-78.2/icu4c-78.2-data-bin-l.zip</param>
+  </service>
+</services>

@@ -1,0 +1,25 @@
+title: Node.js 22 build tool
+description: |
+  Node.js 22.23.1 (+ npm 10.9.8) for UBI 9, ported from the CentOS Stream 9
+  nodejs:22 module dist-git (rpms/nodejs, stream-nodejs-22-rhel-9.9.0). EL9
+  module streams are not exposed in OBS download-on-demand repositories —
+  only the default nodejs 16 stream is — and pgAdmin 4's webpack toolchain
+  requires Node >= 20, so the module spec is built here. Epoch 1 matches the
+  distro nodejs, so this package wins dependency resolution wherever this
+  repository is in the path. Consumed by percona-pgadmin4 (BuildRequires:
+  nodejs >= 1:22, npm) and local-npm-registry (Requires). RPM-only; built
+  for UBI 9 only, like the rest of the pgAdmin build tooling.
+
+build:
+  RockyLinux_8: false
+  RockyLinux_9: false
+  RockyLinux_10: false
+  UBI_8: false
+  Debian_11: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Leap_16: false
+  openSUSE_Tumbleweed: false
