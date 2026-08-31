@@ -187,7 +187,7 @@ links there.
 %autosetup -p1 -n %{name}-%{version}
 
 # The git tag is exported without .git: record the upstream commit the way
-# pkg/src/build.sh does. (The "git:hash" npm script is never invoked -- %build
+# pkg/src/build.sh does. (The "git:hash" npm script is never invoked -- %%build
 # runs npx webpack directly, not the bundle/git:hash scripts -- so it is left
 # alone rather than rewritten with a sed that cannot safely match upstream's
 # escaped-quote value.)
@@ -226,7 +226,7 @@ popd
 #                   of rst inside %{pgadmin_dir} is pointless
 #   build.sh:92-97  copy LICENSE/README.md from the tree root into pip-build/pgadmin4/
 #   build.sh:100-105 SBOM generation via syft -- skipped: not available/needed
-#   build.sh:108-110 write a stub config_distro.py -- skipped: %install installs
+#   build.sh:108-110 write a stub config_distro.py -- skipped: %%install installs
 #                   our own config_distro.py over whatever setup_pip.py packaged
 #   build.sh:113-114 MANIFEST.in -- needed, so setuptools includes the non-.py
 #                   package data (html/css/js/rst) in the wheel
@@ -253,7 +253,7 @@ install -m 0644 %{SOURCE3} %{buildroot}%{pgadmin_dir}/gunicorn_config.py
 
 # The wheel installs two console scripts (pkg/pip/setup_pip.py entry_points):
 # pgadmin4 (pgadmin4.pgAdmin4:main) and pgadmin4-cli (pgadmin4.setup:main); both
-# are packaged below in %files.
+# are packaged below in %%files.
 # Data, log and configuration directories
 install -d -m 0750 %{buildroot}%{pgadmin_data}
 install -d -m 0755 %{buildroot}%{pgadmin_data}/storage
@@ -289,8 +289,8 @@ rm -f %{buildroot}%{_docdir}/%{name}/en_US/Makefile.sphinx \
       %{buildroot}%{_docdir}/%{name}/en_US/.gitignore
 find %{buildroot}%{_docdir}/%{name}/en_US -name '*.excalidraw' -delete
 # LICENSE/README.md are not installed separately under %{_docdir}: both are
-# already covered by %license/%doc from the tree root in %files (a second copy
-# under %{_docdir}/%{name}/ would match no %files entry and fail as unpackaged).
+# already covered by %%license/%%doc from the tree root in %%files (a second copy
+# under %{_docdir}/%{name}/ would match no %%files entry and fail as unpackaged).
 
 # byte-compile with the interpreter that runs the app
 %{__ospython} -m compileall -q -s %{buildroot} -p / %{buildroot}%{pgadmin_dir}
