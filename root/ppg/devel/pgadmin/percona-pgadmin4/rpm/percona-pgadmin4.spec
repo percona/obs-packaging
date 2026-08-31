@@ -52,7 +52,10 @@ BuildRequires:  python%{python3_buildversion}-pip
 BuildRequires:  python%{python3_buildversion}-setuptools
 BuildRequires:  python%{python3_buildversion}-wheel
 BuildRequires:  local-npm-registry
-BuildRequires:  nodejs >= 20
+# The epoch is mandatory: EL9's nodejs carries Epoch 1, so a bare ">= 20"
+# is satisfied by the distro's 1:16.20.2. Node >= 20 comes from our own
+# common:deps:build nodejs package (CS9 nodejs:22 module port).
+BuildRequires:  nodejs >= 1:22
 BuildRequires:  npm
 BuildRequires:  systemd-rpm-macros
 # runtime stack, needed for the %%check import (cloud SDKs — boto3, azure-*, google-* — are
