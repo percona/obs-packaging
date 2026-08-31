@@ -319,7 +319,9 @@ fixtures/utf8-shebang-bom.js
 fixtures/warnings.js
 fixtures/worker-preload.js
 internet/test-dgram-connect.js
-internet/test-dgram-membership.js
+# test-dgram-membership needs a multicast-capable interface; the OBS build VM
+# has loopback only, so addMembership fails with ENODEV (both arches).
+# internet/test-dgram-membership.js
 internet/test-dns-cares-domains.js
 internet/test-dns-getDefaultResultOrder.js
 internet/test-dns-regress-6244.js
