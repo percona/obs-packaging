@@ -238,7 +238,7 @@
 +#extension_destdir = ''			# prepend path when loading extensions
 +					# and shared objects (added by Debian)
  #gin_fuzzy_search_limit = 0
- 
+ #output_plugin_libraries = 'pgoutput, test_decoding'  # approved plugins for logical decoding
  
 --- a/src/backend/utils/misc/guc_tables.c
 +++ b/src/backend/utils/misc/guc_tables.c
