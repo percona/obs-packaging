@@ -47,6 +47,12 @@ override_dh_auto_build:
 override_dh_auto_clean:
 	! [ -f src/Makefile ] || $(MAKE) -C src clean-all
 
+# pgBackRest 2.59.0 added a meson smoke test that needs an installed
+# PostgreSQL server to run against ("no supported PostgreSQL installation
+# found to test against"); the build chroot has none - pgBackRest only
+# build-depends on libpq. Skip it; upstream CI covers the test suite.
+override_dh_auto_test:
+
 # pgBackRest must be configured before the TLS server can be started.
 # Moreover a user must configure valid CA, client and server certificates.
 override_dh_installsystemd:
