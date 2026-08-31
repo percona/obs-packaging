@@ -150,8 +150,8 @@ if [ -n "$stray_gis" ]; then
 fi
 # percona-psql (this project's RockyLinux_8/RockyLinux_9 build repos): psql
 # linked against BSD libedit instead of the host's libreadline. Section 2b
-# copies it over the server RPM's psql, which is what let the readline
-# LD_PRELOAD/symlink wrapper be deleted.
+# stages it as bin/psql.bin beneath a thin exec-only bin/psql wrapper —
+# no readline and no LD_PRELOAD machinery anywhere.
 PSQL_LIBEDIT=/usr/libexec/percona-psql/psql
 [ -f "$PSQL_LIBEDIT" ] || { echo "FATAL: $PSQL_LIBEDIT missing — percona-psql not installed?" >&2; exit 1; }
 
@@ -395,17 +395,35 @@ done
 # RPM's readline-linked one. The RPM build links psql against the
 # buildroot's GNU readline, which minimal target hosts do not ship at all —
 # and the EL8 build needs the long-gone libreadline.so.7 soname. The old
-# tarball worked around that with a psql.bin + shell-wrapper pair that
-# LD_PRELOADed the host readline and, failing that, symlinked
-# libreadline.so.7 at a host .so.8 inside the extraction dir. That whole
-# machinery is GONE: percona-psql is the same PostgreSQL source configured
-# --with-libedit-preferred, so bin/psql NEEDs libedit.so.0 (bundled by
-# section 13's copy_deps, libedit itself needs only host-baseline
-# libtinfo) and no readline is involved on any host. bin/psql is the REAL
-# binary now, like every other tarball binary; section 13's patch_rpath
-# rewrites its RUNPATH to $ORIGIN/../lib and section 15 asserts the link
-# surface (libedit in, libreadline out).
-install -m 0755 "$PSQL_LIBEDIT" $PG_PREFIX/bin/psql
+# tarball worked around that with an LD_PRELOAD/symlink wrapper; that
+# machinery stays GONE: percona-psql is the same PostgreSQL source
+# configured --with-libedit-preferred, so the client NEEDs libedit.so.0
+# (bundled by section 13's copy_deps, libedit itself needs only
+# host-baseline libtinfo) and no readline is involved on any host.
+#
+# Layout: the REAL binary ships as bin/psql.bin with bin/psql a thin
+# exec-only wrapper — the layout the ppg-testing tarball suite (main
+# branch) asserts: test_psql_bin_exists_and_clean_output wants psql.bin
+# next to the wrapper, test_client_binary_has_relative_runpath[psql.bin]
+# wants the $ORIGIN RUNPATH on the binary, and the wrapper clean-output
+# tests demand byte-clean stdout (no bare `cd -`, no path chatter). So
+# the wrapper does nothing but exec: no env exports, no LD_PRELOAD, no
+# output, shell builtins only (it must also work under `env -i`, where
+# there is no PATH for external commands). Section 13's patch_rpath
+# rewrites psql.bin's RUNPATH to $ORIGIN/../lib (the wrapper is not ELF,
+# so patchelf/copy_deps skip it) and section 15 asserts the link surface
+# (libedit in, libreadline out) on psql.bin.
+install -m 0755 "$PSQL_LIBEDIT" $PG_PREFIX/bin/psql.bin
+cat > $PG_PREFIX/bin/psql <<'PSQL_WRAPPER'
+#!/bin/sh
+# Percona tarball psql wrapper: exec the real client sitting next to this
+# script. Shell builtins only — must stay silent (QA asserts byte-clean
+# stdout) and must work under `env -i` (no PATH for external commands).
+here=${0%/*}
+[ "$here" = "$0" ] && here=.
+exec "$here/psql.bin" "$@"
+PSQL_WRAPPER
+chmod 0755 $PG_PREFIX/bin/psql
 
 # NOTE: postgres is shipped as the REAL binary — no env wrapper. The
 # PERL5LIB/TCL_LIBRARY/PYTHONHOME exports the old wrapper carried are now
@@ -1049,20 +1067,36 @@ if [ -s /tmp/baseline-audit.txt ]; then
 fi
 
 echo "=== Verification: psql link audit ==="
-# bin/psql must be the percona-psql (libedit) build, never the server RPM's
-# readline one: the readline soname split (EL8 .so.7 vs modern .so.8) and
-# readline's absence from minimal hosts is what the deleted psql wrapper
-# used to paper over.
-readelf -d "$PG_PREFIX/bin/psql" | grep NEEDED || true
-if readelf -d "$PG_PREFIX/bin/psql" | grep -q 'libreadline'; then
-    echo "FATAL: $PG_PREFIX/bin/psql links libreadline — percona-psql was not staged over the RPM psql" >&2
+# bin/psql.bin must be the percona-psql (libedit) build, never the server
+# RPM's readline one: the readline soname split (EL8 .so.7 vs modern .so.8)
+# and readline's absence from minimal hosts is what the old LD_PRELOAD
+# wrapper used to paper over.
+if [ ! -f "$PG_PREFIX/bin/psql.bin" ]; then
+    echo "FATAL: bin/psql.bin missing — section 2b did not stage the libedit client" >&2
     exit 1
 fi
-readelf -d "$PG_PREFIX/bin/psql" | grep -q 'NEEDED.*libedit\.so\.0' || {
-    echo "FATAL: $PG_PREFIX/bin/psql does not need libedit.so.0" >&2
+readelf -d "$PG_PREFIX/bin/psql.bin" | grep NEEDED || true
+if readelf -d "$PG_PREFIX/bin/psql.bin" | grep -q 'libreadline'; then
+    echo "FATAL: $PG_PREFIX/bin/psql.bin links libreadline — percona-psql was not staged" >&2
+    exit 1
+fi
+readelf -d "$PG_PREFIX/bin/psql.bin" | grep -q 'NEEDED.*libedit\.so\.0' || {
+    echo "FATAL: $PG_PREFIX/bin/psql.bin does not need libedit.so.0" >&2
     exit 1
 }
-[ -e "$PG_PREFIX/bin/psql.bin" ] && { echo "FATAL: psql.bin present — the readline wrapper machinery is supposed to be gone" >&2; exit 1; } || true
+# bin/psql must be the exec-only wrapper script, never an ELF binary, and
+# must not contain a bare `cd -` (POSIX cd - prints the previous directory
+# to stdout; ppg-testing's test_psql_wrapper_no_bare_cd_dash gates this).
+# NB: plain if-statements, not `cond && { ...; }` — a failing && arm under
+# set -e kills the whole script (the section-0a GDAL/PROJ lesson).
+if file "$PG_PREFIX/bin/psql" | grep -q ELF; then
+    echo "FATAL: bin/psql is an ELF binary — expected the wrapper script over psql.bin" >&2
+    exit 1
+fi
+if grep -qE '^[[:space:]]*cd -[[:space:]]*$' "$PG_PREFIX/bin/psql"; then
+    echo "FATAL: psql wrapper contains a bare 'cd -' — it pollutes stdout" >&2
+    exit 1
+fi
 
 echo "=== Verification: OpenSSL host-ABI audit ($SSL_VARIANT) ==="
 # libssl/libcrypto are deliberately NOT bundled (they are on the system
@@ -1207,9 +1241,20 @@ env -i "$PYTHON_PREFIX/bin/python3" -B -c 'import patroni; print("patroni import
 env -i "$PERL_PREFIX/bin/perl" -e 'use strict; print "perl OK\n"'
 echo 'puts "tcl OK"' | env -i "$TCL_PREFIX/bin/tclsh${TCL_VER}"
 env -u LD_LIBRARY_PATH "$HAPROXY_PREFIX/sbin/haproxy" -v
-# psql runs under a fully EMPTY environment: it must find libedit and libpq
+# psql runs under a fully EMPTY environment, THROUGH the wrapper: the
+# wrapper must exec psql.bin with shell builtins alone (env -i leaves no
+# PATH for external commands), and psql.bin must find libedit and libpq
 # through its own RUNPATH ($ORIGIN/../lib) with no readline anywhere.
+# Both entry points are probed, and the wrapper's stdout must be exactly
+# the version line — any wrapper chatter is the bug QA's clean-output
+# tests exist for.
 env -i "$PG_PREFIX/bin/psql" --version
+env -i "$PG_PREFIX/bin/psql.bin" --version
+WRAPPER_LINES=$(env -i "$PG_PREFIX/bin/psql" --version | wc -l)
+if [ "$WRAPPER_LINES" != 1 ]; then
+    echo "FATAL: psql wrapper printed $WRAPPER_LINES lines for --version — extra stdout chatter" >&2
+    exit 1
+fi
 
 echo "=== Verification: extension dlopen smoke ==="
 # THE gate for QA finding 1. Every PostgreSQL extension/plugin module in
