@@ -6,16 +6,16 @@ repositories:
   - name: UBI_10
     paths:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-10
-        repository: appstream
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-10
-        repository: baseos
+        repository: standard
     archs: [x86_64, aarch64]
   - name: images
     paths:
       - subproject: common:containers:ubi10
         repository: UBI_10
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-10
-        repository: standard
+        repository: appstream
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-10
+        repository: baseos
     archs: [x86_64, aarch64]
 
 project-config: |
@@ -37,5 +37,11 @@ project-config: |
 
   Prefer: openssl-fips-provider
   Prefer: glibc-minimal-langpack
+  Prefer: redhat-release
+  Ignore: rocky-release
+  Substitute: rocky-release redhat-release
+
+  BuildFlags: container-compression-format:zstd
+  BuildFlags: container-build-format:oci
 
   %endif
