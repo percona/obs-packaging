@@ -32,6 +32,9 @@ BuildRequires:  python%{python3_buildversion}-wheel
 BuildRequires:  python3.12-cryptography
 
 Requires:       python3.12-cryptography
+# authlib.integrations.flask_client imports ..requests_client unconditionally,
+# which needs requests (RHEL 9 package). Found by the Task 5 smoke test.
+Requires:       python3.12-requests
 
 %description
 The ultimate Python library in building OAuth and OpenID Connect servers and clients.
