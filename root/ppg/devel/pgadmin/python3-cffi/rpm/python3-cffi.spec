@@ -57,6 +57,8 @@ sed -i -e 's/^license = "\(.*\)"$/license = {text = "\1"}/' -e '/^license-files 
 PYTHONPATH=%{buildroot}%{python3_sitearch} %{__ospython} -P -c "import cffi; import _cffi_backend; print(cffi.__version__)"
 
 %files
+# console script new in cffi 2.x
+%{_bindir}/cffi-gen-src
 %{python3_sitearch}/*
 
 %changelog
