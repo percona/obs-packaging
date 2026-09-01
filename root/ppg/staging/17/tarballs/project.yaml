@@ -28,7 +28,7 @@ repositories:
       # libedit-devel lives in PowerTools == RockyLinux:8/devel.
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
         repository: devel
-    archs: [x86_64]
+    archs: [x86_64, aarch64]
   - name: RockyLinux_9
     paths:
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
@@ -40,7 +40,7 @@ repositories:
       # libedit-devel is in CRB, part of RockyLinux:9/standard.
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
         repository: standard
-    archs: [x86_64]
+    archs: [x86_64, aarch64]
   - name: ssl1.1
     paths:
       # First path: this project's own RockyLinux_8 build repo, so the
@@ -59,7 +59,7 @@ repositories:
         repository: baseos
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
         repository: devel
-    archs: [x86_64]
+    archs: [x86_64, aarch64]
   # ssl3 is EL9-based again. The original blocker (staging pgcrypto.so built
   # on Rocky 9.8+ referenced OPENSSL_3.4.0 version nodes — RHEL 9.8 rebased
   # to OpenSSL 3.5.x — breaking the "ssl3 runs on any OpenSSL 3.0 host"
@@ -82,7 +82,7 @@ repositories:
         repository: standard
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
         repository: standard
-    archs: [x86_64]
+    archs: [x86_64, aarch64]
 
 publish:
   # Helper-RPM build repos: consumed only through the sibling path above,
