@@ -5,7 +5,11 @@
 %global __ospython %{_bindir}/python3.12
 %global python3_pkgprefix python3.12
 %global python3_buildversion 3.12
-%global __requires_exclude ^python3\\.12dist
+# Unanchored on purpose: requirements.txt pins like "pkg==X.Y.*" become rich
+# deps "(python3.12dist(pkg) >= X.Y with python3.12dist(pkg) < X.Z)" that
+# start with "(", so an ^-anchored pattern lets them through (35 of them made
+# the RPM uninstallable). rpm matches this as a search, so no anchor needed.
+%global __requires_exclude python3\\.12dist
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '%{_prefix}', 'base': '%{_prefix}'}))")
 %global pgadmin_dir %{python3_sitelib}/pgadmin4
 %global pgadmin_user pgadmin
