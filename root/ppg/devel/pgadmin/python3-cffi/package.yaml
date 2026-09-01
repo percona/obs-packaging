@@ -1,0 +1,7 @@
+title: cffi 2.1.1 for Python 3.12
+description: |
+  C Foreign Function Interface for Python. RPM-only python3.12-* build from
+  the PyPI sdist; replaces the reused RHEL 9 python3.12-cffi 1.x because
+  cryptography >= 49 requires cffi >= 2.0 (Epoch 1 outranks the distro
+  package). Also consumed by python3-pynacl. Bump by editing obs/_service
+  (sdist URL) and rpm/*.spec (Version + changelog).
