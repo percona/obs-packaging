@@ -28,6 +28,9 @@ Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip
+# cryptography-cffi's build.rs compiles the _openssl cffi module through a
+# python -c snippet that imports setuptools/distutils
+BuildRequires:  python%{python3_buildversion}-setuptools
 BuildRequires:  python%{python3_buildversion}-wheel
 # PEP 517 backend (shells out to the maturin binary; pgAdmin stack package)
 BuildRequires:  %{python3_pkgprefix}-maturin
