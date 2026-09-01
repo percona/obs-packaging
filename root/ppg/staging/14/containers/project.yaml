@@ -52,14 +52,10 @@ repositories:
         repository: images
       - subproject: common:containers:ubi10
         repository: UBI_10
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:10
-        repository: standard
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-10
-        repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
-        repository: AppStream
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
-        repository: BaseOS
+        repository: appstream
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-10
+        repository: baseos
     archs: [x86_64, aarch64]
 
 project-config: |
