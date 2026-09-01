@@ -331,7 +331,7 @@ Group:          Productivity/Databases/Servers
 Requires:       %{name} >= %{version}-%{release}
 Requires:       %{name}-libs >= %{version}-%{release}
 Requires(pre):  /usr/sbin/useradd /usr/sbin/groupadd
-Requires:       percona-pg-telemetry%{pgmajorversion}
+Recommends:     percona-pg-telemetry%{pgmajorversion}
 Requires:       percona-pg_tde%{pgmajorversion}
 # for /sbin/ldconfig
 Requires(post):         glibc
