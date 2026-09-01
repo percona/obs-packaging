@@ -56,6 +56,10 @@ repositories:
         repository: standard
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-10
         repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
+        repository: AppStream
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
+        repository: BaseOS
     archs: [x86_64, aarch64]
 
 project-config: |
