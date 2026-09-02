@@ -79,12 +79,6 @@ Release:        1%{?dist}
 Summary:        GDAL runtime under /opt/percona-gdal for the Percona PostgreSQL binary tarball
 License:        MIT
 URL:            https://gdal.org/
-# PERCONA: x86_64 only. This package exists solely to feed the binary
-# tarball (ppg:staging:NN:tarballs), which is published for x86_64 only,
-# but ppg:common:deps inherits aarch64 from root/project.yaml — without
-# this the aarch64 build is dead weight (and a red build) for an artifact
-# nobody consumes.
-ExcludeArch:    aarch64
 # PERCONA: both tarballs are always fetched by the _service; %%prep
 # unpacks only the one that matches the base being built.
 Source0:        gdal-3.0.4.tar.xz
@@ -328,6 +322,11 @@ done
 %{gdal_prefix}
 
 %changelog
+* Wed Sep 02 2026 Percona Build/Release Team <eng-build@percona.com> - %{version}-%{release}
+- Drop ExcludeArch aarch64: the binary tarball (ppg:staging:NN:tarballs)
+  now builds for aarch64 too, so this runtime is no longer dead weight
+  on that arch.
+
 * Tue Aug 25 2026 Percona Build/Release Team <eng-build@percona.com> - %{version}-%{release}
 - Initial /opt/percona-gdal runtime for the Percona PostgreSQL binary
   tarball: GDAL 3.0.4 on RHEL 8 (libgdal.so.26) and GDAL 3.4.3 on

@@ -60,12 +60,6 @@ Release:        1%{?dist}
 Summary:        PROJ runtime under /opt/percona-proj for the Percona PostgreSQL binary tarball
 License:        MIT
 URL:            https://proj.org/
-# PERCONA: x86_64 only. This package exists solely to feed the binary
-# tarball (ppg:staging:NN:tarballs), which is published for x86_64 only,
-# but ppg:common:deps inherits aarch64 from root/project.yaml — without
-# this the aarch64 build is dead weight (and a red build) for an artifact
-# nobody consumes.
-ExcludeArch:    aarch64
 # PERCONA: both tarballs are always fetched by the _service; the %%prep
 # section unpacks only the one that matches the base being built.
 Source0:        proj-6.3.2.tar.gz
@@ -173,6 +167,11 @@ grep -q '%{proj_prefix}/share/proj' %{buildroot}%{proj_prefix}/lib/libproj.so.%{
 %{proj_prefix}
 
 %changelog
+* Wed Sep 02 2026 Percona Build/Release Team <eng-build@percona.com> - %{version}-%{release}
+- Drop ExcludeArch aarch64: the binary tarball (ppg:staging:NN:tarballs)
+  now builds for aarch64 too, so this runtime is no longer dead weight
+  on that arch.
+
 * Tue Aug 25 2026 Percona Build/Release Team <eng-build@percona.com> - %{version}-%{release}
 - Initial /opt/percona-proj runtime for the Percona PostgreSQL binary
   tarball: PROJ 6.3.2 on RHEL 8 (libproj.so.15) and PROJ 9.6.0 on
