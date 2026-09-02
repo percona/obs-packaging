@@ -94,10 +94,24 @@ if [ ! -e "${SQLITE_PATH}" ] && [ "${external_config_db_exists}" = "False" ]; th
         /usr/bin/pgadmin4-cli set-prefs "${PGADMIN_DEFAULT_EMAIL}" --input-file "${prefs_json}"
     fi
 elif [ "${PGADMIN_REPLACE_SERVERS_ON_STARTUP:-}" = "True" ]; then
+    if [ -z "${PGADMIN_DEFAULT_EMAIL:-}" ]; then
+        echo 'PGADMIN_REPLACE_SERVERS_ON_STARTUP=True requires PGADMIN_DEFAULT_EMAIL to be set.' >&2
+        exit 1
+    fi
     server_json="${PGADMIN_SERVER_JSON_FILE:-/pgadmin4/servers.json}"
     if [ -f "${server_json}" ]; then
         /usr/bin/pgadmin4-cli load-servers "${server_json}" --user "${PGADMIN_DEFAULT_EMAIL}" --replace
     fi
+fi
+
+# --- External-config-DB mode: prevent launcher double-init -----------------
+# The launcher's own first-run branch fires whenever its sqlite path is
+# absent and DEFAULT_EMAIL/DEFAULT_PASSWORD are set, with no knowledge of an
+# external config DB. We already decided above (external_config_db_exists)
+# that setup must not run; clear these so the launcher can't re-decide to
+# run setup-db against the external DB.
+if [ "${external_config_db_exists}" = "True" ]; then
+    unset PGADMIN_DEFAULT_EMAIL PGADMIN_DEFAULT_PASSWORD
 fi
 
 # --- TLS pre-flight ---------------------------------------------------------
