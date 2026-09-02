@@ -1,0 +1,59 @@
+From e57cdf6610f0b7c8ac38f9b2342b74b8c9e5bc54 Mon Sep 17 00:00:00 2001
+From: Greg Hudson <ghudson@mit.edu>
+Date: Sun, 26 Apr 2020 19:55:54 -0400
+Subject: [PATCH] Pass gss_localname() through SPNEGO
+
+ticket: 8897 (new)
+(cherry picked from commit f7b8a6432bd289bdc528017be122305f95b8e285)
+(cherry picked from commit 646212314a580a8cdffdacda9cb3c8f806471b08)
+---
+ src/lib/gssapi/spnego/gssapiP_spnego.h | 8 ++++++++
+ src/lib/gssapi/spnego/spnego_mech.c    | 9 ++++++++-
+ 2 files changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/src/lib/gssapi/spnego/gssapiP_spnego.h b/src/lib/gssapi/spnego/gssapiP_spnego.h
+index a93763314..066ec736f 100644
+--- a/src/lib/gssapi/spnego/gssapiP_spnego.h
++++ b/src/lib/gssapi/spnego/gssapiP_spnego.h
+@@ -357,6 +357,14 @@ OM_uint32 KRB5_CALLCONV spnego_gss_wrap_size_limit
+ 	OM_uint32	*max_input_size
+ );
+ 
++OM_uint32 KRB5_CALLCONV spnego_gss_localname
++(
++	OM_uint32 *minor_status,
++	const gss_name_t pname,
++	const gss_const_OID mech_type,
++	gss_buffer_t localname
++);
++
+ OM_uint32 KRB5_CALLCONV spnego_gss_get_mic
+ (
+ 	OM_uint32 *minor_status,
+diff --git a/src/lib/gssapi/spnego/spnego_mech.c b/src/lib/gssapi/spnego/spnego_mech.c
+index ec0bae6a4..594fc5894 100644
+--- a/src/lib/gssapi/spnego/spnego_mech.c
++++ b/src/lib/gssapi/spnego/spnego_mech.c
+@@ -237,7 +237,7 @@ static struct gss_config spnego_mechanism =
+ 	spnego_gss_inquire_context,	/* gss_inquire_context */
+ 	NULL,				/* gss_internal_release_oid */
+ 	spnego_gss_wrap_size_limit,	/* gss_wrap_size_limit */
+-	NULL,				/* gssd_pname_to_uid */
++	spnego_gss_localname,
+ 	NULL,				/* gss_userok */
+ 	NULL,				/* gss_export_name */
+ 	spnego_gss_duplicate_name,	/* gss_duplicate_name */
+@@ -2371,6 +2371,13 @@ spnego_gss_wrap_size_limit(
+ 	return (ret);
+ }
+ 
++OM_uint32 KRB5_CALLCONV
++spnego_gss_localname(OM_uint32 *minor_status, const gss_name_t pname,
++		     const gss_const_OID mech_type, gss_buffer_t localname)
++{
++	return gss_localname(minor_status, pname, GSS_C_NO_OID, localname);
++}
++
+ OM_uint32 KRB5_CALLCONV
+ spnego_gss_get_mic(
+ 		OM_uint32 *minor_status,

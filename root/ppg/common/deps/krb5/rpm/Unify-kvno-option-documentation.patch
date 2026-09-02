@@ -1,0 +1,186 @@
+From 6858ecbb9c407ff6d2b22cac283ea2461af1757b Mon Sep 17 00:00:00 2001
+From: Robbie Harwood <rharwood@redhat.com>
+Date: Thu, 20 Aug 2020 17:49:29 -0400
+Subject: [PATCH] Unify kvno option documentation
+
+Add missing kvno options to the kvno.rst synopsis and option
+descriptions, and to the kvno usage message.  Remove mention of '-h'
+(help text), from kvno.rst as it is an implicit option.  Note that the
+three new caching options were added in release 1.19.
+
+Indicate the two exclusions (-u/-S and --u2u with the S4U2Self options)
+and dependency (-P on S4U2Self) where they are missing.
+
+Switch xusage() to print only a single localized string, rather than
+running each line of output through localization separately.
+
+Leave kvno -C undocumented for now, as the semantics of
+KRB5_GC_CANONICALIZE are minimally useful and likely to change.
+
+[ghudson@mit.edu: edited documentation and commit message]
+
+ticket: 7476
+tags: pullup
+target_version: 1.18-next
+
+(cherry picked from commit becd1ad6830b526d08ddaf5b2b6f213154c6446c)
+(cherry picked from commit 52e3695cc5ef00766e12adfe8ed276c2885e71bb)
+---
+ doc/user/user_commands/kvno.rst | 24 +++++++++++++-----------
+ src/clients/kvno/kvno.c         | 15 +++++++++------
+ src/man/kvno.man                | 24 +++++++++++++-----------
+ 3 files changed, 35 insertions(+), 28 deletions(-)
+
+diff --git a/doc/user/user_commands/kvno.rst b/doc/user/user_commands/kvno.rst
+index 718313576..65c44e1c0 100644
+--- a/doc/user/user_commands/kvno.rst
++++ b/doc/user/user_commands/kvno.rst
+@@ -10,13 +10,9 @@ SYNOPSIS
+ [**-c** *ccache*]
+ [**-e** *etype*]
+ [**-q**]
+-[**-h**]
++[**-u** | **-S** *sname*]
+ [**-P**]
+-[**-S** *sname*]
+-[**-I** *for_user*]
+-[**-U** *for_user*]
+-[**-F** *cert_file*]
+-[**--u2u** *ccache*]
++[[{**-F** *cert_file* | {**-I** | **-U**} *for_user*} [**-P**]] | **--u2u** *ccache*]
+ *service1 service2* ...
+ 
+ 
+@@ -39,13 +35,18 @@ OPTIONS
+     of all the services named on the command line.  This is useful in
+     certain backward compatibility situations.
+ 
++**-k** *keytab*
++    Decrypt the acquired tickets using *keytab* to confirm their
++    validity.
++
+ **-q**
+     Suppress printing output when successful.  If a service ticket
+     cannot be obtained, an error message will still be printed and
+     kvno will exit with nonzero status.
+ 
+-**-h**
+-    Prints a usage statement and exits.
++**-u**
++    Use the unknown name type in requested service principal names.
++    This option Cannot be used with *-S*.
+ 
+ **-P**
+     Specifies that the *service1 service2* ...  arguments are to be
+@@ -76,16 +77,17 @@ OPTIONS
+ 
+ **--cached-only**
+     Only retrieve credentials already present in the cache, not from
+-    the KDC.
++    the KDC.  (Added in release 1.19.)
+ 
+ **--no-store**
+     Do not store retrieved credentials in the cache.  If
+     **--out-cache** is also specified, credentials will still be
+-    stored into the output credential cache.
++    stored into the output credential cache.  (Added in release 1.19.)
+ 
+ **--out-cache** *ccache*
+     Initialize *ccache* and store all retrieved credentials into it.
+-    Do not store acquired credentials in the input cache.
++    Do not store acquired credentials in the input cache.  (Added in
++    release 1.19.)
+ 
+ **--u2u** *ccache*
+     Requests a user-to-user ticket.  *ccache* must contain a local
+diff --git a/src/clients/kvno/kvno.c b/src/clients/kvno/kvno.c
+index 9d85864f6..c5f6bf700 100644
+--- a/src/clients/kvno/kvno.c
++++ b/src/clients/kvno/kvno.c
+@@ -38,15 +38,18 @@
+ static char *prog;
+ static int quiet = 0;
+ 
++#define XUSAGE_BREAK "\n\t"
++
+ static void
+ xusage()
+ {
+-    fprintf(stderr, _("usage: %s [-C] [-u] [-c ccache] [-e etype]\n"), prog);
+-    fprintf(stderr, _("\t[-k keytab] [-S sname] [{-I | -U} for_user | "
+-                      "[-F cert_file] [-P]]\n"));
+-    fprintf(stderr, _("\t[--cached-only] [--no-store] [--out-cache ccache] "
+-                      "[--u2u ccache]\n"));
+-    fprintf(stderr, _("\tservice1 service2 ...\n"));
++    fprintf(stderr, _("usage: %s [-c ccache] [-e etype] [-k keytab] [-q] "
++                      "[-u | -S sname]" XUSAGE_BREAK
++                      "[[{-F cert_file | {-I | -U} for_user} [-P]] | "
++                      "--u2u ccache]" XUSAGE_BREAK
++                      "[--cached-only] [--no-store] [--out-cache] "
++                      "service1 service2 ...\n"),
++            prog);
+     exit(1);
+ }
+ 
+diff --git a/src/man/kvno.man b/src/man/kvno.man
+index b9f6739eb..22318324d 100644
+--- a/src/man/kvno.man
++++ b/src/man/kvno.man
+@@ -36,13 +36,9 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+ [\fB\-c\fP \fIccache\fP]
+ [\fB\-e\fP \fIetype\fP]
+ [\fB\-q\fP]
+-[\fB\-h\fP]
++[\fB\-u\fP | \fB\-S\fP \fIsname\fP]
+ [\fB\-P\fP]
+-[\fB\-S\fP \fIsname\fP]
+-[\fB\-I\fP \fIfor_user\fP]
+-[\fB\-U\fP \fIfor_user\fP]
+-[\fB\-F\fP \fIcert_file\fP]
+-[\fB\-\-u2u\fP \fIccache\fP]
++[[{\fB\-F\fP \fIcert_file\fP | {\fB\-I\fP | \fB\-U\fP} \fIfor_user\fP} [\fB\-P\fP]] | \fB\-\-u2u\fP \fIccache\fP]
+ \fIservice1 service2\fP ...
+ .SH DESCRIPTION
+ .sp
+@@ -60,13 +56,18 @@ Specifies the enctype which will be requested for the session key
+ of all the services named on the command line.  This is useful in
+ certain backward compatibility situations.
+ .TP
++\fB\-k\fP \fIkeytab\fP
++Decrypt the acquired tickets using \fIkeytab\fP to confirm their
++validity.
++.TP
+ \fB\-q\fP
+ Suppress printing output when successful.  If a service ticket
+ cannot be obtained, an error message will still be printed and
+ kvno will exit with nonzero status.
+ .TP
+-\fB\-h\fP
+-Prints a usage statement and exits.
++\fB\-u\fP
++Use the unknown name type in requested service principal names.
++This option Cannot be used with \fI\-S\fP\&.
+ .TP
+ \fB\-P\fP
+ Specifies that the \fIservice1 service2\fP ...  arguments are to be
+@@ -97,16 +98,17 @@ certificate file must be in PEM format.
+ .TP
+ \fB\-\-cached\-only\fP
+ Only retrieve credentials already present in the cache, not from
+-the KDC.
++the KDC.  (Added in release 1.19.)
+ .TP
+ \fB\-\-no\-store\fP
+ Do not store retrieved credentials in the cache.  If
+ \fB\-\-out\-cache\fP is also specified, credentials will still be
+-stored into the output credential cache.
++stored into the output credential cache.  (Added in release 1.19.)
+ .TP
+ \fB\-\-out\-cache\fP \fIccache\fP
+ Initialize \fIccache\fP and store all retrieved credentials into it.
+-Do not store acquired credentials in the input cache.
++Do not store acquired credentials in the input cache.  (Added in
++release 1.19.)
+ .TP
+ \fB\-\-u2u\fP \fIccache\fP
+ Requests a user\-to\-user ticket.  \fIccache\fP must contain a local

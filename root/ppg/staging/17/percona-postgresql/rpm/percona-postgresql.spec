@@ -106,6 +106,13 @@ Patch3:         %{sname}-conf.patch
 Patch5:         %{sname}-var-run-socket.patch
 Patch6:         %{sname}-perl-rpath.patch
 Patch7:         llvm_static_linking.patch
+# pgcrypto: OpenSSL >= 3.4 headers remap the EVP_MD_CTX_size() macro to
+# EVP_MD_CTX_get_size_ex() (a function new in 3.4.0), so building on a
+# newer-OpenSSL base adds an OPENSSL_3.4.0 versioned symbol need that makes
+# pgcrypto.so fail to load on OpenSSL 3.0-3.3 hosts.  Restore the 3.0-era
+# macro expansion (identical behavior).  Candidate for upstreaming to
+# PostgreSQL.
+Patch8:         pgcrypto-openssl34-md-ctx-size.patch
 
 %if 0%{?suse_version}
 BuildRequires:  update-alternatives
@@ -204,7 +211,12 @@ BuildRequires:  perl-ExtUtils-Embed
 %endif
 %endif
 
-%if 0%{?rhel} >= 8 && 0%{?rhel} < 9
+# PERCONA: build plpython3 against the parallel python3.12 stack on EL8 AND
+# EL9 so the embedded interpreter matches the percona python3.12-* runtime
+# packages (and the python 3.12 stdlib bundled in the binary tarball).
+# EL10 is left on the default python3-devel, which already IS 3.12 there.
+# The matching PYTHON= export lives next to %%configure in %%build.
+%if 0%{?rhel} >= 8 && 0%{?rhel} < 10
 BuildRequires:  python3.12-devel
 %else
 BuildRequires:	python3-devel
@@ -594,6 +606,7 @@ benchmarks.
 %patch -P 3 -p0
 %patch -P 5 -p0
 %patch -P 6 -p0
+%patch -P 8 -p0
 
 %{__cp} -p %{SOURCE12} .
 
@@ -634,6 +647,17 @@ source /opt/rh/gcc-toolset-%{gts_version}/enable
         export CLANG=%{_bindir}/clang LLVM_CONFIG=%{_bindir}/llvm-config
 %endif
 
+# PERCONA: steer --with-python explicitly at the 3.12 interpreter on EL8/EL9
+# (same bounds as the python3.12-devel BuildRequires above). Without this,
+# configure probes plain "python3": on EL8 that happened to resolve to 3.12
+# (the python3.12 package registers /usr/bin/python3 via alternatives when it
+# is the only python3 in the chroot), but on EL9 /usr/bin/python3 is always
+# 3.9 — plpython3.so would link libpython3.9 while the tarball bundles the
+# 3.12 stdlib, and the embedded interpreter then fatals at backend start
+# ("No module named 'encodings'").
+%if 0%{?rhel} >= 8 && 0%{?rhel} < 10
+export PYTHON=%{_bindir}/python3.12
+%endif
 
 # These configure options must match main build
 ./configure --enable-rpath \
@@ -1431,6 +1455,11 @@ fi
 %changelog
 * %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PG_VERSION}-1
 - Update to upstream version %!{PG_VERSION}.
+
+* Wed Jul 22 2026 Ricardo Dias <ricardo.dias@percona.com>
+- EL9: build plpython3 against python 3.12 (previously python 3.9), aligning
+  the embedded interpreter with EL8 and the percona python3.12-* runtime
+  stack shipped alongside the server.
 
 * Tue Feb 03 2026 Ricardo Dias <ricardo.dias@percona.com> - 17.5.3
 - Initial spec file for PostgreSQL 17.5.3

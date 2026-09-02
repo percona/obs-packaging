@@ -1,0 +1,5 @@
+build:
+  # The simpleimage tarball recipe only builds on the SSL-variant repos; the
+  # RockyLinux_* repos exist solely for the tarball helper RPMs.
+  RockyLinux_8: false
+  RockyLinux_9: false

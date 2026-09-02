@@ -1,0 +1,303 @@
+From bb5552ece2a351dc3ccab52cceea1eaffeacd768 Mon Sep 17 00:00:00 2001
+From: Greg Hudson <ghudson@mit.edu>
+Date: Mon, 14 Dec 2020 13:16:17 -0500
+Subject: [PATCH] Add support for start_realm cache config
+
+When making TGS requests, if start_realm is set in the cache, use the
+named realm to look up the initial TGT for referral or cross-realm
+requests.  (Also correct a comment in struct _tkt_creds_context: the
+ccache field is an owner pointer, not an alias.)
+
+Add an internal API k5_cc_store_primary_cred(), which sets start_realm
+if the cred being stored is a TGT for a realm other than the client
+realm.  Use this API when acquiring initial tickets with a
+caller-specified output ccache, when renewing or validating tickets
+with kinit, when accepting a delegated credential in a GSS context,
+and when storing a single cred with kvno --out-cache.
+
+ticket: 8332
+tags: pullup
+target_version: 1.19
+
+(cherry picked from commit 0d56740ab9fcc40dc7f46c6fbebdf8f1214f9d96)
+[rharwood@redhat.com: backport around spelling and canonicalization fallback]
+---
+ doc/formats/ccache_file_format.rst       |  6 +++++
+ src/clients/kinit/kinit.c                |  2 +-
+ src/clients/kvno/kvno.c                  |  5 ++++-
+ src/include/k5-int.h                     |  4 ++++
+ src/lib/gssapi/krb5/accept_sec_context.c |  2 +-
+ src/lib/krb5/ccache/ccfns.c              | 20 +++++++++++++++++
+ src/lib/krb5/krb/get_creds.c             | 28 ++++++++++++++++++------
+ src/lib/krb5/krb/get_in_tkt.c            |  2 +-
+ src/lib/krb5/libkrb5.exports             |  1 +
+ src/lib/krb5_32.def                      |  3 +++
+ src/tests/t_crossrealm.py                |  8 +++++++
+ src/tests/t_pkinit.py                    |  3 +++
+ 12 files changed, 73 insertions(+), 11 deletions(-)
+
+diff --git a/doc/formats/ccache_file_format.rst b/doc/formats/ccache_file_format.rst
+index 6349e0d29..6138c1b58 100644
+--- a/doc/formats/ccache_file_format.rst
++++ b/doc/formats/ccache_file_format.rst
+@@ -174,3 +174,9 @@ refresh_time
+     decimal representation of a timestamp at which the GSS mechanism
+     should attempt to refresh the credential cache from the client
+     keytab.
++
++start_realm
++    This key indicates the realm of the ticket-granting ticket to be
++    used for TGS requests, when making a referrals request or
++    beginning a cross-realm request.  If it is not present, the client
++    realm is used.
+diff --git a/src/clients/kinit/kinit.c b/src/clients/kinit/kinit.c
+index 3fdae2878..e5ebeb895 100644
+--- a/src/clients/kinit/kinit.c
++++ b/src/clients/kinit/kinit.c
+@@ -828,7 +828,7 @@ k5_kinit(struct k_opts *opts, struct k5_data *k5)
+         if (opts->verbose)
+             fprintf(stderr, _("Initialized cache\n"));
+ 
+-        ret = krb5_cc_store_cred(k5->ctx, k5->out_cc, &my_creds);
++        ret = k5_cc_store_primary_cred(k5->ctx, k5->out_cc, &my_creds);
+         if (ret) {
+             com_err(progname, ret, _("while storing credentials"));
+             goto cleanup;
+diff --git a/src/clients/kvno/kvno.c b/src/clients/kvno/kvno.c
+index c5f6bf700..f83c68a99 100644
+--- a/src/clients/kvno/kvno.c
++++ b/src/clients/kvno/kvno.c
+@@ -561,7 +561,10 @@ do_v5_kvno(int count, char *names[], char * ccachestr, char *etypestr,
+                 }
+                 initialized = 1;
+             }
+-            ret = krb5_cc_store_cred(context, out_ccache, creds);
++            if (count == 1)
++                ret = k5_cc_store_primary_cred(context, out_ccache, creds);
++            else
++                ret = krb5_cc_store_cred(context, out_ccache, creds);
+             if (ret) {
+                 com_err(prog, ret, _("while storing creds in output ccache"));
+                 exit(1);
+diff --git a/src/include/k5-int.h b/src/include/k5-int.h
+index eb18a4cd6..912aaedac 100644
+--- a/src/include/k5-int.h
++++ b/src/include/k5-int.h
+@@ -307,6 +307,7 @@ typedef unsigned char   u_char;
+ #define KRB5_CC_CONF_PA_TYPE                   "pa_type"
+ #define KRB5_CC_CONF_PROXY_IMPERSONATOR        "proxy_impersonator"
+ #define KRB5_CC_CONF_REFRESH_TIME              "refresh_time"
++#define KRB5_CC_CONF_START_REALM               "start_realm"
+ 
+ /* Error codes used in KRB_ERROR protocol messages.
+    Return values of library routines are based on a different error table
+@@ -1910,6 +1911,9 @@ krb5_ser_unpack_bytes(krb5_octet *, size_t, krb5_octet **, size_t *);
+ krb5_error_code KRB5_CALLCONV
+ krb5int_cc_default(krb5_context, krb5_ccache *);
+ 
++krb5_error_code
++k5_cc_store_primary_cred(krb5_context, krb5_ccache, krb5_creds *);
++
+ /* Fill in the buffer with random alpha-numeric data. */
+ krb5_error_code
+ krb5int_random_string(krb5_context, char *string, unsigned int length);
+diff --git a/src/lib/gssapi/krb5/accept_sec_context.c b/src/lib/gssapi/krb5/accept_sec_context.c
+index 3d5b84b15..abccb5d11 100644
+--- a/src/lib/gssapi/krb5/accept_sec_context.c
++++ b/src/lib/gssapi/krb5/accept_sec_context.c
+@@ -216,7 +216,7 @@ rd_and_store_for_creds(context, auth_context, inbuf, out_cred)
+     if ((retval = krb5_cc_initialize(context, ccache, creds[0]->client)))
+         goto cleanup;
+ 
+-    if ((retval = krb5_cc_store_cred(context, ccache, creds[0])))
++    if ((retval = k5_cc_store_primary_cred(context, ccache, creds[0])))
+         goto cleanup;
+ 
+     /* generate a delegated credential handle */
+diff --git a/src/lib/krb5/ccache/ccfns.c b/src/lib/krb5/ccache/ccfns.c
+index 62a6983d8..23edc2578 100644
+--- a/src/lib/krb5/ccache/ccfns.c
++++ b/src/lib/krb5/ccache/ccfns.c
+@@ -297,3 +297,23 @@ krb5_cc_switch(krb5_context context, krb5_ccache cache)
+         return 0;
+     return cache->ops->switch_to(context, cache);
+ }
++
++krb5_error_code
++k5_cc_store_primary_cred(krb5_context context, krb5_ccache cache,
++                         krb5_creds *creds)
++{
++    krb5_error_code ret;
++
++    /* Write a start realm if we're writing a TGT and the client realm isn't
++     * the same as the TGS realm. */
++    if (IS_TGS_PRINC(creds->server) &&
++        !data_eq(creds->client->realm, creds->server->data[1])) {
++        ret = krb5_cc_set_config(context, cache, NULL,
++                                 KRB5_CC_CONF_START_REALM,
++                                 &creds->server->data[1]);
++        if (ret)
++            return ret;
++    }
++
++    return krb5_cc_store_cred(context, cache, creds);
++}
+diff --git a/src/lib/krb5/krb/get_creds.c b/src/lib/krb5/krb/get_creds.c
+index e0a3b5cd8..b40f705fc 100644
+--- a/src/lib/krb5/krb/get_creds.c
++++ b/src/lib/krb5/krb/get_creds.c
+@@ -149,7 +149,8 @@ struct _krb5_tkt_creds_context {
+     krb5_principal client;      /* Caller-requested client principal (alias) */
+     krb5_principal server;      /* Server principal (alias) */
+     krb5_principal req_server;  /* Caller-requested server principal */
+-    krb5_ccache ccache;         /* Caller-provided ccache (alias) */
++    krb5_ccache ccache;         /* Caller-provided ccache */
++    krb5_data start_realm;      /* Realm of starting TGT in ccache */
+     krb5_flags req_options;     /* Caller-requested KRB5_GC_* options */
+     krb5_flags req_kdcopt;      /* Caller-requested options as KDC options */
+     krb5_authdata **authdata;   /* Caller-requested authdata */
+@@ -783,7 +784,7 @@ get_cached_local_tgt(krb5_context context, krb5_tkt_creds_context ctx,
+         return code;
+ 
+     /* Construct the principal name. */
+-    code = krb5int_tgtname(context, &ctx->client->realm, &ctx->client->realm,
++    code = krb5int_tgtname(context, &ctx->start_realm, &ctx->start_realm,
+                            &tgtname);
+     if (code != 0)
+         return code;
+@@ -821,7 +822,7 @@ init_realm_path(krb5_context context, krb5_tkt_creds_context ctx)
+     size_t nrealms;
+ 
+     /* Get the client realm path and count its length. */
+-    code = k5_client_realm_path(context, &ctx->client->realm,
++    code = k5_client_realm_path(context, &ctx->start_realm,
+                                 &ctx->server->realm, &realm_path);
+     if (code != 0)
+         return code;
+@@ -933,7 +934,7 @@ step_get_tgt(krb5_context context, krb5_tkt_creds_context ctx)
+                 ctx->cur_realm = path_realm;
+                 ctx->next_realm = ctx->last_realm;
+             }
+-        } else if (data_eq(*tgt_realm, ctx->client->realm)) {
++        } else if (data_eq(*tgt_realm, ctx->start_realm)) {
+             /* We were referred back to the local realm, which is bad. */
+             return KRB5_KDCREP_MODIFIED;
+         } else {
+@@ -963,7 +964,7 @@ begin_get_tgt(krb5_context context, krb5_tkt_creds_context ctx)
+ 
+     ctx->state = STATE_GET_TGT;
+ 
+-    is_local_service = data_eq(ctx->client->realm, ctx->server->realm);
++    is_local_service = data_eq(ctx->start_realm, ctx->server->realm);
+     if (!is_local_service) {
+         /* See if we have a cached TGT for the server realm. */
+         code = get_cached_tgt(context, ctx, &ctx->server->realm, &cached_tgt);
+@@ -1048,10 +1049,10 @@ begin(krb5_context context, krb5_tkt_creds_context ctx)
+     if (code != 0 || ctx->state == STATE_COMPLETE)
+         return code;
+ 
+-    /* If the server realm is unspecified, start with the client realm. */
++    /* If the server realm is unspecified, start with the TGT realm. */
+     if (krb5_is_referral_realm(&ctx->server->realm)) {
+         krb5_free_data_contents(context, &ctx->server->realm);
+-        code = krb5int_copy_data_contents(context, &ctx->client->realm,
++        code = krb5int_copy_data_contents(context, &ctx->start_realm,
+                                           &ctx->server->realm);
+         TRACE_TKT_CREDS_REFERRAL_REALM(context, ctx->server);
+         if (code != 0)
+@@ -1100,6 +1101,18 @@ krb5_tkt_creds_init(krb5_context context, krb5_ccache ccache,
+     code = krb5_cc_dup(context, ccache, &ctx->ccache);
+     if (code != 0)
+         goto cleanup;
++
++    /* Get the start realm from the cache config, defaulting to the client
++     * realm. */
++    code = krb5_cc_get_config(context, ccache, NULL, "start_realm",
++                              &ctx->start_realm);
++    if (code != 0) {
++        code = krb5int_copy_data_contents(context, &ctx->client->realm,
++                                          &ctx->start_realm);
++        if (code != 0)
++            goto cleanup;
++    }
++
+     code = krb5_copy_authdata(context, in_creds->authdata, &ctx->authdata);
+     if (code != 0)
+         goto cleanup;
+@@ -1139,6 +1152,7 @@ krb5_tkt_creds_free(krb5_context context, krb5_tkt_creds_context ctx)
+     krb5int_fast_free_state(context, ctx->fast_state);
+     krb5_free_creds(context, ctx->in_creds);
+     krb5_cc_close(context, ctx->ccache);
++    krb5_free_data_contents(context, &ctx->start_realm);
+     krb5_free_principal(context, ctx->req_server);
+     krb5_free_authdata(context, ctx->authdata);
+     krb5_free_creds(context, ctx->cur_tgt);
+diff --git a/src/lib/krb5/krb/get_in_tkt.c b/src/lib/krb5/krb/get_in_tkt.c
+index cc0f70e83..f5dd7518b 100644
+--- a/src/lib/krb5/krb/get_in_tkt.c
++++ b/src/lib/krb5/krb/get_in_tkt.c
+@@ -1779,7 +1779,7 @@ init_creds_step_reply(krb5_context context,
+         code = krb5_cc_initialize(context, out_ccache, ctx->cred.client);
+         if (code != 0)
+             goto cc_cleanup;
+-        code = krb5_cc_store_cred(context, out_ccache, &ctx->cred);
++        code = k5_cc_store_primary_cred(context, out_ccache, &ctx->cred);
+         if (code != 0)
+             goto cc_cleanup;
+         if (fast_avail) {
+diff --git a/src/lib/krb5/libkrb5.exports b/src/lib/krb5/libkrb5.exports
+index 5aba29ee4..cab5b3b17 100644
+--- a/src/lib/krb5/libkrb5.exports
++++ b/src/lib/krb5/libkrb5.exports
+@@ -125,6 +125,7 @@ k5_add_pa_data_from_data
+ k5_alloc_pa_data
+ k5_authind_decode
+ k5_build_conf_principals
++k5_cc_store_primary_cred
+ k5_ccselect_free_context
+ k5_change_error_message_code
+ k5_etypes_contains
+diff --git a/src/lib/krb5_32.def b/src/lib/krb5_32.def
+index a0734c729..de5823c17 100644
+--- a/src/lib/krb5_32.def
++++ b/src/lib/krb5_32.def
+@@ -499,3 +499,6 @@ EXPORTS
+ 	k5_size_context					@467 ; PRIVATE GSSAPI
+ 	k5_size_keyblock				@468 ; PRIVATE GSSAPI
+ 	k5_size_principal				@469 ; PRIVATE GSSAPI
++
++; new in 1.19
++	k5_cc_store_primary_cred			@470 ; PRIVATE
+diff --git a/src/tests/t_crossrealm.py b/src/tests/t_crossrealm.py
+index fa7fd2604..28b397cfb 100755
+--- a/src/tests/t_crossrealm.py
++++ b/src/tests/t_crossrealm.py
+@@ -77,6 +77,14 @@ r1, r2, r3 = cross_realms(3, xtgts=((0,1), (1,2)),
+                                 {'realm': 'B.X'}))
+ test_kvno(r1, r3.host_princ, 'KDC domain walk')
+ check_klist(r1, (tgt(r1, r1), r3.host_princ))
++
++# Test start_realm in this setup.
++r1.run([kvno, '--out-cache', r1.ccache, r2.krbtgt_princ])
++r1.run([klist, '-C'], expected_msg='config: start_realm = X')
++msgs = ('Requesting TGT krbtgt/B.X@X using TGT krbtgt/X@X',
++        'Received TGT for service realm: krbtgt/B.X@X')
++r1.run([kvno, r3.host_princ], expected_trace=msgs)
++
+ stop(r1, r2, r3)
+ 
+ # Test client capaths.  The client in A will ask for a cross TGT to D,
+diff --git a/src/tests/t_pkinit.py b/src/tests/t_pkinit.py
+index ecd450e8a..f224383c8 100755
+--- a/src/tests/t_pkinit.py
++++ b/src/tests/t_pkinit.py
+@@ -130,6 +130,9 @@ realm.run([kvno, realm.host_princ])
+ out = realm.run(['./adata', realm.host_princ])
+ if '97:' in out:
+     fail('auth indicators seen in anonymous PKINIT ticket')
++# Verify start_realm setting and test referrals TGS request.
++realm.run([klist, '-C'], expected_msg='start_realm = KRBTEST.COM')
++realm.run([kvno, '-S', 'host', hostname])
+ 
+ # Test anonymous kadmin.
+ mark('anonymous kadmin')

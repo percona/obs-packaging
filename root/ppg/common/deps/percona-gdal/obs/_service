@@ -1,0 +1,20 @@
+<services>
+  <!-- PERCONA: two upstream tarballs, one per tarball base. The RPM spec
+       picks Source0 on RHEL 8 (GDAL 3.0.4, SONAME libgdal.so.26) and
+       Source1 on RHEL 9 (GDAL 3.4.3, SONAME libgdal.so.30) so our library
+       is a drop-in for the GDAL that PostGIS linked against on each base.
+       download.osgeo.org is upstream's own release archive; neither of
+       these two GDAL versions has GitHub release assets. -->
+  <service name="download_url">
+    <param name="host">download.osgeo.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/gdal/3.0.4/gdal-3.0.4.tar.xz</param>
+    <param name="filename">gdal-3.0.4.tar.xz</param>
+  </service>
+  <service name="download_url">
+    <param name="host">download.osgeo.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/gdal/3.4.3/gdal-3.4.3.tar.xz</param>
+    <param name="filename">gdal-3.4.3.tar.xz</param>
+  </service>
+</services>

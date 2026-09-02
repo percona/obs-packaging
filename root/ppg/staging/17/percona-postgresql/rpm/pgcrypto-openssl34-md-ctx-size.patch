@@ -1,0 +1,23 @@
+--- contrib/pgcrypto/openssl.c.orig
++++ contrib/pgcrypto/openssl.c
+@@ -35,6 +35,20 @@
+ #include <openssl/err.h>
+ #include <openssl/rand.h>
+ 
++/*
++ * OpenSSL 3.4 redefines the EVP_MD_CTX_size() compatibility macro to call
++ * EVP_MD_CTX_get_size_ex(), a function introduced in 3.4.0.  Merely
++ * compiling against >= 3.4 headers therefore adds a runtime dependency on
++ * the OPENSSL_3.4.0 symbol version, which does not exist on OpenSSL
++ * 3.0-3.3 hosts and makes this module fail to load there.  Restore the
++ * 3.0-era expansion (identical behavior) so binaries built on newer
++ * OpenSSL remain loadable on any 3.x host.
++ */
++#if OPENSSL_VERSION_NUMBER >= 0x30400000L
++#undef EVP_MD_CTX_size
++#define EVP_MD_CTX_size(ctx) EVP_MD_get_size(EVP_MD_CTX_get0_md(ctx))
++#endif
++
+ #include "px.h"
+ #include "utils/memutils.h"
+ #include "utils/resowner.h"

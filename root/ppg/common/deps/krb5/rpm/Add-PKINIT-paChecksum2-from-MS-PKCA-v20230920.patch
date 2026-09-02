@@ -1,0 +1,619 @@
+From 7b5dad42e9d5103b763f3c79b82fc619bd3d2d32 Mon Sep 17 00:00:00 2001
+From: Julien Rische <jrische@redhat.com>
+Date: Thu, 3 Apr 2025 16:29:07 +0200
+Subject: [PATCH] Add PKINIT paChecksum2 from MS-PKCA v20230920
+
+(This commit was rewrote for CentOS 8 Stream)
+
+In 2023, Microsoft updated MS-PKCA to add the optional paChecksum2
+element in the PKAuthenticator sequence.  This checksum accepts SHA-1,
+SHA-256, SHA-384, and SHA-512 digests.
+
+In Windows Server 2025, this checksum becomes mandatory when using
+PKINIT with FFDH (but strangely not with ECDH if SHA-1 is configured as
+allowed).
+
+[ghudson@mit.edu: refactored crypto interfaces to reduce complexity of
+calling code]
+
+ticket: 9166 (new)
+---
+ src/include/k5-int-pkinit.h                   |  25 ++--
+ src/lib/krb5/asn.1/asn1_k_encode.c            |  18 ++-
+ src/plugins/preauth/pkinit/pkinit.h           |   1 +
+ src/plugins/preauth/pkinit/pkinit_clnt.c      |  41 +++----
+ src/plugins/preauth/pkinit/pkinit_crypto.h    |  18 +++
+ .../preauth/pkinit/pkinit_crypto_openssl.c    | 110 ++++++++++++++++++
+ .../preauth/pkinit/pkinit_kdf_constants.c     |  24 ++++
+ src/plugins/preauth/pkinit/pkinit_lib.c       |  16 ++-
+ src/plugins/preauth/pkinit/pkinit_srv.c       |  39 ++-----
+ src/plugins/preauth/pkinit/pkinit_trace.h     |   5 +-
+ src/tests/asn.1/krb5_decode_test.c            |   2 +-
+ src/tests/asn.1/ktest.c                       |   7 +-
+ src/tests/asn.1/ktest_equal.c                 |   2 +-
+ src/tests/asn.1/pkinit_encode.out             |   2 +-
+ src/tests/asn.1/pkinit_trval.out              |   2 +-
+ 15 files changed, 233 insertions(+), 79 deletions(-)
+
+diff --git a/src/include/k5-int-pkinit.h b/src/include/k5-int-pkinit.h
+index c23cfd3043..096f4e6145 100644
+--- a/src/include/k5-int-pkinit.h
++++ b/src/include/k5-int-pkinit.h
+@@ -36,15 +36,6 @@
+  * pkinit structures
+  */
+ 
+-/* PKAuthenticator */
+-typedef struct _krb5_pk_authenticator {
+-    krb5_int32      cusec;  /* (0..999999) */
+-    krb5_timestamp  ctime;
+-    krb5_int32      nonce;  /* (0..4294967295) */
+-    krb5_checksum   paChecksum;
+-    krb5_data      *freshnessToken;
+-} krb5_pk_authenticator;
+-
+ /* AlgorithmIdentifier */
+ typedef struct _krb5_algorithm_identifier {
+     krb5_data algorithm;      /* OID */
+@@ -57,6 +48,22 @@ typedef struct _krb5_subject_pk_info {
+     krb5_data                   subjectPublicKey; /* BIT STRING */
+ } krb5_subject_pk_info;
+ 
++/* PAChecksum2 */
++typedef struct _krb5_pachecksum2 {
++    krb5_data checksum;
++    krb5_algorithm_identifier algorithmIdentifier;
++} krb5_pachecksum2;
++
++/* PKAuthenticator */
++typedef struct _krb5_pk_authenticator {
++    krb5_int32        cusec;  /* (0..999999) */
++    krb5_timestamp    ctime;
++    krb5_int32        nonce;  /* (0..4294967295) */
++    krb5_data         paChecksum;
++    krb5_data        *freshnessToken; /* Optional */
++    krb5_pachecksum2 *paChecksum2; /* Optional */
++} krb5_pk_authenticator;
++
+ /** AuthPack from RFC 4556*/
+ typedef struct _krb5_auth_pack {
+     krb5_pk_authenticator       pkAuthenticator;
+diff --git a/src/lib/krb5/asn.1/asn1_k_encode.c b/src/lib/krb5/asn.1/asn1_k_encode.c
+index 39fa8e3bbb..79c845b5d6 100644
+--- a/src/lib/krb5/asn.1/asn1_k_encode.c
++++ b/src/lib/krb5/asn.1/asn1_k_encode.c
+@@ -1429,20 +1429,30 @@ DEFSEQTYPE(pkinit_supp_pub_info, krb5_pkinit_supp_pub_info,
+ MAKE_ENCODER(encode_krb5_pkinit_supp_pub_info, pkinit_supp_pub_info);
+ MAKE_ENCODER(encode_krb5_sp80056a_other_info, sp80056a_other_info);
+ 
+-/* A krb5_checksum encoded as an OCTET STRING, for PKAuthenticator. */
+-DEFCOUNTEDTYPE(ostring_checksum, krb5_checksum, contents, length, octetstring);
++DEFFIELD(pachecksum2_0, krb5_pachecksum2, checksum, 0, ostring_data);
++DEFFIELD(pachecksum2_1, krb5_pachecksum2, algorithmIdentifier, 1,
++         algorithm_identifier);
++static const struct atype_info *pachecksum2_fields[] = {
++    &k5_atype_pachecksum2_0, &k5_atype_pachecksum2_1
++};
++DEFSEQTYPE(pachecksum2, krb5_pachecksum2, pachecksum2_fields);
++
++DEFPTRTYPE(pachecksum2_ptr, pachecksum2);
++DEFOPTIONALZEROTYPE(opt_pachecksum2_ptr, pachecksum2_ptr);
+ 
+ DEFFIELD(pk_authenticator_0, krb5_pk_authenticator, cusec, 0, int32);
+ DEFFIELD(pk_authenticator_1, krb5_pk_authenticator, ctime, 1, kerberos_time);
+ DEFFIELD(pk_authenticator_2, krb5_pk_authenticator, nonce, 2, int32);
+ DEFFIELD(pk_authenticator_3, krb5_pk_authenticator, paChecksum, 3,
+-         ostring_checksum);
++         ostring_data);
+ DEFFIELD(pk_authenticator_4, krb5_pk_authenticator, freshnessToken, 4,
+          opt_ostring_data_ptr);
++DEFFIELD(pk_authenticator_5, krb5_pk_authenticator, paChecksum2, 5,
++         opt_pachecksum2_ptr);
+ static const struct atype_info *pk_authenticator_fields[] = {
+     &k5_atype_pk_authenticator_0, &k5_atype_pk_authenticator_1,
+     &k5_atype_pk_authenticator_2, &k5_atype_pk_authenticator_3,
+-    &k5_atype_pk_authenticator_4
++    &k5_atype_pk_authenticator_4, &k5_atype_pk_authenticator_5
+ };
+ DEFSEQTYPE(pk_authenticator, krb5_pk_authenticator, pk_authenticator_fields);
+ 
+diff --git a/src/plugins/preauth/pkinit/pkinit.h b/src/plugins/preauth/pkinit/pkinit.h
+index ab132d78a9..b4120f3c61 100644
+--- a/src/plugins/preauth/pkinit/pkinit.h
++++ b/src/plugins/preauth/pkinit/pkinit.h
+@@ -339,6 +339,7 @@ void free_krb5_algorithm_identifiers(krb5_algorithm_identifier ***in);
+ void free_krb5_algorithm_identifier(krb5_algorithm_identifier *in);
+ void free_krb5_kdc_dh_key_info(krb5_kdc_dh_key_info **in);
+ void free_krb5_subject_pk_info(krb5_subject_pk_info **in);
++void free_pachecksum2(krb5_context context, krb5_pachecksum2 **in);
+ krb5_error_code pkinit_copy_krb5_data(krb5_data *dst, const krb5_data *src);
+ 
+ 
+diff --git a/src/plugins/preauth/pkinit/pkinit_clnt.c b/src/plugins/preauth/pkinit/pkinit_clnt.c
+index ca0162897b..e07c05518c 100644
+--- a/src/plugins/preauth/pkinit/pkinit_clnt.c
++++ b/src/plugins/preauth/pkinit/pkinit_clnt.c
+@@ -57,10 +57,9 @@ use_content_info(krb5_context context, pkinit_req_context req,
+ static krb5_error_code
+ pkinit_as_req_create(krb5_context context, pkinit_context plgctx,
+                      pkinit_req_context reqctx, krb5_timestamp ctsec,
+-                     krb5_int32 cusec, krb5_ui_4 nonce,
+-                     const krb5_checksum *cksum,
+-                     krb5_principal client, krb5_principal server,
+-                     krb5_data **as_req);
++                     krb5_int32 cusec, krb5_ui_4 nonce, const krb5_data *cksum,
++                     const krb5_pachecksum2 *cksum2, krb5_principal client,
++                     krb5_principal server, krb5_data **as_req);
+ 
+ static krb5_error_code
+ pkinit_as_rep_parse(krb5_context context, pkinit_context plgctx,
+@@ -90,7 +89,8 @@ pa_pkinit_gen_req(krb5_context context,
+     krb5_timestamp ctsec = 0;
+     krb5_int32 cusec = 0;
+     krb5_ui_4 nonce = 0;
+-    krb5_checksum cksum;
++    krb5_data cksum = empty_data();
++    krb5_pachecksum2 *cksum2 = NULL;
+     krb5_data *der_req = NULL;
+     krb5_pa_data **return_pa_data = NULL;
+ 
+@@ -119,15 +119,10 @@ pa_pkinit_gen_req(krb5_context context,
+         goto cleanup;
+     }
+ 
+-    retval = krb5_c_make_checksum(context, CKSUMTYPE_SHA1, NULL, 0, der_req,
+-                                  &cksum);
++    retval = crypto_generate_checksums(context, der_req, &cksum, &cksum2);
+     if (retval)
+         goto cleanup;
+-    TRACE_PKINIT_CLIENT_REQ_CHECKSUM(context, &cksum);
+-#ifdef DEBUG_CKSUM
+-    pkiDebug("calculating checksum on buf size (%d)\n", der_req->length);
+-    print_buffer(der_req->data, der_req->length);
+-#endif
++    TRACE_PKINIT_CLIENT_REQ_CHECKSUMS(context, &cksum, cksum2);
+ 
+     retval = cb->get_preauth_time(context, rock, TRUE, &ctsec, &cusec);
+     if (retval)
+@@ -141,7 +136,8 @@ pa_pkinit_gen_req(krb5_context context,
+     nonce = request->nonce;
+ 
+     retval = pkinit_as_req_create(context, plgctx, reqctx, ctsec, cusec,
+-                                  nonce, &cksum, request->client, request->server, &out_data);
++                                  nonce, &cksum, cksum2, request->client,
++                                  request->server, &out_data); 
+     if (retval) {
+         pkiDebug("error %d on pkinit_as_req_create; aborting PKINIT\n",
+                  (int) retval);
+@@ -169,23 +165,19 @@ pa_pkinit_gen_req(krb5_context context,
+ 
+ cleanup:
+     krb5_free_data(context, der_req);
+-    krb5_free_checksum_contents(context, &cksum);
++    krb5_free_data_contents(context, &cksum);
++    free_pachecksum2(context, &cksum2);
+     krb5_free_data(context, out_data);
+     krb5_free_pa_data(context, return_pa_data);
+     return retval;
+ }
+ 
+ static krb5_error_code
+-pkinit_as_req_create(krb5_context context,
+-                     pkinit_context plgctx,
+-                     pkinit_req_context reqctx,
+-                     krb5_timestamp ctsec,
+-                     krb5_int32 cusec,
+-                     krb5_ui_4 nonce,
+-                     const krb5_checksum * cksum,
+-                     krb5_principal client,
+-                     krb5_principal server,
+-                     krb5_data ** as_req)
++pkinit_as_req_create(krb5_context context, pkinit_context plgctx,
++                     pkinit_req_context reqctx, krb5_timestamp ctsec,
++                     krb5_int32 cusec, krb5_ui_4 nonce, const krb5_data *cksum,
++                     const krb5_pachecksum2 *cksum2, krb5_principal client,
++                     krb5_principal server, krb5_data **as_req)
+ {
+     krb5_error_code retval = ENOMEM;
+     krb5_subject_pk_info info;
+@@ -207,6 +199,7 @@ pkinit_as_req_create(krb5_context context,
+     auth_pack.pkAuthenticator.paChecksum = *cksum;
+     if (!reqctx->opts->disable_freshness)
+         auth_pack.pkAuthenticator.freshnessToken = reqctx->freshness_token;
++    auth_pack.pkAuthenticator.paChecksum2 = (krb5_pachecksum2 *)cksum2;
+     auth_pack.clientDHNonce.length = 0;
+     auth_pack.clientPublicValue = &info;
+     auth_pack.supportedKDFs = (krb5_data **)supported_kdf_alg_ids;
+diff --git a/src/plugins/preauth/pkinit/pkinit_crypto.h b/src/plugins/preauth/pkinit/pkinit_crypto.h
+index f251e41064..d576cd6cef 100644
+--- a/src/plugins/preauth/pkinit/pkinit_crypto.h
++++ b/src/plugins/preauth/pkinit/pkinit_crypto.h
+@@ -568,6 +568,10 @@ extern const krb5_octet krb5_pkinit_sha256_oid[];
+ extern const size_t krb5_pkinit_sha256_oid_len;
+ extern const krb5_octet krb5_pkinit_sha512_oid[];
+ extern const size_t  krb5_pkinit_sha512_oid_len;
++extern const krb5_data cms_sha1_id;
++extern const krb5_data cms_sha256_id;
++extern const krb5_data cms_sha384_id;
++extern const krb5_data cms_sha512_id;
+ /**
+  * An ordered set of OIDs, stored as krb5_data, of KDF algorithms
+  * supported by this implementation. The order of this array controls
+@@ -585,4 +589,18 @@ crypto_req_cert_matching_data(krb5_context context,
+ 			      pkinit_req_crypto_context reqctx,
+ 			      pkinit_cert_matching_data **md_out);
+ 
++/* Generate a SHA-1 checksum over body in *cksum1_out and a SHA-256 checksum
++ * over body in *cksum2_out with appropriate metadata. */
++krb5_error_code
++crypto_generate_checksums(krb5_context context, const krb5_data *body,
++                         krb5_data *cksum1_out,
++                         krb5_pachecksum2 **cksum2_out);
++
++/* Verify the SHA-1 checksum in cksum1 and the tagged checksum in cksum2.
++ * cksum2 may be NULL, in which case only cksum1 is verified. */
++krb5_error_code
++crypto_verify_checksums(krb5_context context, krb5_data *body,
++                       const krb5_data *cksum1,
++                       const krb5_pachecksum2 *cksum2);
++
+ #endif	/* _PKINIT_CRYPTO_H */
+diff --git a/src/plugins/preauth/pkinit/pkinit_crypto_openssl.c b/src/plugins/preauth/pkinit/pkinit_crypto_openssl.c
+index 76ad7526bb..638971fe83 100644
+--- a/src/plugins/preauth/pkinit/pkinit_crypto_openssl.c
++++ b/src/plugins/preauth/pkinit/pkinit_crypto_openssl.c
+@@ -5413,3 +5413,113 @@ crypto_req_cert_matching_data(krb5_context context,
+     return get_matching_data(context, plgctx, reqctx, reqctx->received_cert,
+                              md_out);
+ }
++
++/* Return the OpenSSL message digest type matching the given CMS OID, or NULL
++ * if it doesn't match any of the CMS OIDs we know about. */
++static const EVP_MD *
++md_from_cms_oid(const krb5_data *alg_id)
++{
++    if (data_eq(*alg_id, cms_sha1_id))
++        return EVP_sha1();
++    if (data_eq(*alg_id, cms_sha256_id))
++        return EVP_sha256();
++    if (data_eq(*alg_id, cms_sha384_id))
++        return EVP_sha384();
++    if (data_eq(*alg_id, cms_sha512_id))
++        return EVP_sha512();
++    return NULL;
++}
++
++/* Compute a message digest of the given type over body, placing the result in
++ * *digest_out in allocated storage.  Return true on success. */
++static krb5_boolean
++make_digest(const krb5_data *body, const EVP_MD *md, krb5_data *digest_out)
++{
++    krb5_error_code ret;
++    krb5_data d;
++
++    if (md == NULL)
++        return FALSE;
++    ret = alloc_data(&d, EVP_MD_size(md));
++    if (ret)
++        return FALSE;
++    if (!EVP_Digest(body->data, body->length, (uint8_t *)d.data, &d.length, md,
++                    NULL)) {
++        free(d.data);
++        return FALSE;
++    }
++    *digest_out = d;
++    return TRUE;
++}
++
++/* Return true if digest verifies for the given body and message digest
++ * type. */
++static krb5_boolean
++check_digest(const krb5_data *body, const EVP_MD *md, const krb5_data *digest)
++{
++    unsigned int digest_len;
++    uint8_t buf[EVP_MAX_MD_SIZE];
++
++    if (md == NULL)
++        return FALSE;
++    if (!EVP_Digest(body->data, body->length, buf, &digest_len, md, NULL))
++        return FALSE;
++    return (digest->length == digest_len &&
++            CRYPTO_memcmp(digest->data, buf, digest_len) == 0);
++}
++
++krb5_error_code
++crypto_generate_checksums(krb5_context context, const krb5_data *body,
++                          krb5_data *cksum1_out, krb5_pachecksum2 **cksum2_out)
++{
++    krb5_data cksum1 = empty_data();
++    krb5_pachecksum2 *cksum2 = NULL;
++    krb5_error_code ret;
++
++    if (!make_digest(body, EVP_sha1(), &cksum1))
++        goto fail;
++
++    cksum2 = k5alloc(sizeof(*cksum2), &ret);
++    if (cksum2 == NULL)
++        goto fail;
++
++    if (!make_digest(body, EVP_sha256(), &cksum2->checksum))
++        goto fail;
++
++    if (krb5int_copy_data_contents(context, &cms_sha256_id,
++                                   &cksum2->algorithmIdentifier.algorithm))
++        goto fail;
++
++    cksum2->algorithmIdentifier.parameters = empty_data();
++
++    *cksum1_out = cksum1;
++    *cksum2_out = cksum2;
++    return 0;
++
++fail:
++    krb5_free_data_contents(context, &cksum1);
++    free_pachecksum2(context, &cksum2);
++    return KRB5_CRYPTO_INTERNAL;
++}
++
++krb5_error_code
++crypto_verify_checksums(krb5_context context, krb5_data *body,
++                        const krb5_data *cksum1,
++                        const krb5_pachecksum2 *cksum2)
++{
++    const EVP_MD *md;
++
++    /* RFC 4556 doesn't say what error to return if the checksum doesn't match.
++     * Windows returns this one. */
++    if (!check_digest(body, EVP_sha1(), cksum1))
++        return KRB5KRB_AP_ERR_MODIFIED;
++
++    if (cksum2 == NULL)
++        return 0;
++
++    md = md_from_cms_oid(&cksum2->algorithmIdentifier.algorithm);
++    if (!check_digest(body, md, &cksum2->checksum))
++        return KRB5KRB_AP_ERR_MODIFIED;
++
++    return 0;
++}
+diff --git a/src/plugins/preauth/pkinit/pkinit_kdf_constants.c b/src/plugins/preauth/pkinit/pkinit_kdf_constants.c
+index 1604f1670a..315fc36866 100644
+--- a/src/plugins/preauth/pkinit/pkinit_kdf_constants.c
++++ b/src/plugins/preauth/pkinit/pkinit_kdf_constants.c
+@@ -57,3 +57,27 @@ krb5_data const * const supported_kdf_alg_ids[] = {
+     &sha512_id,
+     NULL
+ };
++
++/* RFC 3370 sha-1: iso(1) identified-organization(3) oiw(14) secsig(3)
++ * algorithm(2) 26 */
++static char cms_sha1[] = { 0x2b, 0x0e, 0x03, 0x02, 0x1a };
++/* RFC 5754 id-sha256: joint-iso-itu-t(2) country(16) us(840) organization(1)
++ * gov(101) csor(3) nistalgorithm(4) hashalgs(2) 1 */
++static char cms_sha256[] = {
++    0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01
++};
++/* RFC 5754 id-sha384: joint-iso-itu-t(2) country(16) us(840) organization(1)
++ * gov(101) csor(3) nistalgorithm(4) hashalgs(2) 2 */
++static char cms_sha384[] = {
++    0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02
++};
++/* RFC 5754 id-sha512: joint-iso-itu-t(2) country(16) us(840) organization(1)
++ * gov(101) csor(3) nistalgorithm(4) hashalgs(2) 3 */
++static char cms_sha512[] = {
++    0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03
++};
++
++const krb5_data cms_sha1_id = { KV5M_DATA, sizeof(cms_sha1), cms_sha1 };
++const krb5_data cms_sha256_id = { KV5M_DATA, sizeof(cms_sha256), cms_sha256 };
++const krb5_data cms_sha384_id = { KV5M_DATA, sizeof(cms_sha384), cms_sha384 };
++const krb5_data cms_sha512_id = { KV5M_DATA, sizeof(cms_sha512), cms_sha512 };
+diff --git a/src/plugins/preauth/pkinit/pkinit_lib.c b/src/plugins/preauth/pkinit/pkinit_lib.c
+index 7af880bf5c..47972bb5eb 100644
+--- a/src/plugins/preauth/pkinit/pkinit_lib.c
++++ b/src/plugins/preauth/pkinit/pkinit_lib.c
+@@ -29,6 +29,7 @@
+  * SUCH DAMAGES.
+  */
+ 
++#include "k5-int.h"
+ #include "pkinit.h"
+ 
+ #define FAKECERT
+@@ -127,8 +128,9 @@ free_krb5_auth_pack(krb5_auth_pack **in)
+         free((*in)->clientPublicValue->subjectPublicKey.data);
+         free((*in)->clientPublicValue);
+     }
+-    free((*in)->pkAuthenticator.paChecksum.contents);
++    free((*in)->pkAuthenticator.paChecksum.data);
+     krb5_free_data(NULL, (*in)->pkAuthenticator.freshnessToken);
++    free_pachecksum2(NULL, &(*in)->pkAuthenticator.paChecksum2);
+     if ((*in)->supportedCMSTypes != NULL)
+         free_krb5_algorithm_identifiers(&((*in)->supportedCMSTypes));
+     if ((*in)->supportedKDFs) {
+@@ -213,6 +215,18 @@ free_krb5_kdc_dh_key_info(krb5_kdc_dh_key_info **in)
+     free(*in);
+ }
+ 
++void
++free_pachecksum2(krb5_context context, krb5_pachecksum2 **in)
++{
++    if (*in == NULL)
++        return;
++    krb5_free_data_contents(context, &(*in)->checksum);
++    krb5_free_data_contents(context, &(*in)->algorithmIdentifier.algorithm);
++    krb5_free_data_contents(context, &(*in)->algorithmIdentifier.parameters);
++    free(*in);
++    *in = NULL;
++}
++
+ void
+ init_krb5_pa_pk_as_req(krb5_pa_pk_as_req **in)
+ {
+diff --git a/src/plugins/preauth/pkinit/pkinit_srv.c b/src/plugins/preauth/pkinit/pkinit_srv.c
+index 4eab5a2761..f5b3d98ef8 100644
+--- a/src/plugins/preauth/pkinit/pkinit_srv.c
++++ b/src/plugins/preauth/pkinit/pkinit_srv.c
+@@ -426,11 +426,12 @@ pkinit_server_verify_padata(krb5_context context,
+     krb5_data authp_data = {0, 0, NULL}, krb5_authz = {0, 0, NULL};
+     krb5_pa_pk_as_req *reqp = NULL;
+     krb5_auth_pack *auth_pack = NULL;
++    krb5_pk_authenticator *pka;
+     pkinit_kdc_context plgctx = NULL;
+     pkinit_kdc_req_context reqctx = NULL;
+     krb5_checksum cksum = {0, 0, 0, NULL};
+     krb5_data *der_req = NULL;
+-    krb5_data k5data, *ftoken;
++    krb5_data k5data;
+     int is_signed = 1;
+     krb5_pa_data **e_data = NULL;
+     krb5_kdcpreauth_modreq modreq = NULL;
+@@ -522,8 +523,9 @@ pkinit_server_verify_padata(krb5_context context,
+         pkiDebug("failed to decode krb5_auth_pack\n");
+         goto cleanup;
+     }
++    pka = &auth_pack->pkAuthenticator;
+ 
+-    retval = krb5_check_clockskew(context, auth_pack->pkAuthenticator.ctime);
++    retval = krb5_check_clockskew(context, pka->ctime);
+     if (retval)
+         goto cleanup;
+ 
+@@ -546,36 +548,13 @@ pkinit_server_verify_padata(krb5_context context,
+         goto cleanup;
+     }
+     der_req = cb->request_body(context, rock);
+-    retval = krb5_c_make_checksum(context, CKSUMTYPE_SHA1, NULL, 0, der_req,
+-                                  &cksum);
+-    if (retval) {
+-        pkiDebug("unable to calculate AS REQ checksum\n");
+-        goto cleanup;
+-    }
+-    if (cksum.length != auth_pack->pkAuthenticator.paChecksum.length ||
+-        k5_bcmp(cksum.contents, auth_pack->pkAuthenticator.paChecksum.contents,
+-                cksum.length) != 0) {
+-        pkiDebug("failed to match the checksum\n");
+-#ifdef DEBUG_CKSUM
+-        pkiDebug("calculating checksum on buf size (%d)\n", req_pkt->length);
+-        print_buffer(req_pkt->data, req_pkt->length);
+-        pkiDebug("received checksum type=%d size=%d ",
+-                 auth_pack->pkAuthenticator.paChecksum.checksum_type,
+-                 auth_pack->pkAuthenticator.paChecksum.length);
+-        print_buffer(auth_pack->pkAuthenticator.paChecksum.contents,
+-                     auth_pack->pkAuthenticator.paChecksum.length);
+-        pkiDebug("expected checksum type=%d size=%d ",
+-                 cksum.checksum_type, cksum.length);
+-        print_buffer(cksum.contents, cksum.length);
+-#endif
+-
+-        retval = KRB5KDC_ERR_PA_CHECKSUM_MUST_BE_INCLUDED;
++    retval = crypto_verify_checksums(context, der_req, &pka->paChecksum,
++                                     pka->paChecksum2);
++    if (retval)
+         goto cleanup;
+-    }
+ 
+-    ftoken = auth_pack->pkAuthenticator.freshnessToken;
+-    if (ftoken != NULL) {
+-        retval = cb->check_freshness_token(context, rock, ftoken);
++    if (pka->freshnessToken != NULL) {
++        retval = cb->check_freshness_token(context, rock, pka->freshnessToken);
+         if (retval)
+             goto cleanup;
+         valid_freshness_token = TRUE;
+diff --git a/src/plugins/preauth/pkinit/pkinit_trace.h b/src/plugins/preauth/pkinit/pkinit_trace.h
+index 4f80e0b9b6..3017f9e059 100644
+--- a/src/plugins/preauth/pkinit/pkinit_trace.h
++++ b/src/plugins/preauth/pkinit/pkinit_trace.h
+@@ -58,8 +58,9 @@
+     TRACE(c, "PKINIT client verified DH reply")
+ #define TRACE_PKINIT_CLIENT_REP_DH_FAIL(c)              \
+     TRACE(c, "PKINIT client could not verify DH reply")
+-#define TRACE_PKINIT_CLIENT_REQ_CHECKSUM(c, cksum)                      \
+-    TRACE(c, "PKINIT client computed kdc-req-body checksum {cksum}", cksum)
++#define TRACE_PKINIT_CLIENT_REQ_CHECKSUMS(c, ck1, ck2)                  \
++    TRACE(c, "PKINIT client computed checksums: {hexdata} {hexdata}",   \
++          ck1, &(ck2)->checksum)
+ #define TRACE_PKINIT_CLIENT_REQ_DH(c)                           \
+     TRACE(c, "PKINIT client making DH request")
+ #define TRACE_PKINIT_CLIENT_SAN_CONFIG_DNSNAME(c, host)                 \
+diff --git a/src/tests/asn.1/krb5_decode_test.c b/src/tests/asn.1/krb5_decode_test.c
+index 7a116b40d9..9946ebd3a5 100644
+--- a/src/tests/asn.1/krb5_decode_test.c
++++ b/src/tests/asn.1/krb5_decode_test.c
+@@ -1173,7 +1173,7 @@ int main(argc, argv)
+     /* decode_krb5_auth_pack */
+     {
+         setup(krb5_auth_pack,ktest_make_sample_auth_pack);
+-        decode_run("krb5_auth_pack","","30 81 93 A0 29 30 27 A0 05 02 03 01 E2 40 A1 11 18 0F 31 39 39 34 30 36 31 30 30 36 30 33 31 37 5A A2 03 02 01 2A A3 06 04 04 31 32 33 34 A1 22 30 20 30 13 06 09 2A 86 48 86 F7 12 01 02 02 04 06 70 61 72 61 6D 73 03 09 00 6B 72 62 35 64 61 74 61 A2 24 30 22 30 13 06 09 2A 86 48 86 F7 12 01 02 02 04 06 70 61 72 61 6D 73 30 0B 06 09 2A 86 48 86 F7 12 01 02 02 A3 0A 04 08 6B 72 62 35 64 61 74 61 A4 10 30 0E 30 0C A0 0A 06 08 6B 72 62 35 64 61 74 61",
++        decode_run("krb5_auth_pack","","30 81 97 A0 2D 30 2B A0 05 02 03 01 E2 40 A1 11 18 0F 31 39 39 34 30 36 31 30 30 36 30 33 31 37 5A A2 03 02 01 2A A3 0A 04 08 6B 72 62 35 64 61 74 61 A1 22 30 20 30 13 06 09 2A 86 48 86 F7 12 01 02 02 04 06 70 61 72 61 6D 73 03 09 00 6B 72 62 35 64 61 74 61 A2 24 30 22 30 13 06 09 2A 86 48 86 F7 12 01 02 02 04 06 70 61 72 61 6D 73 30 0B 06 09 2A 86 48 86 F7 12 01 02 02 A3 0A 04 08 6B 72 62 35 64 61 74 61 A4 10 30 0E 30 0C A0 0A 06 08 6B 72 62 35 64 61 74 61",
+                    acc.decode_krb5_auth_pack,
+                    ktest_equal_auth_pack,ktest_free_auth_pack);
+         ktest_empty_auth_pack(&ref);
+diff --git a/src/tests/asn.1/ktest.c b/src/tests/asn.1/ktest.c
+index 7bb698732b..fc953ac9b7 100644
+--- a/src/tests/asn.1/ktest.c
++++ b/src/tests/asn.1/ktest.c
+@@ -722,9 +722,7 @@ ktest_make_sample_pk_authenticator(krb5_pk_authenticator *p)
+     p->cusec = SAMPLE_USEC;
+     p->ctime = SAMPLE_TIME;
+     p->nonce = SAMPLE_NONCE;
+-    ktest_make_sample_checksum(&p->paChecksum);
+-    /* We don't encode the checksum type, only the contents. */
+-    p->paChecksum.checksum_type = 0;
++    ktest_make_sample_data(&p->paChecksum);
+     p->freshnessToken = ealloc(sizeof(krb5_data));
+     ktest_make_sample_data(p->freshnessToken);
+ }
+@@ -1666,8 +1664,7 @@ ktest_empty_pa_otp_req(krb5_pa_otp_req *p)
+ static void
+ ktest_empty_pk_authenticator(krb5_pk_authenticator *p)
+ {
+-    ktest_empty_checksum(&p->paChecksum);
+-    p->paChecksum.contents = NULL;
++    ktest_empty_data(&p->paChecksum);
+     krb5_free_data(NULL, p->freshnessToken);
+     p->freshnessToken = NULL;
+ }
+diff --git a/src/tests/asn.1/ktest_equal.c b/src/tests/asn.1/ktest_equal.c
+index eed6872f9f..eec7a71601 100644
+--- a/src/tests/asn.1/ktest_equal.c
++++ b/src/tests/asn.1/ktest_equal.c
+@@ -872,7 +872,7 @@ ktest_equal_pk_authenticator(krb5_pk_authenticator *ref,
+     p = p && scalar_equal(cusec);
+     p = p && scalar_equal(ctime);
+     p = p && scalar_equal(nonce);
+-    p = p && struct_equal(paChecksum, ktest_equal_checksum);
++    p = p && data_eq(ref->paChecksum, var->paChecksum);
+     return p;
+ }
+ 
+diff --git a/src/tests/asn.1/pkinit_encode.out b/src/tests/asn.1/pkinit_encode.out
+index 9bd08e159f..cab27cfb68 100644
+--- a/src/tests/asn.1/pkinit_encode.out
++++ b/src/tests/asn.1/pkinit_encode.out
+@@ -1,7 +1,7 @@
+ encode_krb5_pa_pk_as_req: 30 38 80 08 6B 72 62 35 64 61 74 61 A1 22 30 20 30 1E 80 08 6B 72 62 35 64 61 74 61 81 08 6B 72 62 35 64 61 74 61 82 08 6B 72 62 35 64 61 74 61 82 08 6B 72 62 35 64 61 74 61
+ encode_krb5_pa_pk_as_rep(dhInfo): A0 28 30 26 80 08 6B 72 62 35 64 61 74 61 A1 0A 04 08 6B 72 62 35 64 61 74 61 A2 0E 30 0C A0 0A 06 08 6B 72 62 35 64 61 74 61
+ encode_krb5_pa_pk_as_rep(encKeyPack): 81 08 6B 72 62 35 64 61 74 61
+-encode_krb5_auth_pack: 30 81 9F A0 35 30 33 A0 05 02 03 01 E2 40 A1 11 18 0F 31 39 39 34 30 36 31 30 30 36 30 33 31 37 5A A2 03 02 01 2A A3 06 04 04 31 32 33 34 A4 0A 04 08 6B 72 62 35 64 61 74 61 A1 22 30 20 30 13 06 09 2A 86 48 86 F7 12 01 02 02 04 06 70 61 72 61 6D 73 03 09 00 6B 72 62 35 64 61 74 61 A2 24 30 22 30 13 06 09 2A 86 48 86 F7 12 01 02 02 04 06 70 61 72 61 6D 73 30 0B 06 09 2A 86 48 86 F7 12 01 02 02 A3 0A 04 08 6B 72 62 35 64 61 74 61 A4 10 30 0E 30 0C A0 0A 06 08 6B 72 62 35 64 61 74 61
++encode_krb5_auth_pack: 30 81 A3 A0 39 30 37 A0 05 02 03 01 E2 40 A1 11 18 0F 31 39 39 34 30 36 31 30 30 36 30 33 31 37 5A A2 03 02 01 2A A3 0A 04 08 6B 72 62 35 64 61 74 61 A4 0A 04 08 6B 72 62 35 64 61 74 61 A1 22 30 20 30 13 06 09 2A 86 48 86 F7 12 01 02 02 04 06 70 61 72 61 6D 73 03  09 00 6B 72 62 35 64 61 74 61 A2 24 30 22 30 13 06 09 2A 86 48 86 F7 12 01 02 02 04 06 70 61 72 61 6D 73 30 0B 06 09 2A 86 48 86 F7 12 01 02 02 A3 0A 04 08 6B 72 62 35 64 61 74 61 A4 10 30 0E 30 0C A0 0A 06 08 6B 72 62 35 64 61 74 61
+ encode_krb5_kdc_dh_key_info: 30 25 A0 0B 03 09 00 6B 72 62 35 64 61 74 61 A1 03 02 01 2A A2 11 18 0F 31 39 39 34 30 36 31 30 30 36 30 33 31 37 5A
+ encode_krb5_reply_key_pack: 30 26 A0 13 30 11 A0 03 02 01 01 A1 0A 04 08 31 32 33 34 35 36 37 38 A1 0F 30 0D A0 03 02 01 01 A1 06 04 04 31 32 33 34
+ encode_krb5_sp80056a_other_info: 30 81 81 30 0B 06 09 2A 86 48 86 F7 12 01 02 02 A0 32 04 30 30 2E A0 10 1B 0E 41 54 48 45 4E 41 2E 4D 49 54 2E 45 44 55 A1 1A 30 18 A0 03 02 01 01 A1 11 30 0F 1B 06 68 66 74 73 61 69 1B 05 65 78 74 72 61 A1 32 04 30 30 2E A0 10 1B 0E 41 54 48 45 4E 41 2E 4D 49 54 2E 45 44 55 A1 1A 30 18 A0 03 02 01 01 A1 11 30 0F 1B 06 68 66 74 73 61 69 1B 05 65 78 74 72 61 A2 0A 04 08 6B 72 62 35 64 61 74 61
+diff --git a/src/tests/asn.1/pkinit_trval.out b/src/tests/asn.1/pkinit_trval.out
+index 3675fba386..047dec842e 100644
+--- a/src/tests/asn.1/pkinit_trval.out
++++ b/src/tests/asn.1/pkinit_trval.out
+@@ -38,7 +38,7 @@ encode_krb5_auth_pack:
+ .  .  [0] [Integer] 123456
+ .  .  [1] [Generalized Time] "19940610060317Z"
+ .  .  [2] [Integer] 42
+-.  .  [3] [Octet String] "1234"
++.  .  [3] [Octet String] "krb5data"
+ .  .  [4] [Octet String] "krb5data"
+ .  [1] [Sequence/Sequence Of]
+ .  .  [Sequence/Sequence Of]
+-- 
+2.49.0
+

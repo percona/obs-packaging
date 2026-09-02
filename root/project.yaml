@@ -122,6 +122,8 @@ project-config: |
   ExpandFlags: module:perl-IO-Socket-SSL-2.066
   ExpandFlags: module:perl-libwww-perl-6.34
   Prefer: selinux-policy-targeted
+  Prefer: libverto-libev
+  Prefer: Lmod
   %endif
 
   %if "%_repository" == "RockyLinux_9"

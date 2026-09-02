@@ -1,0 +1,107 @@
+#!NoTarBall
+#!NoSquashfs
+Name:           percona-postgresql
+Version:        %!{PG_VERSION}
+
+# PostgreSQL server and all extensions
+BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-server
+BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-contrib
+BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-libs
+BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-plpython3
+BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-plperl
+BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-pltcl
+BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-devel
+BuildRequires:  percona-pg_tde%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pgaudit%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pgaudit%!{PG_MAJOR_VERSION}_set_user
+BuildRequires:  percona-pg_stat_monitor%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pg_repack%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pg_cron_%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-wal2json%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pgvector_%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-postgis35_%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pg-telemetry%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pg_gather
+# Tarball-only helper packages (2026-07 QA round).
+#
+# percona-psql: the psql client rebuilt from the same PostgreSQL source with
+# --with-libedit-preferred, so it links BSD libedit instead of the host's
+# GNU readline. build-tarball.sh copies /usr/libexec/percona-psql/psql over
+# the server RPM's bin/psql (a non-conflicting path, so both RPMs coexist
+# here) and the tarball's readline LD_PRELOAD/symlink wrapper is gone. Built
+# in THIS project's RockyLinux_8/RockyLinux_9 repos, which each ssl repo
+# lists as its first path, so it always matches the tarball's EL base.
+#
+# percona-gdal / percona-proj (ppg:common:deps): lean, /opt-prefixed GDAL and
+# PROJ runtimes for the bundled PostGIS libraries. They satisfy PostGIS's
+# libgdal.so.NN()(64bit) / libproj.so.NN()(64bit) Requires instead of EPEL's
+# gdal-libs/proj — that is a "have choice" for the expander, resolved by the
+# `Prefer: percona-gdal` / `Prefer: percona-proj` lines in this project's
+# project-config. EPEL's chain dragged ~70 surplus shared objects into the
+# artifact (armadillo/BLAS, whose FlexiBLAS ELF constructor abort()s on
+# Rocky hosts, plus hdf/netcdf/OPeNDAP/poppler/xerces/ODBC/mariadb and
+# libtirpc/libexpat/libpcre2-posix) and compiled its resource paths to
+# /usr/share/{gdal,proj}, which no tarball host has. build-tarball.sh
+# section 0a fails the build if either EPEL package is in the chroot anyway.
+#
+# percona-gis-compat (this project's RockyLinux_8/RockyLinux_9 repos): a
+# payload-free shim that Provides the distro GDAL/PROJ *names* PostGIS
+# requires by name (gdal-libs/proj on EL8, gdal3.4-libs/proj on EL9), so the
+# expander sees a have-choice that `Prefer: percona-gis-compat` resolves in
+# our favour, and Requires percona-gdal/percona-proj. Needed because OBS does
+# NOT apply prjconf `Ignore:` rules when expanding image-type recipes (proven
+# 2026-08-26: the effective prjconf had the Ignore lines, EPEL's GDAL and
+# Rocky's proj were installed anyway). Listed here explicitly so the shim's
+# presence in the chroot is deterministic instead of resting on the Prefer:
+# choice alone.
+BuildRequires:  percona-psql
+BuildRequires:  percona-gdal
+BuildRequires:  percona-proj
+BuildRequires:  percona-gis-compat
+# Companion tools
+BuildRequires:  percona-pgbouncer
+BuildRequires:  percona-pgpool-II-pg%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-pgpool-II-pg%!{PG_MAJOR_VERSION}-devel
+BuildRequires:  percona-pgpool-II-pg%!{PG_MAJOR_VERSION}-extensions
+BuildRequires:  percona-pgbackrest
+BuildRequires:  percona-pgbadger
+BuildRequires:  percona-patroni
+BuildRequires:  percona-patroni-aws
+BuildRequires:  percona-haproxy
+BuildRequires:  etcd
+BuildRequires:  python3-pysyncobj
+# Language runtimes: from-source /opt-prefixed builds from ppg:common:deps.
+# Each installs a COMPLETE tree under /opt/percona-{perl,tcl,python3} with
+# every path compiled to the /opt prefix, so the RPM-built plperl.so/
+# pltcl.so/plpython3.so resolve interpreter + stdlib with ZERO environment
+# variables (tarball QA items 3-5). The distro perl/tcl/python3.12 runtime
+# BuildRequires that used to feed the deleted flatten-from-system staging
+# are gone; the python3.12 interpreter still reaches the chroot
+# transitively (the python3.12-* site-packages packages below require it),
+# which is what build-tarball.sh's own ELF-patch helper runs on.
+BuildRequires:  percona-perl
+BuildRequires:  percona-tcl
+BuildRequires:  percona-python3
+# python3.12-* DEPENDENCY packages are kept: they install patroni's
+# site-packages under /usr/lib{,64}/python3.12/site-packages regardless of
+# which interpreter ships in the tarball (section 8 of build-tarball.sh
+# copies them into /opt/percona-python3's site-packages).
+# jmespath/s3transfer must be named explicitly: on the EL8 parallel-python
+# stack the python3.12dist(...) rich-require generators do not run, so
+# python3.12-boto3 carries no dependency that would pull them into the
+# chroot transitively (buildinfo-verified). Without them here, section 8 of
+# build-tarball.sh stages boto3/botocore but patroni_aws imports fail at
+# run time.
+BuildRequires:  python3.12-jmespath
+BuildRequires:  python3.12-s3transfer
+# Build tools (binutils provides readelf for the verification gate)
+BuildRequires:  patchelf
+BuildRequires:  file
+BuildRequires:  binutils
+
+# The %build body is extracted verbatim by the simpleimage recipe and piped
+# to a shell — no macro expansion happens here. Keep it a one-liner and put
+# all build logic in the script.
+%build
+exec bash -x /usr/src/packages/SOURCES/build-tarball.sh

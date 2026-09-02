@@ -1,0 +1,47 @@
+{
+  "planPath": "docs/superpowers/plans/2026-07-29-tarballs-qa-round2.md",
+  "tasks": [
+    {
+      "id": 21,
+      "subject": "Task 21: percona-psql (libedit) + tarballs project build repos",
+      "status": "completed",
+      "description": "**Goal:** libedit-linked psql from PG 17.10 source, built in the tarballs project on new RL8/RL9 build repos; simpleimage repos consume it via sibling path.\n\n**Files:**\n- Modify: root/ppg/staging/17/tarballs/project.yaml (add RockyLinux_8/9 build repos; scope Type: simpleimage to ssl repos; sibling paths; Prefer lines)\n- Create: root/ppg/staging/17/tarballs/percona-postgresql-tarball/package.yaml (disable build repos)\n- Create: root/ppg/staging/17/tarballs/percona-psql/{obs/_service,rpm/percona-psql.spec,package.yaml}\n\n**Acceptance Criteria:**\n- psql NEEDS libedit.so.0 + libpq.so.5, zero libreadline (%check)\n- rpmbuild green rocky8+rocky9; psql works on minimal debian:12 with no readline\n- dry-runs clean; scoped prjconf loader-valid\n\n**Verify:** readelf -d psql; minimal-host psql session\n\n```json:metadata\n{\"files\": [\"root/ppg/staging/17/tarballs/project.yaml\", \"root/ppg/staging/17/tarballs/percona-psql/\", \"root/ppg/staging/17/tarballs/percona-postgresql-tarball/package.yaml\"], \"verifyCommand\": \"readelf -d psql (libedit, no readline); minimal debian psql e2e\", \"acceptanceCriteria\": [\"libedit-linked psql\", \"build repos + scoped Type\", \"dry-runs clean\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 22,
+      "subject": "Task 22: percona-gdal + percona-proj (lean, /opt, RL8+RL9)",
+      "status": "completed",
+      "description": "**Goal:** Lean from-source GDAL (3.0.4 EL8 / 3.4.3 EL9, sonames .26/.30) and PROJ (6.3.2 / 9.6.0, sonames .15/.25) with official's driver set and compiled /opt data paths; drop-in for EPEL libs inside the tarball.\n\n**Files:**\n- Create: root/ppg/common/deps/percona-proj/, root/ppg/common/deps/percona-gdal/\n\n**Acceptance Criteria:**\n- NEEDED surface ~ official (no armadillo/flexiblas/hdf/netcdf/dap/poppler/mariadb/odbc/kml/xerces/tirpc)\n- compiled data paths; proj.db present; dlopen smoke OK from env -i\n- ABI drop-in: postgis + postgis_raster load; ST_Transform works (both bases)\n- dry-runs clean\n\n**Verify:** rocky8/rocky9 containers: CREATE EXTENSION postgis_raster + ST_Transform green\n\n```json:metadata\n{\"files\": [\"root/ppg/common/deps/percona-gdal/\", \"root/ppg/common/deps/percona-proj/\"], \"verifyCommand\": \"postgis_raster load + ST_Transform on both bases\", \"acceptanceCriteria\": [\"lean NEEDED\", \"data paths compiled\", \"ABI drop-in proven\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 23,
+      "subject": "Task 23: build-tarball.sh: consume gdal/proj/psql, baseline exclusions, dlopen gate",
+      "status": "completed",
+      "blockedBy": [
+        21,
+        22
+      ],
+      "description": "**Goal:** Tarball uses percona-psql (no readline wrapper), lean gdal/proj as /opt components (13 total), exclusion list = vetted universal baseline, extension dlopen smoke gate + no-surplus assertions.\n\n**Files:**\n- Modify: obs/simpleimage, obs/build-tarball.sh, tarballs/project.yaml (Prefer)\n\n**Acceptance Criteria:**\n- EL8+EL9 container runs green; lib count drops; no tirpc/expat/pcre2 host needs; no flexiblas/armadillo/hdf/netcdf/dap\n- minimal-image e2e (tzdata only): psql without readline; postgis_raster + ST_Transform via bare postgres\n- pytest/pyright/black; isv dry-run clean\n\n**Verify:** container gates + minimal-host e2e\n\n```json:metadata\n{\"files\": [\"root/ppg/staging/17/tarballs/percona-postgresql-tarball/obs/simpleimage\", \"root/ppg/staging/17/tarballs/percona-postgresql-tarball/obs/build-tarball.sh\", \"root/ppg/staging/17/tarballs/project.yaml\"], \"verifyCommand\": \"container runs + minimal-host e2e\", \"acceptanceCriteria\": [\"lean bundle\", \"baseline exclusions\", \"dlopen gate\", \"psql libedit\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 24,
+      "subject": "Task 24: minimal-host all-extensions battery script + docs",
+      "status": "completed",
+      "blockedBy": [
+        23
+      ],
+      "description": "**Goal:** Reusable tools/tarball-acceptance.sh: minimal images, tzdata-only prereqs, CREATE EXTENSION for every .control, PostGIS deep checks, zero-env clients; docs updated (13 components, libedit psql, lean GDAL/PROJ, baseline contract).\n\n**Files:**\n- Create: tools/tarball-acceptance.sh\n- Modify: root/README.md, spec doc\n\n**Acceptance Criteria:**\n- Script runs end-to-end locally on the matrix against Task-23 local artifacts\n- Docs match tree\n\n**Verify:** local battery run report\n\n```json:metadata\n{\"files\": [\"tools/tarball-acceptance.sh\", \"root/README.md\", \"docs/superpowers/specs/2026-07-20-obs-simpleimage-tarballs-design.md\"], \"verifyCommand\": \"local battery run\", \"acceptanceCriteria\": [\"battery reusable\", \"docs accurate\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 25,
+      "subject": "Task 25: acceptance gate round 6 (USER GATE)",
+      "status": "completed",
+      "blockedBy": [
+        23,
+        24
+      ],
+      "description": "**Goal:** After user pushes and pr-2 rebuilds: Task-24 battery on full matrix; QA's three flows explicitly green; carried-over regressions green.\n\n**USER-ORDERED GATE - NON-SKIPPABLE.** Captured output for every criterion.\n\n**Files:** none\n\n**Acceptance Criteria:**\n- every extension loads on every host (debian 11/12, ubuntu 22.04/24.04, rocky9/10-minimal)\n- postgis_raster loads RHEL-family + Debian-family; no crash Rocky 9/10; psql works Debian 11 w/o readline\n- carried-over regressions green\n\n**Verify:** battery evidence\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"tools/tarball-acceptance.sh on matrix\", \"acceptanceCriteria\": [\"all extensions load\", \"QA flows green\", \"regressions green\"], \"userGate\": true, \"tags\": [\"user-gate\"], \"requireEvidenceTokens\": [[\"postgis_raster\"], [\"debian:11\", \"psql\"], [\"minimal\"]], \"modelTier\": \"standard\"}\n```"
+    }
+  ],
+  "lastUpdated": "2026-08-26T14:00:00"
+}

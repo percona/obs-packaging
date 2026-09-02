@@ -1,0 +1,38 @@
+From 5a0833a3f3b1c44edd08425d98f682b96ad7a01e Mon Sep 17 00:00:00 2001
+From: Robbie Harwood <rharwood@redhat.com>
+Date: Thu, 14 May 2020 15:01:18 -0400
+Subject: [PATCH] Fix typo ("in in") in the ksu man page
+
+(cherry picked from commit 1011841acdc1020f308ef4f569c6622f279d8c3f)
+(cherry picked from commit 8de669742ae4190542741f0dc61119a6a0dad666)
+---
+ doc/user/user_commands/ksu.rst | 2 +-
+ src/man/ksu.man                | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/doc/user/user_commands/ksu.rst b/doc/user/user_commands/ksu.rst
+index 8d6c7ef79..933738229 100644
+--- a/doc/user/user_commands/ksu.rst
++++ b/doc/user/user_commands/ksu.rst
+@@ -155,7 +155,7 @@ wrong password is typed in, ksu fails.
+ .. note::
+ 
+           During authentication, only the tickets that could be
+-          obtained without providing a password are cached in in the
++          obtained without providing a password are cached in the
+           source cache.
+ 
+ 
+diff --git a/src/man/ksu.man b/src/man/ksu.man
+index 81e34815d..8d4c6a359 100644
+--- a/src/man/ksu.man
++++ b/src/man/ksu.man
+@@ -176,7 +176,7 @@ wrong password is typed in, ksu fails.
+ .INDENT 0.0
+ .INDENT 3.5
+ During authentication, only the tickets that could be
+-obtained without providing a password are cached in in the
++obtained without providing a password are cached in the
+ source cache.
+ .UNINDENT
+ .UNINDENT

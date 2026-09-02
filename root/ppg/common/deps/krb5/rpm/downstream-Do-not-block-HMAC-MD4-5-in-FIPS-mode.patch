@@ -1,0 +1,157 @@
+From 400c8d5253a81c2bc220dc158a4f60ab7dbc5951 Mon Sep 17 00:00:00 2001
+From: Julien Rische <jrische@redhat.com>
+Date: Thu, 24 Apr 2025 15:56:32 +0200
+Subject: [PATCH] [downstream] Do not block HMAC-MD4/5 in FIPS mode
+
+To ensure RC4 HMAC-MD5 was not used in FIPS mode, access to HMAC-MD4/5
+was not allowed in this mode. However, since we provide the
+"radius_md5_fips_override" configuration parameter to allow using RADIUS
+regardless to the FIPS restrictions, we should allow HMAC-MD5 to be used
+too in this case, because it is required for the newly supported
+Message-Authenticator attribute.
+
+A FIPS mode check is added in calculate_mac() which will fail if
+"radius_md5_fips_override" is not true. It will not affect interactions
+between krb5kdc and ipa-otpd, because the Message-Authenticator
+attribute is not generated in this case.
+
+This C8S patch does not include the code for loading the OpenSSL default
+and legacy providers in a library context. A flag is enough to unblock
+MD5 and HMAC-MD5 in FIPS mode on C8S, contrary to C9S and C10S.
+---
+ src/lib/crypto/openssl/hmac.c | 19 +++++++++++--------
+ src/lib/krad/packet.c         | 19 ++++++++++++-------
+ 2 files changed, 23 insertions(+), 15 deletions(-)
+
+diff --git a/src/lib/crypto/openssl/hmac.c b/src/lib/crypto/openssl/hmac.c
+index 769a50c007..5814328e3c 100644
+--- a/src/lib/crypto/openssl/hmac.c
++++ b/src/lib/crypto/openssl/hmac.c
+@@ -103,11 +103,7 @@ map_digest(const struct krb5_hash_provider *hash)
+         return EVP_sha256();
+     else if (!strncmp(hash->hash_name, "SHA-384",7))
+         return EVP_sha384();
+-
+-    if (FIPS_mode())
+-        return NULL;
+-
+-    if (!strncmp(hash->hash_name, "MD5", 3))
++    else if (!strncmp(hash->hash_name, "MD5", 3))
+         return EVP_md5();
+     else if (!strncmp(hash->hash_name, "MD4", 3))
+         return EVP_md4();
+@@ -125,6 +121,7 @@ krb5int_hmac_keyblock(const struct krb5_hash_provider *hash,
+     unsigned char md[EVP_MAX_MD_SIZE];
+     HMAC_CTX *ctx;
+     size_t hashsize, blocksize;
++    const EVP_MD *md_alg;
+ 
+     hashsize = hash->hashsize;
+     blocksize = hash->blocksize;
+@@ -134,15 +131,21 @@ krb5int_hmac_keyblock(const struct krb5_hash_provider *hash,
+     if (output->length < hashsize)
+         return(KRB5_BAD_MSIZE);
+ 
+-    if (!map_digest(hash))
++    md_alg = map_digest(hash);
++    if (!md_alg)
+         return(KRB5_CRYPTO_INTERNAL); // unsupported alg
+ 
+     ctx = HMAC_CTX_new();
+     if (ctx == NULL)
+         return ENOMEM;
+ 
+-    ok = HMAC_Init_ex(ctx, keyblock->contents, keyblock->length,
+-                      map_digest(hash), NULL);
++    if (md_alg == EVP_md4() || md_alg == EVP_md5()) {
++        /* HMAC-MD5 and HMAC-MD4 are blocked by default in FIPS mode,
++         * but needed to support RADIUS Message-Authenticator. */
++        HMAC_CTX_set_flags(ctx, EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
++    }
++
++    ok = HMAC_Init_ex(ctx, keyblock->contents, keyblock->length, md_alg, NULL);
+     for (i = 0; ok && i < num_data; i++) {
+         const krb5_crypto_iov *iov = &data[i];
+ 
+diff --git a/src/lib/krad/packet.c b/src/lib/krad/packet.c
+index 257bbc6345..b1a31d78cc 100644
+--- a/src/lib/krad/packet.c
++++ b/src/lib/krad/packet.c
+@@ -278,7 +278,7 @@ lookup_msgauth_addr(const krad_packet *pkt)
+  * auth, which may be from pkt or from a corresponding request.
+  */
+ static krb5_error_code
+-calculate_mac(const char *secret, const krad_packet *pkt,
++calculate_mac(krb5_context ctx, const char *secret, const krad_packet *pkt,
+               const uint8_t auth[AUTH_FIELD_SIZE],
+               uint8_t mac_out[MD5_DIGEST_SIZE])
+ {
+@@ -288,6 +288,10 @@ calculate_mac(const char *secret, const krad_packet *pkt,
+     krb5_crypto_iov input[5];
+     krb5_data ksecr, mac;
+ 
++    /* Do not use HMAC-MD5 if not explicitly allowed */
++    if (kr_use_fips(ctx))
++        return KRB5_CRYPTO_INTERNAL;
++
+     msgauth_attr = lookup_msgauth_addr(pkt);
+     if (msgauth_attr == NULL)
+         return EINVAL;
+@@ -393,7 +397,8 @@ krad_packet_new_request(krb5_context ctx, const char *secret, krad_code code,
+ 
+     if (msgauth_required) {
+         /* Calculate and set the Message-Authenticator MAC. */
+-        retval = calculate_mac(secret, pkt, pkt_auth(pkt), pkt_attr(pkt) + 2);
++        retval = calculate_mac(ctx, secret, pkt, pkt_auth(pkt),
++                               pkt_attr(pkt) + 2);
+         if (retval != 0)
+             goto error;
+     }
+@@ -454,7 +459,7 @@ krad_packet_new_response(krb5_context ctx, const char *secret, krad_code code,
+          * section 5.14, use the authenticator from the request, not from the
+          * response.
+          */
+-        retval = calculate_mac(secret, pkt, pkt_auth(request),
++        retval = calculate_mac(ctx, secret, pkt, pkt_auth(request),
+                                pkt_attr(pkt) + 2);
+         if (retval != 0)
+             goto error;
+@@ -476,7 +481,7 @@ error:
+ /* Verify the Message-Authenticator value in pkt, using the provided
+  * authenticator (which may be from pkt or from a corresponding request). */
+ static krb5_error_code
+-verify_msgauth(const char *secret, const krad_packet *pkt,
++verify_msgauth(krb5_context ctx, const char *secret, const krad_packet *pkt,
+                const uint8_t auth[AUTH_FIELD_SIZE])
+ {
+     uint8_t mac[MD5_DIGEST_SIZE];
+@@ -488,7 +493,7 @@ verify_msgauth(const char *secret, const krad_packet *pkt,
+     if (msgauth == NULL)
+         return ENODATA;
+ 
+-    retval = calculate_mac(secret, pkt, auth, mac);
++    retval = calculate_mac(ctx, secret, pkt, auth, mac);
+     if (retval)
+         return retval;
+ 
+@@ -561,7 +566,7 @@ krad_packet_decode_request(krb5_context ctx, const char *secret,
+ 
+     /* Verify Message-Authenticator if present. */
+     if (has_pkt_msgauth(req)) {
+-        retval = verify_msgauth(secret, req, pkt_auth(req));
++        retval = verify_msgauth(ctx, secret, req, pkt_auth(req));
+         if (retval) {
+             krad_packet_free(req);
+             return retval;
+@@ -613,7 +618,7 @@ krad_packet_decode_response(krb5_context ctx, const char *secret,
+ 
+             /* Verify Message-Authenticator if present. */
+             if (has_pkt_msgauth(*rsppkt)) {
+-                if (verify_msgauth(secret, *rsppkt, pkt_auth(tmp)) != 0)
++                if (verify_msgauth(ctx, secret, *rsppkt, pkt_auth(tmp)) != 0)
+                     continue;
+             }
+ 
+-- 
+2.49.0
+

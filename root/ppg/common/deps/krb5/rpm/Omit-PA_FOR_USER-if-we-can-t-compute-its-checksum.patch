@@ -1,0 +1,35 @@
+From e1b2c967266b14bc37e5ed11e6c0525bd259e0bb Mon Sep 17 00:00:00 2001
+From: Isaac Boukris <iboukris@gmail.com>
+Date: Sat, 6 Jun 2020 11:03:37 +0200
+Subject: [PATCH] Omit PA_FOR_USER if we can't compute its checksum
+
+OpenSSL in FIPS mode will refuse to perform hmac-md5.  Omit the legacy
+PA_FOR_USER element in this case rather than failing out.
+
+[ghudson@mit.edu: minor code and comment edits; wrote commit message]
+
+ticket: 8912 (new)
+(cherry picked from commit 03f122bdb22cfa53c7d855ed929c9541e56365e0)
+(cherry picked from commit 086de78292b8ae89aba8a72926831124da44205d)
+---
+ src/lib/krb5/krb/s4u_creds.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/src/lib/krb5/krb/s4u_creds.c b/src/lib/krb5/krb/s4u_creds.c
+index fc5c886d6..d8f486dc6 100644
+--- a/src/lib/krb5/krb/s4u_creds.c
++++ b/src/lib/krb5/krb/s4u_creds.c
+@@ -534,6 +534,13 @@ krb5_get_self_cred_from_kdc(krb5_context context,
+         if (s4u_user.user_id.user != NULL && s4u_user.user_id.user->length) {
+             code = build_pa_for_user(context, tgtptr, &s4u_user.user_id,
+                                      &in_padata[1]);
++            /*
++             * If we couldn't compute the hmac-md5 checksum, send only the
++             * KRB5_PADATA_S4U_X509_USER; this will still work against modern
++             * Windows and MIT KDCs.
++             */
++            if (code == KRB5_CRYPTO_INTERNAL)
++                code = 0;
+             if (code != 0) {
+                 krb5_free_pa_data(context, in_padata);
+                 goto cleanup;

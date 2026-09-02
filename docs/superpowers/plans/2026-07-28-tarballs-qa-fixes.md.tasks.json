@@ -1,0 +1,58 @@
+{
+  "planPath": "docs/superpowers/plans/2026-07-28-tarballs-qa-fixes.md",
+  "tasks": [
+    {
+      "id": 15,
+      "subject": "Task 15: compiled /tmp socket defaults via ELF string patch",
+      "status": "completed",
+      "description": "**Goal:** Every bundled PG binary/libpq copy defaults to /tmp unix socket (server, initdb, all clients) with no wrappers.\n\n**Files:**\n- Modify: root/ppg/staging/17/tarballs/percona-postgresql-tarball/obs/build-tarball.sh\n\n**Acceptance Criteria:**\n- ELF sweep replaces /run/postgresql\\0 with /tmp\\0+padding (same length) in all bundled ELFs\n- initdb wrapper DELETED; psql PGHOST export DELETED\n- Gate asserts zero ELFs contain /run/postgresql (negative control demonstrated)\n- Container e2e: POSITIONAL initdb form, pgbench/pg_dump/pg_isready connect with no env\n\n**Verify:** container gate green incl. string assertion; strings on postgres/libpq clean\n\n```json:metadata\n{\"files\": [\"root/ppg/staging/17/tarballs/percona-postgresql-tarball/obs/build-tarball.sh\"], \"verifyCommand\": \"container e2e: positional initdb + unwrapped clients connect via /tmp\", \"acceptanceCriteria\": [\"same-length string patch all ELFs\", \"wrappers deleted\", \"gate assertion + negative control\", \"QA flows pass\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 16,
+      "subject": "Task 16: /opt-prefixed runtime packages (perl, tcl, python)",
+      "status": "completed",
+      "description": "**Goal:** From-source runtimes in ppg:common:deps installing under /opt/percona-{perl,tcl,python3} with compiled /opt paths so plperl/pltcl/plpython3 work with ZERO env vars.\n\n**Files:**\n- Create: root/ppg/common/deps/percona-perl/ (5.26.3 RL8 / 5.32.1 RL9 via %if, Rocky Configure flags minus paths, flat lib/<ver> layout, libperl at lib/<ver>/CORE/)\n- Create: root/ppg/common/deps/percona-tcl/ (one 8.6.x, prefix /opt/percona-tcl)\n- Create: root/ppg/common/deps/percona-python3/ (3.12.x, --enable-shared, prefix /opt/percona-python3)\n- package.yaml each: RL8+RL9 only\n\n**Acceptance Criteria:**\n- Builds on rocky8+rocky9; compiled @INC/paths show /opt\n- QA repro with NO env vars: bare `postgres -D` start, plperl use strict + pltcl + plpython3u functions all work on both bases\n- isv dry-runs clean\n\n**Verify:** bare-postgres PL test green on both bases\n\nHIGHEST RISK: perl ABI match with distro-built plperl.so — replicate Rocky Configure flags exactly; escalate rather than ship mismatched libperl.\n\n```json:metadata\n{\"files\": [\"root/ppg/common/deps/percona-perl/\", \"root/ppg/common/deps/percona-tcl/\", \"root/ppg/common/deps/percona-python3/\"], \"verifyCommand\": \"bare postgres -D + PL functions, no env vars, both bases\", \"acceptanceCriteria\": [\"3 packages RL8+RL9\", \"compiled /opt paths\", \"perl ABI matches plperl.so\", \"PL QA repro passes\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 17,
+      "subject": "Task 17: rewrite runtime staging + haproxy + .pyc strip",
+      "status": "completed",
+      "blockedBy": [
+        15,
+        16
+      ],
+      "description": "**Goal:** Tarball consumes the /opt runtime packages (flatten logic deleted, postgres env wrapper deleted), adds percona-haproxy component, strips .pyc.\n\n**Files:**\n- Modify: obs/simpleimage (+3 runtime pkgs, +percona-haproxy; drop distro runtime BuildRequires; keep python3.12-* dep pkgs)\n- Modify: obs/build-tarball.sh (staging rewrite, wrapper removals, .pyc strip + gate, haproxy staging per official layout, 11-component checks, smoke without env)\n\n**Acceptance Criteria:**\n- Full container runs green on EL8+EL9 (both audits + new gates)\n- Structure-diff vs official: haproxy divergence gone\n- pytest/pyright/black green; isv dry-run clean\n\n**Verify:** eleven percona-* top-level dirs; gates green\n\n```json:metadata\n{\"files\": [\"root/ppg/staging/17/tarballs/percona-postgresql-tarball/obs/simpleimage\", \"root/ppg/staging/17/tarballs/percona-postgresql-tarball/obs/build-tarball.sh\"], \"verifyCommand\": \"EL8+EL9 container runs green, 11 components\", \"acceptanceCriteria\": [\"runtimes from RPMs\", \"env wrappers gone\", \"haproxy staged\", \"no .pyc\", \"gates extended\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 18,
+      "subject": "Task 18: docs/spec/release notes (incl. perl-version stance)",
+      "status": "completed",
+      "blockedBy": [
+        17,
+        20
+      ],
+      "description": "**Goal:** README + spec document: compiled /tmp defaults, zero-env PLs, /opt-prefixed runtimes with perl 5.26.3/5.32.1 per variant (plperl ABI constraint, official ships 5.38 via different build model), haproxy included, shrunken host prerequisites.\n\n**Files:**\n- Modify: root/README.md, docs/superpowers/specs/2026-07-20-obs-simpleimage-tarballs-design.md\n\n**Acceptance Criteria:**\n- All 8 QA items addressed or documented; host-prereq list current\n\n**Verify:** grep spot-checks\n\n```json:metadata\n{\"files\": [\"root/README.md\", \"docs/superpowers/specs/2026-07-20-obs-simpleimage-tarballs-design.md\"], \"verifyCommand\": \"grep spot-checks\", \"acceptanceCriteria\": [\"QA items documented\", \"prereqs current\"], \"modelTier\": \"mechanical\"}\n```"
+    },
+    {
+      "id": 19,
+      "subject": "Task 19: acceptance battery round 5 (USER GATE)",
+      "status": "completed",
+      "blockedBy": [
+        17,
+        18,
+        20
+      ],
+      "description": "**Goal:** Full battery with QA flows as regression targets.\n\n**USER-ORDERED GATE - NON-SKIPPABLE.** Captured output for every criterion.\n\n**Files:** none (operational)\n\n**Acceptance Criteria:**\n- positional initdb -> /tmp socket; pgbench/pg_dump/pg_isready zero-env\n- bare `postgres -D` start: plperl use strict + pltclu + plpython3u all work\n- zero .pyc; 11 components; haproxy -v runs; bundled perl @INC shows /opt\n- carried-over regressions green (pgcrypto digest, pg_tde, patroni, psql debian:11, OPENSSL sweeps)\n- debian:11 (ssl1.1) + ubuntu:22.04 + ubuntu:24.04 (ssl3)\n\n**Verify:** containerized battery per variant with captured output\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"battery on 3 hosts\", \"acceptanceCriteria\": [\"QA flows pass\", \"carried-over regressions green\", \"evidence captured\"], \"userGate\": true, \"tags\": [\"user-gate\"], \"requireEvidenceTokens\": [[\"positional\", \"pgbench\"], [\"bare postgres\", \"use strict\"], [\"haproxy\"]], \"modelTier\": \"standard\"}\n```",
+      "notes": [
+        "Round-5 battery PASS 3/3 (debian:11 ssl1.1, ubuntu 22.04+24.04 ssl3): positional initdb, zero-env clients, BARE-postgres PL battery incl. plpython3u import ssl on host OpenSSL 3.0.2, haproxy, 0 bytecode, /run/postgresql never needed. Evidence in scratchpad pr2-round5/."
+      ]
+    },
+    {
+      "id": 20,
+      "subject": "Task 20: _ssl/_hashlib OpenSSL-3.0 symbol patch in percona-python3",
+      "status": "completed",
+      "description": "**Goal:** plpython3u `import ssl` works on OpenSSL-3.0 hosts (ssl3 variant) — CPython source patch (pgcrypto-Patch8 technique) forcing pre-3.3/pre-3.4 fallbacks so _ssl/_hashlib carry only OPENSSL_3.0.0 needs; spec %check pins it.\n\nUSER DECISION 2026-07-28: fix (option 2) rather than accept official-parity failure.\n\n**Files:**\n- Modify: root/ppg/common/deps/percona-python3/ (patch + spec)\n\n**Acceptance Criteria:**\n- EL9 _ssl/_hashlib readelf: no OPENSSL_3.[1-9] needs; EL8 unchanged\n- ubuntu:22.04 bare-postgres plpython3u DO import ssl: fails before, passes after\n- spec-level readelf assertion (loud rpmbuild failure on drift)\n\n**Verify:** before/after readelf + the ubuntu:22.04 e2e\n\n```json:metadata\n{\"files\": [\"root/ppg/common/deps/percona-python3/\"], \"verifyCommand\": \"ubuntu:22.04 plpython3u import ssl e2e\", \"acceptanceCriteria\": [\"3.0-only needs on EL9\", \"EL8 unchanged\", \"spec check pins promise\", \"e2e passes\"], \"modelTier\": \"standard\"}\n```"
+    }
+  ],
+  "lastUpdated": "2026-07-29T10:30:00"
+}
