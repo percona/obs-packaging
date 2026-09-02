@@ -234,6 +234,13 @@ Task-5-style, against the OBS-built image (PR project):
   `pg_dump` 14–18 present + `DEFAULT_BINARY_PATHS['pg-16']` resolves; T6
   `--user 12345:0` boots. Log: scratchpad `sp5/smoke-image.log`; round-1 failure
   evidence and diagnosis in the SDD task-4 report.
+- **Final-review fix wave (same day):** TLS truthiness (any non-empty
+  `PGADMIN_ENABLE_TLS` now enables TLS, normalized to the launcher's literal
+  `true` — `True`/`1` had silently served plaintext), external-config-DB probe
+  crashes abort with a clear error, passwd fixup entry named `pgadminr`
+  (1966c090). Matrix re-run on the final image `9.17-3.1`
+  (`sha256:b6565aebcbffcd162a31bf0d348ccfe7c7b9221bf07922f67a5a70b71a483f88`):
+  **6/6 PASS** plus an explicit `PGADMIN_ENABLE_TLS=True` HTTPS check.
 - Decisions changed during execution: none (the §6 entrypoint amendments and the chmod
   are within the approved design; controller rulings recorded in the SDD ledger).
 
