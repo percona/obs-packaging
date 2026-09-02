@@ -1,0 +1,5 @@
+# Macros for the pgAdmin projects (ppg:devel:pgadmin and its :containers child).
+# PGADMIN_VERSION is the single bump knob shared by the container tags; keep it
+# in sync with the obs_scm revision (REL-<major>_<minor>) in
+# percona-pgadmin4/obs/_service when bumping.
+- PGADMIN_VERSION: 9.17
