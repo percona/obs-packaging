@@ -13,7 +13,7 @@
 #   PGADMIN_SERVER_JSON_FILE (default /pgadmin4/servers.json)
 #   PGADMIN_PREFERENCES_JSON_FILE (default /pgadmin4/preferences.json)
 #   PGADMIN_REPLACE_SERVERS_ON_STARTUP ("True" to re-import with --replace)
-#   PGADMIN_ENABLE_TLS ("true"; certs must exist in /certs)
+#   PGADMIN_ENABLE_TLS (any non-empty value; certs must exist in /certs)
 set -euo pipefail
 
 PGADMIN_DIR=/usr/lib/python3.12/site-packages/pgadmin4
@@ -24,7 +24,7 @@ SQLITE_PATH="${PGADMIN_CONFIG_SQLITE_PATH:-/var/lib/pgadmin/pgadmin4.db}"
 # one. /etc/passwd is group-0 writable (image build).
 if ! whoami >/dev/null 2>&1; then
     if [ -w /etc/passwd ]; then
-        echo "pgadmin:x:$(id -u):0:pgadmin user:/var/lib/pgadmin:/sbin/nologin" >> /etc/passwd
+        echo "pgadminr:x:$(id -u):0:pgadmin user:/var/lib/pgadmin:/sbin/nologin" >> /etc/passwd
     fi
 fi
 
@@ -55,7 +55,9 @@ file_env PGADMIN_CONFIG_CONFIG_DATABASE_URI
 # DB, first-run setup must not run (and must not demand DEFAULT_EMAIL).
 external_config_db_exists="False"
 if [ -n "${PGADMIN_CONFIG_CONFIG_DATABASE_URI:-}" ]; then
-    result=$(cd "${PGADMIN_DIR}/pgadmin/utils" && /usr/bin/python3.12 -c "
+    # Use an `if` guard (not a plain assignment) so a non-zero probe exit is
+    # observed here rather than tripping `set -e` before we can report it.
+    if result=$(cd "${PGADMIN_DIR}/pgadmin/utils" && /usr/bin/python3.12 -c "
 import os, ast
 from check_external_config_db import check_external_config_db
 raw = os.environ['PGADMIN_CONFIG_CONFIG_DATABASE_URI']
@@ -64,7 +66,16 @@ try:
 except (ValueError, SyntaxError):
     uri = raw
 print(check_external_config_db(uri))
-" 2>/dev/null) || true
+" 2>&1); then
+        probe_rc=0
+    else
+        probe_rc=$?
+    fi
+    if [ "${probe_rc}" -ne 0 ]; then
+        echo "error: cannot reach the external configuration database (check_external_config_db failed):" >&2
+        echo "${result}" >&2
+        exit 1
+    fi
     if [ -n "${result:-}" ]; then
         external_config_db_exists="${result}"
     fi
@@ -116,11 +127,16 @@ fi
 
 # --- TLS pre-flight ---------------------------------------------------------
 # The launcher wires the certs; fail early and clearly when they are missing.
-if [ "${PGADMIN_ENABLE_TLS:-}" = "true" ]; then
+# Upstream treats ANY non-empty PGADMIN_ENABLE_TLS as "enabled" (True/1/yes/...);
+# the RPM launcher only recognizes the literal string "true". Match upstream's
+# truthiness here, then normalize to the literal the launcher requires so TLS
+# isn't silently skipped for e.g. PGADMIN_ENABLE_TLS=True.
+if [ -n "${PGADMIN_ENABLE_TLS:-}" ]; then
     if [ ! -r /certs/server.cert ] || [ ! -r /certs/server.key ]; then
         echo 'PGADMIN_ENABLE_TLS is set but /certs/server.cert and/or /certs/server.key are missing or unreadable.' >&2
         exit 1
     fi
+    export PGADMIN_ENABLE_TLS=true
 fi
 
 exec /usr/bin/percona-pgadmin4-gunicorn

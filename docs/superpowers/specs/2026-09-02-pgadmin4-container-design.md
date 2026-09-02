@@ -85,7 +85,10 @@ root/ppg/devel/pgadmin/containers/
 4. `common:deps:build` UBI_9 — **dropped at plan time** (§7); the image install
    closure never touches it
 5. `common:containers:ubi9` `images` + `UBI_9` — `percona-ubi-minimal`, kiwi helpers
-6. `Fedora:EPEL:9 standard`, `RedHat:UBI-9 standard`, `RockyLinux:9 devel`
+6. `Fedora:EPEL:9 standard`, `RedHat:UBI-9 standard` — matches the house ubi9
+   pattern (EPEL 9 + RedHat UBI-9 only, as shipped in `project.yaml`); the
+   `Ignore`/`Substitute` rocky-release lines that appear alongside this repo
+   list are base-image hygiene, not an extra content repo
 
 Remember the OBS path rule: only the last path expands transitively — list content
 repos explicitly (as the staging containers project does).
@@ -142,9 +145,9 @@ In order, then `exec /usr/bin/percona-pgadmin4-gunicorn`:
    (direct or `_FILE`); exit 1 with upstream's message otherwise.
 5. **First-run init + imports:** when setup is needed, run the initialization once —
    `cd %{python3_sitelib}/pgadmin4 && PGADMIN_SETUP_EMAIL=… PGADMIN_SETUP_PASSWORD=…
-   python3.12 -P -c "import run_pgadmin"` (the same import the RPM launcher performs,
-   upstream's mechanism; the launcher later sees `pgadmin4.db` exists and skips its own
-   init — no double-run), then:
+   python3.12 setup.py setup-db` (the same init the RPM launcher performs; the
+   launcher later sees `pgadmin4.db` exists and skips its own init — no double-run),
+   then:
    - `servers.json`: `pgadmin4-cli load-servers "${PGADMIN_SERVER_JSON_FILE:-/pgadmin4/servers.json}"
      --user "$PGADMIN_DEFAULT_EMAIL"` if the file exists; `--replace` when
      `PGADMIN_REPLACE_SERVERS_ON_STARTUP=True` (which also runs on non-first boots,
