@@ -7,6 +7,8 @@ repositories:
     paths:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-10
         repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
+        repository: devel
     archs: [x86_64, aarch64]
   - name: images
     paths:
@@ -16,6 +18,12 @@ repositories:
         repository: appstream
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-10
         repository: baseos
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
+        repository: appstream
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
+        repository: baseos
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
+        repository: devel
     archs: [x86_64, aarch64]
 
 project-config: |
@@ -37,9 +45,6 @@ project-config: |
 
   Prefer: openssl-fips-provider
   Prefer: glibc-minimal-langpack
-  Prefer: redhat-release
-  Ignore: rocky-release
-  Substitute: rocky-release redhat-release
 
   BuildFlags: container-compression-format:zstd
   BuildFlags: container-build-format:oci
