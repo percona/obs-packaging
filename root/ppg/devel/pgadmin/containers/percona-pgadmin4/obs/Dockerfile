@@ -40,6 +40,8 @@ RUN usermod -u 5050 -aG 0 pgadmin && \
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY LICENSE /licenses/LICENSE.Dockerfile
 
+RUN chmod 0755 /usr/local/bin/entrypoint.sh
+
 # Overridable defaults: docker/podman -e wins over ENV, and the RPM's
 # config_distro.py applies PGADMIN_CONFIG_* at every import (better than
 # upstream's bake-once). pg-13 stays unset: no PG 13 in the Percona tree.
