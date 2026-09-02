@@ -12,13 +12,19 @@
 %{expand: %%global py3ver %(echo `%{__ospython} -P -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
+# PINNED TO 5.8.1, NOT the newest 5.8.x: FS-too 5.8.2 fixed issue #1212 by
+# inverting UserMixin.is_locked (LoginForm now treats a True return as
+# "locked, fail"). pgAdmin 9.17's User.is_locked still uses the pre-5.8.2
+# convention (True = "not locked, proceed"), so building 5.8.2 makes EVERY
+# login fail silently (redirect back to /login, no flash). Do not advance
+# this to 5.8.2+ until pgAdmin inverts its is_locked. pgAdmin pins 5.8.*.
 Name:           %{python3_pkgprefix}-flask-security-too
-Version:        5.8.2
+Version:        5.8.1
 Release:        1%{?dist}
 Summary:        Quickly add security features to your Flask application
 License:        MIT
 URL:            https://github.com/pallets-eco/flask-security
-Source0:        https://files.pythonhosted.org/packages/source/F/Flask-Security-Too/flask_security_too-5.8.2.tar.gz
+Source0:        https://files.pythonhosted.org/packages/source/F/Flask-Security-Too/flask_security_too-5.8.1.tar.gz
 BuildArch:      noarch
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
@@ -54,7 +60,7 @@ Quickly add security features to your Flask application.
 Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmin4) dependency stack.
 
 %prep
-%autosetup -p1 -n flask_security_too-5.8.2
+%autosetup -p1 -n flask_security_too-5.8.1
 
 %build
 %{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir dist .
@@ -69,5 +75,5 @@ PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -P -c "import flask_secu
 %{python3_sitelib}/*
 
 %changelog
-* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 5.8.2-1
-- Package Flask-Security-Too 5.8.2 for Python 3.12 (pgAdmin 4 dependency stack)
+* Thu Aug 27 2026 Percona Development Team <info@percona.com> - 5.8.1-1
+- Package Flask-Security-Too 5.8.1 for Python 3.12 (pgAdmin 4 dependency stack)
