@@ -224,9 +224,12 @@ Task-5-style, against the OBS-built image (PR project):
   with a clear error instead of `--user ""`; in external-config-DB mode the entrypoint
   unsets `PGADMIN_DEFAULT_EMAIL/PASSWORD` before exec so the launcher cannot
   double-init against the external DB.
-- Image acquisition (spec §8 open item resolved): the OBS registry returns "name
-  unknown" for PR projects — the working path is `osc getbinaries` of the ~207 MB
-  image tar + `podman load`. Loaded x86_64 image size: 650 MB (five PG client majors).
+- Image acquisition (spec §8 open item resolved, corrected 2026-09-02): the OBS
+  registry DOES serve PR-project images — the path includes the repository name:
+  `registry.opensuse.org/isv/percona/pr/pr-12/ppg/devel/pgadmin/containers/ubi9/percona-pgadmin4:latest`
+  (the initial "name unknown" probe had omitted the `/ubi9/` segment; found by the
+  user). `osc getbinaries` of the ~207 MB image tar + `podman load` works too.
+  Loaded x86_64 image size: 650 MB (five PG client majors).
 - Smoke matrix: **6/6 PASS** on `9.17-2.1`
   (digest `sha256:2bf4c37b4a5ae2774b3d1139f66e4cbfd9ddd51cd0ea878bf6632041bfb1bae2`) —
   T1 login 200 + `ver=91700` + idempotent restart; T2 password `_FILE` + both-set
