@@ -1,0 +1,53 @@
+{
+  "planPath": "docs/superpowers/plans/2026-09-02-pgadmin4-container.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: Containers project skeleton + Dockerfile",
+      "status": "pending",
+      "description": "**Goal:** The ppg:devel:pgadmin:containers project definition, the pgadmin project macros file, and the image package's Dockerfile + LICENSE (entrypoint is Task 2).\n\n**Files:**\n- Create: root/ppg/devel/pgadmin/macros.yaml\n- Create: root/ppg/devel/pgadmin/containers/project.yaml\n- Create: root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/Dockerfile\n- Create: root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/LICENSE\n\n**Acceptance Criteria:**\n- [ ] project.yaml + macros.yaml parse as YAML\n- [ ] Dockerfile: 3 BuildTags, FROM percona-ubi-minimal, installs pgadmin4+gunicorn+percona-postgresql14..18, UID 5050 pin, EXPOSE 8080, VOLUME /var/lib/pgadmin, USER 5050, ENTRYPOINT\n- [ ] LICENSE = upstream PostgreSQL licence text\n- [ ] no common:deps:build path in project.yaml\n\n**Verify:** python3 -c \"import yaml; yaml.safe_load(open('root/ppg/devel/pgadmin/containers/project.yaml'))\" && grep -c '^#!BuildTag' root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/Dockerfile -> yaml OK / 3\n\nAll file contents are given verbatim in the plan document (Task 1 steps 1-4).\n\n```json:metadata\n{\"files\": [\"root/ppg/devel/pgadmin/macros.yaml\", \"root/ppg/devel/pgadmin/containers/project.yaml\", \"root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/Dockerfile\", \"root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/LICENSE\"], \"verifyCommand\": \"python3 -c \\\"import yaml; yaml.safe_load(open('root/ppg/devel/pgadmin/containers/project.yaml'))\\\" && grep -c '^#!BuildTag' root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/Dockerfile\", \"acceptanceCriteria\": [\"project.yaml + macros.yaml parse as YAML\", \"Dockerfile: 3 BuildTags, FROM percona-ubi-minimal, installs pgadmin4+gunicorn+percona-postgresql14..18, UID 5050 pin, EXPOSE 8080, VOLUME /var/lib/pgadmin, USER 5050, ENTRYPOINT\", \"LICENSE = upstream PostgreSQL licence text\", \"no common:deps:build path in project.yaml\"], \"modelTier\": \"mechanical\"}\n```",
+      "activeForm": "Creating containers project skeleton"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: entrypoint.sh with local bash harness",
+      "status": "pending",
+      "blockedBy": [
+        1
+      ],
+      "description": "**Goal:** The container entrypoint implementing spec section 6, tested locally with a bash harness (no container needed).\n\n**Files:**\n- Create: root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/entrypoint.sh\n- Test (scratch): $SCRATCH/sp5/test-entrypoint.sh\n\n**Acceptance Criteria:**\n- [ ] bash -n passes (shellcheck too if installed)\n- [ ] local harness: file_env from file works, both-set errors, first-run guard errors, TLS pre-flight errors, idempotent second boot, servers.json import called\n- [ ] script ends with exec /usr/bin/percona-pgadmin4-gunicorn; no launcher behavior reimplemented\n\n**Verify:** bash -n root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/entrypoint.sh && bash $SCRATCH/sp5/test-entrypoint.sh -> all PASS lines, 0 failed\n\nThe full entrypoint script and the harness are given verbatim in the plan document (Task 2 steps 1 and 3).\n\n```json:metadata\n{\"files\": [\"root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/entrypoint.sh\"], \"verifyCommand\": \"bash -n root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/entrypoint.sh && bash $SCRATCH/sp5/test-entrypoint.sh\", \"acceptanceCriteria\": [\"bash -n passes (shellcheck too if installed)\", \"local harness: file_env from file works, both-set errors, first-run guard errors, TLS pre-flight errors, idempotent second boot, servers.json import called\", \"script ends with exec /usr/bin/percona-pgadmin4-gunicorn; no launcher behavior reimplemented\"], \"modelTier\": \"standard\"}\n```",
+      "activeForm": "Writing container entrypoint"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: Sync + OBS image build loop",
+      "status": "pending",
+      "blockedBy": [
+        2
+      ],
+      "description": "**Goal:** The containers project and image build green in the PR #12 OBS project; a runnable image artifact obtained locally. Controller-driven (like SP4 Task 4): every push asks the user first.\n\n**Files:**\n- Modify (only if the loop finds defects): root/ppg/devel/pgadmin/containers/**, root/ppg/devel/pgadmin/macros.yaml\n\n**Acceptance Criteria:**\n- [ ] isv-pr dry-run green for ppg:devel:pgadmin:containers percona-pgadmin4\n- [ ] user added ubi9-images label to PR #12 before the check run\n- [ ] osc results pr-12:ppg:devel:pgadmin:containers shows succeeded for percona-pgadmin4 (x86_64; aarch64 recorded either way)\n- [ ] a local percona-pgadmin4 image loaded (registry pull or getbinaries+podman load); mechanism recorded in ledger\n\n**Verify:** venv/bin/osc -A https://api.opensuse.org results isv:percona:PR:pr-12:ppg:devel:pgadmin:containers --csv | grep percona-pgadmin4 -> succeeded; podman images | grep percona-pgadmin4\n\nSteps and the registry-vs-getbinaries acquisition probe are in the plan document (Task 3 steps 1-5).\n\n```json:metadata\n{\"files\": [\"root/ppg/devel/pgadmin/containers\"], \"verifyCommand\": \"venv/bin/osc -A https://api.opensuse.org results isv:percona:PR:pr-12:ppg:devel:pgadmin:containers --csv | grep percona-pgadmin4\", \"acceptanceCriteria\": [\"isv-pr dry-run green for ppg:devel:pgadmin:containers percona-pgadmin4\", \"user added ubi9-images label to PR #12 before the check run\", \"osc results pr-12:ppg:devel:pgadmin:containers shows succeeded for percona-pgadmin4 (x86_64; aarch64 recorded either way)\", \"a local percona-pgadmin4 image loaded (registry pull or getbinaries+podman load); mechanism recorded in ledger\"], \"modelTier\": \"standard\"}\n```",
+      "activeForm": "Running OBS image build loop"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: Container smoke matrix (podman)",
+      "status": "pending",
+      "blockedBy": [
+        3
+      ],
+      "description": "**Goal:** Prove the OBS-built image behaves per the spec's runtime contract.\n\n**USER-ORDERED GATE \u2014 NON-SKIPPABLE.** This task was requested by the user in the current conversation. It MUST NOT be closed by walking around it, by declaring it \"verified inline\", or by substituting a cheaper check. Close only after every item in `acceptanceCriteria` has been re-validated independently, with output captured.\n\n**Files:**\n- Create (scratch): $SCRATCH/sp5/smoke-image.sh\n- Modify on defects (via Task 3 loop): root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/*\n\n**Acceptance Criteria:**\n- [ ] T1 login 200 + ver=91700 + idempotent restart\n- [ ] T2 password _FILE works, both-set errors\n- [ ] T3 servers.json imported (sqlite row in server table)\n- [ ] T4 TLS serves https 200, missing certs errors\n- [ ] T5 pg_dump 14-18 present + DEFAULT_BINARY_PATHS['pg-16'] = /usr/pgsql-16/bin\n- [ ] T6 --user 12345:0 boots to 200\n- [ ] log at $SCRATCH/sp5/smoke-image.log; ledger quotes T1-T6 tokens + image tag/digest\n\n**Verify:** bash $SCRATCH/sp5/smoke-image.sh 2>&1 | tee $SCRATCH/sp5/smoke-image.log | grep -E '^T[1-6] (PASS|FAIL)' -> six PASS, zero FAIL\n\nThe full smoke script is given verbatim in the plan document (Task 4 step 1). A FAIL is an image/entrypoint defect: fix in the tree via Task 3's push loop, re-run the whole matrix; never edit the smoke script to pass.\n\n```json:metadata\n{\"files\": [\"root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/Dockerfile\", \"root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/entrypoint.sh\"], \"verifyCommand\": \"bash $SCRATCH/sp5/smoke-image.sh 2>&1 | tee $SCRATCH/sp5/smoke-image.log | grep -E '^T[1-6] (PASS|FAIL)'\", \"acceptanceCriteria\": [\"T1 login 200 + ver=91700 + idempotent restart\", \"T2 password _FILE works, both-set errors\", \"T3 servers.json imported (sqlite row in server table)\", \"T4 TLS serves https 200, missing certs errors\", \"T5 pg_dump 14-18 present + DEFAULT_BINARY_PATHS['pg-16'] = /usr/pgsql-16/bin\", \"T6 --user 12345:0 boots to 200\", \"log at $SCRATCH/sp5/smoke-image.log; ledger quotes T1-T6 tokens + image tag/digest\"], \"modelTier\": \"standard\", \"userGate\": true, \"tags\": [\"user-gate\"]}\n```",
+      "activeForm": "Running container smoke matrix"
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: Records \u2014 spec outcomes, PR #12, memory",
+      "status": "pending",
+      "blockedBy": [
+        4
+      ],
+      "description": "**Goal:** Spec sections 8/9 get the observed outcomes; PR #12 body gains the SP5 section; memory updated.\n\n**Files:**\n- Modify: docs/superpowers/specs/2026-09-02-pgadmin4-container-design.md\n- Modify (remote, with approval): PR #12 body via gh pr edit\n- Modify: ~/.claude/projects/-home-rdias-Work-percona-obs-packaging/memory/pgadmin4-ubi9-effort.md\n\n**Acceptance Criteria:**\n- [ ] spec gains Outcomes section (fix rounds, final OBS result, image size, acquisition path, six smoke tokens + log path, decisions changed)\n- [ ] spec contradicts nothing delivered (sweep usermod/Prefer/common:deps:build/port/UID)\n- [ ] PR #12 body has SP5 section (user-approved edit)\n- [ ] docs: SP5 outcomes committed + pushed with approval; memory updated\n\n**Verify:** grep -n \"Outcomes\" docs/superpowers/specs/2026-09-02-pgadmin4-container-design.md -> one hit; gh pr view 12 body | grep -c SP5 -> >= 1\n\n```json:metadata\n{\"files\": [\"docs/superpowers/specs/2026-09-02-pgadmin4-container-design.md\"], \"verifyCommand\": \"grep -n \\\"Outcomes\\\" docs/superpowers/specs/2026-09-02-pgadmin4-container-design.md\", \"acceptanceCriteria\": [\"spec gains Outcomes section (fix rounds, final OBS result, image size, acquisition path, six smoke tokens + log path, decisions changed)\", \"spec contradicts nothing delivered (sweep usermod/Prefer/common:deps:build/port/UID)\", \"PR #12 body has SP5 section (user-approved edit)\", \"docs: SP5 outcomes committed + pushed with approval; memory updated\"], \"modelTier\": \"mechanical\"}\n```",
+      "activeForm": "Recording SP5 outcomes"
+    }
+  ],
+  "lastUpdated": "2026-09-02T09:41:39.786458+00:00"
+}
