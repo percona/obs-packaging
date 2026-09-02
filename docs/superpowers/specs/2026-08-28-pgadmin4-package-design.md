@@ -75,7 +75,9 @@ requirement), `joserfc` 1.7.4 (Authlib 1.7; needs `cryptography >= 45.0.1`), `li
 **Gone:** `importlib-resources`. **Bumped:** Authlib 1.7.2, Flask-Security-Too 5.8.2,
 Flask-SocketIO 5.6.1, Flask-WTF 1.3.0, gssapi 1.11.1 (pins `Cython == 3.2.4`),
 psycopg/psycopg-c 3.3.4, pytz 2026.3.post1, typer 0.26.8, and — reused from RHEL, not
-built — cryptography 49, setuptools 83, urllib3 2.7, psutil 7.2.
+built — setuptools 83, urllib3 2.7, psutil 7.2. (cryptography 49 was originally in the
+reused-from-RHEL list at version 41; during execution it became a stack package at 49.0.0
+— see §9 Outcomes.)
 
 ### 2.3 Sphinx cost (rejected option, kept for the record)
 
@@ -92,10 +94,10 @@ roman-numerals, snowballstemmer, six `sphinxcontrib-*` helpers, `sphinxcontrib-y
 | Primary runtime | **Containers (SP5): gunicorn**, like upstream's image. **Hosts: httpd + mod_wsgi** (upstream's RHEL packaging) or the systemd unit — which now runs **gunicorn**, not Flask's dev server (refinement of the earlier "systemd unit shipped disabled" idea: same shipped-disabled unit, production-grade server). |
 | Package split (container-driven) | `percona-pgadmin4` (code, user, dirs, config; no web-server dependency) + `percona-pgadmin4-gunicorn` (launcher, gunicorn config, systemd unit; `Requires: python3.12-gunicorn`) + `percona-pgadmin4-httpd` (conf.d snippet, setup helper; `Requires: httpd, python3.12-mod_wsgi`) + `percona-pgadmin4-doc`. An image installs base + `-gunicorn`; a host installs base + `-httpd` or `-gunicorn`. |
 | Configuration | `config_distro.py` (Percona defaults, §5.3) **also applies `PGADMIN_CONFIG_<NAME>` environment variables at import time** (upstream's container semantics, done in Python so it works for services too); `/etc/pgadmin/config_system.py` (`%config(noreplace)`) for host overrides. |
-| Authlib | **Stay on 1.6.12** (no `joserfc`, which would need cryptography ≥ 45 — RHEL has 41 and building cryptography means Rust + maturin, avoided by the SP3 decision). pgAdmin's `Authlib==1.7.*` pin is relaxed like its cryptography/urllib3/setuptools pins. Recorded deviation; revisit when RHEL's cryptography moves. |
+| Authlib | **Stay on 1.6.12** (originally: no `joserfc`, which would need cryptography ≥ 45 — RHEL had 41). pgAdmin's `Authlib==1.7.*` pin is relaxed like its urllib3/setuptools pins. **Amended during execution (§9):** cryptography is now a stack package at 49.0.0, so the joserfc blocker is gone — the Authlib 1.7 + joserfc bump is now possible and deferred as a follow-up. authlib additionally gained an explicit `Requires: python3.12-requests` (its flask integration imports it unconditionally; found by the smoke test). |
 | passlib → libpass | Flask-Security-Too 5.8 requires `libpass`, which installs the `passlib` module: package `python3-libpass` with `Provides: %{python3_pkgprefix}-passlib` and `Conflicts: %{python3_pkgprefix}-passlib < 1.9`, and remove `python3-passlib`. |
 | Frontend lockfile drift | SP1 ruling stands: `package-lock.json` is generated at sync time; npm's resolution drift from upstream's `yarn.lock` is accepted (bounded by the per-commit service cache). |
-| Not shipped | `-desktop`, `-uwsgi`, cloud support (azure/boto3/google), Debian, HTML docs, upgrading cryptography. |
+| Not shipped | `-desktop`, `-uwsgi`, cloud support (azure/boto3/google), Debian, HTML docs. (This row originally also listed "upgrading cryptography" — overturned during execution, see §9.) |
 | Names | `Name: percona-pgadmin4`, `Provides: pgadmin4 = %{version}`; user/group `pgadmin`; URL path `/pgadmin4`; unit `percona-pgadmin4.service`. |
 
 ## 4. Package layout
@@ -182,7 +184,8 @@ The same `python3.12` preamble as the SP3 template (`__ospython`, `python3_pkgpr
 flask-mail,flask-migrate,flask-paranoid,flask-security-too,flask-socketio,flask-sqlalchemy,
 flask-wtf,gssapi,jsonformatter,keyring,ldap3,libgravatar,libpass,paramiko,psycopg,psycopg-c,
 pyotp,pytz,qrcode,sqlalchemy,sqlparse,sshtunnel,typer,user-agents,werkzeug,wtforms,psutil,
-dateutil}` and `python3.12-{cryptography,urllib3,setuptools}` (RHEL, no floors);
+dateutil}`, `python3.12-cryptography` (stack package 1:49.0.0 since §9's crypto pivot;
+originally reused from RHEL at 41) and `python3.12-{urllib3,setuptools}` (RHEL, no floors);
 `Requires(pre): shadow-utils` (sysusers compat). `Suggests: percona-pgadmin4-doc`.
 
 ### 5.2 Subpackages
@@ -417,7 +420,7 @@ entrypoint.
 
 | Risk | Mitigation |
 |---|---|
-| `local-npm-registry install` cannot serve the git-sourced `react-data-grid` | carry openSUSE's `package_git_local.patch` (published beta); SP1 saw the `node_modules` service clone it, so the tarball is in the cpio. |
+| `local-npm-registry install` cannot serve the git-sourced `react-data-grid` | carry openSUSE's `package_git_local.patch` (published beta); SP1 saw the `node_modules` service clone it, so the tarball is in the cpio. **What actually shipped (§9):** no patch — `%prep` rewrites package.json + the lockfile to a `file:` reference to that vendored tarball. |
 | webpack memory/time on OBS workers | `NODE_OPTIONS=--max-old-space-size=3072`; workers have ≥ 4 GB; nodejs:22 stream. |
 | Authlib 1.6.12 vs pgAdmin 9.17 | `%check` imports the app graph; the container smoke test logs in. If 1.7-only APIs are used: bump Authlib, add `joserfc`, and decide cryptography (49 via Rust) then. |
 | `import run_pgadmin` in `%check` wants a writable `DATA_DIR`/log | `PGADMIN_CONFIG_DATA_DIR`/`LOG_FILE` env overrides in `%check` (the new mechanism). |
@@ -426,9 +429,75 @@ entrypoint.
 | SELinux on bare-metal hosts | the helper applies upstream's booleans/fcontexts; containers are permissive; an enforcing-host test is a QA follow-up. |
 | OBS rebuild storms (DoD path-repo refreshes) | expected, as in SP3; nothing to do. |
 
+### Outcomes (2026-09-02)
+
+- OBS (`isv:percona:PR:pr-12:ppg:devel:pgadmin` + `common:deps:build`, UBI_9): **10 fix
+  rounds** across Tasks 4/5 —
+  - sync: `npm_lockfile` missing from the obs-tools image (image builds only from main)
+    → PR #17 (Dockerfile + service on main), rebase;
+  - sync: `node_modules` cannot `ssh`-clone `react-data-grid` → `git url.insteadOf`
+    SSH→HTTPS in the shared obs-setup action;
+  - `python3-psycopg-c`: 3.3.4 declares extensions via `[[tool.setuptools.ext-modules]]`
+    (setuptools ≥ 74.1; RHEL has 68) → `%prep` setup.py shim (the 3.2.x layout);
+  - `percona-pgadmin4`: EL9 rpm 4.16 expands the `%install` macro inside a `%build`
+    comment → "second %install" parse error → `%%`-escape section keywords in comments;
+  - `percona-pgadmin4`: `@fortawesome/fontawesome-free: "latest"` — npm dist-tags don't
+    exist in local-npm-registry's offline packuments (ETARGET) → `%prep` pins the range
+    to the lockfile's version (dynamic);
+  - `percona-pgadmin4`: npm fetches the `react-data-grid` git dependency from
+    codeload.github.com (no network in OBS) → `%prep` rewrites package.json + lockfile
+    to the `file:` tarball the `node_modules` service vendors;
+  - **nodejs 22.23.1** (new package, `common:deps:build`): the buildroot resolved
+    nodejs 16 — EL9 DoD repos expose only the default module stream, and
+    `nodejs >= 20` is epoch-broken (EL9 nodejs has Epoch 1, so `1:16.20.2 >= 20`);
+    ported the CS9 `nodejs:22` module spec (stream-nodejs-22-rhel-9.9.0), sources from
+    the public CS9 lookaside; one skipped test (`internet/test-dgram-membership.js`
+    needs a multicast interface; OBS VMs are loopback-only); consumers now require
+    `nodejs >= 1:22`;
+  - `percona-pgadmin4`: 35 auto-generated **rich-form** `python3.12dist()` requires
+    (from `pkg==X.Y.*` pins; rich deps start with `(` and escaped the `^`-anchored
+    `__requires_exclude`) made the RPM uninstallable → unanchored exclude;
+  - **cryptography 49 pivot** (user decision 2026-09-01, overturning §3's
+    keep-RHEL-41): pgAdmin's `crypto.py` imports CFB8 from
+    `cryptography.hazmat.decrepit` (added in 43; the old location is removed in 49) →
+    new stack packages `python3-maturin` 1.15.0 (PEP 517 backend of every
+    cryptography ≥ 43; binary cargo-built offline, sdist's pure-python shim — bypasses
+    its setuptools ≥ 77 bootstrap), `python3-cffi` 2.1.1 (Epoch 1 > RHEL 1.x;
+    cryptography 49 needs cffi ≥ 2.0; `+Requires pycparser`), `python3-cryptography`
+    49.0.0 (Epoch 1 > RHEL 41; maturin + `cargo_vendor`, system OpenSSL; two OBS
+    rounds: unpackaged `cffi-gen-src` console script, missing
+    `python3.12-setuptools` BuildRequires — build.rs compiles the cffi module via a
+    python snippet);
+  - `python3-authlib`: `+Requires python3.12-requests` (RHEL) — its flask integration
+    imports `..requests_client` unconditionally (first-start crash in the smoke test).
+
+  Final `_result`: 82/82 packages succeeded on UBI_9 x86_64 + aarch64 in
+  `ppg:devel:pgadmin`; `common:deps:build` (local-npm-registry, nodejs) all succeeded;
+  repository published on download.opensuse.org.
+- Stack for 9.17: 9 bumps, 4 additions (annotated-doc, certifi, libpass, gunicorn) — plus
+  the 3 crypto-pivot additions (maturin, cffi, cryptography) — 2 removals (passlib,
+  importlib-resources), 5 `_aggregate`s of `ppg:common:deps`.
+- Container smoke test (podman,
+  `ubi9/ubi@sha256:ae8730de9161f4e98dbe22fef5eba494b0bfe5886be8dc3c4ff687c2e954daf6`,
+  installing `percona-pgadmin4-9.17-6.3.noarch` from the published PR repo):
+  gunicorn — `INSTALL OK`, `ENV OK 7` (PGADMIN_CONFIG_* env mapping), `HTTP 200` for
+  `/login`, `SETUP OK` (pgadmin4.db created from PGADMIN_DEFAULT_*), `VERSION OK 9.17`
+  (page marker `ver=91700`); httpd — `INSTALL OK`, `CONF PRESENT`, `Syntax OK`,
+  `wsgi_module (shared)`, `SETUP-WEB OK`. Logs: scratchpad `smoke/gunicorn.log`,
+  `smoke/httpd.log` (quoted in the SDD ledger).
+- Decisions changed during execution: **cryptography reuse-RHEL-41 → stack package
+  49.0.0** (user, 2026-09-01 — "the original keep-41 ruling was cost-driven; the stack
+  already does offline cargo builds and EL9 ships rust 1.92 ≥ the 1.83 MSRV"); the
+  Authlib-1.7/joserfc follow-up this unblocks is deferred. **Node ≥ 20 from a distro
+  stream → own CS9 port** (user, 2026-08-31). Both recorded in §2.2/§3 amendments above.
+- Deferred minor: `percona-pgadmin4-setup-web` calls `hostname` (absent in minimal
+  UBI-9), so its final info line prints an empty host; cosmetic — the SP5 image uses
+  gunicorn.
+
 ## 10. Out of scope
 
 `-desktop`, `-uwsgi`, cloud support, Debian/Ubuntu, HTML documentation, upgrading
-cryptography/setuptools/urllib3 beyond RHEL's, the container image itself (SP5: Dockerfile,
+setuptools/urllib3 beyond RHEL's (cryptography moved in scope during execution — §9),
+the container image itself (SP5: Dockerfile,
 entrypoint mapping `PGADMIN_DEFAULT_EMAIL/PASSWORD` → `setup-db`, `servers.json` import,
 TLS certificate handling).
