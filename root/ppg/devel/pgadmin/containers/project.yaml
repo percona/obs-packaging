@@ -1,0 +1,53 @@
+title: Percona pgAdmin 4 container image
+description: |
+  Container image for pgAdmin 4 (percona-pgadmin4), built from the
+  ppg:devel:pgadmin RPMs on UBI 9. Bundles the Percona PostgreSQL client
+  binaries for majors 14-18 so pgAdmin's Backup/Restore and external
+  Query Tool features work against any supported server version.
+  Design: docs/superpowers/specs/2026-09-02-pgadmin4-container-design.md
+
+repositories:
+  - name: ubi9
+    paths:
+      - subproject: ppg:devel:pgadmin
+        repository: UBI_9
+      - subproject: ppg:staging:18
+        repository: UBI_9
+      - subproject: ppg:staging:17
+        repository: UBI_9
+      - subproject: ppg:staging:16
+        repository: UBI_9
+      - subproject: ppg:staging:15
+        repository: UBI_9
+      - subproject: ppg:staging:14
+        repository: UBI_9
+      - subproject: ppg:common:deps
+        repository: UBI_9
+      - subproject: common:containers:ubi9
+        repository: images
+      - subproject: common:containers:ubi9
+        repository: UBI_9
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+        repository: standard
+    archs: [x86_64, aarch64]
+
+project-config: |
+  Type: docker
+  BuildEngine: podman
+  BuildFlags: sbom:spdx
+  BuildFlags: sbom:cyclonedx
+  PublishFlags: withsbom
+
+  Preinstall: skopeo
+
+  ExpandFlags: filterbasecontainerpkgs
+
+  Prefer: redhat-release
+  Prefer: glibc-minimal-langpack
+  Prefer: gpgme
+  Prefer: iptables-nft
+  Prefer: percona-postgresql18-libs
+  Ignore: rocky-release
+  Substitute: rocky-release redhat-release
