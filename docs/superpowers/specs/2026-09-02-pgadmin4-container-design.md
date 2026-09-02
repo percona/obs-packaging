@@ -82,8 +82,8 @@ root/ppg/devel/pgadmin/containers/
 1. `ppg:devel:pgadmin` UBI_9 — the pgAdmin stack RPMs
 2. `ppg:staging:{18,17,16,15,14}` UBI_9 — `percona-postgresqlNN` clients
 3. `ppg:common:deps` UBI_9
-4. `common:deps:build` UBI_9 — kept for path consistency; drop at plan time if the
-   image install closure never touches it
+4. `common:deps:build` UBI_9 — **dropped at plan time** (§7); the image install
+   closure never touches it
 5. `common:containers:ubi9` `images` + `UBI_9` — `percona-ubi-minimal`, kiwi helpers
 6. `Fedora:EPEL:9 standard`, `RedHat:UBI-9 standard`, `RockyLinux:9 devel`
 
@@ -162,9 +162,18 @@ python / port 80, postfix, `PGPASS_FILE` (defer until asked — desktop-mode ori
 
 ## 7. RPM change (the single approach-A exception)
 
-`percona-pgadmin4-gunicorn` launcher: when `PGADMIN_TLS_CERTFILE` and
-`PGADMIN_TLS_KEYFILE` are both set, append `--certfile/--keyfile` to the gunicorn
-command line. Host-useful too; ~4 lines; rebuilds `percona-pgadmin4` only.
+**Dropped at plan time (2026-09-02):** the shipped launcher already implements TLS —
+`PGADMIN_ENABLE_TLS=true` adds `--certfile /certs/server.cert --keyfile
+/certs/server.key` to the gunicorn command line (SP4 §5.7 delivered it). No RPM change
+is needed; the entrypoint's TLS step (§6.6) reduces to validating that the cert pair
+exists when `PGADMIN_ENABLE_TLS` is set, then passing the variable through.
+
+Other plan-time resolutions: `common:deps:build` is dropped from the repo paths (§4 —
+nothing in the image's install closure needs the build tools); the `ubi9-images` PR
+label already matches the new `:containers` layout generically
+(`percona_obs/cmd_sync.py` `_IMAGES_REPO_RE` — a `:containers` project with a repo
+named `ubi9`), so PR #12 needs the `ubi9-images` label added alongside `UBI_9`;
+`percona-ubi-minimal` includes shadow-utils, so `usermod` is available at image build.
 
 ## 8. Verification
 
@@ -197,6 +206,33 @@ Task-5-style, against the OBS-built image (PR project):
 | PR project may not publish container images to the OBS registry | fallback `osc getbinaries` + `podman load` (§8). |
 | `pgadmin4-cli load-servers/set-prefs` argument names differ from upstream `setup.py` | they are the same entry points (SP4 §5); verify `--user/--replace` flags in the fix loop. |
 | First-run init in the entrypoint vs launcher double-run | the launcher skips when `pgadmin4.db` exists; entrypoint runs init only when setup is needed. Smoke test 1 covers restart-idempotence. |
+
+### Outcomes (2026-09-02)
+
+- OBS (`isv:percona:PR:pr-12:ppg:devel:pgadmin:containers`, repo `ubi9`): **1 image fix
+  round** — the ENTRYPOINT failed with "not executable" (COPY preserves the mode-644
+  source from the OBS payload; crun refuses exec) → `RUN chmod 0755` after the COPYs
+  plus the x-bit on the committed source (afcd74f9). One CI wrinkle: adding the
+  `ubi9-images` label triggered a skipped label-event run that auto-cancelled the push
+  run; a re-run synced fine. Final: `percona-pgadmin4` **succeeded on x86_64 +
+  aarch64**, tags `9.17-2.1` / `9.17` / `latest` (macros rendered correctly).
+- Entrypoint hardening found in Task 2 review (spec §6 amendments, both harness-covered):
+  `PGADMIN_REPLACE_SERVERS_ON_STARTUP=True` without `PGADMIN_DEFAULT_EMAIL` now fails
+  with a clear error instead of `--user ""`; in external-config-DB mode the entrypoint
+  unsets `PGADMIN_DEFAULT_EMAIL/PASSWORD` before exec so the launcher cannot
+  double-init against the external DB.
+- Image acquisition (spec §8 open item resolved): the OBS registry returns "name
+  unknown" for PR projects — the working path is `osc getbinaries` of the ~207 MB
+  image tar + `podman load`. Loaded x86_64 image size: 650 MB (five PG client majors).
+- Smoke matrix: **6/6 PASS** on `9.17-2.1`
+  (digest `sha256:2bf4c37b4a5ae2774b3d1139f66e4cbfd9ddd51cd0ea878bf6632041bfb1bae2`) —
+  T1 login 200 + `ver=91700` + idempotent restart; T2 password `_FILE` + both-set
+  error; T3 servers.json imported; T4 TLS https 200 + missing-certs error; T5
+  `pg_dump` 14–18 present + `DEFAULT_BINARY_PATHS['pg-16']` resolves; T6
+  `--user 12345:0` boots. Log: scratchpad `sp5/smoke-image.log`; round-1 failure
+  evidence and diagnosis in the SDD task-4 report.
+- Decisions changed during execution: none (the §6 entrypoint amendments and the chmod
+  are within the approved design; controller rulings recorded in the SDD ledger).
 
 ## 10. Out of scope
 
