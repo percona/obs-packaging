@@ -4,14 +4,14 @@
     {
       "id": 1,
       "subject": "Task 1: Containers project skeleton + Dockerfile",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** The ppg:devel:pgadmin:containers project definition, the pgadmin project macros file, and the image package's Dockerfile + LICENSE (entrypoint is Task 2).\n\n**Files:**\n- Create: root/ppg/devel/pgadmin/macros.yaml\n- Create: root/ppg/devel/pgadmin/containers/project.yaml\n- Create: root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/Dockerfile\n- Create: root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/LICENSE\n\n**Acceptance Criteria:**\n- [ ] project.yaml + macros.yaml parse as YAML\n- [ ] Dockerfile: 3 BuildTags, FROM percona-ubi-minimal, installs pgadmin4+gunicorn+percona-postgresql14..18, UID 5050 pin, EXPOSE 8080, VOLUME /var/lib/pgadmin, USER 5050, ENTRYPOINT\n- [ ] LICENSE = upstream PostgreSQL licence text\n- [ ] no common:deps:build path in project.yaml\n\n**Verify:** python3 -c \"import yaml; yaml.safe_load(open('root/ppg/devel/pgadmin/containers/project.yaml'))\" && grep -c '^#!BuildTag' root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/Dockerfile -> yaml OK / 3\n\nAll file contents are given verbatim in the plan document (Task 1 steps 1-4).\n\n```json:metadata\n{\"files\": [\"root/ppg/devel/pgadmin/macros.yaml\", \"root/ppg/devel/pgadmin/containers/project.yaml\", \"root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/Dockerfile\", \"root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/LICENSE\"], \"verifyCommand\": \"python3 -c \\\"import yaml; yaml.safe_load(open('root/ppg/devel/pgadmin/containers/project.yaml'))\\\" && grep -c '^#!BuildTag' root/ppg/devel/pgadmin/containers/percona-pgadmin4/obs/Dockerfile\", \"acceptanceCriteria\": [\"project.yaml + macros.yaml parse as YAML\", \"Dockerfile: 3 BuildTags, FROM percona-ubi-minimal, installs pgadmin4+gunicorn+percona-postgresql14..18, UID 5050 pin, EXPOSE 8080, VOLUME /var/lib/pgadmin, USER 5050, ENTRYPOINT\", \"LICENSE = upstream PostgreSQL licence text\", \"no common:deps:build path in project.yaml\"], \"modelTier\": \"mechanical\"}\n```",
       "activeForm": "Creating containers project skeleton"
     },
     {
       "id": 2,
       "subject": "Task 2: entrypoint.sh with local bash harness",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         1
       ],
@@ -21,7 +21,7 @@
     {
       "id": 3,
       "subject": "Task 3: Sync + OBS image build loop",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         2
       ],
@@ -31,7 +31,7 @@
     {
       "id": 4,
       "subject": "Task 4: Container smoke matrix (podman)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         3
       ],
@@ -41,7 +41,7 @@
     {
       "id": 5,
       "subject": "Task 5: Records \u2014 spec outcomes, PR #12, memory",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         4
       ],
@@ -49,5 +49,5 @@
       "activeForm": "Recording SP5 outcomes"
     }
   ],
-  "lastUpdated": "2026-09-02T09:41:39.786458+00:00"
+  "lastUpdated": "2026-09-02T14:29:06.640428+00:00"
 }
