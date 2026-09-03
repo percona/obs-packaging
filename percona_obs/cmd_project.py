@@ -2,6 +2,7 @@ import argparse
 import concurrent.futures
 import datetime
 import re
+import shutil
 import subprocess
 import sys
 import urllib.error
@@ -26,6 +27,7 @@ from .common import (
     _print_create,
     _print_ok,
     _print_pending,
+    _print_remove,
     apply_env_substitution,
     _MACRO_RE,
     apply_macro_substitution,
@@ -1266,19 +1268,16 @@ def _rewrite_subproject_paths(
     repos: list[dict],
     source_project_id: str,
     release_project_id: str,
-    skip_subproject: str | None = None,
 ) -> list[dict]:
     """Rewrite subproject: path entries for a release subproject yaml.
 
     Rules applied to each path entry:
-      subproject == source_project_id             →  single entry: release_project_id
-      subproject starts with source_project_id:   →  replace prefix with release_project_id;
-                                                       skip if the result equals skip_subproject
+      subproject == source_project_id             →  release_project_id
+      subproject starts with source_project_id:   →  prefix replaced with
+          release_project_id (self- and sibling-references included: the
+          release snapshot keeps the same intra-project topology, e.g. the
+          tarballs ssl repos consuming the project's own RockyLinux repos)
       everything else (project:, external)        →  unchanged
-
-    skip_subproject: if set, any rewritten subproject entry that resolves to this
-    value is dropped.  Used to remove self-referencing paths from release subprojects
-    (e.g. containers referencing itself).
     """
     result = []
     for repo in repos:
@@ -1295,12 +1294,93 @@ def _rewrite_subproject_paths(
                 elif subprj.startswith(source_project_id + ":"):
                     tail = subprj[len(source_project_id) :]
                     rewritten = release_project_id + tail
-                    if skip_subproject and rewritten == skip_subproject:
-                        continue
                     path_entry = {**path_entry, "subproject": rewritten}
             new_paths.append(path_entry)
         result.append({**repo, "paths": new_paths})
     return result
+
+
+def _is_relative_to(child: Path, parent: Path) -> bool:
+    try:
+        child.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+def _write_release_tree(
+    release_dir: Path,
+    project_data: dict,
+    source_path: Path,
+    source_project_id: str,
+    release_project: str,
+    product: str,
+    release_name: str,
+) -> "list[str]":
+    """(Re)generate the release mirror tree from the staging source tree.
+
+    Writes release_dir/project.yaml and one nested mirror dir per source
+    subproject, and deletes stale mirror dirs whose source subproject no
+    longer exists.  Returns repo-relative paths of files written (deletions
+    are staged by the caller via git add -A on release_dir).
+    """
+    written: list[str] = []
+    release_dir.mkdir(parents=True, exist_ok=True)
+
+    project_file = release_dir / "project.yaml"
+    with project_file.open("w") as f:
+        yaml.dump(project_data, f, default_flow_style=False, allow_unicode=True)
+    _print_create(str(project_file.relative_to(_REPO_DIR)))
+    written.append(str(project_file.relative_to(_REPO_DIR)))
+
+    expected_dirs: set[Path] = set()
+    for sub_obs_id, sub_path in find_projects(source_path, source_project_id):
+        if sub_obs_id == source_project_id:
+            continue
+        if not (sub_path / "project.yaml").is_file():
+            continue
+        subproject_name = sub_obs_id[len(source_project_id) + 1 :]
+        source_sub_config = load_project_yaml(sub_path / "project.yaml")
+        rewritten_repos = _rewrite_subproject_paths(
+            source_sub_config.get("repositories", []),
+            source_project_id,
+            release_project,
+        )
+        sub_data: dict = {
+            "title": f"{product} releases {release_name} — {subproject_name}",
+            "description": (
+                f"{subproject_name.capitalize()} subproject for {release_project}.\n"
+                "Builds are disabled; binaries are copied via osc release.\n"
+            ),
+            "build": False,
+            "repositories": rewritten_repos,
+        }
+        for key in ("debuginfo", "publish", "project-config"):
+            if key in source_sub_config:
+                sub_data[key] = source_sub_config[key]
+        release_sub_dir = release_dir / Path(*subproject_name.split(":"))
+        expected_dirs.add(release_sub_dir)
+        release_sub_dir.mkdir(parents=True, exist_ok=True)
+        release_sub_file = release_sub_dir / "project.yaml"
+        with release_sub_file.open("w") as f:
+            yaml.dump(sub_data, f, default_flow_style=False, allow_unicode=True)
+        _print_create(str(release_sub_file.relative_to(_REPO_DIR)))
+        written.append(str(release_sub_file.relative_to(_REPO_DIR)))
+
+    # Delete stale mirrors (e.g. the pre-restructure containers/ubi9).
+    stale = [
+        p.parent
+        for p in sorted(release_dir.rglob("project.yaml"))
+        if p.parent != release_dir
+        and p.parent not in expected_dirs
+        and not any(
+            e == p.parent or _is_relative_to(e, p.parent) for e in expected_dirs
+        )
+    ]
+    for d in stale:
+        shutil.rmtree(d)
+        _print_remove(str(d.relative_to(_REPO_DIR)))
+    return written
 
 
 def _fetch_subproject_container_pkgs(
@@ -1520,6 +1600,13 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     product = args.project.split(":")[0]
     major = args.project.split(":")[-1]
 
+    parts = args.project.split(":")
+    if len(parts) < 3 or parts[1] != "staging":
+        raise SystemExit(
+            "error: project release requires a staging-tier source "
+            f"(<product>:staging:<version>), got: {args.project}"
+        )
+
     source_path = resolve_project_path(args.project)
     if not source_path.is_dir():
         raise SystemExit(
@@ -1690,6 +1777,8 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     print(f"{'First' if is_first_release else 'Update'} release: {release_project}")
     print(f"  Tag:         {tag}")
     print(f"  Directory:   {release_dir.relative_to(_REPO_DIR)}/")
+    if not is_first_release:
+        print("  Mirrors:     regenerated from staging source (stale dirs removed)")
     if _ppg_release_in_macros:
         print(f"  macros.yaml: PPG_RELEASE → {release_counter}")
     print()
@@ -1742,12 +1831,6 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         _print_create(str(release_file.relative_to(_REPO_DIR)))
         committed_paths.append(str(release_file.relative_to(_REPO_DIR)))
 
-        project_file = release_dir / "project.yaml"
-        with project_file.open("w") as f:
-            yaml.dump(project_data, f, default_flow_style=False, allow_unicode=True)
-        _print_create(str(project_file.relative_to(_REPO_DIR)))
-        committed_paths.append(str(project_file.relative_to(_REPO_DIR)))
-
         changelog_file = release_dir / "CHANGELOG.md"
         changelog_file.write_text(
             _CHANGELOG_HEADER + changelog_section + "\n", encoding="utf-8"
@@ -1755,39 +1838,15 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         _print_create(str(changelog_file.relative_to(_REPO_DIR)))
         committed_paths.append(str(changelog_file.relative_to(_REPO_DIR)))
 
-        # Walk source subprojects and generate release subproject project.yaml files.
-        for sub_obs_id, sub_path in find_projects(source_path, args.project):
-            if sub_obs_id == args.project:
-                continue
-            if not (sub_path / "project.yaml").is_file():
-                continue  # intermediate directory, not a real OBS project
-            subproject_name = sub_obs_id[len(args.project) + 1 :]
-            source_sub_config = load_project_yaml(sub_path / "project.yaml")
-            rewritten_repos = _rewrite_subproject_paths(
-                source_sub_config.get("repositories", []),
-                args.project,
-                release_project,
-                skip_subproject=f"{release_project}:{subproject_name}",
-            )
-            sub_data: dict = {
-                "title": f"{product} releases {release_name} — {subproject_name}",
-                "description": (
-                    f"{subproject_name.capitalize()} subproject for {release_project}.\n"
-                    "Builds are disabled; binaries are copied via osc release.\n"
-                ),
-                "build": False,
-                "repositories": rewritten_repos,
-            }
-            for key in ("debuginfo", "publish", "project-config"):
-                if key in source_sub_config:
-                    sub_data[key] = source_sub_config[key]
-            release_sub_dir = release_dir / Path(*subproject_name.split(":"))
-            release_sub_dir.mkdir(parents=True, exist_ok=True)
-            release_sub_file = release_sub_dir / "project.yaml"
-            with release_sub_file.open("w") as f:
-                yaml.dump(sub_data, f, default_flow_style=False, allow_unicode=True)
-            _print_create(str(release_sub_file.relative_to(_REPO_DIR)))
-            committed_paths.append(str(release_sub_file.relative_to(_REPO_DIR)))
+        committed_paths += _write_release_tree(
+            release_dir,
+            project_data,
+            source_path,
+            args.project,
+            release_project,
+            product,
+            release_name,
+        )
 
     else:
         # Update path: append tag to releases list and prepend changelog section.
@@ -1819,10 +1878,31 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         _print_create(str(changelog_file.relative_to(_REPO_DIR)))
         committed_paths.append(str(changelog_file.relative_to(_REPO_DIR)))
 
+        committed_paths += _write_release_tree(
+            release_dir,
+            project_data,
+            source_path,
+            args.project,
+            release_project,
+            product,
+            release_name,
+        )
+
     # Commit.
-    subprocess.run(["git", "add", "--", *committed_paths], cwd=_REPO_DIR, check=True)
     subprocess.run(
-        ["git", "commit", "-s", "-m", commit_msg, "--", *committed_paths],
+        [
+            "git",
+            "add",
+            "-A",
+            "--",
+            *committed_paths,
+            str(release_dir.relative_to(_REPO_DIR)),
+        ],
+        cwd=_REPO_DIR,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-s", "-m", commit_msg],
         cwd=_REPO_DIR,
         check=True,
     )
