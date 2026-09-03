@@ -2171,6 +2171,36 @@ def cmd_sync_promote(args) -> None:
     _print_ok(f"promote successful{suffix}  ({promoted} promoted, {skipped} skipped)")
 
 
+def _collect_release_subprojects(
+    source_project_id: str,
+    release_path: Path,
+) -> "tuple[list[tuple[str, Path]], list[str]]":
+    """Map source subprojects to their release-mirror directories.
+
+    Returns (pairs, missing):
+      pairs   — [(subproject_name, release_sub_path)] for every source
+                subproject whose mirror project.yaml exists.
+      missing — subproject names with no mirror project.yaml.  Full-snapshot
+                releases require a mirror for every subproject; callers must
+                treat a non-empty list as a hard error.
+    """
+    source_path = resolve_project_path(source_project_id)
+    pairs: list[tuple[str, Path]] = []
+    missing: list[str] = []
+    for sub_obs_id, sub_path in find_projects(source_path, source_project_id):
+        if sub_obs_id == source_project_id:
+            continue
+        if not (sub_path / "project.yaml").is_file():
+            continue  # intermediate directory, not a real OBS project
+        subproject_name = sub_obs_id[len(source_project_id) + 1 :]
+        release_sub_path = release_path / Path(*subproject_name.split(":"))
+        if (release_sub_path / "project.yaml").is_file():
+            pairs.append((subproject_name, release_sub_path))
+        else:
+            missing.append(subproject_name)
+    return pairs, missing
+
+
 def _sync_release_subprojects(
     apiurl: str,
     args,
@@ -2181,27 +2211,24 @@ def _sync_release_subprojects(
 ) -> None:
     """Create and populate OBS subprojects for a release (e.g. containers).
 
-    Walks the local source project directory for subprojects that have a
-    corresponding project.yaml under the release tree.  For each one:
-      - Applies the project config to OBS (creating the project if absent).
-      - Disables builds at the project level (binaries come from osc release).
-      - Adds releasetargets to the source subproject, runs osc release, then
-        removes the releasetargets.
-
-    Subprojects without a matching release project.yaml are silently skipped.
+    Every source subproject MUST have a mirror project.yaml under the
+    release tree — a missing mirror aborts the release (a release is a full
+    snapshot; nothing is skipped silently).  Release-tier OBS projects with
+    no local mirror are reported as orphans (manual `sync delete`).
     """
-    source_path = resolve_project_path(source_project_id)
-    for sub_obs_id, sub_path in find_projects(source_path, source_project_id):
-        if sub_obs_id == source_project_id:
-            continue
-        if not (sub_path / "project.yaml").is_file():
-            continue  # intermediate directory, not a real OBS project
-        subproject_name = sub_obs_id[len(source_project_id) + 1 :]
-        release_sub_obs = f"{release_obs_project}:{subproject_name}"
-        release_sub_path = release_path / Path(*subproject_name.split(":"))
+    pairs, missing = _collect_release_subprojects(source_project_id, release_path)
+    if missing:
+        listing = "\n".join(f"  {source_project_id}:{name}" for name in sorted(missing))
+        raise SystemExit(
+            "error: staging subprojects have no release mirror "
+            f"(missing project.yaml under {release_path.relative_to(_REPO_DIR)}):\n"
+            f"{listing}\n"
+            "Re-run 'percona-obs project release' to regenerate the release tree."
+        )
 
-        if not (release_sub_path / "project.yaml").is_file():
-            continue
+    for subproject_name, release_sub_path in pairs:
+        release_sub_obs = f"{release_obs_project}:{subproject_name}"
+        sub_obs_id = f"{source_project_id}:{subproject_name}"
 
         paths_stripped, _ = _apply_project_config(
             apiurl,
@@ -2237,6 +2264,18 @@ def _sync_release_subprojects(
         finally:
             _remove_release_targets(apiurl, source_sub_obs, release_sub_obs)
         _print_ok(f"released  {source_sub_obs} → {release_sub_obs}")
+
+    # Orphan detection: release-tier OBS projects with no local mirror.
+    local_names = {name for name, _ in pairs}
+    for obs_sub in sorted(_fetch_obs_subproject_names(apiurl, release_obs_project)):
+        sub_name = obs_sub[len(release_obs_project) + 1 :]
+        if sub_name not in local_names:
+            print(
+                f"warning: orphaned release subproject on OBS: {obs_sub} "
+                "(no local mirror) — remove manually with "
+                f"'percona-obs sync delete {obs_sub[len(args.rootprj) + 1 :]}'",
+                flush=True,
+            )
 
 
 def cmd_sync_release(args) -> None:
