@@ -1,11 +1,13 @@
 name: OBS PR Cleanup
 
-# When a PR is closed (merged or abandoned), delete the PR-specific OBS
-# project that was created by obs-pr-check.yml.  The delete is a no-op if
-# the project never existed (e.g. the PR was closed before the check ran).
-#
-# Release-only PRs (all changed root/** files under root/*/releases/) never
-# create a PR OBS project, so only the delete step runs (as a no-op).
+# When a PR is closed:
+#   - merged release PR (all changed root/** files under root/*/releases/):
+#     create the release tag on the merge commit and dispatch obs-release.yml
+#     with it (workflow_dispatch works with GITHUB_TOKEN; a tag push would
+#     not trigger anything — GitHub suppresses workflow-to-workflow triggers
+#     for the default token, and this repo has no PAT).
+#   - every PR: delete the PR-specific OBS project created by
+#     obs-pr-check.yml (no-op if it never existed) and the PR's Actions caches.
 
 on:
   pull_request:
@@ -19,9 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     permissions:
-      # Required to push release tags via the GitHub API.
+      # Required to create release tags on the merge commit.
       contents: write
-      # Required to delete the PR's Actions caches.
+      # Required to dispatch obs-release.yml and delete the PR's Actions caches.
       actions: write
       packages: read
 
@@ -32,6 +34,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: ./.github/actions/obs-setup
         with:
@@ -54,8 +58,9 @@ jobs:
             profile create "pr-${PR_NUMBER}"
 
       # Detect whether this is a release-only PR (all changed root/** files are
-      # under root/*/releases/).  Release-only PRs never create a PR OBS project
-      # so sync delete runs as a no-op.
+      # under root/*/releases/).  This output gates tag creation below; it also
+      # still tells us that a release-only PR never created a PR OBS project,
+      # so the delete step below runs as a no-op for it.
       - name: Detect release-only PR
         id: detect
         env:
@@ -72,6 +77,38 @@ jobs:
           else
             echo "is_release_pr=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # Merged release PR: tag the merge commit (the exact reviewed snapshot)
+      # and dispatch the release workflow with it.  Tag-creation errors other
+      # than "already exists" fail the job loudly — a silently missing tag is
+      # how releases used to vanish.
+      - name: Tag release and dispatch obs-release
+        if: github.event.pull_request.merged == true && steps.detect.outputs.is_release_pr == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          set -euo pipefail
+          FILES=$(gh pr view "$PR_NUMBER" --json files \
+            --jq '.files[].path | select(test("^root/[^/]+/releases/[^/]+/release\\.yaml$"))' | sort -u)
+          [ -z "$FILES" ] && { echo "No release.yaml changed; nothing to tag."; exit 0; }
+          while IFS= read -r release_file; do
+            TAG=$(git show "${MERGE_SHA}:${release_file}" | venv/bin/python3 -c \
+              "import sys,yaml; d=yaml.safe_load(sys.stdin); r=d.get('releases') or []; print(r[-1] if r else d.get('revision') or '')")
+            [ -z "$TAG" ] && continue
+            echo "Creating tag ${TAG} at ${MERGE_SHA}"
+            if ! OUT=$(gh api "repos/${GITHUB_REPOSITORY}/git/refs" -X POST \
+                -f "ref=refs/tags/${TAG}" -f "sha=${MERGE_SHA}" 2>&1); then
+              if echo "$OUT" | grep -q "Reference already exists"; then
+                echo "Tag ${TAG} already exists — dispatching anyway"
+              else
+                echo "::error::Failed to create tag ${TAG}: ${OUT}"
+                exit 1
+              fi
+            fi
+            echo "Dispatching obs-release.yml with tag=${TAG}"
+            gh workflow run obs-release.yml --ref main -f "tag=${TAG}"
+          done <<< "$FILES"
 
       # Delete the PR's root project and all its sub-projects.
       # --yes skips the confirmation prompt.
