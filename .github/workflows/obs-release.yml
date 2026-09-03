@@ -6,6 +6,15 @@ name: OBS Release
 # deliberately inert (no PAT exists, and human-pushed tags must not start
 # releases by accident).  Manual recovery:
 #   gh workflow run obs-release.yml -f tag=ppg/17.11-1
+#
+# Pending-cancellation race: this job shares the "sync-main-sync"
+# concurrency group (cancel-in-progress: false) with sync-main's sync job.
+# GitHub only keeps ONE pending run per group, so if a root/** push queues
+# another sync-main sync job while this dispatched run is still pending
+# behind an in-progress one, this run is CANCELLED rather than queued
+# again. Symptom: the dispatched "OBS Release" run shows as cancelled with
+# no release having happened. Recovery: re-dispatch with the manual command
+# above once the concurrency group is free.
 
 on:
   workflow_dispatch:

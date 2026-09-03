@@ -637,6 +637,14 @@ The process is PR-based:
 4. **`obs-release.yml`** — its sole trigger is `workflow_dispatch`; it runs `sync release`
    in CI, then creates a GitHub release with the changelog contents.
 
+> **Constraint:** the tag+dispatch automation in step 3 only fires for a PR whose
+> `root/` changes are **entirely** under `root/*/releases/` (`obs-pr-cleanup.yml`'s
+> release-only detection). Do not mix in unrelated `root/` edits — including the
+> legacy `PPG_RELEASE` counter bump in a per-major `<staging>/<V>/macros.yaml`, which
+> would break release-only detection if it were ever reintroduced there. This is
+> currently dormant in practice because `PPG_RELEASE` lives in the shared
+> `root/ppg/staging/macros.yaml`, which `project release` does not touch or bump.
+
 ### Step 1 — Create or update a release
 
 ```sh
@@ -757,6 +765,14 @@ Manual recovery (e.g. `obs-pr-cleanup.yml` tagged but the dispatch failed):
 gh workflow run obs-release.yml -f tag=ppg/17.9-1
 ```
 
+**Pending-cancellation race:** `obs-release.yml` shares the `sync-main-sync` concurrency
+group (`cancel-in-progress: false`) with `sync-main.yml`'s sync job, and GitHub keeps at
+most one *pending* run per group. If a `root/**` push queues another sync-main sync job
+while the dispatched `obs-release.yml` run is still pending behind an in-progress one,
+the pending `obs-release.yml` run is **cancelled** rather than requeued — the symptom is
+a cancelled "OBS Release" run with no release having happened. Recovery is the same
+manual command above, re-run once the concurrency group is free.
+
 ### Running `sync release` manually
 
 For local testing or recovery from a failed CI run:
@@ -784,7 +800,11 @@ Flags:
    - Runs `sync push --dry-run` to confirm OBS is up-to-date (first release only).
 2. **Mirror check** — a staging subproject with no corresponding local mirror directory
    is a **hard error** (never silently skipped).
-3. **Freeze sequence** (skipped with `--no-freeze`), applying to every release, first or
+3. **Applies the release project config** — the top-level release project meta is
+   re-applied on the update path too, not just on first creation, and this happens
+   *before* the freeze sequence below. Release targets are added only for repos
+   present on both sides.
+4. **Freeze sequence** (skipped with `--no-freeze`), applying to every release, first or
    update:
    1. **Drain** — poll `_result` for the staging project and all subprojects until no
       package is `building` / `scheduled` / `dispatching` / `blocked` / `finished` /
@@ -794,15 +814,13 @@ Flags:
    3. **Freeze** — snapshot each project's meta, then disable builds on staging and
       every subproject.
    4. **Release** — `osc release` for the top-level project and every subproject.
-   5. **Restore** — in a `finally`, re-apply each project's exact snapshotted meta
-      (never a blanket enable, since subprojects carry per-repo flags — e.g. tarballs'
-      `publish:` flags — that must survive the round trip).
-4. **Applies the release project config** — the top-level release project meta is
-   re-applied on the update path too, not just on first creation. Release targets are
-   added only for repos present on both sides.
-5. **Verify** — polls (bounded by `--verify-timeout`) until each released repo holds
-   binaries.
-6. Release-tier OBS projects with no local mirror are reported loudly as orphans;
+   5. **Verify** — still inside the freeze window, polls (bounded by
+      `--verify-timeout`) until each released repo holds binaries.
+   6. **Restore** — in a `finally` (so it still runs even if verify times out or
+      raises), re-apply each project's exact snapshotted meta last (never a blanket
+      enable, since subprojects carry per-repo flags — e.g. tarballs' `publish:`
+      flags — that must survive the round trip).
+5. Release-tier OBS projects with no local mirror are reported loudly as orphans;
    deletion is never automatic — run `sync delete` manually.
 
 Skip all divergence checks:

@@ -846,7 +846,9 @@ def _container_registry_prefix(
     )
 
 
-def _project_image_repo_names(project_path: Path, config: dict) -> "set[str]":
+def _project_image_repo_names(
+    project_path: Path, config: dict, obs_project_name: str = ""
+) -> "set[str]":
     """Repo names that host container images for this project's config.
 
     Old layout: a repo literally named "images".  New layout: a project
@@ -854,6 +856,14 @@ def _project_image_repo_names(project_path: Path, config: dict) -> "set[str]":
     repos after the flavor (ubi8/ubi9) — in that case all config repos are
     image repos (only applied when no "images" repo exists, so the old
     layout's helper repos are not misclassified).
+
+    Release mirror projects have no local package dirs at all (binaries live
+    on OBS only), so the all-children-are-Dockerfile-images rule can't fire.
+    For those, fall back to the naming convention used by
+    ``.github/scripts/list_qa_matrix.py::qa_project_type``: a project whose
+    directory is named "containers" or whose derived OBS path ends in
+    ":containers" is a containers project, and all its config repos are
+    image repos.
     """
     repo_names = {
         r.get("name", "") for r in config.get("repositories", []) if r.get("name")
@@ -865,7 +875,11 @@ def _project_image_repo_names(project_path: Path, config: dict) -> "set[str]":
         for p in project_path.iterdir()
         if p.is_dir() and ((p / "obs").is_dir() or (p / "package.yaml").is_file())
     ]
-    if pkg_dirs and all((p / "obs" / "Dockerfile").is_file() for p in pkg_dirs):
+    if pkg_dirs:
+        if all((p / "obs" / "Dockerfile").is_file() for p in pkg_dirs):
+            return repo_names
+        return set()
+    if project_path.name == "containers" or obs_project_name.endswith(":containers"):
         return repo_names
     return set()
 
@@ -987,7 +1001,7 @@ def cmd_project_install(args) -> None:
         obs_name_to_path[obs_project_name] = project_path
         config = _load_project_config_with_inheritance(project_path, env_vars)
         image_repos_by_project[obs_project_name] = _project_image_repo_names(
-            project_path, config
+            project_path, config, obs_project_name
         )
         publish_config = config.get("publish")
         for repo in config.get("repositories", []):
@@ -1667,6 +1681,33 @@ _CHANGELOG_HEADER = (
 )
 
 
+def _commit_release_paths(
+    commit_msg: str, committed_paths: "list[str]", release_dir: Path
+) -> None:
+    """Stage and commit only the release-relevant paths.
+
+    ``committed_paths`` are repo-relative paths (as strings) explicitly
+    written by the release command — e.g. a bumped ``macros.yaml`` outside
+    ``release_dir``. ``release_dir`` (an absolute path under the repo) is
+    added wholesale so staged deletions under it are picked up too. Scoping
+    both ``git add`` and ``git commit`` to these pathspecs ensures the
+    resulting commit contains only release changes, never anything an
+    operator had staged beforehand elsewhere in the working tree.
+    """
+    release_dir_rel = str(release_dir.relative_to(_REPO_DIR))
+    pathspecs = [*committed_paths, release_dir_rel]
+    subprocess.run(
+        ["git", "add", "-A", "--", *pathspecs],
+        cwd=_REPO_DIR,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-s", "-m", commit_msg, "--", *pathspecs],
+        cwd=_REPO_DIR,
+        check=True,
+    )
+
+
 def cmd_project_release(args: argparse.Namespace) -> None:
     """Create or update a release: release.yaml, CHANGELOG.md, project.yaml, commit, and open a PR."""
     product = args.project.split(":")[0]
@@ -1979,21 +2020,5 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         )
 
     # Commit.
-    subprocess.run(
-        [
-            "git",
-            "add",
-            "-A",
-            "--",
-            *committed_paths,
-            str(release_dir.relative_to(_REPO_DIR)),
-        ],
-        cwd=_REPO_DIR,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "commit", "-s", "-m", commit_msg],
-        cwd=_REPO_DIR,
-        check=True,
-    )
+    _commit_release_paths(commit_msg, committed_paths, release_dir)
     _print_ok(commit_msg)
