@@ -220,3 +220,41 @@ def test_find_pkg_service_walks_subprojects(tmp_path):
     (src / "extras" / "percona-rum" / "obs" / "_service").write_text("<services/>")
     assert cmd_project._find_pkg_service(src, "percona-rum") is not None
     assert cmd_project._find_pkg_service(src, "nope") is None
+
+
+def test_registry_prefix_old_and_new_layouts():
+    old = cmd_project._container_registry_prefix(
+        "isv:percona:ppg:releases:17:containers:ubi9", "isv:percona", None, "images"
+    )
+    assert (
+        old
+        == "registry.opensuse.org/isv/percona/ppg/releases/17/containers/ubi9/images"
+    )
+    new = cmd_project._container_registry_prefix(
+        "isv:percona:ppg:releases:17:containers", "isv:percona", None, "ubi9"
+    )
+    assert new == "registry.opensuse.org/isv/percona/ppg/releases/17/containers/ubi9"
+
+
+def test_project_image_repo_names_new_layout(tmp_path):
+    proj = tmp_path / "containers"
+    (proj / "img-a" / "obs").mkdir(parents=True)
+    (proj / "img-a" / "obs" / "Dockerfile").write_text("FROM x\n")
+    config = {"repositories": [{"name": "ubi8"}, {"name": "ubi9"}]}
+    assert cmd_project._project_image_repo_names(proj, config) == {"ubi8", "ubi9"}
+
+
+def test_project_image_repo_names_old_layout_keeps_helper_repos(tmp_path):
+    proj = tmp_path / "containers-ubi9"
+    (proj / "img-a" / "obs").mkdir(parents=True)
+    (proj / "img-a" / "obs" / "Dockerfile").write_text("FROM x\n")
+    config = {"repositories": [{"name": "RockyLinux_9"}, {"name": "images"}]}
+    assert cmd_project._project_image_repo_names(proj, config) == {"images"}
+
+
+def test_project_image_repo_names_mixed_project_is_not_images(tmp_path):
+    proj = tmp_path / "tarballs"
+    (proj / "percona-psql" / "obs").mkdir(parents=True)
+    (proj / "percona-psql" / "obs" / "_service").write_text("<services/>")
+    config = {"repositories": [{"name": "ssl3"}, {"name": "RockyLinux_9"}]}
+    assert cmd_project._project_image_repo_names(proj, config) == set()

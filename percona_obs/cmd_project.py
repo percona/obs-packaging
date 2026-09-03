@@ -806,9 +806,11 @@ _DEB_REPO_PREFIXES = ("Debian_", "xUbuntu_", "Ubuntu_", "Mint_")
 _ZYPPER_REPO_PREFIXES = ("openSUSE_", "SLE_", "SLES_")
 
 
-def _repo_pkg_manager(repo_name: str) -> str:
+def _repo_pkg_manager(
+    repo_name: str, image_repos: "frozenset[str] | set[str]" = frozenset()
+) -> str:
     """Return 'deb', 'zypper', 'dnf', or 'container' based on the OBS repository name."""
-    if repo_name == "images":
+    if repo_name == "images" or repo_name in image_repos:
         return "container"
     if any(repo_name.startswith(p) for p in _DEB_REPO_PREFIXES):
         return "deb"
@@ -818,12 +820,17 @@ def _repo_pkg_manager(repo_name: str) -> str:
 
 
 def _container_registry_prefix(
-    obs_project: str, rootprj: str, env_vars: "dict[str, str] | None"
+    obs_project: str,
+    rootprj: str,
+    env_vars: "dict[str, str] | None",
+    repo_name: str,
 ) -> str:
-    """Return the container registry base URL for an OBS project's images repo.
+    """Return the container registry base URL for an OBS project's image repo.
 
-    Example: isv:percona:ppg:releases:18:containers:ubi9 →
-      registry.opensuse.org/isv/percona/ppg/releases/18/containers/ubi9/images
+    Old layout:  isv:percona:ppg:releases:17:containers:ubi9 + images
+                 → registry.opensuse.org/isv/percona/ppg/releases/17/containers/ubi9/images
+    New layout:  isv:percona:ppg:releases:17:containers + ubi9
+                 → registry.opensuse.org/isv/percona/ppg/releases/17/containers/ubi9
     """
     registry_rootprj = (env_vars or {}).get(
         "OBS_CONTAINER_REGISTRY_ROOTPRJ",
@@ -834,7 +841,33 @@ def _container_registry_prefix(
         if obs_project.startswith(rootprj + ":")
         else obs_project
     )
-    return f"registry.opensuse.org/{registry_rootprj}/{rel.replace(':', '/')}/images"
+    return (
+        f"registry.opensuse.org/{registry_rootprj}/{rel.replace(':', '/')}/{repo_name}"
+    )
+
+
+def _project_image_repo_names(project_path: Path, config: dict) -> "set[str]":
+    """Repo names that host container images for this project's config.
+
+    Old layout: a repo literally named "images".  New layout: a project
+    whose every direct-child package is a Dockerfile image names its image
+    repos after the flavor (ubi8/ubi9) — in that case all config repos are
+    image repos (only applied when no "images" repo exists, so the old
+    layout's helper repos are not misclassified).
+    """
+    repo_names = {
+        r.get("name", "") for r in config.get("repositories", []) if r.get("name")
+    }
+    if "images" in repo_names:
+        return {"images"}
+    pkg_dirs = [
+        p
+        for p in project_path.iterdir()
+        if p.is_dir() and ((p / "obs").is_dir() or (p / "package.yaml").is_file())
+    ]
+    if pkg_dirs and all((p / "obs" / "Dockerfile").is_file() for p in pkg_dirs):
+        return repo_names
+    return set()
 
 
 def _local_container_images(project_path: Path) -> "list[tuple[str, list[str]]]":
@@ -949,9 +982,13 @@ def cmd_project_install(args) -> None:
     # Build repo_name -> [obs_project_name, ...] mapping and a path lookup.
     repo_entries: dict[str, list[str]] = {}
     obs_name_to_path: dict[str, Path] = {}
+    image_repos_by_project: dict[str, set[str]] = {}
     for obs_project_name, project_path in projects:
         obs_name_to_path[obs_project_name] = project_path
         config = _load_project_config_with_inheritance(project_path, env_vars)
+        image_repos_by_project[obs_project_name] = _project_image_repo_names(
+            project_path, config
+        )
         publish_config = config.get("publish")
         for repo in config.get("repositories", []):
             repo_name = repo.get("name", "")
@@ -973,23 +1010,33 @@ def cmd_project_install(args) -> None:
             raise SystemExit(f"error: repository '{args.repo}' not found in scope")
         raise SystemExit("error: no repositories found in scope")
 
+    def _is_container_repo(repo_name: str) -> bool:
+        return repo_name == "images" or any(
+            repo_name in image_repos_by_project.get(p, ())
+            for p in repo_entries.get(repo_name, [])
+        )
+
     markdown = getattr(args, "markdown", False)
     if markdown:
         print("# Repository Installation Instructions\n")
 
     sep = _col(_DIM, "─" * 72)
     ordered_repos = sorted(
-        repo_entries, key=lambda r: (1 if _repo_pkg_manager(r) == "container" else 0, r)
+        repo_entries, key=lambda r: (1 if _is_container_repo(r) else 0, r)
     )
     for repo_name in ordered_repos:
         if markdown:
-            heading = "Container Images" if repo_name == "images" else repo_name
+            heading = "Container Images" if _is_container_repo(repo_name) else repo_name
             print(f"\n### {heading}\n")
         else:
             print(sep)
             print(_col(_BOLD, repo_name))
             print()
-        pkg_mgr = _repo_pkg_manager(repo_name)
+        pkg_mgr = (
+            "container"
+            if _is_container_repo(repo_name)
+            else _repo_pkg_manager(repo_name)
+        )
         proj_list = repo_entries[repo_name]
 
         for i, obs_project in enumerate(proj_list):
@@ -1002,7 +1049,7 @@ def cmd_project_install(args) -> None:
 
             if pkg_mgr == "container":
                 registry_prefix = _container_registry_prefix(
-                    obs_project, args.rootprj, env_vars
+                    obs_project, args.rootprj, env_vars, repo_name
                 )
                 proj_path = obs_name_to_path.get(obs_project)
                 images = _local_container_images(proj_path) if proj_path else []
