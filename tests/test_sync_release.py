@@ -103,6 +103,162 @@ def test_orphan_reporting(tmp_path, monkeypatch, capsys):
     assert "sync delete" in out
 
 
+class _Args:
+    """Minimal args namespace matching what cmd_sync_release touches."""
+
+    def __init__(self, project, rootprj, no_freeze=False, verify_timeout=600):
+        self.project = project
+        self.force = False
+        self.skip_tag_check = True
+        self.no_freeze = no_freeze
+        self.freeze_timeout = 1
+        self.verify_timeout = verify_timeout
+        self.profile = None
+        self.rootprj = rootprj
+        self.env_overrides = None
+        self.message = None
+
+
+def _wire_release_update_path(monkeypatch, src, rel):
+    """Stub every OBS/osc touchpoint cmd_sync_release hits on the update
+    (project-exists) path, so the test only exercises the freeze wiring."""
+    monkeypatch.setattr(
+        cmd_sync,
+        "resolve_project_path",
+        lambda pid: src if pid == "ppg:staging:17" else rel,
+    )
+    monkeypatch.setattr(cmd_sync, "_REPO_DIR", rel.parents[2])
+    monkeypatch.setattr(cmd_sync.osc.conf, "config", {"apiurl": "http://obs"})
+    monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda *a, **k: True)
+    monkeypatch.setattr(
+        cmd_sync, "_apply_project_config", lambda *a, **k: (False, None)
+    )
+    monkeypatch.setattr(cmd_sync, "_disable_project_builds", lambda *a, **k: None)
+    monkeypatch.setattr(
+        cmd_sync, "_read_project_release_source", lambda *a, **k: ([], None)
+    )
+    monkeypatch.setattr(
+        cmd_sync, "_filter_release_repo_names", lambda apiurl, names, target: names
+    )
+    monkeypatch.setattr(cmd_sync, "_add_release_targets", lambda *a, **k: None)
+    monkeypatch.setattr(cmd_sync, "_remove_release_targets", lambda *a, **k: None)
+    monkeypatch.setattr(
+        cmd_sync, "_fetch_obs_subproject_names", lambda apiurl, prefix: set()
+    )
+
+
+def test_freeze_order_and_restore_on_failure(tmp_path, monkeypatch):
+    src, rel = _mk_tree(tmp_path)
+    (rel / "tarballs").mkdir()
+    (rel / "tarballs" / "project.yaml").write_text("build: false\n")
+    _wire_release_update_path(monkeypatch, src, rel)
+
+    calls = []
+    monkeypatch.setattr(
+        cmd_sync, "wait_for_quiesce", lambda *a, **k: calls.append("drain")
+    )
+    monkeypatch.setattr(
+        cmd_sync, "assert_all_green", lambda *a, **k: calls.append("green") or []
+    )
+    monkeypatch.setattr(
+        cmd_sync,
+        "freeze_builds",
+        lambda *a, **k: calls.append("freeze") or {"p": "<x/>"},
+    )
+    monkeypatch.setattr(
+        cmd_sync, "restore_builds", lambda *a, **k: calls.append("restore")
+    )
+    monkeypatch.setattr(cmd_sync, "verify_release_landed", lambda *a, **k: None)
+
+    def boom(*a, **k):
+        calls.append("release")
+        raise RuntimeError("osc failed")
+
+    monkeypatch.setattr(cmd_sync.subprocess, "run", boom)
+
+    args = _Args(project="ppg:releases:17", rootprj="home:Admin")
+
+    with pytest.raises(RuntimeError):
+        cmd_sync.cmd_sync_release(args)
+
+    assert calls[:3] == ["drain", "green", "freeze"]
+    assert calls[-1] == "restore"
+
+
+def test_red_staging_aborts_before_freeze(tmp_path, monkeypatch):
+    src, rel = _mk_tree(tmp_path)
+    (rel / "tarballs").mkdir()
+    (rel / "tarballs" / "project.yaml").write_text("build: false\n")
+    _wire_release_update_path(monkeypatch, src, rel)
+
+    freeze_called = []
+    monkeypatch.setattr(cmd_sync, "wait_for_quiesce", lambda *a, **k: None)
+    monkeypatch.setattr(
+        cmd_sync, "assert_all_green", lambda *a, **k: ["p/pkg repo/x86_64: failed"]
+    )
+    monkeypatch.setattr(
+        cmd_sync, "freeze_builds", lambda *a, **k: freeze_called.append(1) or {}
+    )
+    monkeypatch.setattr(cmd_sync, "restore_builds", lambda *a, **k: None)
+    monkeypatch.setattr(cmd_sync, "verify_release_landed", lambda *a, **k: None)
+    monkeypatch.setattr(
+        cmd_sync.subprocess,
+        "run",
+        lambda *a, **k: pytest.fail("osc release must not run"),
+    )
+
+    args = _Args(project="ppg:releases:17", rootprj="home:Admin")
+
+    with pytest.raises(SystemExit, match="not fully green"):
+        cmd_sync.cmd_sync_release(args)
+
+    assert freeze_called == []
+
+
+def test_no_freeze_skips_gate_but_verifies(tmp_path, monkeypatch):
+    src, rel = _mk_tree(tmp_path)
+    (rel / "tarballs").mkdir()
+    (rel / "tarballs" / "project.yaml").write_text("build: false\n")
+    _wire_release_update_path(monkeypatch, src, rel)
+
+    def fail_if_called(*a, **k):
+        pytest.fail("drain/green/freeze must be skipped with --no-freeze")
+
+    monkeypatch.setattr(cmd_sync, "wait_for_quiesce", fail_if_called)
+    monkeypatch.setattr(cmd_sync, "assert_all_green", fail_if_called)
+    monkeypatch.setattr(cmd_sync, "freeze_builds", fail_if_called)
+    monkeypatch.setattr(cmd_sync, "restore_builds", lambda *a, **k: None)
+    monkeypatch.setattr(cmd_sync.subprocess, "run", lambda *a, **k: None)
+
+    verified = []
+    monkeypatch.setattr(
+        cmd_sync,
+        "verify_release_landed",
+        lambda apiurl, src_prj, rel_prj, timeout_s=600: verified.append(
+            (src_prj, rel_prj)
+        ),
+    )
+
+    args = _Args(
+        project="ppg:releases:17",
+        rootprj="home:Admin",
+        no_freeze=True,
+        verify_timeout=5,
+    )
+
+    cmd_sync.cmd_sync_release(args)
+
+    assert ("home:Admin:ppg:staging:17", "home:Admin:ppg:releases:17") in verified
+    assert (
+        "home:Admin:ppg:staging:17:containers",
+        "home:Admin:ppg:releases:17:containers",
+    ) in verified
+    assert (
+        "home:Admin:ppg:staging:17:tarballs",
+        "home:Admin:ppg:releases:17:tarballs",
+    ) in verified
+
+
 def test_filter_release_repo_names_warns_and_drops(monkeypatch, capsys):
     monkeypatch.setattr(
         cmd_sync,

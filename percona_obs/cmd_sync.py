@@ -88,6 +88,13 @@ from .obs_api import (
     _remove_release_targets,
     _upload_obs_files,
 )
+from .release_freeze import (
+    assert_all_green,
+    freeze_builds,
+    restore_builds,
+    verify_release_landed,
+    wait_for_quiesce,
+)
 from .services import (
     _copy_local_packaging,
     _has_cargo_vendor_service,
@@ -2233,6 +2240,7 @@ def _sync_release_subprojects(
     release_obs_project: str,
     release_path: Path,
     env_vars: dict[str, str],
+    pairs: "list[tuple[str, Path]] | None" = None,
 ) -> None:
     """Create and populate OBS subprojects for a release (e.g. containers).
 
@@ -2240,16 +2248,25 @@ def _sync_release_subprojects(
     release tree — a missing mirror aborts the release (a release is a full
     snapshot; nothing is skipped silently).  Release-tier OBS projects with
     no local mirror are reported as orphans (manual `sync delete`).
+
+    ``pairs`` may be passed pre-collected (e.g. by ``cmd_sync_release``,
+    which needs the list before this function runs in order to compute the
+    build-freeze scope) to avoid walking the tree twice; when omitted this
+    still performs its own collection and hard-error check for direct
+    callers.
     """
-    pairs, missing = _collect_release_subprojects(source_project_id, release_path)
-    if missing:
-        listing = "\n".join(f"  {source_project_id}:{name}" for name in sorted(missing))
-        raise SystemExit(
-            "error: staging subprojects have no release mirror "
-            f"(missing project.yaml under {release_path.relative_to(_REPO_DIR)}):\n"
-            f"{listing}\n"
-            "Re-run 'percona-obs project release' to regenerate the release tree."
-        )
+    if pairs is None:
+        pairs, missing = _collect_release_subprojects(source_project_id, release_path)
+        if missing:
+            listing = "\n".join(
+                f"  {source_project_id}:{name}" for name in sorted(missing)
+            )
+            raise SystemExit(
+                "error: staging subprojects have no release mirror "
+                f"(missing project.yaml under {release_path.relative_to(_REPO_DIR)}):\n"
+                f"{listing}\n"
+                "Re-run 'percona-obs project release' to regenerate the release tree."
+            )
 
     for subproject_name, release_sub_path in pairs:
         release_sub_obs = f"{release_obs_project}:{subproject_name}"
@@ -2346,6 +2363,42 @@ def cmd_sync_release(args) -> None:
         **auto_rootprj_env(args.rootprj),
     }
 
+    subproject_pairs, missing_mirrors = _collect_release_subprojects(
+        source_project_id, release_path
+    )
+    if missing_mirrors:
+        listing = "\n".join(
+            f"  {source_project_id}:{name}" for name in sorted(missing_mirrors)
+        )
+        raise SystemExit(
+            "error: staging subprojects have no release mirror:\n"
+            f"{listing}\n"
+            "Re-run 'percona-obs project release' to regenerate the release tree."
+        )
+    source_sub_obs_projects = [
+        f"{source_obs_project}:{name}" for name, _ in subproject_pairs
+    ]
+    freeze_scope = [source_obs_project] + source_sub_obs_projects
+
+    def _freeze_and_run(release_all) -> None:
+        snapshots: dict[str, str] = {}
+        if not args.no_freeze:
+            _print_pending(f"draining scheduler for {len(freeze_scope)} project(s)")
+            wait_for_quiesce(apiurl, freeze_scope, timeout_s=args.freeze_timeout)
+            problems = assert_all_green(apiurl, freeze_scope)
+            if problems:
+                listing = "\n".join(f"  {p}" for p in problems[:50])
+                raise SystemExit(
+                    f"error: source projects are not fully green:\n{listing}\n"
+                    "Fix the failures (or use --no-freeze to bypass at your own risk)."
+                )
+            snapshots = freeze_builds(apiurl, freeze_scope)
+        try:
+            release_all()
+        finally:
+            if snapshots:
+                restore_builds(apiurl, snapshots)
+
     _print_pending(f"checking release project {release_obs_project}")
     project_exists = _obs_project_exists(apiurl, release_obs_project)
 
@@ -2422,26 +2475,55 @@ def cmd_sync_release(args) -> None:
             [r.get("name", "") for r in source_repo_elems if r.get("name")],
             release_obs_project,
         )
-        _add_release_targets(
-            apiurl, source_obs_project, release_obs_project, repo_names
-        )
-        try:
-            _print_pending(f"releasing {source_obs_project} → {release_obs_project}")
-            subprocess.run(
-                [_OSC_BIN, "-A", apiurl, "release", source_obs_project, "--no-delay"],
-                check=True,
-            )
-        finally:
-            _remove_release_targets(apiurl, source_obs_project, release_obs_project)
 
-        _sync_release_subprojects(
-            apiurl,
-            args,
-            source_project_id,
-            release_obs_project,
-            release_path,
-            env_vars=shared_env_vars,
-        )
+        def _release_all() -> None:
+            _add_release_targets(
+                apiurl, source_obs_project, release_obs_project, repo_names
+            )
+            try:
+                _print_pending(
+                    f"releasing {source_obs_project} → {release_obs_project}"
+                )
+                subprocess.run(
+                    [
+                        _OSC_BIN,
+                        "-A",
+                        apiurl,
+                        "release",
+                        source_obs_project,
+                        "--no-delay",
+                    ],
+                    check=True,
+                )
+            finally:
+                _remove_release_targets(apiurl, source_obs_project, release_obs_project)
+
+            _sync_release_subprojects(
+                apiurl,
+                args,
+                source_project_id,
+                release_obs_project,
+                release_path,
+                env_vars=shared_env_vars,
+                pairs=subproject_pairs,
+            )
+            if args.verify_timeout > 0:
+                verify_release_landed(
+                    apiurl,
+                    source_obs_project,
+                    release_obs_project,
+                    timeout_s=args.verify_timeout,
+                )
+                for name, _ in subproject_pairs:
+                    verify_release_landed(
+                        apiurl,
+                        f"{source_obs_project}:{name}",
+                        f"{release_obs_project}:{name}",
+                        timeout_s=args.verify_timeout,
+                    )
+
+        _freeze_and_run(_release_all)
+
         update_suffix = f" (update: {tag})" if tag else ""
         _print_ok(
             f"~ release  {source_obs_project} → {release_obs_project}{update_suffix}"
@@ -2527,23 +2609,43 @@ def cmd_sync_release(args) -> None:
 
     _copy_project_conf(apiurl, source_obs_project, release_obs_project)
 
-    _add_release_targets(apiurl, source_obs_project, release_obs_project, repo_names)
-    try:
-        _print_pending(f"releasing {source_obs_project} → {release_obs_project}")
-        subprocess.run(
-            [_OSC_BIN, "-A", apiurl, "release", source_obs_project, "--no-delay"],
-            check=True,
+    def _release_all() -> None:
+        _add_release_targets(
+            apiurl, source_obs_project, release_obs_project, repo_names
         )
-    finally:
-        _remove_release_targets(apiurl, source_obs_project, release_obs_project)
+        try:
+            _print_pending(f"releasing {source_obs_project} → {release_obs_project}")
+            subprocess.run(
+                [_OSC_BIN, "-A", apiurl, "release", source_obs_project, "--no-delay"],
+                check=True,
+            )
+        finally:
+            _remove_release_targets(apiurl, source_obs_project, release_obs_project)
 
-    _sync_release_subprojects(
-        apiurl,
-        args,
-        source_project_id,
-        release_obs_project,
-        release_path,
-        env_vars=shared_env_vars,
-    )
+        _sync_release_subprojects(
+            apiurl,
+            args,
+            source_project_id,
+            release_obs_project,
+            release_path,
+            env_vars=shared_env_vars,
+            pairs=subproject_pairs,
+        )
+        if args.verify_timeout > 0:
+            verify_release_landed(
+                apiurl,
+                source_obs_project,
+                release_obs_project,
+                timeout_s=args.verify_timeout,
+            )
+            for name, _ in subproject_pairs:
+                verify_release_landed(
+                    apiurl,
+                    f"{source_obs_project}:{name}",
+                    f"{release_obs_project}:{name}",
+                    timeout_s=args.verify_timeout,
+                )
+
+    _freeze_and_run(_release_all)
 
     _print_ok(f"release  {source_obs_project} → {release_obs_project}")
