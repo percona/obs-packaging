@@ -718,8 +718,6 @@ New sections are prepended above previous ones. Package entries are auto-populat
 - percona-postgresql17: updated to upstream version 17.9.0 (https://www.postgresql.org/docs/release/17.9/)
 
 ### Changed
-
-### Fixed
 ```
 
 For **update releases**, only packages whose version changed appear (under `### Changed`):
@@ -731,8 +729,6 @@ For **update releases**, only packages whose version changed appear (under `### 
 
 ### Changed
 - percona-postgresql17: updated to upstream version 17.9.1 (https://www.postgresql.org/docs/release/17.9/)
-
-### Fixed
 ```
 
 Upstream URLs are derived from the package's `obs/_service` upstream `obs_scm` entry:
