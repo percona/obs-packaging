@@ -13,6 +13,11 @@ name: OBS PR Check
 #
 # `resolve` fetches PR context from the GitHub API and gates the DAG on the
 # presence of a trigger label so that non-trigger events produce no check runs.
+# Release-only PRs (all root/ changes under root/*/releases/) reach `sync`
+# without a trigger label -- `resolve` also exposes `is_release_pr`, and the
+# `sync` job's `if:` opens on either condition, so an unlabeled release PR
+# still gets a real `sync release --dry-run` against production.  `build`
+# and `qa` stay gated as before (they already skip on is_release_pr).
 # `detect-qa-matrix` runs in parallel with `build`; the `qa` matrix combos
 # show up in the PR's check list as queued check runs as soon as detect
 # finishes, so the upcoming QA work is visible while OBS is still building.
@@ -66,6 +71,7 @@ jobs:
       clone_url:        ${{ steps.ctx.outputs.clone_url }}
       labels_json:      ${{ steps.ctx.outputs.labels_json }}
       has_trigger_label: ${{ steps.ctx.outputs.has_trigger_label }}
+      is_release_pr:    ${{ steps.release.outputs.is_release_pr }}
     steps:
       - name: Fetch PR context
         id: ctx
@@ -86,6 +92,26 @@ jobs:
             echo "has_trigger_label=${HAS_TRIGGER}"
           } >> "$GITHUB_OUTPUT"
 
+      # Release-only PRs (all root/ changes under root/*/releases/) reach the
+      # sync job's release dry-run even without a trigger label -- see the
+      # sync job's `if:` below.  Computed independently of has_trigger_label
+      # so a release PR with no label still gets the DAG gate opened.
+      - name: Detect release-only PR
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.number }}
+        run: |
+          ALL_ROOT=$(gh pr view "$PR_NUMBER" --json files \
+            --jq '[.files[] | select(.path | startswith("root/")) | .path] | length')
+          REL_ROOT=$(gh pr view "$PR_NUMBER" --json files \
+            --jq '[.files[] | select(.path | test("^root/[^/]+/releases/")) | .path] | length')
+          if [ "$ALL_ROOT" -gt 0 ] && [ "$ALL_ROOT" -eq "$REL_ROOT" ]; then
+            echo "is_release_pr=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_release_pr=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # ──────────────────────────────────────────────────────────────────────────
   # sync: push the PR contents to OBS and (for release-only PRs) test the
   # release flow.  Does NOT poll OBS builds — that is done in `build` so it
@@ -99,7 +125,7 @@ jobs:
     # Backstop for stalled source services / OBS API hangs; a healthy sync
     # job finishes in well under 30 minutes.
     timeout-minutes: 120
-    if: needs.resolve.outputs.has_trigger_label == 'true'
+    if: needs.resolve.outputs.has_trigger_label == 'true' || needs.resolve.outputs.is_release_pr == 'true'
     permissions:
       # Required to post/update the PR comment.
       pull-requests: write
@@ -234,6 +260,32 @@ jobs:
             echo "is_release_pr=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Release PRs are validated against the PRODUCTION rootprj: the dry-run
+      # reads staging state and the release tree; it writes nothing.
+      - name: Create main profile (release dry-run)
+        if: steps.detect.outputs.is_release_pr == 'true'
+        run: |
+          venv/bin/python -m percona_obs \
+            -A "$OBS_APIURL" \
+            -R "$OBS_ROOTPRJ" \
+            -e "REMOTE_OBS_ORG_INTERCONNECT:" \
+            -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
+            -e "PERCONA_OBS_PACKAGING_REPO:${{ github.server_url }}/${{ github.repository }}.git" \
+            profile create main
+
+      - name: Release dry-run
+        id: release-dryrun
+        if: steps.detect.outputs.is_release_pr == 'true'
+        run: |
+          set -euo pipefail
+          CHANGED=$(git diff --name-only origin/main...HEAD -- 'root/*/releases/*/release.yaml')
+          [ -z "$CHANGED" ] && { echo "::error::release PR changes no release.yaml"; exit 1; }
+          for release_file in $CHANGED; do
+            proj=$(dirname "${release_file#root/}" | tr '/' ':')
+            echo "== sync release ${proj} --dry-run"
+            venv/bin/python -m percona_obs -P main sync release "$proj" --dry-run
+          done
+
       # Build --only-repos from any PR labels that are not control labels.
       # If repo labels like RockyLinux_9 or Debian_13 are present, sync push
       # will restrict OBS project meta to those repositories only.
@@ -300,9 +352,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           IS_RELEASE_PR: ${{ steps.detect.outputs.is_release_pr }}
           SYNC_OUTCOME: ${{ steps.sync.outcome }}
-          RELEASE_OUTCOME: ''
+          RELEASE_OUTCOME: ${{ steps.release-dryrun.outcome }}
           POLL_OUTCOME: ''
           WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
           OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
         run: python .github/scripts/post_pr_comment.py
 
@@ -372,6 +425,7 @@ jobs:
           RELEASE_OUTCOME: ''
           POLL_OUTCOME: ${{ steps.poll.outcome }}
           WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
           OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
         run: python .github/scripts/post_pr_comment.py
 
