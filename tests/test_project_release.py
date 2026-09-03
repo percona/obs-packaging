@@ -153,3 +153,70 @@ def test_tier_validation_rejects_devel(monkeypatch):
     monkeypatch.setattr(cmd_project, "resolve_project_path", lambda pid: Path("/nope"))
     with pytest.raises(SystemExit, match="staging-tier"):
         cmd_project.cmd_project_release(args)
+
+
+def test_container_flavor_label_old_and_new_layouts():
+    assert (
+        cmd_project._container_flavor_label(
+            "x:ppg:releases:17:containers:ubi9", "images"
+        )
+        == "ubi9"
+    )
+    assert (
+        cmd_project._container_flavor_label("x:ppg:staging:17:containers", "ubi9")
+        == "ubi9"
+    )
+    assert (
+        cmd_project._container_flavor_label("x:ppg:staging:17:containers", "ubi8")
+        == "ubi8"
+    )
+
+
+def test_fetch_subproject_container_pkgs_per_flavor(monkeypatch):
+    monkeypatch.setattr(cmd_project, "_fetch_obs_package_names", lambda a, p: {"img"})
+    monkeypatch.setattr(
+        cmd_project,
+        "_fetch_all_pkg_repo_archs",
+        lambda a, p: {"img": [("ubi8", "x86_64"), ("ubi9", "x86_64")]},
+    )
+    monkeypatch.setattr(
+        cmd_project, "_detect_obs_container_info", lambda a, p, k: {"kind": "docker"}
+    )
+    monkeypatch.setattr(
+        cmd_project,
+        "_fetch_build_container_packages",
+        lambda a, prj, repo, arch, pkg, root: {"pg": f"17.11-{repo}"},
+    )
+    out = cmd_project._fetch_subproject_container_pkgs(
+        "http://obs", "x:staging:17:containers", "x"
+    )
+    assert set(out) == {"img (ubi8)", "img (ubi9)"}
+
+
+def test_fetch_all_pkg_repo_archs_prefers_succeeded(monkeypatch):
+    import percona_obs.obs_api as obs_api
+
+    xml = (
+        b"<resultlist>"
+        b'<result repository="ubi8" arch="x86_64"><status package="img" code="succeeded"/></result>'
+        b'<result repository="ubi8" arch="aarch64"><status package="img" code="failed"/></result>'
+        b'<result repository="ubi9" arch="x86_64"><status package="img" code="succeeded"/></result>'
+        b"</resultlist>"
+    )
+
+    class R:  # noqa: N801
+        def read(self):
+            return xml
+
+    monkeypatch.setattr(obs_api.osc.core, "makeurl", lambda *a: "http://x")
+    monkeypatch.setattr(obs_api.osc.connection, "http_GET", lambda u: R())
+    out = obs_api._fetch_all_pkg_repo_archs("http://obs", "prj")
+    assert out == {"img": [("ubi8", "x86_64"), ("ubi9", "x86_64")]}
+
+
+def test_find_pkg_service_walks_subprojects(tmp_path):
+    src = tmp_path / "staging17"
+    (src / "extras" / "percona-rum" / "obs").mkdir(parents=True)
+    (src / "extras" / "percona-rum" / "obs" / "_service").write_text("<services/>")
+    assert cmd_project._find_pkg_service(src, "percona-rum") is not None
+    assert cmd_project._find_pkg_service(src, "nope") is None

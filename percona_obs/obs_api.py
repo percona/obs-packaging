@@ -409,6 +409,42 @@ def _fetch_all_pkg_archs(apiurl: str, obs_project: str) -> dict[str, tuple[str, 
     return {**fallback, **succeeded}
 
 
+def _fetch_all_pkg_repo_archs(
+    apiurl: str, obs_project: str
+) -> dict[str, list[tuple[str, str]]]:
+    """Return {base_pkg: [(repo, arch), ...]} — one entry per repository.
+
+    Unlike _fetch_all_pkg_archs (single winner), this keeps every repo the
+    package appears in, preferring a succeeded arch within each repo.  Needed
+    for multi-flavor container projects (ubi8 + ubi9 repos) where each repo
+    holds a distinct image build.
+    """
+    url = osc.core.makeurl(apiurl, ["build", obs_project, "_result"])
+    try:
+        root = ET.fromstring(osc.connection.http_GET(url).read())
+    except Exception:
+        return {}
+    succeeded: dict[tuple[str, str], str] = {}
+    fallback: dict[tuple[str, str], str] = {}
+    for result_elem in root.findall("result"):
+        repo = result_elem.get("repository", "")
+        arch = result_elem.get("arch", "")
+        for status_elem in result_elem.findall("status"):
+            base_pkg = status_elem.get("package", "").partition(":")[0]
+            if not base_pkg:
+                continue
+            key = (base_pkg, repo)
+            if status_elem.get("code") == "succeeded":
+                succeeded.setdefault(key, arch)
+            else:
+                fallback.setdefault(key, arch)
+    merged = {**fallback, **succeeded}
+    out: dict[str, list[tuple[str, str]]] = {}
+    for (pkg, repo), arch in sorted(merged.items()):
+        out.setdefault(pkg, []).append((repo, arch))
+    return out
+
+
 def _fetch_obs_subproject_names(apiurl: str, rootprj: str) -> set[str]:
     """Return all OBS project names that are direct or indirect subprojects of rootprj.
 
