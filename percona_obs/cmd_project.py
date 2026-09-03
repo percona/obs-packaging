@@ -50,11 +50,13 @@ from .obs_api import (
     _detect_obs_container_info,
     _extract_obs_managed_elements,
     _fetch_all_pkg_archs,
+    _fetch_all_pkg_repo_archs,
     _fetch_build_container_packages,
     _fetch_build_containerinfo,
     _fetch_obs_container_images,
     _fetch_obs_download_url,
     _fetch_obs_package_names,
+    _fetch_obs_subproject_names,
     _fetch_root_project_managed_elements,
     _inject_obs_managed_elements,
     _obs_meta_to_yaml_debuginfo,
@@ -1385,33 +1387,42 @@ def _write_release_tree(
     return written
 
 
+def _container_flavor_label(obs_project: str, repo: str) -> str:
+    """Stable flavor label for a container image's repo.
+
+    Old layout: project ...:containers:<flavor> with repo "images" → <flavor>.
+    New layout: project ...:containers with repos ubi8/ubi9 → repo name.
+    Both layouts therefore produce the same label for the same flavor, so
+    changelog diffs work across the migration release.
+    """
+    if repo == "images":
+        m = re.search(r":containers:([^:]+)$", obs_project)
+        if m:
+            return m.group(1)
+    return repo
+
+
 def _fetch_subproject_container_pkgs(
     apiurl: str,
     obs_project: str,
     rootprj: str,
 ) -> "dict[str, dict[str, str]]":
-    """Return {container_pkg_name: {binary_pkg: versrel}} for all container images in obs_project.
-
-    Only packages identified as container images (via _detect_obs_container_info) are included.
-    Packages where the .packages artifact is unavailable or empty are silently skipped.
-    """
+    """Return {"<image> (<flavor>)": {binary_pkg: versrel}} for container images."""
     result: dict[str, dict[str, str]] = {}
     pkg_names = sorted(_fetch_obs_package_names(apiurl, obs_project))
     if not pkg_names:
         return result
-    pkg_archs = _fetch_all_pkg_archs(apiurl, obs_project)
+    pkg_repo_archs = _fetch_all_pkg_repo_archs(apiurl, obs_project)
     for pkg in pkg_names:
         if _detect_obs_container_info(apiurl, obs_project, pkg) is None:
             continue
-        repo_arch = pkg_archs.get(pkg)
-        if not repo_arch:
-            continue
-        repo, arch = repo_arch
-        pkgs = _fetch_build_container_packages(
-            apiurl, obs_project, repo, arch, pkg, rootprj
-        )
-        if pkgs:
-            result[pkg] = pkgs
+        for repo, arch in pkg_repo_archs.get(pkg, []):
+            pkgs = _fetch_build_container_packages(
+                apiurl, obs_project, repo, arch, pkg, rootprj
+            )
+            if pkgs:
+                label = _container_flavor_label(obs_project, repo)
+                result[f"{pkg} ({label})"] = pkgs
     return result
 
 
@@ -1477,6 +1488,18 @@ def _fetch_project_pkg_versions(apiurl: str, obs_project: str) -> "dict[str, str
     return result
 
 
+def _find_pkg_service(source_path: Path, pkg: str) -> "Path | None":
+    """Locate <pkg>/obs/_service under the project or its subprojects."""
+    candidates = [source_path / pkg]
+    candidates += sorted(source_path.glob(f"*/{pkg}"))
+    candidates += sorted(source_path.glob(f"*/*/{pkg}"))
+    for cand in candidates:
+        service = cand / "obs" / "_service"
+        if service.is_file():
+            return service
+    return None
+
+
 def _build_changelog_section(
     release_id: str,
     source_versions: "dict[str, str]",
@@ -1512,8 +1535,8 @@ def _build_changelog_section(
         pkg_version = src_ver.split("-")[0]
 
         url_str = ""
-        service_file = source_path / pkg / "obs" / "_service"
-        if service_file.is_file():
+        service_file = _find_pkg_service(source_path, pkg)
+        if service_file is not None:
             info = _extract_upstream_info_from_service(service_file)
             if info:
                 upstream_url, revision = info
@@ -1690,40 +1713,58 @@ def cmd_project_release(args: argparse.Namespace) -> None:
 
     # Build CHANGELOG section by diffing source vs release OBS package versions.
     _print_pending("fetching package versions for CHANGELOG")
+
+    def _has_container_images(sub_path: Path) -> bool:
+        return any(
+            (sub_path / p.name / "obs" / "Dockerfile").is_file()
+            for p in sub_path.iterdir()
+            if p.is_dir()
+        )
+
     source_versions = _fetch_project_pkg_versions(apiurl, source_obs_project)
+    noncontainer_subs: list[str] = []
+    container_subs: list[str] = []
+    for sub_obs_id, sub_path in find_projects(source_path, args.project):
+        if sub_obs_id == args.project:
+            continue
+        if not (sub_path / "project.yaml").is_file():
+            continue
+        subproject_name = sub_obs_id[len(args.project) + 1 :]
+        if _has_container_images(sub_path):
+            container_subs.append(subproject_name)
+        else:
+            noncontainer_subs.append(subproject_name)
+            source_versions.update(
+                _fetch_project_pkg_versions(apiurl, f"{args.rootprj}:{sub_obs_id}")
+            )
+
     release_versions: dict[str, str] | None = None
     if not is_first_release and _obs_project_exists(apiurl, release_obs_project):
         release_versions = _fetch_project_pkg_versions(apiurl, release_obs_project)
+        for subproject_name in noncontainer_subs:
+            rel_sub = f"{release_obs_project}:{subproject_name}"
+            if _obs_project_exists(apiurl, rel_sub):
+                release_versions.update(_fetch_project_pkg_versions(apiurl, rel_sub))
 
     # Fetch container image package lists for each container subproject.
     _print_pending("fetching container image package lists for CHANGELOG")
     source_container_pkgs: dict[str, dict[str, str]] = {}
     release_container_pkgs: dict[str, dict[str, str]] = {}
     prev_release_id: str | None = None
-    for sub_obs_id, sub_path in find_projects(source_path, args.project):
-        if sub_obs_id == args.project:
-            continue
-        if not any(
-            (sub_path / p.name / "obs" / "Dockerfile").is_file()
-            for p in sub_path.iterdir()
-            if p.is_dir()
-        ):
-            continue  # skip subprojects with no container images
-        sub_full = f"{args.rootprj}:{sub_obs_id}"
+    for subproject_name in container_subs:
+        sub_full = f"{args.rootprj}:{args.project}:{subproject_name}"
         source_container_pkgs.update(
             _fetch_subproject_container_pkgs(apiurl, sub_full, args.rootprj)
         )
     if not is_first_release and existing_releases:
         prev_release_id = existing_releases[-1].split("/")[-1]
-        for sub_obs_id, _ in find_projects(source_path, args.project):
-            if sub_obs_id == args.project:
-                continue
-            subproject_name = sub_obs_id[len(args.project) + 1 :]
-            rel_sub_full = f"{args.rootprj}:{release_project}:{subproject_name}"
-            if _obs_project_exists(apiurl, rel_sub_full):
-                release_container_pkgs.update(
-                    _fetch_subproject_container_pkgs(apiurl, rel_sub_full, args.rootprj)
-                )
+        # Diff against whatever release subprojects actually exist on OBS —
+        # this is what makes the ubi9 old-layout → new-layout migration diff
+        # correctly instead of dumping every image as "add".
+        for rel_sub in sorted(_fetch_obs_subproject_names(apiurl, release_obs_project)):
+            release_container_pkgs.update(
+                _fetch_subproject_container_pkgs(apiurl, rel_sub, args.rootprj)
+            )
 
     changelog_section = _build_changelog_section(
         release_id,
