@@ -4,95 +4,127 @@
     {
       "id": 1,
       "subject": "Task 1: release_freeze module",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Self-contained module implementing drain, all-green assertion, build-flag freeze with exact-meta restore, and post-release binary landing verification.\n\n**Files:**\n- Create: `percona_obs/release_freeze.py`\n- Test: `tests/test_release_freeze.py`\n\n**Acceptance Criteria:**\n- [ ] `fetch_project_results` parses a `_result` XML into per-package codes and per-repo states (dirty attr wins).\n- [ ] `wait_for_quiesce` returns once nothing is pending and raises SystemExit on timeout naming pending items.\n- [ ] `assert_all_green` returns [] for succeeded/excluded/disabled-only and a problem list `project/pkg repo/arch: code` otherwise.\n- [ ] `freeze_builds` snapshots exact meta then applies blanket build-disable (replacing any existing build element); `restore_builds` pushes snapshots back verbatim, never raises.\n- [ ] `verify_release_landed` polls until target package set covers source's; SystemExit with missing list on timeout.\n\n**Verify:** venv/bin/python -m pytest tests/test_release_freeze.py -q; venv/bin/black percona_obs/ && venv/bin/pyright\n\n```json:metadata\n{\"files\": [\"percona_obs/release_freeze.py\", \"tests/test_release_freeze.py\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/test_release_freeze.py -q && venv/bin/black --check percona_obs/ && venv/bin/pyright\", \"acceptanceCriteria\": [\"fetch_project_results parses codes+states\", \"wait_for_quiesce returns/timeouts correctly\", \"assert_all_green green-set and problem list\", \"freeze snapshots + blanket disable, restore verbatim never raises\", \"verify_release_landed coverage poll + timeout\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 2,
       "subject": "Task 2: sync release hard-error + orphan reporting",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** A staging subproject without a release mirror aborts sync release with an actionable error; release-tier OBS projects with no local mirror are reported loudly.\n\n**Files:**\n- Modify: `percona_obs/cmd_sync.py` (_sync_release_subprojects ~2174-2239 + new _collect_release_subprojects)\n- Test: `tests/test_sync_release.py` (new)\n\n**Acceptance Criteria:**\n- [ ] `_collect_release_subprojects(source_project_id, release_path)` returns (pairs, missing).\n- [ ] `_sync_release_subprojects` raises SystemExit listing every missing mirror with the project-release regen hint (replaces the silent continue at cmd_sync.py:2203).\n- [ ] OBS release subprojects with no local mirror print `warning: orphaned release subproject ...` naming sync delete.\n- [ ] Matched-subproject behavior unchanged (apply config, disable builds, targets, osc release, remove targets).\n\n**Verify:** venv/bin/python -m pytest tests/test_sync_release.py -q; full suite passes\n\n```json:metadata\n{\"files\": [\"percona_obs/cmd_sync.py\", \"tests/test_sync_release.py\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/test_sync_release.py -q && venv/bin/black --check percona_obs/ && venv/bin/pyright\", \"acceptanceCriteria\": [\"collect helper returns pairs+missing\", \"missing mirror = SystemExit with hint\", \"orphans warned with sync delete hint\", \"matched behavior unchanged\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 3,
       "subject": "Task 3: sync release meta apply + target filtering",
-      "status": "pending",
-      "blockedBy": [2],
+      "status": "completed",
+      "blockedBy": [
+        2
+      ],
       "description": "**Goal:** Update path re-applies local release project config (top level via _apply_project_config + _disable_project_builds) before releasing; release targets only for repos present on both sides.\n\n**Files:**\n- Modify: `percona_obs/cmd_sync.py` (cmd_sync_release update path ~2286-2360, _sync_release_subprojects)\n- Test: `tests/test_sync_release.py` (extend)\n\n**Acceptance Criteria:**\n- [ ] Update path applies release_path config to release_obs_project (paths_stripped double-apply pattern) then disables builds, before releasetarget manipulation.\n- [ ] `_filter_release_repo_names(apiurl, source_repo_names, release_obs_project)` returns intersection (source order) and warns per dropped repo.\n- [ ] Both cmd_sync_release paths and _sync_release_subprojects filter repo lists before _add_release_targets.\n\n**Verify:** venv/bin/python -m pytest tests/test_sync_release.py -q; full suite passes\n\n```json:metadata\n{\"files\": [\"percona_obs/cmd_sync.py\", \"tests/test_sync_release.py\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/test_sync_release.py -q && venv/bin/black --check percona_obs/ && venv/bin/pyright\", \"acceptanceCriteria\": [\"update path applies meta + disables builds\", \"filter helper warns and drops\", \"all releasetarget calls filtered\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 4,
       "subject": "Task 4: sync release freeze sequence + landing verification",
-      "status": "pending",
-      "blockedBy": [1, 2, 3],
+      "status": "completed",
+      "blockedBy": [
+        1,
+        2,
+        3
+      ],
       "description": "**Goal:** sync release drains staging, asserts green, freezes builds around osc release, restores exact meta in a finally, verifies packages landed; CLI knobs --no-freeze/--freeze-timeout/--verify-timeout.\n\n**Files:**\n- Modify: `percona_obs/cmd_sync.py` (cmd_sync_release), `percona_obs/cli.py`\n- Test: `tests/test_sync_release.py` (extend)\n\n**Acceptance Criteria:**\n- [ ] Order: wait_for_quiesce -> assert_all_green (SystemExit on problems) -> freeze_builds, all BEFORE _add_release_targets; restore_builds in finally around the whole release+subproject phase.\n- [ ] Freeze scope = source project + all subprojects from _collect_release_subprojects; missing-mirror check precedes freezing.\n- [ ] verify_release_landed runs for top-level + every subproject pair after release; --verify-timeout 0 disables; --no-freeze skips gate but still verifies.\n- [ ] Flags: --no-freeze, --freeze-timeout (default 3600), --verify-timeout (default 600).\n\n**Verify:** venv/bin/python -m pytest tests/test_sync_release.py -q; full suite passes\n\n```json:metadata\n{\"files\": [\"percona_obs/cmd_sync.py\", \"percona_obs/cli.py\", \"tests/test_sync_release.py\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/test_sync_release.py -q && venv/bin/black --check percona_obs/ && venv/bin/pyright\", \"acceptanceCriteria\": [\"drain->green->freeze order before targets\", \"restore in finally even on failure\", \"verification per project pair\", \"CLI flags wired\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 5,
       "subject": "Task 5: sync release --dry-run",
-      "status": "pending",
-      "blockedBy": [4],
+      "status": "completed",
+      "blockedBy": [
+        4
+      ],
       "description": "**Goal:** Read-only validation mode: mirrors complete, changelog section present, tag not yet created, source project reachable, staging green; accumulates all failures.\n\n**Files:**\n- Modify: `percona_obs/cmd_sync.py`, `percona_obs/cli.py`\n- Test: `tests/test_sync_release.py` (extend)\n\n**Acceptance Criteria:**\n- [ ] --dry-run performs NO OBS writes and no git-diff divergence check; exit 0 with 'release dry-run passed' or exit 1 listing every failed check.\n- [ ] Checks: mirrors complete; CHANGELOG has '## [<release-id>]'; git rev-parse of the tag fails (not yet created); _obs_project_exists(source); assert_all_green over source+subprojects.\n\n**Verify:** venv/bin/python -m pytest tests/test_sync_release.py -q; full suite passes\n\n```json:metadata\n{\"files\": [\"percona_obs/cmd_sync.py\", \"percona_obs/cli.py\", \"tests/test_sync_release.py\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/test_sync_release.py -q && venv/bin/black --check percona_obs/ && venv/bin/pyright\", \"acceptanceCriteria\": [\"no writes in dry-run\", \"all five checks run and accumulate\", \"pass/fail exit codes correct\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 6,
       "subject": "Task 6: project release tier check + mirror regeneration",
-      "status": "pending",
-      "description": "**Goal:** project release refuses non-staging sources and regenerates releases/<name>/project.yaml + every subproject mirror on both first and update releases, deleting stale mirror dirs.\n\n**Files:**\n- Modify: `percona_obs/cmd_project.py` (cmd_project_release ~1518-1830, _rewrite_subproject_paths ~1265)\n- Test: `tests/test_project_release.py` (new)\n\n**Acceptance Criteria:**\n- [ ] Non-staging source (e.g. ppg:devel:18) exits with a staging-tier error before anything else.\n- [ ] `_write_release_tree(...)` writes project.yaml + nested subproject mirrors, deletes stale mirror dirs (never a dir containing an expected mirror beneath it), returns repo-relative paths.\n- [ ] Both branches call _write_release_tree; commit stages deletions via git add -A on the release dir.\n- [ ] _rewrite_subproject_paths keeps self/sibling references rewritten to the release namespace (skip_subproject removed) — tarballs ssl repos case.\n\n**Verify:** venv/bin/python -m pytest tests/test_project_release.py -q; full suite passes\n\n```json:metadata\n{\"files\": [\"percona_obs/cmd_project.py\", \"tests/test_project_release.py\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/test_project_release.py -q && venv/bin/black --check percona_obs/ && venv/bin/pyright\", \"acceptanceCriteria\": [\"tier validation\", \"regen on every release + stale deletion\", \"deletions staged\", \"sibling paths kept\"], \"modelTier\": \"standard\"}\n```"
+      "status": "completed",
+      "description": "**Goal:** project release refuses non-staging sources and regenerates releases/<name>/project.yaml + every subproject mirror on both first and update releases, deleting stale mirror dirs.\n\n**Files:**\n- Modify: `percona_obs/cmd_project.py` (cmd_project_release ~1518-1830, _rewrite_subproject_paths ~1265)\n- Test: `tests/test_project_release.py` (new)\n\n**Acceptance Criteria:**\n- [ ] Non-staging source (e.g. ppg:devel:18) exits with a staging-tier error before anything else.\n- [ ] `_write_release_tree(...)` writes project.yaml + nested subproject mirrors, deletes stale mirror dirs (never a dir containing an expected mirror beneath it), returns repo-relative paths.\n- [ ] Both branches call _write_release_tree; commit stages deletions via git add -A on the release dir.\n- [ ] _rewrite_subproject_paths keeps self/sibling references rewritten to the release namespace (skip_subproject removed) \u2014 tarballs ssl repos case.\n\n**Verify:** venv/bin/python -m pytest tests/test_project_release.py -q; full suite passes\n\n```json:metadata\n{\"files\": [\"percona_obs/cmd_project.py\", \"tests/test_project_release.py\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/test_project_release.py -q && venv/bin/black --check percona_obs/ && venv/bin/pyright\", \"acceptanceCriteria\": [\"tier validation\", \"regen on every release + stale deletion\", \"deletions staged\", \"sibling paths kept\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 7,
       "subject": "Task 7: changelog generation for the new layout",
-      "status": "pending",
-      "blockedBy": [6],
+      "status": "completed",
+      "blockedBy": [
+        6
+      ],
       "description": "**Goal:** CHANGELOG covers extras/tarballs packages, reports ubi8/ubi9 images distinctly, and diffs against whatever release container projects actually exist on OBS (old :containers:ubi9 included).\n\n**Files:**\n- Modify: `percona_obs/obs_api.py` (_fetch_all_pkg_repo_archs), `percona_obs/cmd_project.py` (_fetch_subproject_container_pkgs, version collection ~1602-1647, _find_pkg_service)\n- Test: `tests/test_project_release.py` (extend)\n\n**Acceptance Criteria:**\n- [ ] `_fetch_all_pkg_repo_archs` returns one (repo,arch) per repo, preferring succeeded.\n- [ ] Container keys are 'pkg (flavor)' with _container_flavor_label mapping old images-repo layout and new flavor-repo layout to the SAME key.\n- [ ] Source versions merge non-container subprojects (extras/tarballs); release side merges same-named existing subprojects.\n- [ ] Release container packages fetched from every existing OBS subproject of the release project (via _fetch_obs_subproject_names).\n- [ ] _build_changelog_section finds _service for subproject packages (_find_pkg_service).\n\n**Verify:** venv/bin/python -m pytest tests/test_project_release.py -q; full suite passes\n\n```json:metadata\n{\"files\": [\"percona_obs/obs_api.py\", \"percona_obs/cmd_project.py\", \"tests/test_project_release.py\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/test_project_release.py -q && venv/bin/black --check percona_obs/ && venv/bin/pyright\", \"acceptanceCriteria\": [\"per-repo fetch helper\", \"stable flavor keys across layouts\", \"subproject versions merged\", \"release side scanned from OBS\", \"service lookup walks subprojects\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 8,
       "subject": "Task 8: project install config-derived container repos",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** project install classifies ubi8/ubi9-style image repos as container repos and builds correct registry pull URLs for both layouts.\n\n**Files:**\n- Modify: `percona_obs/cmd_project.py` (_repo_pkg_manager ~805, _container_registry_prefix ~816, install loop ~945-1010)\n- Test: `tests/test_project_release.py` (extend)\n\n**Acceptance Criteria:**\n- [ ] _repo_pkg_manager(repo, image_repos) returns container for 'images' or members of image_repos.\n- [ ] _container_registry_prefix(..., repo_name) appends the repo name (old layout output byte-identical: .../containers/ubi9/images; new: .../containers/ubi9).\n- [ ] _project_image_repo_names: {'images'} when present; all config repos when every child package is a Dockerfile image; else empty.\n- [ ] Install loop classification/ordering/heading/registry calls use the per-project image-repo sets.\n\n**Verify:** venv/bin/python -m pytest tests/ -q\n\n```json:metadata\n{\"files\": [\"percona_obs/cmd_project.py\", \"tests/test_project_release.py\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/ -q && venv/bin/black --check percona_obs/ && venv/bin/pyright\", \"acceptanceCriteria\": [\"pkg-manager classification\", \"registry prefix both layouts\", \"image repo derivation rules\", \"install loop wired\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 9,
       "subject": "Task 9: list_qa_matrix containers typing",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** The new single ...:containers subprojects classify as containers in the QA matrix.\n\n**Files:**\n- Modify: `.github/scripts/list_qa_matrix.py` (~51)\n- Test: `tests/test_list_qa_matrix.py` (new)\n\n**Acceptance Criteria:**\n- [ ] qa_project_type(full_name) returns containers for ':containers:' substring OR ':containers' suffix, else packages; main loop uses it.\n- [ ] Tests cover staging :containers, releases :containers:ubi9, extras:containers, tarballs, bare staging project.\n\n**Verify:** venv/bin/python -m pytest tests/test_list_qa_matrix.py -q\n\n```json:metadata\n{\"files\": [\".github/scripts/list_qa_matrix.py\", \"tests/test_list_qa_matrix.py\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/test_list_qa_matrix.py -q\", \"acceptanceCriteria\": [\"qa_project_type function + loop usage\", \"five classification cases covered\"], \"modelTier\": \"mechanical\"}\n```"
     },
     {
       "id": 10,
       "subject": "Task 10: obs-pr-cleanup tag + dispatch",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Merged release PRs get their tag on the merge commit and obs-release dispatched, all on GITHUB_TOKEN; dead two-path narrative removed.\n\n**Files:**\n- Modify: `.github/workflows/obs-pr-cleanup.yml`\n\n**Acceptance Criteria:**\n- [ ] checkout fetch-depth: 0.\n- [ ] New step (merged && is_release_pr): per changed root/*/releases/*/release.yaml, read last releases: entry from merge_commit_sha tree, create refs/tags/<tag> at merge_commit_sha ('Reference already exists' tolerated, other errors fail), then gh workflow run obs-release.yml --ref main -f tag=<tag>.\n- [ ] Header/detect comments describe new behavior; no sync release-pr / two-path mentions.\n- [ ] permissions contents:write + actions:write with accurate comments.\n- [ ] YAML parses.\n\n**Verify:** venv/bin/python -c \"import yaml; yaml.safe_load(open('.github/workflows/obs-pr-cleanup.yml'))\"\n\n```json:metadata\n{\"files\": [\".github/workflows/obs-pr-cleanup.yml\"], \"verifyCommand\": \"venv/bin/python -c \\\"import yaml; yaml.safe_load(open('.github/workflows/obs-pr-cleanup.yml'))\\\"\", \"acceptanceCriteria\": [\"tag on merge commit, loud failures\", \"dispatch via gh workflow run\", \"comments updated\", \"yaml parses\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 11,
       "subject": "Task 11: obs-release dispatch-only + sync-main tag removal",
-      "status": "pending",
-      "blockedBy": [4],
+      "status": "completed",
+      "blockedBy": [
+        4
+      ],
       "description": "**Goal:** obs-release becomes workflow_dispatch-only, runs from the tagged tree, drops every GH_PAT use, serializes against sync-main; sync-main loses tag creation.\n\n**Files:**\n- Modify: `.github/workflows/obs-release.yml`, `.github/workflows/sync-main.yml`\n\n**Acceptance Criteria:**\n- [ ] Trigger exactly workflow_dispatch with required tag input; no push trigger.\n- [ ] Validate-tag step enforces ^[a-z0-9-]+/[0-9]+(\\.[0-9]+)+-[0-9]+$.\n- [ ] checkout ref refs/tags/<tag>, fetch-depth 0, no token override; gh release uses github.token.\n- [ ] sleep step and if:false version-lists step removed; concurrency group sync-main-sync (cancel-in-progress false).\n- [ ] sync-main: Create-release-tags step + comment removed, GH_PAT checkout tokens removed, header updated.\n- [ ] Both files YAML-parse; no GH_PAT string remains in either.\n\n**Verify:** yaml.safe_load both files; grep GH_PAT returns nothing in the two files\n\n```json:metadata\n{\"files\": [\".github/workflows/obs-release.yml\", \".github/workflows/sync-main.yml\"], \"verifyCommand\": \"venv/bin/python -c \\\"import yaml; yaml.safe_load(open('.github/workflows/obs-release.yml')); yaml.safe_load(open('.github/workflows/sync-main.yml'))\\\" && ! grep -n GH_PAT .github/workflows/obs-release.yml .github/workflows/sync-main.yml\", \"acceptanceCriteria\": [\"dispatch-only trigger + validation\", \"tagged-tree checkout on default token\", \"sleep + dead step gone, concurrency set\", \"sync-main tag step + GH_PAT gone\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 12,
       "subject": "Task 12: obs-pr-check real dry-run + honest comment",
-      "status": "pending",
-      "blockedBy": [5],
+      "status": "completed",
+      "blockedBy": [
+        5
+      ],
       "description": "**Goal:** Release PRs run sync release --dry-run against the production rootprj without needing a label; the PR comment reports the actual outcome.\n\n**Files:**\n- Modify: `.github/workflows/obs-pr-check.yml`, `.github/scripts/post_pr_comment.py`\n\n**Acceptance Criteria:**\n- [ ] resolve job exposes is_release_pr (API files listing); sync job gate becomes has_trigger_label OR is_release_pr (resolve's own gating adjusted so unlabeled release PRs pass).\n- [ ] Sync job gains Create-main-profile + Release-dry-run steps (id release-dryrun) running sync release <proj> --dry-run per changed release.yaml against -R OBS_ROOTPRJ.\n- [ ] Comment step passes RELEASE_OUTCOME from the dry-run step outcome.\n- [ ] post_pr_comment.py: --diff-filter=A removed, links target the production release project (OBS_ROOTPRJ passed through env), body states dry-run outcome truthfully; empty outcome renders 'dry-run not run'.\n- [ ] Workflow YAML parses; full test suite passes.\n\n**Verify:** yaml.safe_load obs-pr-check.yml; venv/bin/python -m pytest tests/ -q\n\n```json:metadata\n{\"files\": [\".github/workflows/obs-pr-check.yml\", \".github/scripts/post_pr_comment.py\"], \"verifyCommand\": \"venv/bin/python -c \\\"import yaml; yaml.safe_load(open('.github/workflows/obs-pr-check.yml'))\\\" && venv/bin/python -m pytest tests/ -q\", \"acceptanceCriteria\": [\"label-free release PR path\", \"real dry-run step against production rootprj\", \"honest RELEASE_OUTCOME plumbing\", \"comment script fixed\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 13,
       "subject": "Task 13: documentation updates",
-      "status": "pending",
-      "blockedBy": [10, 11, 12],
+      "status": "completed",
+      "blockedBy": [
+        10,
+        11,
+        12
+      ],
       "description": "**Goal:** Docs describe the v2 flow; no doc claims behavior that no longer exists.\n\n**Files:**\n- Modify: `docs/PERCONA_OBS_TOOL.md` (~615-800), `.github/copilot-instructions.md` (~451-478, ~1014-1030), `root/README.md` (~58-113)\n\n**Acceptance Criteria:**\n- [ ] PERCONA_OBS_TOOL.md: nested mirror dirs, regen-every-release, sync release flags + freeze sequence, tag+dispatch flow, project release commits only.\n- [ ] copilot-instructions.md: cleanup section = tag+dispatch+delete; tag format ppg/17.9-1; sync release-pr noted as manual-only; sync release flags documented.\n- [ ] root/README.md: tag by obs-pr-cleanup on merge commit, dispatch not tag-trigger; nested layout + regen note.\n- [ ] grep 'containers:ubi9' across docs/.github/root README shows only intentional historical references.\n\n**Verify:** grep check; git diff --stat touches only the three files\n\n```json:metadata\n{\"files\": [\"docs/PERCONA_OBS_TOOL.md\", \".github/copilot-instructions.md\", \"root/README.md\"], \"verifyCommand\": \"grep -rn 'containers:ubi9' docs/PERCONA_OBS_TOOL.md .github/copilot-instructions.md root/README.md || true\", \"acceptanceCriteria\": [\"tool doc updated\", \"copilot-instructions updated\", \"root README updated\", \"no stale layout claims\"], \"modelTier\": \"mechanical\"}\n```"
     },
     {
       "id": 14,
       "subject": "Task 14: dev-OBS release rehearsal (USER GATE)",
       "status": "pending",
-      "blockedBy": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
-      "description": "**Goal:** Prove the whole v2 release path end-to-end against the dev OBS before trusting the CI path.\n\n**USER-ORDERED GATE — NON-SKIPPABLE.** This task was requested by the user in the current conversation. It MUST NOT be closed by walking around it, by declaring it \"verified inline\", or by substituting a cheaper check. Close only after every item in `acceptanceCriteria` has been re-validated independently, with output captured.\n\n**Files:**\n- None (verification only; -P dev, NEVER -P isv)\n\n**Acceptance Criteria:**\n- [ ] sync release --dry-run exits 0 on a prepared scratch release tree (output shows 'release dry-run passed').\n- [ ] Full sync release run completes: drain line, '(builds frozen)' per project, 'released' lines for top level + every subproject, 'packages landed' lines, '(builds restored)' per project.\n- [ ] Source project meta on dev OBS byte-identical before vs after (empty diff of /source/<prj>/_meta captures).\n- [ ] A deliberately broken rehearsal (red package or removed mirror) aborts with the documented hard error, builds end unfrozen/restored.\n\n**Verify:** venv/bin/python -m percona_obs -P dev sync release <scratch-release-project> --dry-run && venv/bin/python -m percona_obs -P dev sync release <scratch-release-project>; captured outputs for all four criteria; scratch commits reverted.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"venv/bin/python -m percona_obs -P dev sync release <scratch-release-project> --dry-run && venv/bin/python -m percona_obs -P dev sync release <scratch-release-project>\", \"acceptanceCriteria\": [\"dry-run exits 0 with 'release dry-run passed'\", \"full run shows frozen/released/landed/restored lines for every project\", \"source project meta byte-identical before vs after (empty diff)\", \"broken input aborts with hard error and builds end unfrozen/restored\"], \"modelTier\": \"standard\", \"userGate\": true, \"tags\": [\"user-gate\"], \"requireEvidenceTokens\": [[\"dry-run passed\", \"dry run\"], [\"builds restored\", \"landed\"]]}\n```"
+      "blockedBy": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ],
+      "description": "**Goal:** Prove the whole v2 release path end-to-end against the dev OBS before trusting the CI path.\n\n**USER-ORDERED GATE \u2014 NON-SKIPPABLE.** This task was requested by the user in the current conversation. It MUST NOT be closed by walking around it, by declaring it \"verified inline\", or by substituting a cheaper check. Close only after every item in `acceptanceCriteria` has been re-validated independently, with output captured.\n\n**Files:**\n- None (verification only; -P dev, NEVER -P isv)\n\n**Acceptance Criteria:**\n- [ ] sync release --dry-run exits 0 on a prepared scratch release tree (output shows 'release dry-run passed').\n- [ ] Full sync release run completes: drain line, '(builds frozen)' per project, 'released' lines for top level + every subproject, 'packages landed' lines, '(builds restored)' per project.\n- [ ] Source project meta on dev OBS byte-identical before vs after (empty diff of /source/<prj>/_meta captures).\n- [ ] A deliberately broken rehearsal (red package or removed mirror) aborts with the documented hard error, builds end unfrozen/restored.\n\n**Verify:** venv/bin/python -m percona_obs -P dev sync release <scratch-release-project> --dry-run && venv/bin/python -m percona_obs -P dev sync release <scratch-release-project>; captured outputs for all four criteria; scratch commits reverted.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"venv/bin/python -m percona_obs -P dev sync release <scratch-release-project> --dry-run && venv/bin/python -m percona_obs -P dev sync release <scratch-release-project>\", \"acceptanceCriteria\": [\"dry-run exits 0 with 'release dry-run passed'\", \"full run shows frozen/released/landed/restored lines for every project\", \"source project meta byte-identical before vs after (empty diff)\", \"broken input aborts with hard error and builds end unfrozen/restored\"], \"modelTier\": \"standard\", \"userGate\": true, \"tags\": [\"user-gate\"], \"requireEvidenceTokens\": [[\"dry-run passed\", \"dry run\"], [\"builds restored\", \"landed\"]]}\n```"
     }
   ],
-  "lastUpdated": "2026-09-03T13:45:00Z"
+  "lastUpdated": "2026-09-03T15:08:37.163540+00:00"
 }
