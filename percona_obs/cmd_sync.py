@@ -2366,6 +2366,47 @@ def cmd_sync_release(args) -> None:
     subproject_pairs, missing_mirrors = _collect_release_subprojects(
         source_project_id, release_path
     )
+    source_sub_obs_projects = [
+        f"{source_obs_project}:{name}" for name, _ in subproject_pairs
+    ]
+    freeze_scope = [source_obs_project] + source_sub_obs_projects
+
+    if getattr(args, "dry_run", False):
+        failures: list[str] = []
+        if missing_mirrors:
+            for name in sorted(missing_mirrors):
+                failures.append(
+                    f"missing release mirror for {source_project_id}:{name}"
+                )
+        release_id = tag.split("/")[-1] if tag else ""
+        changelog_file = release_path / "CHANGELOG.md"
+        if not tag:
+            failures.append("release.yaml has no releases: entries")
+        elif not changelog_file.is_file():
+            failures.append("CHANGELOG.md is missing")
+        elif f"## [{release_id}]" not in changelog_file.read_text("utf-8"):
+            failures.append(f"CHANGELOG.md has no '## [{release_id}]' section")
+        if tag:
+            r = subprocess.run(
+                ["git", "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}"],
+                capture_output=True,
+                cwd=_REPO_DIR,
+            )
+            if r.returncode == 0:
+                failures.append(f"tag {tag} already exists")
+        if not _obs_project_exists(apiurl, source_obs_project):
+            failures.append(f"source project {source_obs_project} not found on OBS")
+        else:
+            failures.extend(
+                f"not green: {p}" for p in assert_all_green(apiurl, freeze_scope)
+            )
+        if failures:
+            for f in failures:
+                print(f"  ✗ {f}", file=sys.stderr)
+            raise SystemExit("error: release dry-run failed")
+        _print_ok(f"release dry-run passed for {tag}  (dry run)")
+        return
+
     if missing_mirrors:
         listing = "\n".join(
             f"  {source_project_id}:{name}" for name in sorted(missing_mirrors)
@@ -2375,10 +2416,6 @@ def cmd_sync_release(args) -> None:
             f"{listing}\n"
             "Re-run 'percona-obs project release' to regenerate the release tree."
         )
-    source_sub_obs_projects = [
-        f"{source_obs_project}:{name}" for name, _ in subproject_pairs
-    ]
-    freeze_scope = [source_obs_project] + source_sub_obs_projects
 
     def _freeze_and_run(release_all) -> None:
         snapshots: dict[str, str] = {}

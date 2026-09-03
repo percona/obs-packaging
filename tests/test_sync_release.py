@@ -259,6 +259,71 @@ def test_no_freeze_skips_gate_but_verifies(tmp_path, monkeypatch):
     ) in verified
 
 
+def _dry_run_args(project="ppg:releases:17"):
+    class Args:
+        pass
+
+    a = Args()
+    a.project = project
+    a.rootprj = "home:Admin"
+    a.env_overrides = None
+    a.profile = None
+    a.force = False
+    a.skip_tag_check = False
+    a.dry_run = True
+    a.no_freeze = False
+    a.freeze_timeout = 1
+    a.verify_timeout = 0
+    a.message = None
+    return a
+
+
+def _patch_dry_run_common(monkeypatch, tmp_path, src, rel):
+    monkeypatch.setattr(
+        cmd_sync,
+        "resolve_project_path",
+        lambda pid: rel if "releases" in pid else src,
+    )
+    monkeypatch.setattr(cmd_sync, "_REPO_DIR", tmp_path)
+    monkeypatch.setattr(cmd_sync.osc.conf, "config", {"apiurl": "http://obs"})
+
+
+def test_dry_run_reports_all_failures(tmp_path, monkeypatch, capsys):
+    src, rel = _mk_tree(tmp_path)  # tarballs mirror missing by construction
+    (rel / "CHANGELOG.md").write_text("# Changelog\n")  # no release section
+    _patch_dry_run_common(monkeypatch, tmp_path, src, rel)
+    monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda a, p: False)
+    monkeypatch.setattr(cmd_sync, "assert_all_green", lambda a, p: [])
+    monkeypatch.setattr(
+        cmd_sync.subprocess,
+        "run",
+        lambda *a, **k: type("R", (), {"returncode": 1, "stdout": "", "stderr": ""})(),
+    )
+    with pytest.raises(SystemExit, match="dry-run failed"):
+        cmd_sync.cmd_sync_release(_dry_run_args())
+    err = capsys.readouterr().err
+    assert "missing release mirror" in err and "tarballs" in err
+    assert "## [17.11-1]" in err
+    assert "not found on OBS" in err
+
+
+def test_dry_run_passes_when_clean(tmp_path, monkeypatch, capsys):
+    src, rel = _mk_tree(tmp_path)
+    (rel / "tarballs").mkdir()
+    (rel / "tarballs" / "project.yaml").write_text("build: false\n")
+    (rel / "CHANGELOG.md").write_text("# Changelog\n\n## [17.11-1] - 2026-09-03\n")
+    _patch_dry_run_common(monkeypatch, tmp_path, src, rel)
+    monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda a, p: True)
+    monkeypatch.setattr(cmd_sync, "assert_all_green", lambda a, p: [])
+    monkeypatch.setattr(
+        cmd_sync.subprocess,
+        "run",
+        lambda *a, **k: type("R", (), {"returncode": 1, "stdout": "", "stderr": ""})(),
+    )
+    cmd_sync.cmd_sync_release(_dry_run_args())
+    assert "dry-run passed" in capsys.readouterr().out
+
+
 def test_filter_release_repo_names_warns_and_drops(monkeypatch, capsys):
     monkeypatch.setattr(
         cmd_sync,

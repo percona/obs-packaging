@@ -339,6 +339,13 @@ def build_parser() -> argparse.ArgumentParser:
         dest="verify_timeout",
         help="Seconds to wait for released packages to land (default: 600; 0 disables).",
     )
+    sync_release_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        dest="dry_run",
+        help="Validate the release (mirrors, changelog, tag, green staging) without writing to OBS.",
+    )
     sync_release_parser.set_defaults(func=cmd_sync_release)
 
     build_parser_ = subparsers.add_parser(
