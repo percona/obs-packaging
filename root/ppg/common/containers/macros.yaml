@@ -1,0 +1,9 @@
+# Macros for the PPG common containers project (images shared across PG major versions).
+# PG_MAJOR_VERSION is the upgrade *target* (the newest supported version); the Dockerfile
+# installs the older major versions it can upgrade from via a hardcoded shell loop instead
+# of a macro, since macros here don't support lists. Bump PG_MAJOR_VERSION/PG_MINOR_VERSION
+# and extend that loop whenever a new PG major version becomes the target.
+- PG_MAJOR_VERSION: 18
+- PG_MINOR_VERSION: 6
+- PG_VERSION: %!{PG_MAJOR_VERSION}.%!{PG_MINOR_VERSION}
+- PPG_RELEASE: 1

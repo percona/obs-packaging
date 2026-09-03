@@ -1,12 +1,21 @@
-title: Percona Container Images for PostgreSQL %!{PG_MAJOR_VERSION}
+title: Percona Common Container Images for PostgreSQL
 description: |
-  This project contains the container images for Percona Software for PostgreSQL %!{PG_MAJOR_VERSION}.
+  This project contains container images shared across all Percona Distribution for PostgreSQL
+  major versions (currently 14-18), such as the major-version upgrade image.
   We currently build our images based on UBI-8 and UBI-9 base containers.
 
 repositories:
   - name: ubi8
     paths:
-      - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
+      - subproject: ppg:staging:18
+        repository: UBI_8
+      - subproject: ppg:staging:17
+        repository: UBI_8
+      - subproject: ppg:staging:16
+        repository: UBI_8
+      - subproject: ppg:staging:15
+        repository: UBI_8
+      - subproject: ppg:staging:14
         repository: UBI_8
       - subproject: ppg:common:deps
         repository: UBI_8
@@ -29,7 +38,15 @@ repositories:
     archs: [x86_64, aarch64]
   - name: ubi9
     paths:
-      - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
+      - subproject: ppg:staging:18
+        repository: UBI_9
+      - subproject: ppg:staging:17
+        repository: UBI_9
+      - subproject: ppg:staging:16
+        repository: UBI_9
+      - subproject: ppg:staging:15
+        repository: UBI_9
+      - subproject: ppg:staging:14
         repository: UBI_9
       - subproject: ppg:common:deps
         repository: UBI_9
@@ -65,17 +82,23 @@ project-config: |
   BuildFlags: dockerarg:PPG_REPO=staging
 
   %if "%_repository" == "ubi8"
-  
+
   ExpandFlags: module:container-tools-rhel8
+  # containers-common (pulled in only by the container-tools-rhel8 module
+  # expansion above, for skopeo) ships its own copy of
+  # /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release, which conflicts with the
+  # file from redhat-release (pulled in via the rocky-release->redhat-release
+  # Substitute above). Nothing here installs containers-common on purpose.
+  Ignore: containers-common
 
   BuildFlags: dockerarg:RHEL_VER=el8
-  
+
   %endif
 
   %if "%_repository" == "ubi9"
-  
+
   BuildFlags: dockerarg:RHEL_VER=el9
-  
+
   %endif
 
 
@@ -85,7 +108,7 @@ qa:
     DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
     SERVER_VERSION: "%!{PG_VERSION}"
     TESTING_BRANCH: ricardo-work
-    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi8
+    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/common/containers/ubi8
     WITH_POSTGIS:
       - true
       - false
@@ -97,7 +120,7 @@ qa:
     DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
     SERVER_VERSION: "%!{PG_VERSION}"
     TESTING_BRANCH: ricardo-work
-    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi9
+    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/common/containers/ubi9
     WITH_POSTGIS:
       - true
       - false
