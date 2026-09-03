@@ -244,6 +244,24 @@ Task-5-style, against the OBS-built image (PR project):
   (1966c090). Matrix re-run on the final image `9.17-3.1`
   (`sha256:b6565aebcbffcd162a31bf0d348ccfe7c7b9221bf07922f67a5a70b71a483f88`):
   **6/6 PASS** plus an explicit `PGADMIN_ENABLE_TLS=True` HTTPS check.
+- **Post-delivery login fix (2026-09-02, user-reported):** the container
+  rendered `/login` but no credentials worked — every login bounced silently to
+  `/login`. Root cause was a flask-security-too version incompatibility, not the
+  image: FS-too 5.8.2 fixed issue #1212 by inverting `UserMixin.is_locked`
+  (`LoginForm.validate` went from `if not user.is_locked()` in 5.8.1 to
+  `if user.is_locked()` in 5.8.2), while pgAdmin 9.17's own `User.is_locked`
+  still returns `True` for a *non-locked* user. Under the SP3-built 5.8.2 the
+  form therefore treated every user as locked, failing validation *after* the
+  password already verified (the error lands in WTForms `form_errors`, which
+  pgAdmin's login view does not flash — hence the silent bounce). Fixed by
+  pinning `python3-flask-security-too` to **5.8.1** (newest release matching
+  pgAdmin's convention; within pgAdmin's own `5.8.*` pin; spec comment warns
+  against re-advancing). Rebuilt image `9.17-3.2`
+  (`sha256:9c565ad309a340011f86fda2dbc7f30e29e3ec996e204daf1681ba81ac46fbf2`).
+  **Gate gap closed:** the smoke matrix only asserted `GET /login` == 200 and
+  never performed a real authentication — a new **T7** now logs in for real
+  (valid credentials must reach `/browser/`, a wrong password must return to
+  `/login`); matrix re-run is **7/7 PASS**.
 - Decisions changed during execution: none (the §6 entrypoint amendments and the chmod
   are within the approved design; controller rulings recorded in the SDD ledger).
 
