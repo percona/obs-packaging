@@ -102,9 +102,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.number }}
         run: |
-          ALL_ROOT=$(gh pr view "$PR_NUMBER" --json files \
+          # -R is required: this job runs without a checkout, so gh cannot
+          # infer the repository from a local git directory.
+          ALL_ROOT=$(gh pr view "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --json files \
             --jq '[.files[] | select(.path | startswith("root/")) | .path] | length')
-          REL_ROOT=$(gh pr view "$PR_NUMBER" --json files \
+          REL_ROOT=$(gh pr view "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --json files \
             --jq '[.files[] | select(.path | test("^root/[^/]+/releases/")) | .path] | length')
           if [ "$ALL_ROOT" -gt 0 ] && [ "$ALL_ROOT" -eq "$REL_ROOT" ]; then
             echo "is_release_pr=true" >> "$GITHUB_OUTPUT"
