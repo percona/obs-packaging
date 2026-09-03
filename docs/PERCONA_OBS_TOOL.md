@@ -623,13 +623,19 @@ counter (e.g. `17.9-1`, `17.9-2`, `17.10-1`). A single OBS release project
 
 The process is PR-based:
 
-1. **`project release`** — auto-derives the release ID from OBS, creates or updates
-   `release.yaml` and `CHANGELOG.md`, commits, pushes a branch, and opens a review PR.
-2. **PR review** — the PR is review-only (no OBS build). Check `CHANGELOG.md` and merge.
-3. **`sync-main.yml`** — after the merge commit lands, detects the changed `release.yaml`
-   and creates the git tag (e.g. `ppg/17.9-1`).
-4. **`obs-release.yml`** — triggered by the tag, runs `sync release` in CI, then creates
-   a GitHub release with the changelog contents.
+1. **`project release`** — auto-derives the release ID from OBS, regenerates the full
+   `releases/<name>/` mirror tree from staging's current config, updates `release.yaml`
+   and `CHANGELOG.md`, and commits locally. Pushing the branch and opening the review
+   PR remain manual steps.
+2. **PR review** — `obs-pr-check.yml` detects the release-only PR and runs
+   `sync release <releases-project> --dry-run`, posting the genuine outcome (mirrors
+   complete, changelog section present, tag not already used, source reachable, staging
+   green) as a PR comment. Check it and `CHANGELOG.md`, then merge.
+3. **`obs-pr-cleanup.yml`** — on close of a merged release PR, tags the merge commit
+   (e.g. `ppg/17.9-1`) with `GITHUB_TOKEN` and dispatches `obs-release.yml` via
+   `gh workflow run` with that tag as input.
+4. **`obs-release.yml`** — its sole trigger is `workflow_dispatch`; it runs `sync release`
+   in CI, then creates a GitHub release with the changelog contents.
 
 ### Step 1 — Create or update a release
 
@@ -644,7 +650,8 @@ The process is PR-based:
 ./percona-obs -P local project release ppg:staging:17 --release-name 17 --release-id 17.9-1
 ```
 
-`project release <source-project>` does the following:
+`source-project` must be a `staging`-tier project — any other tier is rejected with an
+error. `project release <source-project>` does the following:
 
 1. **Auto-derives `release-id`** (if not given with `--release-id`):
    - Queries OBS for the built version of `percona-postgresql<major>` in the source project.
@@ -652,19 +659,28 @@ The process is PR-based:
    - Counts existing entries in `release.yaml` whose tag matches `/<MAJOR.MINOR>-*`
      and appends the next counter (e.g. `17.9-1`, or `17.9-2` if `17.9-1` already exists).
 2. **Fetches** the source project's repository topology from OBS.
-3. **Builds `CHANGELOG.md`** — compares built package versions in the source OBS project
-   against the release OBS project (for updates) and generates entries with upstream URLs.
-4. **First release** (`root/<product>/releases/<release-name>/` does not exist):
-   - Creates `release.yaml`, `project.yaml`, `CHANGELOG.md`.
-   - Creates `<subproject>/project.yaml` for each source subproject (e.g. `containers:ubi9/`)
-     with builds disabled and paths rewritten to point directly at the release project.
-5. **Update release** (directory already exists):
-   - Appends the new tag to `release.yaml`'s `releases:` list.
-   - Prepends a new section to `CHANGELOG.md`.
-6. **Commits** the generated files locally. Push the branch and open a PR manually.
+3. **Regenerates the full mirror tree**, on every release, not just the first: the
+   top-level `project.yaml` plus one nested mirror directory per staging subproject
+   (`containers/`, `extras/`, `extras/containers/`, `tarballs/`). All mirrors get
+   `build: false`, `publish:` flags are carried over, and subproject paths — including
+   intra-project sibling paths — are rewritten to the release namespace. A mirror
+   directory whose staging source no longer exists is **deleted**.
+4. **Builds `CHANGELOG.md`** — compares built package versions from the top-level staging
+   project, `extras`, and `tarballs` against the release OBS project (for updates) and
+   generates entries with upstream URLs. Container images are listed per flavor (`ubi8`
+   and `ubi9` as distinct entries); the previous-release image diff is queried from
+   whichever project actually holds the previous release's images, producing real
+   `prev → new` diffs instead of full package dumps (a full dump remains only for a true
+   first release).
+5. **Appends** the new tag to `release.yaml`'s `releases:` list and prepends the new
+   section to `CHANGELOG.md`.
+6. **Commits** the generated files locally with `git commit -s`. Pushing the branch and
+   opening the PR remain manual steps — `project release` does not do either.
 
-The git tag (e.g. `ppg/17.9-1`) is created automatically by `sync-main.yml` when
-the merge commit lands on `main`. That tag then triggers `obs-release.yml`.
+The git tag (e.g. `ppg/17.9-1`) is created automatically by `obs-pr-cleanup.yml`, on the
+**merge commit**, once the release PR is merged. That tag is then passed as input when
+`obs-pr-cleanup.yml` dispatches `obs-release.yml` — pushing a tag does not trigger
+anything by itself.
 
 ### `release.yaml` format
 
@@ -718,16 +734,28 @@ Upstream URLs are derived from the package's `obs/_service` upstream `obs_scm` e
 
 ### Step 2 — CI ships the release
 
-Release PRs are review-only — `obs-pr-check.yml` detects them and posts a comment
-instead of running an OBS build. On merge:
+Release PRs are review-only — `obs-pr-check.yml` detects them and, instead of running an
+OBS build, runs a real `sync release <releases-project> --dry-run` and posts the genuine
+outcome as a PR comment (no label is required for this check). On merge:
 
 1. `sync-main.yml` runs `sync push` normally (releases/ directories are excluded from
-   traversal), then creates the git tag from the last entry in `release.yaml`.
-2. The tag triggers `obs-release.yml`, which derives the OBS release project name
-   (e.g. `ppg/17.9-1` → `ppg:releases:17`) and runs `sync release`.
-3. After `sync release` finishes, `obs-release.yml` polls OBS (resolves immediately
-   since all builds are disabled), updates version list docs, and creates a GitHub
-   release with the `CHANGELOG.md` section for that release ID.
+   traversal). It no longer creates any tag.
+2. `obs-pr-cleanup.yml`, on close of the merged release PR, tags `merge_commit_sha` with
+   `GITHUB_TOKEN` (e.g. `ppg/17.9-1`) and dispatches `obs-release.yml` via
+   `gh workflow run obs-release.yml --ref main -f tag=<tag>`. A tag-creation or dispatch
+   API error fails the job; only a genuine "tag already exists" response is tolerated.
+3. `obs-release.yml`'s **sole trigger** is `workflow_dispatch` (the `push: tags` trigger
+   has been removed, so pushing a tag by hand is inert). Given the dispatched `tag`
+   input, it derives the OBS release project name (e.g. `ppg/17.9-1` → `ppg:releases:17`)
+   and runs `sync release`.
+4. After `sync release` finishes, `obs-release.yml` updates version list docs and creates
+   a GitHub release with the `CHANGELOG.md` section for that release ID.
+
+Manual recovery (e.g. `obs-pr-cleanup.yml` tagged but the dispatch failed):
+
+```sh
+gh workflow run obs-release.yml -f tag=ppg/17.9-1
+```
 
 ### Running `sync release` manually
 
@@ -737,21 +765,45 @@ For local testing or recovery from a failed CI run:
 ./percona-obs -P local sync release ppg:releases:17 --skip-tag-check
 ```
 
+Flags:
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--dry-run` | off | Read-only: checks that every staging subproject has a mirror, the `CHANGELOG.md` section for the release ID exists, the tag does not already exist, the source OBS project is reachable, and every staging package currently reports `succeeded`. Does not freeze, release, or write anything. |
+| `--force` | off | Skips the divergence (tag) check entirely. |
+| `--skip-tag-check` | off | Skips only the `git diff <tag>..HEAD` check — use when the tag doesn't exist locally yet. |
+| `--no-freeze` | off | Skips the drain/freeze/restore sequence (§ below) — for recovery scenarios where staging is already known idle. |
+| `--freeze-timeout` | `3600` (seconds) | Bound on the drain step; the release fails rather than waiting forever for a stuck package. |
+| `--verify-timeout` | `600` (seconds, `0` disables) | Bound on the post-release poll that confirms each released repo actually holds binaries. |
+
 `sync release <release-project>` reads `release.yaml` and performs:
 
 1. **Divergence check** (skipped with `--force`):
    - Checks that no files under the source project have changed since the release tag
      (`git diff <tag>..HEAD`). Pass `--skip-tag-check` when the tag doesn't exist locally.
    - Runs `sync push --dry-run` to confirm OBS is up-to-date (first release only).
-2. **If the OBS release project does NOT exist** (first release):
-   - Creates the release project with builds globally disabled.
-   - Copies the source project's `prjconf`.
-   - Runs `osc release <source-project> --no-delay` to copy binaries.
-   - Creates each release subproject (e.g. `containers:ubi9`) with builds disabled.
-3. **If the OBS release project already exists** (update release or re-run):
-   - Runs `osc release` again to copy updated binaries in place.
-   - Re-releases each subproject.
-   - Re-runs are safe — `osc release` is idempotent.
+2. **Mirror check** — a staging subproject with no corresponding local mirror directory
+   is a **hard error** (never silently skipped).
+3. **Freeze sequence** (skipped with `--no-freeze`), applying to every release, first or
+   update:
+   1. **Drain** — poll `_result` for the staging project and all subprojects until no
+      package is `building` / `scheduled` / `dispatching` / `blocked` / `finished` /
+      `signing`, bounded by `--freeze-timeout`.
+   2. **Assert green** — every package is `succeeded` (or legitimately `excluded` /
+      `disabled`); any `failed` / `unresolvable` / `broken` aborts the release.
+   3. **Freeze** — snapshot each project's meta, then disable builds on staging and
+      every subproject.
+   4. **Release** — `osc release` for the top-level project and every subproject.
+   5. **Restore** — in a `finally`, re-apply each project's exact snapshotted meta
+      (never a blanket enable, since subprojects carry per-repo flags — e.g. tarballs'
+      `publish:` flags — that must survive the round trip).
+4. **Applies the release project config** — the top-level release project meta is
+   re-applied on the update path too, not just on first creation. Release targets are
+   added only for repos present on both sides.
+5. **Verify** — polls (bounded by `--verify-timeout`) until each released repo holds
+   binaries.
+6. Release-tier OBS projects with no local mirror are reported loudly as orphans;
+   deletion is never automatic — run `sync delete` manually.
 
 Skip all divergence checks:
 
@@ -769,9 +821,22 @@ root/
             ├── release.yaml        # releases: list of tags
             ├── project.yaml        # ppg:releases:17 (builds disabled)
             ├── CHANGELOG.md        # keep-a-changelog, all releases
-            └── containers:ubi9/    # colon-named, mirrors source subproject
-                └── project.yaml    # builds disabled, paths → release project
+            ├── containers/         # nested, mirrors staging's containers/ subproject
+            │   └── project.yaml    # builds disabled, paths → release project
+            ├── extras/
+            │   ├── project.yaml
+            │   └── containers/
+            │       └── project.yaml
+            └── tarballs/
+                └── project.yaml
 ```
+
+Subproject mirrors are nested directories, never colon-named — `containers:ubi9/`
+describes only the pre-restructure layout and no longer reflects reality.
+`project release` **regenerates the entire mirror tree from staging's current
+config on every release**, not just the first: mirrors for subprojects that still
+exist in staging are refreshed in place, and mirror directories whose staging
+source no longer exists are deleted.
 
 The `releases/` directory is excluded from `sync push` traversal — release
 directories (identified by `release.yaml`) are never synced to OBS as source
@@ -779,11 +844,13 @@ projects.
 
 ### Non-release PR: copying binaries to production on merge
 
-When a PR that updates packages (rather than creating a release snapshot) is merged,
-`obs-pr-cleanup.yml` runs `sync release-pr` before deleting the PR project. This copies
-the PR's built binaries to the corresponding production OBS projects via the
-`<releasetarget>` entries that `sync push --branch-from` added to every active PR
-project's repository configuration.
+`sync release-pr` still exists, but no workflow invokes it anymore — it is a
+manual/recovery-only command. Previously `obs-pr-cleanup.yml` ran it before deleting
+the PR project; that step has been removed from the workflow.
+
+`sync release-pr` copies the PR's built binaries to the corresponding production OBS
+projects via the `<releasetarget>` entries that `sync push --branch-from` added to
+every active PR project's repository configuration.
 
 Before copying binaries, `sync release-pr` automatically:
 
