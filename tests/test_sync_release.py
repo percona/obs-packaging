@@ -6,6 +6,7 @@ OBS-side orphans.  OBS interaction is monkeypatched out.
 """
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -260,22 +261,19 @@ def test_no_freeze_skips_gate_but_verifies(tmp_path, monkeypatch):
 
 
 def _dry_run_args(project="ppg:releases:17"):
-    class Args:
-        pass
-
-    a = Args()
-    a.project = project
-    a.rootprj = "home:Admin"
-    a.env_overrides = None
-    a.profile = None
-    a.force = False
-    a.skip_tag_check = False
-    a.dry_run = True
-    a.no_freeze = False
-    a.freeze_timeout = 1
-    a.verify_timeout = 0
-    a.message = None
-    return a
+    return SimpleNamespace(
+        project=project,
+        rootprj="home:Admin",
+        env_overrides=None,
+        profile=None,
+        force=False,
+        skip_tag_check=False,
+        dry_run=True,
+        no_freeze=False,
+        freeze_timeout=1,
+        verify_timeout=0,
+        message=None,
+    )
 
 
 def _patch_dry_run_common(monkeypatch, tmp_path, src, rel):
