@@ -122,6 +122,35 @@ def test_freeze_snapshots_and_restores_exact_meta(monkeypatch):
     assert written[-1] == ("prj", orig, True)
 
 
+def test_freeze_partial_failure_restores_already_frozen_projects(monkeypatch):
+    origs = {
+        "p1": '<project name="p1"><title/><description/>'
+        '<repository name="R8"/></project>',
+        "p2": '<project name="p2"><title/><description/>'
+        '<repository name="R8"/></project>',
+    }
+    written = []
+
+    def fake_show_meta(apiurl, prj):
+        return origs[prj].encode()
+
+    def fake_edit(apiurl, prj, meta, force):
+        written.append((prj, meta, force))
+        if prj == "p2":
+            raise RuntimeError("obs down mid-freeze")
+
+    monkeypatch.setattr(rf.osc.core, "show_project_meta", fake_show_meta)
+    monkeypatch.setattr(rf, "_edit_project_meta", fake_edit)
+
+    with pytest.raises(RuntimeError, match="obs down mid-freeze"):
+        rf.freeze_builds("http://obs", ["p1", "p2"])
+
+    # p1 was frozen then restored; p2's failed edit is the second write.
+    assert [w[0] for w in written] == ["p1", "p2", "p1"]
+    assert "<disable" in written[0][1]  # p1 frozen
+    assert written[2] == ("p1", origs["p1"], True)  # p1 restored to exact prior meta
+
+
 def test_restore_never_raises(monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("obs down")

@@ -258,3 +258,67 @@ def test_project_image_repo_names_mixed_project_is_not_images(tmp_path):
     (proj / "percona-psql" / "obs" / "_service").write_text("<services/>")
     config = {"repositories": [{"name": "ssl3"}, {"name": "RockyLinux_9"}]}
     assert cmd_project._project_image_repo_names(proj, config) == set()
+
+
+def test_project_image_repo_names_packageless_containers_dir(tmp_path):
+    # Release mirror project: only project.yaml, no local package dirs.
+    proj = tmp_path / "containers"
+    proj.mkdir()
+    config = {"repositories": [{"name": "ubi8"}, {"name": "ubi9"}]}
+    assert cmd_project._project_image_repo_names(
+        proj, config, "isv:percona:ppg:releases:17:containers"
+    ) == {"ubi8", "ubi9"}
+
+
+def test_project_image_repo_names_packageless_non_containers_dir(tmp_path):
+    proj = tmp_path / "tarballs"
+    proj.mkdir()
+    config = {"repositories": [{"name": "ssl1.1"}, {"name": "ssl3"}]}
+    assert (
+        cmd_project._project_image_repo_names(
+            proj, config, "isv:percona:ppg:releases:17:tarballs"
+        )
+        == set()
+    )
+
+
+def test_commit_release_paths_scopes_add_and_commit(tmp_path, monkeypatch):
+    monkeypatch.setattr(cmd_project, "_REPO_DIR", tmp_path)
+    release_dir = tmp_path / "root" / "ppg" / "releases" / "17.9"
+    release_dir.mkdir(parents=True)
+
+    calls = []
+
+    def fake_run(cmd, cwd=None, check=None):
+        calls.append(cmd)
+
+        class R:
+            returncode = 0
+
+        return R()
+
+    monkeypatch.setattr(cmd_project.subprocess, "run", fake_run)
+
+    committed_paths = ["root/ppg/staging/macros.yaml"]
+    cmd_project._commit_release_paths("release: 17.9", committed_paths, release_dir)
+
+    assert len(calls) == 2
+    add_cmd, commit_cmd = calls
+    release_dir_rel = "root/ppg/releases/17.9"
+    assert add_cmd[:3] == ["git", "add", "-A"]
+    assert add_cmd[4:] == [*committed_paths, release_dir_rel]
+    assert commit_cmd[:5] == ["git", "commit", "-s", "-m", "release: 17.9"]
+    assert commit_cmd[6:] == [*committed_paths, release_dir_rel]
+    # An unrelated file staged beforehand elsewhere must not be part of the
+    # pathspec list passed to either git add or git commit.
+    assert "unrelated/file.txt" not in add_cmd
+    assert "unrelated/file.txt" not in commit_cmd
+
+
+def test_project_image_repo_names_packageless_containers_with_images_repo(tmp_path):
+    proj = tmp_path / "containers"
+    proj.mkdir()
+    config = {"repositories": [{"name": "RockyLinux_9"}, {"name": "images"}]}
+    assert cmd_project._project_image_repo_names(
+        proj, config, "isv:percona:ppg:releases:17:containers"
+    ) == {"images"}

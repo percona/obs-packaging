@@ -125,21 +125,31 @@ def freeze_builds(apiurl: str, obs_projects: "list[str]") -> "dict[str, str]":
     The snapshot is the exact meta XML fetched before modification, so
     restore_builds round-trips per-repo flags (publish, debuginfo, partial
     build enables) without reconstructing them.
+
+    If freezing any project fails partway through, every project frozen so
+    far is restored before the exception propagates — otherwise the earlier
+    projects would stay build-disabled forever (the caller never receives
+    the snapshots dict on an exception).
     """
     snapshots: dict[str, str] = {}
-    for prj in obs_projects:
-        raw = _decode_obs_response(osc.core.show_project_meta(apiurl, prj))
-        snapshots[prj] = raw
-        root = ET.fromstring(raw)
-        for build_elem in root.findall("build"):
-            root.remove(build_elem)
-        build_elem = ET.SubElement(root, "build")
-        ET.SubElement(build_elem, "disable")
-        ET.indent(root, space="  ")
-        _edit_project_meta(
-            apiurl, prj, ET.tostring(root, encoding="unicode"), force=True
-        )
-        _print_update(f"{prj}  (builds frozen)")
+    try:
+        for prj in obs_projects:
+            raw = _decode_obs_response(osc.core.show_project_meta(apiurl, prj))
+            root = ET.fromstring(raw)
+            for build_elem in root.findall("build"):
+                root.remove(build_elem)
+            build_elem = ET.SubElement(root, "build")
+            ET.SubElement(build_elem, "disable")
+            ET.indent(root, space="  ")
+            _edit_project_meta(
+                apiurl, prj, ET.tostring(root, encoding="unicode"), force=True
+            )
+            snapshots[prj] = raw
+            _print_update(f"{prj}  (builds frozen)")
+    except Exception:
+        if snapshots:
+            restore_builds(apiurl, snapshots)
+        raise
     return snapshots
 
 
