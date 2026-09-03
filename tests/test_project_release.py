@@ -322,3 +322,97 @@ def test_project_image_repo_names_packageless_containers_with_images_repo(tmp_pa
     assert cmd_project._project_image_repo_names(
         proj, config, "isv:percona:ppg:releases:17:containers"
     ) == {"images"}
+
+
+def test_suffix_subproject_versions():
+    out = cmd_project._suffix_subproject_versions(
+        {"percona-postgresql": "3.5-1"}, "extras"
+    )
+    assert out == {"percona-postgresql (extras)": "3.5-1"}
+
+
+def test_split_changelog_key():
+    assert cmd_project._split_changelog_key("percona-postgresql (extras)") == (
+        "percona-postgresql",
+        "extras",
+    )
+    assert cmd_project._split_changelog_key("percona-postgresql") == (
+        "percona-postgresql",
+        None,
+    )
+    assert cmd_project._split_changelog_key("x (extras:containers)") == (
+        "x",
+        "extras:containers",
+    )
+
+
+def _write_obs_service(path: Path, url: str, revision: str = "v1.0") -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "<services>\n"
+        '  <service name="obs_scm">\n'
+        f'    <param name="url">{url}</param>\n'
+        f'    <param name="revision">{revision}</param>\n'
+        "  </service>\n"
+        "</services>\n"
+    )
+
+
+def test_changelog_distinguishes_colliding_package_names(tmp_path):
+    src = tmp_path / "staging17"
+    _write_obs_service(
+        src / "percona-postgresql" / "obs" / "_service",
+        "https://github.com/percona/toplevel.git",
+    )
+    _write_obs_service(
+        src / "extras" / "percona-postgresql" / "obs" / "_service",
+        "https://github.com/percona/extras.git",
+    )
+
+    source_versions = {
+        "percona-postgresql": "17.11-1",
+        "percona-postgresql (extras)": "3.5-1",
+    }
+    release_versions = {
+        "percona-postgresql": "17.10-1",
+        "percona-postgresql (extras)": "3.5-1",
+    }
+
+    section = cmd_project._build_changelog_section(
+        "17.11-1", source_versions, release_versions, src
+    )
+
+    assert "- percona-postgresql: update upstream version 17.11" in section
+    assert "percona/toplevel" in section
+    assert "percona-postgresql (extras)" not in section
+    assert "percona/extras" not in section
+
+
+def test_changelog_distinguishes_colliding_package_names_extras_changed(tmp_path):
+    src = tmp_path / "staging17"
+    _write_obs_service(
+        src / "percona-postgresql" / "obs" / "_service",
+        "https://github.com/percona/toplevel.git",
+    )
+    _write_obs_service(
+        src / "extras" / "percona-postgresql" / "obs" / "_service",
+        "https://github.com/percona/extras.git",
+    )
+
+    source_versions = {
+        "percona-postgresql": "17.10-1",
+        "percona-postgresql (extras)": "3.6-1",
+    }
+    release_versions = {
+        "percona-postgresql": "17.10-1",
+        "percona-postgresql (extras)": "3.5-1",
+    }
+
+    section = cmd_project._build_changelog_section(
+        "17.11-1", source_versions, release_versions, src
+    )
+
+    assert "- percona-postgresql (extras): update upstream version 3.6" in section
+    assert "percona/extras" in section
+    assert "percona/toplevel" not in section
+    assert "- percona-postgresql: update upstream version" not in section

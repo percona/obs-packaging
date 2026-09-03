@@ -1561,6 +1561,34 @@ def _find_pkg_service(source_path: Path, pkg: str) -> "Path | None":
     return None
 
 
+def _suffix_subproject_versions(
+    versions: "dict[str, str]", subproject_name: str
+) -> "dict[str, str]":
+    """Key subproject package versions as "<pkg> (<subproject>)".
+
+    Same-named packages can exist at the top level and inside a subproject
+    (e.g. percona-postgresql vs extras/percona-postgresql); a flat merge
+    would silently last-wins overwrite.  The suffix keeps entries distinct
+    and stable across releases, mirroring the container "(flavor)" style.
+    """
+    return {f"{pkg} ({subproject_name})": v for pkg, v in versions.items()}
+
+
+_CHANGELOG_KEY_RE = re.compile(r"^(?P<pkg>.+?) \((?P<sub>[^()]+)\)$")
+
+
+def _split_changelog_key(key: str) -> "tuple[str, str | None]":
+    """Split "<pkg> (<subproject>)" changelog keys into (pkg, subproject).
+
+    Bare top-level keys return (key, None).  Container image keys also match
+    this shape but never reach the service lookup (separate dicts).
+    """
+    m = _CHANGELOG_KEY_RE.match(key)
+    if m:
+        return m.group("pkg"), m.group("sub")
+    return key, None
+
+
 def _build_changelog_section(
     release_id: str,
     source_versions: "dict[str, str]",
@@ -1596,7 +1624,16 @@ def _build_changelog_section(
         pkg_version = src_ver.split("-")[0]
 
         url_str = ""
-        service_file = _find_pkg_service(source_path, pkg)
+        base_pkg, sub = _split_changelog_key(pkg)
+        service_file: "Path | None" = None
+        if sub is not None:
+            sub_service = (
+                source_path / Path(*sub.split(":")) / base_pkg / "obs" / "_service"
+            )
+            if sub_service.is_file():
+                service_file = sub_service
+        if service_file is None:
+            service_file = _find_pkg_service(source_path, base_pkg)
         if service_file is not None:
             info = _extract_upstream_info_from_service(service_file)
             if info:
@@ -1823,7 +1860,10 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         else:
             noncontainer_subs.append(subproject_name)
             source_versions.update(
-                _fetch_project_pkg_versions(apiurl, f"{args.rootprj}:{sub_obs_id}")
+                _suffix_subproject_versions(
+                    _fetch_project_pkg_versions(apiurl, f"{args.rootprj}:{sub_obs_id}"),
+                    subproject_name,
+                )
             )
 
     release_versions: dict[str, str] | None = None
@@ -1832,7 +1872,12 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         for subproject_name in noncontainer_subs:
             rel_sub = f"{release_obs_project}:{subproject_name}"
             if _obs_project_exists(apiurl, rel_sub):
-                release_versions.update(_fetch_project_pkg_versions(apiurl, rel_sub))
+                release_versions.update(
+                    _suffix_subproject_versions(
+                        _fetch_project_pkg_versions(apiurl, rel_sub),
+                        subproject_name,
+                    )
+                )
 
     # Fetch container image package lists for each container subproject.
     _print_pending("fetching container image package lists for CHANGELOG")
