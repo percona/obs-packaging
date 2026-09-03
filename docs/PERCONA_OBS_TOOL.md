@@ -736,6 +736,22 @@ Upstream URLs are derived from the package's `obs/_service` upstream `obs_scm` e
 - **PostgreSQL** (`git.postgresql.org`): maps to `https://www.postgresql.org/docs/release/<MAJOR.MINOR>/`.
 - **Other**: uses the bare `url` value.
 
+### CHANGELOG Security section (best-effort CVE scan)
+
+Unless `--no-cve-scan` is passed, `project release` also runs a best-effort CVE
+scan and appends the findings as a `### Security` section (after `### Changed`).
+Three sources are scanned: upstream release notes/commit logs per changed
+package (PostgreSQL release notes for PostgreSQL itself; GitHub compare-diff +
+releases for packages whose upstream is on GitHub — other upstreams are
+reported as not scanned rather than guessed at), and the Go toolchain delta
+(`GOLANG_VERSION` in `macros.yaml`, checked against GitHub's Security-labeled
+issue search for each intermediate Go patch release). The scan never blocks a
+release cut — anything it cannot resolve (unrecognized upstream, network
+failure, unrecognized tag scheme) is reported as a "Not scanned: …" line
+rather than silently dropped, and UBI base-image CVEs are explicitly flagged
+as out of scope for this scan. No `### Security` section is emitted when the
+scan produces nothing (e.g. `--no-cve-scan`, or no packages changed).
+
 ### Step 2 — CI ships the release
 
 Release PRs are review-only — `obs-pr-check.yml` detects them and, instead of running an

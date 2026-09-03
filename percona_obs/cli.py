@@ -706,6 +706,13 @@ def build_parser() -> argparse.ArgumentParser:
         "Defaults to auto-derived from OBS: MAJOR.MINOR-N where N counts "
         "existing releases of the same minor version.",
     )
+    project_release_parser.add_argument(
+        "--no-cve-scan",
+        action="store_true",
+        default=False,
+        dest="no_cve_scan",
+        help="Skip the best-effort CVE scan when generating the CHANGELOG Security section.",
+    )
     project_release_parser.set_defaults(func=cmd_project_release)
 
     return parser
