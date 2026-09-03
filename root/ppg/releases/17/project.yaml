@@ -3,38 +3,55 @@ debuginfo:
   RockyLinux_9: true
   openSUSE_Leap_16: true
   openSUSE_Tumbleweed: true
-description: 'Release project for ppg:17 (OBS project ppg:releases:17).
+description: 'Release project for ppg:staging:17 (OBS project ppg:releases:17).
 
   Binaries are populated by osc release and builds are disabled.
 
   This project is read-only — do not add or edit packages directly.
 
   '
-project-config: '%if "%_repository" == "RockyLinux_8" || "%_repository" == "RHEL-8"  ||
-  "%_repository" == "RedHat_RHEL-8"
+project-config: '%if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_8"
 
   ExpandFlags: module:llvm-toolset-rhel8
-
-  # so that we get perl-IO-Socket-SSL
 
   ExpandFlags: module:perl-5.26
 
   ExpandFlags: module:perl-IO-Socket-SSL-2.066
 
-  ExpandFlags: module:python36-3.6
+  ExpandFlags: module:perl-libwww-perl-6.34
+
+  Prefer: python3-devel
+
+  Prefer: atlas
 
   Prefer: selinux-policy-targeted
 
   %endif
 
 
-  %if "%_repository" == "RockyLinux_9"
+  %if "%_repository" == "RockyLinux_9" || "%_repository" == "UBI_9"
 
   ExpandFlags: module:llvm-toolset-rhel9
 
   # hdf-libs (EPEL split package) and hdf both provide libdf.so.0 and libmfhdf.so.0
 
   Prefer: hdf-libs
+
+  %endif
+
+
+  %if "%_repository" == "RockyLinux_10"
+
+  Prefer: selinux-policy-targeted
+
+  Prefer: hdf-libs
+
+
+  Macros:
+
+  %__brp_check_rpaths %{nil}
+
+  :Macros
 
   %endif
 
@@ -51,7 +68,8 @@ project-config: '%if "%_repository" == "RockyLinux_8" || "%_repository" == "RHEL
 
   # requirements resolve to percona-postgresql17-server via its Provides. Also
 
-  # suppress the ppg:18 system package (postgresql18-server) so that this project
+  # suppress the ppg:staging:18 system package (postgresql18-server) so that this
+  project
 
   # does not pick it up when both majors are present in the interconnect.
 
@@ -103,8 +121,58 @@ project-config: '%if "%_repository" == "RockyLinux_8" || "%_repository" == "RHEL
   %endif
 
 
-  %if "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_24.04" || "%_repository"
-  == "Ubuntu_26.04"
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository"
+  == "Ubuntu_22.04"
+
+  # llvm-*-dev needs libtinfo-dev; both libncurses-dev and libtinfo-dev satisfy
+
+  # it and OBS reports "have choice" without a Prefer.
+
+  Prefer: libncurses-dev
+
+  # logrotate Recommends a cron daemon; both cron and bcron may be available.
+
+  Prefer: cron
+
+
+  # Repackaged LLVM 21 (built for Debian 11/12) is only for PPG 18 JIT.
+
+  # For PPG 14–17, Ignore it so builds use the distro LLVM packages.
+
+  Ignore: libllvm21
+
+  Ignore: llvm-21-runtime
+
+  Ignore: llvm-21-linker-tools
+
+  Ignore: libclang-cpp21
+
+  Ignore: libclang-common-21-dev
+
+  Ignore: libclang1-21
+
+  Ignore: llvm-21-tools
+
+  Ignore: llvm-21
+
+  Ignore: llvm-21-dev
+
+  Ignore: clang-21
+
+  %endif
+
+
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository"
+  == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04"
+
+  Prefer: golang-1.26
+
+  %endif
+
+
+  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository"
+  == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04"
+  || "%_repository" == "Ubuntu_26.04"
 
   # libgdal-dev transitively requires both libcurl4-openssl-dev and
 
@@ -169,6 +237,51 @@ repositories:
 - archs:
   - x86_64
   - aarch64
+  name: Ubuntu_22.04
+  paths:
+  - repository: Ubuntu_22.04
+    subproject: ppg:common:deps
+  - repository: Ubuntu_22.04
+    subproject: common:deps:build
+  - project: Ubuntu:22.04
+    repository: universe
+- archs:
+  - x86_64
+  - aarch64
+  name: UBI_9
+  paths:
+  - repository: UBI_9
+    subproject: ppg:common:deps
+  - repository: UBI_9
+    subproject: common:deps:build
+  - project: Fedora:EPEL:9
+    repository: standard
+  - project: RedHat:UBI-9
+    repository: standard
+  - project: RockyLinux:9
+    repository: devel
+- archs:
+  - x86_64
+  - aarch64
+  name: UBI_8
+  paths:
+  - repository: UBI_8
+    subproject: common:deps:build
+  - repository: UBI_8
+    subproject: ppg:common:deps
+  - project: Fedora:EPEL:8
+    repository: standard
+  - project: RedHat:UBI-8
+    repository: standard
+  - project: RockyLinux:8
+    repository: appstream
+  - project: RockyLinux:8
+    repository: baseos
+  - project: RockyLinux:8
+    repository: devel
+- archs:
+  - x86_64
+  - aarch64
   name: RockyLinux_9
   paths:
   - repository: RockyLinux_9
@@ -182,6 +295,34 @@ repositories:
 - archs:
   - x86_64
   - aarch64
+  name: RockyLinux_8
+  paths:
+  - repository: RockyLinux_8
+    subproject: ppg:common:deps
+  - repository: RockyLinux_8
+    subproject: common:deps:build
+  - project: Fedora:EPEL:8
+    repository: standard
+  - project: RockyLinux:8
+    repository: appstream
+  - project: RockyLinux:8
+    repository: baseos
+  - project: RockyLinux:8
+    repository: devel
+- archs:
+  - x86_64
+  - aarch64
+  name: RockyLinux_10
+  paths:
+  - repository: RockyLinux_10
+    subproject: common:deps:build
+  - project: Fedora:EPEL:10
+    repository: standard
+  - project: RockyLinux:10
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
   name: Debian_13
   paths:
   - repository: Debian_13
@@ -189,5 +330,27 @@ repositories:
   - repository: Debian_13
     subproject: common:deps:build
   - project: Debian:13
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: Debian_12
+  paths:
+  - repository: Debian_12
+    subproject: ppg:common:deps
+  - repository: Debian_12
+    subproject: common:deps:build
+  - project: Debian:12
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: Debian_11
+  paths:
+  - repository: Debian_11
+    subproject: ppg:common:deps
+  - repository: Debian_11
+    subproject: common:deps:build
+  - project: Debian:11
     repository: standard
 title: ppg releases 17

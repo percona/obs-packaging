@@ -4,6 +4,247 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [17.11-1] - 2026-09-03
+
+### Added
+- h3 (extras): add upstream version 4.5.0 (https://github.com/uber/h3/releases/tag/v4.5.0)
+- percona-h3-pg (extras): add upstream version 4.5.0 (https://github.com/postgis/h3-pg/releases/tag/v4.5.0)
+- percona-hll (extras): add upstream version 2.21 (https://github.com/citusdata/postgresql-hll/releases/tag/v2.21)
+- percona-ip4r (extras): add upstream version 2.4.3 (https://github.com/RhodiumToad/ip4r/releases/tag/2.4.3)
+- percona-pg_partman (extras): add upstream version 5.4.3 (https://github.com/pgpartman/pg_partman/releases/tag/v5.4.3)
+- percona-pg_similarity (extras): add upstream version pg_similarity_1_0 (https://github.com/eulerto/pg_similarity/releases/tag/pg_similarity_1_0)
+- percona-pgrouting (extras): add upstream version 4.0.1 (https://github.com/pgRouting/pgrouting/releases/tag/v4.0.1)
+- percona-pgvectorscale (extras): add upstream version 0.9.0 (https://github.com/timescale/pgvectorscale/releases/tag/0.9.0)
+- percona-postgresql (extras): add upstream version 17.11 (https://github.com/postgres/postgres/releases/tag/REL_17_11)
+- percona-postgresql-unit (extras): add upstream version 7.10 (https://github.com/df7cb/postgresql-unit/releases/tag/7.10)
+- percona-postgresql_anonymizer (extras): add upstream version 3.1.1 (https://gitlab.com/dalibo/postgresql_anonymizer.git/)
+- percona-rum (extras): add upstream version 1.3.15 (https://github.com/postgrespro/rum/releases/tag/1.3.15)
+- percona-timescaledb (extras): add upstream version 2.28.1 (https://github.com/timescale/timescaledb/releases/tag/2.28.1)
+- percona-distribution-postgresql (ubi8) [container image]: add image 17.11-1
+  - gosu 1.19-13.4
+  - percona-patroni 4.1.5-2.1
+  - percona-patroni-etcd 4.1.5-2.1
+  - percona-pg_cron_17 1.6.7-1.26
+  - percona-pg_repack17 1.5.3-2.20
+  - percona-pg_stat_monitor17 2.3.2-1.26
+  - percona-pg_tde17 2.2.2-1.3
+  - percona-pgaudit17 17.1-2.23
+  - percona-pgaudit17_set_user 4.2.0-1.26
+  - percona-pgbackrest 2.59.0-2.2
+  - percona-pgvector_17 0.8.6-1.3
+  - percona-pgvector_17-llvmjit 0.8.6-1.3
+  - percona-postgresql-client-common 293-1.2
+  - percona-postgresql-common 293-1.2
+  - percona-postgresql17 17.11-2.2
+  - percona-postgresql17-contrib 17.11-2.2
+  - percona-postgresql17-libs 17.11-2.2
+  - percona-postgresql17-llvmjit 17.11-2.2
+  - percona-postgresql17-server 17.11-2.2
+  - percona-wal2json17 2.6-1.26
+  - perl-JSON 4.03-2.22
+  - python3-ydiff 1.4.2-2.25
+  - python3.12-click 8.1.7-2.25
+  - python3.12-dateutil 2.9.0.post0-3.22
+  - python3.12-dns 1.15.0-2.25
+  - python3.12-etcd 0.4.5-2.25
+  - python3.12-prettytable 3.4.0-2.25
+  - python3.12-psutil 6.1.1-2.25
+  - python3.12-psycopg2 2.9.10-2.20
+  - python3.12-six 1.17.0-2.25
+  - python3.12-systemd 235-1.1
+  - python3.12-wcwidth 0.2.13-2.25
+- percona-distribution-postgresql-with-postgis (ubi8) [container image]: add image 17.11-1
+  - SFCGAL 2.2.0-4.22
+  - blas 3.9.0-1.23
+  - geos 3.13.1-2.14
+  - gosu 1.19-13.4
+  - lapack 3.9.0-1.23
+  - percona-patroni 4.1.5-2.1
+  - percona-patroni-etcd 4.1.5-2.1
+  - percona-pg_cron_17 1.6.7-1.26
+  - percona-pg_repack17 1.5.3-2.20
+  - percona-pg_stat_monitor17 2.3.2-1.26
+  - percona-pg_tde17 2.2.2-1.3
+  - percona-pgaudit17 17.1-2.23
+  - percona-pgaudit17_set_user 4.2.0-1.26
+  - percona-pgbackrest 2.59.0-2.2
+  - percona-pgvector_17 0.8.6-1.3
+  - percona-pgvector_17-llvmjit 0.8.6-1.3
+  - percona-postgis35_17 3.5.7-1.36
+  - percona-postgis35_17-client 3.5.7-1.36
+  - percona-postgis35_17-gui 3.5.7-1.36
+  - percona-postgis35_17-llvmjit 3.5.7-1.36
+  - percona-postgis35_17-utils 3.5.7-1.36
+  - percona-postgresql-client-common 293-1.2
+  - percona-postgresql-common 293-1.2
+  - percona-postgresql17 17.11-2.2
+  - percona-postgresql17-contrib 17.11-2.2
+  - percona-postgresql17-libs 17.11-2.2
+  - percona-postgresql17-llvmjit 17.11-2.2
+  - percona-postgresql17-server 17.11-2.2
+  - percona-wal2json17 2.6-1.26
+  - perl-JSON 4.03-2.22
+  - python3-ydiff 1.4.2-2.25
+  - python3.12-click 8.1.7-2.25
+  - python3.12-dateutil 2.9.0.post0-3.22
+  - python3.12-dns 1.15.0-2.25
+  - python3.12-etcd 0.4.5-2.25
+  - python3.12-prettytable 3.4.0-2.25
+  - python3.12-psutil 6.1.1-2.25
+  - python3.12-psycopg2 2.9.10-2.20
+  - python3.12-six 1.17.0-2.25
+  - python3.12-systemd 235-1.1
+  - python3.12-wcwidth 0.2.13-2.25
+- percona-pgbackrest (ubi8) [container image]: add image 17.11-1
+  - percona-pgbackrest 2.59.0-2.2
+- percona-pgbouncer (ubi8) [container image]: add image 17.11-1
+  - c-ares 1.19.1-1.1
+  - percona-pgbouncer 1.25.2-1.20
+  - python3.12-psycopg2 2.9.10-2.20
+
+### Changed
+- etcd: update upstream version 3.5.33
+- percona-haproxy: update upstream version 2.8.27 (http://git.haproxy.org/git/haproxy-2.8.git/)
+- percona-patroni: update upstream version 4.1.5 (https://github.com/zalando/patroni/releases/tag/v4.1.5)
+- percona-pg_tde: update upstream version 2.2.2 (https://github.com/percona/pg_tde/releases/tag/2.2.2)
+- percona-pgbackrest: update upstream version 2.59.0 (https://github.com/pgbackrest/pgbackrest/releases/tag/release/2.59.0)
+- percona-pgpool-II: update upstream version 4.7.2 (https://github.com/pgpool/pgpool2/releases/tag/V4_7_2)
+- percona-pgvector: update upstream version 0.8.6 (https://github.com/pgvector/pgvector/releases/tag/v0.8.6)
+- percona-postgis: update upstream version 3.5.7 (https://github.com/postgis/postgis/releases/tag/3.5.7)
+- percona-postgresql: update upstream version 17.11 (https://github.com/percona/postgres/releases/tag/PSP-17.11.1)
+- percona-postgresql-common: update upstream version 293 (https://salsa.debian.org/postgresql/postgresql-common.git)
+- percona-ppg-server: update upstream version 17.11
+- percona-ppg-server-ha: update upstream version 17.11
+- percona-telemetry-agent: update upstream version 1.0.15
+- percona-distribution-postgresql (ubi9) [container image]: update image 17.10-1 → 17.11-1
+  - added: perl-JSON 4.03-2.22
+  - added: python3.12-systemd 235-1.1
+  - updated: gosu 1.19-3.1 -> 1.19-13.2
+  - updated: percona-patroni 4.1.3-2.1 -> 4.1.5-2.1
+  - updated: percona-patroni-etcd 4.1.3-2.1 -> 4.1.5-2.1
+  - updated: percona-pg_cron_17 1.6.7-2.2 -> 1.6.7-1.25
+  - updated: percona-pg_repack17 1.5.3-5.2 -> 1.5.3-2.20
+  - updated: percona-pg_stat_monitor17 2.3.2-5.6 -> 2.3.2-1.25
+  - updated: percona-pg_tde17 2.2.0-3.1 -> 2.2.2-1.2
+  - updated: percona-pgaudit17 17.1-5.4 -> 17.1-2.23
+  - updated: percona-pgaudit17_set_user 4.2.0-5.2 -> 4.2.0-1.25
+  - updated: percona-pgbackrest 2.58.0-4.6 -> 2.59.0-2.1
+  - updated: percona-pgvector_17 0.8.2-4.2 -> 0.8.6-1.2
+  - updated: percona-pgvector_17-llvmjit 0.8.2-4.2 -> 0.8.6-1.2
+  - updated: percona-postgresql-client-common 290-1.1 -> 293-1.1
+  - updated: percona-postgresql-common 290-1.1 -> 293-1.1
+  - updated: percona-postgresql17 17.10-1.1 -> 17.11-2.1
+  - updated: percona-postgresql17-contrib 17.10-1.1 -> 17.11-2.1
+  - updated: percona-postgresql17-libs 17.10-1.1 -> 17.11-2.1
+  - updated: percona-postgresql17-llvmjit 17.10-1.1 -> 17.11-2.1
+  - updated: percona-postgresql17-server 17.10-1.1 -> 17.11-2.1
+  - updated: percona-wal2json17 2.6-5.1 -> 2.6-1.25
+  - updated: python3-ydiff 1.4.2-1.7 -> 1.4.2-2.23
+  - updated: python3.12-click 8.1.7-1.7 -> 8.1.7-2.23
+  - updated: python3.12-dateutil 2.9.0.post0-1.7 -> 2.9.0.post0-3.22
+  - updated: python3.12-dns 1.15.0-1.7 -> 1.15.0-2.23
+  - updated: python3.12-etcd 0.4.5-1.7 -> 0.4.5-2.23
+  - updated: python3.12-prettytable 3.4.0-1.7 -> 3.4.0-2.23
+  - updated: python3.12-psutil 6.1.1-1.7 -> 6.1.1-2.23
+  - updated: python3.12-psycopg2 2.9.10-2.8 -> 2.9.10-2.20
+  - updated: python3.12-six 1.17.0-1.7 -> 1.17.0-2.23
+  - updated: python3.12-wcwidth 0.2.13-1.7 -> 0.2.13-2.23
+  - removed: percona-pg-telemetry17
+  - removed: percona-telemetry-agent
+  - removed: python3-etcd
+- percona-distribution-postgresql-with-postgis (ubi9) [container image]: update image 17.10-1 → 17.11-1
+  - added: blas 3.9.0-1.26
+  - added: flexiblas 3.0.4-2.25
+  - added: flexiblas-netlib 3.0.4-2.25
+  - added: flexiblas-netlib64 3.0.4-2.25
+  - added: flexiblas-openblas-threads 3.0.4-2.25
+  - added: geos 3.13.1-2.15
+  - added: h3 4.5.0-1.20
+  - added: lapack 3.9.0-1.26
+  - added: percona-h3-pg_17 4.5.0-1.25
+  - added: percona-hll_17 2.21-1.24
+  - added: percona-ip4r_17 2.4.3-1.24
+  - added: percona-pg_partman_17 5.4.3-1.24
+  - added: percona-pg_similarity_17 pg_similarity_1_0-1.24
+  - added: percona-pgrouting_17 4.0.1-1.30
+  - added: percona-pgvectorscale_17 0.9.0-6.4
+  - added: percona-postgresql-unit_17 7.10-1.24
+  - added: percona-postgresql_anonymizer_17 3.1.1-2.26
+  - added: percona-rum_17 1.3.15-1.24
+  - added: percona-timescaledb_17 2.28.1-1.25
+  - added: perl-JSON 4.03-2.22
+  - added: proj 9.6.0-2.27
+  - added: proj-data 9.6.0-2.27
+  - added: python3-psycopg2 2.9.10-2.20
+  - added: python3.12-systemd 235-1.1
+  - updated: SFCGAL 2.2.0-2.4 -> 2.2.0-4.23
+  - updated: gosu 1.19-3.1 -> 1.19-13.2
+  - updated: percona-patroni 4.1.3-2.1 -> 4.1.5-2.1
+  - updated: percona-patroni-etcd 4.1.3-2.1 -> 4.1.5-2.1
+  - updated: percona-pg-telemetry17 1.2.0-4.6 -> 1.2.0-2.1
+  - updated: percona-pg_cron_17 1.6.7-2.2 -> 1.6.7-1.25
+  - updated: percona-pg_repack17 1.5.3-5.2 -> 1.5.3-2.20
+  - updated: percona-pg_stat_monitor17 2.3.2-5.6 -> 2.3.2-1.25
+  - updated: percona-pg_tde17 2.2.0-3.1 -> 2.2.2-1.2
+  - updated: percona-pgaudit17 17.1-5.4 -> 17.1-2.23
+  - updated: percona-pgaudit17_set_user 4.2.0-5.2 -> 4.2.0-1.25
+  - updated: percona-pgbackrest 2.58.0-4.6 -> 2.59.0-2.1
+  - updated: percona-pgvector_17 0.8.2-4.2 -> 0.8.6-1.2
+  - updated: percona-pgvector_17-llvmjit 0.8.2-4.2 -> 0.8.6-1.2
+  - updated: percona-postgis35_17 3.5.6-1.3 -> 3.5.7-1.54
+  - updated: percona-postgis35_17-client 3.5.6-1.3 -> 3.5.7-1.54
+  - updated: percona-postgis35_17-gui 3.5.6-1.3 -> 3.5.7-1.54
+  - updated: percona-postgis35_17-llvmjit 3.5.6-1.3 -> 3.5.7-1.54
+  - updated: percona-postgis35_17-utils 3.5.6-1.3 -> 3.5.7-1.54
+  - updated: percona-postgresql-client-common 290-1.1 -> 293-1.1
+  - updated: percona-postgresql-common 290-1.1 -> 293-1.1
+  - updated: percona-postgresql17 17.10-1.1 -> 17.11-1.2
+  - updated: percona-postgresql17-contrib 17.10-1.1 -> 17.11-1.2
+  - updated: percona-postgresql17-libs 17.10-1.1 -> 17.11-1.2
+  - updated: percona-postgresql17-llvmjit 17.10-1.1 -> 17.11-1.2
+  - updated: percona-postgresql17-server 17.10-1.1 -> 17.11-1.2
+  - updated: percona-wal2json17 2.6-5.1 -> 2.6-1.25
+  - updated: python3-ydiff 1.4.2-1.7 -> 1.4.2-2.23
+  - updated: python3.12-click 8.1.7-1.7 -> 8.1.7-2.23
+  - updated: python3.12-dateutil 2.9.0.post0-1.7 -> 2.9.0.post0-3.22
+  - updated: python3.12-dns 1.15.0-1.7 -> 1.15.0-2.23
+  - updated: python3.12-etcd 0.4.5-1.7 -> 0.4.5-2.23
+  - updated: python3.12-prettytable 3.4.0-1.7 -> 3.4.0-2.23
+  - updated: python3.12-psutil 6.1.1-1.7 -> 6.1.1-2.23
+  - updated: python3.12-psycopg2 2.9.10-2.8 -> 2.9.10-2.20
+  - updated: python3.12-six 1.17.0-1.7 -> 1.17.0-2.23
+  - updated: python3.12-wcwidth 0.2.13-1.7 -> 0.2.13-2.23
+  - removed: percona-telemetry-agent
+  - removed: python3-etcd
+- percona-pgbackrest (ubi9) [container image]: update image 17.10-1 → 17.11-1
+  - updated: percona-pgbackrest 2.58.0-4.6 -> 2.59.0-2.1
+  - updated: percona-postgresql17-libs 17.10-1.1 -> 17.11-2.1
+- percona-pgbouncer (ubi9) [container image]: update image 17.10-1 → 17.11-1
+  - added: c-ares 1.19.1-1.28
+  - updated: percona-pgbouncer 1.25.2-2.1 -> 1.25.2-1.30
+  - updated: percona-postgresql17-libs 17.10-1.1 -> 17.11-2.1
+  - updated: python3.12-psycopg2 2.9.10-2.8 -> 2.9.10-2.20
+  - removed: python3-psycopg2
+
+### Security
+- percona-postgresql: PostgreSQL 17.11 fixes 28 CVEs (https://www.postgresql.org/docs/release/17.11/), notably
+  CVE-2026-15741 (SQL injection in EXTRACT() deparsing), CVE-2026-14681 (GSSEncRequest accepted after direct
+  SSL connection), CVE-2026-14666 (role-dependent cached plans not invalidated), and CVE-2026-6471 (logical
+  decoding output plugin whitelist). Full list: CVE-2026-6464, CVE-2026-6469, CVE-2026-6470, CVE-2026-6471,
+  CVE-2026-14662, CVE-2026-14663, CVE-2026-14664, CVE-2026-14666, CVE-2026-14668, CVE-2026-14669,
+  CVE-2026-14670, CVE-2026-14671, CVE-2026-14672, CVE-2026-14673, CVE-2026-14676, CVE-2026-14677,
+  CVE-2026-14678, CVE-2026-14679, CVE-2026-14680, CVE-2026-14681, CVE-2026-15741, CVE-2026-15742,
+  CVE-2026-16238, CVE-2026-16239, CVE-2026-16241, CVE-2026-18024, CVE-2026-18408, CVE-2026-19385.
+- Go toolchain 1.26.3 → 1.26.6 (rebuilds of gosu, etcd, percona-telemetry-agent in the container
+  images): fixes CVE-2026-39822 (os: Root escape via symlink + trailing slash), CVE-2026-33818,
+  CVE-2026-56864, CVE-2026-56865, plus unnumbered upstream security fixes in crypto/x509,
+  crypto/tls, mime, net/textproto, html/template, encoding/xml, net, net/http and net/url
+  (https://go.dev/doc/devel/release#go1.26.6).
+- No CVE fixes mentioned upstream for: etcd, percona-haproxy, percona-patroni, percona-pg_tde,
+  percona-pgbackrest, percona-pgpool-II, percona-pgvector, percona-postgis, percona-postgresql-common,
+  percona-telemetry-agent (release notes, changelogs, and commit logs scanned for this version range).
+  UBI base-image package CVEs are not covered by this scan.
+
 ## [17.10-1] - 2026-05-19
 
 ### Added

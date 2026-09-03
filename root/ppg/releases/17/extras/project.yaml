@@ -1,0 +1,36 @@
+build: false
+description: 'Extras subproject for ppg:releases:17.
+
+  Builds are disabled; binaries are copied via osc release.
+
+  '
+project-config: '%if "%_repository" == "RockyLinux_9" || "%_repository" == "UBI_9"
+
+  ExpandFlags: module:llvm-toolset-rhel9
+
+  # hdf-libs (EPEL split package) and hdf both provide libdf.so.0 and libmfhdf.so.0
+
+  Prefer: hdf-libs
+
+  %endif
+
+  '
+repositories:
+- archs:
+  - x86_64
+  - aarch64
+  name: UBI_9
+  paths:
+  - repository: UBI_9
+    subproject: ppg:common:deps
+  - repository: UBI_9
+    subproject: common:deps:build
+  - repository: UBI_9
+    subproject: ppg:releases:17
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+    repository: standard
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+    repository: standard
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+    repository: devel
+title: ppg releases 17 — extras
