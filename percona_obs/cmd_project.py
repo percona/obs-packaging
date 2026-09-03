@@ -1378,6 +1378,8 @@ def _write_release_tree(
         )
     ]
     for d in stale:
+        if not d.exists():
+            continue  # already removed as part of an ancestor's rmtree
         shutil.rmtree(d)
         _print_remove(str(d.relative_to(_REPO_DIR)))
     return written

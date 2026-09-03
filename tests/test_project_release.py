@@ -109,6 +109,38 @@ def test_write_release_tree_creates_all_mirrors_and_deletes_stale(
     assert len(written) == 3
 
 
+def test_write_release_tree_deletes_nested_stale_dirs_without_crashing(
+    tmp_path, monkeypatch
+):
+    src = _staging_tree(tmp_path)
+    monkeypatch.setattr(cmd_project, "_REPO_DIR", tmp_path)
+    rel = tmp_path / "root/ppg/releases/17"
+    # multi-level stale branch: both the parent and a nested child carry their
+    # own project.yaml, and neither maps to a current source subproject. The
+    # child dirname ("zzz_nested") is chosen to sort *after* "project.yaml"
+    # so "oldsub/project.yaml" < "oldsub/zzz_nested/project.yaml" — the parent
+    # is processed (and rmtree'd) before the child is reached.
+    (rel / "oldsub" / "zzz_nested").mkdir(parents=True)
+    (rel / "oldsub" / "project.yaml").write_text("build: false\n")
+    (rel / "oldsub" / "zzz_nested" / "project.yaml").write_text("build: false\n")
+
+    written = _write_release_tree(
+        rel,
+        {"build": False, "repositories": []},
+        src,
+        "ppg:staging:17",
+        "ppg:releases:17",
+        "ppg",
+        "17",
+    )
+
+    assert not (rel / "oldsub").exists()  # whole stale branch removed, no crash
+    # expected sibling mirrors survive untouched
+    assert (rel / "containers" / "project.yaml").is_file()
+    assert (rel / "tarballs" / "project.yaml").is_file()
+    assert len(written) == 3
+
+
 def test_tier_validation_rejects_devel(monkeypatch):
     args = argparse.Namespace(
         project="ppg:devel:18",
