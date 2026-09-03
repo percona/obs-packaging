@@ -1706,7 +1706,6 @@ def _build_changelog_section(
     lines: list[str] = [f"## [{release_id}] - {today}", ""]
     lines += ["### Added"] + added + [""]
     lines += ["### Changed"] + changed + [""]
-    lines += ["### Fixed", ""]
 
     return "\n".join(lines)
 
