@@ -203,6 +203,30 @@ def apply_macro_substitution(
     return _MACRO_RE.sub(_replace, text)
 
 
+_FOR_BLOCK_RE = re.compile(
+    r"\{\{FOR (\w+) IN ([^}]+)\}\}\n(.*?)\{\{ENDFOR\}\}\n?",
+    re.DOTALL,
+)
+
+
+def expand_for_blocks(text: str) -> str:
+    """Expand ``{{FOR var IN v1,v2,...}} ... {{ENDFOR}}`` blocks.
+
+    Repeats the enclosed text once per comma-separated value, substituting
+    ``${var}`` with each value in turn, and concatenates the results in
+    place of the block. This is pure text repetition resolved locally before
+    a file is synced to OBS, so OBS itself only ever sees the fully unrolled,
+    literal result — it has no loop construct of its own to expand tokens
+    like a shell ``${var}`` inside a ``RUN`` command.
+    """
+
+    def _expand(m: re.Match) -> str:
+        var, values, body = m.group(1), m.group(2).split(","), m.group(3)
+        return "".join(body.replace(f"${{{var}}}", v.strip()) for v in values)
+
+    return _FOR_BLOCK_RE.sub(_expand, text)
+
+
 def _macros_chain_files(project_path: Path) -> list[Path]:
     """Return the candidate macros.yaml paths from REPO_ROOT down to *project_path*.
 
