@@ -319,6 +319,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip the git tag divergence check. "
         "Use when the release tag has not been created locally yet.",
     )
+    sync_release_parser.add_argument(
+        "--no-freeze",
+        action="store_true",
+        default=False,
+        help="Skip the drain/green-check/build-freeze sequence around osc release.",
+    )
+    sync_release_parser.add_argument(
+        "--freeze-timeout",
+        type=int,
+        default=3600,
+        dest="freeze_timeout",
+        help="Seconds to wait for the source scheduler to drain (default: 3600).",
+    )
+    sync_release_parser.add_argument(
+        "--verify-timeout",
+        type=int,
+        default=600,
+        dest="verify_timeout",
+        help="Seconds to wait for released packages to land (default: 600; 0 disables).",
+    )
     sync_release_parser.set_defaults(func=cmd_sync_release)
 
     build_parser_ = subparsers.add_parser(
