@@ -8,6 +8,7 @@ Required env vars (set by the workflow):
   PR_NUMBER          PR number to comment on.
   GITHUB_REPOSITORY  owner/repo (set automatically by GitHub Actions).
   OBS_WEB_URL        Base URL of the OBS web UI.
+  OBS_ROOTPRJ        Production root OBS project (e.g. home:Admin:percona).
   OBS_PR_ROOTPRJ     Root OBS project for PRs (e.g. home:Admin:percona).
   WORKFLOW_RUN_URL   URL of the current workflow run.
   IS_RELEASE_PR      'true' if the PR is release-only.
@@ -35,6 +36,7 @@ def main() -> None:
     pr_number = os.environ["PR_NUMBER"]
     repo = os.environ["GITHUB_REPOSITORY"]
     obs_web_url = os.environ["OBS_WEB_URL"].rstrip("/")
+    obs_rootprj = os.environ["OBS_ROOTPRJ"]
     obs_pr_rootprj = os.environ["OBS_PR_ROOTPRJ"]
     is_release_pr = os.environ.get("IS_RELEASE_PR") == "true"
     sync_ok = os.environ.get("SYNC_OUTCOME") == "success"
@@ -61,16 +63,17 @@ def main() -> None:
         elif release_outcome == "skipped":
             heading = "## OBS Release Check — ⏭️ Release test skipped"
         else:
-            heading = "## OBS Release Check"
+            heading = "## OBS Release Check — ⚠️ dry-run not run"
 
-        # Derive the per-release OBS project links from the added release.yaml files.
-        added = (
+        # Derive the per-release OBS project links from the changed release.yaml
+        # files.  The dry-run validates against the PRODUCTION release project
+        # (it is read-only), so the link points at obs_rootprj, not pr_rootprj.
+        changed = (
             subprocess.run(
                 [
                     "git",
                     "diff",
                     "--name-only",
-                    "--diff-filter=A",
                     "origin/main...HEAD",
                     "--",
                     "root/*/releases/*/release.yaml",
@@ -82,23 +85,27 @@ def main() -> None:
             .splitlines()
         )
         release_links = []
-        for rf in added:
+        for rf in changed:
             rel_dir = rf.removeprefix("root/").removesuffix("/release.yaml")
             rel_project = rel_dir.replace("/", ":")
-            obs_proj = f"{pr_rootprj}:{rel_project}"
+            obs_proj = f"{obs_rootprj}:{rel_project}"
             release_links.append(
-                f"**[{obs_proj}]({obs_web_url}/project/show/{obs_proj})**"
+                f"**[{rel_project}]({obs_web_url}/project/show/{obs_proj})**"
             )
         projects_str = (
-            ", ".join(release_links) if release_links else f"**{pr_rootprj}**"
+            ", ".join(release_links) if release_links else "the release project"
         )
 
+        outcome_note = {
+            "success": "The release dry-run validated",
+            "failure": "The release dry-run FAILED for",
+        }.get(release_outcome, "No release dry-run ran for")
         lines = [
             "<!-- obs-pr-check -->",
             heading,
             "",
             "This PR adds a release record. No packages are built in OBS.",
-            f"The release dry-run created {projects_str} on OBS.",
+            f"{outcome_note} {projects_str}.",
             "",
             f"> _Updated: {timestamp}_",
         ]
