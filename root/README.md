@@ -66,9 +66,19 @@ releases/
     ├── release.yaml            # list of release tags
     ├── project.yaml            # ppg:releases:17 OBS project (builds disabled)
     ├── CHANGELOG.md            # keep-a-changelog, all releases for this major
-    └── containers:ubi9/        # one per source subproject (colon-named)
-        └── project.yaml        # builds disabled; binaries copied via osc release
+    ├── containers/             # nested dir, one per source subproject (never colon-named)
+    │   └── project.yaml        # builds disabled; binaries copied via osc release
+    ├── extras/
+    │   ├── project.yaml
+    │   └── containers/
+    │       └── project.yaml
+    └── tarballs/
+        └── project.yaml
 ```
+
+`project release` regenerates this entire mirror tree from staging's current config on
+every release (not only the first): mirrors are refreshed in place, and any mirror
+directory whose staging source no longer exists is deleted.
 
 The `release.yaml` format:
 
@@ -93,8 +103,8 @@ for that minor version (resets to 1 when the minor version changes).
 #### Cutting a release
 
 Use the `project release` command — it auto-derives the release ID from OBS,
-creates or updates all required files, commits them, pushes a branch, and opens
-a review PR:
+regenerates the full mirror tree above, and commits everything locally. It does
+**not** push a branch or open the PR; that remains a manual step:
 
 ```sh
 # Fully automatic
@@ -108,9 +118,10 @@ The command fetches the source project's build topology from OBS, diffs package
 versions against the previous release to generate `CHANGELOG.md`, and commits
 everything. See `docs/PERCONA_OBS_TOOL.md` for the full workflow.
 
-The git tag (e.g. `ppg/17.9-1`) is created automatically by `sync-main.yml`
-when the merge commit lands on `main`. That tag triggers `obs-release.yml`,
-which copies binaries to the OBS release project and creates a GitHub release.
+Once the release PR is merged, `obs-pr-cleanup.yml` tags the **merge commit**
+(e.g. `ppg/17.9-1`) and dispatches `obs-release.yml` (its only trigger is
+`workflow_dispatch` — pushing a tag by hand does nothing). `obs-release.yml`
+then copies binaries to the OBS release project and creates a GitHub release.
 
 ### `staging/<major-version>/`
 

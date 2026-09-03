@@ -450,9 +450,13 @@ Projects that do not exist on OBS are silently skipped. Projects are always dele
 
 ### `sync release-pr [--yes] [project]`
 
+**No workflow invokes this command anymore** — `obs-pr-cleanup.yml` deletes every closed
+PR's OBS project directly without releasing its binaries first. `sync release-pr` remains
+available as a manual/recovery tool only.
+
 Copies binaries from a PR OBS project to the corresponding production project using `osc release`,
-then updates the production project configs to match the local desired state. Used to merge a
-non-release PR (one that does not create a version tag) once its OBS builds pass.
+then updates the production project configs to match the local desired state. Historically used to
+merge a non-release PR (one that does not create a version tag) once its OBS builds pass.
 
 **How it works**:
 
@@ -471,7 +475,7 @@ non-release PR (one that does not create a version tag) once its OBS builds pass
    `OBS_ROOTPRJ=<production_rootprj>`.
 
 **Important**: `sync release-pr` only releases binaries; it does not delete the PR project. Run
-`sync delete --yes --recursive` afterward (as `obs-pr-cleanup.yml` does) to clean up.
+`sync delete --yes --recursive` afterward to clean up.
 
 Options:
 - `--yes` / `-y` — skip the confirmation prompt.
@@ -1011,29 +1015,38 @@ Permissions: `contents: read`, `pull-requests: write`.
 
 `OBS_PR_ROOTPRJ` is the base prefix for PR-specific projects, e.g. `home:Admin:percona:pr`. The full PR project becomes `home:Admin:percona:pr:pr-42`. It is intentionally separate from `OBS_ROOTPRJ` so PR projects live in a distinct namespace and are never confused with the main project tree.
 
-### Workflow 3 — `obs-pr-cleanup.yml` (release or delete PR project on close)
+### Workflow 3 — `obs-pr-cleanup.yml` (tag + dispatch release, delete PR project on close)
 
 **Trigger**: `pull_request` against `main` (type: `closed`) where at least one file under `root/**` changed.
 
-**What it does**: Two paths depending on whether the PR is a release PR (i.e. it created a version tag).
+**What it does**: Detects whether every changed `root/**` file in the PR sits under a
+`root/*/releases/` directory (a release-only PR) and, if so and the PR was merged, tags
+and dispatches the release before the shared cleanup step runs.
 
-**Release PR path** (a version tag like `ppg/17.9.1` was pushed during the PR lifecycle):
-The PR built packages against a specific tagged upstream version and those binaries are already in the
-production project via the normal release pipeline. Only cleanup is needed:
-- Runs `percona-obs -A $OBS_APIURL -R $OBS_PR_ROOTPRJ:pr-<N> sync delete --yes --recursive`.
+**Release PR path** (merged, and every changed `root/**` file is under `root/*/releases/`):
+1. For each `release.yaml` changed by the PR, reads the last entry of its `releases:`
+   list from the **merge commit** blob (not the PR head) and creates that git tag
+   (e.g. `ppg/17.9-1`) pointing at `merge_commit_sha`, using `GITHUB_TOKEN`
+   (`contents: write`). A tag-creation error other than "already exists" fails the job.
+2. Dispatches `obs-release.yml` for that tag via
+   `gh workflow run obs-release.yml --ref main -f tag=<tag>` (`actions: write`).
+   `workflow_dispatch` calls made with `GITHUB_TOKEN` are exempt from GitHub's
+   workflow-to-workflow trigger suppression, so this fires reliably without a PAT — and
+   a pushed tag would not have triggered anything on its own.
 
-**Non-release PR path** (no version tag — only packaging or config changes):
-The PR's OBS builds contain binaries that need to be promoted to the production project before cleanup:
-1. Runs `percona-obs -A $OBS_APIURL -R $OBS_PR_ROOTPRJ:pr-<N> sync release-pr --yes` to copy
-   binaries from every PR sub-project into the corresponding production project (via `osc release`)
-   and to sync any updated project configs (e.g. newly added architectures) to the production OBS.
-2. Runs `percona-obs -A $OBS_APIURL -R $OBS_PR_ROOTPRJ:pr-<N> sync delete --yes --recursive`
-   to delete the PR project and all its sub-projects.
+**Every PR** (release or not, merged or closed unmerged):
+- Runs `percona-obs -P pr-<N> sync delete --yes --recursive --from-obs` to delete the
+  PR's OBS project and all its sub-projects. `sync release-pr` is **not** run first —
+  no workflow promotes a non-release PR's binaries to production anymore; production
+  gets those binaries only through the normal `sync-main.yml` sync of `main` plus, for
+  releases, the release pipeline above.
+- Deletes the PR's Actions caches (created by `obs-pr-check.yml` on the PR merge ref).
 
 OBS 404 responses are handled gracefully in `sync delete` so the cleanup is safe even if the PR
 check never ran. `--recursive` ensures projects are deleted even if a build was still in progress.
 
 **Required repository config**: `OBS_APIURL`, `OBS_PR_ROOTPRJ`, `OBS_USER` (vars); `OBS_PASSWORD` (secret).
+Permissions: `contents: write` (tag creation), `actions: write` (dispatch + cache deletion).
 
 ### Workflow 4 — `obs-stale-cleanup.yml` (daily cleanup of stale PR projects)
 
