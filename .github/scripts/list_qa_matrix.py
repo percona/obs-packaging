@@ -23,12 +23,23 @@ import os
 import subprocess
 import sys
 
-import osc.conf
 
-from percona_obs.obs_api import _fetch_obs_subproject_names
+def qa_project_type(full_name: str) -> str:
+    """QA type of an OBS project: containers vs packages.
+
+    Matches both layouts: the old per-flavor ":containers:<flavor>"
+    subprojects and the restructured single ":containers" subproject.
+    """
+    if ":containers:" in full_name or full_name.endswith(":containers"):
+        return "containers"
+    return "packages"
 
 
 def main() -> None:
+    import osc.conf
+
+    from percona_obs.obs_api import _fetch_obs_subproject_names
+
     apiurl = os.environ["OBS_APIURL"]
     obs_project = os.environ["OBS_PROJECT"]
     profile = os.environ.get("PERCONA_OBS_PROFILE", "ci")
@@ -48,7 +59,7 @@ def main() -> None:
     matrix: list = []
     for full_name in subs:
         project = full_name[len(prefix) :]
-        proj_type = "containers" if ":containers:" in full_name else "packages"
+        proj_type = qa_project_type(full_name)
         if qa_types and proj_type not in qa_types:
             continue
         result = subprocess.run(
