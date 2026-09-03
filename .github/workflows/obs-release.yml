@@ -1,20 +1,29 @@
 name: OBS Release
 
-# Triggered when a release tag is pushed (e.g. ppg/17.9).
-# The tag is created automatically by obs-pr-cleanup.yml when a PR that adds
-# a release.yaml file is merged.
-# Runs `sync release` to transfer binaries from the source OBS project to
-# the release target project, then updates the version list documentation.
+# Dispatched by obs-pr-cleanup.yml when a release PR merges (the tag is
+# created there, on the merge commit, then this workflow is dispatched with
+# it).  workflow_dispatch is the ONLY trigger: tags pushed to the repo are
+# deliberately inert (no PAT exists, and human-pushed tags must not start
+# releases by accident).  Manual recovery:
+#   gh workflow run obs-release.yml -f tag=ppg/17.11-1
 
 on:
-  push:
-    tags: ['*/*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. ppg/17.11-1)"
+        required: true
 
 jobs:
   release:
     name: Release packages in OBS
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    # Never run concurrently with a sync-main source upload: the release
+    # freezes staging builds and must see a stable source state.
+    concurrency:
+      group: sync-main-sync
+      cancel-in-progress: false
     permissions:
       contents: write
       packages: read
@@ -24,10 +33,18 @@ jobs:
       OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
 
     steps:
+      - name: Validate tag input
+        run: |
+          TAG="${{ inputs.tag }}"
+          if ! echo "$TAG" | grep -Eq '^[a-z0-9-]+/[0-9]+(\.[0-9]+)+-[0-9]+$'; then
+            echo "::error::tag '$TAG' does not match <product>/<major.minor-N>"
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
         with:
+          ref: refs/tags/${{ inputs.tag }}
           fetch-depth: 0
-          token: ${{ secrets.GH_PAT }}
 
       - uses: ./.github/actions/obs-setup
         with:
@@ -51,7 +68,7 @@ jobs:
       - name: Derive release project
         id: release-info
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          TAG="${{ inputs.tag }}"
           PRODUCT="${TAG%%/*}"
           VERSION="${TAG#*/}"
           MAJOR_VERSION="${VERSION%%.*}"
@@ -68,33 +85,11 @@ jobs:
           venv/bin/python -m percona_obs -P main \
             sync release "${{ steps.release-info.outputs.release_project }}"
 
-      - name: Wait for OBS to process the release
-        run: sleep 60
-
-      # Update docs/versions/<dist>.md for all distribution projects and
-      # refresh the README "## Development Projects" section.  GITHUB_EVENT_BEFORE is
-      # omitted so the script regenerates all version lists (appropriate for a
-      # tag-triggered run where there is no meaningful "before" SHA).
-      # Disabled: this step git-pushes regenerated docs/versions/*.md and
-      # README.md directly to main, which is blocked once main is protected
-      # against direct pushes. Re-enable once a PR-based or badges-branch
-      # publishing path is in place.
-      - name: Update version lists
-        if: false
-        env:
-          OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
-          OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
-          PYTHONPATH: ${{ github.workspace }}
-        run: |
-          git checkout main
-          venv/bin/python .github/scripts/update_version_lists.py \
-            --project "${{ steps.release-info.outputs.release_project }}"
-
       # Create a GitHub release with the CHANGELOG section for this release-id.
       # Idempotent: if the release already exists (re-run), update its notes.
       - name: Create GitHub release
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ steps.release-info.outputs.tag }}"
           RELEASE_ID="${{ steps.release-info.outputs.release_id }}"
