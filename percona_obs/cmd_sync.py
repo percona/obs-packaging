@@ -2201,6 +2201,31 @@ def _collect_release_subprojects(
     return pairs, missing
 
 
+def _filter_release_repo_names(
+    apiurl: str,
+    source_repo_names: "list[str]",
+    release_obs_project: str,
+) -> "list[str]":
+    """Keep only source repos that exist in the release project.
+
+    Adding a <releasetarget> for a repo the target lacks makes osc release
+    fail or drop binaries; a mismatch here means the mirror regeneration and
+    the live release project disagree, which is worth a loud warning but not
+    an abort (the mirror was just applied — a leftover mismatch is repo
+    removal pending on OBS's side).
+    """
+    target = _fetch_obs_project_repository_names(apiurl, release_obs_project)
+    kept = [r for r in source_repo_names if r in target]
+    for r in source_repo_names:
+        if r not in target:
+            print(
+                f"warning: source repo {r} has no counterpart in "
+                f"{release_obs_project}; skipped",
+                flush=True,
+            )
+    return kept
+
+
 def _sync_release_subprojects(
     apiurl: str,
     args,
@@ -2249,9 +2274,11 @@ def _sync_release_subprojects(
 
         source_sub_obs = f"{args.rootprj}:{sub_obs_id}"
         source_sub_repo_elems, _ = _read_project_release_source(apiurl, source_sub_obs)
-        source_sub_repo_names = [
-            r.get("name", "") for r in source_sub_repo_elems if r.get("name")
-        ]
+        source_sub_repo_names = _filter_release_repo_names(
+            apiurl,
+            [r.get("name", "") for r in source_sub_repo_elems if r.get("name")],
+            release_sub_obs,
+        )
         _add_release_targets(
             apiurl, source_sub_obs, release_sub_obs, source_sub_repo_names
         )
@@ -2369,9 +2396,32 @@ def cmd_sync_release(args) -> None:
                         "Use --force to skip this check."
                     )
 
+        # Re-apply the local release project config so repo additions,
+        # publish flags and prjconf changes reach OBS on update releases too.
+        paths_stripped, _ = _apply_project_config(
+            apiurl,
+            release_obs_project,
+            release_path,
+            args.rootprj,
+            env_vars=shared_env_vars,
+        )
+        if paths_stripped:
+            _apply_project_config(
+                apiurl,
+                release_obs_project,
+                release_path,
+                args.rootprj,
+                env_vars=shared_env_vars,
+            )
+        _disable_project_builds(apiurl, release_obs_project)
+
         _remove_release_targets(apiurl, source_obs_project, release_obs_project)
         source_repo_elems, _ = _read_project_release_source(apiurl, source_obs_project)
-        repo_names = [r.get("name", "") for r in source_repo_elems if r.get("name")]
+        repo_names = _filter_release_repo_names(
+            apiurl,
+            [r.get("name", "") for r in source_repo_elems if r.get("name")],
+            release_obs_project,
+        )
         _add_release_targets(
             apiurl, source_obs_project, release_obs_project, repo_names
         )
@@ -2469,7 +2519,11 @@ def cmd_sync_release(args) -> None:
     source_repo_elems = _create_release_project(
         apiurl, source_obs_project, release_obs_project
     )
-    repo_names = [r.get("name", "") for r in source_repo_elems if r.get("name")]
+    repo_names = _filter_release_repo_names(
+        apiurl,
+        [r.get("name", "") for r in source_repo_elems if r.get("name")],
+        release_obs_project,
+    )
 
     _copy_project_conf(apiurl, source_obs_project, release_obs_project)
 

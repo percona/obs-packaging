@@ -101,3 +101,16 @@ def test_orphan_reporting(tmp_path, monkeypatch, capsys):
     assert "orphaned release subproject" in out
     assert "containers:ubi9" in out
     assert "sync delete" in out
+
+
+def test_filter_release_repo_names_warns_and_drops(monkeypatch, capsys):
+    monkeypatch.setattr(
+        cmd_sync,
+        "_fetch_obs_project_repository_names",
+        lambda apiurl, prj: {"RockyLinux_9", "Debian_13"},
+    )
+    kept = cmd_sync._filter_release_repo_names(
+        "http://obs", ["RockyLinux_9", "UBI_9", "Debian_13"], "x:rel"
+    )
+    assert kept == ["RockyLinux_9", "Debian_13"]
+    assert "UBI_9 has no counterpart" in capsys.readouterr().out
