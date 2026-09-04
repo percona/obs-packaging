@@ -1,4 +1,4 @@
-title: cryptography 49.0.0 for Python 3.12
+title: cryptography 50.0.1 for Python 3.12
 description: |
   Cryptographic recipes and primitives for Python, built from the PyPI sdist
   with maturin + vendored Rust crates against the system OpenSSL. Replaces

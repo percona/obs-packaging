@@ -12,12 +12,12 @@
 %global python3_sitearch %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('platlib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
 Name:           %{python3_pkgprefix}-cryptography
-Version:        49.0.0
+Version:        50.0.1
 Release:        1%{?dist}
 Summary:        Cryptographic recipes and primitives for Python
 License:        Apache-2.0 OR BSD-3-Clause
 URL:            https://cryptography.io/
-Source0:        https://files.pythonhosted.org/packages/source/c/cryptography/cryptography-49.0.0.tar.gz
+Source0:        https://files.pythonhosted.org/packages/source/c/cryptography/cryptography-50.0.1.tar.gz
 Source1:        vendor.tar.gz
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
@@ -80,6 +80,9 @@ print(cryptography.__version__)
 %{python3_sitearch}/*
 
 %changelog
+* Fri Sep 04 2026 Percona Development Team <info@percona.com> - 1:50.0.1-1
+- Update to cryptography 50.0.1 (CVE-2026-69247, PKCS#7 EnvelopedData decrypt)
+
 * Tue Sep 01 2026 Percona Development Team <info@percona.com> - 1:49.0.0-1
 - Package cryptography 49.0.0 for Python 3.12 (pgAdmin 9.17 targets 49:
   CFB8 moved to hazmat.decrepit; replaces the reused RHEL cryptography 41)
