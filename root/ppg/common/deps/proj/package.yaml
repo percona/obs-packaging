@@ -1,7 +1,9 @@
 build:
   RockyLinux_8: false
   RockyLinux_9: false
-  RockyLinux_9.6: false
+  # RockyLinux_9.6 stays enabled: the rolling Rocky 9 buildroot gets
+  # proj-devel from the distro devel repo, but the 9.6 vault snapshot
+  # does not carry it, so percona-postgis needs our build there.
   RockyLinux_10: false
   UBI_8: false
   Debian_13: false
