@@ -1,5 +1,6 @@
 build:
   RockyLinux_9: false
+  RockyLinux_9.6: false
   RockyLinux_10: false
   # Debian 11 (bullseye) ships GEOS 3.9, too old for PostGIS 3.x; build our
   # 3.13 here so devel:19 can link against it. Newer deb distros already have
