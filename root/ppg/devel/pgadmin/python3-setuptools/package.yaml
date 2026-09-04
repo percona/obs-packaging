@@ -1,0 +1,8 @@
+title: setuptools 80.10.2 for Python 3.12
+description: |
+  Stack-wide Python build backend for the pgAdmin dependency stack. Epoch 1 so
+  it outranks RHEL 9's setuptools 68 for every setuptools-backed package in
+  ppg:devel:pgadmin — needed by pillow 12 and jaraco.context 6.1 (which require
+  setuptools>=77) and lets the PEP-639 packages use native SPDX license
+  metadata. Pinned to 80.10.2 (not 84.x, which removes pkg_resources). Bump by
+  editing obs/_service (sdist URL) and rpm/*.spec (Version + changelog).
