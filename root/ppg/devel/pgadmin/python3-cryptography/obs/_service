@@ -1,11 +1,11 @@
 <services>
   <service name="download_url">
-    <param name="url">https://files.pythonhosted.org/packages/source/c/cryptography/cryptography-49.0.0.tar.gz</param>
+    <param name="url">https://files.pythonhosted.org/packages/source/c/cryptography/cryptography-50.0.1.tar.gz</param>
   </service>
   <!-- Vendor the Rust crate dependencies (workspace under src/rust) for an
        offline OBS build; produces vendor.tar.gz incl. .cargo/config. -->
   <service mode="buildtime" name="cargo_vendor">
-    <param name="src">cryptography-49.0.0.tar.gz</param>
+    <param name="src">cryptography-50.0.1.tar.gz</param>
     <param name="cargotoml">src/rust/Cargo.toml</param>
     <param name="compression">gz</param>
     <param name="update">false</param>
