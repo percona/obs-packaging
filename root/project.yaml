@@ -32,6 +32,15 @@ repositories:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
         repository: standard
     archs: [x86_64, aarch64]
+  - name: UBI_10
+    paths:
+      - subproject: common:deps:build
+        repository: UBI_10
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-10
+        repository: appstream
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-10
+        repository: baseos
+    archs: [x86_64, aarch64]
   - name: UBI_9
     paths:
       - subproject: common:deps:build
