@@ -1,0 +1,6 @@
+title: pybind11 2.13.6 for Python 3.12
+description: |
+  Header-only C++/Python interop library. Build-time dependency of pillow 12
+  (pgAdmin 4 stack). Pinned to the 2.x line (setuptools-backed); pybind11 3.x
+  switched to a scikit-build-core backend not packaged here. Bump by editing
+  obs/_service (sdist URL) and rpm/*.spec (Version + changelog).
