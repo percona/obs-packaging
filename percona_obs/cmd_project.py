@@ -69,6 +69,7 @@ from .cmd_build import (
     _fetch_pkg_versrel,
     _fetch_versrel_from_history,
 )
+from .cve_scan import ChangedPackage, scan_release_cves
 from .services import _git_head_sha, _git_tag_for_sha
 
 _YAML_FILENAMES = {"project.yaml", "package.yaml"}
@@ -1589,6 +1590,72 @@ def _split_changelog_key(key: str) -> "tuple[str, str | None]":
     return key, None
 
 
+def _build_changed_packages(
+    source_versions: "dict[str, str]",
+    release_versions: "dict[str, str] | None",
+    source_path: Path,
+) -> "list[ChangedPackage]":
+    """Build the CVE scanner's input from the same version dicts the changelog diffs.
+
+    Only packages present in both dicts with a differing upstream version
+    part are included (added/removed packages have nothing to diff a CVE
+    range against); container-image dicts are never passed in here, so they
+    are excluded automatically. Upstream url/revision are resolved the same
+    way ``_build_changelog_section`` resolves them for its release-note link.
+    """
+    changed: list[ChangedPackage] = []
+    if not release_versions:
+        return changed
+
+    macros = load_macros(source_path)
+
+    for pkg in sorted(source_versions):
+        src_ver = source_versions.get(pkg)
+        rel_ver = release_versions.get(pkg)
+        if src_ver is None or rel_ver is None:
+            continue
+
+        old_version = rel_ver.split("-")[0]
+        new_version = src_ver.split("-")[0]
+        if old_version == new_version:
+            continue
+
+        base_pkg, sub = _split_changelog_key(pkg)
+        service_file: "Path | None" = None
+        if sub is not None:
+            sub_service = (
+                source_path / Path(*sub.split(":")) / base_pkg / "obs" / "_service"
+            )
+            if sub_service.is_file():
+                service_file = sub_service
+        if service_file is None:
+            service_file = _find_pkg_service(source_path, base_pkg)
+
+        upstream_url = ""
+        revision = ""
+        if service_file is not None:
+            info = _extract_upstream_info_from_service(service_file)
+            if info:
+                upstream_url, revision = info
+                if macros and _MACRO_RE.search(revision):
+                    try:
+                        revision = apply_macro_substitution(revision, macros)
+                    except SystemExit:
+                        revision = ""
+
+        changed.append(
+            ChangedPackage(
+                key=pkg,
+                old_version=old_version,
+                new_version=new_version,
+                upstream_url=upstream_url,
+                revision=revision,
+            )
+        )
+
+    return changed
+
+
 def _build_changelog_section(
     release_id: str,
     source_versions: "dict[str, str]",
@@ -1598,6 +1665,7 @@ def _build_changelog_section(
     source_container_pkgs: "dict[str, dict[str, str]] | None" = None,
     release_container_pkgs: "dict[str, dict[str, str]] | None" = None,
     prev_release_id: str | None = None,
+    security_lines: "list[str] | None" = None,
 ) -> str:
     """Build a keep-a-changelog section for a release."""
     today = datetime.date.today().isoformat()
@@ -1706,7 +1774,8 @@ def _build_changelog_section(
     lines: list[str] = [f"## [{release_id}] - {today}", ""]
     lines += ["### Added"] + added + [""]
     lines += ["### Changed"] + changed + [""]
-    lines += ["### Fixed", ""]
+    if security_lines:
+        lines += ["### Security"] + security_lines + [""]
 
     return "\n".join(lines)
 
@@ -1899,6 +1968,24 @@ def cmd_project_release(args: argparse.Namespace) -> None:
                 _fetch_subproject_container_pkgs(apiurl, rel_sub, args.rootprj)
             )
 
+    security_lines: list[str] | None = None
+    if not getattr(args, "no_cve_scan", False):
+        _print_pending("scanning upstream release notes for CVE fixes")
+        prev_tag_for_scan = existing_releases[-1] if existing_releases else None
+        try:
+            changed_pkgs = _build_changed_packages(
+                source_versions, release_versions, source_path
+            )
+            scan_result = scan_release_cves(
+                changed_pkgs,
+                source_path,
+                prev_tag_for_scan,
+                has_container_images=bool(container_subs),
+            )
+            security_lines = scan_result.lines or None
+        except Exception as exc:  # belt and braces: the scan must never kill a cut
+            print(f"warning: CVE scan failed: {exc}", flush=True)
+
     changelog_section = _build_changelog_section(
         release_id,
         source_versions,
@@ -1907,6 +1994,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         source_container_pkgs=source_container_pkgs or None,
         release_container_pkgs=release_container_pkgs or None,
         prev_release_id=prev_release_id,
+        security_lines=security_lines,
     )
 
     # Build release.yaml content.
