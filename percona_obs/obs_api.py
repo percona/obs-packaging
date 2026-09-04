@@ -136,10 +136,19 @@ def _fetch_obs_file_md5s(
     which causes all local files to be uploaded unconditionally.
     """
     logger.debug(f"fetching file list: {obs_project_name}/{package_name}")
+    # Pin the listing to the last committed revision. Without an explicit
+    # rev, OBS returns the open upload transaction (rev="upload") when one
+    # exists — e.g. staged files left behind by a cancelled sync — which
+    # makes never-committed files look already synced, so the commit that
+    # would finalize them is skipped forever and the package stays in
+    # "broken: no source uploaded".
+    query: dict[str, str] = {"rev": "latest"}
+    if expanded:
+        query["expand"] = "1"
     url = osc.core.makeurl(
         apiurl,
         ["source", obs_project_name, package_name],
-        query={"expand": "1"} if expanded else None,
+        query=query,
     )
     try:
         response = osc.connection.http_GET(url)
