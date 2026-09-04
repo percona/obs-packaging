@@ -36,6 +36,7 @@ from .common import (
     apply_macro_substitution,
     auto_rootprj_env,
     build_package_meta,
+    expand_for_blocks,
     find_projects,
     is_package,
     load_macros,
@@ -188,6 +189,7 @@ def _copy_with_env_subst(
         if apply_macros:
             assert macros is not None
             text = apply_macro_substitution(text, macros, source=src)
+            text = expand_for_blocks(text)
         if apply_env:
             assert env_vars is not None
             text = apply_env_substitution(text, env_vars, source=src)

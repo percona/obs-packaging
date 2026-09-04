@@ -1,14 +1,14 @@
 #!UseOBSRepositories
 #!BuildVersion: %!{PG_VERSION}-%!{PPG_RELEASE}
-#!BuildTag: percona-distribution-postgresql-upgrade:%!{PG_VERSION}-17-%!{PPG_RELEASE}-<RELEASE>
-#!BuildTag: percona-distribution-postgresql-upgrade:%!{PG_VERSION}-17-%!{PPG_RELEASE}
-#!BuildTag: percona-distribution-postgresql-upgrade:%!{PG_VERSION}-17
-#!BuildTag: percona-distribution-postgresql-upgrade:%!{PG_MAJOR_VERSION}-17
+#!BuildTag: percona-distribution-postgresql-upgrade:%!{PG_VERSION}-%!{PPG_RELEASE}-<RELEASE>
+#!BuildTag: percona-distribution-postgresql-upgrade:%!{PG_VERSION}-%!{PPG_RELEASE}
+#!BuildTag: percona-distribution-postgresql-upgrade:%!{PG_VERSION}
+#!BuildTag: percona-distribution-postgresql-upgrade:%!{PG_MAJOR_VERSION}
 
 FROM percona-ubi-minimal:latest
 
 LABEL name="Percona Distribution for PostgreSQL Upgrade" \
-      description="Upgrade container for Percona Distribution for PostgreSQL. Facilitates major version upgrades from PostgreSQL 17 to %!{PG_MAJOR_VERSION} using pg_upgrade." \
+      description="Upgrade container for Percona Distribution for PostgreSQL. Facilitates major version upgrades from PostgreSQL 14, 15, 16, or 17 to %!{PG_MAJOR_VERSION} using pg_upgrade." \
       vendor="Percona" \
       summary="Percona Distribution for PostgreSQL major version upgrade container" \
       maintainer="Percona Development <info@percona.com>" \
@@ -70,26 +70,35 @@ RUN set -ex; \
         percona-pg_cron_${PPG_MAJOR_VERSION}; \
     microdnf clean all
 
-# Install PG%!{PG_PREV_MAJOR_VERSION} (source version for upgrade) with all extensions including PostGIS
+# Install every older PG major version this image can upgrade from, with the extensions
+# that exist for that version, so a single image can upgrade from any of them to
+# ${PPG_MAJOR_VERSION}. This block is expanded by percona-obs's sync tooling
+# (expand_for_blocks) into one literal, fully-expanded RUN per version before the file
+# ever reaches OBS — OBS's Dockerfile scanner statically resolves package names and
+# cannot expand a real shell loop variable, so what OBS sees is never this block itself.
+{{FOR pg_version IN 17,16,15,14}}
 RUN set -ex; \
     microdnf install -y \
-        percona-postgresql%!{PG_PREV_MAJOR_VERSION}-server \
-        percona-postgresql%!{PG_PREV_MAJOR_VERSION}-contrib \
-        percona-pg_tde%!{PG_PREV_MAJOR_VERSION} \
-        percona-pg_stat_monitor%!{PG_PREV_MAJOR_VERSION} \
-        percona-pg_repack%!{PG_PREV_MAJOR_VERSION} \
-        percona-pgaudit%!{PG_PREV_MAJOR_VERSION} \
-        percona-pgaudit%!{PG_PREV_MAJOR_VERSION}_set_user \
-        percona-pgvector_%!{PG_PREV_MAJOR_VERSION} \
-        percona-postgresql%!{PG_PREV_MAJOR_VERSION}-llvmjit \
-        percona-pgvector_%!{PG_PREV_MAJOR_VERSION}-llvmjit \
-        percona-wal2json%!{PG_PREV_MAJOR_VERSION} \
-        percona-postgis35_%!{PG_PREV_MAJOR_VERSION} \
-        percona-postgis35_%!{PG_PREV_MAJOR_VERSION}-client \
-        percona-postgis35_%!{PG_PREV_MAJOR_VERSION}-gui \
-        percona-postgis35_%!{PG_PREV_MAJOR_VERSION}-llvmjit \
-        percona-postgis35_%!{PG_PREV_MAJOR_VERSION}-utils \
-        percona-pg_cron_%!{PG_PREV_MAJOR_VERSION}; \
+        percona-postgresql${pg_version}-server \
+        percona-postgresql${pg_version}-contrib \
+        percona-postgresql${pg_version}-llvmjit \
+        percona-pg_stat_monitor${pg_version} \
+        percona-pg_repack${pg_version} \
+        percona-pgaudit${pg_version} \
+        percona-pgaudit${pg_version}_set_user \
+        percona-pgvector_${pg_version} \
+        percona-pgvector_${pg_version}-llvmjit \
+        percona-wal2json${pg_version} \
+        percona-postgis35_${pg_version} \
+        percona-postgis35_${pg_version}-llvmjit \
+        percona-pg_cron_${pg_version}; \
+    microdnf clean all
+{{ENDFOR}}
+
+# pg_tde is only packaged standalone from PG17 onward, so it's installed separately
+# here rather than inside the loop above.
+RUN set -ex; \
+    microdnf install -y percona-pg_tde17; \
     microdnf clean all; \
     rm -rf /var/cache/dnf /var/cache/yum
 
