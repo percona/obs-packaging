@@ -13,12 +13,12 @@
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
 Name:           %{python3_pkgprefix}-jaraco-context
-Version:        6.0.1
+Version:        6.1.0
 Release:        1%{?dist}
 Summary:        Useful decorators and context managers
 License:        MIT
 URL:            https://github.com/jaraco/jaraco.context
-Source0:        https://files.pythonhosted.org/packages/source/j/jaraco.context/jaraco_context-6.0.1.tar.gz
+Source0:        https://files.pythonhosted.org/packages/source/j/jaraco.context/jaraco_context-6.1.0.tar.gz
 BuildArch:      noarch
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
@@ -36,7 +36,10 @@ Useful decorators and context managers.
 Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmin4) dependency stack.
 
 %prep
-%autosetup -p1 -n jaraco_context-6.0.1
+%autosetup -p1 -n jaraco_context-6.1.0
+# coherent.licensed (a jaraco/skeleton license-file helper) is not packaged
+# here and not load-bearing under setuptools>=77; drop it from build-system.
+sed -i '/coherent\.licensed/d' pyproject.toml
 
 %build
 %{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir dist .
@@ -51,5 +54,9 @@ PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -P -c "import jaraco.con
 %{python3_sitelib}/*
 
 %changelog
+* Fri Sep 04 2026 Percona Development Team <info@percona.com> - 1:6.1.0-1
+- Update to jaraco.context 6.1.0 (CVE-2026-23949, tar path traversal); needs
+  setuptools>=77, drop the unpackaged coherent.licensed build requirement
+
 * Thu Aug 27 2026 Percona Development Team <info@percona.com> - 6.0.1-1
 - Package jaraco.context 6.0.1 for Python 3.12 (pgAdmin 4 dependency stack)
