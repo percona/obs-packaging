@@ -152,3 +152,27 @@ project-config: |
   Prefer: libjpeg62-turbo-dev
   %endif
 
+  # Append the distribution codename to the OBS release counter on deb-based
+  # repositories so that deb filenames are distinguishable across distro
+  # versions (e.g. …_1.0.15-1+2.1.trixie_amd64.deb).  debtransform appends
+  # "+<release>" to the version for packages whose debian.dsc carries
+  # "Debtransform-Release: 1".  RPM repositories keep the default
+  # <CI_CNT>.<B_CNT> release.
+  %if "%_repository" == "Debian_11"
+  Release: <CI_CNT>.<B_CNT>.bullseye
+  %endif
+  %if "%_repository" == "Debian_12"
+  Release: <CI_CNT>.<B_CNT>.bookworm
+  %endif
+  %if "%_repository" == "Debian_13"
+  Release: <CI_CNT>.<B_CNT>.trixie
+  %endif
+  %if "%_repository" == "Ubuntu_22.04"
+  Release: <CI_CNT>.<B_CNT>.jammy
+  %endif
+  %if "%_repository" == "Ubuntu_24.04"
+  Release: <CI_CNT>.<B_CNT>.noble
+  %endif
+  %if "%_repository" == "Ubuntu_26.04"
+  Release: <CI_CNT>.<B_CNT>.resolute
+  %endif

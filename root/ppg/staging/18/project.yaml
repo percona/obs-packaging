@@ -278,6 +278,27 @@ project-config: |
   Prefer: libjpeg62-turbo-dev
   %endif
 
+  # Distro codename suffix for deb releases — keep in sync with the root
+  # project.yaml (this project-config overrides the inherited root config).
+  %if "%_repository" == "Debian_11"
+  Release: <CI_CNT>.<B_CNT>.bullseye
+  %endif
+  %if "%_repository" == "Debian_12"
+  Release: <CI_CNT>.<B_CNT>.bookworm
+  %endif
+  %if "%_repository" == "Debian_13"
+  Release: <CI_CNT>.<B_CNT>.trixie
+  %endif
+  %if "%_repository" == "Ubuntu_22.04"
+  Release: <CI_CNT>.<B_CNT>.jammy
+  %endif
+  %if "%_repository" == "Ubuntu_24.04"
+  Release: <CI_CNT>.<B_CNT>.noble
+  %endif
+  %if "%_repository" == "Ubuntu_26.04"
+  Release: <CI_CNT>.<B_CNT>.resolute
+  %endif
+
 qa:
   pipeline: ppg-obs
   parameters:
