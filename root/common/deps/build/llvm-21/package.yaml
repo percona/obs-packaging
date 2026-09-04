@@ -9,6 +9,7 @@ description: |
 build:
   RockyLinux_8: false
   RockyLinux_9: false
+  RockyLinux_9.6: false
   RockyLinux_10: false
   UBI_8: false
   UBI_9: false

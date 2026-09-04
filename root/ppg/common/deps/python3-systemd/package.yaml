@@ -3,6 +3,7 @@ description: Python interface for libsystemd, built for the python3.12 stream ne
 build:
   RockyLinux_8: false
   RockyLinux_9: false
+  RockyLinux_9.6: false
   RockyLinux_10: false
   Debian_11: false
   Debian_12: false
