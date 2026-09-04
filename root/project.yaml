@@ -139,6 +139,16 @@ project-config: |
   Prefer: hdf-libs
   %endif
 
+  %if "%_repository" == "RockyLinux_9.6"
+  # EPEL 9 tracks the latest RHEL 9 minor and ships llvm19-libs as a compat
+  # package for the newer distro LLVM. On the 9.6 baseline the distro
+  # llvm-libs (19.1.7) provides the same libLLVM.so.19.1, so OBS reports
+  # "have choice" (e.g. for annobin). The 9.6 toolchain (llvm-devel,
+  # clang-libs) hard-requires llvm-libs = 19.1.7, so prefer the distro
+  # package over the EPEL compat one.
+  Prefer: llvm-libs
+  %endif
+
   %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository" == "Ubuntu_22.04"
   # llvm-*-dev needs libtinfo-dev; both libncurses-dev and libtinfo-dev satisfy
   # it and OBS reports "have choice" without a Prefer.
