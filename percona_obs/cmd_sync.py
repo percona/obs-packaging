@@ -97,9 +97,9 @@ from .release_freeze import (
 )
 from .services import (
     _copy_local_packaging,
-    _has_cargo_vendor_service,
     _has_runnable_services,
     _run_local_services,
+    drift_tolerant_patterns,
     upstream_scm_refs,
 )
 from .targets import (
@@ -126,9 +126,6 @@ _IMAGES_REPO_RE = re.compile(r"^(.+)-images$")
 # e.g. "ppg:17:containers:ubi9" → group 1 = "ubi9".  The new single-subproject
 # layout ("…:containers") intentionally does not match and is never filtered.
 _CONTAINER_SUBPROJ_RE = re.compile(r":containers:([^:]+)$")
-
-# Matches the vendored-crates archive produced by the cargo_vendor service.
-_VENDOR_TAR_RE = re.compile(r"^vendor\.tar\.[a-z0-9]+$")
 
 
 _OBS_SUBSTITUTABLE = {"_service", "_aggregate", "_link"}
@@ -449,27 +446,26 @@ def _is_link_package(obs_dir: Path) -> bool:
 def _content_mismatches(
     local_md5s: dict[str, str],
     obs_md5s: dict[str, str],
-    ignore_vendor: bool,
+    tolerant: list[re.Pattern[str]],
 ) -> list[str]:
     """Return the file names whose content differs between local and OBS.
 
-    With *ignore_vendor*, a vendor.tar.* present on both sides is compared by
-    presence only, never by bytes.  cargo_vendor output is a function of the
-    other uploaded files plus the crates.io state at generation time: upstream
-    projects without a committed Cargo.lock (e.g. pgvectorscale) re-resolve
-    the crate graph on every run, so its bytes drift between machines and
-    dates even when no real input changed.  A vendor-only difference must
-    therefore not flip a branch decision to promote.  A vendor archive
+    Files matching a *tolerant* pattern (see services.drift_tolerant_patterns)
+    and present on both sides are compared by presence only, never by bytes:
+    their content is a function of an external registry's state at generation
+    time — cargo_vendor re-resolving crates for a project without Cargo.lock,
+    npm re-resolving ranges for node_modules — so byte drift between machines
+    and dates must not flip a branch decision to promote.  A tolerant file
     missing from either side is still a mismatch.
     """
     mismatches = [name for name, md5 in local_md5s.items() if obs_md5s.get(name) != md5]
     mismatches += [name for name in obs_md5s if name not in local_md5s]
-    if ignore_vendor:
+    if tolerant:
         both = set(local_md5s) & set(obs_md5s)
         mismatches = [
             name
             for name in mismatches
-            if not (_VENDOR_TAR_RE.match(name) and name in both)
+            if not (name in both and any(p.search(name) for p in tolerant))
         ]
     return sorted(mismatches)
 
@@ -584,7 +580,7 @@ def _content_matches_branch(
         mismatches = _content_mismatches(
             local_md5s,
             obs_md5s,
-            ignore_vendor=run_services and _has_cargo_vendor_service(service_file),
+            tolerant=drift_tolerant_patterns(service_file) if run_services else [],
         )
         for fname in mismatches:
             detail = "differs" if fname in local_md5s else "in OBS but not local"

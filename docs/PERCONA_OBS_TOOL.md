@@ -17,6 +17,11 @@ dependency vendoring):
 | `obs_scm` | `obs-service-obs-scm` | `obs-service-obs_scm` |
 | `go_modules` | `obs-service-go_modules` | `obs-service-go_modules` |
 | `download_url` | `obs-service-download_url` | `obs-service-download_url` |
+| `node_modules` | `obs-service-node-modules` (openSUSE:Tools repo) | `obs-service-node_modules` (openSUSE:Tools repo) |
+| `npm_lockfile` | this repo — `tools/obs-services/` (see its README) | same |
+
+`node_modules` and `npm_lockfile` additionally need `npm` (Node.js ≥ 18; the CI image
+uses 22) and `cpio` on `PATH`.
 
 Binaries are expected at `/usr/lib/obs/service/<name>`.
 
@@ -120,6 +125,64 @@ see [root/README.md](../root/README.md) — not covered further here.)
 ```sh
 ./percona-obs -P local sync push ppg:staging:17 percona-pg-telemetry
 ```
+
+### Vendoring npm dependencies (`npm_lockfile` + `node_modules`)
+
+Packages with a webpack/npm frontend (pgAdmin 4) vendor their npm dependencies for
+offline OBS builds with two `mode="manual"` services, run locally by `sync` in this order:
+
+```xml
+<service name="npm_lockfile" mode="manual">
+  <param name="archive">*percona-pgadmin4*.obscpio</param>   <!-- the upstream obs_scm output -->
+  <param name="subdir">web</param>                            <!-- where package.json lives -->
+</service>
+<service name="node_modules" mode="manual">
+  <param name="cpio">node_modules.obscpio</param>
+  <param name="output">node_modules.spec.inc</param>
+  <param name="source-offset">10000</param>
+</service>
+```
+
+`npm_lockfile` (repo-owned, `tools/obs-services/`) generates `package-lock.json` with
+`npm install --package-lock-only`; `node_modules` (openSUSE) reads it and downloads every
+tarball into `node_modules.obscpio`, writing `SourceNNNNN:` lines to `node_modules.spec.inc`
+(`%include %{_sourcedir}/node_modules.spec.inc` in the spec; `BuildRequires: local-npm-registry`
+serves the tarballs to `npm` at build time). All three files are uploaded to OBS and cached
+under `.cache/services/<upstream commit>/` — the lockfile is a function of the upstream commit
+plus registry state, so `--no-cache` is the way to deliberately refresh the vendored set.
+Each new upstream commit of an npm-vendored package adds a cache entry of roughly the
+`.obscpio`'s size (~220 MB for pgAdmin); this is bounded locally by `prune_cache`, which
+removes entries unused for 7 days, and in CI additionally by the `actions/cache` size limits.
+`npm_lockfile` also accepts an optional `npm-flags` param (default `--legacy-peer-deps --ignore-scripts`; a given value replaces the default set) for upstreams that need different npm resolution flags.
+
+`root/ppg/devel/pgadmin/percona-pgadmin4/obs/_service` is the reference user of this chain:
+`obs_scm` (tag `REL-9_17`, `versionrewrite-pattern REL-(\d+)_(\d+)` → `9.17`) →
+`npm_lockfile` (`subdir web`) → `node_modules` (`source-offset 10000`) → `tar`/`recompress`/
+`set_version` at build time. A `sync push --dry-run` of that package runs the whole chain
+locally and takes several minutes (it downloads every npm tarball once; later runs hit the
+service cache).
+
+Two rules in `percona-obs` make this work:
+
+- `.obscpio` files produced by **manual** services are uploaded as-is (OBS unpacks them into
+  `SOURCES` at build time); only `obs_scm` archives are extracted locally.
+- **Drift-tolerant artifacts**: outputs whose bytes depend on registry state at generation
+  time are compared by presence only in the `--branch-from` content check, so re-resolution
+  never promotes a package by itself (absence on either side is still a change):
+
+  | Service | Tolerated files |
+  |---|---|
+  | `cargo_vendor` | `vendor.tar.*` |
+  | `node_modules` | `node_modules.obscpio`, `node_modules.spec.inc`, `*package-lock.json` (names follow the `cpio`/`output`/`input` params) |
+
+  Drift tolerance only affects the `--branch-from` content check's changed/unchanged
+  decision — it does not affect what gets uploaded. A sync that is not skipped (no
+  matching `--skip-unchanged` manifest entry, or run with `--force`) still uploads
+  whatever the local service run produced, so a regenerated drift-tolerant artifact
+  (for pgAdmin, a ~220 MB `node_modules.obscpio`) is re-PUT to OBS and commits a new
+  revision, triggering a rebuild even though nothing meaningful changed. `--skip-unchanged`
+  avoids this in the normal CI path because tag-pinned packages are skipped outright before
+  any service reruns; `--no-cache` is the deliberate way to force that refresh.
 
 ### Sync all packages under a subproject
 

@@ -1,0 +1,8 @@
+title: cryptography 50.0.1 for Python 3.12
+description: |
+  Cryptographic recipes and primitives for Python, built from the PyPI sdist
+  with maturin + vendored Rust crates against the system OpenSSL. Replaces
+  the reused RHEL 9 python3.12-cryptography 41 (Epoch 1 outranks it): pgAdmin
+  9.17 imports CFB8 from cryptography.hazmat.decrepit, which only exists in
+  cryptography >= 43, and CFB8's pre-decrepit location is removed in 49. Bump
+  by editing obs/_service (sdist URL) and rpm/*.spec (Version + changelog).

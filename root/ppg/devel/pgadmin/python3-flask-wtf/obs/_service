@@ -1,0 +1,5 @@
+<services>
+  <service name="download_url">
+    <param name="url">https://files.pythonhosted.org/packages/source/F/Flask-WTF/flask_wtf-1.3.0.tar.gz</param>
+  </service>
+</services>

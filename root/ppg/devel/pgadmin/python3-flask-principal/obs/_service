@@ -1,0 +1,5 @@
+<services>
+  <service name="download_url">
+    <param name="url">https://files.pythonhosted.org/packages/source/F/Flask-Principal/Flask-Principal-0.4.0.tar.gz</param>
+  </service>
+</services>

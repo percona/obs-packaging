@@ -1,0 +1,31 @@
+title: pgAdmin 4 for Percona Distribution for PostgreSQL
+description: |
+  pgAdmin 4 (percona-pgadmin4) and its Python 3.12 / Node.js build and runtime
+  dependency stack, built for UBI 9 only. Independent of the PostgreSQL major
+  version, hence a version-less devel project rather than a ppg:devel:<V> entry.
+  Design: docs/superpowers/specs/2026-08-26-pgadmin4-tooling-design.md
+repositories:
+  - name: UBI_9
+    paths:
+      # python3.12-six / -dateutil / -psutil / -click already built there
+      - subproject: ppg:common:deps
+        repository: UBI_9
+      # local-npm-registry (npm offline registry used at build time)
+      - subproject: common:deps:build
+        repository: UBI_9
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+        repository: devel
+    archs: [x86_64, aarch64]
+project-config: |
+  %if "%_repository" == "UBI_9"
+  ExpandFlags: module:llvm-toolset-rhel9
+  # pgAdmin's webpack build and local-npm-registry need Node.js >= 20; the
+  # obs-tools image pins the same major for npm_lockfile — bump both together.
+  ExpandFlags: module:nodejs:22
+  # hdf-libs (EPEL split package) and hdf both provide libdf.so.0 and libmfhdf.so.0
+  Prefer: hdf-libs
+  %endif
