@@ -278,6 +278,9 @@ jobs:
       - name: Release dry-run
         id: release-dryrun
         if: steps.detect.outputs.is_release_pr == 'true'
+        # Container-job steps default to plain `sh`, which rejects
+        # `set -o pipefail`; this script is bash.
+        shell: bash
         run: |
           set -euo pipefail
           CHANGED=$(git diff --name-only origin/main...HEAD -- 'root/*/releases/*/release.yaml')

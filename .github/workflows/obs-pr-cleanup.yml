@@ -87,6 +87,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        # Container-job steps default to plain `sh`, which rejects
+        # `set -o pipefail` and `<<<` here-strings; this script is bash.
+        shell: bash
         run: |
           set -euo pipefail
           FILES=$(gh pr view "$PR_NUMBER" --json files \
