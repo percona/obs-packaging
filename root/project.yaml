@@ -147,6 +147,11 @@ project-config: |
   # clang-libs) hard-requires llvm-libs = 19.1.7, so prefer the distro
   # package over the EPEL compat one.
   Prefer: llvm-libs
+  # armadillo (EPEL, gdal chain for postgis) needs liblapack.so.3, which
+  # both lapack and lapack64 provide in 9.6; the same split exists for
+  # libblas.so.3 (blas/blas64). Prefer the standard LP64 variants.
+  Prefer: lapack
+  Prefer: blas
   %endif
 
   %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository" == "Ubuntu_22.04"
