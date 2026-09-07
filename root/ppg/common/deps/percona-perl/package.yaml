@@ -7,8 +7,9 @@ description: |
   the distro perl of each build base (5.26.3 on EL8, 5.32.1 on EL9):
   plperl.so is ABI-tied to the libperl it was compiled against
   (DT_NEEDED libperl.so.5.26 / libperl.so.5.32). Installs only under
-  /opt/percona-perl — nothing shadows system packages. RockyLinux_8 and
-  RockyLinux_9 only: these are the tarball build bases (ssl1.1 / ssl3).
+  /opt/percona-perl — nothing shadows system packages. RockyLinux_8,
+  RockyLinux_9 and RockyLinux_9.6 only — the tarball build bases
+  (ssl1.1 on EL8, ssl3 on the 9.6 vault).
 
 build:
   RockyLinux_10: false

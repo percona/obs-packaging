@@ -161,6 +161,13 @@ make %{?_smp_mflags}
 %install
 make install DESTDIR=%{buildroot}
 
+# PERCONA: perl's make install ships the XS .so files mode 0555. The
+# RockyLinux_9.6 (RHEL 9.6 EUS vault) buildroot's brp-strip cannot rewrite
+# read-only files ("strip: unable to copy file ...; reason: Permission
+# denied" fails %install), while newer 9.x toolchains tolerated it. Make
+# them owner-writable, like the distro perl spec does.
+find %{buildroot}%{perl_prefix} -type f -name '*.so' -exec chmod u+w {} +
+
 # PERCONA: unversioned libperl.so symlink next to the real SONAME file,
 # same convenience link the distro ships in its CORE directory.
 ln -sf %{perl_soname} %{buildroot}%{perl_prefix}/lib/%{perl_version}/CORE/libperl.so

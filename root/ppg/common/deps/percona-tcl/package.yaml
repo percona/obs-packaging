@@ -7,8 +7,9 @@ description: |
   One version for both bases: pltcl.so links the unversioned SONAME
   libtcl8.6.so and Tcl is ABI-stable within 8.6 (EL8 ships 8.6.8, EL9
   8.6.10 — we build 8.6.10). Installs only under /opt/percona-tcl —
-  nothing shadows system packages. RockyLinux_8 and RockyLinux_9 only:
-  these are the tarball build bases (ssl1.1 / ssl3).
+  nothing shadows system packages. RockyLinux_8, RockyLinux_9 and
+  RockyLinux_9.6 only — the tarball build bases (ssl1.1 on EL8, ssl3 on
+  the 9.6 vault).
 
 build:
   RockyLinux_10: false
