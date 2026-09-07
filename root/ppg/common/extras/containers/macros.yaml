@@ -1,0 +1,11 @@
+# Macros for the PPG common extras-containers project (custom/extras-bundling images
+# shared across the PG major versions that ship the "extras" package set: 16-18).
+# PG_MAJOR_VERSION is the upgrade *target* (the newest supported version); older source
+# versions are installed via a hardcoded shell loop in the Dockerfile, expanded by
+# percona-obs's {{FOR}} block templating (see percona_obs/common.py expand_for_blocks).
+# Bump PG_MAJOR_VERSION/PG_MINOR_VERSION and extend that loop whenever a new PG major
+# version becomes the target.
+- PG_MAJOR_VERSION: 18
+- PG_MINOR_VERSION: 6
+- PG_VERSION: %!{PG_MAJOR_VERSION}.%!{PG_MINOR_VERSION}
+- PPG_RELEASE: 1
