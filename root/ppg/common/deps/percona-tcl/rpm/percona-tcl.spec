@@ -72,6 +72,13 @@ make %{?_smp_mflags}
 %install
 make -C unix install INSTALL_ROOT=%{buildroot}
 
+# PERCONA: tcl's make install ships libtcl%{tcl_major}.so mode 0555. The
+# RockyLinux_9.6 (RHEL 9.6 EUS vault) buildroot's brp-strip cannot rewrite
+# read-only files ("strip: unable to copy file ...; reason: Permission
+# denied" fails %install), while newer 9.x toolchains tolerated it. Make
+# every installed .so owner-writable.
+find %{buildroot}%{tcl_prefix} -type f -name '*.so' -exec chmod u+w {} +
+
 # PERCONA: unversioned tclsh convenience link, like the distro ships.
 ln -sf tclsh%{tcl_major} %{buildroot}%{tcl_prefix}/bin/tclsh
 
