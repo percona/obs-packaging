@@ -3,9 +3,10 @@ description: |
   Binary tarball (simpleimage) builds for Percona Software for PostgreSQL
   %!{PG_MAJOR_VERSION}. Each repository is one SSL variant of the official
   tarball, built against a different EL base of ppg:staging:%!{PG_MAJOR_VERSION}:
-  ssl1.1 (RockyLinux 8), ssl3 (RockyLinux 9).
+  ssl1.1 (RockyLinux 8), ssl3 (RockyLinux 9.6 — the RHEL 9.6 EUS vault
+  baseline, OpenSSL 3.2).
 
-  The RockyLinux_8/RockyLinux_9 repositories are plain RPM build repos (not
+  The RockyLinux_8/RockyLinux_9.6 repositories are plain RPM build repos (not
   simpleimage): they build the tarball-only helper packages that must be
   compiled against the very same EL base as the tarball that bundles them
   (percona-psql — psql linked against BSD libedit instead of the host's
@@ -29,16 +30,18 @@ repositories:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
         repository: devel
     archs: [x86_64, aarch64]
-  - name: RockyLinux_9
+  - name: RockyLinux_9.6
     paths:
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
-        repository: RockyLinux_9
+        repository: RockyLinux_9.6
       - subproject: ppg:common:deps
-        repository: RockyLinux_9
+        repository: RockyLinux_9.6
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
         repository: standard
-      # libedit-devel is in CRB, part of RockyLinux:9/standard.
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+      # libedit-devel is in CRB, part of RockyLinux:9.6/standard (same
+      # layout as RockyLinux:9 — watch the first build in case the 9.6
+      # vault interconnect splits CRB out).
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9.6
         repository: standard
     archs: [x86_64, aarch64]
   - name: ssl1.1
@@ -60,27 +63,30 @@ repositories:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
         repository: devel
     archs: [x86_64, aarch64]
-  # ssl3 is EL9-based again. The original blocker (staging pgcrypto.so built
-  # on Rocky 9.8+ referenced OPENSSL_3.4.0 version nodes — RHEL 9.8 rebased
-  # to OpenSSL 3.5.x — breaking the "ssl3 runs on any OpenSSL 3.0 host"
-  # promise) is now fixed at the source: staging percona-postgresql carries
-  # a pgcrypto patch that avoids the EVP_MD_CTX_get_size_ex() 3.4 API, so
-  # EL9-built pgcrypto stays at OPENSSL_3.0.0. An interim Ubuntu 22.04
+  # ssl3 builds on the RockyLinux_9.6 base (RHEL 9.6 EUS vault, OpenSSL
+  # 3.2). The original blocker (staging pgcrypto.so built on Rocky 9.8+
+  # referenced OPENSSL_3.4.0 version nodes — RHEL 9.8 rebased to OpenSSL
+  # 3.5.x — breaking the "ssl3 runs on any OpenSSL 3.0 host" promise)
+  # disappears on this baseline: 3.2 headers predate the 3.4
+  # EVP_MD_CTX_size()->EVP_MD_CTX_get_size_ex() remap, so pgcrypto needs no
+  # source patch (the one we carried is dropped) and every bundled binary
+  # stays at OPENSSL_3.0.* nodes — still enforced per artifact by
+  # build-tarball.sh's section-15 host-ABI audit. An interim Ubuntu 22.04
   # deb-based ssl3 was abandoned: the PGDG deb layout is non-relocatable
   # (multiarch lib paths, /usr/share/postgresql split), unlike the PGDG RPM
   # /usr/pgsql-NN prefix the tarball layout is derived from.
   - name: ssl3
     paths:
-      # See the ssl1.1 comment: own RockyLinux_9 build repo first.
+      # See the ssl1.1 comment: own RockyLinux_9.6 build repo first.
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}:tarballs
-        repository: RockyLinux_9
+        repository: RockyLinux_9.6
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
-        repository: RockyLinux_9
+        repository: RockyLinux_9.6
       - subproject: ppg:common:deps
-        repository: RockyLinux_9
+        repository: RockyLinux_9.6
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
         repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9.6
         repository: standard
     archs: [x86_64, aarch64]
 
@@ -88,7 +94,7 @@ publish:
   # Helper-RPM build repos: consumed only through the sibling path above,
   # never shipped as a repository.
   RockyLinux_8: false
-  RockyLinux_9: false
+  RockyLinux_9.6: false
   ssl1.1: true
   ssl3: true
 
@@ -141,7 +147,7 @@ project-config: |
   # chroot). Those inert Ignore: lines are therefore gone.
   #
   # Instead, the payload-free percona-gis-compat shim (this project,
-  # RockyLinux_8/RockyLinux_9 repos only) Provides those distro NAMES
+  # RockyLinux_8/RockyLinux_9.6 repos only) Provides those distro NAMES
   # itself, which turns each by-name Requires into a real have-choice that
   # the Prefer: below resolves; the shim Requires percona-gdal/percona-proj
   # so the runtimes PostGIS needs still come in. The simpleimage recipe also
@@ -165,7 +171,7 @@ project-config: |
   Type: simpleimage
   # Explicit binary format (see the ssl1.1 comment).
   Binarytype: rpm
-  # Same choice-resolution as staging RockyLinux_9: hdf-libs and hdf both
+  # Same choice-resolution as staging RockyLinux_9.6: hdf-libs and hdf both
   # provide libdf.so.0. This is LIVE, not a leftover — percona-gdal is built
   # --without-hdf4/hdf5 so the gdal chain no longer drags hdf in, but PostGIS
   # itself carries `Requires: hdf5` by name, and hdf5 requires libdf.so.0.
@@ -174,6 +180,16 @@ project-config: |
   # Ignore: rule — nothing in the tarball bundles it, section 0a only guards
   # the GDAL/PROJ names.)
   Prefer: hdf-libs
+  # 9.6-baseline choice resolution, mirrored from ppg:staging's prjconf
+  # RockyLinux_9.6 block (the tarball buildconfig is THIS prjconf + base
+  # distro only — staging's prjconf is never inherited): EPEL 9 tracks the
+  # latest RHEL 9 minor, so on the 9.6 baseline EPEL's llvm19-libs compat
+  # package and the distro llvm-libs (19.1.7) both provide libLLVM.so.19.1,
+  # and lapack/lapack64 + blas/blas64 both provide liblapack.so.3 /
+  # libblas.so.3 (pulled in by armadillo via PostGIS's EPEL gdal chain).
+  Prefer: llvm-libs
+  Prefer: lapack
+  Prefer: blas
   # See the ssl1.1 block: our lean /opt GDAL+PROJ must win the
   # libgdal.so.NN()(64bit)/libproj.so.NN()(64bit) choice over EPEL's
   # gdal-libs/proj.
@@ -198,7 +214,7 @@ project-config: |
   # chroot). Those inert Ignore: lines are therefore gone.
   #
   # Instead, the payload-free percona-gis-compat shim (this project,
-  # RockyLinux_8/RockyLinux_9 repos only) Provides those distro NAMES
+  # RockyLinux_8/RockyLinux_9.6 repos only) Provides those distro NAMES
   # itself, which turns each by-name Requires into a real have-choice that
   # the Prefer: below resolves; the shim Requires percona-gdal/percona-proj
   # so the runtimes PostGIS needs still come in. The simpleimage recipe also

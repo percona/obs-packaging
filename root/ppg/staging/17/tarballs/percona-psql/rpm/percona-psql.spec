@@ -11,7 +11,7 @@
 # It lives in ppg:staging:%!{PG_MAJOR_VERSION}:tarballs (not in staging
 # itself): it is PG-version-bound, is never published to a distro repository
 # and must be compiled against exactly the EL base of the tarball that
-# bundles it.  Hence the RockyLinux_8/RockyLinux_9 build repos in this
+# bundles it.  Hence the RockyLinux_8/RockyLinux_9.6 build repos in this
 # project's project.yaml.
 
 %undefine _package_note_file
@@ -58,7 +58,7 @@ BuildRequires:  flex
 # does not carry on EL9 (lib.pm, Data::Dumper, ...).
 BuildRequires:  perl
 # EL8: PowerTools (RockyLinux:8/devel path).  EL9: CRB, part of
-# RockyLinux:9/standard.  Deliberately NO readline-devel: configure must not
+# RockyLinux:9.6/standard.  Deliberately NO readline-devel: configure must not
 # be able to find readline, so the libedit link is unambiguous.
 BuildRequires:  libedit-devel
 BuildRequires:  zlib-devel
