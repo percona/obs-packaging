@@ -9,7 +9,7 @@ description: |
 build:
   # Plain RPM package: it is a build input for the simpleimage recipes, so it
   # must not build on the ssl* (Type: simpleimage) repositories. Keeping it on
-  # the unpublished RockyLinux_8/RockyLinux_9 repos only is also what keeps
+  # the unpublished RockyLinux_8/RockyLinux_9.6 repos only is also what keeps
   # its fake Provides: invisible to every other project.
   ssl1.1: false
   ssl3: false

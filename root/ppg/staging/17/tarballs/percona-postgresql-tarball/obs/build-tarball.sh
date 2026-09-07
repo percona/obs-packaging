@@ -103,7 +103,7 @@ done
 #     tarballs/project.yaml, both ssl blocks) win the "have choice" for
 #     PostGIS's automatic libgdal.so.NN()(64bit)/libproj.so.NN()(64bit)
 #     soname Requires;
-#   * percona-gis-compat (this project, RockyLinux_8/RockyLinux_9 repos; a
+#   * percona-gis-compat (this project, RockyLinux_8/RockyLinux_9.6 repos; a
 #     BuildRequires of the simpleimage recipe) is a payload-free shim that
 #     Provides the distro NAMES PostGIS requires by name — gdal-libs/proj on
 #     EL8, gdal3.4-libs/proj on EL9 — turning each single-provider by-name
@@ -148,7 +148,7 @@ if [ -n "$stray_gis" ]; then
     done
     exit 1
 fi
-# percona-psql (this project's RockyLinux_8/RockyLinux_9 build repos): psql
+# percona-psql (this project's RockyLinux_8/RockyLinux_9.6 build repos): psql
 # linked against BSD libedit instead of the host's libreadline. Section 2b
 # stages it as bin/psql.bin beneath a thin exec-only bin/psql wrapper —
 # no readline and no LD_PRELOAD machinery anywhere.
@@ -1121,10 +1121,12 @@ case "$SSL_VARIANT" in
     # RH-fork leakage into bundled binaries must fail here at build time.
     ssl1.1) OPENSSL_ALLOWED='OPENSSL_1_1_[01]' ;;
     # Must run on any OpenSSL 3.0 host: only 3.0.x nodes are acceptable.
-    # Achievable on the EL9 base (Rocky 9.8+ ships OpenSSL 3.5) because
-    # staging percona-postgresql patches pgcrypto to avoid the
-    # EVP_MD_CTX_get_size_ex() 3.4 API — without that patch pgcrypto.so
-    # would reference OPENSSL_3.4.0 and fail this gate.
+    # Achievable because the ssl3 repos build on the RockyLinux_9.6 vault
+    # base (RHEL 9.6 EUS, OpenSSL 3.2): its headers predate the OpenSSL 3.4
+    # EVP_MD_CTX_size()->EVP_MD_CTX_get_size_ex() remap that once pushed
+    # pgcrypto.so to OPENSSL_3.4.0 (a source patch we used to carry and
+    # have dropped), and nothing in the stack uses 3.1/3.2-only symbols —
+    # which is exactly what this gate keeps proving on every build.
     ssl3)   OPENSSL_ALLOWED='OPENSSL_3\.0\.[0-9]*' ;;
     *)      echo "FATAL: no SSL-ABI policy for $SSL_VARIANT" >&2; exit 1 ;;
 esac
