@@ -139,6 +139,10 @@ project-config: |
   ExpandFlags: module:llvm-toolset-rhel9
   # hdf-libs (EPEL split package) and hdf both provide libdf.so.0 and libmfhdf.so.0
   Prefer: hdf-libs
+  # krb5-server needs libverto-module-base, provided by both libverto-libev
+  # and libverto-libevent on the 9.6 vault repo set ("have choice", seen on
+  # pr-2 ppg:common:deps/krb5). Same pick as the EL8 block above.
+  Prefer: libverto-libev
   %endif
 
   %if "%_repository" == "RockyLinux_9.6"
