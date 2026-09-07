@@ -1,0 +1,64 @@
+title: Percona Common Custom Container Images for PostgreSQL
+description: |
+  This project contains container images shared across the Percona Distribution for
+  PostgreSQL major versions that ship the "extras" package set (currently 16-18), such as
+  the custom major-version upgrade image that bundles those extra extensions.
+  We currently build these images based on UBI-9 only, matching the per-version
+  extras/containers projects (there is no UBI-8 variant of the extras/custom images).
+
+repositories:
+  - name: ubi9
+    paths:
+      - subproject: ppg:staging:18:extras
+        repository: UBI_9
+      - subproject: ppg:staging:17:extras
+        repository: UBI_9
+      - subproject: ppg:staging:16:extras
+        repository: UBI_9
+      - subproject: ppg:staging:18
+        repository: UBI_9
+      - subproject: ppg:staging:17
+        repository: UBI_9
+      - subproject: ppg:staging:16
+        repository: UBI_9
+      - subproject: ppg:common:deps
+        repository: UBI_9
+      - subproject: common:containers:ubi9
+        repository: images
+      - subproject: common:containers:ubi9
+        repository: UBI_9
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+        repository: standard
+    archs: [x86_64, aarch64]
+
+project-config: |
+  %if "%_repository" == "ubi9"
+  Type: docker
+  BuildEngine: podman
+  BuildFlags: dockerarg:PPG_REPO=staging
+  BuildFlags: dockerarg:RHEL_VER=el9
+
+  Preinstall: skopeo
+
+  ExpandFlags: filterbasecontainerpkgs
+  Prefer: redhat-release
+  Prefer: glibc-minimal-langpack
+  Prefer: gpgme
+  Prefer: iptables-nft
+  Prefer: percona-postgresql%!{PG_MAJOR_VERSION}-libs
+  Ignore: rocky-release
+
+  BuildFlags: sbom:spdx
+  BuildFlags: sbom:cyclonedx
+  PublishFlags: withsbom
+  %endif
+
+qa:
+  pipeline: docker-server-parallel-generic
+  parameters:
+    DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
+    SERVER_VERSION: "%!{PG_VERSION}"
+    TESTING_BRANCH: ricardo-work
+    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/common/extras/containers/ubi9
