@@ -1167,7 +1167,9 @@ def _disable_project_builds(apiurl: str, obs_project_name: str) -> None:
 
 
 def _filter_meta_repos(
-    repos: "list[dict]", only_repos: "set[str] | None"
+    repos: "list[dict]",
+    only_repos: "set[str] | None",
+    self_subproject: "str | None" = None,
 ) -> "list[dict]":
     """Apply the --only-repos project-meta filter.
 
@@ -1179,15 +1181,38 @@ def _filter_meta_repos(
     repositories and the tarball would silently never build.  Always keep
     ``ssl*`` repos regardless of the filter.
 
+    A kept repository may list a SIBLING repo of the same project as a build
+    path (the ssl variants consume the tarball helper-RPM repos this way).
+    Emitting the referrer while filtering out the referenced sibling produces
+    meta OBS rejects wholesale (``project_save_error: Cannot find repository``
+    — seen on PR #2 when the helper repo was renamed RockyLinux_9 →
+    RockyLinux_9.6 and no longer matched the PR's repo labels).  When
+    ``self_subproject`` (this project's subproject path under the root, as
+    spelled in project.yaml ``subproject:`` entries) is given, repos referenced
+    by kept repos' same-project paths are therefore kept too, transitively.
+    Cross-project paths never rescue a same-named local repo.
+
     ``only_repos`` of ``None`` is a passthrough (no filtering).
     """
     if only_repos is None:
         return repos
-    return [
-        r
+    keep = {
+        r.get("name")
         for r in repos
         if r.get("name") in only_repos or (r.get("name") or "").startswith("ssl")
-    ]
+    }
+    if self_subproject is not None:
+        by_name = {r.get("name"): r for r in repos}
+        queue = [by_name[n] for n in keep if n in by_name]
+        while queue:
+            for path_info in queue.pop().get("paths", []):
+                if path_info.get("subproject") != self_subproject:
+                    continue
+                ref = path_info.get("repository")
+                if ref and ref not in keep and ref in by_name:
+                    keep.add(ref)
+                    queue.append(by_name[ref])
+    return [r for r in repos if r.get("name") in keep]
 
 
 def _apply_project_config(
@@ -1244,7 +1269,14 @@ def _apply_project_config(
     if branch_rootprj is not None:
         build = None
     repos = project_config.get("repositories", [])
-    repos = _filter_meta_repos(repos, only_repos)
+    # This project's own subproject path (as project.yaml subproject: entries
+    # spell it), so the filter can follow same-project sibling references.
+    self_subproject = (
+        obs_project_name[len(rootprj) + 1 :]
+        if obs_project_name.startswith(rootprj + ":")
+        else None
+    )
+    repos = _filter_meta_repos(repos, only_repos, self_subproject)
     meta = build_project_meta(
         obs_project_name,
         project_config.get("title", ""),

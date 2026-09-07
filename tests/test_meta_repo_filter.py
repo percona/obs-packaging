@@ -53,3 +53,70 @@ def test_empty_only_repos_still_keeps_ssl():
     # An empty set means "no standard repo selected"; ssl repos still survive.
     repos = [{"name": "RockyLinux_9"}, {"name": "ssl3"}]
     assert _names(_filter_meta_repos(repos, set())) == ["ssl3"]
+
+
+def test_sibling_path_reference_keeps_filtered_repo():
+    # PR #2 regression (project_save_error on OBS): ssl3 lists this project's
+    # own RockyLinux_9.6 helper repo as a build path. A label-derived filter
+    # ({RockyLinux_9, RockyLinux_8}) would drop RockyLinux_9.6 while the ssl*
+    # exemption keeps ssl3, emitting meta whose <path> references a repository
+    # element that does not exist — OBS rejects the whole meta. Repos
+    # referenced by kept repos' same-project paths must survive the filter.
+    repos = [
+        {
+            "name": "RockyLinux_9.6",
+            "paths": [{"subproject": "ppg:staging:17", "repository": "RockyLinux_9.6"}],
+        },
+        {"name": "RockyLinux_8", "paths": []},
+        {
+            "name": "ssl3",
+            "paths": [
+                {
+                    "subproject": "ppg:staging:17:tarballs",
+                    "repository": "RockyLinux_9.6",
+                },
+                {"subproject": "ppg:staging:17", "repository": "RockyLinux_9.6"},
+            ],
+        },
+    ]
+    assert _names(
+        _filter_meta_repos(
+            repos, {"RockyLinux_9", "RockyLinux_8"}, "ppg:staging:17:tarballs"
+        )
+    ) == ["RockyLinux_9.6", "RockyLinux_8", "ssl3"]
+
+
+def test_sibling_reference_closure_is_transitive():
+    # A kept repo's sibling reference may itself reference another sibling.
+    repos = [
+        {"name": "a", "paths": [{"subproject": "me", "repository": "b"}]},
+        {"name": "b", "paths": [{"subproject": "me", "repository": "c"}]},
+        {"name": "c", "paths": []},
+        {"name": "d", "paths": []},
+        {"name": "ssl3", "paths": [{"subproject": "me", "repository": "a"}]},
+    ]
+    assert _names(_filter_meta_repos(repos, set(), "me")) == ["a", "b", "c", "ssl3"]
+
+
+def test_cross_project_path_does_not_keep_same_named_repo():
+    # A kept repo pointing at ANOTHER project's repository must not rescue a
+    # local repo that merely shares that repository name.
+    repos = [
+        {"name": "standard", "paths": []},
+        {
+            "name": "ssl3",
+            "paths": [{"project": "RockyLinux:9.6", "repository": "standard"}],
+        },
+    ]
+    assert _names(_filter_meta_repos(repos, set(), "ppg:staging:17:tarballs")) == [
+        "ssl3"
+    ]
+
+
+def test_no_self_subproject_disables_sibling_closure():
+    # Callers that cannot express project identity keep the old behavior.
+    repos = [
+        {"name": "helper", "paths": []},
+        {"name": "ssl3", "paths": [{"subproject": "me", "repository": "helper"}]},
+    ]
+    assert _names(_filter_meta_repos(repos, set())) == ["ssl3"]
