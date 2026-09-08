@@ -11,8 +11,8 @@
 # It lives in ppg:staging:%!{PG_MAJOR_VERSION}:tarballs (not in staging
 # itself): it is PG-version-bound, is never published to a distro repository
 # and must be compiled against exactly the EL base of the tarball that
-# bundles it.  Hence the RockyLinux_8/RockyLinux_9.6 build repos in this
-# project's project.yaml.
+# bundles it.  Hence the RockyLinux_8/RockyLinux_9.6/RockyLinux_9 build
+# repos in this project's project.yaml.
 
 %undefine _package_note_file
 

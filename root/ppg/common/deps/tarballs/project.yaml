@@ -1,0 +1,72 @@
+title: PPG Binary Tarball Dependencies
+description: |
+  Dependencies that exist solely for the Percona PostgreSQL binary
+  tarballs (the simpleimage builds in ppg:staging:NN:tarballs) and are
+  PG-version-agnostic, so every PG major's tarball project consumes this
+  one subproject:
+
+  - /opt-prefixed runtimes bundled into the artifact (percona-perl,
+    percona-tcl, percona-python3, percona-gdal, percona-proj): every
+    path compiled to /opt so the RPM-built PLs/PostGIS resolve them with
+    zero environment variables.
+  - EL8-only portability rebuilds whose libraries the ssl1.1 tarball
+    bundles (krb5 with builtin crypto, libssh with the libgcrypt
+    backend): no RHEL-OpenSSL-1.1-fork symbol nodes.
+  - percona-gis-compat: payload-free shim providing the distro GDAL/PROJ
+    package NAMES PostGIS requires by name, so image expansion has a
+    choice that `Prefer: percona-gis-compat` resolves (prjconf Ignore:
+    is not applied to image-type recipes). Its fake Provides stay
+    invisible outside the tarball chroots: only the ssl* repos path this
+    project.
+
+  percona-psql is the one tarball-only helper NOT here: it is built from
+  the PG source of each major (PG-version-bound _service revision), so
+  it lives in each ppg:staging:NN:tarballs project.
+
+  Repos mirror ppg:common:deps' Rocky repos — one per tarball EL base:
+  RockyLinux_8 (ssl1.1), RockyLinux_9.6 (ssl3, the RHEL 9.6 EUS vault),
+  RockyLinux_9 (ssl3.5, rolling 9.8+). Never published: consumed only
+  through the tarball projects' repository paths. No project-config of
+  its own — the root prjconf (inherited) already carries the EL8
+  libverto-libev and EL9/9.6 Prefer blocks these packages need.
+
+repositories:
+  - name: RockyLinux_8
+    paths:
+      - subproject: ppg:common:deps
+        repository: RockyLinux_8
+      - subproject: common:deps:build
+        repository: RockyLinux_8
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:8
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: appstream
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: baseos
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+        repository: devel
+    archs: [x86_64, aarch64]
+  - name: RockyLinux_9
+    paths:
+      - subproject: ppg:common:deps
+        repository: RockyLinux_9
+      - subproject: common:deps:build
+        repository: RockyLinux_9
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+        repository: standard
+    archs: [x86_64, aarch64]
+  - name: RockyLinux_9.6
+    paths:
+      - subproject: ppg:common:deps
+        repository: RockyLinux_9.6
+      - subproject: common:deps:build
+        repository: RockyLinux_9.6
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9.6
+        repository: standard
+    archs: [x86_64, aarch64]
+
+publish: false

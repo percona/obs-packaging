@@ -46,11 +46,9 @@
 # dependencies of the distro `proj` package itself, which is exactly what
 # this shim replaces.
 #
-# This package is built ONLY in this project's plain-RPM RockyLinux_8 /
-# RockyLinux_9.6 repositories (see package.yaml, which disables ssl1.1/ssl3),
-# which are unpublished and consumed solely through the same-project sibling
-# repository path of each ssl repo.  That is what keeps these fake
-# Provides: invisible to every other project.
+# This package is built ONLY in ppg:common:deps:tarballs, an unpublished
+# subproject whose repos are pathed solely by the ssl* tarball repos.  That
+# is what keeps these fake Provides: invisible to every other project.
 
 Summary:        GDAL/PROJ name-compatibility shim for the binary tarball chroot
 Name:           percona-gis-compat
