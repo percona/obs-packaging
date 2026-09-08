@@ -1,3 +1,4 @@
+import os
 import socket
 import subprocess
 import sys
@@ -50,6 +51,24 @@ def _check_git_clean() -> None:
         sys.exit(1)
 
 
+def _package_pathspecs(package_path: Path) -> list[Path]:
+    """Return the git pathspecs that cover *package_path*'s content.
+
+    A package directory may be a relative symlink into a ``_shared/`` source
+    library (see ``common.SHARED_SOURCE_DIRNAME``).  git scopes ``diff``,
+    ``log`` and ``status`` to the link *blob* in that case, so the lexical
+    link target is added as a second pathspec.  The target is computed with
+    ``os.readlink`` + ``normpath`` rather than ``Path.resolve()`` so the result
+    stays inside the worktree's own path namespace even when the checkout
+    itself sits under a symlink.
+    """
+    paths = [package_path]
+    if package_path.is_symlink():
+        target = os.path.normpath(package_path.parent / os.readlink(package_path))
+        paths.append(Path(target))
+    return paths
+
+
 def _has_non_obs_package_changes_since(short_sha: str, package_path: Path) -> bool:
     """Return True if the net file-tree diff between short_sha and HEAD contains
     any file outside the obs/ subdirectory of package_path.
@@ -63,10 +82,14 @@ def _has_non_obs_package_changes_since(short_sha: str, package_path: Path) -> bo
     from real packaging changes (rpm/, debian/, package.yaml, etc.) so that the
     branch decision can skip the obsinfo check only when it is safe to do so.
 
+    Symlinked package directories also cover their ``_shared/`` target (see
+    ``_package_pathspecs``).
+
     Returns True (treat as changed) if the SHA is unknown or git fails.
     """
+    paths = _package_pathspecs(package_path)
     result = subprocess.run(
-        ["git", "diff", "--name-only", f"{short_sha}..HEAD", "--", str(package_path)],
+        ["git", "diff", "--name-only", f"{short_sha}..HEAD", "--", *map(str, paths)],
         capture_output=True,
         text=True,
         cwd=_REPO_DIR,
@@ -78,12 +101,12 @@ def _has_non_obs_package_changes_since(short_sha: str, package_path: Path) -> bo
     # git diff --name-only outputs paths relative to the repo root with
     # forward slashes on all platforms.
     try:
-        obs_rel = str((package_path / "obs").relative_to(_REPO_DIR)) + "/"
+        obs_prefixes = [str((p / "obs").relative_to(_REPO_DIR)) + "/" for p in paths]
     except ValueError:
         return True
     for line in result.stdout.splitlines():
         path = line.strip()
-        if path and not path.startswith(obs_rel):
+        if path and not any(path.startswith(prefix) for prefix in obs_prefixes):
             return True
     return False
 
@@ -99,6 +122,9 @@ def _has_package_content_changes_since(short_sha: str, package_path: Path) -> bo
       appear here because the local templates still contain the raw ``${VAR}``
       tokens — those never change unless the template itself is edited.
 
+    Symlinked package directories also cover their ``_shared/`` target (see
+    ``_package_pathspecs``).
+
     Returns True (treat as changed) if the SHA is unknown or git fails.
     """
     result = subprocess.run(
@@ -108,7 +134,7 @@ def _has_package_content_changes_since(short_sha: str, package_path: Path) -> bo
             "--name-only",
             f"{short_sha}..HEAD",
             "--",
-            str(package_path),
+            *map(str, _package_pathspecs(package_path)),
         ],
         capture_output=True,
         text=True,
@@ -127,9 +153,17 @@ def _has_package_changes_since(short_sha: str, package_path: Path) -> bool:
 
     Returns True (treat as changed) if the SHA is unknown, git fails, or any
     commits are found. Returns False only when no commits touch the directory.
+    Symlinked package directories also cover their ``_shared/`` target (see
+    ``_package_pathspecs``).
     """
     result = subprocess.run(
-        ["git", "log", f"{short_sha}..HEAD", "--", str(package_path)],
+        [
+            "git",
+            "log",
+            f"{short_sha}..HEAD",
+            "--",
+            *map(str, _package_pathspecs(package_path)),
+        ],
         capture_output=True,
         text=True,
         cwd=_REPO_DIR,
@@ -148,12 +182,14 @@ def _is_path_dirty(*paths: Path) -> bool:
     package's content must route the decision to the authoritative content check.
 
     With no paths given it returns False; on git error it returns True
-    (safe default).
+    (safe default).  Symlinked package directories also cover their
+    ``_shared/`` target (see ``_package_pathspecs``).
     """
     if not paths:
         return False
+    specs = [str(p) for path in paths for p in _package_pathspecs(path)]
     result = subprocess.run(
-        ["git", "status", "--porcelain", "--", *(str(p) for p in paths)],
+        ["git", "status", "--porcelain", "--", *specs],
         capture_output=True,
         text=True,
         cwd=_REPO_DIR,
