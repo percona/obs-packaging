@@ -1,8 +1,10 @@
-title: Percona Common Custom Container Images for PostgreSQL
+title: Percona Custom Container Images for PostgreSQL — shared across versions
 description: |
   This project contains container images shared across the Percona Distribution for
   PostgreSQL major versions that ship the "extras" package set (currently 16-18), such as
-  the custom major-version upgrade image that bundles those extra extensions.
+  the custom major-version upgrade image that bundles those extra extensions. It is not tied
+  to a single staging/<V>, so its released counterpart is ppg:releases:extras:containers
+  rather than a per-version releases/<V>/extras subproject.
   We currently build these images based on UBI-9 only, matching the per-version
   extras/containers projects (there is no UBI-8 variant of the extras/custom images).
 
@@ -61,4 +63,4 @@ qa:
     DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
     SERVER_VERSION: "%!{PG_VERSION}"
     TESTING_BRANCH: ricardo-work
-    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/common/extras/containers/ubi9
+    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/extras/containers/ubi9

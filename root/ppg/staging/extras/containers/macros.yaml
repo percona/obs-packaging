@@ -1,0 +1,12 @@
+# Macros for the ppg:staging:extras:containers project (custom/extras-bundling images
+# shared across the PG major versions that ship the "extras" package set: 16-18, not tied
+# to a single staging/<V>). PG_MAJOR_VERSION is the upgrade *target* (the newest supported
+# version); older source versions are installed via a hardcoded shell loop in the
+# Dockerfile, expanded by percona-obs's {{FOR}} block templating (see
+# percona_obs/common.py expand_for_blocks). Bump PG_MAJOR_VERSION/PG_MINOR_VERSION and
+# extend that loop whenever a new PG major version becomes the target.
+# PPG_RELEASE is inherited from root/ppg/staging/macros.yaml; override it here only if
+# this project needs its own independent release counter.
+- PG_MAJOR_VERSION: 18
+- PG_MINOR_VERSION: 6
+- PG_VERSION: %!{PG_MAJOR_VERSION}.%!{PG_MINOR_VERSION}
