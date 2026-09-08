@@ -1,7 +1,9 @@
-title: Percona Common Container Images for PostgreSQL
+title: Percona Container Images for PostgreSQL — shared across versions
 description: |
   This project contains container images shared across all Percona Distribution for PostgreSQL
-  major versions (currently 14-18), such as the major-version upgrade image.
+  major versions (currently 14-18), such as the major-version upgrade image. It is not tied to
+  a single staging/<V>, so its released counterpart is ppg:releases:containers rather than a
+  per-version releases/<V> subproject.
   We currently build our images based on UBI-8 and UBI-9 base containers.
 
 repositories:
@@ -102,7 +104,7 @@ qa:
     DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
     SERVER_VERSION: "%!{PG_VERSION}"
     TESTING_BRANCH: ricardo-work
-    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/common/containers/ubi8
+    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/containers/ubi8
     WITH_POSTGIS:
       - true
       - false
@@ -114,7 +116,7 @@ qa:
     DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
     SERVER_VERSION: "%!{PG_VERSION}"
     TESTING_BRANCH: ricardo-work
-    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/common/containers/ubi9
+    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/containers/ubi9
     WITH_POSTGIS:
       - true
       - false
