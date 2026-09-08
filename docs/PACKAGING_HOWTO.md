@@ -531,6 +531,31 @@ version before assuming this.
 
 ---
 
+## Sharing One Package Source Across PG Majors
+
+If the packaging for a package is identical in every `staging/<V>/` except for the PG major
+(which enters only via `%!{PG_MAJOR_VERSION}`), keep a single copy:
+
+```sh
+git mv root/ppg/staging/18/<pkg> root/ppg/staging/_shared/<pkg>
+for v in 14 15 16 17 18; do
+  git rm -r -q root/ppg/staging/$v/<pkg> 2>/dev/null || true
+  ln -s ../_shared/<pkg> root/ppg/staging/$v/<pkg>
+  git add root/ppg/staging/$v/<pkg>
+done
+```
+
+Rules:
+
+- The symlink target must be relative (`../_shared/<pkg>`).
+- Every `%!{VAR}` the shared files use must be defined at or above each linking major
+  (`staging/macros.yaml` or every `staging/<V>/macros.yaml`).
+- `_shared/` itself is never synced; only the symlinks are, each rendered with its own
+  major's macros.
+- Do not use this for packages whose `_service` revision or packaging differs per major.
+
+---
+
 ## Quick Reference: File Checklist
 
 | File | Required | Notes |
