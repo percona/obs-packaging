@@ -1,27 +1,15 @@
 #!/usr/bin/make -f
 
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# Using pg_buildext
+include /usr/share/postgresql-common/pgxs_debian_control.mk
+
 export USE_PGXS=1
-PG_VERSION := 15
-PG_CONFIG := /usr/lib/postgresql/$(PG_VERSION)/bin/pg_config
 
 %:
 	dh $@
-
-override_dh_auto_build:
-	$(MAKE) USE_PGXS=1 PG_CONFIG=$(PG_CONFIG)
-
-override_dh_auto_test:
-	# nothing to do here
-
-override_dh_auto_install:
-	$(MAKE) install USE_PGXS=1 PG_CONFIG=$(PG_CONFIG) \
-		DESTDIR=$(CURDIR)/debian/percona-pg-stat-monitor$(PG_VERSION)
-
-override_dh_installdocs:
-	dh_installdocs --all README.*
-
-override_dh_auto_clean:
-	$(MAKE) clean PG_CONFIG=$(PG_CONFIG) || true
 
 override_dh_builddeb:
 	dh_builddeb -- -Zgzip
@@ -37,3 +25,22 @@ override_dh_builddeb:
 	  done; \
 	  sed -i 's/\(-dbgsym_[^ ]*\)\.ddeb/\1.deb/g' debian/files; \
 	fi
+
+override_dh_auto_build:
+	+pg_buildext clean . build-%v
+	# Sources on git main live under src/; pg_buildext's out-of-tree build
+	# does not create output subdirectories, so -o src/*.o fails without this.
+	mkdir -p build-%!{PG_MAJOR_VERSION}/src
+	+pg_buildext build . build-%v
+
+override_dh_auto_test:
+	# nothing to do here
+
+override_dh_auto_install:
+	+pg_buildext install . build-%v percona-pg-stat-monitor%!{PG_MAJOR_VERSION}
+
+override_dh_installdocs:
+	dh_installdocs --all README.*
+
+override_dh_auto_clean:
+	rm -rf results/* regression.*

@@ -3,10 +3,11 @@ Section: database
 Priority: optional
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
- debhelper (>= 10),
- percona-postgresql-server-dev-all (>= 153~)
-Standards-Version: 3.9.8
-Homepage: https://github.com/percona/pg_stat_monitor
+ mawk,
+ debhelper (>= 9),
+ libkrb5-dev,
+ libssl-dev,
+ postgresql-server-dev-all (>= 153~) | percona-postgresql-server-dev-all (>= 153~),
 
 Package: percona-pg-stat-monitor%!{PG_MAJOR_VERSION}
 Architecture: any
