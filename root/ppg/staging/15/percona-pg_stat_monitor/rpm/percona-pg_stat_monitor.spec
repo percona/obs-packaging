@@ -1,10 +1,10 @@
-%global sname          percona-pg_stat_monitor
-%define pgmajorversion %!{PG_MAJOR_VERSION}
+%global sname percona-pg_stat_monitor
+%global pgmajorversion %!{PG_MAJOR_VERSION}
 
-%if 0%{?rhel} && 0%{?rhel} <= 9
+%if 0%{?rhel} >= 8 && 0%{?rhel} <= 9
 %global gts_version 14
 %endif
-%global pginstdir      /usr/pgsql-%{pgmajorversion}
+%global pginstdir /usr/pgsql-%{pgmajorversion}
 
 Summary:        Statistics collector for PostgreSQL
 Name:           %{sname}%{pgmajorversion}
@@ -13,21 +13,26 @@ Release:        1%{?dist}
 License:        PostgreSQL
 Source0:        %{sname}-%{version}.tar.gz
 URL:            https://github.com/percona/pg_stat_monitor
+Epoch:          1
+Packager:       Percona Development Team <https://jira.percona.com>
+Vendor:         Percona, Inc
+
 BuildRequires:  percona-postgresql%{pgmajorversion}-devel
 BuildRequires:  clang llvm
 %if 0%{?gts_version}
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
 %endif
+
+BuildRequires:  krb5-devel
+BuildRequires:  openssl-devel
+
 Requires:       percona-postgresql%{pgmajorversion}
 Provides:       percona-pg-stat-monitor%{pgmajorversion}
 Conflicts:      percona-pg-stat-monitor%{pgmajorversion}
 Obsoletes:      percona-pg-stat-monitor%{pgmajorversion}
-Epoch:          1
-Packager:       Percona Development Team <https://jira.percona.com>
-Vendor:         Percona, Inc
 
 %description
-The pg_stat_monitor is statistics collector tool
+The pg_stat_monitor is a statistics collector tool
 based on PostgreSQL's contrib module "pg_stat_statements".
 .
 pg_stat_monitor is developed on the basis of pg_stat_statments
@@ -43,7 +48,6 @@ It provides all the features of pg_stat_statment plus its own feature set.
 %if 0%{?gts_version}
 source /opt/rh/gcc-toolset-%{gts_version}/enable
 %endif
-
 USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags}
 
 
@@ -65,19 +69,20 @@ USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags} install DESTDIR
 
 
 %files
-%defattr(-,root,root,-)
+%defattr(755,root,root,755)
 %doc %{pginstdir}/share/extension/README-pg_stat_monitor
 %dir %{pginstdir}
 %dir %{pginstdir}/lib
 %dir %{pginstdir}/lib/bitcode
 %dir %{pginstdir}/lib/bitcode/pg_stat_monitor
+%dir %{pginstdir}/lib/bitcode/pg_stat_monitor/src
 %dir %{pginstdir}/share
 %dir %{pginstdir}/share/extension
 %{pginstdir}/lib/pg_stat_monitor.so
 %{pginstdir}/share/extension/pg_stat_monitor--*.sql
 %{pginstdir}/share/extension/pg_stat_monitor.control
 %{pginstdir}/lib/bitcode/pg_stat_monitor*.bc
-%{pginstdir}/lib/bitcode/pg_stat_monitor/*.bc
+%{pginstdir}/lib/bitcode/pg_stat_monitor/src/*.bc
 
 
 %changelog
