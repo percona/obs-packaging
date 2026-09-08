@@ -1,7 +1,7 @@
 description: |
   GDAL/PROJ name-compatibility shim for the binary tarball build chroots.
-  Provides the distro package names percona-postgis35_%!{PG_MAJOR_VERSION}
-  requires by name (gdal-libs/proj on EL8, gdal3.4-libs/proj on EL9) so the
+  Provides the distro package names the percona-postgis35_NN packages
+  require by name (gdal-libs/proj on EL8, gdal3.4-libs/proj on EL9) so the
   OBS expander has a choice that `Prefer: percona-gis-compat` can resolve
   towards the lean /opt-prefixed percona-gdal/percona-proj runtimes. Payload
   free; never published outside this project.
