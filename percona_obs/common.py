@@ -110,6 +110,19 @@ def resolve_project_path(project: str) -> Path:
     return REPO_ROOT.joinpath(*project.split(":"))
 
 
+# Directory name (per tier, e.g. root/ppg/staging/_shared/) holding complete
+# package directories that per-major subprojects reference via relative git
+# symlinks.  It is neither a project nor a package: discovery skips it, and
+# each symlink is discovered under its own subproject so %!{VAR} macros render
+# from that subproject's macros.yaml chain.
+SHARED_SOURCE_DIRNAME = "_shared"
+
+
+def is_shared_source_dir(path: Path) -> bool:
+    """Return True if *path* is a ``_shared/`` source library directory."""
+    return path.name == SHARED_SOURCE_DIRNAME
+
+
 def _is_release_dir(path: Path) -> bool:
     """Return True if *path* is a release directory (contains release.yaml)."""
     return (path / "release.yaml").is_file()
@@ -132,12 +145,14 @@ def find_packages(project_path: Path, obs_project: str, recursive: bool = True):
     Subdirectories that are themselves projects (no obs/) are treated as
     subprojects and descended into, extending obs_project with the child name.
     When recursive=False, only direct-child packages are yielded; subproject
-    directories are not descended into.
+    directories are not descended into.  ``_shared/`` source-library
+    directories are skipped; symlinked package directories are yielded under
+    the subproject that holds the link.
     """
     for child in sorted(project_path.iterdir()):
         if not child.is_dir():
             continue
-        if _is_release_dir(child):
+        if _is_release_dir(child) or is_shared_source_dir(child):
             continue
         if is_package(child):
             yield obs_project, child
@@ -598,7 +613,12 @@ def find_projects(path: Path, obs_project: str):
     obs_project_name = config.get("name") or obs_project
     yield obs_project_name, path
     for child in sorted(path.iterdir()):
-        if child.is_dir() and not _is_release_dir(child) and is_project(child):
+        if (
+            child.is_dir()
+            and not _is_release_dir(child)
+            and not is_shared_source_dir(child)
+            and is_project(child)
+        ):
             yield from find_projects(child, f"{obs_project}:{child.name}")
 
 
