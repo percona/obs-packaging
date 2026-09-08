@@ -3,3 +3,4 @@ build:
   # RockyLinux_* repos exist solely for the tarball helper RPMs.
   RockyLinux_8: false
   RockyLinux_9.6: false
+  RockyLinux_9: false

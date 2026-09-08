@@ -3,3 +3,4 @@ build:
   # must not build on the ssl* (Type: simpleimage) repositories.
   ssl1.1: false
   ssl3: false
+  ssl3.5: false

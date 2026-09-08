@@ -937,9 +937,10 @@ PYEOF
 # vacuously — the exact failure mode this gate exists to prevent.
 command -v readelf >/dev/null || { echo "FATAL: readelf missing — SSL-ABI audit impossible" >&2; exit 1; }
 
-# The SSL variant labels follow the official tarball naming and map 1:1 to
-# the EL base of each repository: EL8=ssl1.1, EL9=ssl3. Fail loudly on
-# anything unmapped, e.g. a future EL10/EL11.
+# The SSL variant labels follow the official tarball naming: EL8=ssl1.1,
+# and EL9 splits by buildroot OpenSSL — the 9.6 EUS vault (OpenSSL 3.2)
+# builds ssl3, the rolling 9.8+ base (OpenSSL 3.5) builds ssl3.5. Fail
+# loudly on anything unmapped, e.g. a future EL10/EL11.
 # The variant is derived here, before the gate, because the OpenSSL
 # host-ABI audit below picks its allowed-symbol policy from it; section 16
 # reuses it for the artifact name.
@@ -951,7 +952,15 @@ if [ -z "$EL_MAJOR" ]; then
 fi
 case "$EL_MAJOR" in
     8)  SSL_VARIANT=ssl1.1 ;;
-    9)  SSL_VARIANT=ssl3 ;;
+    9)
+        # Two EL9 bases exist; the chroot's openssl-libs IS the variant
+        # promise, so derive the label from it rather than the EL major.
+        OPENSSL_BUILDROOT=$(rpm -q --qf '%{version}' openssl-libs)
+        case "$OPENSSL_BUILDROOT" in
+            3.[0-2].*) SSL_VARIANT=ssl3 ;;
+            3.5.*)     SSL_VARIANT=ssl3.5 ;;
+            *)  echo "FATAL: unmapped EL9 buildroot openssl-libs '$OPENSSL_BUILDROOT'" >&2; exit 1 ;;
+        esac ;;
     *)  echo "FATAL: unmapped EL major version '$EL_MAJOR'" >&2; exit 1 ;;
 esac
 
@@ -1128,6 +1137,9 @@ case "$SSL_VARIANT" in
     # have dropped), and nothing in the stack uses 3.1/3.2-only symbols —
     # which is exactly what this gate keeps proving on every build.
     ssl3)   OPENSSL_ALLOWED='OPENSSL_3\.0\.[0-9]*' ;;
+    # Must run on any OpenSSL 3.5 host: every 3.0-3.5 version node exists
+    # there, so all of them are acceptable (e.g. pgcrypto's OPENSSL_3.4.0).
+    ssl3.5) OPENSSL_ALLOWED='OPENSSL_3\.[0-5]\.[0-9]*' ;;
     *)      echo "FATAL: no SSL-ABI policy for $SSL_VARIANT" >&2; exit 1 ;;
 esac
 # Scan every ELF under /opt EXCEPT the percona-python3 tree: the python

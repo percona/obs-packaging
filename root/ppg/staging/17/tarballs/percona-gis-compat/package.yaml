@@ -13,3 +13,4 @@ build:
   # its fake Provides: invisible to every other project.
   ssl1.1: false
   ssl3: false
+  ssl3.5: false
