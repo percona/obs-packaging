@@ -13,16 +13,7 @@ description: |
   distro libssh.
 
 build:
+  # EL8-only rebuild for the ssl1.1 tarball: EL9 variants (ssl3/ssl3.5)
+  # bundle the distro package.
   RockyLinux_9: false
   RockyLinux_9.6: false
-  RockyLinux_10: false
-  UBI_8: false
-  UBI_9: false
-  Debian_11: false
-  Debian_12: false
-  Debian_13: false
-  Ubuntu_22.04: false
-  Ubuntu_24.04: false
-  Ubuntu_26.04: false
-  openSUSE_Leap_16: false
-  openSUSE_Tumbleweed: false

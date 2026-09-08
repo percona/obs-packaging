@@ -11,15 +11,5 @@ description: |
   RockyLinux_9.6 only — the tarball build bases (ssl1.1 on EL8, ssl3 on
   the 9.6 vault).
 
-build:
-  RockyLinux_10: false
-  UBI_8: false
-  UBI_9: false
-  Debian_11: false
-  Debian_12: false
-  Debian_13: false
-  Ubuntu_22.04: false
-  Ubuntu_24.04: false
-  Ubuntu_26.04: false
-  openSUSE_Leap_16: false
-  openSUSE_Tumbleweed: false
+# Builds on every repo of ppg:common:deps:tarballs (one per tarball EL
+# base: RockyLinux_8=ssl1.1, RockyLinux_9.6=ssl3, RockyLinux_9=ssl3.5).

@@ -76,7 +76,7 @@ done
 ###############################################################
 # 0a. GDAL/PROJ runtimes + psql client from the helper RPMs
 ###############################################################
-# percona-gdal/percona-proj (ppg:common:deps) replace EPEL's gdal-libs/proj
+# percona-gdal/percona-proj (ppg:common:deps:tarballs) replace EPEL's gdal-libs/proj
 # for the PostGIS libraries the tarball bundles. EPEL's cost us ~70 surplus
 # shared objects (armadillo/BLAS -> a FlexiBLAS ELF constructor that
 # abort()s on Rocky hosts, hdf/netcdf/OPeNDAP/poppler/xerces/ODBC/mariadb,
@@ -103,7 +103,7 @@ done
 #     tarballs/project.yaml, both ssl blocks) win the "have choice" for
 #     PostGIS's automatic libgdal.so.NN()(64bit)/libproj.so.NN()(64bit)
 #     soname Requires;
-#   * percona-gis-compat (this project, RockyLinux_8/RockyLinux_9.6 repos; a
+#   * percona-gis-compat (ppg:common:deps:tarballs; a
 #     BuildRequires of the simpleimage recipe) is a payload-free shim that
 #     Provides the distro NAMES PostGIS requires by name — gdal-libs/proj on
 #     EL8, gdal3.4-libs/proj on EL9 — turning each single-provider by-name

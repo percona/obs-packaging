@@ -8,17 +8,21 @@ description: |
   OpenSSL 3.5).
 
   The RockyLinux_8/RockyLinux_9.6/RockyLinux_9 repositories are plain RPM
-  build repos (not
-  simpleimage): they build the tarball-only helper packages that must be
-  compiled against the very same EL base as the tarball that bundles them
-  (percona-psql — psql linked against BSD libedit instead of the host's
-  libreadline). They are unpublished; the ssl variants consume them through
-  the same-project sibling path below.
+  build repos (not simpleimage): they build percona-psql — psql linked
+  against BSD libedit instead of the host's libreadline — which is built
+  from each PG major's own source and therefore cannot live in the
+  PG-version-agnostic ppg:common:deps:tarballs subproject where every
+  other tarball-only dependency (percona-perl/tcl/python3, percona-gdal/
+  proj, the EL8 krb5/libssh rebuilds, percona-gis-compat) now does. They
+  are unpublished; the ssl variants consume them through the same-project
+  sibling path below, and the shared deps through ppg:common:deps:tarballs.
 
 repositories:
   - name: RockyLinux_8
     paths:
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
+        repository: RockyLinux_8
+      - subproject: ppg:common:deps:tarballs
         repository: RockyLinux_8
       - subproject: ppg:common:deps
         repository: RockyLinux_8
@@ -36,6 +40,8 @@ repositories:
     paths:
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
         repository: RockyLinux_9.6
+      - subproject: ppg:common:deps:tarballs
+        repository: RockyLinux_9.6
       - subproject: ppg:common:deps
         repository: RockyLinux_9.6
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
@@ -52,6 +58,8 @@ repositories:
     paths:
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
         repository: RockyLinux_9
+      - subproject: ppg:common:deps:tarballs
+        repository: RockyLinux_9
       - subproject: ppg:common:deps
         repository: RockyLinux_9
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
@@ -67,6 +75,8 @@ repositories:
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}:tarballs
         repository: RockyLinux_8
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
+        repository: RockyLinux_8
+      - subproject: ppg:common:deps:tarballs
         repository: RockyLinux_8
       - subproject: ppg:common:deps
         repository: RockyLinux_8
@@ -98,6 +108,8 @@ repositories:
         repository: RockyLinux_9.6
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
         repository: RockyLinux_9.6
+      - subproject: ppg:common:deps:tarballs
+        repository: RockyLinux_9.6
       - subproject: ppg:common:deps
         repository: RockyLinux_9.6
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
@@ -117,6 +129,8 @@ repositories:
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}:tarballs
         repository: RockyLinux_9
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
+        repository: RockyLinux_9
+      - subproject: ppg:common:deps:tarballs
         repository: RockyLinux_9
       - subproject: ppg:common:deps
         repository: RockyLinux_9
@@ -158,7 +172,7 @@ project-config: |
   Prefer: selinux-policy-targeted
   # PostGIS's libgdal.so.NN()(64bit)/libproj.so.NN()(64bit) Requires are a
   # "have choice" between EPEL's gdal-libs/proj and our /opt-prefixed
-  # percona-gdal/percona-proj (ppg:common:deps deliberately keeps those
+  # percona-gdal/percona-proj (ppg:common:deps:tarballs deliberately keeps those
   # auto-Provides). Ours must win: EPEL's fully-optioned libgdal drags ~70
   # surplus shared objects into the tarball — including the armadillo/BLAS
   # chain whose FlexiBLAS ELF constructor abort()s on Rocky hosts — and has
@@ -184,8 +198,8 @@ project-config: |
   # hdf-libs`, and percona-gdal/percona-proj/percona-psql all landing in the
   # chroot). Those inert Ignore: lines are therefore gone.
   #
-  # Instead, the payload-free percona-gis-compat shim (this project's
-  # unpublished helper repos only) Provides those distro NAMES
+  # Instead, the payload-free percona-gis-compat shim (from the unpublished
+  # ppg:common:deps:tarballs subproject) Provides those distro NAMES
   # itself, which turns each by-name Requires into a real have-choice that
   # the Prefer: below resolves; the shim Requires percona-gdal/percona-proj
   # so the runtimes PostGIS needs still come in. The simpleimage recipe also
@@ -251,8 +265,8 @@ project-config: |
   # hdf-libs`, and percona-gdal/percona-proj/percona-psql all landing in the
   # chroot). Those inert Ignore: lines are therefore gone.
   #
-  # Instead, the payload-free percona-gis-compat shim (this project's
-  # unpublished helper repos only) Provides those distro NAMES
+  # Instead, the payload-free percona-gis-compat shim (from the unpublished
+  # ppg:common:deps:tarballs subproject) Provides those distro NAMES
   # itself, which turns each by-name Requires into a real have-choice that
   # the Prefer: below resolves; the shim Requires percona-gdal/percona-proj
   # so the runtimes PostGIS needs still come in. The simpleimage recipe also
