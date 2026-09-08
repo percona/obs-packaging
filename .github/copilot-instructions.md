@@ -308,7 +308,7 @@ The corresponding branch OBS project is derived by substituting the current `roo
 3. If the message matches and the detail does **not** start with `"local changes on"` (i.e. was synced from a pushed branch):
    - Call `git log` to check whether any commits touching `<package_path>` exist since `<sha>`.
    - Check for uncommitted edits inside `<package_path>`.
-   - Check whether any macro the package references (`%!{NAME}` tokens in its obs/, debian/, rpm/ files) renders to a different value now than at `<sha>` (`_macros_changed_since`). The comparison is by rendered value, not by which `macros.yaml` files were touched: moving a macro between ancestor files with the same value, or bumping a macro this package never uses, is not a change.
+   - Check whether any macro the package references (`%!{NAME}` tokens in its obs/, debian/, rpm/ files) renders to a different value now than at `<sha>` (`_macros_changed_since`). The comparison is by rendered value, not by which `macros.yaml` files were touched: moving a macro between ancestor files with the same value, or bumping a macro this package never uses, is not a change. For symlinked package directories (`_shared/` sources, see `root/README.md`) the git checks cover both the link and its target.
    - **Nothing changed** → aggregate (package unchanged). **Otherwise** → fall back to the content check.
 
 #### Fallback — content check

@@ -263,6 +263,10 @@ packages have no direct source file changes.
    what OBS holds, and also verifies that the upstream source commit hash in the `.obsinfo`
    file matches the current remote HEAD via `git ls-remote`. Both must match → aggregate.
 
+Packages stored under a tier's `_shared/` directory and referenced by symlink (see
+`root/README.md`) are checked against both the symlink and its target path, so an edit
+to the shared copy invalidates every linking package's fast path.
+
 ---
 
 ## Reducing OBS API traffic

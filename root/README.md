@@ -136,6 +136,7 @@ Inside a staging major-version directory:
 | `<package>/` | Source packages for this version (one subdirectory per package) |
 | `containers/` | Container image definitions for this version |
 | `tarballs/` | Tarball artifact definitions for this version |
+| `../_shared/<package>/` | Packaging shared by several majors; per-major entries are relative symlinks into it (see below) |
 
 Each package directory contains the packaging sources split by format:
 
@@ -145,6 +146,26 @@ Each package directory contains the packaging sources split by format:
 ├── rpm/        # RPM spec and supporting files
 └── debian/     # Debian packaging files
 ```
+
+A package whose packaging is byte-identical across majors (only `%!{PG_MAJOR_VERSION}` differs) is
+stored once in `staging/_shared/<package>/` and referenced from each major by a relative git symlink:
+
+```
+staging/
+├── _shared/
+│   └── percona-pg_stat_monitor/      # the only copy: obs/, debian/, rpm/
+├── 17/
+│   └── percona-pg_stat_monitor -> ../_shared/percona-pg_stat_monitor
+└── 18/
+    └── percona-pg_stat_monitor -> ../_shared/percona-pg_stat_monitor
+```
+
+`_shared/` is never an OBS project or package: `percona-obs` skips it during discovery. Each symlink is
+synced as a normal package of the subproject that holds it, and `%!{VAR}` macros are resolved from the
+symlink's own directory chain (`staging/17/macros.yaml` for the `17/` entry), so every major still gets
+a fully rendered, independent package in OBS. Any macro the shared files reference must therefore be
+defined at or above every linking major. Edits under `_shared/` count as changes for every linking
+package (change detection follows the link target).
 
 ### `devel/<major-version>/`
 
