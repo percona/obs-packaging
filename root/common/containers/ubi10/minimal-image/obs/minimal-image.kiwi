@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- OBS-AddTag: percona-ubi-minimal:10-%RELEASE% percona-ubi-minimal:10 -->
+<!-- OBS-Imagerepo: obsrepositories:/ -->
+<image schemaversion="7.4" name="percona-ubi-minimal-image">
+  <description type="system">
+    <author>Percona</author>
+    <contact>info@percona.com</contact>
+    <specification>Percona UBI 10 Minimal Container Image</specification>
+  </description>
+  <preferences>
+    <type image="docker">
+      <containerconfig name="percona-ubi-minimal" tag="latest"/>
+    </type>
+    <version>10.0.0</version>
+    <packagemanager>dnf</packagemanager>
+  </preferences>
+  <repository type="rpm-md">
+    <source path="obsrepositories:/"/>
+  </repository>
+  <packages type="bootstrap">
+    <package name="alternatives"/>
+    <package name="bash"/>
+    <package name="coreutils-single"/>
+    <package name="microdnf"/>
+    <package name="filesystem"/>
+    <package name="glibc-minimal-langpack"/>
+    <package name="redhat-release"/>
+    <package name="rpm"/>
+    <package name="sed"/>
+    <package name="setup"/>
+    <package name="shadow-utils"/>
+    <package name="systemd-libs"/>
+    <package name="rootfiles"/>
+    <package name="libusbx"/>
+    <package name="dejavu-sans-fonts"/>
+    <package name="fonts-filesystem"/>
+    <package name="langpacks-en"/>
+    <package name="langpacks-core-en"/>
+    <package name="langpacks-core-font-en"/>
+  </packages>
+</image>

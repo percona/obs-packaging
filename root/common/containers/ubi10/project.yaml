@@ -1,0 +1,43 @@
+title: Percona UBI-10 Base Container Images
+description: |
+  This project contains UBI-10 base container images used by the several Percona distributions.
+publish: false
+repositories:
+  - name: UBI_10
+    paths:
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:10
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-10
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
+        repository: devel
+    archs: [x86_64, aarch64]
+  - name: images
+    paths:
+      - subproject: common:containers:ubi10
+        repository: UBI_10
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-10
+        repository: standard
+    archs: [x86_64, aarch64]
+
+project-config: |
+  %if "%_repository" == "UBI_10"
+  Type: spec
+  Ignore: kbd-legacy < 2.4.0-11
+  %endif
+
+  %if "%_repository" == "images"
+  Type: kiwi
+  Repotype: none
+  Patterntype: none
+
+  ExpandFlags: kiwi-nobasepackages
+  Preinstall: filesystem glibc libgcc audit-libs bzip2-libs libacl libattr libarchive libcap libcap-ng lz4-libs libxml2 libzstd lua-libs openssl-libs popt sqlite-libs xz-libs zlib rpm-libs rpm util-linux-user umoci xz
+  Ignore: obs-service-kiwi_label_helper:libxslt-tools
+  Ignore: python3-kiwi:screen
+  Ignore: kiwi-systemdeps-core:mtools
+
+  Prefer: openssl-fips-provider
+  Prefer: glibc-minimal-langpack
+
+  %endif
