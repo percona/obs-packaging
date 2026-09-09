@@ -184,7 +184,10 @@ Each package in `devel/<V>/` is one of two classes:
   retargeted from a release tag to a development branch. The packaging is deliberately duplicated
   so it can be edited independently of the staging copy while the dev branch is being worked on.
   `devel/<V>/macros.yaml` is likewise a copy of staging's `macros.yaml`, so `%!{VAR}` macros in the
-  copied packaging files resolve identically in both tiers.
+  copied packaging files resolve identically in both tiers. A Class A package whose devel packaging
+  is identical across devel majors can live once in `devel/_shared/<package>/` with per-major
+  symlinks, following the same convention as `staging/_shared/` described above (its `_service`
+  keeps the devel-tier branch revision and `versionformat`).
 - **Class B (link only)** — the package directory contains only an `obs/_link` file pointing at the
   staging package, e.g.:
 
