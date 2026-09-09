@@ -1,0 +1,1 @@
+<link project="${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Factory" package="memory-constraints" />

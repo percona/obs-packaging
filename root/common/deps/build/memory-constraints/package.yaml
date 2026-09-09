@@ -1,0 +1,19 @@
+title: RPM macros to limit build parallelism by available memory
+description: |
+  Source link to openSUSE:Factory/memory-constraints. Installs the
+  %limit_build macro, which clamps %_smp_mflags / %_smp_build_ncpus to
+  (MemTotal + SwapTotal) / <MB per job> inside the build VM so that
+  memory-hungry C++ builds (e.g. sfcgal/CGAL) pick a -j that fits the
+  worker instead of OOM-ing on hosts with little RAM per core.
+  Noarch, RPM-only; consumers add "BuildRequires: memory-constraints".
+
+build:
+  Debian_11: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  # openSUSE already ships memory-constraints in the base distro.
+  openSUSE_Leap_16: false
+  openSUSE_Tumbleweed: false
