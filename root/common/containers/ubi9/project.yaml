@@ -40,4 +40,7 @@ project-config: |
   Prefer: openssl-fips-provider
   Prefer: glibc-minimal-langpack
 
+  BuildFlags: container-compression-format:zstd
+  BuildFlags: container-build-format:oci
+
   %endif
