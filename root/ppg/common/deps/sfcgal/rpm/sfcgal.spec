@@ -63,10 +63,10 @@ BuildRequires:  pkgconfig(nlohmann_json)
 BuildRequires:  nlohmann-json-devel
 %endif
 
-# openSUSE memory constraints
-%if 0%{?suse_version}
+# %%limit_build: clamp -j to the memory available in the build VM.
+# openSUSE ships this in the distro; for RHEL-family repos it comes from
+# common:deps:build (a _link to openSUSE:Factory/memory-constraints).
 BuildRequires:  memory-constraints
-%endif
 
 %description
 SFCGAL is a C++ wrapper library around CGAL with the aim of supporting
@@ -101,8 +101,11 @@ find . -name 'Exception.h' -exec perl -i -0777 \
 %endif
 
 %build
-%if 0%{?suse_version}
+# CGAL template instantiation needs several GB per compile job; aarch64
+# workers with little RAM per core OOM at -j$(nproc). Let %%limit_build pick
+# a -j that fits (MemTotal+SwapTotal)/6400MB. No-op on well-provisioned hosts.
 %limit_build -m 6400
+%if 0%{?suse_version}
 %define _lto_cflags %{nil}
 %endif
 
