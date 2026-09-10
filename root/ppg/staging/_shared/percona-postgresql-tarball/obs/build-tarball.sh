@@ -967,13 +967,24 @@ esac
 echo "=== Verification: NEEDED-soname audit ==="
 # ldd would resolve against the fully-populated buildroot (ld.so.cache), hiding
 # libraries we failed to bundle. Instead audit DT_NEEDED sonames directly: each
-# must either be host-provided by design (is_system_lib) or bundled under /opt.
-# Precompute the bundled-soname list once; a per-soname 'find /opt' rescan
-# is O(tree size) for every NEEDED entry. -xtype f = regular files plus
+# must either be host-provided by design (is_system_lib) or bundled in the
+# artifact.
+#
+# ARTIFACT SCOPE: the artifact is exactly the /opt/percona-* trees, and every
+# audit below (and the section-16 tar) walks /opt/percona-* — never all of
+# /opt. The chroot may install OTHER /opt content the tarball must not see:
+# on PG >= 18 the -devel chain Requires the EL gcc-toolset, which lands under
+# /opt/rh/ and would both poison the bundled-soname list (masking genuinely
+# missing bundles) and fail the audits with toolset-only NEEDs (libmpc,
+# libdebuginfod, ...). prjconf Ignore: rules are not applied to image-type
+# expansion, so the chroot content cannot be trimmed — the scope must.
+#
+# Precompute the bundled-soname list once; a per-soname rescan is
+# O(tree size) for every NEEDED entry. -xtype f = regular files plus
 # symlinks that resolve to one, so dangling symlinks never count as bundled.
-find /opt -name '*.so*' -xtype f -printf '%f\n' | sort -u \
+find /opt/percona-* -name '*.so*' -xtype f -printf '%f\n' | sort -u \
     > /tmp/bundled-sonames.txt
-find /opt -type f \( -perm -u+x -o -name '*.so*' \) | while read -r f; do
+find /opt/percona-* -type f \( -perm -u+x -o -name '*.so*' \) | while read -r f; do
     file "$f" 2>/dev/null | grep -q ELF || continue
     patchelf --print-needed "$f" 2>/dev/null | while read -r soname; do
         if is_system_lib "$soname"; then
@@ -1008,9 +1019,9 @@ SURPLUS_LIBS="libflexiblas libarmadillo libhdf libdf libmfhdf libnetcdf libdap
 libpoppler libmariadb libodbc libkml libxerces libarpack libsuperlu"
 : > /tmp/surplus-audit.txt
 for bad in $SURPLUS_LIBS; do
-    find /opt -name "${bad}*" -printf 'SURPLUS-FILE: %p\n' >> /tmp/surplus-audit.txt
+    find /opt/percona-* -name "${bad}*" -printf 'SURPLUS-FILE: %p\n' >> /tmp/surplus-audit.txt
 done
-find /opt -type f \( -perm -u+x -o -name '*.so*' \) | while read -r f; do
+find /opt/percona-* -type f \( -perm -u+x -o -name '*.so*' \) | while read -r f; do
     file "$f" 2>/dev/null | grep -q ELF || continue
     patchelf --print-needed "$f" 2>/dev/null | while read -r soname; do
         for bad in $SURPLUS_LIBS; do
@@ -1050,7 +1061,7 @@ for tok in $FORMERLY_EXCLUDED_LIBS; do
         echo "BASELINE: $tok is back on the host baseline — it is NOT present on every minimal host" >> /tmp/baseline-audit.txt
     fi
 done
-find /opt -type f \( -perm -u+x -o -name '*.so*' \) | while read -r f; do
+find /opt/percona-* -type f \( -perm -u+x -o -name '*.so*' \) | while read -r f; do
     file "$f" 2>/dev/null | grep -q ELF || continue
     # /opt/<component>/... -> the two directories the loader can reach
     # through the RUNPATHs this script sets.
@@ -1149,7 +1160,7 @@ esac
 # bundled copy), and its loaders are pointed at those bundled libs via
 # RPATH/LD_LIBRARY_PATH — so the python tree's OpenSSL symbol needs are
 # satisfied internally and are NOT part of the host promise.
-find /opt -path /opt/percona-python3 -prune -o \
+find /opt/percona-* -path /opt/percona-python3 -prune -o \
         -type f \( -perm -u+x -o -name '*.so*' \) -print | while read -r f; do
     file "$f" 2>/dev/null | grep -q ELF || continue
     # Parse the version NEEDS only — never version definitions. readelf -V
@@ -1410,11 +1421,11 @@ done
 
 echo "=== Verification: python bytecode audit ==="
 # Section 12a stripped all bytecode; the official tarball ships none
-# (QA item 6). Sweep ALL of /opt so a future component cannot sneak any
-# in. Deliberately the LAST gate before the artifact is created: anything
-# that imports python modules during the build (e.g. the smoke probes
-# above, when run without -B) regenerates __pycache__ as root.
-find /opt \( -name '*.pyc' -o -name '*.pyo' -o \( -type d -name '__pycache__' \) \) > /tmp/pyc-audit.txt
+# (QA item 6). Sweep every shipped tree so a future component cannot sneak
+# any in. Deliberately the LAST gate before the artifact is created:
+# anything that imports python modules during the build (e.g. the smoke
+# probes above, when run without -B) regenerates __pycache__ as root.
+find /opt/percona-* \( -name '*.pyc' -o -name '*.pyo' -o \( -type d -name '__pycache__' \) \) > /tmp/pyc-audit.txt
 if [ -s /tmp/pyc-audit.txt ]; then
     cat /tmp/pyc-audit.txt
     echo "FATAL: python bytecode found in the artifact (section 12a strip incomplete)" >&2
@@ -1434,5 +1445,8 @@ PG_FULL_VERSION=$(rpm -q --qf '%{version}' "percona-postgresql${PG_MAJOR}-server
 TARBALL="percona-postgresql-${PG_FULL_VERSION}-${SSL_VARIANT}-linux-$(uname -m).tar.gz"
 mkdir -p /usr/src/packages/OTHER
 cd /opt
-tar -czf "/usr/src/packages/OTHER/${TARBALL}" -- *
+# percona-* ONLY — see the artifact-scope note in section 15: the chroot may
+# hold other /opt trees (EL gcc-toolset under /opt/rh on PG >= 18) that must
+# never ship.
+tar -czf "/usr/src/packages/OTHER/${TARBALL}" -- percona-*
 echo "Created ${TARBALL}"
