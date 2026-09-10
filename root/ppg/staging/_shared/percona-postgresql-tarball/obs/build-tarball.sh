@@ -1230,7 +1230,10 @@ echo "=== Verification: component inventory ==="
 # and percona-proj, whose resource paths are compiled as
 # /opt/percona-{gdal,proj}/share/... and therefore have to be components of
 # their own). A missing dir means a staging section silently did nothing; an
-# extra dir means something leaked into /opt.
+# extra percona-* dir means something leaked into the artifact scope. (Other
+# /opt trees — the EL gcc-toolset under /opt/rh on PG >= 18 — are outside
+# the artifact scope and never ship, so they are not inventoried; see the
+# section-15 artifact-scope note.)
 cat > /tmp/expected-components.txt << EOF
 percona-etcd
 percona-gdal
@@ -1246,7 +1249,7 @@ percona-proj
 percona-python3
 percona-tcl
 EOF
-ls /opt | LC_ALL=C sort > /tmp/actual-components.txt
+(cd /opt && ls -d percona-*) | LC_ALL=C sort > /tmp/actual-components.txt
 if ! diff -u /tmp/expected-components.txt /tmp/actual-components.txt; then
     echo "FATAL: /opt component set does not match the expected 13 components" >&2
     exit 1
