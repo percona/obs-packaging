@@ -61,6 +61,7 @@ schedule PostgreSQL commands directly from the database.
 Summary:	Just-in-time compilation support for pg_cron
 Requires:	%{name}%{?_isa} = %{version}-%{release}
 
+<<<<<<< HEAD
 %if 0%{?suse_version} == 1500
 BuildRequires:	llvm17-devel clang17-devel
 Requires:	llvm17
@@ -80,6 +81,9 @@ Requires:	llvm >= 15.0
 BuildRequires:	llvm-devel >= 19.0 clang-devel >= 19.0
 Requires:	llvm >= 19.0
 %endif
+=======
+BuildRequires:	llvm-devel clang-devel clang llvm
+>>>>>>> b39895bd (PG-2752 Add PPG19 in staging project)
 
 %description llvmjit
 This packages provides JIT support for pg_cron

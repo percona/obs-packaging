@@ -1,0 +1,6 @@
+percona-postgresql-%!{PG_MAJOR_VERSION} (%!{PG_VERSION}-1) unstable; urgency=low
+
+  * Percona PostgreSQL based on upstream version %!{PG_VERSION}.
+
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}
+ 
