@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -ex
+
+trap "rm -rf /tmp/pg-repack-*" EXIT
+mkdir /tmp/pg-repack-testts '/tmp/pg-repack-test"ts' '/tmp/pg-repack-test ts' '/tmp/pg-repack-1testts'
+if [ "$(id -u)" = "0" ]; then
+	chown postgres:postgres /tmp/pg-repack-*
+fi
+
+LC_ALL=C.UTF-8 pg_buildext -i'--auth=trust' installcheck . regress

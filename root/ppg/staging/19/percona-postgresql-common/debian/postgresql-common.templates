@@ -1,0 +1,34 @@
+Template: postgresql-common/ssl
+Type: boolean
+Default: true
+_Description: Enable SSL by default in new PostgreSQL clusters?
+ PostgreSQL supports SSL-encrypted connections. This is usually a good thing.
+ However, if the database is solely accessed using TCP connections on
+ localhost, SSL can be turned off without introducing security issues.
+ .
+ UNIX domain socket connections (called "local" in pg_hba.conf) are not
+ affected by this setting. This setting concerns new PostgreSQL clusters
+ created during package install, or by using the pg_createcluster command. It
+ does not reconfigure existing clusters.
+ .
+ If unsure, enable SSL.
+
+# The last paragraph of this note does not appear in PO files.
+# It contains shell commands and should not be translated.
+Template: postgresql-common/catversion-bump
+Type: note
+#flag:translate:1,2,3
+_Description: PostgreSQL ${version} catalog version changed
+ The PostgreSQL cluster ${version} ${cluster} was created using catalog
+ version ${db_catversion}, but the currently being installed package
+ postgresql-${version} is using catalog version ${new_catversion}. You will not
+ be able to use this cluster until it was upgraded to the new catalog version.
+ .
+ The necessary subset of binaries from the old version was saved in
+ ${vartmpdir}. To upgrade the cluster, execute these commands:
+ .
+   pg_renamecluster ${version} ${cluster} ${cluster}.old
+   pg_upgradecluster ${version} ${cluster}.old --rename ${cluster} \
+     -m upgrade -v ${version} --old-bindir=${vartmpdir}/bin
+   pg_dropcluster ${version} ${cluster}.old
+   rm -rf ${vartmpdir}

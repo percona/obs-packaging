@@ -1,0 +1,1 @@
+usr/share/postgresql/%!{PG_MAJOR_VERSION} usr/share/postgresql/

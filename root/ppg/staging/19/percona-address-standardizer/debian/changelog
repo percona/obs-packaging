@@ -1,0 +1,5 @@
+percona-address-standardizer (%!{ADDRESS_STANDARDIZER_VERSION}-1) unstable; urgency=low
+
+  * Initial packaging of the standalone address_standardizer extension.
+
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}

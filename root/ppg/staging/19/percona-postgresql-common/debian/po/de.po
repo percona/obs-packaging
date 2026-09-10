@@ -1,0 +1,144 @@
+# postgresql-common debconf templates.
+# Copyright (C) 2005 Martin Pitt <mpitt@debian.org>
+# Copyright (C) 2014-2015 Christoph Berg <myon@debian.org>
+# Copyright (C) 2025 Hermann-Josef Beckers <hjb-news@onlinehome.de>
+# This file is distributed under the same license as the postgresql-common package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: postgresql-common\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-02-09 16:47+0000\n"
+"PO-Revision-Date: 2025-02-11 02:54+0100\n"
+"Last-Translator: Hermann-Josef Beckers <hjb-news@onlinehome.de>\n"
+"Language-Team: German <debian-l10n-german@lists.debian.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. Type: boolean
+#. Description
+#: ../postgresql.templates:1001
+msgid "Upgrade PostgreSQL cluster ${oldversion}/main to ${newversion}?"
+msgstr "PostgreSQL-Cluster ${oldversion}/main auf ${newversion) aktualisieren?"
+
+#. Type: boolean
+#. Description
+#: ../postgresql.templates:1001
+msgid ""
+"The PostgreSQL database cluster ${oldversion}/main can be upgraded to "
+"version ${newversion}, this will be attempted now. (If no automated cluster "
+"upgrades are desired, uninstall the \"postgresql\" meta package.)"
+msgstr ""
+"Der PostgreSQL-Databank-Cluster ${oldversion}/main kann auf Version ${newversion} "
+"aktualisiert werden; dies wird jetzt versucht. (Falls keine automatischen Cluster-"
+"Aktualisierungen gewünscht sind, kann das »postgresql«-Metapaket entfernt werden.)"
+
+#. Type: boolean
+#. Description
+#: ../postgresql.templates:1001
+msgid ""
+"Alternatively, the cluster can later be upgraded by running the command:"
+msgstr ""
+"Alternativ kann der Cluster später aktualisiert werden durch den Befehl:"
+
+#. Type: boolean
+#. Description
+#: ../postgresql.templates:1001
+msgid ""
+"Once the upgraded cluster has been validated to work, drop the old cluster "
+"using the command:"
+msgstr ""
+"Sobald die Funktionsfähigkeit des aktualisierten Clusters bestätigt ist, kann der"
+"alte Cluster entfernt werden durch den Befehl:"
+
+#. Type: note
+#. Description
+#: ../postgresql.templates:2001
+msgid "PostgreSQL upgrade of cluster ${oldversion}/main failed"
+msgstr "PostgreSQL-Aktualisierung des Clusters ${oldversion}/main nicht erfolgreich"
+
+#. Type: note
+#. Description
+#: ../postgresql.templates:2001
+msgid ""
+"The automated upgrade of PostgreSQL cluster ${oldversion}/main to version "
+"${newversion} failed. Please investigate the situation and re-run the "
+"command:"
+msgstr ""
+"Die automatisierte Aktualisierung des PostgreSQL-Clusters ${oldversion}/main auf Version "
+"${newversion} war nicht erfolgreich. Bitte überprüfen Sie die Situation und führen Sie "
+"erneut diesen Befehl aus:"
+
+#. Type: boolean
+#. Description
+#: ../postgresql-common.templates:1001
+msgid "Enable SSL by default in new PostgreSQL clusters?"
+msgstr "SSL standardmäßig in neuen PostgreSQL-Clustern aktivieren?"
+
+#. Type: boolean
+#. Description
+#: ../postgresql-common.templates:1001
+msgid ""
+"PostgreSQL supports SSL-encrypted connections. This is usually a good thing. "
+"However, if the database is solely accessed using TCP connections on "
+"localhost, SSL can be turned off without introducing security issues."
+msgstr ""
+"PostgreSQL unterstützt SSL-verschlüsselte Verbindungen, was normalerweise "
+"benutzt werden sollte. Wenn die Datenbank jedoch ausschließlich über TCP-"
+"Verbindungen über localhost benutzt wird, kann SSL abgeschaltet werden, ohne "
+"die Sicherheit zu beeinträchtigen."
+
+#. Type: boolean
+#. Description
+#: ../postgresql-common.templates:1001
+msgid ""
+"UNIX domain socket connections (called \"local\" in pg_hba.conf) are not "
+"affected by this setting. This setting concerns new PostgreSQL clusters "
+"created during package install, or by using the pg_createcluster command. It "
+"does not reconfigure existing clusters."
+msgstr ""
+"Verbindungen über UNIX-Sockets (in der pg_hba.conf »local« genannt) sind "
+"nicht von dieser Einstellung betroffen. Diese Einstellung betrifft neue "
+"PostgreSQL-Cluster, die während der Paketinstallation oder durch "
+"pg_createcluster angelegt werden. Es konfiguriert bestehende Cluster nicht "	
+"um."
+
+#. Type: boolean
+#. Description
+#: ../postgresql-common.templates:1001
+msgid "If unsure, enable SSL."
+msgstr "Aktivieren Sie SSL im Zweifelsfall."
+
+#. Type: note
+#. Description
+#: ../postgresql-common.templates:2001
+msgid "PostgreSQL ${version} catalog version changed"
+msgstr "Geänderte Katalogversion in PostgreSQL ${version}"
+
+#. Type: note
+#. Description
+#: ../postgresql-common.templates:2001
+msgid ""
+"The PostgreSQL cluster ${version} ${cluster} was created using catalog "
+"version ${db_catversion}, but the currently being installed package "
+"postgresql-${version} is using catalog version ${new_catversion}. You will "
+"not be able to use this cluster until it was upgraded to the new catalog "
+"version."
+msgstr ""
+"Der PostgreSQL-Cluster ${version} ${cluster} wurde mit der Katalogversion "
+"${db_catversion} erstellt, aber das gerade installierte Paket postgresql-"
+"${version} benutzt Katalogversion ${new_catversion}. Sie werden diesen "
+"Cluster erst benutzen können, wenn er auf die neue Katalogversion "	
+"aktualisiert wurde."
+
+#. Type: note
+#. Description
+#: ../postgresql-common.templates:2001
+msgid ""
+"The necessary subset of binaries from the old version was saved in "
+"${vartmpdir}. To upgrade the cluster, execute these commands:"
+msgstr ""
+"Die notwendigen Programmdateien der alten Version wurden in ${vartmpdir} "
+"gesichert. Benutzen Sie folgende Befehle um den Cluster zu aktualisieren:"
