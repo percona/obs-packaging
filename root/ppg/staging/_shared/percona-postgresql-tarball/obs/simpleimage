@@ -21,7 +21,14 @@ BuildRequires:  percona-pg_cron_%!{PG_MAJOR_VERSION}
 BuildRequires:  percona-wal2json%!{PG_MAJOR_VERSION}
 BuildRequires:  percona-pgvector_%!{PG_MAJOR_VERSION}
 BuildRequires:  percona-postgis35_%!{PG_MAJOR_VERSION}
-BuildRequires:  percona-pg-telemetry%!{PG_MAJOR_VERSION}
+# Per-major extension deltas, defined in each major's staging macros.yaml:
+# the majors do not ship an identical extension set (pg-telemetry exists on
+# <= 17 only, pg_oidc_validator on >= 18), and this recipe is shared
+# byte-identically across majors via staging/_shared. rpm accepts several
+# names on one BuildRequires line. build-tarball.sh needs no per-component
+# knowledge: bundling, RUNPATH rewriting and every gate enumerate what is
+# actually present in the chroot/artifact.
+BuildRequires:  %!{TARBALL_PG_EXTRA_COMPONENTS}
 BuildRequires:  percona-pg_gather
 # Tarball-only helper packages (2026-07 QA round).
 #
