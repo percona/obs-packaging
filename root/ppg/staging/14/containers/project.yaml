@@ -42,6 +42,21 @@ repositories:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
         repository: standard
     archs: [x86_64, aarch64]
+  - name: ubi10
+    paths:
+      - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
+        repository: UBI_10
+      - subproject: ppg:common:deps
+        repository: UBI_10
+      - subproject: common:containers:ubi10
+        repository: images
+      - subproject: common:containers:ubi10
+        repository: UBI_10
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-10
+        repository: appstream
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-10
+        repository: baseos
+    archs: [x86_64, aarch64]
 
 project-config: |
   Type: docker
@@ -78,6 +93,12 @@ project-config: |
   
   %endif
 
+  %if "%_repository" == "ubi10"
+  
+  BuildFlags: dockerarg:RHEL_VER=el10
+  
+  %endif
+
 
 qa:
   pipeline: docker-server-parallel-generic
@@ -98,6 +119,18 @@ qa:
     SERVER_VERSION: "%!{PG_VERSION}"
     TESTING_BRANCH: ricardo-work
     REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi9
+    WITH_POSTGIS:
+      - true
+      - false
+  matrix:
+    - WITH_POSTGIS
+
+  pipeline: docker-server-parallel-generic
+  parameters:
+    DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
+    SERVER_VERSION: "%!{PG_VERSION}"
+    TESTING_BRANCH: ricardo-work
+    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi10
     WITH_POSTGIS:
       - true
       - false
