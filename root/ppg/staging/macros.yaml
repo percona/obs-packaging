@@ -3,6 +3,8 @@
 # live in the per-version macros.yaml files and override these where needed.
 
 # Core package versions
+- CREDCHECK_TAG: v5.0
+- CREDCHECK_VERSION: 5.0
 - HAPROXY_VERSION: 2.8.27
 - PATRONI_VERSION: 4.1.5
 - PGAUDIT_SET_USER_TAG: REL4_2_0
