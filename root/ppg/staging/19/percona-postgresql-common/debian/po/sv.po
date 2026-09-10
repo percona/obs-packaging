@@ -1,0 +1,130 @@
+# Translation of postgresql-common debconf template to Swedish
+# Copyright (C) 2023 Martin Bagge <brother@persilja.net>
+# This file is distributed under the same license as the postgresql-common package.
+#
+# Martin Bagge <brother@persilja.net>, 2009, 2023
+msgid ""
+msgstr ""
+"Project-Id-Version: postgresql-common\n"
+"Report-Msgid-Bugs-To: postgresql-common@packages.debian.org\n"
+"POT-Creation-Date: 2025-01-20 11:27+0100\n"
+"PO-Revision-Date: 2023-12-20 22:12+0100\n"
+"Last-Translator: Martin Bagge <brother@persilja.net>\n"
+"Language-Team: Swedish <debian-l10n-swedish@lists.debian.org>\n"
+"Language: sv\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. Type: boolean
+#. Description
+#: ../postgresql.templates:1001
+msgid "Upgrade PostgreSQL cluster ${oldversion}/main to ${newversion}?"
+msgstr ""
+
+#. Type: boolean
+#. Description
+#: ../postgresql.templates:1001
+msgid ""
+"The PostgreSQL database cluster ${oldversion}/main can be upgraded to "
+"version ${newversion}, this will be attempted now. (If no automated cluster "
+"upgrades are desired, uninstall the \"postgresql\" meta package.)"
+msgstr ""
+
+#. Type: boolean
+#. Description
+#: ../postgresql.templates:1001
+msgid ""
+"Alternatively, the cluster can later be upgraded by running the command:"
+msgstr ""
+
+#. Type: boolean
+#. Description
+#: ../postgresql.templates:1001
+msgid ""
+"Once the upgraded cluster has been validated to work, drop the old cluster "
+"using the command:"
+msgstr ""
+
+#. Type: note
+#. Description
+#: ../postgresql.templates:2001
+msgid "PostgreSQL upgrade of cluster ${oldversion}/main failed"
+msgstr ""
+
+#. Type: note
+#. Description
+#: ../postgresql.templates:2001
+msgid ""
+"The automated upgrade of PostgreSQL cluster ${oldversion}/main to version $"
+"{newversion} failed. Please investigate the situation and re-run the command:"
+msgstr ""
+
+#. Type: boolean
+#. Description
+#: ../postgresql-common.templates:1001
+msgid "Enable SSL by default in new PostgreSQL clusters?"
+msgstr "Ska SSL aktiveras som standard för nya PostgreSQL-kluster?"
+
+#. Type: boolean
+#. Description
+#: ../postgresql-common.templates:1001
+msgid ""
+"PostgreSQL supports SSL-encrypted connections. This is usually a good thing. "
+"However, if the database is solely accessed using TCP connections on "
+"localhost, SSL can be turned off without introducing security issues."
+msgstr ""
+"PostgreSQL har stöd för SSL-krypterade anslutningar. Detta är vanligtvis en "
+"bra sak. Dock, om databasen enbart ansluts till via TCP mot localhost så kan "
+"SSL slås av utan att det påverkar säkerhetsnivån."
+
+#. Type: boolean
+#. Description
+#: ../postgresql-common.templates:1001
+msgid ""
+"UNIX domain socket connections (called \"local\" in pg_hba.conf) are not "
+"affected by this setting. This setting concerns new PostgreSQL clusters "
+"created during package install, or by using the pg_createcluster command. It "
+"does not reconfigure existing clusters."
+msgstr ""
+"UNIX domain sockets (kallas \"local\" i pg_hba.conf) påverkas inte av denna "
+"inställning. Denna inställning påverkar nya PostgreSQL-kluster som skapas "
+"vid paketinstallationen eller genom kommandot pg_createcluster. Redan "
+"existerande kluster påverkas inte."
+
+#. Type: boolean
+#. Description
+#: ../postgresql-common.templates:1001
+msgid "If unsure, enable SSL."
+msgstr "Om du är osäker ska SSL aktiveras."
+
+#. Type: note
+#. Description
+#: ../postgresql-common.templates:2001
+msgid "PostgreSQL ${version} catalog version changed"
+msgstr "PostgreSQL ${version} har ändrat katalogversion"
+
+#. Type: note
+#. Description
+#: ../postgresql-common.templates:2001
+msgid ""
+"The PostgreSQL cluster ${version} ${cluster} was created using catalog "
+"version ${db_catversion}, but the currently being installed package "
+"postgresql-${version} is using catalog version ${new_catversion}. You will "
+"not be able to use this cluster until it was upgraded to the new catalog "
+"version."
+msgstr ""
+"PostgreSQL-kluster ${version} ${cluster} skapades med katalogversion $"
+"{db_catversion} men paketet som installeras nu, postgresql-${version}, "
+"använder katalogversion ${new_catversion}. Klustret kan inte användas innan "
+"det uppgraderats till den nya katalogversionen."
+
+#. Type: note
+#. Description
+#: ../postgresql-common.templates:2001
+msgid ""
+"The necessary subset of binaries from the old version was saved in $"
+"{vartmpdir}. To upgrade the cluster, execute these commands:"
+msgstr ""
+"De binärer som behövs från den äldre versionen har sparats i ${vartmpdir}. "
+"För att uppgradera kluster kör dessa kommandon:"

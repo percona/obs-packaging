@@ -1,0 +1,30 @@
+From b5638c1959308665486ca9241997d48cae1485eb Mon Sep 17 00:00:00 2001
+From: Michael Banck <mbanck@debian.org>
+Date: Fri, 13 Feb 2026 16:34:45 +0100
+Subject: [PATCH v1] Add an additional check in raw_connect_works for the Hurd.
+
+The function raw_connect_works() tests whether raw sockets work for the
+postmaster TAP tests. While creating the socket does work on the Hurd,
+the TAP test does a subsequent send() on it which fails on the Hurd with
+"Cannot determine peer address". To circumvent this, try a send() and
+catch this error as well.
+---
+ src/test/perl/PostgreSQL/Test/Cluster.pm | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+Index: postgresql/src/test/perl/PostgreSQL/Test/Cluster.pm
+===================================================================
+--- postgresql.orig/src/test/perl/PostgreSQL/Test/Cluster.pm
++++ postgresql/src/test/perl/PostgreSQL/Test/Cluster.pm
+@@ -353,9 +353,10 @@ sub raw_connect_works
+ 	{
+ 		eval {
+ 			my $sock = $self->raw_connect();
++			$sock->send('foo');
+ 			$sock->close();
+ 		};
+-		if ($@ =~ /not implemented/)
++		if ($@ =~ /not implemented/ or $@ =~ /Cannot determine peer address/)
+ 		{
+ 			diag "IO::Socket::UNIX does not work: $@";
+ 			return 0;

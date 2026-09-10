@@ -1,0 +1,7 @@
+#!/bin/sh
+pg_buildext \
+	-c --locale=C.UTF-8 \
+	-o wal_level=logical \
+	-o max_replication_slots=5 \
+	-o extra_float_digits=0 \
+	installcheck

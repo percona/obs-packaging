@@ -1,0 +1,5 @@
+percona-pgvector (%!{PGVECTOR_VERSION}-1) unstable; urgency=low
+
+  * Update to upstream version %!{PGVECTOR_VERSION}
+
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}

@@ -1,0 +1,2 @@
+# debian/rules template
+script-not-executable *usr/share/postgresql-common/server/postgresql.mk*

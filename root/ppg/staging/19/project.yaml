@@ -47,6 +47,8 @@ repositories:
     archs: [x86_64, aarch64]
   - name: RockyLinux_10
     paths:
+      - subproject: ppg:common:deps
+        repository: RockyLinux_10
       - subproject: common:deps:build
         repository: RockyLinux_10
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:10

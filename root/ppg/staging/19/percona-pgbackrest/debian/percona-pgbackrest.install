@@ -1,0 +1,2 @@
+debian/pgbackrest.conf etc/
+usr/bin/pgbackrest

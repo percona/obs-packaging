@@ -1,0 +1,26 @@
+Use the pre-ratification spelling "c++2a" of the C++20 standard so that
+meson 0.56.2 on Debian 11 accepts the cpp_std value ("c++20" was only
+added to meson's cpp_std choices in 0.57). gcc and clang treat -std=c++2a
+and -std=c++20 identically, and g++ 10 on bullseye compiles the C++ KMIP
+client fine. The libkmip cmake subproject needs no change: cmake itself
+emits -std=c++2a for CMAKE_CXX_STANDARD 20 on gcc 10.
+--- a/meson.build
++++ b/meson.build
+@@ -139,7 +139,7 @@ shared_module('pg_tde',
+     'src/pg_tde_guc.c',
+     'src/smgr/pg_tde_smgr.c',
+   ),
+-  override_options: ['cpp_std=c++20'],
++  override_options: ['cpp_std=c++2a'],
+   include_directories: incdirs,
+   install: true,
+   install_dir: pkglibdir,
+@@ -168,7 +168,7 @@ pg_tde_frontend = static_library('pg_tde_frontend',
+   ),
+   c_args: ['-DFRONTEND'],
+   cpp_args: ['-DFRONTEND'],
+-  override_options: ['cpp_std=c++20'],
++  override_options: ['cpp_std=c++2a'],
+   dependencies: [pgfeutils, pgcommon, pgport, curl, crypto, ssl, kmipclient, kmipcore],
+   include_directories: incdirs,
+ )

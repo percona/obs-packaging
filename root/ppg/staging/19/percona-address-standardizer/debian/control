@@ -1,0 +1,20 @@
+Source: percona-address-standardizer
+Section: database
+Priority: optional
+Maintainer: Percona Development Team <info@percona.com>
+Build-Depends: debhelper,
+ mawk, libpcre2-dev, percona-postgresql-server-dev-all (>= 153~),
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://github.com/postgis/address_standardizer
+
+Package: percona-postgresql-%!{PG_MAJOR_VERSION}-address-standardizer
+Architecture: any
+Depends: ${postgresql:Depends}, ${misc:Depends}, ${shlibs:Depends}
+Description: Parse a street address into its components
+ The address_standardizer PostgreSQL extension parses a street address
+ into its components (house number, street name, suffix, ...). It is a
+ single-line address parser derived from the PAGC address standardizer,
+ formerly distributed as part of PostGIS and now maintained as a
+ standalone extension. The companion address_standardizer_data_us
+ extension provides the US dataset used by the parser.

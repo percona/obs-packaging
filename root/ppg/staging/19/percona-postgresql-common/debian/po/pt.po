@@ -1,0 +1,148 @@
+# Translation of postgresql-common debconf messages to European Portuguese
+# This file is distributed under the same license as the postgresql-common package.
+#
+# Ricardo Silva <ardoric@gmail.com>, 2006,2017.
+# Américo Monteiro <a_monteiro@gmx.com>, 2025.
+msgid ""
+msgstr ""
+"Project-Id-Version: postgresql-common 278\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-06-05 17:13+0000\n"
+"PO-Revision-Date: 2025-06-07 13:26+0100\n"
+"Last-Translator: Américo Monteiro <a_monteiro@gmx.com>\n"
+"Language-Team: Portuguese <>\n"
+"Language: pt\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Lokalize 22.12.3\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. Type: boolean
+#. Description
+#: ../postgresql.templates:1001
+msgid "Upgrade PostgreSQL cluster ${oldversion}/main to ${newversion}?"
+msgstr ""
+"Actualizar o agrupamento PostgreSQL ${oldversion}/main para ${newversion}?"
+
+#. Type: boolean
+#. Description
+#: ../postgresql.templates:1001
+msgid ""
+"The PostgreSQL database cluster ${oldversion}/main can be upgraded to "
+"version ${newversion}, this will be attempted now. (If no automated cluster "
+"upgrades are desired, uninstall the \"postgresql\" meta package.)"
+msgstr ""
+"O agrupamento de bases de dados PostgreSQL ${oldversion}/main pode ser "
+"actualizado para a versão ${newversion}, isto será tentado agora. (Se não "
+"desejar actualizações de agrupamento automatizadas, desinstale o meta "
+"pacote \"postgresql\".)"
+
+#. Type: boolean
+#. Description
+#: ../postgresql.templates:1001
+msgid ""
+"Alternatively, the cluster can later be upgraded by running the command:"
+msgstr ""
+"Em alternativa, o agrupamento pode ser actualizado mais tarde ao correr "
+"o comando:"
+
+#. Type: boolean
+#. Description
+#: ../postgresql.templates:1001
+msgid ""
+"Once the upgraded cluster has been validated to work, drop the old cluster "
+"using the command:"
+msgstr ""
+"Assim que o agrupamento actualizado estiver validado para funcionar, "
+"abandone o agrupamento antigo usando o comando:"
+
+#. Type: note
+#. Description
+#: ../postgresql.templates:2001
+msgid "PostgreSQL upgrade of cluster ${oldversion}/main failed"
+msgstr "A actualização do agrupamento PostgreSQL ${oldversion}/main falhou"
+
+#. Type: note
+#. Description
+#: ../postgresql.templates:2001
+msgid ""
+"The automated upgrade of PostgreSQL cluster ${oldversion}/main to version "
+"${newversion} failed. Please investigate the situation and re-run the "
+"command:"
+msgstr ""
+"A actualização automatizada do agrupamento PostgreSQL ${oldversion}/main "
+"para versão ${newversion} falhou. Por favor investigue a situação e volte "
+"a executar o comando:"
+
+#. Type: boolean
+#. Description
+#: ../postgresql-common.templates:1001
+msgid "Enable SSL by default in new PostgreSQL clusters?"
+msgstr "Activar SSL por predefinição em novos agrupamentos PostgreSQL?"
+
+#. Type: boolean
+#. Description
+#: ../postgresql-common.templates:1001
+msgid ""
+"PostgreSQL supports SSL-encrypted connections. This is usually a good thing. "
+"However, if the database is solely accessed using TCP connections on "
+"localhost, SSL can be turned off without introducing security issues."
+msgstr ""
+"O PostgreSQL suporta ligações cifradas com SSL. Isto é geralmente uma boa "
+"ideia. No entanto, se a base de dados é somente acedida por ligações TCP na "
+"máquina local, é possível desligar SSL sem introduzir problemas de "
+"segurança."
+
+#. Type: boolean
+#. Description
+#: ../postgresql-common.templates:1001
+msgid ""
+"UNIX domain socket connections (called \"local\" in pg_hba.conf) are not "
+"affected by this setting. This setting concerns new PostgreSQL clusters "
+"created during package install, or by using the pg_createcluster command. It "
+"does not reconfigure existing clusters."
+msgstr ""
+"Ligações por sockets UNIX (chamadas \"local\" no pg_hba.conf) não são "
+"afetadas por esta configuração. Esta configuração diz respeito a novos "
+"agrupamentos de PostgreSQL criados durante a instalação do pacote, ou ao "
+"se usar comando pg_createcluster. Os agrupamentos existentes não serão "
+"reconfigurados."
+
+#. Type: boolean
+#. Description
+#: ../postgresql-common.templates:1001
+msgid "If unsure, enable SSL."
+msgstr "Em caso de dúvidas, active o SSL."
+
+#. Type: note
+#. Description
+#: ../postgresql-common.templates:2001
+msgid "PostgreSQL ${version} catalog version changed"
+msgstr "A versão do catálogo ${version} do PostgreSQL mudou"
+
+#. Type: note
+#. Description
+#: ../postgresql-common.templates:2001
+msgid ""
+"The PostgreSQL cluster ${version} ${cluster} was created using catalog "
+"version ${db_catversion}, but the currently being installed package "
+"postgresql-${version} is using catalog version ${new_catversion}. You will "
+"not be able to use this cluster until it was upgraded to the new catalog "
+"version."
+msgstr ""
+"O agrupamento PostgreSQL ${version} ${cluster} foi criado usando o catálogo "
+"na versão ${db_catversion}, mas o pacote que está a ser instalado "
+"postgresql-${version} usa a versão de catálogo ${new_catversion}. Não será "
+"possível usar este agrupamento até que seja actualizado para a nova versão "
+"de catálogo."
+
+#. Type: note
+#. Description
+#: ../postgresql-common.templates:2001
+msgid ""
+"The necessary subset of binaries from the old version was saved in "
+"${vartmpdir}. To upgrade the cluster, execute these commands:"
+msgstr ""
+"O subconjunto necessário de binários da versão antiga foi guardado em "
+"${vartmpdir}. Para actualizar o agrupamento, execute estes comandos:"

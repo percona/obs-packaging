@@ -1,0 +1,8 @@
+Depends: @, make
+Tests: cron
+Restrictions: allow-stderr
+
+Depends: @, make
+Test-Command: pg_buildext -o 'shared_preload_libraries=pg_cron' installcheck
+Features: test-name=installcheck
+Restrictions: allow-stderr

@@ -1,0 +1,4 @@
+extras/startup-scripts/patroni.service /lib/systemd/system
+debian/patroni.yml.sample /etc/patroni
+debian/tmp/usr/lib
+debian/tmp/usr/bin
