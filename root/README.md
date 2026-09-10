@@ -167,6 +167,12 @@ a fully rendered, independent package in OBS. Any macro the shared files referen
 defined at or above every linking major. Edits under `_shared/` count as changes for every linking
 package (change detection follows the link target).
 
+Links may also live inside a nested subproject of a major — the tarballs packages are the example:
+`staging/17/tarballs/percona-psql -> ../../_shared/percona-psql` (likewise
+`percona-postgresql-tarball`), discovered under `ppg:staging:17:tarballs` with macros still rendered
+through `staging/17/macros.yaml`. Porting the tarballs to another major is then mostly a per-major
+`tarballs/project.yaml` plus two symlinks.
+
 #### `tarballs/`
 
 Binary-tarball builds (OBS `simpleimage` format) for air-gapped / unsupported-distro
