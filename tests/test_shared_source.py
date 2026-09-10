@@ -199,3 +199,35 @@ def test_git_macros_changed_since_is_per_subproject(tree):
     _commit(repo, "change referenced macro on 17")
     assert _macros_changed_since(sha, repo / "root/ppg/staging/17/pkg") is True
     assert _macros_changed_since(sha, repo / "root/ppg/staging/14/pkg") is False
+
+
+# --- nested subprojects (staging/NN/tarballs/<pkg> -> ../../_shared/<pkg>) ----
+
+
+def test_discovery_and_macros_for_link_in_nested_subproject(tree):
+    """A _shared symlink may sit one level deeper, inside a subproject of a
+    major (the tarballs layout: staging/17/tarballs/<pkg>).  Discovery must
+    yield it under the subproject's OBS name, macros must resolve from the
+    link's lexical chain (through staging/17/macros.yaml), and the git
+    pathspecs must cover the _shared target."""
+    repo, _ = tree
+    _write(repo, "root/ppg/staging/17/tarballs/project.yaml", "title: t\n")
+    os.symlink(
+        f"../../{SHARED_SOURCE_DIRNAME}/pkg",
+        repo / "root/ppg/staging/17/tarballs/pkg",
+    )
+    _commit(repo, "nested subproject link")
+
+    found = list(find_packages(repo / "root/ppg/staging", "X:ppg:staging"))
+    link = repo / "root/ppg/staging/17/tarballs/pkg"
+    assert ("X:ppg:staging:17:tarballs", link) in found
+    assert not any(SHARED_SOURCE_DIRNAME in path.parts for _, path in found)
+
+    macros = load_macros(link)
+    assert macros.get("PG_MAJOR_VERSION") == "17"
+
+    paths = _package_pathspecs(link)
+    assert link in paths
+    assert repo / f"root/ppg/staging/{SHARED_SOURCE_DIRNAME}/pkg" in [
+        Path(p) for p in paths
+    ]
