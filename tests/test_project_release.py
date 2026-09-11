@@ -416,3 +416,58 @@ def test_changelog_distinguishes_colliding_package_names_extras_changed(tmp_path
     assert "percona/extras" in section
     assert "percona/toplevel" not in section
     assert "- percona-postgresql: update upstream version" not in section
+
+
+def test_container_changelog_label_keeps_bare_flavor_for_containers():
+    lbl = cmd_project._container_changelog_label
+    parent = "x:ppg:staging:17"
+    assert lbl("x:ppg:staging:17:containers", "ubi9", parent) == "ubi9"
+    # old layout (release project) maps onto the same key as the new layout
+    assert (
+        lbl("x:ppg:releases:17:containers:ubi9", "images", "x:ppg:releases:17")
+        == "ubi9"
+    )
+    # no parent → legacy behaviour
+    assert lbl("x:ppg:staging:17:containers", "ubi8", None) == "ubi8"
+
+
+def test_container_changelog_label_prefixes_other_subprojects():
+    lbl = cmd_project._container_changelog_label
+    parent = "x:ppg:staging:17"
+    assert lbl("x:ppg:staging:17:extras:containers", "ubi9", parent) == "extras/ubi9"
+    assert (
+        lbl("x:ppg:releases:17:extras:containers:ubi9", "images", "x:ppg:releases:17")
+        == "extras/ubi9"
+    )
+
+
+def test_fetch_subproject_container_pkgs_distinct_keys_across_subprojects(monkeypatch):
+    monkeypatch.setattr(cmd_project, "_fetch_obs_package_names", lambda a, p: {"img"})
+    monkeypatch.setattr(
+        cmd_project,
+        "_fetch_all_pkg_repo_archs",
+        lambda a, p: {"img": [("ubi9", "x86_64")]},
+    )
+    monkeypatch.setattr(
+        cmd_project, "_detect_obs_container_info", lambda a, p, k: {"kind": "docker"}
+    )
+    monkeypatch.setattr(
+        cmd_project,
+        "_fetch_build_container_packages",
+        lambda a, prj, repo, arch, pkg, root: {"pg": prj},
+    )
+    parent = "x:ppg:staging:17"
+    std = cmd_project._fetch_subproject_container_pkgs(
+        "http://obs", f"{parent}:containers", "x", parent
+    )
+    extras = cmd_project._fetch_subproject_container_pkgs(
+        "http://obs", f"{parent}:extras:containers", "x", parent
+    )
+    assert set(std) == {"img (ubi9)"}
+    assert set(extras) == {"img (extras/ubi9)"}
+    merged: dict = {}
+    cmd_project._merge_container_pkgs(merged, std, f"{parent}:containers")
+    cmd_project._merge_container_pkgs(merged, extras, f"{parent}:extras:containers")
+    assert len(merged) == 2
+    with pytest.raises(SystemExit, match="collide"):
+        cmd_project._merge_container_pkgs(merged, std, f"{parent}:containers")
