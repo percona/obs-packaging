@@ -1,0 +1,106 @@
+build: false
+description: 'Containers subproject for ppg:releases:17.
+
+  Builds are disabled; binaries are copied via osc release.
+
+  '
+project-config: 'Type: docker
+
+  BuildEngine: podman
+
+  BuildFlags: sbom:spdx
+
+  BuildFlags: sbom:cyclonedx
+
+  PublishFlags: withsbom
+
+
+  Preinstall: skopeo
+
+
+  ExpandFlags: filterbasecontainerpkgs
+
+
+  Prefer: redhat-release
+
+  Prefer: glibc-minimal-langpack
+
+  Prefer: gpgme
+
+  Prefer: iptables-nft
+
+  Prefer: percona-postgresql17-libs
+
+  Ignore: rocky-release
+
+  Substitute: rocky-release redhat-release
+
+
+  BuildFlags: dockerarg:PPG_REPO=staging
+
+
+  %if "%_repository" == "ubi8"
+
+
+  ExpandFlags: module:container-tools-rhel8
+
+
+  BuildFlags: dockerarg:RHEL_VER=el8
+
+
+  %endif
+
+
+  %if "%_repository" == "ubi9"
+
+
+  BuildFlags: dockerarg:RHEL_VER=el9
+
+
+  %endif
+
+  '
+repositories:
+- archs:
+  - x86_64
+  - aarch64
+  name: ubi8
+  paths:
+  - repository: UBI_8
+    subproject: ppg:releases:17
+  - repository: UBI_8
+    subproject: ppg:common:deps
+  - repository: images
+    subproject: common:containers:ubi8
+  - repository: UBI_8
+    subproject: common:containers:ubi8
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:8
+    repository: standard
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
+    repository: appstream
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
+    repository: baseos
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+    repository: appstream
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+    repository: baseos
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+    repository: devel
+- archs:
+  - x86_64
+  - aarch64
+  name: ubi9
+  paths:
+  - repository: UBI_9
+    subproject: ppg:releases:17
+  - repository: UBI_9
+    subproject: ppg:common:deps
+  - repository: images
+    subproject: common:containers:ubi9
+  - repository: UBI_9
+    subproject: common:containers:ubi9
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+    repository: standard
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+    repository: standard
+title: ppg releases 17 — containers

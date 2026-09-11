@@ -3,4 +3,5 @@ releases:
 - ppg/17.9-1
 - ppg/17.9-2
 - ppg/17.10-1
+- ppg/17.11-1
 repository: ${PERCONA_OBS_PACKAGING_REPO}
