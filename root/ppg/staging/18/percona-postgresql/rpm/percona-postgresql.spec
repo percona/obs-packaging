@@ -175,7 +175,19 @@ BuildRequires:	perl
 %endif
 
 %if %plpython3
+# PERCONA: build plpython3 against the parallel python3.12 stack on EL8 AND
+# EL9 so the embedded interpreter matches the percona python3.12-* runtime
+# packages (and the python 3.12 stdlib bundled in the binary tarball).
+# EL10 is left on the default python3-devel, which already IS 3.12 there.
+# The matching PYTHON= export lives next to the configure call in %%build.
+# (Ported from the staging:17 spec — first PG 18 ssl3 tarball shipped a
+# plpython3 embedding the EL9 system python 3.9, which fatals on every
+# Debian-family host: "No module named 'encodings'".)
+%if 0%{?rhel} >= 8 && 0%{?rhel} < 10
+BuildRequires:  python3.12-devel
+%else
 BuildRequires:	python3-devel
+%endif
 %endif
 
 %if %pltcl
@@ -581,6 +593,18 @@ export CLANG=%{_bindir}/clang LLVM_CONFIG=%{_bindir}/llvm-config
 # On openSUSE, llvm-config is not at a stable path (llvm19-devel provides
 # /usr/lib/llvm19/bin/llvm-config, not /usr/bin/llvm-config-19). Let PG's
 # configure locate a working llvm-config via PATH by not exporting it here.
+
+# PERCONA: steer --with-python explicitly at the 3.12 interpreter on EL8/EL9
+# (same bounds as the python3.12-devel BuildRequires above). Without this,
+# configure probes plain "python3": on EL8 that happened to resolve to 3.12
+# (the python3.12 package registers /usr/bin/python3 via alternatives when it
+# is the only python3 in the chroot), but on EL9 /usr/bin/python3 is always
+# 3.9 — plpython3.so would link libpython3.9 while the tarball bundles the
+# 3.12 stdlib, and the embedded interpreter then fatals at backend start
+# ("No module named 'encodings'").
+%if 0%{?rhel} >= 8 && 0%{?rhel} < 10
+export PYTHON=%{_bindir}/python3.12
+%endif
 
 # These configure options must match main build
 ./configure --enable-rpath \
