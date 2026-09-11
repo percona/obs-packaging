@@ -1464,12 +1464,47 @@ def _container_flavor_label(obs_project: str, repo: str) -> str:
     return repo
 
 
+def _container_changelog_label(
+    obs_project: str,
+    repo: str,
+    parent_obs_project: "str | None",
+) -> str:
+    """Changelog label for a container image: "<flavor>" or "<sub>/<flavor>".
+
+    Images of the plain ``containers`` subproject keep the bare flavor label
+    (``ubi9``) so entries match across the old ``:containers:<flavor>``
+    layout and earlier changelog sections.  Images of any other container
+    subproject (e.g. ``extras:containers``) get the subproject path — minus
+    its trailing ``containers`` segment — as a prefix (``extras/ubi9``), so
+    same-named images in different subprojects never share a key.
+    """
+    flavor = _container_flavor_label(obs_project, repo)
+    if parent_obs_project is None or not obs_project.startswith(
+        parent_obs_project + ":"
+    ):
+        return flavor
+    sub = obs_project[len(parent_obs_project) + 1 :]
+    if repo == "images" and sub.endswith(f":{flavor}"):
+        sub = sub[: -len(flavor) - 1]  # old layout: strip the flavor leaf
+    if sub == "containers":
+        return flavor
+    if sub.endswith(":containers"):
+        sub = sub[: -len(":containers")]
+    return f"{sub.replace(':', '/')}/{flavor}"
+
+
 def _fetch_subproject_container_pkgs(
     apiurl: str,
     obs_project: str,
     rootprj: str,
+    parent_obs_project: "str | None" = None,
 ) -> "dict[str, dict[str, str]]":
-    """Return {"<image> (<flavor>)": {binary_pkg: versrel}} for container images."""
+    """Return {"<image> (<label>)": {binary_pkg: versrel}} for container images.
+
+    ``parent_obs_project`` (the release or staging OBS project the container
+    subproject hangs off) makes the label subproject-aware — see
+    ``_container_changelog_label``.
+    """
     result: dict[str, dict[str, str]] = {}
     pkg_names = sorted(_fetch_obs_package_names(apiurl, obs_project))
     if not pkg_names:
@@ -1483,9 +1518,26 @@ def _fetch_subproject_container_pkgs(
                 apiurl, obs_project, repo, arch, pkg, rootprj
             )
             if pkgs:
-                label = _container_flavor_label(obs_project, repo)
+                label = _container_changelog_label(
+                    obs_project, repo, parent_obs_project
+                )
                 result[f"{pkg} ({label})"] = pkgs
     return result
+
+
+def _merge_container_pkgs(
+    into: "dict[str, dict[str, str]]",
+    new: "dict[str, dict[str, str]]",
+    obs_project: str,
+) -> None:
+    """Merge per-subproject container dicts, refusing silent key collisions."""
+    clash = sorted(set(into) & set(new))
+    if clash:
+        raise SystemExit(
+            f"error: container image keys from {obs_project} collide with "
+            f"another subproject: {', '.join(clash)}"
+        )
+    into.update(new)
 
 
 def _extract_upstream_info_from_service(
@@ -1955,8 +2007,12 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     prev_release_id: str | None = None
     for subproject_name in container_subs:
         sub_full = f"{args.rootprj}:{args.project}:{subproject_name}"
-        source_container_pkgs.update(
-            _fetch_subproject_container_pkgs(apiurl, sub_full, args.rootprj)
+        _merge_container_pkgs(
+            source_container_pkgs,
+            _fetch_subproject_container_pkgs(
+                apiurl, sub_full, args.rootprj, source_obs_project
+            ),
+            sub_full,
         )
     if not is_first_release and existing_releases:
         prev_release_id = existing_releases[-1].split("/")[-1]
@@ -1964,8 +2020,12 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         # this is what makes the ubi9 old-layout → new-layout migration diff
         # correctly instead of dumping every image as "add".
         for rel_sub in sorted(_fetch_obs_subproject_names(apiurl, release_obs_project)):
-            release_container_pkgs.update(
-                _fetch_subproject_container_pkgs(apiurl, rel_sub, args.rootprj)
+            _merge_container_pkgs(
+                release_container_pkgs,
+                _fetch_subproject_container_pkgs(
+                    apiurl, rel_sub, args.rootprj, release_obs_project
+                ),
+                rel_sub,
             )
 
     security_lines: list[str] | None = None
