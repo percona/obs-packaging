@@ -836,6 +836,23 @@ for ext in plperl plpython3 pltcl; do
 done
 patchelf --set-rpath "/opt/percona-perl/lib/${PERL_VER}/CORE:\$ORIGIN" "$PG_PREFIX/lib/plperl.so"
 patchelf --set-rpath '/opt/percona-python3/lib:$ORIGIN' "$PG_PREFIX/lib/plpython3.so"
+# plpython3.so must embed the SAME python the tarball bundles: its libpython
+# NEEDED soname has to exist in /opt/percona-python3/lib. Built against the
+# chroot's system python instead (EL9: 3.9), everything still loads in the
+# chroot and on EL QA hosts (whose system python provides the stdlib at
+# /usr/lib64/pythonX.Y) — but the embedded interpreter fatals on any host
+# without it ("Fatal Python error: init_fs_encoding ... No module named
+# 'encodings'", proven on Debian 12 by the first PG 18 ssl3 tarball, whose
+# spec lacked the parallel-python3.12 BuildRequires/PYTHON= steering).
+PLPY_LIBPYTHON=$(patchelf --print-needed "$PG_PREFIX/lib/plpython3.so" | grep '^libpython' || true)
+if [ -z "$PLPY_LIBPYTHON" ]; then
+    echo "FATAL: plpython3.so carries no libpython NEEDED entry" >&2
+    exit 1
+fi
+if [ ! -e "$PYTHON_PREFIX/lib/$PLPY_LIBPYTHON" ]; then
+    echo "FATAL: plpython3.so needs $PLPY_LIBPYTHON but $PYTHON_PREFIX/lib does not provide it — plpython was built against the wrong python (check the server spec's python3.12 steering)" >&2
+    exit 1
+fi
 patchelf --set-rpath '/opt/percona-tcl/lib:$ORIGIN' "$PG_PREFIX/lib/pltcl.so"
 
 # All other PostgreSQL lib/ .so files get $ORIGIN
