@@ -1,0 +1,5 @@
+percona-patroni (%!{PATRONI_VERSION}-1) unstable; urgency=low
+
+  * Update to upstream version %!{PATRONI_VERSION}
+
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}

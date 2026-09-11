@@ -1,0 +1,2 @@
+version=4
+https://github.com/citusdata/pg_cron/tags .*/v(.*).tar.gz

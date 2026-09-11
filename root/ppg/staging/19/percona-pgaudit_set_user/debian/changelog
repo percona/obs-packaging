@@ -1,0 +1,5 @@
+percona-pgaudit%!{PG_MAJOR_VERSION}-set-user (%!{PGAUDIT_SET_USER_VERSION}-1) unstable; urgency=low
+
+  * Update to upstream version %!{PGAUDIT_SET_USER_VERSION}
+
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}

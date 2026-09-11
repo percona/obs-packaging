@@ -1,0 +1,18 @@
+<services>
+  <service name="obs_scm">
+    <param name="url">https://github.com/postgis/address_standardizer.git</param>
+    <param name="scm">git</param>
+    <param name="revision">v%!{ADDRESS_STANDARDIZER_VERSION}.0</param>
+    <param name="versionformat">@PARENT_TAG@</param>
+    <param name="versionrewrite-pattern">v(.*)</param>
+    <param name="filename">percona-address-standardizer%!{PG_MAJOR_VERSION}</param>
+  </service>
+  <service mode="buildtime" name="tar" />
+  <service mode="buildtime" name="recompress">
+    <param name="file">*.tar</param>
+    <param name="compression">gz</param>
+  </service>
+  <service mode="buildtime" name="set_version">
+    <param name="basename">percona-address-standardizer%!{PG_MAJOR_VERSION}</param>
+  </service>
+</services>

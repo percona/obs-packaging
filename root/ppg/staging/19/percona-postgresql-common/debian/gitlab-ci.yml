@@ -1,0 +1,6 @@
+include:
+  - https://salsa.debian.org/salsa-ci-team/pipeline/raw/master/recipes/debian.yml
+
+variables:
+  # does not understand our use of dpkg-divert
+  SALSA_CI_DISABLE_MISSING_BREAKS: 1

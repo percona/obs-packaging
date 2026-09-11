@@ -1,0 +1,4 @@
+# file is now managed by pg_updateaptconfig
+rm_conffile /etc/apt/apt.conf.d/01autoremove-postgresql 229~ postgresql-common
+# file removed in 228 (#1042927)
+rm_conffile /etc/sysctl.d/30-postgresql-shm.conf 269~ postgresql-client-common

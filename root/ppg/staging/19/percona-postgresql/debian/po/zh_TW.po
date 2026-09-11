@@ -1,0 +1,37 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# Yangfl <mmyangfl@gmail.com>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-01-01 07:04+0000\n"
+"PO-Revision-Date: 2026-01-02 00:30+0800\n"
+"Last-Translator: Yangfl <mmyangfl@gmail.com>\n"
+"Language-Team: 漢語 <debian-l10n-chinese@lists.debian.org>\n"
+"Language: zh_TW\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"X-Generator: Poedit 3.8\n"
+
+#. Type: boolean
+#. Description
+#: ../postgresql-18.templates:1001
+msgid "Remove PostgreSQL directories when package is purged?"
+msgstr "清除套件時是否移除 PostgreSQL 目錄？"
+
+#. Type: boolean
+#. Description
+#: ../postgresql-18.templates:1001
+msgid ""
+"Removing the PostgreSQL server package will leave existing database clusters "
+"intact, i.e. their configuration, data, and log directories will not be "
+"removed. On purging the package, the directories can optionally be removed."
+msgstr ""
+"移除 PostgreSQL 伺服器套件不會影響現有的資料庫集群，即其設定、資料和日誌目錄"
+"不會被移除。在清除套件時，可以選擇移除這些目錄。"

@@ -1,0 +1,5 @@
+PgCommon.pm usr/share/perl5
+debian/maintscripts-functions usr/share/postgresql-common
+pg_wrapper usr/share/postgresql-common
+user_clusters etc/postgresql-common
+debian/pgcommon.sh usr/share/postgresql-common

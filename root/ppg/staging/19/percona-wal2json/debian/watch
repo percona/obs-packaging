@@ -1,0 +1,3 @@
+version=4
+options="uversionmangle=s/_/./g" \
+https://github.com/eulerto/wal2json/tags .*/wal2json_(.*).tar.gz

@@ -1,0 +1,10 @@
+/var/log/pgbackrest/*.log {
+    weekly
+    rotate 10
+    delaycompress
+    compress
+    notifempty
+    missingok
+    su root root
+    copytruncate
+}

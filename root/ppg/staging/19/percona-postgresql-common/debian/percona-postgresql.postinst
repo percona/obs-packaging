@@ -1,0 +1,53 @@
+#!/bin/sh
+
+set -e
+
+# version information maintained by debian/rules
+NEWVERSION=17
+
+. /usr/share/debconf/confmodule
+
+show_error () {
+    # tell the user about the failure
+    db_fset postgresql/auto_upgrade_failed seen false
+    db_subst postgresql/auto_upgrade_failed oldversion $OLDVERSION
+    db_subst postgresql/auto_upgrade_failed newversion $NEWVERSION
+    db_input high postgresql/auto_upgrade_failed || true
+    db_go || true
+}
+
+try_upgrade () {
+    # look for the newest "main" cluster
+    OLDVERSION=$(pg_lsclusters -h | grep -E '^[0-9.]+ +main ' | tail -n1)
+    [ "$OLDVERSION" ] || return 0 # no cluster found
+    OLDVERSION=${OLDVERSION%% *}
+
+    # check if that's older than the newest version
+    dpkg --compare-versions $OLDVERSION lt $NEWVERSION || return 0
+
+    # does the user want it?
+    db_get postgresql/auto_upgrade
+    [ "$RET" = "false" ] && return 0
+
+    # run pre-upgrade checks
+    echo "Checking if PostgreSQL cluster $OLDVERSION/main can be upgraded"
+    if ! pg_upgradecluster --check $OLDVERSION main -v $NEWVERSION; then
+        show_error
+        return
+    fi
+
+    # run the upgrade
+    if ! pg_upgradecluster $OLDVERSION main -v $NEWVERSION; then
+        show_error
+    fi
+}
+
+case $1 in
+    configure)
+        try_upgrade
+        ;;
+esac
+
+db_stop
+
+#DEBHELPER#

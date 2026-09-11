@@ -1,0 +1,155 @@
+# Mesajele în limba română pentru pachetul postgresql-common.
+# translation of postgresql-common.po to Romanian
+# Copyright © 2008, 2023, 2025 THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the postgresql-common package.
+#
+# Igor Stirbu <igor.stirbu@gmail.com>, 2008.
+# Remus-Gabriel Chelu <remusgabriel.chelu@disroot.org>, 2023, 2025.
+# NOTĂ: la sugestia lui Daniel Șerbănescu, am vrut să traduc cluster(s) = grup(uri) de servere;
+# dar în textul mesajelor, nu rezultă foarte clar dacă cluster(s) = ca mai sus(grup de servere),
+# sau este vorba de baza/bazele de date ale acestora, sau decît directorul(ele) ce găzduiesc
+# aceste baze de date. Așa că le-am lăsat în românizatul cluster(e)/clusterul(ele). Scuze...
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: postgresql-common 275\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-03-31 17:08+0000\n"
+"PO-Revision-Date: 2025-04-01 12:22+0200\n"
+"Last-Translator: Remus-Gabriel Chelu <remusgabriel.chelu@disroot.org>\n"
+"Language-Team: Romanian <debian-l10n-romanian@lists.debian.org>\n"
+"Language: ro\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < "
+"20)) ? 1 : 2;\n"
+"X-Generator: Poedit 3.5\n"
+
+#. Type: boolean
+#. Description
+#: ../postgresql.templates:1001
+msgid "Upgrade PostgreSQL cluster ${oldversion}/main to ${newversion}?"
+msgstr ""
+"Doriți să actualizați clusterul PostgreSQL de la ${oldversion}/main la $"
+"{newversion}?"
+
+#. Type: boolean
+#. Description
+#: ../postgresql.templates:1001
+msgid ""
+"The PostgreSQL database cluster ${oldversion}/main can be upgraded to "
+"version ${newversion}, this will be attempted now. (If no automated cluster "
+"upgrades are desired, uninstall the \"postgresql\" meta package.)"
+msgstr ""
+"Clusterul de baze de date PostgreSQL ${oldversion}/main poate fi actualizat "
+"la versiunea ${newversion}, acest lucru va fi încercat acum; (dacă nu se "
+"dorește actualizarea automată a clusterului, dezinstalați metapachetul "
+"„postgresql”)."
+
+#. Type: boolean
+#. Description
+#: ../postgresql.templates:1001
+msgid ""
+"Alternatively, the cluster can later be upgraded by running the command:"
+msgstr ""
+"Alternativ, clusterul poate fi actualizat ulterior prin executarea comenzii:"
+
+#. Type: boolean
+#. Description
+#: ../postgresql.templates:1001
+msgid ""
+"Once the upgraded cluster has been validated to work, drop the old cluster "
+"using the command:"
+msgstr ""
+"Odată ce clusterul actualizat a fost validat să funcționeze, renunțați la "
+"vechiul cluster folosind comanda:"
+
+#. Type: note
+#. Description
+#: ../postgresql.templates:2001
+msgid "PostgreSQL upgrade of cluster ${oldversion}/main failed"
+msgstr "Actualizarea clusterului PostgreSQL ${oldversion}/main a eșuat"
+
+#. Type: note
+#. Description
+#: ../postgresql.templates:2001
+msgid ""
+"The automated upgrade of PostgreSQL cluster ${oldversion}/main to version $"
+"{newversion} failed. Please investigate the situation and re-run the command:"
+msgstr ""
+"Actualizarea automată a clusterului PostgreSQL ${oldversion}/main la "
+"versiunea ${newversion} a eșuat. Vă rugăm să investigați situația și să re-"
+"executați comanda:"
+
+#. Type: boolean
+#. Description
+#: ../postgresql-common.templates:1001
+msgid "Enable SSL by default in new PostgreSQL clusters?"
+msgstr "Activați protocolul SSL în mod implicit în noile clustere PostgreSQL?"
+
+#. Type: boolean
+#. Description
+#: ../postgresql-common.templates:1001
+msgid ""
+"PostgreSQL supports SSL-encrypted connections. This is usually a good thing. "
+"However, if the database is solely accessed using TCP connections on "
+"localhost, SSL can be turned off without introducing security issues."
+msgstr ""
+"PostgreSQL acceptă conexiuni criptate SSL. Acesta este de obicei un lucru "
+"bun. Cu toate acestea, dacă baza de date este accesată exclusiv folosind "
+"conexiuni TCP în localhost (mașina ta), protocolul SSL poate fi dezactivat "
+"fără a introduce probleme de securitate."
+
+#. Type: boolean
+#. Description
+#: ../postgresql-common.templates:1001
+msgid ""
+"UNIX domain socket connections (called \"local\" in pg_hba.conf) are not "
+"affected by this setting. This setting concerns new PostgreSQL clusters "
+"created during package install, or by using the pg_createcluster command. It "
+"does not reconfigure existing clusters."
+msgstr ""
+"Conexiunile la soclul de domeniu UNIX (numite „local” în „pg_hba.conf”) nu "
+"sunt afectate de această configurare. Această configurare se referă la noile "
+"clustere PostgreSQL create în timpul instalării pachetului, sau prin "
+"utilizarea comenzii «pg_createcluster». Nu reconfigurează clusterele "
+"existente."
+
+#. Type: boolean
+#. Description
+#: ../postgresql-common.templates:1001
+msgid "If unsure, enable SSL."
+msgstr "Dacă nu sunteți sigur, activați protocolul SSL."
+
+#. Type: note
+#. Description
+#: ../postgresql-common.templates:2001
+msgid "PostgreSQL ${version} catalog version changed"
+msgstr "Versiunea catalogului PostgreSQL ${version} a fost schimbată"
+
+#. Type: note
+#. Description
+#: ../postgresql-common.templates:2001
+msgid ""
+"The PostgreSQL cluster ${version} ${cluster} was created using catalog "
+"version ${db_catversion}, but the currently being installed package "
+"postgresql-${version} is using catalog version ${new_catversion}. You will "
+"not be able to use this cluster until it was upgraded to the new catalog "
+"version."
+msgstr ""
+"Clusterul PostgreSQL ${cluster} ${version} a fost creat folosind versiunea "
+"de catalog ${db_catversion}, dar pachetul în curs de instalare postgresql-$"
+"{version} folosește versiunea de catalog ${new_catversion}. Nu veți putea să "
+"utilizați acest cluster până când nu a fost actualizat la noua versiune de "
+"catalog."
+
+#. Type: note
+#. Description
+#: ../postgresql-common.templates:2001
+msgid ""
+"The necessary subset of binaries from the old version was saved in $"
+"{vartmpdir}. To upgrade the cluster, execute these commands:"
+msgstr ""
+"Subsetul necesar de binare din versiunea veche a fost salvat în „$"
+"{vartmpdir}”. Pentru a actualiza clusterul, executați aceste comenzi:"

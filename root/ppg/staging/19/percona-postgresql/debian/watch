@@ -1,0 +1,5 @@
+Version: 5
+
+Source: https://ftp.postgresql.org/pub/source/v(%!{PG_MAJOR_VERSION}.*)/
+Matching-Pattern: postgresql-(%!{PG_MAJOR_VERSION}.*).tar.bz2
+Uversionmangle: auto
