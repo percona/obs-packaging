@@ -12,7 +12,6 @@ BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-plpython3
 BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-plperl
 BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-pltcl
 BuildRequires:  percona-postgresql%!{PG_MAJOR_VERSION}-devel
-BuildRequires:  percona-pg_tde%!{PG_MAJOR_VERSION}
 BuildRequires:  percona-pgaudit%!{PG_MAJOR_VERSION}
 BuildRequires:  percona-pgaudit%!{PG_MAJOR_VERSION}_set_user
 BuildRequires:  percona-pg_stat_monitor%!{PG_MAJOR_VERSION}
@@ -23,8 +22,10 @@ BuildRequires:  percona-pgvector_%!{PG_MAJOR_VERSION}
 BuildRequires:  percona-postgis35_%!{PG_MAJOR_VERSION}
 # Per-major extension deltas, defined in each major's staging macros.yaml:
 # the majors do not ship an identical extension set (pg-telemetry exists on
-# <= 17 only, pg_oidc_validator on >= 18), and this recipe is shared
-# byte-identically across majors via staging/_shared. rpm accepts several
+# <= 17 only, pg_oidc_validator on >= 18, pg_tde on >= 17 — PG 16's TDE is
+# a separate ppg:staging:16:tde edition whose packages must NEVER enter
+# this tarball, and no repository path here reaches that subproject), and
+# this recipe is shared byte-identically across majors via staging/_shared. rpm accepts several
 # names on one BuildRequires line. build-tarball.sh needs no per-component
 # knowledge: bundling, RUNPATH rewriting and every gate enumerate what is
 # actually present in the chroot/artifact.
