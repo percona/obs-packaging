@@ -471,3 +471,40 @@ def test_fetch_subproject_container_pkgs_distinct_keys_across_subprojects(monkey
     assert len(merged) == 2
     with pytest.raises(SystemExit, match="collide"):
         cmd_project._merge_container_pkgs(merged, std, f"{parent}:containers")
+
+
+def test_changelog_emits_removed_section(tmp_path):
+    src = tmp_path / "staging18"
+    src.mkdir()
+    section = cmd_project._build_changelog_section(
+        "18.6-1",
+        {"percona-postgresql": "18.6-1"},
+        {"percona-postgresql": "18.4-1", "percona-old-ext": "1.0-1"},
+        src,
+        source_container_pkgs={"img (ubi9)": {"pg": "18.6-1"}},
+        release_container_pkgs={
+            "img (ubi9)": {"pg": "18.4-1"},
+            "percona-distribution-postgresql-upgrade (ubi9)": {"pg": "18.4-1"},
+        },
+        prev_release_id="18.4-1",
+    )
+    assert "### Removed" in section
+    assert "- percona-old-ext: removed (was 1.0)" in section
+    assert (
+        "- percona-distribution-postgresql-upgrade (ubi9) [container image]: "
+        "remove image 18.4-1"
+    ) in section
+    # ordering: Added, Changed, Removed
+    assert section.index("### Changed") < section.index("### Removed")
+
+
+def test_changelog_omits_removed_section_when_nothing_removed(tmp_path):
+    src = tmp_path / "staging18"
+    src.mkdir()
+    section = cmd_project._build_changelog_section(
+        "18.6-1",
+        {"percona-postgresql": "18.6-1"},
+        {"percona-postgresql": "18.4-1"},
+        src,
+    )
+    assert "### Removed" not in section

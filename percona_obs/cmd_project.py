@@ -1826,6 +1826,8 @@ def _build_changelog_section(
     lines: list[str] = [f"## [{release_id}] - {today}", ""]
     lines += ["### Added"] + added + [""]
     lines += ["### Changed"] + changed + [""]
+    if removed:
+        lines += ["### Removed"] + removed + [""]
     if security_lines:
         lines += ["### Security"] + security_lines + [""]
 
