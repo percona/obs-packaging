@@ -18,6 +18,8 @@ Summary:        C++ wrapper library around CGAL for ISO 19107:2013 geometry oper
 License:        LGPL-2.0-or-later
 URL:            https://sfcgal.gitlab.io/SFCGAL/
 Source0:        %{srcname}-%{version}.tar.gz
+# gcc 8 + CGAL's -frounding-math reject constexpr M_PI arithmetic (Chamfer.cpp)
+Patch0:         gcc8-constexpr.patch
 Vendor:         Percona LLC
 Packager:       Percona LLC
 

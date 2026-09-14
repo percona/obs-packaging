@@ -1,0 +1,26 @@
+gcc 8: do not fold M_PI arithmetic into constexpr under -frounding-math
+
+CGAL forces -frounding-math. With that flag gcc 8 (RHEL 8 / UBI 8) refuses
+to evaluate floating-point arithmetic in a constexpr initializer:
+
+  Chamfer.cpp:372:57: error: '(1.5707963267948966e+1 / 1.8e+2)' is not a
+  constant expression
+
+gcc 9+ accepts it. These are function-local constants, so `const` gives
+the same result on every compiler.
+
+diff --git a/src/algorithm/Chamfer.cpp b/src/algorithm/Chamfer.cpp
+index 474bc37..1202dc5 100644
+--- a/src/algorithm/Chamfer.cpp
++++ b/src/algorithm/Chamfer.cpp
+@@ -369,8 +369,8 @@ create_cutter_for_edge(const Surface_mesh_3 &mesh, const LineString &edge,
+   const double opening_angle = M_PI - alpha;
+ 
+   // Validate opening angle range
+-  constexpr double MIN_OPENING = MIN_OPENING_DEG * M_PI / 180.0;
+-  constexpr double MAX_OPENING = MAX_OPENING_DEG * M_PI / 180.0;
++  const double MIN_OPENING = MIN_OPENING_DEG * M_PI / 180.0;
++  const double MAX_OPENING = MAX_OPENING_DEG * M_PI / 180.0;
+ 
+   if (opening_angle < MIN_OPENING) {
+     throw std::invalid_argument("Edge opening angle too small (" +
