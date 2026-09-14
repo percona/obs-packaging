@@ -18,8 +18,6 @@ Summary:        C++ wrapper library around CGAL for ISO 19107:2013 geometry oper
 License:        LGPL-2.0-or-later
 URL:            https://sfcgal.gitlab.io/SFCGAL/
 Source0:        %{srcname}-%{version}.tar.gz
-Patch0:         boost.patch
-Patch1:         647.patch
 Vendor:         Percona LLC
 Packager:       Percona LLC
 
@@ -95,9 +93,11 @@ building applications that use SFCGAL.
 
 %if 0%{?rhel} && 0%{?rhel} >= 8 && 0%{?rhel} < 9
 # Boost 1.73+ throw_exception wraps in wrapexcept<E> which needs a copy ctor.
-# SFCGAL 2.x deleted copy ctors; restore them (Exception holds only std::string).
+# gcc 8 rejects a defaulted special member whose noexcept differs from the
+# implicit one; strip it (Exception holds only std::string). SFCGAL 2.3 writes
+# the assignment operators with a trailing return type, so match that too.
 find . -name 'Exception.h' -exec perl -i -0777 \
-  -pe 's/\)\s*noexcept\s*=\s*(delete|default)/) = default/g' {} \;
+  -pe 's/\)\s*noexcept(\s*->\s*\w+\s*&)?\s*=\s*(delete|default)/)$1 = default/g' {} \;
 %endif
 
 %build
