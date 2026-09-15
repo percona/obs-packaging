@@ -18,6 +18,13 @@ ExcludeArch: %{ix86}
 # (same approach as proj and percona-postgis on EL8).
 %if 0%{?rhel} == 8
 %global gts_version 14
+# EL8's Boost 1.78 Multiprecision provides a __float128 conversion in its GMP
+# backend that no longer compiles with gcc >= 13 (C++23 extended-float rules
+# made __float128 non-convertible; fixed upstream in Boost 1.82). CGAL pulls
+# those headers in unless told not to. Numerically a no-op here: with
+# CMAKE_GMP_ENABLE_CXX=ON CGAL already selects the GMPXX exact backend
+# ahead of the Boost one, so Exact_rational stays mpq_class.
+%global optflags %{optflags} -DCGAL_DO_NOT_USE_BOOST_MP
 %endif
 
 Name:           %{pkgname}
