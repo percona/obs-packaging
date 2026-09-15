@@ -104,8 +104,13 @@ BuildRequires:  percona-python3
 # run time.
 BuildRequires:  python3.12-jmespath
 BuildRequires:  python3.12-s3transfer
-# Build tools (binutils provides readelf for the verification gate)
-BuildRequires:  patchelf
+# Build tools (binutils provides readelf for the verification gates).
+# patchelf versioned: EPEL 8's 0.12 fails on newer SHT_NOTE/PT_NOTE
+# layouts (PG 16 pg_verifybackup shipped RUNPATH-less), so the chroot must
+# resolve the 0.17.2 build from ppg:common:deps:tarballs — the version
+# bound turns a missing/outdated patchelf into an unresolvable chroot
+# instead of a silently broken artifact.
+BuildRequires:  patchelf >= 0.17
 BuildRequires:  file
 BuildRequires:  binutils
 
