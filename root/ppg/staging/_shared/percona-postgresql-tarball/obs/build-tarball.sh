@@ -307,13 +307,26 @@ bundle_deps() {
     done
 }
 
-# patchelf all ELF files in bin/, sbin/ and lib/ to given RPATH
+# patchelf all ELF files in bin/, sbin/ and lib/ to given RPATH.
+# A patchelf failure is FATAL: the silent `|| true` this used to carry let
+# EPEL 8's patchelf 0.12 skip PG 16's pg_verifybackup ("unsupported overlap
+# of SHT_NOTE and PT_NOTE"), shipping a binary with no RUNPATH that could
+# not resolve the bundled libpq on any EL8 host. The chroots now install
+# patchelf 0.17.2 from ppg:common:deps:tarballs, which handles that layout;
+# anything it still cannot patch must fail the build, not the QA hosts.
+# Static ELF (no NEEDED entries) has nothing to resolve and is skipped —
+# readelf classifies it, since a broken patchelf parse must not demote a
+# dynamic binary to "static".
 patch_rpath() {
     local prefix="$1"
     local rpath="${2:-\$ORIGIN/../lib}"
     find "$prefix/bin" "$prefix/sbin" "$prefix/lib" -maxdepth 1 -type f 2>/dev/null | while read f; do
-        file "$f" 2>/dev/null | grep -q ELF && \
-            patchelf --set-rpath "$rpath" "$f" 2>/dev/null || true
+        file "$f" 2>/dev/null | grep -q ELF || continue
+        readelf -d "$f" 2>/dev/null | grep -q 'NEEDED' || continue
+        if ! patchelf --set-rpath "$rpath" "$f"; then
+            echo "FATAL: patchelf failed on $f — dynamic ELF would ship without its RUNPATH" >&2
+            exit 1
+        fi
     done
 }
 
@@ -860,7 +873,12 @@ find $PG_PREFIX/lib -name '*.so*' -type f | while read f; do
     case "$(basename "$f")" in
         plperl.so|plpython3.so|pltcl.so) continue ;;
     esac
-    patchelf --set-rpath '$ORIGIN' "$f" 2>/dev/null || true
+    file "$f" 2>/dev/null | grep -q ELF || continue
+    # Same FATAL-on-failure policy as patch_rpath above.
+    if ! patchelf --set-rpath '$ORIGIN' "$f"; then
+        echo "FATAL: patchelf failed on $f — dynamic ELF would ship without its RUNPATH" >&2
+        exit 1
+    fi
 done
 
 ###############################################################
