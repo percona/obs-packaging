@@ -1,0 +1,11 @@
+title: patchelf 0.17.2 for the tarball build chroots
+description: |
+  RUNPATH-rewriting tool used by build-tarball.sh on every bundled ELF.
+  EPEL 8 ships patchelf 0.12, which fails ("unsupported overlap of
+  SHT_NOTE and PT_NOTE") on binaries linked by newer toolchains — proven
+  on PG 16's pg_verifybackup, which then shipped without a RUNPATH and
+  could not resolve the bundled libpq on EL8 hosts. Our EVR beats EPEL's,
+  so the ssl chroots resolve this build.
+
+# Builds on every repo of ppg:common:deps:tarballs (one per tarball EL
+# base: RockyLinux_8=ssl1.1, RockyLinux_9.6=ssl3, RockyLinux_9=ssl3.5).
