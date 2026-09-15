@@ -11,6 +11,15 @@
 # ix86 excluded upstream (SFCGAL issues #258, #259)
 ExcludeArch: %{ix86}
 
+# SFCGAL 2.3 uses std::filesystem. gcc 8's libstdc++ keeps it in a separate
+# static archive that upstream never links, so libSFCGAL.so ends up with
+# undefined std::filesystem symbols that break every consumer link (PostGIS).
+# gcc-toolset folds the newer symbols in statically via libstdc++_nonshared.a
+# (same approach as proj and percona-postgis on EL8).
+%if 0%{?rhel} == 8
+%global gts_version 14
+%endif
+
 Name:           %{pkgname}
 Version:        1.0.0
 Release:        1%{?dist}
@@ -18,13 +27,14 @@ Summary:        C++ wrapper library around CGAL for ISO 19107:2013 geometry oper
 License:        LGPL-2.0-or-later
 URL:            https://sfcgal.gitlab.io/SFCGAL/
 Source0:        %{srcname}-%{version}.tar.gz
-# gcc 8 + CGAL's -frounding-math reject constexpr M_PI arithmetic (Chamfer.cpp)
-Patch0:         gcc8-constexpr.patch
 Vendor:         Percona LLC
 Packager:       Percona LLC
 
 BuildRequires:  cmake
 BuildRequires:  gcc-c++
+%if 0%{?gts_version}
+BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
+%endif
 BuildRequires:  pkgconfig
 BuildRequires:  gmp-devel
 BuildRequires:  eigen3-devel
@@ -93,16 +103,11 @@ building applications that use SFCGAL.
 %prep
 %autosetup -p1 -n %{srcname}-%{version}
 
-%if 0%{?rhel} && 0%{?rhel} >= 8 && 0%{?rhel} < 9
-# Boost 1.73+ throw_exception wraps in wrapexcept<E> which needs a copy ctor.
-# gcc 8 rejects a defaulted special member whose noexcept differs from the
-# implicit one; strip it (Exception holds only std::string). SFCGAL 2.3 writes
-# the assignment operators with a trailing return type, so match that too.
-find . -name 'Exception.h' -exec perl -i -0777 \
-  -pe 's/\)\s*noexcept(\s*->\s*\w+\s*&)?\s*=\s*(delete|default)/)$1 = default/g' {} \;
-%endif
 
 %build
+%if 0%{?gts_version}
+source /opt/rh/gcc-toolset-%{gts_version}/enable
+%endif
 # CGAL template instantiation needs several GB per compile job; aarch64
 # workers with little RAM per core OOM at -j$(nproc). Let %%limit_build pick
 # a -j that fits (MemTotal+SwapTotal)/6400MB. No-op on well-provisioned hosts.
@@ -127,6 +132,15 @@ find . -name 'Exception.h' -exec perl -i -0777 \
 
 %install
 %cmake_install
+
+# A shared library links fine with dangling symbol references; they only
+# blow up when a consumer (PostGIS) links an executable against it. Catch
+# that here instead: ldd -r resolves every relocation and reports any
+# undefined symbol.
+if ldd -r %{buildroot}%{_libdir}/libSFCGAL.so.%{version} 2>&1 | grep 'undefined symbol'; then
+  echo "libSFCGAL.so has unresolved symbols" >&2
+  exit 1
+fi
 
 %post -p /sbin/ldconfig
 %postun -p /sbin/ldconfig
