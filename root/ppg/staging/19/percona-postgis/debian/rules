@@ -180,9 +180,6 @@ override_dh_auto_install:
 			install DESTDIR=$(CURDIR)/debian/tmp; \
 	done)
 
-#	Remove unversioned and unused files from address standardizer
-	rm -fv debian/tmp/usr/share/postgresql/*/extension/address_standardizer.sql
-	rm -fv debian/tmp/usr/share/postgresql/*/extension/address_standardizer_data_us.sql
 
 #	Move extension control files to version-specific names
 #	(otherwise, the -script packages from different major versions would conflict)

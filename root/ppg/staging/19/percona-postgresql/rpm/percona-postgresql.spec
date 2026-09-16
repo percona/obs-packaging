@@ -89,7 +89,7 @@ Patch6:         %{sname}-%{pgmajorversion}-perl-rpath.patch
 BuildRequires:  update-alternatives
 %endif
 
-BuildRequires:  perl glibc-devel bison flex >= 2.5.31
+BuildRequires:  perl glibc-devel bison >= 3.0.4 flex >= 2.6.1
 BuildRequires:  gcc-c++
 %if 0%{?gts_version}
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
@@ -143,10 +143,6 @@ BuildRequires:	openldap2-devel
 %else
 BuildRequires:	openldap-devel
 %endif
-%endif
-
-%if %nls
-BuildRequires:	gettext >= 0.19.8
 %endif
 
 %if %liburing

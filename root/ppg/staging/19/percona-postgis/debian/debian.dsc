@@ -10,7 +10,6 @@ Build-Depends:
  debhelper-compat (= 13),
  dpkg-dev (>= 1.16.1~),
  flex,
- imagemagick,
  libcunit1-dev,
  libgdal-dev (>= 3.0),
  libgeos-dev (>= 3.6),
@@ -27,9 +26,6 @@ Build-Depends:
  percona-postgresql-common (>= 148~),
  percona-postgresql-server-dev-all,
  protobuf-c-compiler,
- rdfind,
- xsltproc,
- libxml2-utils,
- docbook-xsl
+ rdfind
 Debtransform-Release: 1
 Debtransform-Files-Tar: debian.tar.gz

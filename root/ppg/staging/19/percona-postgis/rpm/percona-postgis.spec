@@ -1,7 +1,7 @@
 %undefine _debugsource_packages
 %global _build_id_links none
 %global postgismajorversion 3.7
-%global postgisminorversion 5
+%global postgisminorversion 7
 %global postgissomajorversion 3
 %define pgmajorversion %!{PG_MAJOR_VERSION}
 
@@ -95,7 +95,7 @@
 %{!?raster:%global     raster 1}
 %endif
 
-%if 0%{?fedora} >= 41 || 0%{?rhel} >= 7 || 0%{?suse_version} >= 1500
+%if 0%{?fedora} >= 43 || 0%{?rhel} >= 9 || 0%{?suse_version} >= 1500
 %ifnarch ppc64 ppc64le
 # TODO
 %{!?sfcgal:%global     sfcgal 1}
@@ -127,10 +127,10 @@ BuildRequires:	geos-devel libgeotiff-devel
 BuildRequires:	geos%{geosmajorversion}-devel >= %{geosfullversion}
 BuildRequires:	libgeotiff%{libgeotiffmajorversion}-devel
 %if !0%{?suse_version}
-BuildRequires:	pgdg-srpm-macros >= 1.0.53
+BuildRequires:	pgdg-srpm-macros >= 1.0.54
 %endif
 %endif
-%if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
+%if 0%{?fedora} >= 43 || 0%{?rhel} >= 9
 Requires:       pcre2
 %else
 Requires:       libpcre2-8-0
@@ -156,7 +156,7 @@ BuildRequires:	libxml2-devel
 BuildRequires:	gtk2-devel > 2.8.0
 %endif
 %if %{sfcgal}
-%if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
+%if 0%{?fedora} >= 43 || 0%{?rhel} >= 9
 BuildRequires:	SFCGAL SFCGAL-devel >= 2.1.0
 %endif
 %if 0%{?suse_version} >= 1500 && 0%{?suse_version} < 1600
@@ -219,6 +219,7 @@ BuildRequires:        libxerces-c-devel
 %endif
 %if 0%{?suse_version} >= 1600
 Requires:        libjson-c5
+Requires:        libxerces-c-3_3
 BuildRequires:        libxerces-c-devel
 %endif
 %if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
@@ -300,13 +301,13 @@ The %{name}-utils package provides the utilities for PostGIS.
 
 %if %llvm
 %package llvmjit
-Summary:	Just-in-time compilation support for postgis35
+Summary:	Just-in-time compilation support for postgis37
 Requires:	%{name}%{?_isa} = %{version}-%{release}
 BuildRequires:	clang llvm
 Requires:	llvm >= 19.0
 
 %description llvmjit
-This packages provides JIT support for postgis35
+This packages provides JIT support for postgis37
 %endif
 
 
@@ -341,6 +342,8 @@ export GMP_CFLAGS="-I/usr/include"
 export GMP_LIBS="-lgmp"
 %endif
 
+autoconf
+
 %configure --with-pgconfig=%{pginstdir}/bin/pg_config \
         --bindir=%{pginstdir}/bin/ \
 	      --datadir=%{pginstdir}/share/ \
@@ -356,7 +359,7 @@ export GMP_LIBS="-lgmp"
 %if %{shp2pgsqlgui}
 	--with-gui \
 %endif
-%if 0%{?fedora} >= 41 || 0%{?rhel} >= 8  || 0%{?suse_version} >= 1500
+%if 0%{?fedora} >= 43 || 0%{?rhel} >= 9  || 0%{?suse_version} >= 1500
 	--with-protobuf \
 %else
 	--without-protobuf \
@@ -534,6 +537,7 @@ fi
    %dir %{pginstdir}lib/bitcode/postgis_sfcgal-%{postgissomajorversion}
    %{pginstdir}/lib/bitcode/postgis_sfcgal-%{postgissomajorversion}.index.bc
    %{pginstdir}/lib/bitcode/postgis_sfcgal-%{postgissomajorversion}/lwgeom_sfcgal.bc
+   %{pginstdir}/lib/bitcode/postgis_sfcgal-%{postgissomajorversion}/postgis_sfcgal_legacy.bc
    %endif
 %endif
 

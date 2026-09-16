@@ -1,2 +1,3 @@
 #!/bin/sh
-/usr/lib/rpm/perl.req "$@" | /bin/grep -v 'Pg\b'
+
+/usr/lib/rpm/perl.req $* | grep -v 'perl(Pg'
