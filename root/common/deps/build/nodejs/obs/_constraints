@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- Node.js links V8 with ninja at high parallelism: small workers run out
+     of disk (the build tree alone is ~10 GB) or memory during the final
+     library link. -->
+<constraints>
+  <hardware>
+    <disk>
+      <size unit="G">16</size>
+    </disk>
+    <memory>
+      <size unit="G">8</size>
+    </memory>
+  </hardware>
+  <sandbox>kvm</sandbox>
+  <hostlabel exclude="true">SLOW_CPU</hostlabel>
+</constraints>

@@ -61,3 +61,15 @@ runs:
       run: |
         printf 'tries = 3\nconnect_timeout = 30\nread_timeout = 120\n' > "$RUNNER_TEMP/wgetrc"
         echo "WGETRC=$RUNNER_TEMP/wgetrc" >> "$GITHUB_ENV"
+
+    # OBS source services (obs_scm, node_modules) clone git dependencies that
+    # upstreams reference over SSH — e.g. pgAdmin's react-data-grid,
+    # ssh://git@github.com/pgadmin-org/react-data-grid.git.  The container has
+    # no ssh client and no GitHub key, so route GitHub SSH URLs over anonymous
+    # HTTPS.  Only public repositories are involved; a private one would still
+    # fail, loudly, at clone time.
+    - name: Route GitHub SSH URLs over HTTPS
+      shell: bash
+      run: |
+        git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
+        git config --global --add url."https://github.com/".insteadOf "git@github.com:"

@@ -1,0 +1,5 @@
+<services>
+  <service name="download_url">
+    <param name="url">https://files.pythonhosted.org/packages/source/F/Flask-Compress/flask_compress-1.24.tar.gz</param>
+  </service>
+</services>

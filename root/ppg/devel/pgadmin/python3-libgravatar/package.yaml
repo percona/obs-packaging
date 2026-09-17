@@ -1,0 +1,5 @@
+title: libgravatar 1.0.4 for Python 3.12
+description: |
+  A library that provides a Python 3 interface for the Gravatar API. RPM-only python3.12-* build from the PyPI sdist,
+  consumed by pgAdmin 4 (percona-pgadmin4). Bump by editing obs/_service (sdist URL) and
+  rpm/*.spec (Version + changelog).

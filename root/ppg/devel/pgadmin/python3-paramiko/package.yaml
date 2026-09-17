@@ -1,0 +1,5 @@
+title: paramiko 3.5.1 for Python 3.12
+description: |
+  SSH2 protocol library. RPM-only python3.12-* build from the PyPI sdist,
+  consumed by pgAdmin 4 (percona-pgadmin4). Bump by editing obs/_service (sdist URL) and
+  rpm/*.spec (Version + changelog).

@@ -1,0 +1,11 @@
+title: packaging 25.0 for Python 3.12
+description: |
+  Core utilities for Python packages. RPM-only python3.12-* build from the PyPI sdist,
+  consumed by Percona PostgreSQL packages. Bump by editing obs/_service (sdist URL) and
+  rpm/*.spec (Version + changelog).
+
+# EL10 and openSUSE ship python3-hatchling & friends; only EL8/EL9/UBI need ours.
+build:
+  RockyLinux_10: false
+  openSUSE_Leap_16: false
+  openSUSE_Tumbleweed: false
