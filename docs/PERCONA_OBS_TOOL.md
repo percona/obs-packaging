@@ -643,11 +643,29 @@ The process is PR-based:
 
 > **Constraint:** the tag+dispatch automation in step 3 only fires for a PR whose
 > `root/` changes are **entirely** under `root/*/releases/` (`obs-pr-cleanup.yml`'s
-> release-only detection). Do not mix in unrelated `root/` edits — including the
-> legacy `PPG_RELEASE` counter bump in a per-major `<staging>/<V>/macros.yaml`, which
-> would break release-only detection if it were ever reintroduced there. This is
-> currently dormant in practice because `PPG_RELEASE` lives in the shared
-> `root/ppg/staging/macros.yaml`, which `project release` does not touch or bump.
+> release-only detection). Do not mix unrelated `root/` edits into a release PR.
+
+### The `PPG_RELEASE` counter
+
+`PPG_RELEASE` is the counter part of a release id, the `1` in `18.6-1`, and it is
+what the container image tags are built from. It is **computed, never declared**:
+`load_macros` sets it to one plus the number of tags in
+`root/<product>/releases/<major>/release.yaml` that belong to the project's current
+`PG_VERSION`.
+
+Two consequences follow, and both are deliberate:
+
+- Bumping `PG_MINOR_VERSION` resets the counter to 1 on its own, because the new
+  `PG_VERSION` matches no existing tag. There is nothing to remember and nothing to
+  edit.
+- Merging a release PR raises the counter for that PG version, so the staging
+  container images are due to be retagged. `sync-main.yml` deliberately skips a push
+  whose `root/` changes are all under `root/*/releases/`, so that retag does not race
+  `obs-release.yml` copying the images it just released. The retag happens on the
+  next packaging push.
+
+A project that needs its own pinned counter can still declare `PPG_RELEASE` in its
+`macros.yaml`; an explicit declaration always wins over the computed value.
 
 ### Step 1 — Create or update a release
 
