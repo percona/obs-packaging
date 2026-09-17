@@ -1,8 +1,8 @@
 <services>
   <service name="obs_scm">
-    <param name="url">https://github.com/percona/postgres.git</param>
+    <param name="url">%!{PG_SOURCE_GIT_URL}</param>
     <param name="scm">git</param>
-    <param name="revision">PSP-%!{PG_VERSION}.%!{PERCONA_PG_PATCH_VERSION}</param>
+    <param name="revision">%!{PG_SOURCE_GIT_REVISION}</param>
     <param name="version">%!{PG_VERSION}</param>
     <param name="filename">percona-psql</param>
   </service>
