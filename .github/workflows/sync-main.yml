@@ -33,6 +33,8 @@ jobs:
     permissions:
       contents: read
       packages: read
+    outputs:
+      release_only: ${{ steps.detect.outputs.release_only }}
 
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +42,38 @@ jobs:
           # Full history is required: sync push reads git log to detect
           # per-package changes since the last OBS sync commit SHA.
           fetch-depth: 0
+
+      # A push whose root/ changes are entirely under root/*/releases/ carries no
+      # packaging change, and must NOT be synced.  PPG_RELEASE is computed from
+      # release.yaml, so merging a release PR changes the rendered container tags;
+      # syncing here would rebuild those images with the NEXT release counter at
+      # the same moment obs-release.yml is copying the current ones out of
+      # staging, and the release workflow waits for staging to go quiet before it
+      # copies.  The retag lands on the next packaging push instead.
+      - name: Detect release-only push
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          BEFORE="${{ github.event.before }}"
+          SHA="${{ github.sha }}"
+          # Unknown range (workflow_dispatch, first push, force push, shallow
+          # clone): never skip.
+          if [ -z "$BEFORE" ] \
+             || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            echo "release_only=false" >> "$GITHUB_OUTPUT"
+            echo "unknown before-SHA; syncing"
+            exit 0
+          fi
+          CHANGED=$(git diff --name-only "$BEFORE" "$SHA" -- 'root/**')
+          NON_RELEASE=$(echo "$CHANGED" | grep -v '^root/[^/]*/releases/' || true)
+          if [ -n "$CHANGED" ] && [ -z "$NON_RELEASE" ]; then
+            echo "release_only=true" >> "$GITHUB_OUTPUT"
+            echo "release-only push; skipping sync"
+          else
+            echo "release_only=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # Packages synced before the migration to percona/obs-packaging carry
       # OBS sync comments whose SHAs come from the legacy repo's history and
@@ -119,6 +153,7 @@ jobs:
       # The report JSON scopes the poll job to the packages this run touched;
       # remove any stale report first (self-hosted runners reuse /tmp).
       - name: Sync to OBS
+        if: steps.detect.outputs.release_only != 'true'
         run: |
           rm -f /tmp/sync-report.json
           venv/bin/python -m percona_obs --verbose -P main sync push \
@@ -129,7 +164,7 @@ jobs:
       # Entry mtimes are bumped on every cache hit, so age == unused-for.
       # Runs even when the sync fails: pruning only removes stale entries.
       - name: Prune stale cache entries
-        if: always()
+        if: always() && steps.detect.outputs.release_only != 'true'
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/prune_obs_cache.py
@@ -138,6 +173,7 @@ jobs:
       # only runs after a successful sync, so an always() upload is not
       # needed.
       - name: Upload sync report
+        if: steps.detect.outputs.release_only != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: sync-report
@@ -147,6 +183,7 @@ jobs:
   poll:
     name: Wait for OBS builds
     needs: sync
+    if: needs.sync.outputs.release_only != 'true'
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     timeout-minutes: 360
