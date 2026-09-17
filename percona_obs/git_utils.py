@@ -297,7 +297,12 @@ def _macros_changed_since(short_sha: str, package_path: Path) -> bool:
     Returns True (treat as changed) when the SHA is unknown or a macros.yaml
     on either side cannot be parsed (safe default).
     """
-    from .common import _macros_chain_files, load_macros, resolve_macros
+    from .common import (
+        _macros_chain_files,
+        inject_computed_macros,
+        load_macros,
+        resolve_macros,
+    )
 
     referenced = _referenced_macros(package_path)
     if not referenced:
@@ -310,7 +315,15 @@ def _macros_changed_since(short_sha: str, package_path: Path) -> bool:
         if text is not None:
             sources.append((macro_file, text))
     try:
-        then = resolve_macros(sources)
+        # Tool-computed macros (PPG_RELEASE) are not in any macros.yaml, so the
+        # historical side has to recompute them from the same inputs at the same
+        # commit.  Without this the name is present on one side only and every
+        # package referencing it compares unequal on every single sync.
+        then = inject_computed_macros(
+            resolve_macros(sources),
+            package_path,
+            lambda p: _git_show_at(short_sha, p.relative_to(_REPO_DIR).as_posix()),
+        )
         now = load_macros(package_path)
     except SystemExit:
         return True
