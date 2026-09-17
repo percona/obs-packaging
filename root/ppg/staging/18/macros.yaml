@@ -6,3 +6,5 @@
 - PERCONA_PG_PATCH_VERSION: 1
 - PGAUDIT_VERSION: 18.0
 - TARBALL_PG_EXTRA_COMPONENTS: percona-pg_tde%!{PG_MAJOR_VERSION} percona-pg_oidc_validator%!{PG_MAJOR_VERSION}
+- PG_SOURCE_GIT_URL: https://github.com/percona/postgres.git
+- PG_SOURCE_GIT_REVISION: PSP-%!{PG_VERSION}.%!{PERCONA_PG_PATCH_VERSION}
