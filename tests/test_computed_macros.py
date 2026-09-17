@@ -106,3 +106,38 @@ def test_inject_is_pure_in_its_reader():
     )
     assert out["PPG_RELEASE"] == "2"
     assert "PPG_RELEASE" not in macros  # input dict not mutated
+
+
+import percona_obs.git_utils as git_utils
+
+
+def _macros_check_fixture(monkeypatch, tmp_path, then_release: str, now_release: str):
+    """Wire _macros_changed_since onto a fixture tree with fake git reads."""
+    root = _tree(tmp_path)
+    (root / "ppg" / "releases" / "18" / "release.yaml").write_text(now_release)
+    monkeypatch.setattr(common, "REPO_ROOT", root)
+    monkeypatch.setattr(git_utils, "_REPO_DIR", root.parent)
+    monkeypatch.setattr(git_utils, "_commit_exists", lambda sha: True)
+    monkeypatch.setattr(
+        git_utils, "_referenced_macros", lambda p: {"PG_VERSION", "PPG_RELEASE"}
+    )
+
+    def _show(sha: str, rel_path: str) -> "str | None":
+        if rel_path.endswith("releases/18/release.yaml"):
+            return then_release
+        blob = root.parent / rel_path
+        return blob.read_text("utf-8") if blob.exists() else None
+
+    monkeypatch.setattr(git_utils, "_git_show_at", _show)
+    return root / "ppg" / "staging" / "18"
+
+
+def test_macros_unchanged_when_release_state_identical(monkeypatch, tmp_path):
+    pkg = _macros_check_fixture(monkeypatch, tmp_path, RELEASE_YAML, RELEASE_YAML)
+    assert git_utils._macros_changed_since("abc1234", pkg) is False
+
+
+def test_macros_changed_when_release_added(monkeypatch, tmp_path):
+    after = RELEASE_YAML + "- ppg/18.4-2\n"
+    pkg = _macros_check_fixture(monkeypatch, tmp_path, RELEASE_YAML, after)
+    assert git_utils._macros_changed_since("abc1234", pkg) is True
