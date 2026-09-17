@@ -1,0 +1,68 @@
+{
+  "planPath": "docs/superpowers/plans/2026-09-17-computed-ppg-release-macro.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: Compute PPG_RELEASE in the macro loader",
+      "status": "pending",
+      "description": "**Goal:** `load_macros` returns a `PPG_RELEASE` entry derived from `release.yaml` for any project whose macro chain defines `PG_VERSION`.\n\n**Files:**\n- Modify: `percona_obs/common.py` (add near `resolve_macros`/`load_macros`, around lines 262-310)\n- Test: `tests/test_computed_macros.py`\n\n**Acceptance Criteria:**\n- [ ] `compute_ppg_release` returns \"1\" for None, empty, unparsable, or non-matching release data\n- [ ] `compute_ppg_release` returns one plus the count of tags matching `<product>/<pg_version>-`\n- [ ] `inject_computed_macros` leaves the dict untouched when `PG_VERSION` is absent\n- [ ] `inject_computed_macros` leaves an explicitly declared `PPG_RELEASE` untouched\n- [ ] `load_macros` on a tree with a `release.yaml` yields the computed value\n- [ ] black clean, pyright reports 0 errors\n\n**Verify:** `PYTHONPATH=$PWD venv/bin/python -m pytest tests/test_computed_macros.py -v` -> all pass\n\n```json:metadata\n{\"files\": [\"percona_obs/common.py\", \"tests/test_computed_macros.py\"], \"verifyCommand\": \"PYTHONPATH=$PWD venv/bin/python -m pytest tests/test_computed_macros.py -v\", \"acceptanceCriteria\": [\"compute_ppg_release returns 1 for missing/broken/non-matching input\", \"compute_ppg_release returns count+1 for matching product/pg_version prefix\", \"inject_computed_macros is a no-op without PG_VERSION and never mutates its input\", \"explicit PPG_RELEASE declaration wins over the computed value\", \"load_macros injects the computed value\", \"black clean and pyright 0 errors\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: Keep the content check symmetric",
+      "status": "pending",
+      "blockedBy": [
+        0
+      ],
+      "description": "**Goal:** `_macros_changed_since` computes `PPG_RELEASE` on the historical side too, so container packages are reported as changed only when the counter genuinely changed.\n\n**Files:**\n- Modify: `percona_obs/git_utils.py:300-318`\n- Test: `tests/test_computed_macros.py`\n\n**Acceptance Criteria:**\n- [ ] With identical release state at both revisions, a package referencing `PPG_RELEASE` is not reported as changed\n- [ ] With a new release tag added since the synced commit, it is reported as changed\n- [ ] The historical side reads `release.yaml` through `_git_show_at`, not from the working tree\n- [ ] black clean, pyright reports 0 errors\n\n**Verify:** `PYTHONPATH=$PWD venv/bin/python -m pytest tests/test_computed_macros.py -v` -> all pass\n\n```json:metadata\n{\"files\": [\"percona_obs/git_utils.py\", \"tests/test_computed_macros.py\"], \"verifyCommand\": \"PYTHONPATH=$PWD venv/bin/python -m pytest tests/test_computed_macros.py -v\", \"acceptanceCriteria\": [\"identical release state at both revisions reports no change\", \"a new release tag since the synced commit reports a change\", \"historical side reads release.yaml via _git_show_at\", \"black clean and pyright 0 errors\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: Remove the PPG_RELEASE declarations",
+      "status": "pending",
+      "blockedBy": [
+        0,
+        1
+      ],
+      "description": "**Goal:** The macro exists nowhere in the tree as a declaration, and every package that references it still resolves it.\n\n**Files:**\n- Modify: `root/ppg/staging/macros.yaml:27`\n- Modify: `root/ppg/devel/{14,15,16,17,18,19}/macros.yaml` (line 6 in each)\n- Modify: `root/ppg/staging/containers/macros.yaml:7-8`, `root/ppg/staging/extras/containers/macros.yaml:8-9`\n- Test: `tests/test_macro_resolution.py`\n\n**Acceptance Criteria:**\n- [ ] `grep -rn \"PPG_RELEASE\" root/ --include=macros.yaml` returns only comment lines\n- [ ] Every package directory referencing `%!{PPG_RELEASE}` resolves the macro through `load_macros`\n- [ ] Staging majors 14, 15, 16 and 19 and both cross-major container projects resolve to 1\n- [ ] Staging majors 17 and 18 resolve to 2, the intended change: both shipped a -1 release\n- [ ] black clean, pyright reports 0 errors\n\n**Verify:** `PYTHONPATH=$PWD venv/bin/python -m pytest tests/test_macro_resolution.py -v` -> all pass\n\n```json:metadata\n{\"files\": [\"root/ppg/staging/macros.yaml\", \"root/ppg/devel/14/macros.yaml\", \"root/ppg/devel/15/macros.yaml\", \"root/ppg/devel/16/macros.yaml\", \"root/ppg/devel/17/macros.yaml\", \"root/ppg/devel/18/macros.yaml\", \"root/ppg/devel/19/macros.yaml\", \"root/ppg/staging/containers/macros.yaml\", \"root/ppg/staging/extras/containers/macros.yaml\", \"tests/test_macro_resolution.py\"], \"verifyCommand\": \"PYTHONPATH=$PWD venv/bin/python -m pytest tests/test_macro_resolution.py -v\", \"acceptanceCriteria\": [\"no PPG_RELEASE declaration remains in any macros.yaml\", \"every package referencing the macro resolves it\", \"14/15/16/19 and both cross-major projects render 1\", \"17 and 18 render 2\", \"black clean and pyright 0 errors\"], \"modelTier\": \"mechanical\"}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 4: Delete the dead bump from project release",
+      "status": "pending",
+      "blockedBy": [
+        2
+      ],
+      "description": "**Goal:** `cmd_project_release` no longer contains the no-op `PPG_RELEASE` rewrite, so the release commit is release-only by construction.\n\n**Files:**\n- Modify: `percona_obs/cmd_project.py:2091-2099`, `:2109`, `:2137-2149`\n- Test: `tests/test_project_release.py`\n\n**Acceptance Criteria:**\n- [ ] No reference to `PPG_RELEASE` or `release_counter` remains anywhere in `percona_obs/`\n- [ ] `project release --help` still works and the existing release tests pass\n- [ ] black clean, pyright reports 0 errors\n\n**Verify:** `! grep -rn \"PPG_RELEASE\\|release_counter\" percona_obs/ && PYTHONPATH=$PWD venv/bin/python -m pytest tests/test_project_release.py -q` -> grep finds nothing, tests pass\n\n```json:metadata\n{\"files\": [\"percona_obs/cmd_project.py\", \"tests/test_project_release.py\"], \"verifyCommand\": \"! grep -rn 'PPG_RELEASE\\\\|release_counter' percona_obs/ && PYTHONPATH=$PWD venv/bin/python -m pytest tests/test_project_release.py -q\", \"acceptanceCriteria\": [\"no PPG_RELEASE or release_counter reference in percona_obs/\", \"existing project release tests pass\", \"black clean and pyright 0 errors\"], \"modelTier\": \"mechanical\"}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 5: Drop the dead spec references",
+      "status": "pending",
+      "blockedBy": [
+        2
+      ],
+      "description": "**Goal:** The PG 14 and PG 15 server specs stop referencing the macro where it has no effect, and keep it where it does.\n\n**Files:**\n- Modify: `root/ppg/staging/14/percona-postgresql/rpm/percona-postgresql.spec:101,103,1593`\n- Modify: `root/ppg/staging/15/percona-postgresql/rpm/percona-postgresql.spec:101,103,1621`\n\n**Acceptance Criteria:**\n- [ ] `Release:` and the `%changelog` header carry literals, matching the PG 16/17/18 specs\n- [ ] The call-home line still uses `%!{PG_VERSION}-%!{PPG_RELEASE}`\n- [ ] The rendered spec is byte-identical to the rendering before the change\n- [ ] Exactly two `PPG_RELEASE` references remain in `root/` outside Dockerfiles, both call-home lines\n\n**Verify:** the render-diff command in Step 3 prints `identical` for both specs\n\n```json:metadata\n{\"files\": [\"root/ppg/staging/14/percona-postgresql/rpm/percona-postgresql.spec\", \"root/ppg/staging/15/percona-postgresql/rpm/percona-postgresql.spec\"], \"verifyCommand\": \"see plan Task 5 Step 3 render-diff; both specs must print 'identical'\", \"acceptanceCriteria\": [\"Release: and %changelog carry literals\", \"call-home keeps the macro\", \"rendered spec byte-identical to before\", \"only the two call-home references remain outside Dockerfiles\"], \"modelTier\": \"mechanical\"}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 6: Skip release-only pushes in the main sync",
+      "status": "pending",
+      "blockedBy": [
+        2
+      ],
+      "description": "**Goal:** A push to main whose `root/` changes are entirely under `root/*/releases/` does not re-sync or poll, so merging a release PR cannot retag staging images while `obs-release.yml` is copying them.\n\n**Files:**\n- Modify: `.github/workflows/sync-main.yml` (sync job: detect step, job outputs, gated steps; poll job: gated on the output)\n\n**Acceptance Criteria:**\n- [ ] The sync job exposes a `release_only` output\n- [ ] The detect step falls back to false when the before-SHA is missing, all zeros, or absent from the clone\n- [ ] The sync, cache-prune and report-upload steps are skipped when `release_only` is true\n- [ ] The poll job is skipped when `release_only` is true\n- [ ] A YAML parse of the workflow succeeds\n\n**Verify:** `venv/bin/python -c \"import yaml; yaml.safe_load(open('.github/workflows/sync-main.yml')); print('yaml ok')\"` -> `yaml ok`\n\n```json:metadata\n{\"files\": [\".github/workflows/sync-main.yml\"], \"verifyCommand\": \"venv/bin/python -c \\\"import yaml; yaml.safe_load(open('.github/workflows/sync-main.yml')); print('yaml ok')\\\"\", \"acceptanceCriteria\": [\"sync job exposes release_only output\", \"unknown before-SHA never skips\", \"sync/prune/upload steps gated\", \"poll job gated\", \"workflow YAML parses\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 7: Document the computed macro",
+      "status": "pending",
+      "blockedBy": [
+        2,
+        5
+      ],
+      "description": "**Goal:** The tool reference and the packaging README describe `PPG_RELEASE` as computed, and the stale \"dormant\" paragraph is gone.\n\n**Files:**\n- Modify: `docs/PERCONA_OBS_TOOL.md:645-650`\n- Modify: `root/README.md` (the macros section)\n\n**Acceptance Criteria:**\n- [ ] No text in `docs/` describes the bump as dormant or as something `project release` writes\n- [ ] The reference states the derivation rule, the automatic reset on a minor bump, and the release-only skip\n- [ ] `root/README.md` documents that the macro must not be declared\n\n**Verify:** `grep -rn \"dormant\" docs/PERCONA_OBS_TOOL.md` -> no match\n\n```json:metadata\n{\"files\": [\"docs/PERCONA_OBS_TOOL.md\", \"root/README.md\"], \"verifyCommand\": \"grep -rn 'dormant' docs/PERCONA_OBS_TOOL.md || echo 'no stale text'\", \"acceptanceCriteria\": [\"no dormant/bump text left in docs\", \"derivation rule, reset and sync skip documented\", \"root/README.md says the macro must not be declared\"], \"modelTier\": \"mechanical\"}\n```"
+    }
+  ],
+  "lastUpdated": "2026-09-17T16:25:08.251649+00:00"
+}
