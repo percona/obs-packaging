@@ -508,3 +508,14 @@ def test_changelog_omits_removed_section_when_nothing_removed(tmp_path):
         src,
     )
     assert "### Removed" not in section
+
+
+def test_release_no_longer_touches_macros():
+    """The PPG_RELEASE bump is gone: the value is computed from release.yaml.
+
+    A release commit that also rewrote a staging macros.yaml would stop being
+    release-only, which is what obs-pr-cleanup keys its tag-and-dispatch on.
+    """
+    source = Path(cmd_project.__file__).read_text("utf-8")
+    assert "PPG_RELEASE" not in source
+    assert "release_counter" not in source
