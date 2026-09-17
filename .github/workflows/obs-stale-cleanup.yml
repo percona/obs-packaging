@@ -20,7 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     permissions:
+      contents: read
       packages: read
+      pull-requests: write
 
     env:
       OBS_APIURL: ${{ vars.OBS_APIURL }}
@@ -44,6 +46,7 @@ jobs:
           WARN_MARKER: "<!-- percona-obs-stale-warning -->"
         run: |
           now_ts=$(date -u +%s)
+          failures=$(mktemp)
           gh pr list \
             --state open \
             --limit 200 \
@@ -87,8 +90,18 @@ jobs:
                 echo "PR #${number}: ${age_days}d stale, posting warning"
                 warn_body=$(printf '%s\n\n:warning: This PR has had no new commits for %d days. Its OBS PR build project (`%s`) will be deleted in 1 day unless:\n\n- new commits are pushed, **or**\n- the `keep-pr-build` label is added.\n' \
                   "$WARN_MARKER" "$age_days" "$PR_ROOTPRJ")
-                gh pr comment "$number" --body "$warn_body"
+                if ! gh pr comment "$number" --body "$warn_body"; then
+                  echo "PR #${number}: failed to post warning comment" >&2
+                  echo "$number" >>"$failures"
+                fi
               else
                 echo "PR #${number}: ${age_days}d stale, no action"
               fi
             done
+
+          # One unpostable comment must not hide the rest of the sweep, but it
+          # still has to fail the job so the problem is visible.
+          if [ -s "$failures" ]; then
+            echo "::error::could not post stale warnings on PRs: $(tr '\n' ' ' <"$failures")"
+            exit 1
+          fi
