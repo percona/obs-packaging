@@ -8,6 +8,7 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Callable
 
 import yaml
 
@@ -293,20 +294,111 @@ def resolve_macros(sources: list[tuple[Path, str]]) -> dict[str, str]:
     return resolved
 
 
+# Macros computed by the tool instead of being declared in a macros.yaml.
+#
+# Unlike the FILE_MODIFY_DATE built-ins, these ARE placed in the resolved macro
+# dict, so every existing consumer — substitution, the package content check,
+# the changelog builder — treats them like any declared macro.  That is what
+# keeps git_utils._macros_changed_since honest: it recomputes the same value at
+# the historical commit instead of seeing the name appear out of nowhere.
+_COMPUTED_MACROS = frozenset({"PPG_RELEASE"})
+
+
+def compute_ppg_release(
+    product: str, pg_version: str, release_yaml_text: "str | None"
+) -> str:
+    """Return the counter of the NEXT release of *pg_version*, as a string.
+
+    The counter is one plus the number of tags in *release_yaml_text* that
+    belong to *pg_version*, i.e. tags shaped ``<product>/<pg_version>-<n>``.
+
+    A missing, empty, unparsable or tag-less release.yaml all mean "this PG
+    version has never been released", which is 1.  That is what makes the
+    counter reset by itself when PG_MINOR_VERSION is bumped: the new
+    PG_VERSION matches no existing tag.
+    """
+    if not release_yaml_text:
+        return "1"
+    try:
+        data = yaml.safe_load(release_yaml_text) or {}
+    except yaml.YAMLError:
+        return "1"
+    if not isinstance(data, dict):
+        return "1"
+    raw = data.get("releases")
+    tags = [str(t) for t in raw] if isinstance(raw, list) else []
+    if not tags and data.get("revision"):
+        tags = [str(data["revision"])]
+    prefix = f"{product}/{pg_version}-"
+    return str(sum(1 for t in tags if t.startswith(prefix)) + 1)
+
+
+def _read_worktree_file(path: Path) -> "str | None":
+    """Read *path* from the working tree, or None when it does not exist."""
+    try:
+        return path.read_text("utf-8")
+    except OSError:
+        return None
+
+
+def inject_computed_macros(
+    macros: dict[str, str],
+    project_path: Path,
+    read_file: "Callable[[Path], str | None]",
+    repo_root: "Path | None" = None,
+) -> dict[str, str]:
+    """Return *macros* plus the tool-computed entries, without mutating it.
+
+    Currently only ``PPG_RELEASE``.  *read_file* returns a repo file's contents
+    or None; callers pass a working-tree reader or a git-revision reader so the
+    identical value can be computed at any commit — see
+    ``git_utils._macros_changed_since``.  *repo_root* defaults to the module
+    global and exists so tests can point at a fixture tree.
+
+    Nothing is injected when the chain defines no ``PG_VERSION`` (e.g. under
+    ``root/ppg/common/deps``): those packages never reference the counter, and
+    one that did would still fail with the usual undefined-macro error.  An
+    explicitly declared ``PPG_RELEASE`` always wins, so a project can pin its
+    own counter.
+    """
+    root = REPO_ROOT if repo_root is None else repo_root
+    pg_version = macros.get("PG_VERSION")
+    if not pg_version or "PPG_RELEASE" in macros:
+        return macros
+    try:
+        parts = project_path.relative_to(root).parts
+    except ValueError:
+        return macros
+    if not parts:
+        return macros
+    product = parts[0]
+    major = pg_version.split(".", 1)[0].strip()
+    if not major:
+        return macros
+    release_file = root / product / "releases" / major / "release.yaml"
+    return {
+        **macros,
+        "PPG_RELEASE": compute_ppg_release(
+            product, pg_version, read_file(release_file)
+        ),
+    }
+
+
 def load_macros(project_path: Path) -> dict[str, str]:
     """Load and resolve macros from macros.yaml files in the directory hierarchy.
 
     Walks from REPO_ROOT down to *project_path*, collecting the macros.yaml
-    files that exist in the working tree, and resolves them with
-    ``resolve_macros``.
+    files that exist in the working tree, resolves them with ``resolve_macros``,
+    then adds the tool-computed macros (see ``inject_computed_macros``).
     """
-    return resolve_macros(
+    resolved = resolve_macros(
         [
             (f, f.read_text("utf-8"))
             for f in _macros_chain_files(project_path)
             if f.exists()
         ]
     )
+    return inject_computed_macros(resolved, project_path, _read_worktree_file)
 
 
 def load_yaml(path: Path) -> dict:
