@@ -294,16 +294,15 @@ def resolve_macros(sources: list[tuple[Path, str]]) -> dict[str, str]:
     return resolved
 
 
-# Macros computed by the tool instead of being declared in a macros.yaml.
+# PPG_RELEASE is computed by the tool instead of being declared in a
+# macros.yaml.
 #
-# Unlike the FILE_MODIFY_DATE built-ins, these ARE placed in the resolved macro
-# dict, so every existing consumer — substitution, the package content check,
-# the changelog builder — treats them like any declared macro.  That is what
-# keeps git_utils._macros_changed_since honest: it recomputes the same value at
-# the historical commit instead of seeing the name appear out of nowhere.
-_COMPUTED_MACROS = frozenset({"PPG_RELEASE"})
-
-
+# Unlike the FILE_MODIFY_DATE built-ins, its value IS placed in the resolved
+# macro dict, so every existing consumer — substitution, the package content
+# check, the changelog builder — treats it like any declared macro.  That is
+# what keeps git_utils._macros_changed_since honest: it recomputes the same
+# value at the historical commit instead of seeing the name appear out of
+# nowhere.
 def compute_ppg_release(
     product: str, pg_version: str, release_yaml_text: "str | None"
 ) -> str:
@@ -334,10 +333,13 @@ def compute_ppg_release(
 
 
 def _read_worktree_file(path: Path) -> "str | None":
-    """Read *path* from the working tree, or None when it does not exist."""
+    """Read *path* from the working tree, or None when it does not exist.
+
+    Undecodable content (invalid UTF-8) is also treated as absent.
+    """
     try:
         return path.read_text("utf-8")
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return None
 
 

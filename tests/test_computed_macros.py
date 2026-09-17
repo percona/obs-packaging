@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import percona_obs.common as common
+import percona_obs.git_utils as git_utils
 from percona_obs.common import compute_ppg_release, inject_computed_macros
 
 RELEASE_YAML = """\
@@ -106,9 +107,6 @@ def test_inject_is_pure_in_its_reader():
     )
     assert out["PPG_RELEASE"] == "2"
     assert "PPG_RELEASE" not in macros  # input dict not mutated
-
-
-import percona_obs.git_utils as git_utils
 
 
 def _macros_check_fixture(monkeypatch, tmp_path, then_release: str, now_release: str):

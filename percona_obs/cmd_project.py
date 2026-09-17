@@ -1847,12 +1847,13 @@ def _commit_release_paths(
     """Stage and commit only the release-relevant paths.
 
     ``committed_paths`` are repo-relative paths (as strings) explicitly
-    written by the release command — e.g. a bumped ``macros.yaml`` outside
-    ``release_dir``. ``release_dir`` (an absolute path under the repo) is
-    added wholesale so staged deletions under it are picked up too. Scoping
-    both ``git add`` and ``git commit`` to these pathspecs ensures the
-    resulting commit contains only release changes, never anything an
-    operator had staged beforehand elsewhere in the working tree.
+    written by the release command — e.g. ``release.yaml`` and
+    ``CHANGELOG.md`` — all of them inside ``release_dir``. ``release_dir``
+    (an absolute path under the repo) is added wholesale so staged deletions
+    under it are picked up too. Scoping both ``git add`` and ``git commit``
+    to these pathspecs ensures the resulting commit contains only release
+    changes, never anything an operator had staged beforehand elsewhere in
+    the working tree.
     """
     release_dir_rel = str(release_dir.relative_to(_REPO_DIR))
     pathspecs = [*committed_paths, release_dir_rel]
