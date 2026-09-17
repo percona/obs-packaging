@@ -98,9 +98,9 @@ Version:        1.0
 %if 0%{?suse_version} >= 1315
 # SuSE upstream packages have release numbers like 150200.5.19.1
 # which overrides our packages. Increase our release number on SuSE.
-Release:        4200%!{PPG_RELEASE}%{?dist}
+Release:        42001%{?dist}
 %else
-Release:        %!{PPG_RELEASE}%{?dist}
+Release:        1%{?dist}
 %endif
 License:        PostgreSQL
 Url:            https://www.postgresql.org/
@@ -1618,6 +1618,6 @@ fi
 %endif
 
 %changelog
-* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PG_VERSION}-%!{PPG_RELEASE}
+* %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PG_VERSION}-1
 - Update to upstream version %!{PG_VERSION}.
 
