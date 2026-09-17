@@ -27,7 +27,7 @@ Of the 8 spec references, only the telemetry call-home line has a real effect. T
 
 ## Global Constraints
 
-- **The only intended rendering change is `PPG_RELEASE` moving from `1` to `2` for `staging/17` and `staging/18`.** Every other package must render byte-identically. All staging majors and both cross-major container projects currently render `PPG_RELEASE` as `1`. PG 14, 15, 16 and 19 have no release project, so they compute to `1`. PG 17 has one `17.11-*` tag and PG 18 has one `18.6-*` tag, so both compute to `2`. Tasks 1 to 5 must therefore be verified against that expectation, and Task 3 explicitly records the 17 and 18 change as intended.
+- **The only intended rendering change is `PPG_RELEASE` moving from `1` to `2` for `staging/17`, `staging/18` and the two cross-major container projects.** Every other package must render byte-identically. All of them currently render `PPG_RELEASE` as `1`. PG 14, 15, 16 and 19 have no release project, so they compute to `1`. PG 17 has one `17.11-*` tag and PG 18 has one `18.6-*` tag, so both compute to `2`. `staging/containers` and `staging/extras/containers` declare `PG_VERSION: 18.6`, the upgrade target, so they track the same counter as `staging/18` and also compute to `2` — see the ruling recorded in Task 3.
 - `_macros_changed_since` compares a package's referenced macro values at the last synced commit against the current ones. Any macro present on one side and absent on the other makes every package carrying it compare unequal on every sync forever. The computed macro must be injected on **both** sides.
 - The computation must never raise on malformed or missing input. A missing `release.yaml` and an unparsable one both mean "never released", which is `1`.
 - An explicit `PPG_RELEASE` in a `macros.yaml` must keep winning over the computed value, so a project can still pin its own counter.
@@ -511,8 +511,9 @@ release.yaml at that same commit."
 **Acceptance Criteria:**
 - [ ] `grep -rn "PPG_RELEASE" root/ --include=macros.yaml` returns only comment lines
 - [ ] Every package directory referencing `%!{PPG_RELEASE}` resolves the macro through `load_macros`
-- [ ] Staging majors 14, 15, 16 and 19 and both cross-major container projects resolve to `1`
+- [ ] Staging majors 14, 15, 16 and 19 resolve to `1`
 - [ ] Staging majors 17 and 18 resolve to `2`, which is the intended change: both have shipped a `-1` release, so the next one is `-2`
+- [ ] Both cross-major container projects resolve to `2`, because they declare `PG_VERSION: 18.6`, the upgrade target, and so track `staging/18`'s counter
 - [ ] `black` clean, `pyright` reports 0 errors
 
 **Verify:** `PYTHONPATH=$PWD venv/bin/python -m pytest tests/test_macro_resolution.py -v` → all pass
@@ -630,7 +631,9 @@ for p in ["ppg/staging/14", "ppg/staging/15", "ppg/staging/16", "ppg/staging/17"
 EOF
 ```
 
-Expected: all tests pass; 14, 15, 16, 19 and both cross-major projects print `PPG_RELEASE=1`; 17 and 18 print `PPG_RELEASE=2`.
+Expected: all tests pass; 14, 15, 16 and 19 print `PPG_RELEASE=1`; 17, 18 and both cross-major container projects print `PPG_RELEASE=2`.
+
+The two cross-major projects track `staging/18` because their `macros.yaml` declares `PG_VERSION: 18.6`, the upgrade target. Their upgrade images are not currently part of any release project, so the retag costs two image rebuilds and nothing else. If that is ever unwanted, the escape hatch is to declare an explicit `PPG_RELEASE` in those two files, which still wins over the computed value.
 
 If 17 or 18 prints anything other than `2`, stop and re-read `root/ppg/releases/{17,18}/release.yaml` before continuing — the counter must match one plus the number of tags for the current `PG_VERSION`.
 
@@ -650,7 +653,9 @@ comment explaining where the value comes from.
 
 staging/17 and staging/18 move from 1 to 2 as a result: both have shipped
 a -1 release, so the next one is -2 and their images retag accordingly.
-Every other project stays at 1."
+The two cross-major container projects follow staging/18, since they
+declare PG_VERSION 18.6 as their upgrade target.  Every other project
+stays at 1."
 ```
 
 ---
@@ -664,11 +669,11 @@ Every other project stays at 1."
 - Test: `tests/test_project_release.py`
 
 **Acceptance Criteria:**
-- [ ] No reference to `PPG_RELEASE` or `release_counter` remains anywhere in `percona_obs/`
+- [ ] No reference to `PPG_RELEASE` or `release_counter` remains in `percona_obs/cmd_project.py`, and `release_counter` is gone from `percona_obs/` entirely. `common.py` and `git_utils.py` keep their `PPG_RELEASE` literals: that is the computation itself.
 - [ ] `project release --help` still works and the existing release tests pass
 - [ ] `black` clean, `pyright` reports 0 errors
 
-**Verify:** `! grep -rn "PPG_RELEASE\|release_counter" percona_obs/ && PYTHONPATH=$PWD venv/bin/python -m pytest tests/test_project_release.py -q` → grep finds nothing, tests pass
+**Verify:** `! grep -n "PPG_RELEASE\|release_counter" percona_obs/cmd_project.py && ! grep -rn "release_counter" percona_obs/ && PYTHONPATH=$PWD venv/bin/python -m pytest tests/test_project_release.py -q` → both greps find nothing, tests pass
 
 **Steps:**
 
@@ -1059,10 +1064,11 @@ venv/bin/black percona_obs/ tests/
 PYTHONPATH=$PWD venv/bin/pyright
 PYTHONPATH=$PWD venv/bin/python -m pytest tests/ -q
 grep -rn "PPG_RELEASE" root/ --include=macros.yaml | grep -v '^\s*#' || echo "no declarations"
-grep -rn "PPG_RELEASE" percona_obs/ || echo "no tool-side references"
+grep -n "PPG_RELEASE\|release_counter" percona_obs/cmd_project.py || echo "cmd_project clean"
+grep -rn "release_counter" percona_obs/ || echo "no release_counter anywhere"
 ```
 
-Expected: black clean, pyright `0 errors`, full suite green, no declarations, no tool-side references outside `common.py`'s computation.
+Expected: black clean, pyright `0 errors`, full suite green, no declarations, `cmd_project clean`, `no release_counter anywhere`. `common.py` and `git_utils.py` still mention `PPG_RELEASE`; that is the computation and its comment, and it must stay.
 
 Then, before opening the PR, confirm against production that the intended retag is the only packaging change:
 
