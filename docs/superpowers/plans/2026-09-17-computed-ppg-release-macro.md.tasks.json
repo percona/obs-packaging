@@ -4,13 +4,13 @@
     {
       "id": 0,
       "subject": "Task 1: Compute PPG_RELEASE in the macro loader",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** `load_macros` returns a `PPG_RELEASE` entry derived from `release.yaml` for any project whose macro chain defines `PG_VERSION`.\n\n**Files:**\n- Modify: `percona_obs/common.py` (add near `resolve_macros`/`load_macros`, around lines 262-310)\n- Test: `tests/test_computed_macros.py`\n\n**Acceptance Criteria:**\n- [ ] `compute_ppg_release` returns \"1\" for None, empty, unparsable, or non-matching release data\n- [ ] `compute_ppg_release` returns one plus the count of tags matching `<product>/<pg_version>-`\n- [ ] `inject_computed_macros` leaves the dict untouched when `PG_VERSION` is absent\n- [ ] `inject_computed_macros` leaves an explicitly declared `PPG_RELEASE` untouched\n- [ ] `load_macros` on a tree with a `release.yaml` yields the computed value\n- [ ] black clean, pyright reports 0 errors\n\n**Verify:** `PYTHONPATH=$PWD venv/bin/python -m pytest tests/test_computed_macros.py -v` -> all pass\n\n```json:metadata\n{\"files\": [\"percona_obs/common.py\", \"tests/test_computed_macros.py\"], \"verifyCommand\": \"PYTHONPATH=$PWD venv/bin/python -m pytest tests/test_computed_macros.py -v\", \"acceptanceCriteria\": [\"compute_ppg_release returns 1 for missing/broken/non-matching input\", \"compute_ppg_release returns count+1 for matching product/pg_version prefix\", \"inject_computed_macros is a no-op without PG_VERSION and never mutates its input\", \"explicit PPG_RELEASE declaration wins over the computed value\", \"load_macros injects the computed value\", \"black clean and pyright 0 errors\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 1,
       "subject": "Task 2: Keep the content check symmetric",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         0
       ],
@@ -19,7 +19,7 @@
     {
       "id": 2,
       "subject": "Task 3: Remove the PPG_RELEASE declarations",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         0,
         1
@@ -29,7 +29,7 @@
     {
       "id": 3,
       "subject": "Task 4: Delete the dead bump from project release",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         2
       ],
@@ -38,7 +38,7 @@
     {
       "id": 4,
       "subject": "Task 5: Drop the dead spec references",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         2
       ],
@@ -47,7 +47,7 @@
     {
       "id": 5,
       "subject": "Task 6: Skip release-only pushes in the main sync",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         2
       ],
@@ -56,7 +56,7 @@
     {
       "id": 6,
       "subject": "Task 7: Document the computed macro",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         2,
         5
@@ -64,5 +64,5 @@
       "description": "**Goal:** The tool reference and the packaging README describe `PPG_RELEASE` as computed, and the stale \"dormant\" paragraph is gone.\n\n**Files:**\n- Modify: `docs/PERCONA_OBS_TOOL.md:645-650`\n- Modify: `root/README.md` (the macros section)\n\n**Acceptance Criteria:**\n- [ ] No text in `docs/` describes the bump as dormant or as something `project release` writes\n- [ ] The reference states the derivation rule, the automatic reset on a minor bump, and the release-only skip\n- [ ] `root/README.md` documents that the macro must not be declared\n\n**Verify:** `grep -rn \"dormant\" docs/PERCONA_OBS_TOOL.md` -> no match\n\n```json:metadata\n{\"files\": [\"docs/PERCONA_OBS_TOOL.md\", \"root/README.md\"], \"verifyCommand\": \"grep -rn 'dormant' docs/PERCONA_OBS_TOOL.md || echo 'no stale text'\", \"acceptanceCriteria\": [\"no dormant/bump text left in docs\", \"derivation rule, reset and sync skip documented\", \"root/README.md says the macro must not be declared\"], \"modelTier\": \"mechanical\"}\n```"
     }
   ],
-  "lastUpdated": "2026-09-17T16:25:08.251649+00:00"
+  "lastUpdated": "2026-09-17T16:54:51.456876+00:00"
 }
