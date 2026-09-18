@@ -1,0 +1,22 @@
+Tests: run-testsuite
+Depends:
+ build-essential,
+ debhelper,
+ fakeroot,
+ hunspell-en-us,
+ iproute2,
+ locales-all,
+ logrotate,
+ netcat-openbsd,
+ perl,
+ postgresql-common-dev,
+ procps,
+ @,
+Restrictions: needs-root
+
+Tests: installcheck
+Depends:
+ build-essential,
+ tzdata-legacy | tzdata (<< 2023c-8),
+ @,
+Restrictions: allow-stderr
