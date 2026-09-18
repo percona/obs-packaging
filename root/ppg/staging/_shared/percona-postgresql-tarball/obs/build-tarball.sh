@@ -1027,8 +1027,15 @@ find /opt/percona-* -type f -perm -u+x | while read -r f; do
     readelf -lW "$f" 2>/dev/null | grep -q 'INTERP' || continue
     # timeout: belt and braces. With the INTERP filter nothing should run,
     # but a gate must never be able to hang a build.
-    timeout 30 env -i LD_TRACE_LOADED_OBJECTS=1 "$f" >/dev/null 2>&1
-    rc=$?
+    #
+    # `|| rc=$?` is LOAD-BEARING, not style: this script runs under set -e,
+    # so a bare command that exits non-zero kills the build THERE — before
+    # the rc test below, with no message and no audit line. That is exactly
+    # what happened on EL8 x86_64, where percona-haproxy does not exit 0
+    # under tracing: every ssl1.1 build died mid-loop and powered the VM off
+    # with no explanation. A gate must report, never vanish.
+    rc=0
+    timeout 30 env -i LD_TRACE_LOADED_OBJECTS=1 "$f" >/dev/null 2>&1 || rc=$?
     # >= 128: killed by a signal (139 = SIGSEGV in the loader) — the ELF is
     # unloadable. A plain non-zero exit is NOT a failure here: a missing
     # bundled library is the NEEDED audit's job. 124 = timeout, i.e. the
