@@ -2328,10 +2328,10 @@ def cmd_sync_release(args) -> None:
     """Release packages from an OBS source project to a release target.
 
     Reads the release.yaml for the given release project identifier,
-    checks that the source project is up-to-date, creates (or updates) the
-    release target project on OBS, configures releasetarget entries on the
-    source project, runs ``osc release``, then restores the source project's
-    repository configuration.
+    checks that the staging project's directory has not changed in git since
+    the release tag, creates (or updates) the release target project on OBS,
+    configures releasetarget entries on the source project, runs ``osc release``,
+    then restores the source project's repository configuration.
 
     If the release OBS project already exists (update release or re-run),
     ``osc release`` is run again to copy updated binaries in place.
@@ -2569,7 +2569,7 @@ def cmd_sync_release(args) -> None:
         )
         return
 
-    # First release: validate source project is up-to-date, then create.
+    # First release: check that staging hasn't changed since tag, then create.
     if not args.force:
         source_path = resolve_project_path(source_project_id)
         if tag and getattr(args, "skip_tag_check", False):
