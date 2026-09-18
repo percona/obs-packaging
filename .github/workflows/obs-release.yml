@@ -214,6 +214,8 @@ jobs:
           STATE=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/sync-main.yml" --jq .state || echo "unknown")
           if [ "$STATE" = "active" ]; then
             echo "::error::Release failed or was cancelled, and sync-main is ACTIVE (the lock was already released before this happened, e.g. a failed catch-up dispatch). Check whether staging was re-synced with the wrong release counter."
+          elif [ "$STATE" = "unknown" ]; then
+            echo "::error::Release failed or was cancelled and sync-main's state could not be determined. Check it manually: gh api repos/${GITHUB_REPOSITORY}/actions/workflows/sync-main.yml --jq .state"
           else
             echo "::error::Release failed or was cancelled and sync-main is still DISABLED (state: ${STATE}). Staging must not be re-synced until this release succeeds, or the release counter will retag staging images before they are released. Disabling only blocks NEW triggers — a sync-main run already in progress or already pending in the concurrency group will still run once this job ends, so you may also need to cancel that run. Re-run this workflow once the cause is fixed, or re-enable manually with: gh workflow enable sync-main.yml"
           fi

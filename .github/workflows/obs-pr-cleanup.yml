@@ -123,6 +123,19 @@ jobs:
           echo "Release lock taken: sync-main state is ${STATE}"
 
           DISPATCHED_ANY=false
+          # The lock must never outlive this step unless a release actually took it
+          # over.  An EXIT trap covers every way out: tag creation failing, a pipeline
+          # aborting under pipefail, or simply finding no tag to dispatch.
+          release_lock_if_unused() {
+            if [ "$DISPATCHED_ANY" = "false" ]; then
+              echo "::warning::No release was dispatched — releasing the sync-main lock"
+              if ! gh workflow enable sync-main.yml; then
+                echo "::error::Failed to re-enable sync-main. Re-enable it manually: gh workflow enable sync-main.yml"
+              fi
+            fi
+          }
+          trap release_lock_if_unused EXIT
+
           while IFS= read -r release_file; do
             TAG=$(git show "${MERGE_SHA}:${release_file}" | venv/bin/python3 -c \
               "import sys,yaml; d=yaml.safe_load(sys.stdin); r=d.get('releases') or []; print(r[-1] if r else d.get('revision') or '')")
@@ -146,8 +159,7 @@ jobs:
               if [ "$DISPATCHED_ANY" = "true" ]; then
                 echo "::warning::Failed to dispatch obs-release.yml for tag ${TAG}, but an earlier release from this PR is running — a release is running and holds the lock, leaving sync-main disabled"
               else
-                echo "::error::Failed to dispatch obs-release.yml for tag ${TAG}; re-enabling sync-main"
-                gh workflow enable sync-main.yml || true
+                echo "::error::Failed to dispatch obs-release.yml for tag ${TAG}"
               fi
               exit 1
             fi
