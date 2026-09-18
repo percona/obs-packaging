@@ -1017,14 +1017,28 @@ echo "=== Verification: dynamic-loader sanity ==="
 # honest — no inherited LD_LIBRARY_PATH propping the resolution up.
 : > /tmp/loader-audit.txt
 find /opt/percona-* -type f -perm -u+x | while read -r f; do
-    file "$f" 2>/dev/null | grep -q 'ELF.*executable' || continue
-    env -i LD_TRACE_LOADED_OBJECTS=1 "$f" >/dev/null 2>&1
+    # PT_INTERP is the precise test for "the dynamic loader must accept
+    # this": only those binaries honour LD_TRACE_LOADED_OBJECTS. A STATIC
+    # binary (percona-etcd ships Go ones) ignores the variable and simply
+    # RUNS — etcd then serves forever and hangs the build, which is exactly
+    # what the first version of this gate did. readelf, not file(1), because
+    # file's wording for PIE executables differs across EL8/EL9 ("shared
+    # object" vs "pie executable") and would silently skip real binaries.
+    readelf -lW "$f" 2>/dev/null | grep -q 'INTERP' || continue
+    # timeout: belt and braces. With the INTERP filter nothing should run,
+    # but a gate must never be able to hang a build.
+    timeout 30 env -i LD_TRACE_LOADED_OBJECTS=1 "$f" >/dev/null 2>&1
     rc=$?
-    # >= 128: killed by a signal (139 = SIGSEGV in the loader). A plain
-    # non-zero exit is NOT a failure here: a missing bundled library is the
-    # NEEDED audit's job, and some binaries exit non-zero under tracing.
+    # >= 128: killed by a signal (139 = SIGSEGV in the loader) — the ELF is
+    # unloadable. A plain non-zero exit is NOT a failure here: a missing
+    # bundled library is the NEEDED audit's job. 124 = timeout, i.e. the
+    # binary ran instead of being traced; report it as a gate blind spot
+    # rather than a corruption, so it gets looked at without failing a build
+    # for the wrong reason.
     if [ "$rc" -ge 128 ]; then
         echo "LOADER-FAIL ($rc): $f" >> /tmp/loader-audit.txt
+    elif [ "$rc" -eq 124 ]; then
+        echo "  NOTE: $f ignored LD_TRACE_LOADED_OBJECTS (not trace-checked)"
     fi
 done
 if [ -s /tmp/loader-audit.txt ]; then
