@@ -61,7 +61,6 @@ schedule PostgreSQL commands directly from the database.
 Summary:	Just-in-time compilation support for pg_cron
 Requires:	%{name}%{?_isa} = %{version}-%{release}
 
-<<<<<<< HEAD
 %if 0%{?suse_version} == 1500
 BuildRequires:	llvm17-devel clang17-devel
 Requires:	llvm17
