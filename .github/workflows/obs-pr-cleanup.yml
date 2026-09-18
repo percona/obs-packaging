@@ -109,8 +109,25 @@ jobs:
                 exit 1
               fi
             fi
+            # PPG_RELEASE is one plus the release count in release.yaml, so the
+            # instant this PR's tag commit lands, git already reports the NEXT
+            # counter while staging still holds artifacts built under the
+            # current one. Take an exclusive lock on staging before dispatching:
+            # disable sync-main so it cannot re-render staging container
+            # Dockerfiles (and get them rebuilt with the next counter) while
+            # obs-release.yml is still copying the current artifacts out.
+            # Idempotent: disabling an already-disabled workflow exits non-zero,
+            # hence `|| true` under `set -euo pipefail`.
+            gh workflow disable sync-main.yml || true
             echo "Dispatching obs-release.yml with tag=${TAG}"
-            gh workflow run obs-release.yml --ref main -f "tag=${TAG}"
+            # Capture the dispatch exit status instead of letting `set -e` abort
+            # immediately: a failed dispatch must not leave sync-main disabled
+            # with no release actually running.
+            if ! gh workflow run obs-release.yml --ref main -f "tag=${TAG}"; then
+              echo "::error::Failed to dispatch obs-release.yml for tag ${TAG}; re-enabling sync-main"
+              gh workflow enable sync-main.yml || true
+              exit 1
+            fi
           done <<< "$FILES"
 
       # Delete the PR's root project and all its sub-projects.

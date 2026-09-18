@@ -7,14 +7,29 @@ name: OBS Release
 # releases by accident).  Manual recovery:
 #   gh workflow run obs-release.yml -f tag=ppg/17.11-1
 #
-# Pending-cancellation race: this job shares the "sync-main-sync"
-# concurrency group (cancel-in-progress: false) with sync-main's sync job.
-# GitHub only keeps ONE pending run per group, so if a root/** push queues
-# another sync-main sync job while this dispatched run is still pending
-# behind an in-progress one, this run is CANCELLED rather than queued
-# again. Symptom: the dispatched "OBS Release" run shows as cancelled with
-# no release having happened. Recovery: re-dispatch with the manual command
-# above once the concurrency group is free.
+# Exclusive lock on staging: PPG_RELEASE is computed as one plus the release
+# count in root/<product>/releases/<major>/release.yaml, so the moment a
+# release PR merges, git already reports the NEXT counter while staging still
+# holds the artifacts this release is about to copy out, built under the
+# CURRENT one. If sync-main ran during that window it would re-render staging
+# container Dockerfiles with the next counter and get them rebuilt; a failed
+# release re-run would then copy next-counter images into this release. So a
+# release takes an exclusive lock on staging: sync-main is disabled (by
+# obs-pr-cleanup.yml before dispatch, and redundantly as this job's first step
+# for the manual re-dispatch path below) for the whole duration of a release,
+# and only re-enabled by this job's last step once no other release run is
+# still queued or in progress. With sync-main disabled, the "sync-main-sync"
+# concurrency group below normally holds only release runs, so two release
+# runs queue back to back and both complete rather than one being cancelled.
+#
+# Residual race: this only closes the window from PR-merge onward. If a
+# release is dispatched (manually, or via the recipe below) while a sync-main
+# sync job is already in-progress or pending in the group, that sync still
+# runs, and GitHub keeps only ONE pending run per group — a second release
+# dispatched behind it can still displace (cancel) the first. Symptom: the
+# dispatched "OBS Release" run shows as cancelled with no release having
+# happened. Recovery: re-dispatch with the manual command above once the
+# concurrency group is free.
 
 on:
   workflow_dispatch:
@@ -36,12 +51,24 @@ jobs:
     permissions:
       contents: write
       packages: read
+      # Required to disable/re-enable sync-main.yml for the staging lock.
+      actions: write
 
     env:
       OBS_APIURL: ${{ vars.OBS_APIURL }}
       OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
 
     steps:
+      # Idempotent: obs-pr-cleanup.yml already disables sync-main before
+      # dispatching this workflow, but a manual re-dispatch (the recovery
+      # recipe above) does not go through that workflow, so take the lock
+      # here too. `|| true` because disabling an already-disabled workflow
+      # returns non-zero.
+      - name: Take the release lock (disable sync-main)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow disable sync-main.yml || true
+
       - name: Validate tag input
         run: |
           TAG="${{ inputs.tag }}"
@@ -111,3 +138,40 @@ jobs:
             --notes "${BODY:-No changelog available.}" \
           || gh release edit "$TAG" \
             --notes "${BODY:-No changelog available.}"
+
+      # Release the lock. Only if no other release run is still queued or
+      # in-progress: a manual re-dispatch, or a second release-PR merge while
+      # this run was still going, can leave another obs-release run waiting
+      # on the same "sync-main-sync" concurrency group, and re-enabling
+      # sync-main here would open the window this whole lock exists to close
+      # for that run's duration. Enable before dispatching: a disabled
+      # workflow cannot be run with `gh workflow run`.
+      - name: Release the lock (re-enable sync-main)
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Container-job steps default to plain `sh`, which rejects
+        # `set -o pipefail`; this script is bash.
+        shell: bash
+        run: |
+          set -euo pipefail
+          OTHERS=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/obs-release.yml/runs?per_page=100" \
+            --jq "[.workflow_runs[]
+                   | select(.status == \"queued\" or .status == \"in_progress\")
+                   | select(.id != ${{ github.run_id }})] | length")
+          if [ "$OTHERS" -gt 0 ]; then
+            echo "::notice::${OTHERS} further release run(s) pending — handing the lock over, sync-main stays disabled"
+            exit 0
+          fi
+          gh workflow enable sync-main.yml
+          echo "::notice::sync-main re-enabled; dispatching a catch-up sync"
+          gh workflow run sync-main.yml --ref main
+
+      # Make a held lock impossible to miss: a failed release leaves
+      # sync-main disabled on purpose (the staging state this release was
+      # about to copy out must not be disturbed by a retry), but that must
+      # not be silently forgotten.
+      - name: Report held lock on failure
+        if: failure()
+        run: |
+          echo "::error::Release failed and sync-main is still DISABLED. Staging must not be re-synced until this release succeeds, or the release counter will retag staging images before they are released. Re-run this workflow once the cause is fixed, or re-enable manually with: gh workflow enable sync-main.yml"
