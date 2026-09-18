@@ -2605,37 +2605,6 @@ def cmd_sync_release(args) -> None:
                     "Use --force to skip this check."
                 )
 
-        # Check OBS-level divergence (external edits directly in OBS).
-        _print_pending(f"validating source project {source_obs_project} is up-to-date")
-        cmd = [sys.executable, "-m", "percona_obs"]
-        if args.profile:
-            cmd += ["-P", args.profile]
-        else:
-            cmd += ["-A", apiurl, "-R", args.rootprj]
-        cmd += ["sync", "push", "--dry-run", "--no-scm-validate", source_project_id]
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=_REPO_DIR)
-        if result.returncode != 0:
-            print(result.stderr, end="", file=sys.stderr)
-            raise SystemExit(
-                f"error: sync push --dry-run failed for {source_project_id}"
-            )
-        pending_lines = [
-            line
-            for line in result.stdout.splitlines()
-            if line.startswith("  + ") or line.startswith("  ~ ")
-        ]
-        if pending_lines:
-            print(
-                f"error: source project {source_project_id} has pending changes:",
-                file=sys.stderr,
-            )
-            for line in pending_lines:
-                print(f"  {line}", file=sys.stderr)
-            raise SystemExit(
-                "Sync the source project before releasing: "
-                f"percona-obs sync push {source_project_id}"
-            )
-
     # Create the release target project on OBS (builds disabled, same repos as source).
     source_repo_elems = _create_release_project(
         apiurl, source_obs_project, release_obs_project

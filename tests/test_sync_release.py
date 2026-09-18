@@ -260,6 +260,66 @@ def test_no_freeze_skips_gate_but_verifies(tmp_path, monkeypatch):
     ) in verified
 
 
+def _wire_release_first_path(monkeypatch, src, rel):
+    """Stub every OBS/osc touchpoint cmd_sync_release hits on the first-release
+    (project-does-not-exist) path."""
+    monkeypatch.setattr(
+        cmd_sync,
+        "resolve_project_path",
+        lambda pid: src if pid == "ppg:staging:17" else rel,
+    )
+    monkeypatch.setattr(cmd_sync, "_REPO_DIR", rel.parents[2])
+    monkeypatch.setattr(cmd_sync.osc.conf, "config", {"apiurl": "http://obs"})
+    monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda *a, **k: False)
+    monkeypatch.setattr(cmd_sync, "_create_release_project", lambda *a, **k: [])
+    monkeypatch.setattr(cmd_sync, "_copy_project_conf", lambda *a, **k: None)
+    monkeypatch.setattr(
+        cmd_sync, "_apply_project_config", lambda *a, **k: (False, None)
+    )
+    monkeypatch.setattr(cmd_sync, "_disable_project_builds", lambda *a, **k: None)
+    monkeypatch.setattr(
+        cmd_sync, "_read_project_release_source", lambda *a, **k: ([], None)
+    )
+    monkeypatch.setattr(
+        cmd_sync, "_filter_release_repo_names", lambda apiurl, names, target: names
+    )
+    monkeypatch.setattr(cmd_sync, "_add_release_targets", lambda *a, **k: None)
+    monkeypatch.setattr(cmd_sync, "_remove_release_targets", lambda *a, **k: None)
+    monkeypatch.setattr(
+        cmd_sync, "_fetch_obs_subproject_names", lambda apiurl, prefix: set()
+    )
+
+
+def test_first_release_does_not_shell_out_to_dry_run_sync(tmp_path, monkeypatch):
+    """The first-release path must not run a `sync push --dry-run` subprocess
+    to validate OBS-level divergence; only `osc release` may be invoked."""
+    src, rel = _mk_tree(tmp_path)
+    (rel / "tarballs").mkdir()
+    (rel / "tarballs" / "project.yaml").write_text("build: false\n")
+    _wire_release_first_path(monkeypatch, src, rel)
+
+    monkeypatch.setattr(cmd_sync, "wait_for_quiesce", lambda *a, **k: None)
+    monkeypatch.setattr(cmd_sync, "assert_all_green", lambda *a, **k: [])
+    monkeypatch.setattr(cmd_sync, "freeze_builds", lambda *a, **k: {})
+    monkeypatch.setattr(cmd_sync, "restore_builds", lambda *a, **k: None)
+    monkeypatch.setattr(cmd_sync, "verify_release_landed", lambda *a, **k: None)
+
+    run_calls = []
+
+    def fake_run(cmd, *a, **k):
+        run_calls.append(cmd)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(cmd_sync.subprocess, "run", fake_run)
+
+    args = _Args(project="ppg:releases:17", rootprj="home:Admin")
+
+    cmd_sync.cmd_sync_release(args)
+
+    assert not any("push" in cmd for cmd in run_calls)
+    assert any("release" in cmd for cmd in run_calls)
+
+
 def _dry_run_args(project="ppg:releases:17"):
     return SimpleNamespace(
         project=project,
