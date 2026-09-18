@@ -830,8 +830,8 @@ Flags:
 
 1. **Divergence check** (skipped with `--force`):
    - Checks that no files under the source project have changed since the release tag
-     (`git diff <tag>..HEAD`). Pass `--skip-tag-check` when the tag doesn't exist locally.
-     Runs on both the first-release and update paths.
+     (`git diff <tag>..HEAD`). This check runs on both the first-release and update paths.
+     Pass `--skip-tag-check` when the tag doesn't exist locally.
 2. **Mirror check** — a staging subproject with no corresponding local mirror directory
    is a **hard error** (never silently skipped).
 3. **Applies the release project config** — the top-level release project meta is
