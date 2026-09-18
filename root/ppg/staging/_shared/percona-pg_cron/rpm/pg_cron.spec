@@ -80,9 +80,6 @@ Requires:	llvm >= 15.0
 BuildRequires:	llvm-devel >= 19.0 clang-devel >= 19.0
 Requires:	llvm >= 19.0
 %endif
-=======
-BuildRequires:	llvm-devel clang-devel clang llvm
->>>>>>> b39895bd (PG-2752 Add PPG19 in staging project)
 
 %description llvmjit
 This packages provides JIT support for pg_cron
