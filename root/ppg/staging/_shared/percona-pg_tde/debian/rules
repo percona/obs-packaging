@@ -25,11 +25,8 @@ override_dh_auto_configure:
 
 override_dh_auto_install:
 	dh_auto_install
-<<<<<<< HEAD
 	find $(CURDIR)/debian/tmp -type f \( -name '*.so' -o -name 'pg_tde_*' \) \
 		-exec chrpath --delete {} \; 2>/dev/null || true
-=======
->>>>>>> b39895bd (PG-2752 Add PPG19 in staging project)
 	mkdir -p $(CURDIR)/debian/tmp/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib/pgxs/src/test/perl/PostgreSQL/Test
 	install -m 644 ci_scripts/perl/PostgreSQL/Test/TdeCluster.pm $(CURDIR)/debian/tmp/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/lib/pgxs/src/test/perl/PostgreSQL/Test/
 
