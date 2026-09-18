@@ -999,6 +999,41 @@ case "$EL_MAJOR" in
     *)  echo "FATAL: unmapped EL major version '$EL_MAJOR'" >&2; exit 1 ;;
 esac
 
+echo "=== Verification: dynamic-loader sanity ==="
+# THE gate this section was missing, and the reason three broken tarballs
+# shipped: every step above trusts that a tool which exited 0 produced a
+# working ELF. patchelf 0.17.2 did not — it wrote plausible-looking
+# binaries whose program headers make glibc's rtld segfault inside
+# dl_main() before a single instruction of program code runs (measured:
+# pg_ctl/pg_basebackup on EL8, createdb/createuser on EL9, bin/postgres on
+# the EL9 PG 14 build). The NEEDED/RUNPATH audits below all PASSED on
+# those binaries, because they only parse the ELF with readelf/patchelf —
+# they never ask the loader to accept it.
+#
+# So ask the loader, on every bundled executable: LD_TRACE_LOADED_OBJECTS
+# makes ld.so map the whole dependency chain, print it and exit WITHOUT
+# running the program (safe for servers and one-shot tools alike), so a
+# death by signal here means the ELF itself is unloadable. env -i keeps it
+# honest — no inherited LD_LIBRARY_PATH propping the resolution up.
+: > /tmp/loader-audit.txt
+find /opt/percona-* -type f -perm -u+x | while read -r f; do
+    file "$f" 2>/dev/null | grep -q 'ELF.*executable' || continue
+    env -i LD_TRACE_LOADED_OBJECTS=1 "$f" >/dev/null 2>&1
+    rc=$?
+    # >= 128: killed by a signal (139 = SIGSEGV in the loader). A plain
+    # non-zero exit is NOT a failure here: a missing bundled library is the
+    # NEEDED audit's job, and some binaries exit non-zero under tracing.
+    if [ "$rc" -ge 128 ]; then
+        echo "LOADER-FAIL ($rc): $f" >> /tmp/loader-audit.txt
+    fi
+done
+if [ -s /tmp/loader-audit.txt ]; then
+    cat /tmp/loader-audit.txt
+    echo "FATAL: the dynamic loader cannot load the binaries above — an ELF-rewriting step corrupted them (check the patchelf version)" >&2
+    exit 1
+fi
+echo "loader sanity: every bundled executable loads"
+
 echo "=== Verification: NEEDED-soname audit ==="
 # ldd would resolve against the fully-populated buildroot (ld.so.cache), hiding
 # libraries we failed to bundle. Instead audit DT_NEEDED sonames directly: each
