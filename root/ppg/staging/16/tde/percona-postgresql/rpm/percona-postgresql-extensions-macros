@@ -1,0 +1,2 @@
+
+%percona_pg_version_from_name %define pg_version %( echo %{?pg_name} | sed -e 's|^percona-postgresql||g' )%{nil}
