@@ -182,6 +182,10 @@ jobs:
           SYNC_PROJECT: ${{ inputs.project }}
           SYNC_PACKAGE: ${{ inputs.package }}
           SYNC_FORCE: ${{ inputs.force }}
+        # Explicit, like the detect step above: this job's default shell in the
+        # obs-tools container is `sh -e {0}` (dash), where the array below is a
+        # syntax error.
+        shell: bash
         run: |
           rm -f /tmp/sync-report.json
           if [ -n "$SYNC_PACKAGE" ] && [ -z "$SYNC_PROJECT" ]; then
@@ -189,8 +193,8 @@ jobs:
             exit 1
           fi
           # if/then, not `[ ... ] && ...`: a false test as the last command of
-          # an AND list exits non-zero, which `bash -e` turns into a step
-          # failure on every push run (all inputs empty).
+          # an AND list exits non-zero, which `-e` turns into a step failure on
+          # every push run (all inputs empty).
           args=()
           if [ "$SYNC_FORCE" = "true" ]; then args+=(--force); fi
           if [ -n "$SYNC_PROJECT" ]; then args+=("$SYNC_PROJECT"); fi
