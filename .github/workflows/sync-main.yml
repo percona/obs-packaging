@@ -19,7 +19,26 @@ on:
     paths:
       - 'root/**'
       - '!root/README.md'
-  workflow_dispatch: {}
+  # Manual escape hatch.  The main use is repairing a package whose local
+  # sync-state manifest entry no longer matches OBS (e.g. the package was
+  # deleted from OBS and later restored with byte-identical content, so the
+  # git tree diff against the recorded SHA is empty and --skip-unchanged
+  # skips it).  A forced, scoped sync re-uploads it and refreshes the entry.
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Project to sync (e.g. ppg:staging:16:tde); empty = whole tree'
+        required: false
+        default: ''
+      package:
+        description: 'Package to sync (requires project); empty = all packages'
+        required: false
+        default: ''
+      force:
+        description: 'Force re-upload: ignore the skip-unchanged fast paths'
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   sync:
@@ -152,12 +171,33 @@ jobs:
       # synced normally but produce no OBS changes.
       # The report JSON scopes the poll job to the packages this run touched;
       # remove any stale report first (self-hosted runners reuse /tmp).
+      #
+      # A manual run may scope the sync to one project/package and/or pass
+      # --force, which bypasses the manifest and OBS-comment skip decisions
+      # so the package is re-uploaded (MD5 comparison still suppresses
+      # unchanged files at upload time).
       - name: Sync to OBS
         if: steps.detect.outputs.release_only != 'true'
+        env:
+          SYNC_PROJECT: ${{ inputs.project }}
+          SYNC_PACKAGE: ${{ inputs.package }}
+          SYNC_FORCE: ${{ inputs.force }}
         run: |
           rm -f /tmp/sync-report.json
+          if [ -n "$SYNC_PACKAGE" ] && [ -z "$SYNC_PROJECT" ]; then
+            echo "::error::'package' input requires 'project'"
+            exit 1
+          fi
+          # if/then, not `[ ... ] && ...`: a false test as the last command of
+          # an AND list exits non-zero, which `bash -e` turns into a step
+          # failure on every push run (all inputs empty).
+          args=()
+          if [ "$SYNC_FORCE" = "true" ]; then args+=(--force); fi
+          if [ -n "$SYNC_PROJECT" ]; then args+=("$SYNC_PROJECT"); fi
+          if [ -n "$SYNC_PACKAGE" ]; then args+=("$SYNC_PACKAGE"); fi
           venv/bin/python -m percona_obs --verbose -P main sync push \
-            --no-scm-validate --skip-unchanged --report-json /tmp/sync-report.json
+            --no-scm-validate --skip-unchanged --report-json /tmp/sync-report.json \
+            "${args[@]}"
 
       # Drop cache entries not used by any run in the last 7 days so the
       # .cache/ tree saved by actions/cache stops growing monotonically.

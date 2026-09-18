@@ -122,3 +122,27 @@ def record_or_invalidate(
         manifest[key] = head_sha
     elif invalidate:
         manifest.pop(key, None)
+
+
+def forget_package(manifest: dict[str, str], key: str) -> None:
+    """Drop the manifest entry for *key* ('project/package').
+
+    Called whenever a package is removed from OBS.  Without this the entry
+    outlives the package it described: a later commit restoring the package
+    with content identical to the recorded SHA produces an empty tree diff,
+    so ``manifest_entry_clean`` reports "nothing changed" and the package is
+    skipped — never re-uploaded — even though OBS no longer has it.
+    """
+    manifest.pop(key, None)
+
+
+def forget_project(manifest: dict[str, str], obs_project: str) -> None:
+    """Drop every manifest entry belonging to *obs_project*.
+
+    The project-level counterpart of :func:`forget_package`: deleting a
+    project takes all of its packages with it, so none of their entries can
+    still claim to describe what OBS holds.
+    """
+    prefix = f"{obs_project}/"
+    for key in [k for k in manifest if k.startswith(prefix)]:
+        del manifest[key]
