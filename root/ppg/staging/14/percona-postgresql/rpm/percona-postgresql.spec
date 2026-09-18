@@ -237,7 +237,19 @@ BuildRequires:	perl-ExtUtils-Embed
 %endif
 
 %if %plpython3
+# PERCONA: build plpython3 against the parallel python3.12 stack on EL8 AND
+# EL9 so the embedded interpreter matches the percona python3.12-* runtime
+# packages (and the python 3.12 stdlib bundled in the binary tarball).
+# EL10 is left on the default python3-devel, which already IS 3.12 there.
+# The matching PYTHON= export lives next to the configure call in %%build.
+# (Ported from the staging:17 spec — a system-python plpython3 fatals on
+# any host without /usr/lib64/python3.9: "No module named 'encodings'",
+# the failure the first PG 18 tarball hit on every Debian-family QA host.)
+%if 0%{?rhel} >= 8 && 0%{?rhel} < 10
+BuildRequires:  python3.12-devel
+%else
 BuildRequires:	python3-devel
+%endif
 %endif
 
 %if %pltcl
@@ -716,7 +728,17 @@ LDFLAGS="-Wl,--as-needed"; export LDFLAGS
 export CFLAGS
 
 %if %plpython3
+# PERCONA: steer --with-python explicitly at the 3.12 interpreter on EL8/EL9
+# (same bounds as the python3.12-devel BuildRequires above). Without this,
+# configure probes plain "python3", which on EL9 is always 3.9 —
+# plpython3.so would link libpython3.9 while the tarball bundles the 3.12
+# stdlib, and the embedded interpreter then fatals at backend start
+# ("No module named 'encodings'").
+%if 0%{?rhel} >= 8 && 0%{?rhel} < 10
+export PYTHON=%{_bindir}/python3.12
+%else
 export PYTHON=/usr/bin/python3
+%endif
 %endif
 
 %if 0%{?rhel} && 0%{?rhel} == 7
