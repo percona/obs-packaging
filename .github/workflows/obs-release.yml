@@ -18,18 +18,27 @@ name: OBS Release
 # obs-pr-cleanup.yml before dispatch, and redundantly as this job's first step
 # for the manual re-dispatch path below) for the whole duration of a release,
 # and only re-enabled by this job's last step once no other release run is
-# still queued or in progress. With sync-main disabled, the "sync-main-sync"
-# concurrency group below normally holds only release runs, so two release
-# runs queue back to back and both complete rather than one being cancelled.
+# still queued or in progress.
 #
-# Residual race: this only closes the window from PR-merge onward. If a
-# release is dispatched (manually, or via the recipe below) while a sync-main
+# The one-pending-run-per-concurrency-group limit is a property of the
+# "sync-main-sync" group itself, not of sync-main being disabled: three
+# releases dispatched in quick succession will still displace (cancel) the
+# middle one, with sync-main never involved. Symptom: the dispatched
+# "OBS Release" run shows as cancelled with no release having happened.
+# Recovery: re-dispatch with the manual command above once the concurrency
+# group is free.
+#
+# Residual race: the lock only closes the window from PR-merge onward. If a
+# release is dispatched (manually, or via the recipe above) while a sync-main
 # sync job is already in-progress or pending in the group, that sync still
-# runs, and GitHub keeps only ONE pending run per group — a second release
-# dispatched behind it can still displace (cancel) the first. Symptom: the
-# dispatched "OBS Release" run shows as cancelled with no release having
-# happened. Recovery: re-dispatch with the manual command above once the
-# concurrency group is free.
+# runs regardless of the lock.
+#
+# Operationally important: a failed or cancelled release deliberately leaves
+# sync-main disabled until a person acts — this is intentional, not a bug, so
+# that a retry never re-syncs staging out from under it. A run cancelled
+# while still pending (never starts a single step) leaves sync-main disabled
+# with no annotation at all; see the last step's comment for why that case
+# can't be covered here.
 
 on:
   workflow_dispatch:
@@ -59,16 +68,6 @@ jobs:
       OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
 
     steps:
-      # Idempotent: obs-pr-cleanup.yml already disables sync-main before
-      # dispatching this workflow, but a manual re-dispatch (the recovery
-      # recipe above) does not go through that workflow, so take the lock
-      # here too. `|| true` because disabling an already-disabled workflow
-      # returns non-zero.
-      - name: Take the release lock (disable sync-main)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow disable sync-main.yml || true
-
       - name: Validate tag input
         run: |
           TAG="${{ inputs.tag }}"
@@ -76,6 +75,28 @@ jobs:
             echo "::error::tag '$TAG' does not match <product>/<major.minor-N>"
             exit 1
           fi
+
+      # Idempotent: obs-pr-cleanup.yml already disables sync-main before
+      # dispatching this workflow, but a manual re-dispatch (the recovery
+      # recipe above) does not go through that workflow, so take the lock
+      # here too. The disable call itself succeeds whether or not sync-main
+      # was already disabled, so we verify the resulting state instead of
+      # trusting the exit code — a permissions error or a renamed workflow
+      # file must not let the release proceed believing it holds a lock it
+      # does not.
+      - name: Take the release lock (disable sync-main)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow disable sync-main.yml
+          STATE=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/sync-main.yml" --jq .state)
+          if [ "$STATE" = "active" ]; then
+            echo "::error::Failed to take the release lock: sync-main is still active"
+            exit 1
+          fi
+          echo "Release lock taken: sync-main state is ${STATE}"
 
       - uses: actions/checkout@v4
         with:
@@ -155,9 +176,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Any non-terminal status counts, not just "queued"/"in_progress":
+          # the runs API also reports "pending" (notably for a run held by
+          # the concurrency group — exactly where a second release sits),
+          # "waiting" and "requested". Missing one of those would re-enable
+          # sync-main and dispatch a catch-up sync ahead of a release that
+          # hasn't run yet.
           OTHERS=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/obs-release.yml/runs?per_page=100" \
             --jq "[.workflow_runs[]
-                   | select(.status == \"queued\" or .status == \"in_progress\")
+                   | select(.status != \"completed\")
                    | select(.id != ${{ github.run_id }})] | length")
           if [ "$OTHERS" -gt 0 ]; then
             echo "::notice::${OTHERS} further release run(s) pending — handing the lock over, sync-main stays disabled"
@@ -167,11 +194,26 @@ jobs:
           echo "::notice::sync-main re-enabled; dispatching a catch-up sync"
           gh workflow run sync-main.yml --ref main
 
-      # Make a held lock impossible to miss: a failed release leaves
-      # sync-main disabled on purpose (the staging state this release was
-      # about to copy out must not be disturbed by a retry), but that must
-      # not be silently forgotten.
-      - name: Report held lock on failure
-        if: failure()
+      # Make a held (or unexpectedly released) lock impossible to miss. The
+      # previous step can itself fail after already re-enabling sync-main
+      # (e.g. the catch-up dispatch fails), so this must read the actual
+      # state rather than assert it — otherwise the annotation can claim the
+      # lock is held when it has in fact been released.
+      #
+      # `cancelled()` covers a release cancelled mid-run; it cannot cover a
+      # run cancelled while still pending in the concurrency group, because
+      # no step of that run ever executes and this step never runs either.
+      # That case is called out in the header comment instead.
+      - name: Report lock state on failure or cancellation
+        if: failure() || cancelled()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          echo "::error::Release failed and sync-main is still DISABLED. Staging must not be re-synced until this release succeeds, or the release counter will retag staging images before they are released. Re-run this workflow once the cause is fixed, or re-enable manually with: gh workflow enable sync-main.yml"
+          set -euo pipefail
+          STATE=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/sync-main.yml" --jq .state || echo "unknown")
+          if [ "$STATE" = "active" ]; then
+            echo "::error::Release failed or was cancelled, and sync-main is ACTIVE (the lock was already released before this happened, e.g. a failed catch-up dispatch). Check whether staging was re-synced with the wrong release counter."
+          else
+            echo "::error::Release failed or was cancelled and sync-main is still DISABLED (state: ${STATE}). Staging must not be re-synced until this release succeeds, or the release counter will retag staging images before they are released. Disabling only blocks NEW triggers — a sync-main run already in progress or already pending in the concurrency group will still run once this job ends, so you may also need to cancel that run. Re-run this workflow once the cause is fixed, or re-enable manually with: gh workflow enable sync-main.yml"
+          fi

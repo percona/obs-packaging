@@ -95,6 +95,34 @@ jobs:
           FILES=$(gh pr view "$PR_NUMBER" --json files \
             --jq '.files[].path | select(test("^root/[^/]+/releases/[^/]+/release\\.yaml$"))' | sort -u)
           [ -z "$FILES" ] && { echo "No release.yaml changed; nothing to tag."; exit 0; }
+
+          # PPG_RELEASE is one plus the release count in release.yaml, so the
+          # instant this PR's tag commit lands, git already reports the NEXT
+          # counter while staging still holds artifacts built under the
+          # current one. Take an exclusive lock on staging before dispatching
+          # any release: disable sync-main so it cannot re-render staging
+          # container Dockerfiles (and get them rebuilt with the next
+          # counter) while obs-release.yml is still copying the current
+          # artifacts out. This happens ONCE before the loop, not per
+          # iteration — a PR can touch more than one release.yaml, and a
+          # per-iteration disable/re-enable would let a later iteration's
+          # failure-handler re-enable sync-main while an earlier iteration's
+          # dispatched release is still running.
+          #
+          # The disable call itself succeeds whether or not sync-main was
+          # already disabled, so verify the resulting state instead of
+          # trusting the exit code — a permissions error or a renamed
+          # workflow file must not let releases be dispatched believing the
+          # lock is held when it is not.
+          gh workflow disable sync-main.yml
+          STATE=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/sync-main.yml" --jq .state)
+          if [ "$STATE" = "active" ]; then
+            echo "::error::Failed to take the release lock: sync-main is still active"
+            exit 1
+          fi
+          echo "Release lock taken: sync-main state is ${STATE}"
+
+          DISPATCHED_ANY=false
           while IFS= read -r release_file; do
             TAG=$(git show "${MERGE_SHA}:${release_file}" | venv/bin/python3 -c \
               "import sys,yaml; d=yaml.safe_load(sys.stdin); r=d.get('releases') or []; print(r[-1] if r else d.get('revision') or '')")
@@ -109,25 +137,21 @@ jobs:
                 exit 1
               fi
             fi
-            # PPG_RELEASE is one plus the release count in release.yaml, so the
-            # instant this PR's tag commit lands, git already reports the NEXT
-            # counter while staging still holds artifacts built under the
-            # current one. Take an exclusive lock on staging before dispatching:
-            # disable sync-main so it cannot re-render staging container
-            # Dockerfiles (and get them rebuilt with the next counter) while
-            # obs-release.yml is still copying the current artifacts out.
-            # Idempotent: disabling an already-disabled workflow exits non-zero,
-            # hence `|| true` under `set -euo pipefail`.
-            gh workflow disable sync-main.yml || true
             echo "Dispatching obs-release.yml with tag=${TAG}"
-            # Capture the dispatch exit status instead of letting `set -e` abort
-            # immediately: a failed dispatch must not leave sync-main disabled
-            # with no release actually running.
+            # Capture the dispatch exit status instead of letting `set -e`
+            # abort immediately: on failure we must decide whether to
+            # release the lock, which depends on whether an earlier
+            # iteration's dispatch already succeeded and is running.
             if ! gh workflow run obs-release.yml --ref main -f "tag=${TAG}"; then
-              echo "::error::Failed to dispatch obs-release.yml for tag ${TAG}; re-enabling sync-main"
-              gh workflow enable sync-main.yml || true
+              if [ "$DISPATCHED_ANY" = "true" ]; then
+                echo "::warning::Failed to dispatch obs-release.yml for tag ${TAG}, but an earlier release from this PR is running — a release is running and holds the lock, leaving sync-main disabled"
+              else
+                echo "::error::Failed to dispatch obs-release.yml for tag ${TAG}; re-enabling sync-main"
+                gh workflow enable sync-main.yml || true
+              fi
               exit 1
             fi
+            DISPATCHED_ANY=true
           done <<< "$FILES"
 
       # Delete the PR's root project and all its sub-projects.
