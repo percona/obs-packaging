@@ -58,6 +58,8 @@ from .git_utils import (
     _macros_changed_since,
 )
 from .sync_state import (
+    forget_package,
+    forget_project,
     load_manifest,
     manifest_entry_clean,
     record_or_invalidate,
@@ -1950,6 +1952,11 @@ def cmd_sync(args):
             obs_pkgs = _fetch_obs_package_names(apiurl, proj_name)
             for orphan in sorted(obs_pkgs - local_pkgs):
                 _delete_obs_package(apiurl, proj_name, orphan, dry_run_obs)
+                # The manifest entry described a package OBS no longer has.
+                # Leaving it would skip the package if a later commit restored
+                # it with content identical to the recorded SHA (empty tree
+                # diff), so it would never be re-uploaded.
+                forget_package(sync_manifest, f"{proj_name}/{orphan}")
 
     # Remove subprojects on OBS that no longer exist locally, but only when
     # the full tree was processed (not a single-project or single-package sync).
@@ -1967,6 +1974,9 @@ def cmd_sync(args):
         }
         for orphan_proj in sorted(orphan_projects, key=lambda x: -x.count(":")):
             _delete_obs_project(apiurl, orphan_proj, dry_run_obs, recursive=True)
+            # Same reasoning as the orphan-package case, for every package the
+            # deleted project took with it.
+            forget_project(sync_manifest, orphan_proj)
 
     # Persist the sync-state manifest for the next run's zero-request skips.
     if skip_unchanged and not dry_run_obs:
@@ -1977,6 +1987,28 @@ def cmd_sync(args):
 
     suffix = " (dry run)" if args.dry_run else ""
     _print_ok(f"sync successful{suffix}")
+
+
+def _prune_sync_manifest(
+    apiurl: str,
+    rootprj: str,
+    packages: list[str] | None = None,
+    projects: list[str] | None = None,
+) -> None:
+    """Drop manifest entries for packages/projects just deleted from OBS.
+
+    ``sync delete`` removes content behind the back of ``sync push``, so the
+    next ``--skip-unchanged`` run would otherwise trust entries describing
+    packages OBS no longer has and skip re-uploading them.
+    """
+    manifest = load_manifest(apiurl, rootprj)
+    before = len(manifest)
+    for key in packages or []:
+        forget_package(manifest, key)
+    for project in projects or []:
+        forget_project(manifest, project)
+    if len(manifest) != before:
+        save_manifest(apiurl, rootprj, manifest)
 
 
 def cmd_sync_delete(args) -> None:
@@ -2011,6 +2043,9 @@ def cmd_sync_delete(args) -> None:
             if answer not in ("y", "yes"):
                 raise SystemExit("Aborted.")
         _delete_obs_package(apiurl, obs_project_name, args.package, dry_run=False)
+        _prune_sync_manifest(
+            apiurl, args.rootprj, packages=[f"{obs_project_name}/{args.package}"]
+        )
     else:
         # ── Project tree ──────────────────────────────────────────────────
         if args.from_obs:
@@ -2072,6 +2107,7 @@ def cmd_sync_delete(args) -> None:
             _delete_obs_project(
                 apiurl, obs_name, dry_run=False, recursive=args.recursive
             )
+        _prune_sync_manifest(apiurl, args.rootprj, projects=projects_sorted)
 
     _print_ok("delete done")
 

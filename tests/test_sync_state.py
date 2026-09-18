@@ -1,11 +1,14 @@
 """Unit tests for the sync-state manifest (percona_obs.sync_state)."""
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import percona_obs.git_utils as git_utils
 import percona_obs.sync_state as sync_state
 from percona_obs.git_utils import _head_is_pushed
 from percona_obs.sync_state import (
+    forget_package,
+    forget_project,
     load_manifest,
     manifest_entry_clean,
     record_or_invalidate,
@@ -154,3 +157,42 @@ def test_head_is_pushed(monkeypatch):
         lambda *a, **k: SimpleNamespace(returncode=128, stdout=""),
     )
     assert _head_is_pushed() is False
+
+
+def test_forget_package_drops_only_that_entry():
+    manifest = {"prj/a": "aaa1111", "prj/b": "bbb2222", "prj:sub/a": "ccc3333"}
+    forget_package(manifest, "prj/a")
+    assert manifest == {"prj/b": "bbb2222", "prj:sub/a": "ccc3333"}
+    # Absent key is a no-op.
+    forget_package(manifest, "prj/a")
+    assert manifest == {"prj/b": "bbb2222", "prj:sub/a": "ccc3333"}
+
+
+def test_forget_project_drops_its_packages_only():
+    manifest = {
+        "prj/a": "aaa1111",
+        "prj/b": "bbb2222",
+        "prj:sub/a": "ccc3333",
+        "other/a": "ddd4444",
+    }
+    forget_project(manifest, "prj")
+    # Sub-projects are distinct OBS projects, not children of the prefix.
+    assert manifest == {"prj:sub/a": "ccc3333", "other/a": "ddd4444"}
+
+
+def test_deleted_then_identically_restored_package_is_not_skipped(monkeypatch):
+    """Regression: a package deleted from OBS and re-added with identical content.
+
+    The restoring commit produces an empty tree diff against the recorded SHA,
+    so without invalidation on delete the entry still reads clean and the
+    package is skipped — never re-uploaded — although OBS no longer has it.
+    """
+    monkeypatch.setattr(
+        sync_state, "_has_package_content_changes_since", lambda *a: False
+    )
+    monkeypatch.setattr(sync_state, "_is_path_dirty", lambda *a: False)
+    monkeypatch.setattr(sync_state, "_macros_changed_since", lambda *a: False)
+    manifest = {"prj/pkg": "abc1234"}
+    assert manifest_entry_clean(manifest, "prj/pkg", Path("/repo/prj/pkg")) is True
+    forget_package(manifest, "prj/pkg")
+    assert manifest_entry_clean(manifest, "prj/pkg", Path("/repo/prj/pkg")) is False
