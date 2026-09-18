@@ -109,19 +109,11 @@ jobs:
           # failure-handler re-enable sync-main while an earlier iteration's
           # dispatched release is still running.
           #
-          # The disable call itself succeeds whether or not sync-main was
-          # already disabled, so verify the resulting state instead of
-          # trusting the exit code — a permissions error or a renamed
-          # workflow file must not let releases be dispatched believing the
-          # lock is held when it is not.
-          gh workflow disable sync-main.yml
-          STATE=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/sync-main.yml" --jq .state)
-          if [ "$STATE" = "active" ]; then
-            echo "::error::Failed to take the release lock: sync-main is still active"
-            exit 1
-          fi
-          echo "Release lock taken: sync-main state is ${STATE}"
-
+          # Arm the trap first, before disabling the workflow: with the flag
+          # still false and sync-main still enabled, an early trap invocation
+          # (if the disable fails) is a safe no-op. If we disables first and
+          # the verification read fails, set -e exits without a trap installed,
+          # leaving the lock held with nothing running.
           DISPATCHED_ANY=false
           # The lock must never outlive this step unless a release actually took it
           # over.  An EXIT trap covers every way out: tag creation failing, a pipeline
@@ -135,6 +127,19 @@ jobs:
             fi
           }
           trap release_lock_if_unused EXIT
+
+          # The disable call itself succeeds whether or not sync-main was
+          # already disabled, so verify the resulting state instead of
+          # trusting the exit code — a permissions error or a renamed
+          # workflow file must not let releases be dispatched believing the
+          # lock is held when it is not.
+          gh workflow disable sync-main.yml
+          STATE=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/sync-main.yml" --jq .state)
+          if [ "$STATE" = "active" ]; then
+            echo "::error::Failed to take the release lock: sync-main is still active"
+            exit 1
+          fi
+          echo "Release lock taken: sync-main state is ${STATE}"
 
           while IFS= read -r release_file; do
             TAG=$(git show "${MERGE_SHA}:${release_file}" | venv/bin/python3 -c \
@@ -163,6 +168,11 @@ jobs:
               fi
               exit 1
             fi
+            # If the job is cancelled after gh workflow run succeeds but before
+            # this flag is set, the EXIT trap re-enables sync-main while the
+            # dispatched release is starting. The window spans only this HTTP
+            # call and only on cancellation, not worth code to fix, but worth
+            # documenting.
             DISPATCHED_ANY=true
           done <<< "$FILES"
 
