@@ -314,3 +314,87 @@ def test_moving_ref_true_for_malformed_service_file(monkeypatch, tmp_path):
     )
     _forbid_classification(monkeypatch)
     assert cmd_sync._has_moving_upstream_ref(pkg, {}) is True
+
+
+# --- _skip_unchanged_decision: OBS existence gate ---
+
+
+def _patch_skip_chain(monkeypatch, *, moving=False, manifest=True, comment=True):
+    """Stub the three checks behind the existence gate, counting each call."""
+    calls: dict[str, int] = {"moving": 0, "manifest": 0, "comment": 0}
+
+    def _moving(*a):
+        calls["moving"] += 1
+        return moving
+
+    def _manifest(*a):
+        calls["manifest"] += 1
+        return manifest
+
+    def _comment(*a):
+        calls["comment"] += 1
+        return comment
+
+    monkeypatch.setattr(cmd_sync, "_has_moving_upstream_ref", _moving)
+    monkeypatch.setattr(cmd_sync, "manifest_entry_clean", _manifest)
+    monkeypatch.setattr(cmd_sync, "_resolve_skip_decision", _comment)
+    return calls
+
+
+def test_gate_promotes_package_missing_on_obs_despite_clean_manifest(monkeypatch):
+    """Regression: a package OBS no longer has must never be skipped.
+
+    The manifest may still claim the package is clean (e.g. deleted from OBS
+    and restored byte-identical), so existence is checked first and the
+    remaining checks are not even consulted.
+    """
+    calls = _patch_skip_chain(monkeypatch, manifest=True)
+    obs_packages = {"prj": {"other-pkg"}}
+    assert (
+        cmd_sync._skip_unchanged_decision(
+            "http://obs", "prj", PKG, {"prj/pkg": "abc1234"}, obs_packages, {}
+        )
+        is False
+    )
+    assert calls == {"moving": 0, "manifest": 0, "comment": 0}
+
+
+def test_gate_treats_unlisted_project_as_empty(monkeypatch):
+    calls = _patch_skip_chain(monkeypatch)
+    assert (
+        cmd_sync._skip_unchanged_decision("http://obs", "prj", PKG, {}, {}, {}) is False
+    )
+    assert calls["moving"] == 0
+
+
+def test_gate_passes_present_package_to_manifest_check(monkeypatch):
+    calls = _patch_skip_chain(monkeypatch, manifest=True)
+    assert (
+        cmd_sync._skip_unchanged_decision(
+            "http://obs", "prj", PKG, {}, {"prj": {PKG.name}}, {}
+        )
+        is True
+    )
+    assert calls == {"moving": 1, "manifest": 1, "comment": 0}
+
+
+def test_gate_falls_back_to_comment_when_manifest_unclean(monkeypatch):
+    calls = _patch_skip_chain(monkeypatch, manifest=False, comment=True)
+    assert (
+        cmd_sync._skip_unchanged_decision(
+            "http://obs", "prj", PKG, {}, {"prj": {PKG.name}}, {}
+        )
+        is True
+    )
+    assert calls == {"moving": 1, "manifest": 1, "comment": 1}
+
+
+def test_gate_never_skips_moving_ref_even_when_present(monkeypatch):
+    calls = _patch_skip_chain(monkeypatch, moving=True)
+    assert (
+        cmd_sync._skip_unchanged_decision(
+            "http://obs", "prj", PKG, {}, {"prj": {PKG.name}}, {}
+        )
+        is False
+    )
+    assert calls == {"moving": 1, "manifest": 0, "comment": 0}

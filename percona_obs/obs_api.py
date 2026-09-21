@@ -387,6 +387,29 @@ def _fetch_obs_package_names(apiurl: str, obs_project_name: str) -> set[str]:
         return set()
 
 
+def _fetch_obs_package_names_or_fail(apiurl: str, obs_project_name: str) -> set[str]:
+    """Return the set of package names in an OBS project, or abort the run.
+
+    Strict counterpart of :func:`_fetch_obs_package_names` for the
+    ``--skip-unchanged`` existence gate, where an empty answer means "OBS
+    has none of these packages, re-create them all": a project that does
+    not exist yet (404) legitimately has no packages, but any other failure
+    must not be mistaken for that, so it exits like other fatal OBS API
+    errors instead of degrading silently.
+    """
+    try:
+        return {p for p in osc.core.meta_get_packagelist(apiurl, obs_project_name) if p}
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return set()
+        _obs_api_error(e, f"listing packages of {obs_project_name}")
+        raise  # unreachable: _obs_api_error exits
+    except Exception as exc:
+        raise SystemExit(
+            f"error listing packages of {obs_project_name}: {exc}"
+        ) from exc
+
+
 def _fetch_all_pkg_archs(apiurl: str, obs_project: str) -> dict[str, tuple[str, str]]:
     """Return {base_pkg: (repo, arch)} for all packages in an OBS project.
 
