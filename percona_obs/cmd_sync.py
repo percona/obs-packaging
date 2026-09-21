@@ -84,6 +84,7 @@ from .obs_api import (
     _fetch_obs_package_meaningful_comment,
     _fetch_obs_package_meta_bytes,
     _fetch_obs_package_names,
+    _fetch_obs_package_names_or_fail,
     _fetch_obs_project_repository_names,
     _fetch_obs_subproject_names,
     _obs_project_exists,
@@ -788,6 +789,43 @@ def _resolve_skip_decision(
     return True
 
 
+def _skip_unchanged_decision(
+    apiurl: str,
+    obs_project_name: str,
+    package_path: Path,
+    sync_manifest: dict[str, str],
+    obs_packages: dict[str, set[str]],
+    pkg_env: dict[str, str],
+) -> bool:
+    """Return True when a plain ``--skip-unchanged`` push may skip the package.
+
+    The checks run cheapest-and-most-decisive first:
+
+    1. Existence gate — *obs_packages* is the per-project package listing
+       fetched once at the start of the run.  A package OBS does not have
+       is promoted no matter what the local state says: the manifest and
+       the OBS comment both describe an upload that has since been deleted
+       behind the tool's back, so neither can be trusted to mean "OBS still
+       matches".  Checked before the moving-ref classification so a package
+       that will be re-created anyway never costs a ``git ls-remote``.
+    2. Moving upstream ref — never skipped (local/cached check).
+    3. Sync-state manifest — skip with zero API calls when warm.
+    4. OBS revision comment — the per-package API fallback.
+    """
+    mkey = f"{obs_project_name}/{package_path.name}"
+    if package_path.name not in obs_packages.get(obs_project_name, set()):
+        logger.debug(f"skip decision: promote  {mkey}  (missing on OBS)")
+        return False
+    if _has_moving_upstream_ref(package_path, pkg_env):
+        return False
+    if manifest_entry_clean(sync_manifest, mkey, package_path):
+        logger.debug(f"skip decision: skip  {mkey}  (manifest)")
+        return True
+    return _resolve_skip_decision(
+        apiurl, obs_project_name, package_path.name, package_path
+    )
+
+
 def _resolve_branch_decision(
     apiurl: str,
     branch_project: str,
@@ -1113,6 +1151,38 @@ def cmd_sync(args):
     _head_sha = _head_short_sha() if skip_unchanged else None
     _head_pushed = _head_is_pushed() if skip_unchanged else False
 
+    # Existence gate for the plain-push skip decision: one package listing
+    # per OBS project in this run (~15-20 reads, none per package) so a
+    # package can only be skipped when OBS is known to have it.  Read-only,
+    # so it runs in --dry-run too.  Only the plain --skip-unchanged path
+    # skips; --force and --branch-from never consult it.
+    obs_packages: dict[str, set[str]] = {}
+    if skip_unchanged and not args.force and not branch_rootprj:
+        # Same project-name resolution as _decide_package below.
+        resolved_targets = [
+            (load_project_yaml(pp.parent / "project.yaml").get("name") or op, pp)
+            for op, pp in targets
+        ]
+        project_names = sorted({n for n, _ in resolved_targets})
+        _print_action(f"planning: listing {len(project_names)} OBS project(s)")
+        with ThreadPoolExecutor(max_workers=8) as _lpool:
+            listings = _lpool.map(
+                lambda n: _fetch_obs_package_names_or_fail(apiurl, n), project_names
+            )
+            obs_packages = dict(zip(project_names, listings))
+        missing_on_obs = sorted(
+            f"{n}/{pp.name}"
+            for n, pp in resolved_targets
+            if pp.name not in obs_packages[n]
+        )
+        if missing_on_obs:
+            _print_action(
+                f"planning: {len(missing_on_obs)} package(s) missing on OBS "
+                "will be re-created"
+            )
+            for _m in missing_on_obs:
+                logger.debug(f"missing on OBS: {_m}")
+
     # Sync report (--report-json): projects whose builds this run may have
     # triggered (committed file uploads or meta/prjconf changes) plus the
     # per-package upload list, consumed by CI to scope build monitoring.
@@ -1216,30 +1286,25 @@ def cmd_sync(args):
             else:
                 return key, "promote", None, None
         else:
-            # Without --branch-from: --skip-unchanged trusts the recorded sync
-            # SHA and skips clean packages outright (no meta fetch, no services,
-            # no md5 listing).  Otherwise always promote — the upload function
-            # compares file MD5s against OBS and only uploads what changed,
-            # so unchanged packages are effectively skipped at upload time.
-            # The moving-ref check runs first: it is local/cached, so the
-            # local-manifest and OBS-comment checks only happen for genuinely
-            # skippable packages.  The manifest is consulted before the OBS
-            # comment so a warm manifest costs zero API calls.
+            # Without --branch-from: --skip-unchanged skips clean packages
+            # outright (no meta fetch, no services, no md5 listing) — see
+            # _skip_unchanged_decision for the check order.  Otherwise always
+            # promote — the upload function compares file MD5s against OBS
+            # and only uploads what changed, so unchanged packages are
+            # effectively skipped at upload time.
             if (
                 skip_unchanged
                 and not args.force
-                and not _has_moving_upstream_ref(
-                    package_path, {**env_vars, **_pkg_env_vars(package_path)}
+                and _skip_unchanged_decision(
+                    apiurl,
+                    obs_project_name,
+                    package_path,
+                    sync_manifest,
+                    obs_packages,
+                    {**env_vars, **_pkg_env_vars(package_path)},
                 )
             ):
-                mkey = f"{obs_project_name}/{package_path.name}"
-                if manifest_entry_clean(sync_manifest, mkey, package_path):
-                    logger.debug(f"skip decision: skip  {mkey}  (manifest)")
-                    return key, "skip", None, None
-                if _resolve_skip_decision(
-                    apiurl, obs_project_name, package_path.name, package_path
-                ):
-                    return key, "skip", None, None
+                return key, "skip", None, None
             return key, "promote", None, None
 
     with ThreadPoolExecutor(max_workers=8) as _pool:
