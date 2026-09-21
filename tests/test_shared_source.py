@@ -231,3 +231,41 @@ def test_discovery_and_macros_for_link_in_nested_subproject(tree):
     assert repo / f"root/ppg/staging/{SHARED_SOURCE_DIRNAME}/pkg" in [
         Path(p) for p in paths
     ]
+
+
+def test_shared_target_may_sit_in_a_subdir_of_shared(tree):
+    """The _shared library may group packages by subproject
+    (staging/_shared/containers/<pkg>) when the bare package name is already
+    taken at _shared/ top level (e.g. the percona-pgbouncer image vs the
+    percona-pgbouncer RPM/deb package).  The subdirectory is never a project
+    or a package; the link is discovered under staging/17/containers with 17's
+    macros, and git change detection follows it into the nested target."""
+    repo, sha = tree
+    nested = f"root/ppg/staging/{SHARED_SOURCE_DIRNAME}/containers/pkg"
+    _write(repo, "root/ppg/staging/17/containers/project.yaml", "title: c\n")
+    _write(repo, f"{nested}/obs/Dockerfile", "FROM x\nENV V %!{PG_MAJOR_VERSION}\n")
+    os.symlink(
+        f"../../{SHARED_SOURCE_DIRNAME}/containers/pkg",
+        repo / "root/ppg/staging/17/containers/pkg",
+    )
+    _commit(repo, "nested shared subdir")
+    sha2 = _git(repo, "rev-parse", "--short", "HEAD")
+
+    found = list(find_packages(repo / "root/ppg/staging", "X:ppg:staging"))
+    link = repo / "root/ppg/staging/17/containers/pkg"
+    assert ("X:ppg:staging:17:containers", link) in found
+    assert not any(SHARED_SOURCE_DIRNAME in path.parts for _, path in found)
+    projects = [
+        name for name, _ in find_projects(repo / "root/ppg/staging", "X:ppg:staging")
+    ]
+    assert "X:ppg:staging:17:containers" in projects
+    assert not any(SHARED_SOURCE_DIRNAME in name for name in projects)
+
+    assert load_macros(link).get("PG_MAJOR_VERSION") == "17"
+    assert repo / nested in [Path(p) for p in _package_pathspecs(link)]
+
+    assert not _has_package_content_changes_since(sha2, link)
+    _write(repo, f"{nested}/obs/Dockerfile", "FROM y\n")
+    assert _is_path_dirty(link)
+    _commit(repo, "edit nested shared Dockerfile")
+    assert _has_package_content_changes_since(sha2, link)

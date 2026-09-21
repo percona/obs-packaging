@@ -547,7 +547,15 @@ done
 
 Rules:
 
-- The symlink target must be relative (`../_shared/<pkg>`).
+- The symlink target must be relative (`../_shared/<pkg>`, or `../../_shared/<sub>/<pkg>` for
+  a package inside a nested subproject such as `containers/` or `tarballs/`).
+- If the package name is already used at `_shared/` top level by a different package (the
+  `percona-pgbouncer` container image vs the `percona-pgbouncer` RPM/deb), put the shared copy in a
+  subdirectory named after the subproject: `_shared/containers/<pkg>`.
+- A small per-major difference can often be turned into a macro instead of blocking sharing:
+  the container images use `CONTAINER_PG_EXTRA_COMPONENTS` (empty by default in
+  `staging/macros.yaml`, set in `staging/17` and `staging/18`) for the pg_tde / pg_oidc_validator
+  install lines. An empty macro value renders to an empty string.
 - Every `%!{VAR}` the shared files use must be defined at or above each linking major
   (`staging/macros.yaml` or every `staging/<V>/macros.yaml`).
 - `_shared/` itself is never synced; only the symlinks are, each rendered with its own
