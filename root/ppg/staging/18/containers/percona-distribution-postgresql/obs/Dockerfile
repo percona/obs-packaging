@@ -57,12 +57,11 @@ RUN microdnf install -y \
         percona-postgresql${PPG_MAJOR_VERSION}-server \
         percona-postgresql${PPG_MAJOR_VERSION}-contrib \
         percona-postgresql-common \
-        percona-pg_tde${PPG_MAJOR_VERSION} \
+        %!{CONTAINER_PG_EXTRA_COMPONENTS} \
         percona-pg_stat_monitor${PPG_MAJOR_VERSION} \
         percona-pg_repack${PPG_MAJOR_VERSION} \
         percona-pgaudit${PPG_MAJOR_VERSION} \
         percona-pgaudit${PPG_MAJOR_VERSION}_set_user \
-        percona-pg_oidc_validator${PPG_MAJOR_VERSION} \
         percona-pgbackrest \
         percona-pgvector_${PPG_MAJOR_VERSION} \
         percona-postgresql${PPG_MAJOR_VERSION}-llvmjit \

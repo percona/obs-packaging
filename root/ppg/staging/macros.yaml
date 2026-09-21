@@ -30,6 +30,11 @@
 - WAL2JSON_TAG: wal2json_2_6
 - WAL2JSON_VERSION: 2.6
 
+# Extra Percona extensions installed in the distribution container images
+# (percona-distribution-postgresql and -with-postgis).  Empty by default; majors
+# that ship pg_tde / pg_oidc_validator override it in their own macros.yaml.
+- CONTAINER_PG_EXTRA_COMPONENTS:
+
 # Extension (extras) versions
 - H3_VERSION: 4.5.0
 - H3_PG_VERSION: 4.5.0
