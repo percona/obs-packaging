@@ -1,0 +1,5 @@
+<aggregatelist>
+  <aggregate project="${OBS_ROOTPRJ}:common:deps:build">
+    <package>llvm-21</package>
+  </aggregate>
+</aggregatelist>
