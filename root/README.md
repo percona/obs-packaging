@@ -181,6 +181,16 @@ Links may also live inside a nested subproject of a major — the tarballs packa
 through `staging/17/macros.yaml`. Porting the tarballs to another major is then mostly a per-major
 `tarballs/project.yaml` plus two symlinks.
 
+When the bare package name is already taken at `_shared/` top level, the shared copy sits in a
+subdirectory named after the subproject. The container images are the example: the
+`percona-pgbouncer` and `percona-pgbackrest` *images* live in `staging/_shared/containers/<pkg>/`
+(the RPM/deb packages of the same name are `staging/_shared/<pkg>/`), and every major links to them
+with `staging/<V>/containers/<pkg> -> ../../_shared/containers/<pkg>`. `_shared/containers/` is
+neither a project nor a package; `containers/project.yaml` stays per major. The only per-major
+difference in those images — the extra Percona extensions installed (pg_tde, pg_oidc_validator) — is
+the `CONTAINER_PG_EXTRA_COMPONENTS` macro, empty in `staging/macros.yaml` and overridden by the majors
+that ship them.
+
 #### `tarballs/`
 
 Binary-tarball builds (OBS `simpleimage` format) for air-gapped / unsupported-distro

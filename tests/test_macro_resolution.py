@@ -5,12 +5,28 @@ without a replacement — the failure mode that would otherwise only show up as
 an aborted sync.
 """
 
+import os
 from pathlib import Path
 
 import pytest
 
-from percona_obs.common import REPO_ROOT, load_macros
+from percona_obs.common import REPO_ROOT, SHARED_SOURCE_DIRNAME, load_macros
 from percona_obs.git_utils import _referenced_macros
+
+
+def _links_by_target() -> "dict[Path, list[Path]]":
+    """Map each ``_shared/`` package dir to the symlinked package dirs using it.
+
+    ``rglob`` lists a symlink without descending into it, so shared packaging
+    is only ever seen through its ``_shared/`` copy; macros, however, resolve
+    from the *link's* location (see root/README.md).
+    """
+    links: dict[Path, list[Path]] = {}
+    for p in REPO_ROOT.rglob("*"):
+        if p.is_symlink() and p.is_dir():
+            target = Path(os.path.normpath(p.parent / os.readlink(p)))
+            links.setdefault(target, []).append(p)
+    return links
 
 
 def _dirs_referencing_ppg_release() -> "list[Path]":
@@ -25,7 +41,16 @@ def _dirs_referencing_ppg_release() -> "list[Path]":
         if "%!{PPG_RELEASE}" in text:
             # obs/Dockerfile and rpm/*.spec live one level below the package dir
             hits.add(f.parent.parent)
-    return sorted(hits)
+    links = _links_by_target()
+    resolved: set[Path] = set()
+    for d in hits:
+        if SHARED_SOURCE_DIRNAME in d.parts:
+            # A _shared/ copy resolves only through the majors that link to it.
+            assert links.get(d), f"{d}: shared packaging nothing links to"
+            resolved.update(links[d])
+        else:
+            resolved.add(d)
+    return sorted(resolved)
 
 
 def test_tree_has_no_ppg_release_declaration():
