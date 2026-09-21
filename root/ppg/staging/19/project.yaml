@@ -3,8 +3,10 @@ description: |
   Packages for Percona Distribution for PostgreSQL %!{PG_MAJOR_VERSION} — the server, extensions,
   HA components (Patroni, etcd, HAProxy, pgBouncer, pgPool-II), and companion tools.
 debuginfo:
+  RockyLinux_8: true
   RockyLinux_9: true
   RockyLinux_9.6: true
+  RockyLinux_10: true
   openSUSE_Tumbleweed: true
   openSUSE_Leap_16: true
 repositories:
