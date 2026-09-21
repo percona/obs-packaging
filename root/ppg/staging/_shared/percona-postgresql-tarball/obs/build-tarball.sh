@@ -1000,60 +1000,85 @@ case "$EL_MAJOR" in
 esac
 
 echo "=== Verification: dynamic-loader sanity ==="
-# THE gate this section was missing, and the reason three broken tarballs
-# shipped: every step above trusts that a tool which exited 0 produced a
-# working ELF. patchelf 0.17.2 did not — it wrote plausible-looking
-# binaries whose program headers make glibc's rtld segfault inside
-# dl_main() before a single instruction of program code runs (measured:
-# pg_ctl/pg_basebackup on EL8, createdb/createuser on EL9, bin/postgres on
-# the EL9 PG 14 build). The NEEDED/RUNPATH audits below all PASSED on
-# those binaries, because they only parse the ELF with readelf/patchelf —
-# they never ask the loader to accept it.
+# THE gate this section was missing, and the reason broken tarballs shipped
+# twice: every step above trusts that a tool which exited 0 produced a
+# working ELF. patchelf did not — 0.17.2 wrote executables whose program
+# headers make glibc's rtld segfault in dl_main() (pg_ctl on EL8,
+# createdb/createuser on EL9, bin/postgres on the EL9 PG 14 build), and
+# 0.18.0 wrote shared libraries with misaligned PT_LOAD that the loader
+# REJECTS ("ELF load command address/offset not properly aligned" — every
+# EL8 ICU library). The NEEDED/RUNPATH audits below all PASSED on those
+# objects, because they only parse the ELF with readelf/patchelf — they
+# never ask the loader to accept it.
 #
-# So ask the loader, on every bundled executable: LD_TRACE_LOADED_OBJECTS
-# makes ld.so map the whole dependency chain, print it and exit WITHOUT
-# running the program (safe for servers and one-shot tools alike), so a
-# death by signal here means the ELF itself is unloadable. env -i keeps it
-# honest — no inherited LD_LIBRARY_PATH propping the resolution up.
+# So ask the loader, about every bundled ELF, WITHOUT running anything:
+#   * dynamic executables (PT_INTERP): LD_TRACE_LOADED_OBJECTS=1 makes ld.so
+#     map the whole dependency chain, print it and exit;
+#   * shared objects (ET_DYN, no INTERP): ld.so --list does the same for a
+#     library — this is how a library nothing traces through (python's
+#     lib-dynload, haproxy's, dlopen-only modules) still gets checked.
+# Static binaries (percona-etcd's Go ones) have no loader to ask and would
+# simply RUN if invoked — they are skipped, and timeout(1) guarantees the
+# gate can never hang a build even if the classification is wrong.
+#
+# Verdicts, verified against the loader on Rocky 8: a MISSING library is
+# reported as "=> not found" with exit 0 (the NEEDED audit's job, not a
+# failure here); a REJECTED object exits 127 with "error while loading
+# shared libraries: ..."; a corrupt executable dies by signal (>= 128).
+# So every non-zero exit other than 124 (timeout) is a defect in the
+# artifact — the first version of this gate failed only on signals and let
+# the 0.18.0 rejections straight through. env -i keeps it honest: no
+# inherited LD_LIBRARY_PATH propping the resolution up.
+LDSO=$(readelf -lW "$PG_PREFIX/bin/postgres" 2>/dev/null | sed -n 's/.*interpreter: \([^]]*\)\].*/\1/p')
+if [ ! -x "$LDSO" ]; then
+    echo "FATAL: cannot determine the dynamic loader from $PG_PREFIX/bin/postgres (got '$LDSO')" >&2
+    exit 1
+fi
+echo "dynamic loader: $LDSO"
 : > /tmp/loader-audit.txt
-find /opt/percona-* -type f -perm -u+x | while read -r f; do
-    # PT_INTERP is the precise test for "the dynamic loader must accept
-    # this": only those binaries honour LD_TRACE_LOADED_OBJECTS. A STATIC
-    # binary (percona-etcd ships Go ones) ignores the variable and simply
-    # RUNS — etcd then serves forever and hangs the build, which is exactly
-    # what the first version of this gate did. readelf, not file(1), because
-    # file's wording for PIE executables differs across EL8/EL9 ("shared
-    # object" vs "pie executable") and would silently skip real binaries.
-    readelf -lW "$f" 2>/dev/null | grep -q 'INTERP' || continue
-    # timeout: belt and braces. With the INTERP filter nothing should run,
-    # but a gate must never be able to hang a build.
-    #
-    # `|| rc=$?` is LOAD-BEARING, not style: this script runs under set -e,
-    # so a bare command that exits non-zero kills the build THERE — before
-    # the rc test below, with no message and no audit line. That is exactly
-    # what happened on EL8 x86_64, where percona-haproxy does not exit 0
-    # under tracing: every ssl1.1 build died mid-loop and powered the VM off
-    # with no explanation. A gate must report, never vanish.
+: > /tmp/loader-probed.txt
+find /opt/percona-* -type f \( -perm -u+x -o -name '*.so*' \) | sort -u | while read -r f; do
+    if readelf -lW "$f" 2>/dev/null | grep -q 'INTERP'; then
+        probe=(env -i LD_TRACE_LOADED_OBJECTS=1 "$f")
+    elif readelf -hW "$f" 2>/dev/null | grep -q 'Type:.*DYN'; then
+        probe=(env -i "$LDSO" --list "$f")
+    else
+        continue
+    fi
+    echo "$f" >> /tmp/loader-probed.txt
+    # `|| rc=$?` is LOAD-BEARING: under set -e a bare non-zero exit kills
+    # the build right here, before the verdict below, with no audit line.
     rc=0
-    timeout 30 env -i LD_TRACE_LOADED_OBJECTS=1 "$f" >/dev/null 2>&1 || rc=$?
-    # >= 128: killed by a signal (139 = SIGSEGV in the loader) — the ELF is
-    # unloadable. A plain non-zero exit is NOT a failure here: a missing
-    # bundled library is the NEEDED audit's job. 124 = timeout, i.e. the
-    # binary ran instead of being traced; report it as a gate blind spot
-    # rather than a corruption, so it gets looked at without failing a build
-    # for the wrong reason.
-    if [ "$rc" -ge 128 ]; then
-        echo "LOADER-FAIL ($rc): $f" >> /tmp/loader-audit.txt
-    elif [ "$rc" -eq 124 ]; then
-        echo "  NOTE: $f ignored LD_TRACE_LOADED_OBJECTS (not trace-checked)"
+    timeout 30 "${probe[@]}" >/dev/null 2>/tmp/loader-err.txt || rc=$?
+    if [ "$rc" -eq 124 ]; then
+        echo "  NOTE: $f did not return under the loader probe (not checked)"
+    elif [ "$rc" -ne 0 ] && grep -q 'cannot open shared object file' /tmp/loader-err.txt; then
+        # A shared object whose own NEEDED cannot be found from its RUNPATH
+        # alone: ld.so --list reports that as exit 127 (an executable's trace
+        # would print "=> not found" and exit 0). Whether every NEEDED is
+        # bundled is the NEEDED-soname audit's job, and some objects resolve
+        # theirs from the process that loads them (a dlopened module sees
+        # the backend's libraries; python's lib-dynload sees the wrapper's
+        # LD_LIBRARY_PATH) — so this is visible, not fatal.
+        echo "  NOTE: $f — $(tr '\n' ' ' < /tmp/loader-err.txt | cut -c1-160)"
+    elif [ "$rc" -ne 0 ]; then
+        echo "LOADER-FAIL ($rc): $f — $(tr '\n' ' ' < /tmp/loader-err.txt | cut -c1-220)" >> /tmp/loader-audit.txt
     fi
 done
 if [ -s /tmp/loader-audit.txt ]; then
     cat /tmp/loader-audit.txt
-    echo "FATAL: the dynamic loader cannot load the binaries above — an ELF-rewriting step corrupted them (check the patchelf version)" >&2
+    echo "FATAL: the dynamic loader rejects the objects above — an ELF-rewriting step corrupted them (check the patchelf version)" >&2
     exit 1
 fi
-echo "loader sanity: every bundled executable loads"
+# A vacuous pass is the failure mode this gate must not have (a broken
+# find/readelf would otherwise "pass" an unchecked artifact): the artifact
+# carries hundreds of dynamic objects, so a handful means the walk broke.
+PROBED=$(wc -l < /tmp/loader-probed.txt)
+if [ "$PROBED" -lt 100 ]; then
+    echo "FATAL: loader gate probed only $PROBED objects — object detection is broken" >&2
+    exit 1
+fi
+echo "loader sanity: all $PROBED bundled executables and shared objects load"
 
 echo "=== Verification: NEEDED-soname audit ==="
 # ldd would resolve against the fully-populated buildroot (ld.so.cache), hiding
