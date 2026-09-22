@@ -1,25 +1,24 @@
 #!UseOBSRepositories
-#!BuildVersion: %!{PG_VERSION}-%!{PPG_RELEASE}
-#!BuildTag: percona-distribution-postgresql-with-postgis:<VERSION>-<RELEASE>
-#!BuildTag: percona-distribution-postgresql-with-postgis:<VERSION>
-#!BuildTag: percona-distribution-postgresql-with-postgis:%!{PG_VERSION}
-#!BuildTag: percona-distribution-postgresql-with-postgis:%!{PG_MAJOR_VERSION}
+#!BuildVersion: %!{PPG_IMAGE_VERSION}-%!{PPG_RELEASE}
+#!BuildTag: percona-distribution-postgresql-custom:%!{PPG_IMAGE_VERSION}-%!{PPG_RELEASE}
+#!BuildTag: percona-distribution-postgresql-custom:%!{PG_VERSION}
+#!BuildTag: percona-distribution-postgresql-custom:%!{PG_MAJOR_VERSION}
 
 FROM percona-ubi-minimal:latest
 
 LABEL name="Percona Distribution for PostgreSQL" \
-      description="Essential / key PostgreSQL%!{PG_MAJOR_VERSION} components with PostGIS. Percona Distribution for PostgreSQL features core components, tools and add-ons from the community, tested to work together in demanding enterprise environments." \
+      description="Essential / key PostgreSQL%!{PG_MAJOR_VERSION} components. Percona Distribution for PostgreSQL features core components, tools and add-ons from the community, tested to work together in demanding enterprise environments." \
       vendor="Percona" \
-      summary="Percona base selection of PostgreSQL%!{PG_MAJOR_VERSION} components with PostGIS" \
+      summary="Percona base selection of PostgreSQL%!{PG_MAJOR_VERSION} components" \
       maintainer="Percona Development <info@percona.com>" \
       org.opencontainers.image.authors="info@percona.com"
-LABEL version="%!{PG_VERSION}-%!{PPG_RELEASE}"
+LABEL version="%!{PPG_IMAGE_VERSION}-%!{PPG_RELEASE}"
 LABEL release="%!{PPG_RELEASE}"
 
 ARG PPG_REPO
 ARG RHEL_VER
 
-ENV PPG_VERSION %!{PG_VERSION}-%!{PPG_RELEASE}
+ENV PPG_VERSION %!{PPG_IMAGE_VERSION}-%!{PPG_RELEASE}
 ENV PPG_MAJOR_VERSION %!{PG_MAJOR_VERSION}
 ENV PPG_MINOR_VERSION %!{PG_MINOR_VERSION}
 ENV OS_VER ${RHEL_VER}
@@ -65,7 +64,6 @@ RUN microdnf install -y \
         percona-pg_repack${PPG_MAJOR_VERSION} \
         percona-pgaudit${PPG_MAJOR_VERSION} \
         percona-pgaudit${PPG_MAJOR_VERSION}_set_user \
-        percona-pg_oidc_validator${PPG_MAJOR_VERSION} \
         percona-pgbackrest \
         percona-pgvector_${PPG_MAJOR_VERSION} \
         percona-pgvector_${PPG_MAJOR_VERSION}-llvmjit \
