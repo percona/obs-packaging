@@ -1,9 +1,9 @@
 #!UseOBSRepositories
-#!BuildVersion: %!{PG_VERSION}-%!{PPG_RELEASE}
-#!BuildTag: percona-distribution-postgresql-upgrade:%!{PG_VERSION}-%!{PPG_RELEASE}-<RELEASE>
-#!BuildTag: percona-distribution-postgresql-upgrade:%!{PG_VERSION}-%!{PPG_RELEASE}
-#!BuildTag: percona-distribution-postgresql-upgrade:%!{PG_VERSION}
-#!BuildTag: percona-distribution-postgresql-upgrade:%!{PG_MAJOR_VERSION}
+#!BuildVersion: 18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-14.%!{PG_14_MINOR_VERSION}
+#!BuildTag: percona-distribution-postgresql-upgrade:18-17-16-15-14-<RELEASE>
+#!BuildTag: percona-distribution-postgresql-upgrade:18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-14.%!{PG_14_MINOR_VERSION}-<RELEASE>
+#!BuildTag: percona-distribution-postgresql-upgrade:18-17-16-15-14
+#!BuildTag: percona-distribution-postgresql-upgrade:18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-14.%!{PG_14_MINOR_VERSION}
 
 FROM percona-ubi-minimal:latest
 

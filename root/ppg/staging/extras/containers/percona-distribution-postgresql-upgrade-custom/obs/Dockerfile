@@ -1,16 +1,16 @@
 #!UseOBSRepositories
-#!BuildVersion: %!{PG_VERSION}-%!{PPG_RELEASE}
-#!BuildTag: percona-distribution-postgresql-upgrade-custom:%!{PG_VERSION}-%!{PPG_RELEASE}-<RELEASE>
-#!BuildTag: percona-distribution-postgresql-upgrade-custom:%!{PG_VERSION}-%!{PPG_RELEASE}
-#!BuildTag: percona-distribution-postgresql-upgrade-custom:%!{PG_VERSION}
-#!BuildTag: percona-distribution-postgresql-upgrade-custom:%!{PG_MAJOR_VERSION}
+#!BuildVersion: 18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}
+#!BuildTag: percona-distribution-postgresql-upgrade-custom:18-17-16-<RELEASE>
+#!BuildTag: percona-distribution-postgresql-upgrade-custom:18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-<RELEASE>
+#!BuildTag: percona-distribution-postgresql-upgrade-custom:18-17-16
+#!BuildTag: percona-distribution-postgresql-upgrade-custom:18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}
 
 FROM percona-ubi-minimal:latest
 
-LABEL name="Percona Distribution for PostgreSQL Upgrade (custom)" \
-      description="Upgrade container for Percona Distribution for PostgreSQL, including the extras package set (timescaledb, h3, pgrouting, pg_partman, ...). Facilitates major version upgrades from PostgreSQL 16 or 17 to %!{PG_MAJOR_VERSION} using pg_upgrade." \
+LABEL name="Percona PostgreSQL Distribution upgrade" \
+      description="Percona Distribution for PostgreSQL is a collection of tools to assist you in managing your PostgreSQL database system" \
       vendor="Percona" \
-      summary="Percona Distribution for PostgreSQL major version upgrade container with extras" \
+      summary="Percona Distribution for PostgreSQL" \
       maintainer="Percona Development <info@percona.com>" \
       org.opencontainers.image.authors="info@percona.com"
 LABEL version="%!{PG_VERSION}-%!{PPG_RELEASE}"
@@ -52,8 +52,6 @@ RUN set -ex; \
     microdnf install -y \
         percona-postgresql${PPG_MAJOR_VERSION}-server \
         percona-postgresql${PPG_MAJOR_VERSION}-contrib \
-        percona-postgresql-common \
-        percona-pg_tde${PPG_MAJOR_VERSION} \
         percona-pg_stat_monitor${PPG_MAJOR_VERSION} \
         percona-pg_repack${PPG_MAJOR_VERSION} \
         percona-pgaudit${PPG_MAJOR_VERSION} \
@@ -65,7 +63,6 @@ RUN set -ex; \
         percona-wal2json${PPG_MAJOR_VERSION} \
         percona-postgis35_${PPG_MAJOR_VERSION} \
         percona-postgis35_${PPG_MAJOR_VERSION}-client \
-        percona-postgis35_${PPG_MAJOR_VERSION}-gui \
         percona-postgis35_${PPG_MAJOR_VERSION}-llvmjit \
         percona-postgis35_${PPG_MAJOR_VERSION}-utils \
         percona-pg_cron_${PPG_MAJOR_VERSION} \
@@ -119,12 +116,7 @@ RUN set -ex; \
     microdnf clean all
 {{ENDFOR}}
 
-# pg_tde is only packaged standalone from PG17 onward, so it's installed separately
-# here rather than inside the loop above.
-RUN set -ex; \
-    microdnf install -y percona-pg_tde17; \
-    microdnf clean all; \
-    rm -rf /var/cache/dnf /var/cache/yum
+RUN rm -rf /var/cache/dnf /var/cache/yum
 
 COPY LICENSE /licenses/LICENSE.Dockerfile
 RUN cp /usr/share/doc/percona-postgresql${PPG_MAJOR_VERSION}/COPYRIGHT /licenses/COPYRIGHT.PostgreSQL
