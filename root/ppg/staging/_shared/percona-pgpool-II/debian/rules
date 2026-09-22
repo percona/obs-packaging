@@ -45,14 +45,26 @@ override_dh_auto_test:
 
 override_dh_auto_install:
 	dh_auto_install
+	# pgpool-regclass is obsolete since PostgreSQL 9.4 (to_regclass is
+	# in core) and no longer compiles against PostgreSQL 19+; build only
+	# the shipped extensions there, like the RPM spec already does.
 	set -e ; \
 	for v in `pg_buildext supported-versions .` ; do \
 		echo "# $$v ##################################################################" ; \
 		PG_CONFIG=/usr/lib/postgresql/$$v/bin/pg_config ; \
-		$(MAKE) -C src/sql clean PG_CONFIG=$$PG_CONFIG ; \
-		$(MAKE) -C src/sql PG_CONFIG=$$PG_CONFIG ; \
+		if [ "$$v" -ge 19 ] ; then \
+			$(MAKE) -C src/sql/pgpool-recovery clean PG_CONFIG=$$PG_CONFIG ; \
+			$(MAKE) -C src/sql/pgpool_adm clean PG_CONFIG=$$PG_CONFIG ; \
+			$(MAKE) -C src/sql/pgpool-recovery PG_CONFIG=$$PG_CONFIG ; \
+			$(MAKE) -C src/sql/pgpool_adm PG_CONFIG=$$PG_CONFIG ; \
+			$(MAKE) -C src/sql/pgpool-recovery install DESTDIR=$(CURDIR)/debian/postgresql-$$v-pgpool2 PG_CONFIG=$$PG_CONFIG ; \
+			$(MAKE) -C src/sql/pgpool_adm install DESTDIR=$(CURDIR)/debian/postgresql-$$v-pgpool2 PG_CONFIG=$$PG_CONFIG ; \
+		else \
+			$(MAKE) -C src/sql clean PG_CONFIG=$$PG_CONFIG ; \
+			$(MAKE) -C src/sql PG_CONFIG=$$PG_CONFIG ; \
+			$(MAKE) -C src/sql install DESTDIR=$(CURDIR)/debian/postgresql-$$v-pgpool2 PG_CONFIG=$$PG_CONFIG ; \
+		fi ; \
 		chrpath -d src/sql/pgpool_adm/pgpool_adm.so ; \
-		$(MAKE) -C src/sql install DESTDIR=$(CURDIR)/debian/postgresql-$$v-pgpool2 PG_CONFIG=$$PG_CONFIG ; \
 	done
 
 override_dh_install:
