@@ -64,7 +64,7 @@ RUN microdnf install -y \
         percona-pg_repack${PPG_MAJOR_VERSION} \
         percona-pgaudit${PPG_MAJOR_VERSION} \
         percona-pgaudit${PPG_MAJOR_VERSION}_set_user \
-        percona-pg_oidc_validator${PPG_MAJOR_VERSION} \
+        %!{CONTAINER_PG_EXTRA_COMPONENTS} \
         percona-pgbackrest \
         percona-pgvector_${PPG_MAJOR_VERSION} \
         percona-pgvector_${PPG_MAJOR_VERSION}-llvmjit \
