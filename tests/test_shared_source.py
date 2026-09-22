@@ -269,3 +269,36 @@ def test_shared_target_may_sit_in_a_subdir_of_shared(tree):
     assert _is_path_dirty(link)
     _commit(repo, "edit nested shared Dockerfile")
     assert _has_package_content_changes_since(sha2, link)
+
+
+def test_shared_subdir_may_mirror_a_two_level_subproject(tree):
+    """staging/_shared/extras/containers/<pkg> is linked from
+    staging/17/extras/containers/<pkg>, three levels below the major: the
+    link target climbs ../../../ and the macro chain includes the extras
+    project's own macros.yaml (which overrides a major-level macro)."""
+    repo, _ = tree
+    nested = f"root/ppg/staging/{SHARED_SOURCE_DIRNAME}/extras/containers/img"
+    _write(repo, "root/ppg/staging/17/extras/project.yaml", "title: e\n")
+    _write(repo, "root/ppg/staging/17/extras/macros.yaml", "- IMG_EXTRA:\n")
+    _write(repo, "root/ppg/staging/17/extras/containers/project.yaml", "title: c\n")
+    _write(
+        repo,
+        "root/ppg/staging/17/macros.yaml",
+        "- PG_MAJOR_VERSION: 17\n- IMG_EXTRA: tde\n",
+    )
+    _write(repo, f"{nested}/obs/Dockerfile", "FROM x\nRUN echo %!{IMG_EXTRA}\n")
+    os.symlink(
+        f"../../../{SHARED_SOURCE_DIRNAME}/extras/containers/img",
+        repo / "root/ppg/staging/17/extras/containers/img",
+    )
+    _commit(repo, "three-level link")
+
+    found = list(find_packages(repo / "root/ppg/staging", "X:ppg:staging"))
+    link = repo / "root/ppg/staging/17/extras/containers/img"
+    assert ("X:ppg:staging:17:extras:containers", link) in found
+    assert not any(SHARED_SOURCE_DIRNAME in path.parts for _, path in found)
+
+    macros = load_macros(link)
+    assert macros.get("PG_MAJOR_VERSION") == "17"
+    assert macros.get("IMG_EXTRA") == ""  # extras override wins over the major
+    assert repo / nested in [Path(p) for p in _package_pathspecs(link)]

@@ -186,7 +186,13 @@ subdirectory named after the subproject. The container images are the example: t
 `percona-pgbouncer` and `percona-pgbackrest` *images* live in `staging/_shared/containers/<pkg>/`
 (the RPM/deb packages of the same name are `staging/_shared/<pkg>/`), and every major links to them
 with `staging/<V>/containers/<pkg> -> ../../_shared/containers/<pkg>`. `_shared/containers/` is
-neither a project nor a package; `containers/project.yaml` stays per major. The only per-major
+neither a project nor a package; `containers/project.yaml` stays per major. The extras tier follows the
+same pattern one level deeper: `staging/_shared/extras/<pkg>` holds the extras extension packages linked
+from `staging/<V>/extras/<pkg>` (`../../_shared/extras/<pkg>`), and
+`staging/_shared/extras/containers/percona-distribution-postgresql-custom` is linked from
+`staging/<V>/extras/containers/` (`../../../_shared/extras/containers/...`). A per-major delta inside
+shared extras packaging goes into `staging/<V>/extras/macros.yaml`, which sits in the link's macro chain
+and overrides the major's values (e.g. `PPG_IMAGE_VERSION`, `CONTAINER_PG_EXTRA_COMPONENTS`). The only per-major
 difference in those images — the extra Percona extensions installed (pg_tde, pg_oidc_validator) — is
 the `CONTAINER_PG_EXTRA_COMPONENTS` macro, empty in `staging/macros.yaml` and overridden by the majors
 that ship them.

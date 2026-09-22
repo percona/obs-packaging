@@ -551,7 +551,8 @@ Rules:
   a package inside a nested subproject such as `containers/` or `tarballs/`).
 - If the package name is already used at `_shared/` top level by a different package (the
   `percona-pgbouncer` container image vs the `percona-pgbouncer` RPM/deb), put the shared copy in a
-  subdirectory named after the subproject: `_shared/containers/<pkg>`.
+  subdirectory named after the subproject: `_shared/containers/<pkg>`. Nested subprojects mirror
+  their path (`_shared/extras/<pkg>`, `_shared/extras/containers/<pkg>`), with one more `../` per level.
 - A small per-major difference can often be turned into a macro instead of blocking sharing:
   the container images use `CONTAINER_PG_EXTRA_COMPONENTS` (empty by default in
   `staging/macros.yaml`, set in `staging/17` and `staging/18`) for the pg_tde / pg_oidc_validator
