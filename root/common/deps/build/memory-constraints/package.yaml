@@ -8,7 +8,6 @@ description: |
   Noarch, RPM-only; consumers add "BuildRequires: memory-constraints".
 
 build:
-  Debian_11: false
   Debian_12: false
   Debian_13: false
   Ubuntu_22.04: false

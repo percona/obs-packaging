@@ -2,7 +2,6 @@ title: python3.12-systemd
 description: Python interface for libsystemd, built for the python3.12 stream needed by percona-patroni on UBI containers
 build:
   RockyLinux_10: false
-  Debian_11: false
   Debian_12: false
   Debian_13: false
   Ubuntu_22.04: false
