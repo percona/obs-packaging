@@ -31,6 +31,9 @@ Packager:       Percona Development Team <https://jira.percona.com>
 Vendor:         Percona, LLC
 
 BuildRequires:  %{pg_name}-devel, %{pg_name}
+%if %{pg_version} >= 19
+BuildRequires:  %{pg_name}-static
+%endif
 %if 0%{?gts_version}
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
 %endif
