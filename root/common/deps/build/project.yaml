@@ -42,7 +42,7 @@ project-config: |
   Prefer: blas
   %endif
 
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository" == "Ubuntu_22.04"
+  %if "%_repository" == "Debian_12" || "%_repository" == "Ubuntu_22.04"
   # llvm-*-dev needs libtinfo-dev; both libncurses-dev and libtinfo-dev satisfy
   # it and OBS reports "have choice" without a Prefer.
   Prefer: libncurses-dev
@@ -50,11 +50,11 @@ project-config: |
   Prefer: cron
   %endif
 
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04"
+  %if "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04"
   Prefer: golang-1.26
   %endif
 
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
+  %if "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
   # libgdal-dev transitively requires both libcurl4-openssl-dev and
   # libcurl4-gnutls-dev which conflict; ignore the gnutls variant so
   # the openssl variant is used consistently.
@@ -66,9 +66,6 @@ project-config: |
 
   # Distro codename suffix for deb releases — keep in sync with the root
   # project.yaml (this project-config overrides the inherited root config).
-  %if "%_repository" == "Debian_11"
-  Release: <CI_CNT>.<B_CNT>.bullseye
-  %endif
   %if "%_repository" == "Debian_12"
   Release: <CI_CNT>.<B_CNT>.bookworm
   %endif

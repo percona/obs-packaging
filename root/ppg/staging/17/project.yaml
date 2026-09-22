@@ -86,15 +86,6 @@ repositories:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
         repository: devel
     archs: [x86_64, aarch64]
-  - name: Debian_11
-    paths:
-      - subproject: ppg:common:deps
-        repository: Debian_11
-      - subproject: common:deps:build
-        repository: Debian_11
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:11
-        repository: standard
-    archs: [x86_64, aarch64]
   - name: Debian_12
     paths:
       - subproject: ppg:common:deps
@@ -233,14 +224,14 @@ project-config: |
   Ignore: postgresql
   %endif
 
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository" == "Ubuntu_22.04"
+  %if "%_repository" == "Debian_12" || "%_repository" == "Ubuntu_22.04"
   # llvm-*-dev needs libtinfo-dev; both libncurses-dev and libtinfo-dev satisfy
   # it and OBS reports "have choice" without a Prefer.
   Prefer: libncurses-dev
   # logrotate Recommends a cron daemon; both cron and bcron may be available.
   Prefer: cron
 
-  # Repackaged LLVM 21 (built for Debian 11/12) is only for PPG 18 JIT.
+  # Repackaged LLVM 21 (built for Debian 12) is only for PPG 18 JIT.
   # For PPG 14–17, Ignore it so builds use the distro LLVM packages.
   Ignore: libllvm21
   Ignore: llvm-21-runtime
@@ -254,11 +245,11 @@ project-config: |
   Ignore: clang-21
   %endif
 
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04"
+  %if "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04"
   Prefer: golang-1.26
   %endif
 
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
+  %if "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
   # libgdal-dev transitively requires both libcurl4-openssl-dev and
   # libcurl4-gnutls-dev which conflict; ignore the gnutls variant so
   # the openssl variant is used consistently.
@@ -270,9 +261,6 @@ project-config: |
 
   # Distro codename suffix for deb releases — keep in sync with the root
   # project.yaml (this project-config overrides the inherited root config).
-  %if "%_repository" == "Debian_11"
-  Release: <CI_CNT>.<B_CNT>.bullseye
-  %endif
   %if "%_repository" == "Debian_12"
   Release: <CI_CNT>.<B_CNT>.bookworm
   %endif
