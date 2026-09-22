@@ -2,6 +2,18 @@
 # Version-specific macros (PG_MAJOR_VERSION, PGAUDIT_VERSION, PG_TDE_VERSION, ...)
 # live in the per-version macros.yaml files and override these where needed.
 
+# Current PostgreSQL minor version of every major, in one place.  Each
+# staging/<V>/macros.yaml sets its own PG_MINOR_VERSION from the matching entry,
+# and the cross-major upgrade images (staging/containers, staging/extras/containers)
+# read several of them at once to build their tags.  Bump the minor here, nowhere
+# else; PPG_RELEASE is computed from the resulting PG_VERSION and resets on its own.
+- PG_14_MINOR_VERSION: 24
+- PG_15_MINOR_VERSION: 19
+- PG_16_MINOR_VERSION: 15
+- PG_17_MINOR_VERSION: 11
+- PG_18_MINOR_VERSION: 6
+- PG_19_MINOR_VERSION: 0
+
 # Core package versions
 - CREDCHECK_TAG: v5.0
 - CREDCHECK_VERSION: 5.0
