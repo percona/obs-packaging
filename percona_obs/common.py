@@ -351,7 +351,9 @@ def inject_computed_macros(
 ) -> dict[str, str]:
     """Return *macros* plus the tool-computed entries, without mutating it.
 
-    Currently only ``PPG_RELEASE``.  *read_file* returns a repo file's contents
+    Two entries: ``PG_PREV_MAJOR_VERSION`` (the major before ``PG_MAJOR_VERSION``,
+    PostgreSQL majors being consecutive integers) and ``PPG_RELEASE``.
+    *read_file* returns a repo file's contents
     or None; callers pass a working-tree reader or a git-revision reader so the
     identical value can be computed at any commit — see
     ``git_utils._macros_changed_since``.  *repo_root* defaults to the module
@@ -364,6 +366,9 @@ def inject_computed_macros(
     own counter.
     """
     root = REPO_ROOT if repo_root is None else repo_root
+    major_str = (macros.get("PG_MAJOR_VERSION") or "").strip()
+    if major_str.isdigit() and "PG_PREV_MAJOR_VERSION" not in macros:
+        macros = {**macros, "PG_PREV_MAJOR_VERSION": str(int(major_str) - 1)}
     pg_version = macros.get("PG_VERSION")
     if not pg_version or "PPG_RELEASE" in macros:
         return macros
