@@ -1,7 +1,6 @@
 #!UseOBSRepositories
-#!BuildVersion: %!{PG_VERSION}-%!{PPG_RELEASE}
-#!BuildTag: percona-distribution-postgresql:<VERSION>-<RELEASE>
-#!BuildTag: percona-distribution-postgresql:<VERSION>
+#!BuildVersion: %!{PPG_IMAGE_VERSION}-%!{PPG_RELEASE}
+#!BuildTag: percona-distribution-postgresql:%!{PPG_IMAGE_VERSION}-%!{PPG_RELEASE}
 #!BuildTag: percona-distribution-postgresql:%!{PG_VERSION}
 #!BuildTag: percona-distribution-postgresql:%!{PG_MAJOR_VERSION}
 
@@ -13,13 +12,13 @@ LABEL name="Percona Distribution for PostgreSQL" \
       summary="Percona base selection of PostgreSQL%!{PG_MAJOR_VERSION} components" \
       maintainer="Percona Development <info@percona.com>" \
       org.opencontainers.image.authors="info@percona.com"
-LABEL version="%!{PG_VERSION}-%!{PPG_RELEASE}"
+LABEL version="%!{PPG_IMAGE_VERSION}-%!{PPG_RELEASE}"
 LABEL release="%!{PPG_RELEASE}"
 
 ARG PPG_REPO
 ARG RHEL_VER
 
-ENV PPG_VERSION %!{PG_VERSION}-%!{PPG_RELEASE}
+ENV PPG_VERSION %!{PPG_IMAGE_VERSION}-%!{PPG_RELEASE}
 ENV PPG_MAJOR_VERSION %!{PG_MAJOR_VERSION}
 ENV PPG_MINOR_VERSION %!{PG_MINOR_VERSION}
 ENV OS_VER ${RHEL_VER}
