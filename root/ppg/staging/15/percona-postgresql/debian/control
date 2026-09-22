@@ -175,8 +175,8 @@ Depends:
  ${shlibs:Depends}
 Suggests: percona-postgresql-%!{PG_MAJOR_VERSION}, percona-postgresql-doc-%!{PG_MAJOR_VERSION}
 Provides: percona-postgresql-client, postgresql-client (= ${binary:Version}), postgresql-client-%!{PG_MAJOR_VERSION} (= ${binary:Version})
-Conflicts: postgresql-client-%!{PG_MAJOR_VERSION}, postgresql-server-dev-%!{PG_MAJOR_VERSION} (<< %!{PG_VERSION}-1~)
-Replaces: postgresql-client-%!{PG_MAJOR_VERSION}, postgresql-server-dev-%!{PG_MAJOR_VERSION} (<< %!{PG_VERSION}-1~)
+Conflicts: postgresql-client-%!{PG_MAJOR_VERSION}
+Replaces: postgresql-client-%!{PG_MAJOR_VERSION}
 Description: front-end programs for PostgreSQL %!{PG_MAJOR_VERSION}
  This package contains client and administrative programs for
  PostgreSQL: these are the interactive terminal client psql and

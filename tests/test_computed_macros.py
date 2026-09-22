@@ -139,3 +139,34 @@ def test_macros_changed_when_release_added(monkeypatch, tmp_path):
     after = RELEASE_YAML + "- ppg/18.4-2\n"
     pkg = _macros_check_fixture(monkeypatch, tmp_path, RELEASE_YAML, after)
     assert git_utils._macros_changed_since("abc1234", pkg) is True
+
+
+def test_prev_major_is_computed_from_major():
+    macros = inject_computed_macros(
+        {"PG_MAJOR_VERSION": "18"}, Path("/nowhere"), lambda _p: None
+    )
+    assert macros["PG_PREV_MAJOR_VERSION"] == "17"
+
+
+def test_prev_major_explicit_declaration_wins():
+    macros = inject_computed_macros(
+        {"PG_MAJOR_VERSION": "18", "PG_PREV_MAJOR_VERSION": "16"},
+        Path("/nowhere"),
+        lambda _p: None,
+    )
+    assert macros["PG_PREV_MAJOR_VERSION"] == "16"
+
+
+def test_prev_major_absent_without_a_numeric_major():
+    assert "PG_PREV_MAJOR_VERSION" not in inject_computed_macros(
+        {}, Path("/nowhere"), lambda _p: None
+    )
+    assert "PG_PREV_MAJOR_VERSION" not in inject_computed_macros(
+        {"PG_MAJOR_VERSION": "%!{X}"}, Path("/nowhere"), lambda _p: None
+    )
+
+
+def test_load_macros_injects_prev_major(tmp_path, monkeypatch):
+    root = _tree(tmp_path)
+    monkeypatch.setattr(common, "REPO_ROOT", root)
+    assert common.load_macros(root / "ppg/staging/18")["PG_PREV_MAJOR_VERSION"] == "17"

@@ -667,6 +667,11 @@ Two consequences follow, and both are deliberate:
 A project that needs its own pinned counter can still declare `PPG_RELEASE` in its
 `macros.yaml`; an explicit declaration always wins over the computed value.
 
+`PG_PREV_MAJOR_VERSION` is computed the same way: whenever the chain defines
+`PG_MAJOR_VERSION`, `load_macros` sets it to that major minus one (the server spec's
+`prevmajorversion` and the extras upgrade QA job use it). Declare it explicitly only
+to override the arithmetic.
+
 ### Step 1 — Create or update a release
 
 ```sh
