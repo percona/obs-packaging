@@ -7,10 +7,15 @@ literal "images" repo.  The dep-cascade _buildinfo queries hardcoded
 "images", so for new-layout projects they 404ed, no Dockerfile-image → RPM
 edges were found, and container images were never dep-promoted when a
 package they install (percona-pg_tde) was promoted.
+
+Repository selection comes from the process-default RepositoryFilter (the
+active profile's slice).
 """
 
 from pathlib import Path
 
+import percona_obs.common as common
+from percona_obs.project_config import RepositoryFilter
 from percona_obs.targets import image_dep_query_repos
 
 NEW_LAYOUT_YAML = """\
@@ -29,9 +34,6 @@ repositories:
     archs: [x86_64, aarch64]
 """
 
-# What --only-repos ubi9-images,UBI_9 expands to (old + new layout candidates).
-UBI9_ONLY_REPOS = {"images", "ubi9", "UBI_9"}
-
 
 def _make_image_pkg(tmp_path: Path, project_yaml: str) -> Path:
     project = tmp_path / "containers"
@@ -47,19 +49,15 @@ def test_new_layout_all_repos(tmp_path):
     assert image_dep_query_repos(pkg) == {"ubi8", "ubi9"}
 
 
-def test_new_layout_only_repos_filter(tmp_path):
+def test_default_filter_slices_image_repos(tmp_path):
     pkg = _make_image_pkg(tmp_path, NEW_LAYOUT_YAML)
-    assert image_dep_query_repos(pkg, only_repos=UBI9_ONLY_REPOS) == {"ubi9"}
-
-
-def test_old_layout_only_repos_filter(tmp_path):
-    pkg = _make_image_pkg(tmp_path, OLD_LAYOUT_YAML)
-    assert image_dep_query_repos(pkg, only_repos=UBI9_ONLY_REPOS) == {"images"}
-
-
-def test_filter_excluding_all_repos(tmp_path):
-    pkg = _make_image_pkg(tmp_path, NEW_LAYOUT_YAML)
-    assert image_dep_query_repos(pkg, only_repos={"UBI_8"}) == set()
+    common.set_default_repository_filter(RepositoryFilter(include_repos=("ubi9",)))
+    try:
+        assert image_dep_query_repos(pkg) == {"ubi9"}
+        common.set_default_repository_filter(RepositoryFilter(include_repos=("UBI_8",)))
+        assert image_dep_query_repos(pkg) == set()
+    finally:
+        common.set_default_repository_filter(None)
 
 
 def test_cache_is_populated_and_reused(tmp_path):
