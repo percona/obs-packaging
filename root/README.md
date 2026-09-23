@@ -401,8 +401,8 @@ configuration, merged with the tier's `subprojects.yaml` (for example
 `ppg/staging/subprojects.yaml`, which `ppg/devel/subprojects.yaml` symlinks), and declares only
 what differs for that project. Subprojects with unrelated repository sets (tarballs, containers,
 extras) opt out with `repositories-inherit: false`. Where several majors need the same delta, the file lives once under the tier's
-`_shared/` directory and each `<V>/project.yaml` is a symlink to it (for example
-`ppg/staging/_shared/project.pre18.yaml` for PostgreSQL 14–17); it still renders with the
+`_shared/` directory and each `<V>/project.yaml` is a symlink to it (`ppg/staging/_shared/project.pre18.yaml` for PostgreSQL 14–17 and
+`project.post18.yaml` for 18+, likewise under `ppg/devel/_shared/`); it still renders with the
 linking major's `macros.yaml`. Run
 `percona-obs project config <project> --offline --resolved` to see the effective configuration;
 the merge rules are in `.github/copilot-instructions.md`.
