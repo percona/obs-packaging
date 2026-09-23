@@ -13,6 +13,7 @@ from .common import (
     _print_update,
     parse_env_overrides,
 )
+from .project_config import RepositoryFilter
 
 
 def _load_profile(name: str) -> dict[str, str]:
@@ -38,7 +39,33 @@ def _load_profile(name: str) -> dict[str, str]:
         data: object = yaml.safe_load(fh)
     if not isinstance(data, dict):
         raise SystemExit(f"error: profile {path} is empty or not a YAML mapping")
-    return {k: str(v) for k, v in data.items() if v is not None}
+    return {
+        k: str(v)
+        for k, v in data.items()
+        if v is not None and not isinstance(v, (list, dict))
+    }
+
+
+def _load_profile_filter(name: str) -> RepositoryFilter:
+    """The slice declared in .profile/<name>.yaml (``include-repositories`` …).
+
+    A missing profile or one without filter keys is unfiltered.  Malformed
+    lists exit with an error naming the file.
+    """
+    path = _PROFILES_DIR / f"{name}.yaml"
+    if not path.is_file():
+        return RepositoryFilter.EMPTY
+    with path.open(encoding="utf-8") as fh:
+        data: object = yaml.safe_load(fh) or {}
+    if not isinstance(data, dict):
+        return RepositoryFilter.EMPTY
+    f = RepositoryFilter.from_profile(data, source=str(path))
+    return RepositoryFilter.EMPTY if f.is_empty else f
+
+
+def _split_globs(values: list[str]) -> tuple[str, ...]:
+    """``["a,b", "c"]`` → ``("a", "b", "c")`` (profile create flag values)."""
+    return tuple(x.strip() for v in values for x in v.split(",") if x.strip())
 
 
 def _load_profile_env_strings(name: str) -> list[str]:
@@ -87,9 +114,20 @@ def cmd_profile_create(args: argparse.Namespace) -> None:
     exists = path.is_file()
 
     env_vars = parse_env_overrides(args.env_overrides)
+    repo_filter = RepositoryFilter(
+        include_repos=_split_globs(getattr(args, "include_repos", []) or []),
+        exclude_repos=_split_globs(getattr(args, "exclude_repos", []) or []),
+        include_projects=_split_globs(getattr(args, "include_projects", []) or []),
+        exclude_projects=_split_globs(getattr(args, "exclude_projects", []) or []),
+    )
+    # `-P name profile create name` without filter flags re-creates the
+    # profile from its current state (like -e does for env): keep its slice.
+    if repo_filter.is_empty and getattr(args, "profile", None):
+        repo_filter = _load_profile_filter(args.profile)
     data: dict[str, object] = {"apiurl": args.apiurl, "rootprj": args.rootprj}
     if env_vars:
         data["env"] = [{"name": k, "value": v} for k, v in sorted(env_vars.items())]
+    data.update(repo_filter.to_profile())
 
     with path.open("w", encoding="utf-8") as fh:
         yaml.dump(data, fh, default_flow_style=False, allow_unicode=True)
@@ -122,6 +160,11 @@ def cmd_profile_list(args: argparse.Namespace) -> None:
                 data: object = yaml.safe_load(fh)
             if isinstance(data, dict):
                 for key, val in data.items():
-                    print(f"    {_col(_DIM, key + ':')}  {val}")
+                    shown = (
+                        ", ".join(map(str, val))
+                        if isinstance(val, list) and key != "env"
+                        else val
+                    )
+                    print(f"    {_col(_DIM, key + ':')}  {shown}")
         except Exception:
             print(f"    {_col(_RED, '(error reading file)')}")

@@ -10,6 +10,7 @@ from .cmd_build import cmd_build_dependency, cmd_build_status, cmd_build_trigger
 from .cmd_profile import (
     _load_profile,
     _load_profile_env_strings,
+    _load_profile_filter,
     cmd_profile_create,
     cmd_profile_list,
 )
@@ -33,7 +34,7 @@ from .cmd_sync import (
     cmd_sync_promote,
     cmd_sync_release,
 )
-from .common import _DIM, _col, logger
+from .common import _DIM, _col, logger, set_default_repository_filter
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -560,6 +561,29 @@ def build_parser() -> argparse.ArgumentParser:
         "name",
         help="Profile name (saved as .profile/<name>.yaml).",
     )
+    for _flag, _dest, _what in (
+        ("--include-repos", "include_repos", "repository names to keep"),
+        ("--exclude-repos", "exclude_repos", "repository names to drop"),
+        (
+            "--include-projects",
+            "include_projects",
+            "project names (without rootprj) to keep",
+        ),
+        (
+            "--exclude-projects",
+            "exclude_projects",
+            "project names (without rootprj) to drop",
+        ),
+    ):
+        profile_create_parser.add_argument(
+            _flag,
+            metavar="GLOB[,GLOB...]",
+            action="append",
+            default=[],
+            dest=_dest,
+            help=f"Slice rule: {_what} (shell globs, repeatable). Written to the profile as "
+            f"{_flag[2:].replace('repos', 'repositories')}. See docs/PERCONA_OBS_TOOL.md.",
+        )
     profile_create_parser.set_defaults(func=cmd_profile_create)
 
     profile_list_parser = profile_subparsers.add_parser(
@@ -749,6 +773,7 @@ def main() -> None:
         args.env_overrides = (
             _load_profile_env_strings(args.profile) + args.env_overrides
         )
+        set_default_repository_filter(_load_profile_filter(args.profile))
 
     _local_only_commands = ("profile", "project")
 
