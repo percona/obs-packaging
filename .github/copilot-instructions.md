@@ -175,7 +175,9 @@ build configuration from `root/ppg/staging/subprojects.yaml`. Use
 
 Macro substitution uses the target project's macro set. Ancestor layers may reference macros only
 the descendants define (e.g. `%!{PG_MAJOR_VERSION}` in the staging tier); a token left unresolved
-in the final configuration is an error.
+in the final configuration is an error. Because ancestor layers render with the target's macro set,
+a `macros.yaml` further down that redefines a macro also changes how inherited text renders for
+that project.
 
 Only the paths listed in the resolved `repositories` are emitted; `build_project_meta()` injects no
 ancestor paths.

@@ -199,6 +199,12 @@ a descendant declines a map inherited from a tier.
   `ppg/common/deps/tarballs`: `repositories-inherit: false` and, where the
   prjconf is not the parent's, `project-config-inherit: false`; `debuginfo: ~`
   where the project has none today. Content otherwise unchanged.
+- `root/ppg/staging/extras/project.yaml`: a package-less intermediate that
+  previously had no `project.yaml` of its own and inherited root's 13
+  repositories by default; it now carries all three opt-outs
+  (`repositories-inherit: false`, `project-config-inherit: false`,
+  `debuginfo: ~`) and declares no repositories of its own, since nothing
+  paths to it.
 - `common/deps/build`: inherits root's repositories and prjconf, adds its
   RockyLinux_10 `Prefer:` lines.
 - `root/ppg/releases/subprojects.yaml`: `standalone: true`. Release
@@ -299,11 +305,25 @@ projects that inherit root's prjconf verbatim (`root`, `ppg:staging`,
 `ppg:releases` tier loses them too but is outside the gate, which skips
 everything under `releases/`. Anything else is a bug in the rewrite.
 
+The gate enumerates projects by `project.yaml` presence, so the intermediate
+directories without one (`root/common`, `root/common/deps`,
+`root/common/containers`, `root/ppg`, `root/ppg/common`) were never
+baselined. The final review's full-tree comparison found nine package-less
+projects lose `Prefer: libverto-libev`/`Prefer: Lmod`: `ROOT`,
+`ROOT:common`, `ROOT:common:containers`, `ROOT:common:deps`, `ROOT:ppg`,
+`ROOT:ppg:common`, `ROOT:ppg:devel`, `ROOT:ppg:releases`, `ROOT:ppg:staging`
+(all verified to hold no packages).
+
 Consequence on OBS after merge: every non-release project gets a textual
 prjconf update (comments, block order) with unchanged effective content, and
-the four package-less projects lose two `Prefer` lines. A prjconf-only change
+the nine package-less projects lose two `Prefer` lines. A prjconf-only change
 rebuilds nothing (observed during the deb codename rollout), so this is
-metadata churn only. Meta XML is unchanged everywhere.
+metadata churn only. Meta XML is unchanged for every project that existed
+before, with one exception: `ppg:staging:extras`, a package-less
+intermediate that previously inherited root's 13 repositories, now declares
+none (its new `project.yaml` opts out of the tier patches); nothing paths to
+it, so OBS should accept the removal. If OBS refuses it, keep `repositories`
+inherited in that file instead.
 
 ### Rewrite order
 
