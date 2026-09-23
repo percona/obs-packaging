@@ -561,3 +561,26 @@ def test_render_resolved_yaml(repo):
     assert out.startswith("# project ROOT:a\n")
     assert "repositories:" in out and "name: RockyLinux_9" in out
     assert out.endswith("\n")
+
+
+def test_repositories_inherit_false_drops_inherited_path_prefix(repo):
+    root = repo(
+        {
+            "project.yaml": _ROOT_REPOS,
+            "tier/subprojects.yaml": (
+                'path-prefix:\n  - subproject: ppg:common:deps\n    repository: "%_repository"\n'
+            ),
+            "tier/17/project.yaml": "title: S\n",
+            "tier/17/containers/project.yaml": (
+                "repositories-inherit: false\nrepositories:\n  - name: ubi9\n    paths:\n"
+                "      - subproject: common:containers:ubi9\n        repository: images\n"
+                "    archs: [x86_64]\n"
+            ),
+        }
+    )
+    assert _paths(resolve_project_config(root / "tier" / "17"), "Debian_12")[0] == (
+        "ppg:common:deps",
+        "Debian_12",
+    )
+    containers = resolve_project_config(root / "tier" / "17" / "containers")
+    assert _paths(containers, "ubi9") == [("common:containers:ubi9", "images")]

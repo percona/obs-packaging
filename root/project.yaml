@@ -69,31 +69,31 @@ repositories:
     archs: [x86_64, aarch64]
   - name: Debian_12
     paths:
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:12
-        repository: standard
       - subproject: common:deps:build
         repository: Debian_12
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:12
+        repository: standard
     archs: [x86_64, aarch64]
   - name: Debian_13
     paths:
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:13
-        repository: standard
       - subproject: common:deps:build
         repository: Debian_13
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:13
+        repository: standard
     archs: [x86_64, aarch64]
   - name: Ubuntu_22.04
     paths:
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:22.04
-        repository: universe
       - subproject: common:deps:build
         repository: Ubuntu_22.04
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:22.04
+        repository: universe
     archs: [x86_64, aarch64]
   - name: Ubuntu_24.04
     paths:
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:24.04
-        repository: universe
       - subproject: common:deps:build
         repository: Ubuntu_24.04
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:24.04
+        repository: universe
     archs: [x86_64, aarch64]
   - name: Ubuntu_26.04
     paths:
@@ -104,17 +104,17 @@ repositories:
     archs: [x86_64, aarch64]
   - name: openSUSE_Tumbleweed
     paths:
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Tumbleweed
-        repository: standard
       - subproject: common:deps:build
         repository: openSUSE_Tumbleweed
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Tumbleweed
+        repository: standard
     archs: [x86_64, aarch64]
   - name: openSUSE_Leap_16
     paths:
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Leap:16.0
-        repository: standard
       - subproject: common:deps:build
         repository: openSUSE_Leap_16
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Leap:16.0
+        repository: standard
     archs: [x86_64, aarch64]
 
 project-config: |

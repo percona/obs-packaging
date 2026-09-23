@@ -15,107 +15,11 @@ debuginfo:
   openSUSE_Tumbleweed: true
   openSUSE_Leap_16: true
 
-# Repository patches over the root definitions.  PPG projects resolve
-# ppg:common:deps first, then common:deps:build, then the distro.  For the
-# repositories where the root project.yaml lists the distro before
-# common:deps:build the whole path list is restated (paths-replace) so that
-# the emitted order stays exactly what OBS has today.
-repositories:
-  - name: RockyLinux_8
-    paths:
-      - subproject: ppg:common:deps
-        repository: RockyLinux_8
-  - name: RockyLinux_9
-    paths:
-      - subproject: ppg:common:deps
-        repository: RockyLinux_9
-  - name: RockyLinux_9.6
-    paths:
-      - subproject: ppg:common:deps
-        repository: RockyLinux_9.6
-  - name: RockyLinux_10
-    paths:
-      - subproject: ppg:common:deps
-        repository: RockyLinux_10
-  - name: UBI_9
-    paths:
-      - subproject: ppg:common:deps
-        repository: UBI_9
-  - name: UBI_8
-    paths-replace: true
-    paths:
-      - subproject: common:deps:build
-        repository: UBI_8
-      - subproject: ppg:common:deps
-        repository: UBI_8
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:8
-        repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
-        repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
-        repository: appstream
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
-        repository: baseos
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
-        repository: devel
-  - name: Debian_12
-    paths-replace: true
-    paths:
-      - subproject: ppg:common:deps
-        repository: Debian_12
-      - subproject: common:deps:build
-        repository: Debian_12
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:12
-        repository: standard
-  - name: Debian_13
-    paths-replace: true
-    paths:
-      - subproject: ppg:common:deps
-        repository: Debian_13
-      - subproject: common:deps:build
-        repository: Debian_13
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:13
-        repository: standard
-  - name: Ubuntu_22.04
-    paths-replace: true
-    paths:
-      - subproject: ppg:common:deps
-        repository: Ubuntu_22.04
-      - subproject: common:deps:build
-        repository: Ubuntu_22.04
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:22.04
-        repository: universe
-  - name: Ubuntu_24.04
-    paths-replace: true
-    paths:
-      - subproject: ppg:common:deps
-        repository: Ubuntu_24.04
-      - subproject: common:deps:build
-        repository: Ubuntu_24.04
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:24.04
-        repository: universe
-  - name: Ubuntu_26.04
-    paths:
-      - subproject: ppg:common:deps
-        repository: Ubuntu_26.04
-  - name: openSUSE_Tumbleweed
-    paths-replace: true
-    paths:
-      - subproject: ppg:common:deps
-        repository: openSUSE_Tumbleweed
-      - subproject: common:deps:build
-        repository: openSUSE_Tumbleweed
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Tumbleweed
-        repository: standard
-  - name: openSUSE_Leap_16
-    paths-replace: true
-    paths:
-      - subproject: ppg:common:deps
-        repository: openSUSE_Leap_16
-      - subproject: common:deps:build
-        repository: openSUSE_Leap_16
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Leap:16.0
-        repository: standard
+# Every PPG repository resolves ppg:common:deps first, then common:deps:build,
+# then the distro (the latter two come from the root project.yaml in that order).
+path-prefix:
+  - subproject: ppg:common:deps
+    repository: "%_repository"
 
 # PPG-wide build configuration on top of the root project.yaml.
 project-config: |
