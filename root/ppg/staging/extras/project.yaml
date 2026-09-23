@@ -1,0 +1,11 @@
+title: Percona Distribution for PostgreSQL — Staging extras (cross-version)
+description: |
+  Container project for the cross-version extras subprojects
+  (ppg:staging:extras:containers). It holds no buildable packages and
+  therefore no build repositories.
+# A package-less intermediate: it must not pick up the per-major repository
+# patches, debuginfo flags or build configuration that
+# root/ppg/staging/subprojects.yaml folds into every project below it.
+repositories-inherit: false
+project-config-inherit: false
+debuginfo: ~
