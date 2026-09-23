@@ -2,3 +2,19 @@ title: Common Runtime Dependencies
 description: |
   Runtime packages shared across Percona distributions.
 publish: false
+
+project-config: |
+  # libverto-libev / Lmod settle "have choice" reports for krb5-server and
+  # friends in the common dependency projects.  They used to live in the root
+  # project.yaml; the PPG projects never needed them, so they moved here.
+  %if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_8"
+  Prefer: libverto-libev
+  Prefer: Lmod
+  %endif
+
+  %if "%_repository" == "RockyLinux_9" || "%_repository" == "RockyLinux_9.6"
+  # krb5-server needs libverto-module-base, provided by both libverto-libev
+  # and libverto-libevent on the 9.6 vault repo set ("have choice", seen on
+  # pr-2 ppg:common:deps/krb5). Same pick as the EL8 block above.
+  Prefer: libverto-libev
+  %endif
