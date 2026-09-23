@@ -522,7 +522,7 @@ def test_release_no_longer_touches_macros():
 
 
 def test_write_release_tree_materializes_delta_source(tmp_path, monkeypatch):
-    """A staging subproject that only patches a tier subprojects.yaml still yields a full mirror."""
+    """A staging subproject that only patches its parent's subprojects.yaml still yields a full mirror."""
     import percona_obs.common as common
 
     root = tmp_path / "root"
@@ -541,7 +541,7 @@ def test_write_release_tree_materializes_delta_source(tmp_path, monkeypatch):
             }
         )
     )
-    (root / "ppg/staging/subprojects.yaml").write_text(
+    (root / "ppg/staging/17/subprojects.yaml").write_text(
         yaml.dump(
             {
                 "repositories": [

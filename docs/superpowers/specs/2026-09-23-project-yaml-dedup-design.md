@@ -88,17 +88,20 @@ Facts found in the tree forced these refinements. None changes the goal.
 For a project P whose directory chain from `root/` is A0 (= `root/`), A1, …,
 An (= P), the resolver folds, in order:
 
-    A0/project.yaml, A0/subprojects.yaml, A1/project.yaml, A1/subprojects.yaml, …, P/project.yaml
+    A0/project.yaml, A1/project.yaml, …, A(n-1)/project.yaml, A(n-1)/subprojects.yaml, P/project.yaml
 
 - `project.yaml` fields apply to the project itself **and** are inherited by
   its descendants (today's rule, now merged rather than replaced).
-- `subprojects.yaml` applies to **strict descendants only**. Allowed keys:
+- `subprojects.yaml` applies to the **direct children** of its directory only
+  (decided in PR review; deeper subprojects inherit from their parent's
+  `project.yaml` and from root, but not from the tier file). Allowed keys:
   `repositories`, `project-config`, `path-prefix`, `debuginfo`, `publish`,
   `build`, `repositories-inherit`, `project-config-inherit`, `standalone`.
   Unknown keys are an error. The file may be a symlink.
-- `subprojects.yaml` containing only `standalone: true` makes every strict
-  descendant resolve from its own `project.yaml` alone (all ancestor layers,
-  including intermediate ones, are dropped). Used by `root/ppg/releases/`.
+- `subprojects.yaml` containing only `standalone: true` is the one recursive
+  form: every strict descendant, at any depth, resolves from its own
+  `project.yaml` alone (all ancestor layers, including intermediate ones, are
+  dropped). Used by `root/ppg/releases/`.
 - A missing or empty file contributes nothing.
 
 Fields that **never** merge and are read only from P's own file: `title`,
@@ -198,9 +201,12 @@ a descendant declines a map inherited from a tier.
   `remove: true` for Debian_12 (14–17), the same per-major prjconf delta as
   staging/<V>. devel/19 mirrors staging/19 exactly (no prefix), as today.
 - Tarballs, extras, containers, tde, `common/containers/*`,
-  `ppg/common/deps/tarballs`: `repositories-inherit: false` and, where the
-  prjconf is not the parent's, `project-config-inherit: false`; `debuginfo: ~`
-  where the project has none today. Content otherwise unchanged.
+  `ppg/common/deps/tarballs`: `repositories-inherit: false` (root's
+  repositories would otherwise be inherited) and, where the prjconf is not the
+  parent's, `project-config-inherit: false`. The direct children of the
+  staging tier that are not majors (`staging/containers`, `staging/extras`)
+  also reset `debuginfo: ~`. The three `<V>/extras` projects carry the UBI_9
+  block locally because the tier file does not reach them.
 - `root/ppg/staging/extras/project.yaml`: a package-less intermediate that
   previously had no `project.yaml` of its own and inherited root's 13
   repositories by default; it now carries all three opt-outs

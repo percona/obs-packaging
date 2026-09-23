@@ -130,14 +130,14 @@ A project's effective configuration is resolved by
 `percona_obs/project_config.py::resolve_project_config`, folding these layers
 from `root/` down to the project:
 
-    root/project.yaml, root/subprojects.yaml, <tier>/project.yaml, <tier>/subprojects.yaml, …, <project>/project.yaml
+    root/project.yaml, …, <parent>/project.yaml, <parent>/subprojects.yaml, <project>/project.yaml
 
 - `project.yaml` applies to the project itself **and** is inherited by its descendants.
-- `subprojects.yaml` (optional, next to a `project.yaml`) applies to **strict descendants only**.
+- `subprojects.yaml` (optional, next to a `project.yaml`) applies to the **direct children** of that directory only; deeper subprojects inherit from their parent's `project.yaml` and from root, not from the tier file.
   Allowed keys: `repositories`, `project-config`, `path-prefix`, `debuginfo`, `publish`, `build`,
   `repositories-inherit`, `project-config-inherit`, `standalone`. It may be a symlink
   (`root/ppg/devel/subprojects.yaml` → `../staging/subprojects.yaml`).
-- `subprojects.yaml` containing only `standalone: true` makes every descendant resolve from its own
+- `subprojects.yaml` containing only `standalone: true` is recursive: every descendant, at any depth, resolves from its own
   `project.yaml` alone (`root/ppg/releases/`: release snapshots are frozen).
 - `title`, `description`, `name`, `qa` are never inherited.
 

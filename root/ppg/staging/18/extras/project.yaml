@@ -5,8 +5,6 @@ description: |
 # This project's repository set and build configuration are unrelated to its
 # parent's: declare them in full here instead of patching the inherited ones.
 repositories-inherit: false
-# no debuginfo repositories here; do not inherit the staging map
-debuginfo: ~
 
 repositories:
   - name: UBI_9
@@ -24,3 +22,13 @@ repositories:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
         repository: devel
     archs: [x86_64, aarch64]
+
+# UBI_9 build configuration, same as the PPG-wide block in
+# root/ppg/staging/subprojects.yaml (which reaches direct children of the
+# staging tier only, and this project is one level deeper).
+project-config: |
+  %if "%_repository" == "UBI_9"
+  ExpandFlags: module:llvm-toolset-rhel9
+  # hdf-libs (EPEL split package) and hdf both provide libdf.so.0 and libmfhdf.so.0
+  Prefer: hdf-libs
+  %endif
