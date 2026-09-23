@@ -811,15 +811,36 @@ def cmd_project_verify(args) -> None:
         root_obs = load_project_yaml(REPO_ROOT / "project.yaml").get("name") or (
             args.rootprj or "ROOT"
         )
+        # One shared slice cache and one resolved config per project: the
+        # per-package calls would otherwise re-resolve the project each time.
+        summary_cache: dict[Path, bool] = {}
+        summary_configs: dict[Path, dict] = {}
+
+        def _summary_cfg(path: Path) -> dict:
+            cfg = summary_configs.get(path)
+            if cfg is None:
+                cfg = summary_configs[path] = _load_project_config_with_inheritance(
+                    path, env_vars, repo_filter
+                )
+            return cfg
+
         out_projects = [
             name
             for name, path in find_projects(REPO_ROOT, root_obs)
-            if not project_in_slice(path, env_vars, repo_filter)
+            if not project_in_slice(
+                path, env_vars, repo_filter, _summary_cfg(path), summary_cache
+            )
         ]
         out_packages = [
             f"{obs}/{path.name}"
             for obs, path in find_packages(REPO_ROOT, root_obs)
-            if not package_in_slice(path, env_vars, repo_filter)
+            if not package_in_slice(
+                path,
+                env_vars,
+                repo_filter,
+                _summary_cfg(path.parent),
+                summary_cache,
+            )
         ]
         for name in out_projects:
             logger.debug(f"out of slice: project {name}")

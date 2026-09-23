@@ -248,7 +248,9 @@ jobs:
       # for all PRs including forks.  OBS's obs_scm service uses this ref to
       # check out the PR's packaging files when it builds promoted packages.
       # Repo labels narrow this instance's slice (never widen it): each label
-      # is a repository name; <flavor>-images expands to <flavor>,UBI_<n> and
+      # is a repository name; <flavor>-images expands to <flavor>,UBI_<n>,images
+      # (the base-image projects under common/containers declare a repository
+      # literally named "images") and
       # excludes the other flavor's base-image project; ssl* keeps tarballs
       # building whenever any repo label is present.  A leg whose narrowed
       # slice is empty (profile create exits 3) has nothing to build here.
@@ -276,7 +278,7 @@ jobs:
           narrow=(); flavors=(); labels=()
           for l in "${REPO_LABELS[@]}"; do
             case "$l" in
-              *-images) f="${l%-images}"; flavors+=("$f"); narrow+=("$f" "UBI_${f#ubi}") ;;
+              *-images) f="${l%-images}"; flavors+=("$f"); narrow+=("$f" "UBI_${f#ubi}" images) ;;
               *)        narrow+=("$l") ;;
             esac
           done

@@ -117,7 +117,10 @@ Create the profiles with flags instead of editing YAML (flags are repeatable and
 ```
 
 `--narrow-repos RockyLinux_9,ssl*` keeps only the named repositories the profile already accepts
-and exits 3 when nothing is left; the PR workflow uses it for repo labels.
+and exits 3 when nothing is left; the PR workflow uses it for repo labels. Entries are matched
+against the profile's rules as literal names: a glob such as `ssl*` is kept only if the profile
+accepts it literally — an exclude-only profile that does not exclude it, or an include list
+containing the same glob.
 
 Inspect a slice offline: `./percona-obs -P labs -e REMOTE_OBS_ORG_INTERCONNECT:x project config --offline --resolved`
 (out-of-slice projects print `# project <name>: out of slice`) and `./percona-obs -P labs project verify`

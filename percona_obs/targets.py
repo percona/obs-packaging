@@ -107,22 +107,22 @@ def _resolve_targets(args) -> list[tuple[str, Path]]:
     return targets
 
 
-def _iter_project_chain(
+def iter_project_ancestors(
     obs_project: str,
     project_path: Path,
-    slice_cache: "dict[Path, bool] | None" = None,
 ):
     """Yield (raw_obs_project, obs_project_name, path) from root down to project_path.
 
     Walks up from project_path to REPO_ROOT, then yields in reverse (root-first)
     so every ancestor project level is visited before the immediate project.
-    Projects that are out of the active slice (``project_in_slice``: excluded
-    by the profile, or left with zero repositories) are not yielded: they are
-    never created, and a full-tree push deletes them as orphans.
+    Release directories and directories that are neither a project (no
+    project.yaml) nor a package container are skipped; no slice test is applied,
+    so out-of-slice ancestors are yielded too.  Callers use this to *protect*
+    such ancestors from the orphan cleanup: they are never created, but
+    deleting them would take their in-slice children with them.
 
     raw_obs_project is the path-derived key used for deduplication.
     obs_project_name may differ if project.yaml contains a 'name' override.
-    *slice_cache* memoises the in-slice decision per project path across calls.
     """
     chain = []
     path = project_path
@@ -142,6 +142,23 @@ def _iter_project_chain(
             continue  # release dirs are managed by sync release, not sync push
         if not ((path / "project.yaml").exists() or _has_direct_packages(path)):
             continue
+        yield proj, obs_name, path
+
+
+def _iter_project_chain(
+    obs_project: str,
+    project_path: Path,
+    slice_cache: "dict[Path, bool] | None" = None,
+):
+    """Like iter_project_ancestors, but only the projects in the active slice.
+
+    Projects that are out of the active slice (``project_in_slice``: excluded
+    by the profile, or left with zero repositories) are not yielded: they are
+    never created.  They are still returned by ``iter_project_ancestors`` so a
+    full-tree push does not delete them as orphans.
+    *slice_cache* memoises the in-slice decision per project path across calls.
+    """
+    for proj, obs_name, path in iter_project_ancestors(obs_project, project_path):
         if not project_in_slice(path, cache=slice_cache):
             continue
         yield proj, obs_name, path
