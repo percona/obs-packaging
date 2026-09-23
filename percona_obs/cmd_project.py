@@ -216,7 +216,7 @@ def _package_project_id(package_path: Path) -> str:
 def _is_under_release_project(path: Path) -> bool:
     """True when *path* itself or any ancestor up to REPO_ROOT contains release.yaml."""
     p = path
-    while p != REPO_ROOT:
+    while p != common.REPO_ROOT:
         if (p / "release.yaml").is_file():
             return True
         if p.parent == p:
@@ -422,7 +422,9 @@ def _validate_repo_path_refs(
     slice and a repository that project keeps.  Unfiltered this is plain
     repo-level reference validation.  Paths with ``${VAR}`` in the subproject
     name and paths to directories that do not exist are skipped (the latter
-    is reported by ``_validate_subproject_refs``).
+    is reported by ``_validate_subproject_refs``).  Projects under a release
+    tree are skipped: release snapshots are frozen and may reference
+    repositories the live tree no longer defines.
     """
     errors: list[tuple[Path, str]] = []
     repo_filter = get_default_repository_filter()
@@ -436,6 +438,8 @@ def _validate_repo_path_refs(
 
     for yaml_path in _project_yaml_files(root):
         proj = yaml_path.parent
+        if _is_under_release_project(proj):
+            continue
         if not project_in_slice(proj, env_vars, repo_filter, cfg(proj), slice_cache):
             continue
         for repo in cfg(proj).get("repositories", []):

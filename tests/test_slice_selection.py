@@ -349,13 +349,22 @@ def test_validate_repo_path_refs(repo):
                 "      - subproject: does:not:exist\n        repository: UBI_9\n"
                 "      - subproject: ${OBS_X}:y\n        repository: UBI_9\n"
             ),
+            "ppg/releases/17/release.yaml": "project: ppg:staging:17\n",
+            "ppg/releases/17/project.yaml": (
+                "repositories-inherit: false\nrepositories:\n"
+                "  - name: Debian_11\n    archs: [x86_64]\n    paths:\n"
+                "      - subproject: common:deps:build\n        repository: Debian_11\n"
+            ),
         }
     )
 
     def msgs(errors):
         return [(str(p.relative_to(root)), m) for p, m in errors]
 
-    # unfiltered: UBI_8 is not defined by ppg:staging:17 (root only has RockyLinux_9/UBI_9)
+    # unfiltered: UBI_8 is not defined by ppg:staging:17 (root only has RockyLinux_9/UBI_9);
+    # the release tree's Debian_11 path (which common:deps:build does not define either) is
+    # skipped — release snapshots are frozen and may reference repositories the live tree no
+    # longer carries.
     assert msgs(_validate_repo_path_refs(root, None)) == [
         (
             "ppg/staging/17/containers/project.yaml",
