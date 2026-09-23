@@ -229,3 +229,102 @@ def test_package_in_slice(repo):
     # default filter applies when none is passed
     common.set_default_repository_filter(LABS)
     assert not package_in_slice(s17 / "bison")
+
+
+# --- sync push targets -----------------------------------------------------------
+
+from types import SimpleNamespace as _NS  # noqa: E402
+
+from percona_obs.cmd_sync import _require_targets_in_slice, _slice_targets  # noqa: E402
+from percona_obs.targets import _iter_project_chain  # noqa: E402
+
+
+def _targets(root):
+    s17 = root / "ppg/staging/17"
+    return [
+        ("ROOT:ppg:staging:17", s17 / "percona-postgresql"),
+        ("ROOT:ppg:staging:17", s17 / "bison"),
+        ("ROOT:ppg:staging:17:containers", s17 / "containers" / "image"),
+    ]
+
+
+def test_slice_targets_labs_and_boo(repo):
+    root = repo(_TREE)
+    cache: dict[Path, bool] = {}
+    kept, skipped_projects, skipped_packages = _slice_targets(
+        _targets(root), {}, LABS, cache
+    )
+    assert [p.name for _, p in kept] == ["percona-postgresql", "image"]
+    assert skipped_projects == []
+    assert skipped_packages == ["ROOT:ppg:staging:17/bison"]
+    kept, skipped_projects, skipped_packages = _slice_targets(
+        _targets(root), {}, BOO, {}
+    )
+    assert [p.name for _, p in kept] == ["percona-postgresql", "bison"]
+    assert skipped_projects == ["ROOT:ppg:staging:17:containers"]
+    assert skipped_packages == []
+    kept, sp, sk = _slice_targets(_targets(root), {}, RepositoryFilter.EMPTY, {})
+    assert len(kept) == 3 and sp == [] and sk == []
+
+
+def test_require_targets_in_slice_errors(repo):
+    root = repo(_TREE)
+    full = _NS(project=None, package=None)
+    _require_targets_in_slice(full, [("x", root)], [], [])  # kept → fine
+    with pytest.raises(
+        SystemExit, match="nothing to sync: every target is out of slice"
+    ):
+        _require_targets_in_slice(full, [], ["ROOT:a"], [])
+    with pytest.raises(SystemExit, match=r"ppg:staging:17/bison is out of slice"):
+        _require_targets_in_slice(
+            _NS(project="ppg:staging:17", package="bison"),
+            [],
+            [],
+            ["ROOT:ppg:staging:17/bison"],
+        )
+    with pytest.raises(
+        SystemExit, match=r"project 'ppg:staging:17:containers' is out of slice"
+    ):
+        _require_targets_in_slice(
+            _NS(project="ppg:staging:17:containers", package=None),
+            [],
+            ["ROOT:ppg:staging:17:containers"],
+            [],
+        )
+
+
+def test_iter_project_chain_skips_out_of_slice_projects(repo):
+    root = repo(_TREE)
+    (root / "ppg/staging/extras/containers").mkdir()
+    (root / "ppg/staging/extras/containers/project.yaml").write_text(
+        "repositories-inherit: false\nrepositories:\n  - name: ubi9\n    paths: []\n    archs: [x86_64]\n"
+    )
+    (root / "ppg/staging/project.yaml").write_text("title: staging\n")
+    (root / "ppg/project.yaml").write_text("title: ppg\n")
+    cache: dict[Path, bool] = {}
+    common.set_default_repository_filter(LABS)
+    names = [
+        n
+        for _, n, _ in _iter_project_chain(
+            "ROOT:ppg:staging:extras:containers",
+            root / "ppg/staging/extras/containers",
+            cache,
+        )
+    ]
+    # root, ppg, ppg:staging keep UBI_9; ppg:staging:extras has zero repos → skipped
+    assert names == [
+        "ROOT",
+        "ROOT:ppg",
+        "ROOT:ppg:staging",
+        "ROOT:ppg:staging:extras:containers",
+    ]
+    common.set_default_repository_filter(BOO)
+    names = [
+        n
+        for _, n, _ in _iter_project_chain(
+            "ROOT:ppg:staging:extras:containers",
+            root / "ppg/staging/extras/containers",
+            {},
+        )
+    ]
+    assert names == ["ROOT", "ROOT:ppg", "ROOT:ppg:staging"]
