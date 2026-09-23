@@ -178,7 +178,10 @@ _FILE_DATE_BUILTINS = {"FILE_MODIFY_DATE", "FILE_MODIFY_DATE_RFC5322"}
 
 
 def apply_macro_substitution(
-    text: str, macros: dict[str, str], source: Path | None = None
+    text: str,
+    macros: dict[str, str],
+    source: Path | None = None,
+    strict: bool = True,
 ) -> str:
     """Replace every ``%!{VAR}`` token in *text* with the value from *macros*.
 
@@ -190,6 +193,11 @@ def apply_macro_substitution(
     Raises ``SystemExit`` if any token has no corresponding entry in *macros*
     and is not a built-in.  *source* is used for error messages and mtime
     lookups; it is required when the text contains a built-in date macro.
+
+    With ``strict=False`` an undefined token is left in place instead of
+    raising; ``project_config.resolve_project_config`` uses this for ancestor
+    layers, whose macros may only be defined further down the tree, and
+    reports leftovers on the *resolved* configuration instead.
     """
 
     def _replace(m: re.Match) -> str:
@@ -210,6 +218,8 @@ def apply_macro_substitution(
                 return email.utils.format_datetime(dt)
             return dt.strftime("%a %b %d %Y")
         if var not in macros:
+            if not strict:
+                return m.group(0)
             loc = f"{source}: " if source else ""
             raise SystemExit(
                 f"error: {loc}undefined macro %!{{{var}}} — " "define it in macros.yaml"
@@ -725,43 +735,14 @@ def _load_project_config_with_inheritance(
     project_path: Path,
     env_vars: dict[str, str] | None = None,
 ) -> dict:
-    """Load project.yaml, inheriting repositories and project-config from ancestors.
+    """Backward-compatible alias for ``project_config.resolve_project_config``.
 
-    Walks up the directory tree from project_path to REPO_ROOT. For each of
-    'repositories' and 'project-config', if the field is absent or empty in
-    the project's own project.yaml, the value from the nearest ancestor that
-    defines it is used.
-
-    'title', 'description', and 'name' are never inherited.
-
-    ``%!{VAR}`` macro tokens (from macros.yaml in the hierarchy) are resolved
-    first, then ``${VAR}`` env-var tokens are substituted.
+    Kept so obs_api, cmd_sync, targets and cmd_project need no import changes.
+    New code should import ``resolve_project_config`` directly.
     """
-    macros = load_macros(project_path)
-    config = load_yaml_with_env(project_path / "project.yaml", env_vars, macros)
+    from percona_obs.project_config import resolve_project_config
 
-    # Collect ancestor configs from nearest parent up to (and including) REPO_ROOT
-    ancestor_configs: list[dict] = []
-    path = project_path.parent
-    while True:
-        ancestor_macros = load_macros(path)
-        ancestor_configs.append(
-            load_yaml_with_env(path / "project.yaml", env_vars, ancestor_macros)
-        )
-        if path == REPO_ROOT:
-            break
-        if not path.is_relative_to(REPO_ROOT):
-            break
-        path = path.parent
-
-    for field in ("repositories", "project-config"):
-        if not config.get(field):
-            for ancestor in ancestor_configs:
-                if ancestor.get(field):
-                    config[field] = ancestor[field]
-                    break
-
-    return config
+    return resolve_project_config(project_path, env_vars)
 
 
 def _decode_obs_response(raw) -> str:
