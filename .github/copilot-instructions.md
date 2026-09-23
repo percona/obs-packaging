@@ -149,7 +149,7 @@ Merge rules per layer:
 | `path-prefix` | list of path entries prepended to **every** repository; `"%_repository"` in `repository:` becomes the repo name. Layers concatenate child-first. |
 | `project-config` | concatenated; each contribution is preceded by `# --- from <file> ---`. |
 | `debuginfo`, `publish`, `build` | whole value, child wins; `~` (null) resets to unset. |
-| `repositories-inherit: false`, `project-config-inherit: false` | discard what ancestors accumulated for that field. |
+| `repositories-inherit: false`, `project-config-inherit: false` | discard what ancestors accumulated for that field (`repositories-inherit: false` also drops inherited `path-prefix` entries). |
 
 Example — `root/ppg/devel/17/project.yaml` says only what makes devel/17 different:
 

@@ -27,7 +27,9 @@ project-config
 debuginfo / publish / build
     whole value, child wins; ``null`` resets to unset.
 repositories-inherit: false / project-config-inherit: false
-    discard what earlier layers accumulated for that field.
+    discard what earlier layers accumulated for that field
+    (``repositories-inherit: false`` also discards accumulated ``path-prefix``
+    entries).
 title / description / name / qa (and any unknown key)
     never inherited; copied from the leaf only.
 
@@ -202,7 +204,11 @@ def _fold(layers: list[tuple[Path, dict]], own: dict, own_path: Path) -> dict:
     flags: dict[str, Any] = {}
     for source, data in layers:
         if data.get("repositories-inherit") is False:
+            # Opting out of the inherited repositories also drops the
+            # inherited path-prefix rules: they describe how the parent's
+            # repositories resolve, not this project's own list.
             repos = []
+            prefixes = []
         repos = _merge_repositories(repos, data.get("repositories") or [], source)
         if data.get("project-config-inherit") is False:
             prjconf = []

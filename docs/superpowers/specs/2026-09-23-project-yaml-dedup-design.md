@@ -149,7 +149,8 @@ Allowed keys on an entry: `name`, `paths`, `archs`, `paths-replace`,
 `remove`. Anything else is an error.
 
 `repositories-inherit: false` on a layer discards the accumulated repository
-list and starts from that layer's own list. Used by every project whose
+list **and the accumulated `path-prefix` entries**, and starts from that
+layer's own list. Used by every project whose
 repository set is not a superset of its parent's (tarballs, extras,
 containers, tde, `common/containers/*`, `ppg/common/deps/tarballs`).
 
@@ -181,9 +182,10 @@ a descendant declines a map inherited from a tier.
   ncurses/cron) minus `Prefer: libverto-libev` ×2 and `Prefer: Lmod`, which
   move to `common/deps/runtime` and `ppg/common/deps` (the only projects where
   they are effective; root has no packages).
-- `root/ppg/staging/subprojects.yaml`: staging `debuginfo` map; by-name
-  patches for the 13 repositories (6 prepend `ppg:common:deps`, 7
-  `paths-replace` in staging order); PPG-wide prjconf blocks (EL8
+- `root/ppg/staging/subprojects.yaml`: staging `debuginfo` map; a single
+  `path-prefix` putting `ppg:common:deps` first in every repository (root
+  lists `common:deps:build` before the distro everywhere, so the order is
+  `ppg:common:deps`, `common:deps:build`, distro for all 13); PPG-wide prjconf blocks (EL8
   python3-devel/atlas, UBI_9 EL9 block, RockyLinux_10 block, SUSE
   `Prefer: percona-postgresql%!{PG_MAJOR_VERSION}-server` + python313 prefers
   + `Ignore: postgresql-server`/`postgresql`).
@@ -222,6 +224,14 @@ a descendant declines a map inherited from a tier.
   line that a later change can express with the macro.
 
 ### Deliberate effective changes made during review (user decisions)
+
+- Root listed the distro path before `common:deps:build` in six repositories
+  (Debian_12/13, Ubuntu_22.04/24.04, Tumbleweed, Leap) and staging carried
+  `paths-replace` patches to restore the intended order. Decision: the order is
+  `ppg:common:deps`, `common:deps:build`, distro for every repository. Root is
+  reordered (affects root, `common:deps:runtime`, `ppg:common:deps`, the
+  package-less tiers) and the tier uses one `path-prefix`; UBI_8 in staging
+  swaps our two projects' order accordingly.
 
 - `RockyLinux_10` was the only repository whose path list lacked
   `ppg:common:deps` in majors 14–18 (19 had it). Declared a typo; the path now
