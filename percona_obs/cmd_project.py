@@ -49,7 +49,12 @@ from .common import (
     _print_same,
 )
 from . import common
-from .project_config import package_in_slice, project_in_slice
+from .project_config import (
+    RepositoryFilter,
+    package_in_slice,
+    project_in_slice,
+    resolve_project_config,
+)
 from .cmd_profile import _load_profile, _load_profile_env
 from .obs_api import (
     _decode_obs_response,
@@ -65,10 +70,7 @@ from .obs_api import (
     _fetch_obs_subproject_names,
     _fetch_root_project_managed_elements,
     _inject_obs_managed_elements,
-    _obs_meta_to_yaml_debuginfo,
-    _obs_meta_to_yaml_repos,
     _obs_project_exists,
-    _read_project_release_source,
 )
 from .cmd_build import (
     _fetch_build_results,
@@ -1574,6 +1576,9 @@ def _write_release_tree(
 
     The source subproject is read through the resolver, so a delta-style
     staging subproject produces a fully materialized release mirror.
+
+    Always unfiltered (RepositoryFilter.EMPTY): the release tree is
+    instance-agnostic; each instance's `sync release` slices it.
     """
     written: list[str] = []
     release_dir.mkdir(parents=True, exist_ok=True)
@@ -1591,7 +1596,9 @@ def _write_release_tree(
         if not (sub_path / "project.yaml").is_file():
             continue
         subproject_name = sub_obs_id[len(source_project_id) + 1 :]
-        source_sub_config = _load_project_config_with_inheritance(sub_path)
+        source_sub_config = _load_project_config_with_inheritance(
+            sub_path, repo_filter=RepositoryFilter.EMPTY
+        )
         rewritten_repos = _rewrite_subproject_paths(
             source_sub_config.get("repositories", []),
             source_project_id,
@@ -1604,6 +1611,12 @@ def _write_release_tree(
                 "Builds are disabled; binaries are copied via osc release.\n"
             ),
             "build": False,
+            # The repositories list above is already the subproject's fully
+            # resolved, unfiltered set (captured via the RepositoryFilter.EMPTY
+            # read above); it must not pick up further inheritance from this
+            # mirror's own ancestor chain under releases/ when re-resolved
+            # later (e.g. by sync release's project_in_slice check).
+            "repositories-inherit": False,
             "repositories": rewritten_repos,
         }
         for key in ("debuginfo", "publish", "project-config"):
@@ -2132,20 +2145,19 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     if tag in existing_releases:
         raise SystemExit(f"error: release tag {tag} is already present in release.yaml")
 
-    # Fetch source project topology from OBS.
-    raw_meta = _decode_obs_response(
-        osc.core.show_project_meta(apiurl, source_obs_project)
+    # Source project topology comes from the tree, unfiltered: the release
+    # snapshot is instance-agnostic and each instance's `sync release` slices
+    # it (spec Section 4).  Env vars follow the same precedence as sync.
+    release_env: dict[str, str] = {
+        **(parse_env_overrides(args.env_overrides) if args.env_overrides else {}),
+        **auto_rootprj_env(args.rootprj),
+    }
+    source_cfg = resolve_project_config(
+        source_path, release_env, repo_filter=RepositoryFilter.EMPTY
     )
-    meta_root = ET.fromstring(raw_meta)
-    source_repo_elems, _ = _read_project_release_source(apiurl, source_obs_project)
-    source_repos = _obs_meta_to_yaml_repos(source_repo_elems, args.rootprj)
-    source_debuginfo = _obs_meta_to_yaml_debuginfo(meta_root)
-    try:
-        source_prjconf = _decode_obs_response(
-            osc.core.show_project_conf(apiurl, source_obs_project)
-        ).strip()
-    except urllib.error.HTTPError:
-        source_prjconf = ""
+    source_repos = source_cfg.get("repositories", [])
+    source_debuginfo = source_cfg.get("debuginfo")
+    source_prjconf = (source_cfg.get("project-config") or "").strip()
 
     # Build CHANGELOG section by diffing source vs release OBS package versions.
     _print_pending("fetching package versions for CHANGELOG")

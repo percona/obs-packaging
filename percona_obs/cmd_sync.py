@@ -2329,6 +2329,9 @@ def _collect_release_subprojects(
       missing — subproject names with no mirror project.yaml.  Full-snapshot
                 releases require a mirror for every subproject; callers must
                 treat a non-empty list as a hard error.
+
+    Subprojects out of the active slice are skipped on both sides; `missing`
+    lists only in-slice source subprojects without a mirror.
     """
     source_path = resolve_project_path(source_project_id)
     pairs: list[tuple[str, Path]] = []
@@ -2341,9 +2344,12 @@ def _collect_release_subprojects(
         subproject_name = sub_obs_id[len(source_project_id) + 1 :]
         release_sub_path = release_path / Path(*subproject_name.split(":"))
         if (release_sub_path / "project.yaml").is_file():
-            pairs.append((subproject_name, release_sub_path))
-        else:
+            if project_in_slice(release_sub_path):
+                pairs.append((subproject_name, release_sub_path))
+            # else: this instance does not hold the subproject — nothing to release
+        elif project_in_slice(sub_path):
             missing.append(subproject_name)
+        # else: source out of slice too; a missing mirror is irrelevant here
     return pairs, missing
 
 

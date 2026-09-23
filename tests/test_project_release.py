@@ -595,3 +595,43 @@ def test_write_release_tree_materializes_delta_source(tmp_path, monkeypatch):
     ]
     assert extras["repositories"][0]["archs"] == ["x86_64"]
     assert "Prefer: shared" in extras["project-config"]
+
+
+def test_write_release_tree_ignores_the_process_default_filter(tmp_path, monkeypatch):
+    """Release mirrors are instance-agnostic: a labs/boo default filter must not slice them."""
+    import percona_obs.common as common
+    from percona_obs.project_config import RepositoryFilter
+
+    root = tmp_path / "root"
+    (root / "ppg/staging/17/extras").mkdir(parents=True)
+    (root / "macros.yaml").write_text("- X: 1\n")
+    (root / "project.yaml").write_text(
+        yaml.dump(
+            {
+                "repositories": [
+                    {"name": "UBI_9", "paths": [], "archs": ["x86_64"]},
+                    {"name": "RockyLinux_9", "paths": [], "archs": ["x86_64"]},
+                ]
+            }
+        )
+    )
+    (root / "ppg/staging/17/project.yaml").write_text("title: S17\n")
+    (root / "ppg/staging/17/extras/project.yaml").write_text("title: E\n")
+    monkeypatch.setattr(common, "REPO_ROOT", root)
+    monkeypatch.setattr(cmd_project, "_REPO_DIR", tmp_path)
+    common.set_default_repository_filter(RepositoryFilter(exclude_repos=("UBI_*",)))
+    try:
+        rel = root / "ppg/releases/17"
+        _write_release_tree(
+            rel,
+            {"build": False, "repositories": []},
+            root / "ppg/staging/17",
+            "ppg:staging:17",
+            "ppg:releases:17",
+            "ppg",
+            "17",
+        )
+    finally:
+        common.set_default_repository_filter(None)
+    extras = yaml.safe_load((rel / "extras" / "project.yaml").read_text())
+    assert [r["name"] for r in extras["repositories"]] == ["UBI_9", "RockyLinux_9"]

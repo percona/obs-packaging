@@ -16,25 +16,42 @@ from percona_obs.cmd_sync import (
     _sync_release_subprojects,
 )
 
+_REPO_YAML = "repositories:\n  - name: {name}\n    archs: [x86_64]\n    paths: []\n"
 
-def _mk_tree(tmp_path: Path):
-    """staging tree with containers+tarballs; release tree mirroring only containers."""
-    src = tmp_path / "root/ppg/staging/17"
-    for sub in ("containers", "tarballs"):
-        (src / sub).mkdir(parents=True)
-        (src / sub / "project.yaml").write_text("repositories: []\n")
-    (src / "project.yaml").write_text("repositories: []\n")
-    rel = tmp_path / "root/ppg/releases/17"
+
+def _mk_tree(tmp_path: Path, monkeypatch=None):
+    """staging tree with containers (ubi9 repo) + tarballs (ssl3 repo); release tree mirrors only containers."""
+    root = tmp_path / "root"
+    (root / "macros.yaml").parent.mkdir(parents=True, exist_ok=True)
+    (root / "macros.yaml").write_text("- M: 1\n")
+    (root / "project.yaml").write_text(_REPO_YAML.format(name="RockyLinux_9"))
+    src = root / "ppg/staging/17"
+    (src / "containers").mkdir(parents=True)
+    (src / "containers" / "project.yaml").write_text(
+        "repositories-inherit: false\n" + _REPO_YAML.format(name="ubi9")
+    )
+    (src / "tarballs").mkdir()
+    (src / "tarballs" / "project.yaml").write_text(
+        "repositories-inherit: false\n" + _REPO_YAML.format(name="ssl3")
+    )
+    (src / "project.yaml").write_text("title: S\n")
+    rel = root / "ppg/releases/17"
     (rel / "containers").mkdir(parents=True)
-    (rel / "containers" / "project.yaml").write_text("build: false\n")
+    (rel / "containers" / "project.yaml").write_text(
+        "build: false\nrepositories-inherit: false\n" + _REPO_YAML.format(name="ubi9")
+    )
     (rel / "release.yaml").write_text(
         "project: ppg:staging:17\nreleases: [ppg/17.11-1]\n"
     )
+    if monkeypatch is not None:
+        import percona_obs.common as common
+
+        monkeypatch.setattr(common, "REPO_ROOT", root)
     return src, rel
 
 
 def test_collect_pairs_and_missing(tmp_path, monkeypatch):
-    src, rel = _mk_tree(tmp_path)
+    src, rel = _mk_tree(tmp_path, monkeypatch)
     monkeypatch.setattr(cmd_sync, "resolve_project_path", lambda pid: src)
     pairs, missing = _collect_release_subprojects("ppg:staging:17", rel)
     assert [name for name, _ in pairs] == ["containers"]
@@ -42,7 +59,7 @@ def test_collect_pairs_and_missing(tmp_path, monkeypatch):
 
 
 def test_missing_mirror_is_hard_error(tmp_path, monkeypatch):
-    src, rel = _mk_tree(tmp_path)
+    src, rel = _mk_tree(tmp_path, monkeypatch)
     monkeypatch.setattr(cmd_sync, "resolve_project_path", lambda pid: src)
     monkeypatch.setattr(cmd_sync, "_REPO_DIR", tmp_path)
 
@@ -61,7 +78,7 @@ def test_missing_mirror_is_hard_error(tmp_path, monkeypatch):
 
 
 def test_orphan_reporting(tmp_path, monkeypatch, capsys):
-    src, rel = _mk_tree(tmp_path)
+    src, rel = _mk_tree(tmp_path, monkeypatch)
     # complete the mirror so no hard error fires
     (rel / "tarballs").mkdir()
     (rel / "tarballs" / "project.yaml").write_text("build: false\n")
@@ -149,7 +166,7 @@ def _wire_release_update_path(monkeypatch, src, rel):
 
 
 def test_freeze_order_and_restore_on_failure(tmp_path, monkeypatch):
-    src, rel = _mk_tree(tmp_path)
+    src, rel = _mk_tree(tmp_path, monkeypatch)
     (rel / "tarballs").mkdir()
     (rel / "tarballs" / "project.yaml").write_text("build: false\n")
     _wire_release_update_path(monkeypatch, src, rel)
@@ -187,7 +204,7 @@ def test_freeze_order_and_restore_on_failure(tmp_path, monkeypatch):
 
 
 def test_red_staging_aborts_before_freeze(tmp_path, monkeypatch):
-    src, rel = _mk_tree(tmp_path)
+    src, rel = _mk_tree(tmp_path, monkeypatch)
     (rel / "tarballs").mkdir()
     (rel / "tarballs" / "project.yaml").write_text("build: false\n")
     _wire_release_update_path(monkeypatch, src, rel)
@@ -217,7 +234,7 @@ def test_red_staging_aborts_before_freeze(tmp_path, monkeypatch):
 
 
 def test_no_freeze_skips_gate_but_verifies(tmp_path, monkeypatch):
-    src, rel = _mk_tree(tmp_path)
+    src, rel = _mk_tree(tmp_path, monkeypatch)
     (rel / "tarballs").mkdir()
     (rel / "tarballs" / "project.yaml").write_text("build: false\n")
     _wire_release_update_path(monkeypatch, src, rel)
@@ -293,7 +310,7 @@ def _wire_release_first_path(monkeypatch, src, rel):
 def test_first_release_does_not_shell_out_to_dry_run_sync(tmp_path, monkeypatch):
     """The first-release path must not run a `sync push --dry-run` subprocess
     to validate OBS-level divergence; only `osc release` may be invoked."""
-    src, rel = _mk_tree(tmp_path)
+    src, rel = _mk_tree(tmp_path, monkeypatch)
     (rel / "tarballs").mkdir()
     (rel / "tarballs" / "project.yaml").write_text("build: false\n")
     _wire_release_first_path(monkeypatch, src, rel)
@@ -347,7 +364,9 @@ def _patch_dry_run_common(monkeypatch, tmp_path, src, rel):
 
 
 def test_dry_run_reports_all_failures(tmp_path, monkeypatch, capsys):
-    src, rel = _mk_tree(tmp_path)  # tarballs mirror missing by construction
+    src, rel = _mk_tree(
+        tmp_path, monkeypatch
+    )  # tarballs mirror missing by construction
     (rel / "CHANGELOG.md").write_text("# Changelog\n")  # no release section
     _patch_dry_run_common(monkeypatch, tmp_path, src, rel)
     monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda a, p: False)
@@ -366,7 +385,7 @@ def test_dry_run_reports_all_failures(tmp_path, monkeypatch, capsys):
 
 
 def test_dry_run_passes_when_clean(tmp_path, monkeypatch, capsys):
-    src, rel = _mk_tree(tmp_path)
+    src, rel = _mk_tree(tmp_path, monkeypatch)
     (rel / "tarballs").mkdir()
     (rel / "tarballs" / "project.yaml").write_text("build: false\n")
     (rel / "CHANGELOG.md").write_text("# Changelog\n\n## [17.11-1] - 2026-09-03\n")
@@ -393,3 +412,23 @@ def test_filter_release_repo_names_warns_and_drops(monkeypatch, capsys):
     )
     assert kept == ["RockyLinux_9", "Debian_13"]
     assert "UBI_9 has no counterpart" in capsys.readouterr().out
+
+
+def test_collect_release_subprojects_respects_slice(tmp_path, monkeypatch):
+    import percona_obs.common as common
+    from percona_obs.project_config import RepositoryFilter
+
+    src, rel = _mk_tree(tmp_path, monkeypatch)
+    monkeypatch.setattr(cmd_sync, "resolve_project_path", lambda pid: src)
+    try:
+        # boo: containers is out of slice (mirror and source) → not a pair, not missing;
+        # tarballs is in slice on boo and has no mirror → missing
+        common.set_default_repository_filter(RepositoryFilter(exclude_repos=("ubi*",)))
+        pairs, missing = _collect_release_subprojects("ppg:staging:17", rel)
+        assert pairs == [] and missing == ["tarballs"]
+        # labs: containers released, tarballs is out of slice → not missing
+        common.set_default_repository_filter(RepositoryFilter(include_repos=("ubi*",)))
+        pairs, missing = _collect_release_subprojects("ppg:staging:17", rel)
+        assert [n for n, _ in pairs] == ["containers"] and missing == []
+    finally:
+        common.set_default_repository_filter(None)
