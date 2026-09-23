@@ -38,11 +38,12 @@ def _mk_tree(tmp_path: Path, monkeypatch=None):
     rel = root / "ppg/releases/17"
     (rel / "containers").mkdir(parents=True)
     (rel / "containers" / "project.yaml").write_text(
-        "build: false\nrepositories-inherit: false\n" + _REPO_YAML.format(name="ubi9")
+        "build: false\n" + _REPO_YAML.format(name="ubi9")
     )
     (rel / "release.yaml").write_text(
         "project: ppg:staging:17\nreleases: [ppg/17.11-1]\n"
     )
+    (root / "ppg/releases/subprojects.yaml").write_text("standalone: true\n")
     if monkeypatch is not None:
         import percona_obs.common as common
 
@@ -81,7 +82,9 @@ def test_orphan_reporting(tmp_path, monkeypatch, capsys):
     src, rel = _mk_tree(tmp_path, monkeypatch)
     # complete the mirror so no hard error fires
     (rel / "tarballs").mkdir()
-    (rel / "tarballs" / "project.yaml").write_text("build: false\n")
+    (rel / "tarballs" / "project.yaml").write_text(
+        "build: false\n" + _REPO_YAML.format(name="ssl3")
+    )
     monkeypatch.setattr(cmd_sync, "resolve_project_path", lambda pid: src)
     monkeypatch.setattr(cmd_sync, "_REPO_DIR", tmp_path)
     # neutralize the OBS side of the per-subproject body
@@ -168,7 +171,9 @@ def _wire_release_update_path(monkeypatch, src, rel):
 def test_freeze_order_and_restore_on_failure(tmp_path, monkeypatch):
     src, rel = _mk_tree(tmp_path, monkeypatch)
     (rel / "tarballs").mkdir()
-    (rel / "tarballs" / "project.yaml").write_text("build: false\n")
+    (rel / "tarballs" / "project.yaml").write_text(
+        "build: false\n" + _REPO_YAML.format(name="ssl3")
+    )
     _wire_release_update_path(monkeypatch, src, rel)
 
     calls = []
@@ -206,7 +211,9 @@ def test_freeze_order_and_restore_on_failure(tmp_path, monkeypatch):
 def test_red_staging_aborts_before_freeze(tmp_path, monkeypatch):
     src, rel = _mk_tree(tmp_path, monkeypatch)
     (rel / "tarballs").mkdir()
-    (rel / "tarballs" / "project.yaml").write_text("build: false\n")
+    (rel / "tarballs" / "project.yaml").write_text(
+        "build: false\n" + _REPO_YAML.format(name="ssl3")
+    )
     _wire_release_update_path(monkeypatch, src, rel)
 
     freeze_called = []
@@ -236,7 +243,9 @@ def test_red_staging_aborts_before_freeze(tmp_path, monkeypatch):
 def test_no_freeze_skips_gate_but_verifies(tmp_path, monkeypatch):
     src, rel = _mk_tree(tmp_path, monkeypatch)
     (rel / "tarballs").mkdir()
-    (rel / "tarballs" / "project.yaml").write_text("build: false\n")
+    (rel / "tarballs" / "project.yaml").write_text(
+        "build: false\n" + _REPO_YAML.format(name="ssl3")
+    )
     _wire_release_update_path(monkeypatch, src, rel)
 
     def fail_if_called(*a, **k):
@@ -312,7 +321,9 @@ def test_first_release_does_not_shell_out_to_dry_run_sync(tmp_path, monkeypatch)
     to validate OBS-level divergence; only `osc release` may be invoked."""
     src, rel = _mk_tree(tmp_path, monkeypatch)
     (rel / "tarballs").mkdir()
-    (rel / "tarballs" / "project.yaml").write_text("build: false\n")
+    (rel / "tarballs" / "project.yaml").write_text(
+        "build: false\n" + _REPO_YAML.format(name="ssl3")
+    )
     _wire_release_first_path(monkeypatch, src, rel)
 
     monkeypatch.setattr(cmd_sync, "wait_for_quiesce", lambda *a, **k: None)
@@ -387,7 +398,9 @@ def test_dry_run_reports_all_failures(tmp_path, monkeypatch, capsys):
 def test_dry_run_passes_when_clean(tmp_path, monkeypatch, capsys):
     src, rel = _mk_tree(tmp_path, monkeypatch)
     (rel / "tarballs").mkdir()
-    (rel / "tarballs" / "project.yaml").write_text("build: false\n")
+    (rel / "tarballs" / "project.yaml").write_text(
+        "build: false\n" + _REPO_YAML.format(name="ssl3")
+    )
     (rel / "CHANGELOG.md").write_text("# Changelog\n\n## [17.11-1] - 2026-09-03\n")
     _patch_dry_run_common(monkeypatch, tmp_path, src, rel)
     monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda a, p: True)
