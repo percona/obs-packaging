@@ -64,6 +64,27 @@ synced, what is deleted as orphan, what a release contains) is derived.
 - **Deferred**: the `registry.opensuse.org/` host hard-coded in `qa:` blocks
   (becomes a profile env var in a follow-up); QA workflow changes.
 
+## Amendments made while planning and implementing (2026-09-23)
+
+- No `--branch-from` filter-mismatch refusal (Section 2). A PR profile is
+  narrowed by labels while `main` is not, so the filters legitimately differ;
+  the existing "repos missing from branch → promote" logic already covers a
+  branch source lacking a repo.
+- Project-name matching uses the path-derived name only
+  (`ppg:staging:17:containers`). No `name:` override exists anywhere under
+  `root/`, and an override is a full OBS name that cannot be matched without
+  the rootprj.
+- Label narrowing is an intersection, not a list append: `profile create
+  --narrow-repos` keeps only the named repositories the profile's own filter
+  already accepts, and exits 3 when nothing is left so the workflow can skip
+  that instance.
+- The repository path integrity check (Section 3) skips projects under a
+  release tree: frozen snapshots may reference repositories the live tree no
+  longer defines (the 17/18 releases reference `Debian_11`).
+- Per-instance PR comments use the marker `<!-- obs-pr-check:<instance> -->`;
+  the first per-instance run posts fresh comments and leaves any old
+  `<!-- obs-pr-check -->` comment in place.
+
 ## Section 1: the filter
 
 ### Profile keys
@@ -131,8 +152,9 @@ is never excluded.
 - `resolve_project_config(project_path, env_vars=None, repo_filter=None)`:
   `None` means "use the process default"; `RepositoryFilter.EMPTY` means
   unfiltered. The project name for the project test is derived from
-  `project_path` relative to `REPO_ROOT` joined with colons, honouring a `name:`
-  override in the leaf file.
+  `project_path` relative to `REPO_ROOT` joined with colons (`name:` overrides
+  are not consulted: none exist in the tree and an override is a full OBS
+  name).
 - `common.set_default_repository_filter(f)` / `get_default_repository_filter()`;
   `cli.main()` calls the setter after profile loading. The default is
   `RepositoryFilter.EMPTY` when no profile or a profile without filter keys is
@@ -172,8 +194,9 @@ is never excluded.
 - Branch decision, dep-cascade and content checks are unchanged in logic:
   they read repository names through the loader and compare against the
   instance's own OBS state. `--branch-from` already requires both profiles to
-  share an instance; both profiles must also carry the same filter, which the
-  tool checks and refuses otherwise.
+  share an instance; the two profiles' filters may differ (a PR profile is
+  narrowed by labels); a repository missing from the branch source already
+  forces a promote.
 
 ## Section 3: `project verify` and `project config`
 
@@ -237,10 +260,11 @@ fields mean unfiltered.
   fromJSON(vars.OBS_INSTANCES)`, `fail-fast: false`; each creates its profile
   with the instance's `-A/-R` and filter flags; sync report, badge and summary
   are per instance.
-- **obs-pr-check**: `sync` and `build` take the same matrix; the PR profile of every instance gets the instance filter **plus**
-  the label-derived rules appended: each repo label becomes an
-  `--include-repos` entry; `<flavor>-images` expands to
-  `<flavor>,UBI_<n>` plus `--exclude-projects common:containers:<other>`;
+- **obs-pr-check**: `sync` and `build` take the same matrix; the PR profile of
+  every instance starts from the instance filter, then the repo labels are
+  applied narrowed by `profile create --narrow-repos` (intersection with the
+  instance slice; a leg left with no repository skips its sync): `<flavor>-images`
+  expands to `<flavor>,UBI_<n>` plus `--exclude-projects common:containers:<other>`;
   `ssl*` is appended whenever any repo label is present (tarballs keep
   building on labelled PRs, as today). `detect-qa-matrix` and `qa` are left
   as they are in this change, still reading the existing `OBS_APIURL` /

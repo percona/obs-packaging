@@ -123,6 +123,7 @@ project-config: |              # raw OBS project config string
 - `repositories[].paths` — list of path entries providing the base build environment. Each entry uses either `project:` (absolute OBS project name) or `subproject:` (resolved as `<rootprj>:<subproject>`) plus `repository:`.
 - `project-config` — merged with ancestor layers (including `subprojects.yaml`); passed verbatim to the OBS project config API; used for RPM macros, module expansion flags, etc.
 - `title` and `description` are informational only and never inherited by child projects.
+- A project whose resolved `repositories` list is empty is never created on OBS.
 
 ### Config inheritance and merging
 
@@ -226,7 +227,13 @@ rootprj: home:Admin:percona         # OBS root project
 env:                                 # optional: variables for ${VAR} substitution
   - name: REMOTE_OBS_ORG_INTERCONNECT
     value: 'openSUSE.org:'           # values containing colons must be quoted
+# optional slice (all four are shell-glob lists; absent = the instance carries everything)
+exclude-repositories: ["UBI_*", "ubi*", "images"]   # b.o.o: no UBI RPM repos, no images
+# include-repositories: ["UBI_*", "ubi*", "images"] # labs: only those
+# include-projects / exclude-projects: globs on the OBS project name without the rootprj
 ```
+
+**Slices.** A profile may declare which repositories and projects its instance carries. The tree stays instance-agnostic; `percona_obs/project_config.py::RepositoryFilter` is applied to every resolved configuration by the loader (`cli.main()` installs the active profile's filter as the process default). A project is *in slice* iff its name passes the project globs and it keeps at least one repository (a project with zero repositories is never created); a package is in slice iff its project is and it is not `build: false` on every surviving repository. Out-of-slice projects and packages are treated exactly like things absent from the tree: `sync push` neither creates nor uploads them, and a full-tree push deletes them from that instance as orphans. `profile create --include-repos/--exclude-repos/--include-projects/--exclude-projects GLOB[,GLOB]` write the keys; `--narrow-repos REPO[,REPO]` intersects the slice with the given names (used by the PR workflow for repo labels; exits 3 when nothing is left). See `docs/PERCONA_OBS_TOOL.md`.
 
 **Example** — create a `dev` profile and use it:
 ```sh
@@ -326,6 +333,7 @@ Options:
 - `--skip-unchanged` — plain pushes only (rejected with `--branch-from`): skip packages whose OBS revision comment records a clean sync from a git SHA with no changes since (package-directory commits, uncommitted edits, rendered values of the macros the package references). One API call per skipped package, or zero when the `.cache/sync_state/` manifest is warm. Packages whose `_service` has an upstream obs_scm tracking a moving ref (branch or no revision) are never skipped; `--force` disables skipping entirely. See "Reducing OBS API traffic" in `docs/PERCONA_OBS_TOOL.md`.
 - `--report-json PATH` — write a JSON sync report (`rebuild_projects`, `promoted`, `skipped`, `head_sha`) consumed by the CI poll script via `OBS_SYNC_REPORT` to scope build monitoring to the projects the sync actually touched.
 - `-m MSG` / `--message MSG` — commit message recorded in the OBS source revision. When omitted, a message is generated automatically: `sync: <branch>@<short-sha> (<remote_url> or <hostname>)`
+- The active profile's slice — `sync push -P labs` renders only the repositories the profile keeps; projects/packages out of slice are skipped and reported (`slice: N project(s), M package(s) out of slice`; `--verbose` lists them) and are orphan-deleted on a full-tree push. `sync push <project> <package>` for an out-of-slice target is an error.
 
 ### `--branch-from` decision process
 
@@ -674,6 +682,10 @@ Env resolution for the check (same precedence as all other commands):
 ```
 
 Exit code is 0 on success, 1 if any check fails.
+
+**Check 3 — repository path integrity**: for every in-slice project and every kept repository, each `subproject:` path must name a project that is in slice and a repository that is kept there. Unfiltered, this is plain repo-level reference validation. Release trees (`root/ppg/releases/`) are frozen snapshots and are skipped: they may reference repositories the live tree no longer defines.
+
+**Slice summary**: `project verify -P <profile>` prints `slice: N project(s), M package(s) out of slice`; `--verbose` lists them.
 
 ## Maintaining Release Changelogs
 
