@@ -19,12 +19,14 @@ root/
 │   ├── releases/           # release definitions (see below)
 │   ├── staging/
 │   │   ├── project.yaml       # staging container project configuration
+│   │   ├── subprojects.yaml   # config merged into every subproject under staging
 │   │   └── <major-version>/   # full package set for this version, e.g. 17/
 │   │       ├── <package>/     # source packages for this version
 │   │       ├── containers/    # container images for this version
 │   │       └── tarballs/      # tarball artifacts for this version
 │   └── devel/
 │       ├── project.yaml       # devel container project configuration
+│       ├── subprojects.yaml   # symlink to ../staging/subprojects.yaml
 │       └── <major-version>/   # manually curated dev-branch subset for this version
 │           └── <package>/     # Class A (full copy) or Class B (obs/_link only) package
 └── project.yaml            # root OBS project configuration
@@ -393,3 +395,11 @@ entry (Class A or B) is removed — or repointed at the next development branch 
 Each project directory may contain a `project.yaml` file that defines the OBS project metadata,
 build repositories, and project configuration. The root `project.yaml` defines the top-level project
 and the repositories available to all subprojects.
+
+Every other `project.yaml` is a **delta**: it inherits the root repositories and build
+configuration, merged with the tier's `subprojects.yaml` (for example
+`ppg/staging/subprojects.yaml`, which `ppg/devel/subprojects.yaml` symlinks), and declares only
+what differs for that project. Subprojects with unrelated repository sets (tarballs, containers,
+extras) opt out with `repositories-inherit: false`. Run
+`percona-obs project config <project> --offline --resolved` to see the effective configuration;
+the merge rules are in `.github/copilot-instructions.md`.

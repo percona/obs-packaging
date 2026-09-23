@@ -27,6 +27,8 @@ root/
     ├── releases/                   # release pointer files (see root/README.md)
     │   └── <name>/release.yaml
     ├── staging/                    # full package set, tag builds, QA/release candidate
+    │   ├── project.yaml            # OBS project config for the staging tier
+    │   ├── subprojects.yaml        # config for the subprojects below (tiers only)
     │   └── <major-version>/        # e.g. 17/
     │       ├── project.yaml        # OBS project config for this subproject
     │       ├── <package>/          # source packages
@@ -109,6 +111,8 @@ repositories:
       - subproject: builddep   # relative reference: resolves to <rootprj>:builddep
         repository: RockyLinux_9
     archs: [x86_64]
+    # paths-replace: true      # optional — replace inherited paths instead of prepending to them
+    # remove: true             # optional — drop an inherited repository entirely (name only)
 project-config: |              # raw OBS project config string
   %if "%_repository" == "RockyLinux_9"
   ExpandFlags: module:llvm-toolset-rhel9
@@ -117,36 +121,64 @@ project-config: |              # raw OBS project config string
 
 - `name` — absent or empty means the OBS project name is derived from the directory path relative to `root/` joined with `--rootprj` using colons (e.g. `home:Admin:ppg:staging:17`). Set it explicitly only when the OBS project name must differ from the directory path.
 - `repositories[].paths` — list of path entries providing the base build environment. Each entry uses either `project:` (absolute OBS project name) or `subproject:` (resolved as `<rootprj>:<subproject>`) plus `repository:`.
-- `project-config` — passed verbatim to the OBS project config API; used for RPM macros, module expansion flags, etc.
+- `project-config` — merged with ancestor layers (including `subprojects.yaml`); passed verbatim to the OBS project config API; used for RPM macros, module expansion flags, etc.
 - `title` and `description` are informational only and never inherited by child projects.
 
-### Config inheritance
+### Config inheritance and merging
 
-`repositories` and `project-config` are **inherited** from ancestor `project.yaml` files when absent or empty in a project's own file. The nearest ancestor that defines the field wins. `title`, `description`, and `name` are never inherited.
+A project's effective configuration is resolved by
+`percona_obs/project_config.py::resolve_project_config`, folding these layers
+from `root/` down to the project:
 
-This means:
-- The root `project.yaml` acts as the default config for all subprojects.
-- A subproject only needs its own `project.yaml` if it requires a different build environment.
-- An empty or missing `project.yaml` in a subdirectory is valid — it will fully inherit from its parent.
+    root/project.yaml, root/subprojects.yaml, <tier>/project.yaml, <tier>/subprojects.yaml, …, <project>/project.yaml
 
-### Dynamically generated repository paths
+- `project.yaml` applies to the project itself **and** is inherited by its descendants.
+- `subprojects.yaml` (optional, next to a `project.yaml`) applies to **strict descendants only**.
+  Allowed keys: `repositories`, `project-config`, `path-prefix`, `debuginfo`, `publish`, `build`,
+  `repositories-inherit`, `project-config-inherit`, `standalone`. It may be a symlink
+  (`root/ppg/devel/subprojects.yaml` → `../staging/subprojects.yaml`).
+- `subprojects.yaml` containing only `standalone: true` makes every descendant resolve from its own
+  `project.yaml` alone (`root/ppg/releases/`: release snapshots are frozen).
+- `title`, `description`, `name`, `qa` are never inherited.
 
-When `percona-obs` pushes project metadata to OBS, it automatically injects one `<path>` entry per ancestor OBS project into every repository of every non-root subproject. This is done by `build_project_meta()` in `percona-obs`, using the `_ancestor_projects()` helper.
+Merge rules per layer:
 
-Ancestor paths are injected closest-first (immediate parent before grandparent), followed by the upstream path from `project.yaml`. This gives every subproject **direct** visibility into packages built in all ancestor projects, without relying on OBS transitive resolution.
+| Field | Rule |
+|---|---|
+| `repositories` | merged by `name`. Unknown name **with** `archs` → appended. Unknown name **without** `archs` → error (typo guard). Known name → its `paths` are **prepended**; `paths-replace: true` replaces them; `archs` replaces if given. `- name: X` + `remove: true` drops X. |
+| `path-prefix` | list of path entries prepended to **every** repository; `"%_repository"` in `repository:` becomes the repo name. Layers concatenate child-first. |
+| `project-config` | concatenated; each contribution is preceded by `# --- from <file> ---`. |
+| `debuginfo`, `publish`, `build` | whole value, child wins; `~` (null) resets to unset. |
+| `repositories-inherit: false`, `project-config-inherit: false` | discard what ancestors accumulated for that field. |
 
-For example, the `home:Admin:ppg:staging:17` project gets this generated for each repository:
-```xml
-<repository name="RockyLinux_9">
-  <path project="home:Admin:ppg:staging" repository="RockyLinux_9"/>   <!-- auto-injected: immediate parent -->
-  <path project="home:Admin:ppg" repository="RockyLinux_9"/>           <!-- auto-injected: grandparent -->
-  <path project="home:Admin" repository="RockyLinux_9"/>               <!-- auto-injected: great-grandparent (rootprj) -->
-  <path project="openSUSE.org:RockyLinux:9" repository="standard"/>   <!-- from project.yaml -->
-  <arch>x86_64</arch>
-</repository>
+Example — `root/ppg/devel/17/project.yaml` says only what makes devel/17 different:
+
+```yaml
+title: Percona Distribution for PostgreSQL %!{PG_MAJOR_VERSION} — Devel
+debuginfo: {RockyLinux_9: true, RockyLinux_9.6: true, openSUSE_Tumbleweed: true, openSUSE_Leap_16: true}
+path-prefix:
+  - subproject: ppg:staging:%!{PG_MAJOR_VERSION}   # resolve everything else from staging:17
+    repository: "%_repository"
+repositories:
+  - name: Debian_12
+    remove: true                                    # devel does not build Debian 12
+project-config: |
+  %if "%_repository" == "openSUSE_Tumbleweed" || "%_repository" == "openSUSE_Leap_16"
+  Ignore: postgresql18-server
+  %endif
 ```
 
-The root project (matching `--rootprj`) never gets ancestor paths injected. Only non-root subprojects are affected.
+The 13 distro repositories come from `root/project.yaml`; the PPG-specific paths, debuginfo map and
+build configuration from `root/ppg/staging/subprojects.yaml`. Use
+`percona-obs project config <project> --offline --resolved` to see the effective result and
+`--diff` (with a profile) to compare it with OBS.
+
+Macro substitution uses the target project's macro set. Ancestor layers may reference macros only
+the descendants define (e.g. `%!{PG_MAJOR_VERSION}` in the staging tier); a token left unresolved
+in the final configuration is an error.
+
+Only the paths listed in the resolved `repositories` are emitted; `build_project_meta()` injects no
+ancestor paths.
 
 ## Package Configuration (package.yaml)
 

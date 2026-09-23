@@ -233,8 +233,8 @@ Use `build dependency` to inspect these relationships before syncing:
 In addition to per-package file comparisons, `percona-obs` detects when a **project's
 configuration has changed** and promotes all packages in that project for rebuild —
 even if their source files are identical to the branch project. This handles scenarios
-like adding a new architecture to `root/project.yaml`, which is inherited by every
-subproject that does not define its own `repositories:` list.
+like adding a new architecture to `root/project.yaml`, which every subproject's
+`repositories` list is merged with unless it opts out with `repositories-inherit: false`.
 
 Two cases are handled:
 
@@ -249,6 +249,30 @@ Two cases are handled:
 This ensures that an architecture or repository change introduced in a PR is always
 built and tested for the packages that belong to affected projects, even when those
 packages have no direct source file changes.
+
+### Inspecting the effective project configuration
+
+`project.yaml` files are deltas: repositories, build configuration and flags are merged from
+`root/project.yaml` down through tier-level `subprojects.yaml` files (see
+`.github/copilot-instructions.md`, "Config inheritance and merging"). To see what a project
+actually gets:
+
+```sh
+# Meta XML and build config exactly as sync would upload them (no OBS access)
+percona-obs -P dev project config ppg:staging:17 --offline
+
+# The merged project.yaml as YAML
+percona-obs -P dev project config ppg:staging:17 --offline --resolved
+
+# Unified diff of meta and build config against what OBS holds now
+percona-obs -P dev project config ppg:staging:17 --diff
+```
+
+`--offline` still needs `${VAR}` tokens resolved (e.g. `${REMOTE_OBS_ORG_INTERCONNECT}` in
+`root/project.yaml`), so pass a profile (`-P`) or the matching `-e KEY:VALUE` flags even though no
+OBS connection is made. Without a project argument all projects under `root/` are shown. The build
+config carries one `# --- from <file> ---` header per contributing file, so a line can be traced to
+its source.
 
 ### How unchanged packages are detected
 
