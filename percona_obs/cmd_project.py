@@ -40,7 +40,6 @@ from .common import (
     load_macros,
     load_project_yaml,
     load_yaml,
-    load_yaml_with_env,
     parse_env_overrides,
     resolve_project_path,
 )
@@ -240,7 +239,7 @@ def _fill_release_online_records(
 
     def _repo_arch_pairs_from_yaml(project_path: Path) -> list[tuple[str, str]]:
         """Return [(repo, arch), ...] from a local project.yaml as fallback."""
-        data = load_project_yaml(project_path / "project.yaml")
+        data = _load_project_config_with_inheritance(project_path)
         pairs: list[tuple[str, str]] = []
         for repo in data.get("repositories", []):
             name = repo.get("name", "")
@@ -357,10 +356,14 @@ def _validate_subproject_refs(root: Path) -> list[tuple[Path, str]]:
     Returns a list of (yaml_path, error_message) for each invalid reference.
     Only validates subproject: entries (relative to rootprj); project: entries
     reference external OBS projects and cannot be validated locally.
+
+    References are validated on the *resolved* configuration, so a bad
+    `subproject:` inherited from an ancestor `project.yaml` or
+    `subprojects.yaml` is reported against every project that inherits it.
     """
     errors: list[tuple[Path, str]] = []
     for yaml_path in sorted(root.rglob("project.yaml")):
-        config = load_project_yaml(yaml_path)
+        config = _load_project_config_with_inheritance(yaml_path.parent)
         for repo in config.get("repositories", []):
             for path_info in repo.get("paths", []):
                 subproject = path_info.get("subproject")
@@ -418,9 +421,7 @@ def _validate_project_path_refs(
     # Collect (yaml_path, resolved_project, resolved_repository) triples.
     triples: list[tuple[Path, str, str]] = []
     for yaml_path in sorted(root.rglob("project.yaml")):
-        config = load_yaml_with_env(
-            yaml_path, env_vars, macros=load_macros(yaml_path.parent)
-        )
+        config = _load_project_config_with_inheritance(yaml_path.parent, env_vars)
         for repo in config.get("repositories", []):
             for path_info in repo.get("paths", []):
                 raw_project = path_info.get("project")
@@ -1387,6 +1388,9 @@ def _write_release_tree(
     subproject, and deletes stale mirror dirs whose source subproject no
     longer exists.  Returns repo-relative paths of files written (deletions
     are staged by the caller via git add -A on release_dir).
+
+    The source subproject is read through the resolver, so a delta-style
+    staging subproject produces a fully materialized release mirror.
     """
     written: list[str] = []
     release_dir.mkdir(parents=True, exist_ok=True)
@@ -1404,7 +1408,7 @@ def _write_release_tree(
         if not (sub_path / "project.yaml").is_file():
             continue
         subproject_name = sub_obs_id[len(source_project_id) + 1 :]
-        source_sub_config = load_project_yaml(sub_path / "project.yaml")
+        source_sub_config = _load_project_config_with_inheritance(sub_path)
         rewritten_repos = _rewrite_subproject_paths(
             source_sub_config.get("repositories", []),
             source_project_id,
