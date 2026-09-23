@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 
+from . import common
 from .common import (
     REPO_ROOT,
     _is_release_dir,
@@ -11,6 +12,7 @@ from .common import (
     load_yaml,
     resolve_project_path,
 )
+from .project_config import project_in_slice
 
 
 def _has_direct_packages(path: Path) -> bool:
@@ -105,14 +107,22 @@ def _resolve_targets(args) -> list[tuple[str, Path]]:
     return targets
 
 
-def _iter_project_chain(obs_project: str, project_path: Path):
+def _iter_project_chain(
+    obs_project: str,
+    project_path: Path,
+    slice_cache: "dict[Path, bool] | None" = None,
+):
     """Yield (raw_obs_project, obs_project_name, path) from root down to project_path.
 
     Walks up from project_path to REPO_ROOT, then yields in reverse (root-first)
     so every ancestor project level is visited before the immediate project.
+    Projects that are out of the active slice (``project_in_slice``: excluded
+    by the profile, or left with zero repositories) are not yielded: they are
+    never created, and a full-tree push deletes them as orphans.
 
     raw_obs_project is the path-derived key used for deduplication.
     obs_project_name may differ if project.yaml contains a 'name' override.
+    *slice_cache* memoises the in-slice decision per project path across calls.
     """
     chain = []
     path = project_path
@@ -121,14 +131,17 @@ def _iter_project_chain(obs_project: str, project_path: Path):
         config = load_project_yaml(path / "project.yaml")
         obs_name = config.get("name") or proj
         chain.append((proj, obs_name, path))
-        if path == REPO_ROOT:
+        if path == common.REPO_ROOT:
             break
-        if not path.is_relative_to(REPO_ROOT):
+        if not path.is_relative_to(common.REPO_ROOT):
             break
         path = path.parent
         proj = proj.rsplit(":", 1)[0]
     for proj, obs_name, path in reversed(chain):
         if _is_release_dir(path):
             continue  # release dirs are managed by sync release, not sync push
-        if (path / "project.yaml").exists() or _has_direct_packages(path):
-            yield proj, obs_name, path
+        if not ((path / "project.yaml").exists() or _has_direct_packages(path)):
+            continue
+        if not project_in_slice(path, cache=slice_cache):
+            continue
+        yield proj, obs_name, path

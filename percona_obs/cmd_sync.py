@@ -38,6 +38,7 @@ from .common import (
     build_package_meta,
     expand_for_blocks,
     find_projects,
+    get_default_repository_filter,
     is_package,
     load_macros,
     load_package_yaml,
@@ -48,6 +49,7 @@ from .common import (
     parse_env_overrides,
     resolve_project_path,
 )
+from .project_config import package_in_slice, project_in_slice
 from .git_utils import (
     _generate_sync_message,
     _has_package_changes_since,
@@ -895,6 +897,62 @@ def _can_skip_project_apply(
     return branch_rootprj is None and not force and verdict == (False, False)
 
 
+def _slice_targets(
+    targets: "list[tuple[str, Path]]",
+    env_vars: dict[str, str],
+    repo_filter,
+    slice_cache: "dict[Path, bool]",
+) -> "tuple[list[tuple[str, Path]], list[str], list[str]]":
+    """Drop targets that are out of the active slice.
+
+    Returns (kept, skipped_projects, skipped_packages): projects whose every
+    package is dropped because the *project* is out of slice, and
+    ``<project>/<package>`` entries dropped because the package builds in no
+    surviving repository.  *slice_cache* is filled for _iter_project_chain.
+    """
+    kept: list[tuple[str, Path]] = []
+    skipped_projects: set[str] = set()
+    skipped_packages: list[str] = []
+    configs: dict[Path, dict] = {}
+    for obs_project, package_path in targets:
+        proj_path = package_path.parent
+        cfg = configs.get(proj_path)
+        if cfg is None:
+            cfg = configs[proj_path] = _load_project_config_with_inheritance(
+                proj_path, env_vars, repo_filter
+            )
+        if not project_in_slice(proj_path, env_vars, repo_filter, cfg, slice_cache):
+            skipped_projects.add(obs_project)
+            logger.debug(f"out of slice: project {obs_project}")
+            continue
+        if not package_in_slice(package_path, env_vars, repo_filter, cfg, slice_cache):
+            skipped_packages.append(f"{obs_project}/{package_path.name}")
+            logger.debug(f"out of slice: package {obs_project}/{package_path.name}")
+            continue
+        kept.append((obs_project, package_path))
+    return kept, sorted(skipped_projects), skipped_packages
+
+
+def _require_targets_in_slice(
+    args, kept: list, skipped_projects: list[str], skipped_packages: list[str]
+) -> None:
+    """Explicit targets that are entirely out of slice are an error, not a silent no-op."""
+    if kept:
+        return
+    if getattr(args, "package", None):
+        raise SystemExit(
+            f"error: {args.project}/{args.package} is out of slice for the active "
+            "profile (the package builds in no repository this instance carries)"
+        )
+    if getattr(args, "project", None):
+        raise SystemExit(
+            f"error: project '{args.project}' is out of slice for the active profile"
+        )
+    raise SystemExit(
+        "error: nothing to sync: every target is out of slice for the active profile"
+    )
+
+
 def _compute_branch_project(
     obs_project_name: str, rootprj: str, branch_rootprj: str
 ) -> str:
@@ -981,8 +1039,6 @@ def cmd_sync(args):
             print(f"error: {rel}: {msg}", file=sys.stderr)
         sys.exit(1)
 
-    targets = _resolve_targets(args)
-
     # Build env_vars from profile env + -e overrides (already merged by main()).
     # OBS_ROOTPRJ / OBS_CONTAINER_REGISTRY_ROOTPRJ are always auto-injected so _aggregate
     # files can reference sibling subprojects (e.g.
@@ -992,6 +1048,24 @@ def cmd_sync(args):
         **(parse_env_overrides(args.env_overrides) if args.env_overrides else {}),
         **auto_rootprj_env(args.rootprj),
     }
+
+    targets = _resolve_targets(args)
+
+    # Restrict the run to the active profile's slice.  Dropped projects and
+    # packages are not counted as local, so the orphan cleanup below removes
+    # them from this instance on a full-tree push (spec Section 2).
+    _slice_cache: dict[Path, bool] = {}
+    targets, _slice_skipped_projects, _slice_skipped_packages = _slice_targets(
+        targets, env_vars, get_default_repository_filter(), _slice_cache
+    )
+    _require_targets_in_slice(
+        args, targets, _slice_skipped_projects, _slice_skipped_packages
+    )
+    if _slice_skipped_projects or _slice_skipped_packages:
+        _print_action(
+            f"planning: {len(_slice_skipped_projects)} project(s) and "
+            f"{len(_slice_skipped_packages)} package(s) out of slice"
+        )
 
     # Collect all _service files with their per-package env vars, then validate
     # in one pass so identical (url, revision) pairs are deduplicated globally.
@@ -1597,7 +1671,7 @@ def cmd_sync(args):
         all_projects: dict[str, tuple[str, Path]] = {}
         for obs_project, package_path in targets:
             for raw_proj, prj_name, proj_path in _iter_project_chain(
-                obs_project, package_path.parent
+                obs_project, package_path.parent, _slice_cache
             ):
                 # With --branch-from, skip projects with no promoted packages.
                 if active_projects is not None and prj_name not in active_projects:
@@ -1702,6 +1776,15 @@ def cmd_sync(args):
         # carries only project-config-triggered entries; skipped still
         # reflects the Phase-1 decisions, which run unconditionally.
         _write_report()
+        if (
+            not get_default_repository_filter().is_empty
+            or _slice_skipped_projects
+            or _slice_skipped_packages
+        ):
+            _print_same(
+                f"slice: {len(_slice_skipped_projects)} project(s), "
+                f"{len(_slice_skipped_packages)} package(s) out of slice"
+            )
         suffix = " (dry run)" if args.dry_run else ""
         _print_ok(f"sync successful{suffix}")
         return
@@ -1731,7 +1814,7 @@ def cmd_sync(args):
             if not _obs_project_exists(apiurl, obs_project_name):
                 chain: dict[str, tuple[str, Path]] = {}
                 for raw_proj, prj_name, proj_path in _iter_project_chain(
-                    obs_project, project_path
+                    obs_project, project_path, _slice_cache
                 ):
                     local_project_names.add(prj_name)
                     if raw_proj not in chain:
@@ -1994,6 +2077,15 @@ def cmd_sync(args):
     # Write the sync report (read-only output — also written in dry-run).
     _write_report()
 
+    if (
+        not get_default_repository_filter().is_empty
+        or _slice_skipped_projects
+        or _slice_skipped_packages
+    ):
+        _print_same(
+            f"slice: {len(_slice_skipped_projects)} project(s), "
+            f"{len(_slice_skipped_packages)} package(s) out of slice"
+        )
     suffix = " (dry run)" if args.dry_run else ""
     _print_ok(f"sync successful{suffix}")
 
