@@ -160,3 +160,72 @@ def test_profile_create_writes_and_round_trips_filter(profiles_dir, capsys):
     cmd_profile.cmd_profile_list(SimpleNamespace())
     out = capsys.readouterr().out
     assert "include-repositories:" in out and "UBI_*, ubi*, images" in out
+
+
+# --- predicates ------------------------------------------------------------------
+
+from percona_obs.project_config import package_in_slice, project_in_slice  # noqa: E402
+
+_TREE = {
+    "project.yaml": _ROOT,
+    "ppg/staging/17/project.yaml": "title: S\n",
+    "ppg/staging/17/percona-postgresql/obs/_service": "",
+    "ppg/staging/17/bison/obs/_service": "",
+    "ppg/staging/17/bison/package.yaml": "build:\n  UBI_9: false\n",
+    "ppg/staging/17/blanket/obs/_service": "",
+    "ppg/staging/17/blanket/package.yaml": "build:\n  disable: true\n",
+    "ppg/staging/17/containers/project.yaml": (
+        "repositories-inherit: false\nrepositories:\n  - name: ubi9\n    paths: []\n    archs: [x86_64]\n"
+    ),
+    "ppg/staging/17/containers/image/obs/Dockerfile": "FROM scratch\n",
+    "ppg/staging/extras/project.yaml": "repositories-inherit: false\n",
+}
+
+
+def test_project_in_slice(repo):
+    root = repo(_TREE)
+    s17 = root / "ppg/staging/17"
+    assert project_in_slice(s17, repo_filter=RepositoryFilter.EMPTY)
+    assert project_in_slice(s17, repo_filter=LABS)
+    assert project_in_slice(s17, repo_filter=BOO)
+    assert project_in_slice(root, repo_filter=LABS)  # root keeps UBI_9
+    containers = s17 / "containers"
+    assert project_in_slice(containers, repo_filter=LABS)
+    assert not project_in_slice(containers, repo_filter=BOO)
+    assert not project_in_slice(
+        containers, repo_filter=RepositoryFilter(exclude_projects=("*:containers",))
+    )
+    # zero repositories: out everywhere, even unfiltered
+    assert not project_in_slice(
+        root / "ppg/staging/extras", repo_filter=RepositoryFilter.EMPTY
+    )
+    # pre-resolved config and cache are honoured
+    cfg = resolve_project_config(containers, repo_filter=BOO)
+    cache: dict[Path, bool] = {}
+    assert not project_in_slice(containers, repo_filter=BOO, config=cfg, cache=cache)
+    assert cache == {containers: False}
+    cache[containers] = True
+    assert project_in_slice(
+        containers, repo_filter=BOO, cache=cache
+    )  # cache is authoritative
+
+
+def test_package_in_slice(repo):
+    root = repo(_TREE)
+    s17 = root / "ppg/staging/17"
+    assert package_in_slice(s17 / "percona-postgresql", repo_filter=LABS)
+    assert package_in_slice(s17 / "percona-postgresql", repo_filter=BOO)
+    assert not package_in_slice(
+        s17 / "bison", repo_filter=LABS
+    )  # disabled on its only labs repo
+    assert package_in_slice(s17 / "bison", repo_filter=BOO)
+    assert package_in_slice(
+        s17 / "blanket", repo_filter=LABS
+    )  # shorthand map is not per-repo
+    assert package_in_slice(s17 / "containers" / "image", repo_filter=LABS)
+    assert not package_in_slice(
+        s17 / "containers" / "image", repo_filter=BOO
+    )  # project out
+    # default filter applies when none is passed
+    common.set_default_repository_filter(LABS)
+    assert not package_in_slice(s17 / "bison")

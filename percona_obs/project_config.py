@@ -437,3 +437,62 @@ def resolve_project_config(
     if repo_filter is None:
         repo_filter = common.get_default_repository_filter()
     return repo_filter.apply(resolved, project_slice_name(project_path))
+
+
+def project_in_slice(
+    project_path: Path,
+    env_vars: dict[str, str] | None = None,
+    repo_filter: "RepositoryFilter | None" = None,
+    config: dict | None = None,
+    cache: "dict[Path, bool] | None" = None,
+) -> bool:
+    """True iff the project passes the project test and keeps ≥ 1 repository.
+
+    A project with zero repositories (unfiltered or after slicing) is out of
+    slice everywhere: it is never created on any instance.  *config* is an
+    already-resolved configuration for *project_path* under *repo_filter*
+    (saves a resolution in loops); *cache* memoises per project path and is
+    authoritative when it holds the path.
+    """
+    if cache is not None and project_path in cache:
+        return cache[project_path]
+    if repo_filter is None:
+        repo_filter = common.get_default_repository_filter()
+    result = repo_filter.project_passes(project_slice_name(project_path))
+    if result:
+        if config is None:
+            config = resolve_project_config(project_path, env_vars, repo_filter)
+        result = bool(config.get("repositories"))
+    if cache is not None:
+        cache[project_path] = result
+    return result
+
+
+def package_in_slice(
+    package_path: Path,
+    env_vars: dict[str, str] | None = None,
+    repo_filter: "RepositoryFilter | None" = None,
+    project_config: dict | None = None,
+    cache: "dict[Path, bool] | None" = None,
+) -> bool:
+    """True iff the package's project is in slice and the package builds in a kept repo.
+
+    "Builds in": its ``package.yaml`` ``build:`` per-repository map does not set
+    every surviving repository to ``false``.  No ``package.yaml``, no ``build:``,
+    booleans and the ``{disable: true}`` shorthand all count as building.
+    """
+    if repo_filter is None:
+        repo_filter = common.get_default_repository_filter()
+    project_path = package_path.parent
+    if project_config is None:
+        project_config = resolve_project_config(project_path, env_vars, repo_filter)
+    if not project_in_slice(project_path, env_vars, repo_filter, project_config, cache):
+        return False
+    repos = [r["name"] for r in project_config.get("repositories") or []]
+    pkg_yaml = package_path / "package.yaml"
+    build = (
+        common.load_package_yaml(pkg_yaml).get("build") if pkg_yaml.is_file() else None
+    )
+    if isinstance(build, dict) and not set(build) <= {"disable", "enable"}:
+        return any(build.get(name, True) is not False for name in repos)
+    return True
