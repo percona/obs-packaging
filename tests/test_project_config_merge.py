@@ -612,3 +612,150 @@ def test_validators_skip_shared_library_files(repo):
     )
     # the template itself has no macros and must not be validated as a project
     assert _validate_subproject_refs(root) == []
+
+
+# --- repository filter ---------------------------------------------------------
+
+from percona_obs.project_config import RepositoryFilter  # noqa: E402
+
+
+def _cfg(*names, paths=None, flags=None):
+    repos = [
+        {"name": n, "paths": list((paths or {}).get(n, [])), "archs": ["x86_64"]}
+        for n in names
+    ]
+    cfg = {"title": "T", "repositories": repos}
+    cfg.update(flags or {})
+    return cfg
+
+
+def test_filter_empty_is_passthrough():
+    cfg = _cfg("RockyLinux_9", "UBI_9")
+    assert RepositoryFilter.EMPTY.is_empty
+    assert RepositoryFilter().is_empty
+    assert RepositoryFilter.EMPTY.apply(cfg, "ppg:staging:17") is cfg
+    assert RepositoryFilter.EMPTY.repo_matches("anything")
+    assert RepositoryFilter.EMPTY.project_passes("anything")
+
+
+def test_filter_repo_include_then_exclude():
+    f = RepositoryFilter(
+        include_repos=("UBI_*", "ubi*", "images"), exclude_repos=("ubi8",)
+    )
+    assert (
+        f.repo_matches("UBI_9") and f.repo_matches("ubi9") and f.repo_matches("images")
+    )
+    assert not f.repo_matches("ubi8")  # excluded wins over included
+    assert not f.repo_matches("RockyLinux_9")
+    only_exclude = RepositoryFilter(exclude_repos=("UBI_*",))
+    assert only_exclude.repo_matches("RockyLinux_9") and not only_exclude.repo_matches(
+        "UBI_8"
+    )
+
+
+def test_filter_project_globs_and_root_never_excluded():
+    f = RepositoryFilter(exclude_projects=("*:containers", "common:containers:*"))
+    assert not f.project_passes("ppg:staging:17:containers")
+    assert not f.project_passes("common:containers:ubi8")
+    assert f.project_passes(
+        "ppg:staging:17:containers:x"
+    )  # descendants are independent
+    assert f.project_passes("ppg:staging:17")
+    assert f.project_passes("")
+    inc = RepositoryFilter(include_projects=("ppg:*",))
+    assert inc.project_passes("ppg:staging:17") and not inc.project_passes(
+        "common:deps:build"
+    )
+    assert inc.project_passes("")  # root passes even with an include list
+
+
+def test_filter_apply_prunes_repositories_and_flag_maps():
+    f = RepositoryFilter(exclude_repos=("UBI_*",))
+    cfg = _cfg(
+        "RockyLinux_9",
+        "UBI_9",
+        flags={
+            "debuginfo": {"RockyLinux_9": True, "UBI_9": True},
+            "build": {"UBI_9": False},
+            "publish": False,
+        },
+    )
+    out = f.apply(cfg, "ppg:staging:17")
+    assert [r["name"] for r in out["repositories"]] == ["RockyLinux_9"]
+    assert out["debuginfo"] == {"RockyLinux_9": True}
+    assert out["build"] == {}
+    assert out["publish"] is False
+    assert out["title"] == "T"
+    # shorthand maps are not repository maps
+    short = f.apply(_cfg("RockyLinux_9", flags={"build": {"disable": True}}), "x")
+    assert short["build"] == {"disable": True}
+    # the input is not mutated
+    assert [r["name"] for r in cfg["repositories"]] == ["RockyLinux_9", "UBI_9"]
+
+
+def test_filter_apply_same_project_rescue_is_transitive_not_cross_project():
+    f = RepositoryFilter(include_repos=("ssl3",))
+    cfg = _cfg(
+        "helper",
+        "helper2",
+        "standard",
+        "ssl3",
+        paths={
+            "ssl3": [
+                {"subproject": "ppg:staging:17:tarballs", "repository": "helper"},
+                {
+                    "subproject": "ppg:staging:17",
+                    "repository": "helper2",
+                },  # other project
+                {"project": "RockyLinux:9", "repository": "standard"},
+            ],
+            "helper": [
+                {"subproject": "ppg:staging:17:tarballs", "repository": "helper2"}
+            ],
+        },
+    )
+    out = f.apply(cfg, "ppg:staging:17:tarballs")
+    assert [r["name"] for r in out["repositories"]] == ["helper", "helper2", "ssl3"]
+    # without the same-project name nothing is rescued
+    out2 = f.apply(cfg, "somewhere:else")
+    assert [r["name"] for r in out2["repositories"]] == ["ssl3"]
+
+
+def test_filter_from_profile_and_validation():
+    f = RepositoryFilter.from_profile(
+        {
+            "apiurl": "x",
+            "include-repositories": ["UBI_*"],
+            "exclude-projects": ["common:containers:ubi8"],
+        },
+        source=".profile/labs.yaml",
+    )
+    assert f.include_repos == ("UBI_*",)
+    assert f.exclude_projects == ("common:containers:ubi8",)
+    assert f.exclude_repos == () and f.include_projects == ()
+    assert f.to_profile() == {
+        "include-repositories": ["UBI_*"],
+        "exclude-projects": ["common:containers:ubi8"],
+    }
+    with pytest.raises(
+        SystemExit,
+        match=r"\.profile/labs\.yaml: include-repositories must be a list of non-empty strings",
+    ):
+        RepositoryFilter.from_profile(
+            {"include-repositories": "UBI_*"}, source=".profile/labs.yaml"
+        )
+    with pytest.raises(SystemExit, match="exclude-repositories must be a list"):
+        RepositoryFilter.from_profile(
+            {"exclude-repositories": ["ok", ""]}, source=".profile/labs.yaml"
+        )
+
+
+def test_filter_from_env_json():
+    assert RepositoryFilter.from_env_json("").is_empty
+    f = RepositoryFilter.from_env_json(
+        '{"name": "labs", "include_repos": "UBI_*, ubi*,images", "exclude_projects": ["a:b"]}'
+    )
+    assert f.include_repos == ("UBI_*", "ubi*", "images")
+    assert f.exclude_projects == ("a:b",)
+    with pytest.raises(SystemExit, match="include_repos"):
+        RepositoryFilter.from_env_json('{"include_repos": 5}')
