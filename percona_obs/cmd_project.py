@@ -38,6 +38,7 @@ from .common import (
     find_projects,
     is_package,
     is_project,
+    is_shared_source_dir,
     load_macros,
     load_project_yaml,
     load_yaml,
@@ -358,6 +359,21 @@ def _detect_container_info(
     return None  # not a container image
 
 
+def _project_yaml_files(root: Path) -> "list[Path]":
+    """All project.yaml files under *root* that describe a project.
+
+    Files inside a ``_shared/`` library directory are templates that the
+    per-major projects symlink to (see root/README.md); they render only
+    through the link's directory, so they are skipped here just as
+    ``find_projects`` skips ``_shared/`` itself.
+    """
+    return sorted(
+        p
+        for p in root.rglob("project.yaml")
+        if not any(is_shared_source_dir(parent) for parent in p.parents)
+    )
+
+
 def _validate_subproject_refs(root: Path) -> list[tuple[Path, str]]:
     """Check all subproject: references in project.yaml files under ``root``.
 
@@ -370,7 +386,7 @@ def _validate_subproject_refs(root: Path) -> list[tuple[Path, str]]:
     `subprojects.yaml` is reported against every project that inherits it.
     """
     errors: list[tuple[Path, str]] = []
-    for yaml_path in sorted(root.rglob("project.yaml")):
+    for yaml_path in _project_yaml_files(root):
         config = _load_project_config_with_inheritance(yaml_path.parent)
         for repo in config.get("repositories", []):
             for path_info in repo.get("paths", []):
@@ -428,7 +444,7 @@ def _validate_project_path_refs(
 
     # Collect (yaml_path, resolved_project, resolved_repository) triples.
     triples: list[tuple[Path, str, str]] = []
-    for yaml_path in sorted(root.rglob("project.yaml")):
+    for yaml_path in _project_yaml_files(root):
         config = _load_project_config_with_inheritance(yaml_path.parent, env_vars)
         for repo in config.get("repositories", []):
             for path_info in repo.get("paths", []):
