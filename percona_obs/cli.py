@@ -653,7 +653,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="Show unified diffs of the rendered meta XML and build config against what "
-        "OBS currently holds. Requires a profile (-P).",
+        "OBS currently holds. Requires an OBS API URL (-P profile or --apiurl).",
     )
     project_config_parser.set_defaults(func=cmd_project_config)
 

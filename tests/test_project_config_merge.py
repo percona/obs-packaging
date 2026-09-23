@@ -431,6 +431,18 @@ def test_flags_child_wins_and_null_resets(repo):
     assert d["debuginfo"] == {"RockyLinux_9": True, "Debian_12": True}
 
 
+def test_publish_false_in_subprojects_yaml_is_inherited(repo):
+    root = repo(
+        {
+            "project.yaml": _ROOT_REPOS,
+            "a/subprojects.yaml": "publish: false\n",
+            "a/b/project.yaml": "title: B\n",
+        }
+    )
+    assert resolve_project_config(root / "a" / "b")["publish"] is False
+    assert common._load_project_config_with_inheritance(root / "a" / "b").get("publish") is False
+
+
 def test_title_description_name_qa_are_leaf_only(repo):
     root = repo(
         {

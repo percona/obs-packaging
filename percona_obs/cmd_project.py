@@ -736,8 +736,6 @@ def cmd_project_config(args) -> None:
     # `cmd_project_config` requires --rootprj (validated above) so always inject.
     env_vars = {**auto_rootprj_env(args.rootprj), **(env_vars or {})}
 
-    if getattr(args, "diff", False) and not args.profile:
-        raise SystemExit("error: --diff needs a profile (-P) to reach OBS")
     if getattr(args, "diff", False) and getattr(args, "offline", False):
         raise SystemExit("error: --diff and --offline are mutually exclusive")
 
@@ -753,6 +751,11 @@ def cmd_project_config(args) -> None:
             if raw_apiurl:
                 osc.conf.get_config(override_apiurl=raw_apiurl)
                 apiurl = osc.conf.config["apiurl"]
+
+    if getattr(args, "diff", False) and apiurl is None:
+        raise SystemExit(
+            "error: --diff needs an OBS API URL: pass -P <profile> (with apiurl) or --apiurl"
+        )
 
     # Always resolve the root OBS project name — needed both for the project
     # list and for inheriting person/group into new subprojects.
@@ -813,7 +816,8 @@ def cmd_project_config(args) -> None:
                     meta = _inject_obs_managed_elements(meta, inherited)
 
         if getattr(args, "diff", False):
-            assert apiurl is not None
+            if apiurl is None:
+                continue  # unreachable: guarded by the apiurl check above
             try:
                 current_meta = _decode_obs_response(
                     osc.core.show_project_meta(apiurl, obs_project_name)
@@ -1048,7 +1052,7 @@ def cmd_project_install(args) -> None:
     projects = [
         (obs_name, proj_path)
         for obs_name, proj_path in all_projects
-        if load_project_yaml(proj_path / "project.yaml").get("publish") is not False
+        if _load_project_config_with_inheritance(proj_path).get("publish") is not False
         and (
             (proj_path / "project.yaml").is_file()
             if is_release
