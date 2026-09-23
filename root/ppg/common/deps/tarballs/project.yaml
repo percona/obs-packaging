@@ -30,6 +30,10 @@ description: |
   its own — the root prjconf (inherited) already carries the EL8
   libverto-libev and EL9/9.6 Prefer blocks these packages need.
 
+# This project's repository set and build configuration are unrelated to its
+# parent's: declare them in full here instead of patching the inherited ones.
+repositories-inherit: false
+
 repositories:
   - name: RockyLinux_8
     paths:

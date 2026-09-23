@@ -1,6 +1,13 @@
 title: Packages for PostgreSQL %!{PG_MAJOR_VERSION} Custom Images
 description: |
   Packages for PostgreSQL %!{PG_MAJOR_VERSION} Custom Images — the server and the extensions
+
+# This project's repository set and build configuration are unrelated to its
+# parent's: declare them in full here instead of patching the inherited ones.
+repositories-inherit: false
+# no debuginfo repositories here; do not inherit the staging map
+debuginfo: ~
+
 repositories:
   - name: UBI_9
     paths:
@@ -17,31 +24,3 @@ repositories:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
         repository: devel
     archs: [x86_64, aarch64]
-
-project-config: |
-  %if "%_repository" == "RockyLinux_9" || "%_repository" == "UBI_9"
-  ExpandFlags: module:llvm-toolset-rhel9
-  # hdf-libs (EPEL split package) and hdf both provide libdf.so.0 and libmfhdf.so.0
-  Prefer: hdf-libs
-  %endif
-
-  # Distro codename suffix for deb releases — keep in sync with the root
-  # project.yaml (this project-config overrides the inherited root config).
-  %if "%_repository" == "Debian_11"
-  Release: <CI_CNT>.<B_CNT>.bullseye
-  %endif
-  %if "%_repository" == "Debian_12"
-  Release: <CI_CNT>.<B_CNT>.bookworm
-  %endif
-  %if "%_repository" == "Debian_13"
-  Release: <CI_CNT>.<B_CNT>.trixie
-  %endif
-  %if "%_repository" == "Ubuntu_22.04"
-  Release: <CI_CNT>.<B_CNT>.jammy
-  %endif
-  %if "%_repository" == "Ubuntu_24.04"
-  Release: <CI_CNT>.<B_CNT>.noble
-  %endif
-  %if "%_repository" == "Ubuntu_26.04"
-  Release: <CI_CNT>.<B_CNT>.resolute
-  %endif

@@ -1,0 +1,4 @@
+# Release snapshots are fully materialized by `percona-obs project release`
+# and must not pick up later edits to root/ or staging: every project below
+# this directory resolves from its own project.yaml alone.
+standalone: true

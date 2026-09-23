@@ -8,6 +8,13 @@ description: |
   We currently build these images based on UBI-9 only, matching the per-version
   extras/containers projects (there is no UBI-8 variant of the extras/custom images).
 
+# This project's repository set and build configuration are unrelated to its
+# parent's: declare them in full here instead of patching the inherited ones.
+repositories-inherit: false
+project-config-inherit: false
+# no debuginfo repositories here; do not inherit the staging map
+debuginfo: ~
+
 repositories:
   - name: ubi9
     paths:

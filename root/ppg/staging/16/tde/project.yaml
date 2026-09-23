@@ -1,6 +1,12 @@
 title: Percona Server for PostgreSQL %!{PG_MAJOR_VERSION}
 description: |
   Packages for Percona Server for PostgreSQL %!{PG_MAJOR_VERSION} — the server and tde.
+
+# This project's repository set and build configuration are unrelated to its
+# parent's: declare them in full here instead of patching the inherited ones.
+repositories-inherit: false
+project-config-inherit: false
+
 debuginfo:
   RockyLinux_9: true
   RockyLinux_9.6: true
