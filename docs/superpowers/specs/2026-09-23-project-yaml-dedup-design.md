@@ -61,9 +61,24 @@ any project where it changes the result.
 
 ### project-config
 
-Concatenation in fold order, contributions separated by one blank line, each
-contribution stripped of leading and trailing blank lines first. OBS prjconf
-is order-sensitive but additive, so appending is safe.
+Concatenation in fold order, each contribution stripped of leading and
+trailing blank lines first, then preceded by one blank line and a provenance
+comment naming the file it came from, relative to the repository:
+
+```
+# --- from root/project.yaml ---
+%if "%_repository" == "Debian_11"
+...
+%endif
+
+# --- from root/ppg/staging/project.yaml ---
+%if "%_repository" == "openSUSE_Tumbleweed"
+...
+```
+
+OBS prjconf accepts `#` comments, and the header makes the OBS web UI and
+`project render` output self-explaining. OBS prjconf is order-sensitive but
+additive, so appending is safe.
 
 `project-config-inherit: false` on a project discards everything inherited so
 far and starts from that project's own text. Descendants of that project
@@ -207,9 +222,16 @@ A throwaway script (scratchpad, not committed) renders the resolved config of
 every non-release project with the current tool and stores it as a baseline
 (one file per project: resolved YAML plus rendered prjconf text). After the
 tool change and each step of the yaml rewrite, the same render must match the
-baseline exactly. Two documented exceptions, both of which render to the same
-text anyway: staging/18 and devel/18 where a literal `18` becomes the macro.
-Any other difference is a bug in the rewrite.
+baseline exactly. The prjconf comparison strips comment lines (`#`-prefixed)
+on both sides, because the provenance headers are new by design. Two
+documented exceptions, both of which render to the same text anyway:
+staging/18 and devel/18 where a literal `18` becomes the macro. Any other
+difference is a bug in the rewrite.
+
+Consequence: the first sync after merge writes a new prjconf (comments only)
+to every non-release project. A prjconf-only change rebuilds nothing in OBS
+(observed during the deb codename rollout), and comment lines cannot alter
+dependency resolution, so this is churn in metadata only.
 
 ### Rewrite order
 
@@ -249,7 +271,8 @@ One PR against `percona/main` from worktree
 2. `project render` and docs
 3. yaml rewrite
 
-The sync running with no OBS change is the acceptance test. If anything
+The sync running with no OBS change other than the comment-only prjconf
+rewrite is the acceptance test. If anything
 rebuilds, commit 3 reverts cleanly and commits 1 and 2 stand on their own.
 
 ## Out of scope
