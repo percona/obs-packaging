@@ -3,6 +3,13 @@ description: |
   This project contains the container images for Percona Software for PostgreSQL %!{PG_MAJOR_VERSION}.
   We currently build our images based on UBI-8 and UBI-9 base containers.
 
+# This project's repository set and build configuration are unrelated to its
+# parent's: declare them in full here instead of patching the inherited ones.
+repositories-inherit: false
+project-config-inherit: false
+# no debuginfo repositories here; do not inherit the staging map
+debuginfo: ~
+
 repositories:
   - name: ubi8
     paths:
