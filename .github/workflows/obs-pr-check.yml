@@ -147,11 +147,12 @@ jobs:
       pull-requests: write
       packages: read
 
-    # Matrix job outputs are last-writer-wins; both values are derived from
-    # the PR diff alone, so every leg writes the same thing.
+    # Matrix job outputs are last-writer-wins, so only a value identical
+    # across every leg may be exposed here: is_release_pr is derived from
+    # the PR diff alone.  Per-leg sync success is NOT an output -- downstream
+    # jobs use the aggregate needs.sync.result instead.
     outputs:
       is_release_pr: ${{ steps.detect.outputs.is_release_pr }}
-      sync_outcome: ${{ steps.sync.outcome }}
 
     env:
       PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
@@ -296,13 +297,14 @@ jobs:
 
           venv/bin/python -m percona_obs -A "$OBS_APIURL" -R "$OBS_ROOTPRJ" \
             -e "REMOTE_OBS_ORG_INTERCONNECT:" -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
-            -e "PERCONA_OBS_PACKAGING_REPO:${MAIN_REPO_URL}" "${inst[@]}" profile create main
+            -e "PERCONA_OBS_PACKAGING_REPO:${MAIN_REPO_URL}" profile create main "${inst[@]}"
 
           PR_ROOTPRJ="${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}"
           set +e
           venv/bin/python -m percona_obs -A "$OBS_APIURL" -R "$PR_ROOTPRJ" \
             -e "REMOTE_OBS_ORG_INTERCONNECT:" -e "PERCONA_OBS_PACKAGING_BRANCH:refs/pull/${PR_NUMBER}/head" \
-            -e "PERCONA_OBS_PACKAGING_REPO:${CLONE_URL}" "${inst[@]}" "${labels[@]}" profile create "pr-${PR_NUMBER}"
+            -e "PERCONA_OBS_PACKAGING_REPO:${CLONE_URL}" \
+            profile create "pr-${PR_NUMBER}" "${inst[@]}" "${labels[@]}"
           rc=$?
           set -e
           if [ "$rc" = "3" ]; then
@@ -347,7 +349,7 @@ jobs:
           if [ -n "${EXCLUDE_PROJECTS:-}" ]; then inst+=(--exclude-projects "$EXCLUDE_PROJECTS"); fi
           venv/bin/python -m percona_obs -A "$OBS_APIURL" -R "$OBS_ROOTPRJ" \
             -e "REMOTE_OBS_ORG_INTERCONNECT:" -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
-            -e "PERCONA_OBS_PACKAGING_REPO:${MAIN_REPO_URL}" "${inst[@]}" profile create main
+            -e "PERCONA_OBS_PACKAGING_REPO:${MAIN_REPO_URL}" profile create main "${inst[@]}"
 
       - name: Release dry-run
         id: release-dryrun
@@ -474,8 +476,13 @@ jobs:
           obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance.name)] }}
 
       # continue-on-error: a leg whose slice the PR labels narrowed to
-      # nothing uploaded no artifact.
+      # nothing never ran (let alone uploaded) a sync, so its artifact does
+      # not exist.  The download outcome is therefore this job's skip
+      # signal: a failed download means "that instance had nothing to do",
+      # and the steps below are gated on it so the leg neither polls a
+      # non-existent PR project nor posts a spurious failure comment.
       - name: Download sync output
+        id: sync-output
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:
@@ -488,6 +495,7 @@ jobs:
       # slice (the poll script reads the filter keys and ignores the rest).
       - name: Poll OBS build status
         id: poll
+        if: steps.sync-output.outcome == 'success'
         env:
           OBS_APIURL: ${{ matrix.instance.apiurl }}
           OBS_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}:pr-${{ needs.resolve.outputs.pr_number }}
@@ -495,11 +503,12 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/poll_obs_builds.py
 
-      # Always runs so the comment is updated even when poll fails.
+      # Always runs so the comment is updated even when poll fails -- but
+      # only for a leg that actually synced (see the download step above).
       # Each instance owns its own comment (post_pr_comment.py keys on
       # OBS_INSTANCE).
       - name: Post OBS project comment
-        if: always()
+        if: always() && steps.sync-output.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           IS_RELEASE_PR: 'false'
@@ -522,8 +531,10 @@ jobs:
   detect-qa-matrix:
     name: Detect QA matrix
     needs: [resolve, sync]
+    # needs.sync.result: the aggregate over all instance legs -- per-leg sync
+    # success cannot be a job output (matrix outputs are last-writer-wins).
     if: |
-      needs.sync.outputs.is_release_pr != 'true' && needs.sync.outputs.sync_outcome == 'success' &&
+      needs.sync.outputs.is_release_pr != 'true' && needs.sync.result == 'success' &&
       (contains(fromJSON(needs.resolve.outputs.labels_json), 'qa-packages') || contains(fromJSON(needs.resolve.outputs.labels_json), 'qa-containers'))
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
