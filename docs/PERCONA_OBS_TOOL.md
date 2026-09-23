@@ -84,6 +84,64 @@ Once a profile exists, activate it with `-P`:
 
 Explicit `-A`/`-R` flags always override the profile values when both are given.
 
+### Slices: several OBS instances
+
+build.opensuse.org cannot build UBI container images, so the UBI RPM repositories and the
+container-image projects live on a second instance. One tree, two profiles:
+
+```yaml
+# .profile/boo.yaml — production RPM/DEB on build.opensuse.org
+apiurl: https://api.opensuse.org
+rootprj: isv:percona
+exclude-repositories: ["UBI_*", "ubi*", "images"]
+
+# .profile/labs.yaml — UBI RPMs and images on obs.pg.labs.percona.com
+apiurl: https://obs.pg.labs.percona.com
+rootprj: percona
+include-repositories: ["UBI_*", "ubi*", "images"]
+```
+
+Rules (globs are `fnmatch`, case-sensitive):
+- a repository is kept iff it matches an `include-repositories` glob (or there is none) and no `exclude-repositories` glob; a kept repository also keeps the same-project sibling repositories its paths reference;
+- a project is in slice iff its rootprj-less name passes `include-projects`/`exclude-projects` **and** it keeps at least one repository (zero repositories → never created);
+- a package is in slice iff its project is and its `package.yaml` `build:` map does not disable every kept repository;
+- out-of-slice projects and packages are not created/uploaded and are **deleted as orphans** on a full-tree `sync push`. The first `sync push -P boo` against production therefore removes every `:containers` project and every UBI-only package there: run it with `--dry-run` first and read the `-` lines.
+
+Create the profiles with flags instead of editing YAML (flags are repeatable and comma-separated):
+
+```sh
+./percona-obs -A https://api.opensuse.org -R isv:percona \
+  profile create boo --exclude-repos 'UBI_*,ubi*,images'
+./percona-obs -A https://obs.pg.labs.percona.com -R percona \
+  profile create labs --include-repos 'UBI_*,ubi*,images'
+```
+
+`--narrow-repos RockyLinux_9,ssl*` keeps only the named repositories the profile already accepts
+and exits 3 when nothing is left; the PR workflow uses it for repo labels.
+
+Inspect a slice offline: `./percona-obs -P labs -e REMOTE_OBS_ORG_INTERCONNECT:x project config --offline --resolved`
+(out-of-slice projects print `# project <name>: out of slice`) and `./percona-obs -P labs project verify`
+(prints `slice: N project(s), M package(s) out of slice`, `--verbose` lists them, and fails if a kept
+repository paths into a repository the slice does not carry).
+
+`sync release -P <profile>` releases the subprojects that instance holds; `project release` always
+generates the full, instance-agnostic release tree.
+
+CI: the repository variable `OBS_INSTANCES` is a JSON list, one object per instance —
+`{"name": "boo", "apiurl": "…", "rootprj": "isv:percona", "pr_rootprj": "isv:percona:pr",
+"exclude_repos": "UBI_*,ubi*,images"}` (also `include_repos`, `include_projects`,
+`exclude_projects`, optional `user`). The password secret is `OBS_PASSWORD_<NAME>` (upper-case
+name). `sync-main`, `obs-pr-check` and `obs-release` run their OBS jobs once per entry.
+
+`OBS_INSTANCES` and the matching `OBS_PASSWORD_<NAME>` secrets must be created before the
+workflow change merges, or the matrix jobs have nothing to iterate over and no credentials to
+authenticate with. Roll out an instance's first sync with `--dry-run` and review the deletion
+list before removing that flag — a plain profile-less tree carries everything, so the first
+sliced push against a previously-unsliced instance is the one that deletes out-of-slice
+projects and packages as orphans. The README build badge now reads
+`obs-build-badge-boo.json` from the `badges` branch (one file per instance); the first
+`sync-main` run under the new per-instance workflow creates it.
+
 ---
 
 ## Examples

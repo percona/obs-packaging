@@ -406,3 +406,8 @@ extras) opt out with `repositories-inherit: false`. Where several majors need th
 linking major's `macros.yaml`. Run
 `percona-obs project config <project> --offline --resolved` to see the effective configuration;
 the merge rules are in `.github/copilot-instructions.md`.
+
+The tree describes every OBS instance at once. Which repositories and projects a given instance
+carries is declared in the connection profile (`.profile/<name>.yaml`, see
+`docs/PERCONA_OBS_TOOL.md` "Slices"); a project that keeps no repository under the active profile
+is out of slice and is never created there.
