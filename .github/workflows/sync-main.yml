@@ -12,6 +12,15 @@ name: Sync to OBS (main)
 # replaces an older run's poll (the OBS badge and version lists are derived
 # from the last *successful* run's SHA, so whichever poll survives covers
 # the superseded runs' ranges too).
+#
+# One sync/poll pair runs per entry of the `OBS_INSTANCES` repository
+# variable (a JSON list of objects: name, apiurl, rootprj, pr_rootprj and
+# the optional include_repos/exclude_repos/include_projects/exclude_projects
+# glob lists that slice the packaging tree for that instance).  Each leg
+# authenticates with the secret `OBS_PASSWORD_<NAME>` (NAME being the
+# instance's `name`) and keeps its own concurrency group, profile, sync
+# report artifact and build badge file, so instances never serialize behind
+# or overwrite each other.
 
 on:
   push:
@@ -42,16 +51,22 @@ on:
 
 jobs:
   sync:
-    name: percona-obs sync push
+    name: percona-obs sync push (${{ matrix.instance.name }})
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
-    # Serialize syncs; never cancel a sync mid-upload.
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: ${{ fromJSON(vars.OBS_INSTANCES) }}
+    # Serialize syncs per instance; never cancel a sync mid-upload.
     concurrency:
-      group: sync-main-sync
+      group: sync-main-sync-${{ matrix.instance.name }}
       cancel-in-progress: false
     permissions:
       contents: read
       packages: read
+    # Matrix job outputs are last-writer-wins; release_only is computed from
+    # the pushed commit range alone, so every leg writes the same value.
     outputs:
       release_only: ${{ steps.detect.outputs.release_only }}
 
@@ -148,21 +163,35 @@ jobs:
 
       - uses: ./.github/actions/obs-setup
         with:
-          obs-apiurl: ${{ vars.OBS_APIURL }}
-          obs-user: ${{ vars.OBS_USER }}
-          obs-password: ${{ secrets.OBS_PASSWORD }}
+          obs-apiurl: ${{ matrix.instance.apiurl }}
+          obs-user: ${{ matrix.instance.user || vars.OBS_USER }}
+          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance.name)] }}
 
-      - name: Create percona-obs profile
+      # The instance's repo/project filters slice the packaging tree down to
+      # what this OBS instance builds; an absent key is an empty string and
+      # contributes no flag.
+      - name: Create percona-obs profile (${{ matrix.instance.name }})
+        shell: bash
         env:
-          OBS_APIURL: ${{ vars.OBS_APIURL }}
-          OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
+          OBS_APIURL: ${{ matrix.instance.apiurl }}
+          INCLUDE_REPOS: ${{ matrix.instance.include_repos }}
+          EXCLUDE_REPOS: ${{ matrix.instance.exclude_repos }}
+          INCLUDE_PROJECTS: ${{ matrix.instance.include_projects }}
+          EXCLUDE_PROJECTS: ${{ matrix.instance.exclude_projects }}
         run: |
+          set -euo pipefail
+          args=()
+          if [ -n "${INCLUDE_REPOS:-}" ]; then args+=(--include-repos "$INCLUDE_REPOS"); fi
+          if [ -n "${EXCLUDE_REPOS:-}" ]; then args+=(--exclude-repos "$EXCLUDE_REPOS"); fi
+          if [ -n "${INCLUDE_PROJECTS:-}" ]; then args+=(--include-projects "$INCLUDE_PROJECTS"); fi
+          if [ -n "${EXCLUDE_PROJECTS:-}" ]; then args+=(--exclude-projects "$EXCLUDE_PROJECTS"); fi
           venv/bin/python -m percona_obs \
             -A "$OBS_APIURL" \
-            -R "$OBS_ROOTPRJ" \
+            -R "${{ matrix.instance.rootprj }}" \
             -e "REMOTE_OBS_ORG_INTERCONNECT:" \
             -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
             -e "PERCONA_OBS_PACKAGING_REPO:${{ github.server_url }}/${{ github.repository }}.git" \
+            "${args[@]}" \
             profile create main
 
       # releases/ directories are excluded from sync push traversal (each
@@ -220,20 +249,25 @@ jobs:
         if: steps.detect.outputs.release_only != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: sync-report
+          name: sync-report-${{ matrix.instance.name }}
           path: /tmp/sync-report.json
           retention-days: 1
 
   poll:
-    name: Wait for OBS builds
+    name: Wait for OBS builds (${{ matrix.instance.name }})
     needs: sync
     if: needs.sync.outputs.release_only != 'true'
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     timeout-minutes: 360
-    # Newest poll wins: a newer push's poll supersedes (cancels) older polls.
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: ${{ fromJSON(vars.OBS_INSTANCES) }}
+    # Newest poll wins, per instance: a newer push's poll supersedes
+    # (cancels) older polls of the same instance only.
     concurrency:
-      group: sync-main-poll
+      group: sync-main-poll-${{ matrix.instance.name }}
       cancel-in-progress: true
     permissions:
       # Required to push the badge JSON to the badges branch.
@@ -251,14 +285,14 @@ jobs:
 
       - uses: ./.github/actions/obs-setup
         with:
-          obs-apiurl: ${{ vars.OBS_APIURL }}
-          obs-user: ${{ vars.OBS_USER }}
-          obs-password: ${{ secrets.OBS_PASSWORD }}
+          obs-apiurl: ${{ matrix.instance.apiurl }}
+          obs-user: ${{ matrix.instance.user || vars.OBS_USER }}
+          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance.name)] }}
 
       - name: Download sync report
         uses: actions/download-artifact@v4
         with:
-          name: sync-report
+          name: sync-report-${{ matrix.instance.name }}
           path: /tmp
 
       # A superseded (cancelled) poll never runs the version-lists step
@@ -285,8 +319,9 @@ jobs:
       - name: Poll OBS build status
         id: poll
         env:
-          OBS_APIURL: ${{ vars.OBS_APIURL }}
-          OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
+          OBS_APIURL: ${{ matrix.instance.apiurl }}
+          OBS_ROOTPRJ: ${{ matrix.instance.rootprj }}
+          OBS_REPO_FILTER: ${{ toJSON(matrix.instance) }}
           OBS_SYNC_REPORT: /tmp/sync-report.json
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/poll_obs_builds.py
@@ -303,7 +338,7 @@ jobs:
         env:
           GITHUB_EVENT_BEFORE: ${{ steps.base.outputs.sha }}
           OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
-          OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
+          OBS_ROOTPRJ: ${{ matrix.instance.rootprj }}
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/update_version_lists.py
 
@@ -311,25 +346,28 @@ jobs:
       # embedded in README.md via a shields.io endpoint badge.
       # Runs even when the poll step fails so the badge always reflects the
       # latest build outcome.
+      # One badge file per instance (README embeds the b.o.o one), so the
+      # legs never overwrite each other's badge.
       - name: Publish OBS build badge
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
+          BADGE_FILE: obs-build-badge-${{ matrix.instance.name }}.json
         run: |
           [ -f /tmp/obs-build-badge.json ] || exit 0
           BADGE=$(base64 -w0 /tmp/obs-build-badge.json)
           FILE_SHA=$(gh api \
-            "repos/$GITHUB_REPOSITORY/contents/obs-build-badge.json?ref=badges" \
+            "repos/$GITHUB_REPOSITORY/contents/${BADGE_FILE}?ref=badges" \
             --jq '.sha' 2>/dev/null || echo "")
           if [ -n "$FILE_SHA" ]; then
-            gh api "repos/$GITHUB_REPOSITORY/contents/obs-build-badge.json" \
+            gh api "repos/$GITHUB_REPOSITORY/contents/${BADGE_FILE}" \
               -X PUT \
               -f message="ci: update OBS build badge" \
               -f content="$BADGE" \
               -f branch=badges \
               -f sha="$FILE_SHA"
           else
-            gh api "repos/$GITHUB_REPOSITORY/contents/obs-build-badge.json" \
+            gh api "repos/$GITHUB_REPOSITORY/contents/${BADGE_FILE}" \
               -X PUT \
               -f message="ci: update OBS build badge" \
               -f content="$BADGE" \

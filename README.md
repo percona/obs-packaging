@@ -1,6 +1,6 @@
 # percona-obs-packaging
 
-[![OBS Build](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/percona/obs-packaging/badges/obs-build-badge.json)](https://github.com/percona/obs-packaging/actions/workflows/sync-main.yml)
+[![OBS Build](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/percona/obs-packaging/badges/obs-build-badge-boo.json)](https://github.com/percona/obs-packaging/actions/workflows/sync-main.yml)
 
 RPM and Debian **packaging metadata** for building Percona software packages against an
 [OpenSUSE Build Service (OBS)](https://build.opensuse.org/) instance.

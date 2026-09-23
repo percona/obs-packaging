@@ -29,6 +29,16 @@ name: OBS PR Check
 # the PR.  Triggering via pull_request (rather than workflow_dispatch) is
 # required for the resulting check runs to show in the PR's statusCheckRollup
 # and be visible to branch protection.
+#
+# `sync` and `build` run once per entry of the `OBS_INSTANCES` repository
+# variable: each leg targets one OBS instance (its own apiurl, rootprj,
+# pr_rootprj, `OBS_PASSWORD_<NAME>` secret and repo/project slice), creates
+# its own profiles and PR project, uploads its own artifacts and owns its
+# own PR comment (see post_pr_comment.py's per-instance marker).  Repo
+# labels only ever narrow an instance's slice, never widen it; a leg left
+# with no repository at all skips its sync steps and posts no comment.
+# `detect-qa-matrix` and `qa` still target the legacy single-instance
+# variables; per-instance QA routing is a follow-up.
 
 on:
   pull_request:
@@ -120,10 +130,14 @@ jobs:
   # can run in parallel with QA matrix detection.
   # ──────────────────────────────────────────────────────────────────────────
   sync:
-    name: Sync packages to OBS
+    name: Sync packages to OBS (${{ matrix.instance.name }})
     needs: [resolve]
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: ${{ fromJSON(vars.OBS_INSTANCES) }}
     # Backstop for stalled source services / OBS API hangs; a healthy sync
     # job finishes in well under 30 minutes.
     timeout-minutes: 120
@@ -133,16 +147,21 @@ jobs:
       pull-requests: write
       packages: read
 
+    # Matrix job outputs are last-writer-wins; both values are derived from
+    # the PR diff alone, so every leg writes the same thing.
     outputs:
       is_release_pr: ${{ steps.detect.outputs.is_release_pr }}
       sync_outcome: ${{ steps.sync.outcome }}
 
     env:
       PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
-      OBS_APIURL: ${{ vars.OBS_APIURL }}
+      OBS_APIURL: ${{ matrix.instance.apiurl }}
+      # The comment link host is still the legacy single-instance web URL;
+      # per-instance web URLs are a QA/UI follow-up.
       OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
-      OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
-      OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
+      OBS_ROOTPRJ: ${{ matrix.instance.rootprj }}
+      OBS_PR_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}
+      OBS_INSTANCE: ${{ matrix.instance.name }}
 
     steps:
       - uses: actions/checkout@v4
@@ -209,9 +228,9 @@ jobs:
 
       - uses: ./.github/actions/obs-setup
         with:
-          obs-apiurl: ${{ vars.OBS_APIURL }}
-          obs-user: ${{ vars.OBS_USER }}
-          obs-password: ${{ secrets.OBS_PASSWORD }}
+          obs-apiurl: ${{ matrix.instance.apiurl }}
+          obs-user: ${{ matrix.instance.user || vars.OBS_USER }}
+          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance.name)] }}
 
       # Two profiles are needed:
       #
@@ -227,25 +246,71 @@ jobs:
       # refs/pull/<N>/head — a GitHub pseudo-ref accessible via git ls-remote
       # for all PRs including forks.  OBS's obs_scm service uses this ref to
       # check out the PR's packaging files when it builds promoted packages.
-      - name: Create percona-obs profiles
+      # Repo labels narrow this instance's slice (never widen it): each label
+      # is a repository name; <flavor>-images expands to <flavor>,UBI_<n> and
+      # excludes the other flavor's base-image project; ssl* keeps tarballs
+      # building whenever any repo label is present.  A leg whose narrowed
+      # slice is empty (profile create exits 3) has nothing to build here.
+      - name: Create percona-obs profiles (${{ matrix.instance.name }})
+        id: profiles
+        shell: bash
+        env:
+          LABELS_JSON: ${{ needs.resolve.outputs.labels_json }}
+          INCLUDE_REPOS: ${{ matrix.instance.include_repos }}
+          EXCLUDE_REPOS: ${{ matrix.instance.exclude_repos }}
+          INCLUDE_PROJECTS: ${{ matrix.instance.include_projects }}
+          EXCLUDE_PROJECTS: ${{ matrix.instance.exclude_projects }}
+          CLONE_URL: ${{ needs.resolve.outputs.clone_url }}
+          MAIN_REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
         run: |
+          set -euo pipefail
+          inst=()
+          if [ -n "${INCLUDE_REPOS:-}" ]; then inst+=(--include-repos "$INCLUDE_REPOS"); fi
+          if [ -n "${EXCLUDE_REPOS:-}" ]; then inst+=(--exclude-repos "$EXCLUDE_REPOS"); fi
+          if [ -n "${INCLUDE_PROJECTS:-}" ]; then inst+=(--include-projects "$INCLUDE_PROJECTS"); fi
+          if [ -n "${EXCLUDE_PROJECTS:-}" ]; then inst+=(--exclude-projects "$EXCLUDE_PROJECTS"); fi
+
+          CONTROL='. != "obs-sync" and . != "qa-packages" and . != "qa-containers" and . != "no-dep-cascade"'
+          mapfile -t REPO_LABELS < <(echo "$LABELS_JSON" | jq -r ".[] | select(${CONTROL})")
+          narrow=(); flavors=(); labels=()
+          for l in "${REPO_LABELS[@]}"; do
+            case "$l" in
+              *-images) f="${l%-images}"; flavors+=("$f"); narrow+=("$f" "UBI_${f#ubi}") ;;
+              *)        narrow+=("$l") ;;
+            esac
+          done
+          if [ ${#REPO_LABELS[@]} -gt 0 ]; then
+            narrow+=("ssl*")
+            labels+=(--narrow-repos "$(IFS=,; echo "${narrow[*]}")")
+            if [ ${#flavors[@]} -gt 0 ]; then
+              for other in ubi8 ubi9; do
+                if ! printf '%s\n' "${flavors[@]}" | grep -qx "$other"; then
+                  labels+=(--exclude-projects "common:containers:${other}")
+                fi
+              done
+            fi
+          fi
+          if echo "$LABELS_JSON" | jq -e '[.[] | select(. == "no-dep-cascade")] | length > 0' > /dev/null; then
+            echo "no_dep_cascade_arg=--no-dep-cascade" >> "$GITHUB_OUTPUT"
+          fi
+
+          venv/bin/python -m percona_obs -A "$OBS_APIURL" -R "$OBS_ROOTPRJ" \
+            -e "REMOTE_OBS_ORG_INTERCONNECT:" -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
+            -e "PERCONA_OBS_PACKAGING_REPO:${MAIN_REPO_URL}" "${inst[@]}" profile create main
+
           PR_ROOTPRJ="${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}"
-
-          venv/bin/python -m percona_obs \
-            -A "$OBS_APIURL" \
-            -R "$OBS_ROOTPRJ" \
-            -e "REMOTE_OBS_ORG_INTERCONNECT:" \
-            -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
-            -e "PERCONA_OBS_PACKAGING_REPO:${{ github.server_url }}/${{ github.repository }}.git" \
-            profile create main
-
-          venv/bin/python -m percona_obs \
-            -A "$OBS_APIURL" \
-            -R "$PR_ROOTPRJ" \
-            -e "REMOTE_OBS_ORG_INTERCONNECT:" \
-            -e "PERCONA_OBS_PACKAGING_BRANCH:refs/pull/${PR_NUMBER}/head" \
-            -e "PERCONA_OBS_PACKAGING_REPO:${{ needs.resolve.outputs.clone_url }}" \
-            profile create "pr-${PR_NUMBER}"
+          set +e
+          venv/bin/python -m percona_obs -A "$OBS_APIURL" -R "$PR_ROOTPRJ" \
+            -e "REMOTE_OBS_ORG_INTERCONNECT:" -e "PERCONA_OBS_PACKAGING_BRANCH:refs/pull/${PR_NUMBER}/head" \
+            -e "PERCONA_OBS_PACKAGING_REPO:${CLONE_URL}" "${inst[@]}" "${labels[@]}" profile create "pr-${PR_NUMBER}"
+          rc=$?
+          set -e
+          if [ "$rc" = "3" ]; then
+            echo "::notice::instance ${{ matrix.instance.name }}: no repository of this slice is selected by the PR labels; skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [ "$rc" != "0" ]; then
+            exit "$rc"
+          fi
 
       # Detect whether this is a release-only PR (all changed files under
       # root/ are under root/*/releases/).  Release-only PRs skip the package
@@ -266,14 +331,23 @@ jobs:
       # reads staging state and the release tree; it writes nothing.
       - name: Create main profile (release dry-run)
         if: steps.detect.outputs.is_release_pr == 'true'
+        shell: bash
+        env:
+          INCLUDE_REPOS: ${{ matrix.instance.include_repos }}
+          EXCLUDE_REPOS: ${{ matrix.instance.exclude_repos }}
+          INCLUDE_PROJECTS: ${{ matrix.instance.include_projects }}
+          EXCLUDE_PROJECTS: ${{ matrix.instance.exclude_projects }}
+          MAIN_REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
         run: |
-          venv/bin/python -m percona_obs \
-            -A "$OBS_APIURL" \
-            -R "$OBS_ROOTPRJ" \
-            -e "REMOTE_OBS_ORG_INTERCONNECT:" \
-            -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
-            -e "PERCONA_OBS_PACKAGING_REPO:${{ github.server_url }}/${{ github.repository }}.git" \
-            profile create main
+          set -euo pipefail
+          inst=()
+          if [ -n "${INCLUDE_REPOS:-}" ]; then inst+=(--include-repos "$INCLUDE_REPOS"); fi
+          if [ -n "${EXCLUDE_REPOS:-}" ]; then inst+=(--exclude-repos "$EXCLUDE_REPOS"); fi
+          if [ -n "${INCLUDE_PROJECTS:-}" ]; then inst+=(--include-projects "$INCLUDE_PROJECTS"); fi
+          if [ -n "${EXCLUDE_PROJECTS:-}" ]; then inst+=(--exclude-projects "$EXCLUDE_PROJECTS"); fi
+          venv/bin/python -m percona_obs -A "$OBS_APIURL" -R "$OBS_ROOTPRJ" \
+            -e "REMOTE_OBS_ORG_INTERCONNECT:" -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
+            -e "PERCONA_OBS_PACKAGING_REPO:${MAIN_REPO_URL}" "${inst[@]}" profile create main
 
       - name: Release dry-run
         id: release-dryrun
@@ -291,50 +365,31 @@ jobs:
             venv/bin/python -m percona_obs -P main sync release "$proj" --dry-run
           done
 
-      # Build --only-repos from any PR labels that are not control labels.
-      # If repo labels like RockyLinux_9 or Debian_13 are present, sync push
-      # will restrict OBS project meta to those repositories only.
-      # Also emits --no-dep-cascade when the no-dep-cascade label is set.
-      - name: Resolve repo label filter
-        id: repo-filter
-        run: |
-          LABELS='${{ needs.resolve.outputs.labels_json }}'
-          CONTROL='. != "obs-sync" and . != "qa-packages" and . != "qa-containers" and . != "no-dep-cascade"'
-          REPO_LABELS=$(echo "$LABELS" | jq -r "[.[] | select(${CONTROL})] | join(\",\")")
-          if [ -n "$REPO_LABELS" ]; then
-            echo "only_repos_arg=--only-repos ${REPO_LABELS}" >> "$GITHUB_OUTPUT"
-          fi
-          if echo "$LABELS" | jq -e '[.[] | select(. == "no-dep-cascade")] | length > 0' > /dev/null; then
-            echo "no_dep_cascade_arg=--no-dep-cascade" >> "$GITHUB_OUTPUT"
-          fi
-
       # Dry run: shows the sync plan (which packages will be promoted vs
       # aggregated) before the real sync starts, making progress visible early.
       # A failure here aborts the workflow before the real sync runs.
       - name: Plan sync (dry run)
-        if: steps.detect.outputs.is_release_pr != 'true'
+        if: steps.detect.outputs.is_release_pr != 'true' && steps.profiles.outputs.skip != 'true'
         run: |
           venv/bin/python -u -m percona_obs \
             -P "pr-${PR_NUMBER}" sync push \
             --dry-run \
             --branch-from main \
             --no-scm-validate \
-            ${{ steps.repo-filter.outputs.only_repos_arg }} \
-            ${{ steps.repo-filter.outputs.no_dep_cascade_arg }}
+            ${{ steps.profiles.outputs.no_dep_cascade_arg }}
 
       # -u disables Python stdout buffering so progress lines appear
       # immediately even though output is piped through tee.
       # Output is tee'd to a file so the comment step can parse package counts.
       - name: Sync PR to OBS
         id: sync
-        if: steps.detect.outputs.is_release_pr != 'true'
+        if: steps.detect.outputs.is_release_pr != 'true' && steps.profiles.outputs.skip != 'true'
         run: |
           venv/bin/python -u -m percona_obs --verbose \
             -P "pr-${PR_NUMBER}" sync push \
             --branch-from main \
             --no-scm-validate \
-            ${{ steps.repo-filter.outputs.only_repos_arg }} \
-            ${{ steps.repo-filter.outputs.no_dep_cascade_arg }} \
+            ${{ steps.profiles.outputs.no_dep_cascade_arg }} \
             | tee /tmp/sync-output.txt
 
       # Drop cache entries not used by any run in the last 7 days so the
@@ -351,8 +406,11 @@ jobs:
       # the poll details).  This step only fires for the two terminal-in-sync
       # cases: release-only PRs and sync failures.  For successful non-release
       # PRs it is skipped — `build` will post the real comment.
+      # A leg whose slice the labels narrowed to nothing posts no comment at
+      # all: it has nothing to report.  Each instance owns its own comment
+      # (post_pr_comment.py keys on OBS_INSTANCE).
       - name: Post OBS project comment (sync-side)
-        if: always() && (steps.detect.outputs.is_release_pr == 'true' || steps.sync.outcome != 'success')
+        if: always() && steps.profiles.outputs.skip != 'true' && (steps.detect.outputs.is_release_pr == 'true' || steps.sync.outcome != 'success')
         env:
           GH_TOKEN: ${{ github.token }}
           IS_RELEASE_PR: ${{ steps.detect.outputs.is_release_pr }}
@@ -360,8 +418,9 @@ jobs:
           RELEASE_OUTCOME: ${{ steps.release-dryrun.outcome }}
           POLL_OUTCOME: ''
           WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
-          OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
+          OBS_INSTANCE: ${{ matrix.instance.name }}
+          OBS_ROOTPRJ: ${{ matrix.instance.rootprj }}
+          OBS_PR_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}
         run: python .github/scripts/post_pr_comment.py
 
       # Upload the sync output so the `build` job can read it for the comment.
@@ -370,7 +429,7 @@ jobs:
         if: steps.sync.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: sync-output
+          name: sync-output-${{ matrix.instance.name }}
           path: /tmp/sync-output.txt
           retention-days: 1
 
@@ -379,48 +438,66 @@ jobs:
   # comment.  Runs in parallel with `detect-qa-matrix`.
   # ──────────────────────────────────────────────────────────────────────────
   build:
-    name: Wait for OBS builds
+    name: Wait for OBS builds (${{ matrix.instance.name }})
     needs: [resolve, sync]
-    if: needs.sync.outputs.is_release_pr != 'true' && needs.sync.outputs.sync_outcome == 'success'
+    # needs.sync.result is the aggregate over all instance legs: a leg that
+    # narrowed to nothing still counts as success, but one FAILED leg blocks
+    # the build job for every instance.  Accepted trade-off -- a per-leg gate
+    # would need per-instance job outputs, which a matrix job cannot express.
+    if: needs.sync.outputs.is_release_pr != 'true' && needs.sync.result == 'success'
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: ${{ fromJSON(vars.OBS_INSTANCES) }}
     permissions:
       pull-requests: write
       packages: read
 
     env:
       PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
-      OBS_APIURL: ${{ vars.OBS_APIURL }}
+      OBS_APIURL: ${{ matrix.instance.apiurl }}
+      # The comment link host is still the legacy single-instance web URL;
+      # per-instance web URLs are a QA/UI follow-up.
       OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
-      OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
+      OBS_PR_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}
+      OBS_INSTANCE: ${{ matrix.instance.name }}
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: ./.github/actions/obs-setup
         with:
-          obs-apiurl: ${{ vars.OBS_APIURL }}
-          obs-user: ${{ vars.OBS_USER }}
-          obs-password: ${{ secrets.OBS_PASSWORD }}
+          obs-apiurl: ${{ matrix.instance.apiurl }}
+          obs-user: ${{ matrix.instance.user || vars.OBS_USER }}
+          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance.name)] }}
 
+      # continue-on-error: a leg whose slice the PR labels narrowed to
+      # nothing uploaded no artifact.
       - name: Download sync output
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
-          name: sync-output
+          name: sync-output-${{ matrix.instance.name }}
           path: /tmp
 
       # Poll OBS until all builds in the PR project reach a terminal state.
       # Fails the job (and PR check) if any build fails, is broken, or is
-      # unresolvable.
+      # unresolvable.  OBS_REPO_FILTER restricts polling to this instance's
+      # slice (the poll script reads the filter keys and ignores the rest).
       - name: Poll OBS build status
         id: poll
         env:
-          OBS_APIURL: ${{ vars.OBS_APIURL }}
-          OBS_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}:pr-${{ needs.resolve.outputs.pr_number }}
+          OBS_APIURL: ${{ matrix.instance.apiurl }}
+          OBS_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}:pr-${{ needs.resolve.outputs.pr_number }}
+          OBS_REPO_FILTER: ${{ toJSON(matrix.instance) }}
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/poll_obs_builds.py
 
       # Always runs so the comment is updated even when poll fails.
+      # Each instance owns its own comment (post_pr_comment.py keys on
+      # OBS_INSTANCE).
       - name: Post OBS project comment
         if: always()
         env:
@@ -430,14 +507,17 @@ jobs:
           RELEASE_OUTCOME: ''
           POLL_OUTCOME: ${{ steps.poll.outcome }}
           WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
-          OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
+          OBS_INSTANCE: ${{ matrix.instance.name }}
+          OBS_ROOTPRJ: ${{ matrix.instance.rootprj }}
+          OBS_PR_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}
         run: python .github/scripts/post_pr_comment.py
 
   # ──────────────────────────────────────────────────────────────────────────
   # detect-qa-matrix: discover QA-enabled OBS subprojects.  Runs in parallel
   # with `build`; once it finishes, the `qa` matrix job's check runs appear in
   # the PR's check list as queued, signalling the upcoming QA work.
+  # QA still targets the legacy single-instance variables; per-instance
+  # routing is a follow-up.
   # ──────────────────────────────────────────────────────────────────────────
   detect-qa-matrix:
     name: Detect QA matrix
