@@ -84,6 +84,12 @@ synced, what is deleted as orphan, what a release contains) is derived.
 - Per-instance PR comments use the marker `<!-- obs-pr-check:<instance> -->`;
   the first per-instance run posts fresh comments and leaves any old
   `<!-- obs-pr-check -->` comment in place.
+- The `<flavor>-images` label expands to `<flavor>,UBI_<n>,images`: the base
+  image projects (`root/common/containers/ubi8`, `ubi9`) declare a repository
+  literally named `images`, which would otherwise drop out of the narrowed
+  slice and take the base-image project with it.
+- `_obs_meta_to_yaml_repos` / `_obs_meta_to_yaml_debuginfo` were removed with
+  their last caller.
 
 ## Section 1: the filter
 
@@ -223,8 +229,7 @@ The top-level `root/ppg/releases/<V>/project.yaml` is generated from the
 same way the subproject mirrors already are since PR #82. Live OBS meta is no
 longer the source of repositories or `debuginfo` for the release tree. The
 generated files are byte-identical to today's for the current tree (gate,
-Section 7); `_read_project_release_source`/`_obs_meta_to_yaml_repos` stay for
-`sync release`.
+Section 7); `_read_project_release_source` stays for `sync release`.
 
 ### `sync release`
 
@@ -264,7 +269,7 @@ fields mean unfiltered.
   every instance starts from the instance filter, then the repo labels are
   applied narrowed by `profile create --narrow-repos` (intersection with the
   instance slice; a leg left with no repository skips its sync): `<flavor>-images`
-  expands to `<flavor>,UBI_<n>` plus `--exclude-projects common:containers:<other>`;
+  expands to `<flavor>,UBI_<n>,images` plus `--exclude-projects common:containers:<other>`;
   `ssl*` is appended whenever any repo label is present (tarballs keep
   building on labelled PRs, as today). `detect-qa-matrix` and `qa` are left
   as they are in this change, still reading the existing `OBS_APIURL` /

@@ -582,7 +582,10 @@ def build_parser() -> argparse.ArgumentParser:
         dest="narrow_repos",
         help="Restrict the slice to these repository names (repeatable; used by the PR "
         "workflow for repo labels). Only names the profile's own include/exclude rules "
-        "already accept are kept; exits 3 when none is left.",
+        "already accept are kept; exits 3 when none is left. Entries are matched against "
+        "those rules as literal names, so a glob such as 'ssl*' survives only when the "
+        "profile accepts it literally (an exclude-only profile that does not exclude it, "
+        "or an include list containing the same glob).",
     )
     profile_create_parser.set_defaults(func=cmd_profile_create)
 

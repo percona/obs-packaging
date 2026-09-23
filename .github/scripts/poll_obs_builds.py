@@ -55,7 +55,11 @@ from percona_obs.common import (
     set_default_repository_filter,
 )
 from percona_obs.http_throttle import install as _install_http_throttle
-from percona_obs.project_config import RepositoryFilter, package_in_slice
+from percona_obs.project_config import (
+    RepositoryFilter,
+    package_in_slice,
+    resolve_project_config,
+)
 
 # ---------------------------------------------------------------------------
 # Configuration from environment
@@ -114,8 +118,18 @@ scope_is_devel = "devel" in scope_project.split(":") if scope_project else False
 
 obs_projects: set[str] = set()
 _slice_cache: dict = {}
+# One resolved project config per project directory: package_in_slice would
+# otherwise re-resolve the project for every package under it.
+_slice_configs: dict = {}
 for obs_project, package_path in find_packages(scope_path, scope_obs):
-    if not package_in_slice(package_path, cache=_slice_cache):
+    _proj_path = package_path.parent
+    if _proj_path not in _slice_configs:
+        _slice_configs[_proj_path] = resolve_project_config(_proj_path)
+    if not package_in_slice(
+        package_path,
+        project_config=_slice_configs[_proj_path],
+        cache=_slice_cache,
+    ):
         continue
     project_config = load_project_yaml(package_path.parent / "project.yaml")
     obs_name = project_config.get("name") or obs_project

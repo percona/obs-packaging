@@ -110,6 +110,7 @@ from .services import (
 )
 from .targets import (
     _iter_project_chain,
+    iter_project_ancestors,
     _resolve_targets,
     image_dep_query_repos,
     is_dockerfile_image,
@@ -939,18 +940,62 @@ def _require_targets_in_slice(
     """Explicit targets that are entirely out of slice are an error, not a silent no-op."""
     if kept:
         return
+    dropped = (
+        f" ({len(skipped_projects)} project(s), "
+        f"{len(skipped_packages)} package(s) dropped)"
+    )
     if getattr(args, "package", None):
         raise SystemExit(
             f"error: {args.project}/{args.package} is out of slice for the active "
             "profile (the package builds in no repository this instance carries)"
+            f"{dropped}"
         )
     if getattr(args, "project", None):
         raise SystemExit(
             f"error: project '{args.project}' is out of slice for the active profile"
+            f"{dropped}"
         )
     raise SystemExit(
         "error: nothing to sync: every target is out of slice for the active profile"
+        f"{dropped}"
     )
+
+
+def _collect_chain_projects(
+    targets: "list[tuple[str, Path]]",
+    slice_cache: "dict[Path, bool]",
+    active_projects: "set[str] | None",
+) -> "tuple[set[str], dict[str, tuple[str, Path]]]":
+    """Project bookkeeping for the full-tree pre-pass.
+
+    Returns (local_project_names, all_projects):
+
+    * *local_project_names* holds every project on every target's chain,
+      including out-of-slice ancestors of in-slice projects.  Those are never
+      created, but they must never be orphan-deleted either: the cleanup
+      deletes recursively, so dropping an out-of-slice intermediate would take
+      its in-slice children with it.
+    * *all_projects* (raw name → (obs name, path)) holds only the in-slice
+      projects, which are the ones actually created and configured.  With
+      --branch-from, projects with no promoted package (*active_projects*) are
+      not created; ancestors stay protected either way.
+    """
+    local_project_names: set[str] = set()
+    all_projects: dict[str, tuple[str, Path]] = {}
+    for obs_project, package_path in targets:
+        project_path = package_path.parent
+        for _raw, prj_name, _path in iter_project_ancestors(obs_project, project_path):
+            local_project_names.add(prj_name)
+        for raw_proj, prj_name, proj_path in _iter_project_chain(
+            obs_project, project_path, slice_cache
+        ):
+            # With --branch-from, skip projects with no promoted packages.
+            if active_projects is not None and prj_name not in active_projects:
+                continue
+            local_project_names.add(prj_name)
+            if raw_proj not in all_projects:
+                all_projects[raw_proj] = (prj_name, proj_path)
+    return local_project_names, all_projects
 
 
 def _compute_branch_project(
@@ -1298,9 +1343,7 @@ def cmd_sync(args):
                         for r in target_config.get("repositories", [])
                         if r.get("name")
                     }
-                target_repos = _target_repos_cache[proj_path]
-                effective_repos = target_repos
-                missing_repos = effective_repos - branch_repos
+                missing_repos = _target_repos_cache[proj_path] - branch_repos
                 if missing_repos:
                     logger.debug(
                         f"branch decision: promote  {obs_project_name}/{package_path.name}"
@@ -1668,17 +1711,10 @@ def cmd_sync(args):
     #   every project in the tree exists.  Because all projects are already
     #   present by this point, OBS never raises repository_access_failure.
     if args.package is None:
-        all_projects: dict[str, tuple[str, Path]] = {}
-        for obs_project, package_path in targets:
-            for raw_proj, prj_name, proj_path in _iter_project_chain(
-                obs_project, package_path.parent, _slice_cache
-            ):
-                # With --branch-from, skip projects with no promoted packages.
-                if active_projects is not None and prj_name not in active_projects:
-                    continue
-                local_project_names.add(prj_name)
-                if raw_proj not in all_projects:
-                    all_projects[raw_proj] = (prj_name, proj_path)
+        _chain_local, all_projects = _collect_chain_projects(
+            targets, _slice_cache, active_projects
+        )
+        local_project_names |= _chain_local
         sorted_projs = sorted(all_projects.items(), key=lambda kv: kv[1][0].count(":"))
         created_any = False
         for _raw, (prj_name, proj_path) in sorted_projs:
@@ -1813,6 +1849,12 @@ def cmd_sync(args):
             # using the same two-stage approach as the full-tree pre-pass.
             if not _obs_project_exists(apiurl, obs_project_name):
                 chain: dict[str, tuple[str, Path]] = {}
+                # Out-of-slice ancestors are protected from orphan cleanup but
+                # never created (see _collect_chain_projects).
+                for _raw, prj_name, _path in iter_project_ancestors(
+                    obs_project, project_path
+                ):
+                    local_project_names.add(prj_name)
                 for raw_proj, prj_name, proj_path in _iter_project_chain(
                     obs_project, project_path, _slice_cache
                 ):
@@ -2052,6 +2094,9 @@ def cmd_sync(args):
 
     # Remove subprojects on OBS that no longer exist locally, but only when
     # the full tree was processed (not a single-project or single-package sync).
+    # Out-of-slice ancestors of in-slice projects count as local: they are
+    # never created, but deleting them (recursive=True) would take their
+    # in-slice children with them.
     # Skip when --non-recursive is active: sub-project directories were not
     # scanned so local_project_names is incomplete and would incorrectly mark
     # every sub-project as orphaned.

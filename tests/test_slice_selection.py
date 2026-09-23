@@ -1,6 +1,5 @@
 """Slice selection: filter wiring, profile parsing, in-slice predicates (percona_obs.project_config)."""
 
-import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -229,6 +228,34 @@ def test_package_in_slice(repo):
     # default filter applies when none is passed
     common.set_default_repository_filter(LABS)
     assert not package_in_slice(s17 / "bison")
+    common.set_default_repository_filter(None)
+
+
+def test_package_in_slice_mixed_build_map(repo):
+    # A build: map that mixes the {disable,enable} shorthand with per-repo keys
+    # is not the shorthand: the key set is not a subset, so the per-repository
+    # branch decides and UBI_9 (the only repo LABS keeps) is false → out.
+    root = repo(
+        {
+            **_TREE,
+            "ppg/staging/17/mixed-disable/obs/_service": "",
+            "ppg/staging/17/mixed-disable/package.yaml": (
+                "build:\n  disable: true\n  UBI_9: false\n"
+            ),
+            "ppg/staging/17/mixed-enable/obs/_service": "",
+            "ppg/staging/17/mixed-enable/package.yaml": (
+                "build:\n  enable: true\n  UBI_9: false\n"
+            ),
+        }
+    )
+    s17 = root / "ppg/staging/17"
+    assert not package_in_slice(s17 / "mixed-disable", repo_filter=LABS)
+    assert not package_in_slice(s17 / "mixed-enable", repo_filter=LABS)
+    # the plain shorthand keeps counting as building
+    assert package_in_slice(s17 / "blanket", repo_filter=LABS)
+    # BOO keeps RockyLinux_9, which neither map disables
+    assert package_in_slice(s17 / "mixed-disable", repo_filter=BOO)
+    assert package_in_slice(s17 / "mixed-enable", repo_filter=BOO)
 
 
 # --- sync push targets -----------------------------------------------------------
@@ -236,7 +263,11 @@ def test_package_in_slice(repo):
 from types import SimpleNamespace as _NS  # noqa: E402
 
 from percona_obs.cmd_sync import _require_targets_in_slice, _slice_targets  # noqa: E402
-from percona_obs.targets import _iter_project_chain  # noqa: E402
+from percona_obs.cmd_sync import _collect_chain_projects  # noqa: E402
+from percona_obs.targets import (  # noqa: E402
+    _iter_project_chain,
+    iter_project_ancestors,
+)
 
 
 def _targets(root):
@@ -328,6 +359,63 @@ def test_iter_project_chain_skips_out_of_slice_projects(repo):
         )
     ]
     assert names == ["ROOT", "ROOT:ppg", "ROOT:ppg:staging"]
+
+
+def _extras_tree(repo):
+    """_TREE plus an in-slice ppg:staging:extras:containers under the zero-repo extras."""
+    root = repo(_TREE)
+    (root / "ppg/staging/extras/containers").mkdir()
+    (root / "ppg/staging/extras/containers/project.yaml").write_text(
+        "repositories-inherit: false\nrepositories:\n  - name: ubi9\n    paths: []\n    archs: [x86_64]\n"
+    )
+    (root / "ppg/staging/extras/containers/image/obs").mkdir(parents=True)
+    (root / "ppg/staging/extras/containers/image/obs/Dockerfile").write_text(
+        "FROM scratch\n"
+    )
+    (root / "ppg/staging/project.yaml").write_text("title: staging\n")
+    (root / "ppg/project.yaml").write_text("title: ppg\n")
+    return root
+
+
+def test_iter_project_ancestors_yields_out_of_slice_intermediate(repo):
+    # The orphan cleanup deletes recursively, so ppg:staging:extras (zero
+    # repositories, never created) must still be reported as local or it takes
+    # its in-slice child with it.
+    root = _extras_tree(repo)
+    common.set_default_repository_filter(LABS)
+    args = (
+        "ROOT:ppg:staging:extras:containers",
+        root / "ppg/staging/extras/containers",
+    )
+    assert [n for _, n, _ in iter_project_ancestors(*args)] == [
+        "ROOT",
+        "ROOT:ppg",
+        "ROOT:ppg:staging",
+        "ROOT:ppg:staging:extras",
+        "ROOT:ppg:staging:extras:containers",
+    ]
+    assert "ROOT:ppg:staging:extras" not in [
+        n for _, n, _ in _iter_project_chain(*args, {})
+    ]
+
+
+def test_collect_chain_projects_protects_but_never_creates(repo):
+    root = _extras_tree(repo)
+    common.set_default_repository_filter(LABS)
+    targets = [
+        (
+            "ROOT:ppg:staging:extras:containers",
+            root / "ppg/staging/extras/containers/image",
+        )
+    ]
+    local_names, all_projects = _collect_chain_projects(targets, {}, None)
+    created = {name for name, _ in all_projects.values()}
+    # b = the zero-repo intermediate: protected from deletion, never created
+    assert "ROOT:ppg:staging:extras" in local_names
+    assert "ROOT:ppg:staging:extras" not in created
+    # c = the in-slice leaf, and the root: both protected and created
+    for name in ("ROOT", "ROOT:ppg:staging:extras:containers"):
+        assert name in local_names and name in created
 
 
 # --- verify: repository path integrity -----------------------------------------
