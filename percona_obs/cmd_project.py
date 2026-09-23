@@ -1611,12 +1611,6 @@ def _write_release_tree(
                 "Builds are disabled; binaries are copied via osc release.\n"
             ),
             "build": False,
-            # The repositories list above is already the subproject's fully
-            # resolved, unfiltered set (captured via the RepositoryFilter.EMPTY
-            # read above); it must not pick up further inheritance from this
-            # mirror's own ancestor chain under releases/ when re-resolved
-            # later (e.g. by sync release's project_in_slice check).
-            "repositories-inherit": False,
             "repositories": rewritten_repos,
         }
         for key in ("debuginfo", "publish", "project-config"):
