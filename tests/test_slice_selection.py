@@ -328,3 +328,56 @@ def test_iter_project_chain_skips_out_of_slice_projects(repo):
         )
     ]
     assert names == ["ROOT", "ROOT:ppg", "ROOT:ppg:staging"]
+
+
+# --- verify: repository path integrity -----------------------------------------
+
+from percona_obs.cmd_project import _validate_repo_path_refs  # noqa: E402
+
+
+def test_validate_repo_path_refs(repo):
+    root = repo(
+        {
+            "project.yaml": _ROOT,
+            "common/deps/build/project.yaml": "title: B\n",
+            "ppg/staging/17/project.yaml": "title: S\n",
+            "ppg/staging/17/containers/project.yaml": (
+                "repositories-inherit: false\nrepositories:\n"
+                "  - name: ubi9\n    archs: [x86_64]\n    paths:\n"
+                "      - subproject: ppg:staging:17\n        repository: UBI_9\n"
+                "      - subproject: ppg:staging:17\n        repository: UBI_8\n"
+                "      - subproject: does:not:exist\n        repository: UBI_9\n"
+                "      - subproject: ${OBS_X}:y\n        repository: UBI_9\n"
+            ),
+        }
+    )
+
+    def msgs(errors):
+        return [(str(p.relative_to(root)), m) for p, m in errors]
+
+    # unfiltered: UBI_8 is not defined by ppg:staging:17 (root only has RockyLinux_9/UBI_9)
+    assert msgs(_validate_repo_path_refs(root, None)) == [
+        (
+            "ppg/staging/17/containers/project.yaml",
+            "repository 'ubi9' paths to 'ppg:staging:17/UBI_8', which that subproject does not define",
+        )
+    ]
+    # boo: containers itself is out of slice → nothing to check there
+    common.set_default_repository_filter(BOO)
+    assert _validate_repo_path_refs(root, None) == []
+    # labs with staging excluded by project glob: the target is out of slice
+    common.set_default_repository_filter(
+        RepositoryFilter(
+            include_repos=("UBI_*", "ubi*"), exclude_projects=("ppg:staging:17",)
+        )
+    )
+    assert msgs(_validate_repo_path_refs(root, None)) == [
+        (
+            "ppg/staging/17/containers/project.yaml",
+            "repository 'ubi9' paths to subproject 'ppg:staging:17', which is out of slice",
+        ),
+        (
+            "ppg/staging/17/containers/project.yaml",
+            "repository 'ubi9' paths to subproject 'ppg:staging:17', which is out of slice",
+        ),
+    ]

@@ -36,15 +36,20 @@ from .common import (
     build_project_meta,
     find_packages,
     find_projects,
+    get_default_repository_filter,
     is_package,
     is_project,
     is_shared_source_dir,
     load_macros,
     load_project_yaml,
     load_yaml,
+    logger,
     parse_env_overrides,
     resolve_project_path,
+    _print_same,
 )
+from . import common
+from .project_config import package_in_slice, project_in_slice
 from .cmd_profile import _load_profile, _load_profile_env
 from .obs_api import (
     _decode_obs_response,
@@ -407,6 +412,64 @@ def _validate_subproject_refs(root: Path) -> list[tuple[Path, str]]:
     return errors
 
 
+def _validate_repo_path_refs(
+    root: Path, env_vars: dict[str, str] | None
+) -> list[tuple[Path, str]]:
+    """Check that kept repositories path into repositories the slice carries.
+
+    For every in-slice project and every kept repository, each ``subproject:``
+    path that names a project in the tree must name a project that is in
+    slice and a repository that project keeps.  Unfiltered this is plain
+    repo-level reference validation.  Paths with ``${VAR}`` in the subproject
+    name and paths to directories that do not exist are skipped (the latter
+    is reported by ``_validate_subproject_refs``).
+    """
+    errors: list[tuple[Path, str]] = []
+    repo_filter = get_default_repository_filter()
+    configs: dict[Path, dict] = {}
+    slice_cache: dict[Path, bool] = {}
+
+    def cfg(p: Path) -> dict:
+        if p not in configs:
+            configs[p] = _load_project_config_with_inheritance(p, env_vars, repo_filter)
+        return configs[p]
+
+    for yaml_path in _project_yaml_files(root):
+        proj = yaml_path.parent
+        if not project_in_slice(proj, env_vars, repo_filter, cfg(proj), slice_cache):
+            continue
+        for repo in cfg(proj).get("repositories", []):
+            for path_info in repo.get("paths", []):
+                sub = path_info.get("subproject")
+                if sub is None or _ENV_VAR_RE.search(str(sub)):
+                    continue
+                target = common.REPO_ROOT.joinpath(*str(sub).split(":"))
+                if not target.is_dir():
+                    continue
+                if not project_in_slice(
+                    target, env_vars, repo_filter, cfg(target), slice_cache
+                ):
+                    errors.append(
+                        (
+                            yaml_path,
+                            f"repository '{repo['name']}' paths to subproject '{sub}', "
+                            "which is out of slice",
+                        )
+                    )
+                    continue
+                kept = {r["name"] for r in cfg(target).get("repositories", [])}
+                ref = path_info.get("repository")
+                if ref not in kept:
+                    errors.append(
+                        (
+                            yaml_path,
+                            f"repository '{repo['name']}' paths to '{sub}/{ref}', "
+                            "which that subproject does not define",
+                        )
+                    )
+    return errors
+
+
 def _validate_project_path_refs(
     root: Path,
     env_vars: dict[str, str] | None,
@@ -694,6 +757,7 @@ def cmd_project_verify(args) -> None:
         env_vars = {**auto_rootprj_env(args.rootprj), **(env_vars or {})}
 
     ref_errors = _validate_subproject_refs(scan_root)
+    repo_path_errors = _validate_repo_path_refs(scan_root, env_vars)
     env_errors = _validate_env_vars(scan_root, env_vars)
     service_files = sorted(scan_root.rglob("obs/_service"))
     scm_errors = _validate_obs_scm_revisions([(f, env_vars) for f in service_files])
@@ -714,6 +778,10 @@ def cmd_project_verify(args) -> None:
         rel = yaml_path.relative_to(REPO_ROOT.parent)
         print(f"error: {rel}: {msg}", file=sys.stderr)
 
+    for yaml_path, msg in repo_path_errors:
+        rel = yaml_path.relative_to(REPO_ROOT.parent)
+        print(f"error: {rel}: {msg}", file=sys.stderr)
+
     for file_path, lineno, var_name, detail in env_errors:
         rel = file_path.relative_to(REPO_ROOT.parent)
         print(f"error: {rel}:{lineno}: ${{{var_name}}}: {detail}", file=sys.stderr)
@@ -729,8 +797,31 @@ def cmd_project_verify(args) -> None:
         rel = yaml_path.relative_to(REPO_ROOT.parent)
         print(f"error: {rel}: {msg}", file=sys.stderr)
 
-    if ref_errors or env_errors or scm_errors or path_ref_errors:
+    if ref_errors or repo_path_errors or env_errors or scm_errors or path_ref_errors:
         sys.exit(1)
+
+    repo_filter = get_default_repository_filter()
+    if not repo_filter.is_empty:
+        root_obs = load_project_yaml(REPO_ROOT / "project.yaml").get("name") or (
+            args.rootprj or "ROOT"
+        )
+        out_projects = [
+            name
+            for name, path in find_projects(REPO_ROOT, root_obs)
+            if not project_in_slice(path, env_vars, repo_filter)
+        ]
+        out_packages = [
+            f"{obs}/{path.name}"
+            for obs, path in find_packages(REPO_ROOT, root_obs)
+            if not package_in_slice(path, env_vars, repo_filter)
+        ]
+        for name in out_projects:
+            logger.debug(f"out of slice: project {name}")
+        for name in out_packages:
+            logger.debug(f"out of slice: package {name}")
+        _print_same(
+            f"slice: {len(out_projects)} project(s), {len(out_packages)} package(s) out of slice"
+        )
     _print_ok("project verify: all checks passed")
 
 
@@ -795,6 +886,10 @@ def cmd_project_config(args) -> None:
 
     sep = _col(_DIM, "─" * 60)
     for obs_project_name, project_path in projects:
+        if not project_in_slice(project_path, env_vars):
+            print(sep)
+            print(f"# project {obs_project_name}: out of slice")
+            continue
         project_config = _load_project_config_with_inheritance(project_path, env_vars)
         if getattr(args, "resolved", False):
             print(sep)
