@@ -261,7 +261,7 @@ project-config: |
 
   # Distro codename suffix for deb releases — keep in sync with the root
   # project.yaml (this project-config overrides the inherited root config).
- %if "%_repository" == "Debian_12"
+  %if "%_repository" == "Debian_12"
   Release: <CI_CNT>.<B_CNT>.bookworm
   %endif
   %if "%_repository" == "Debian_13"
