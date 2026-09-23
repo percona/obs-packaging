@@ -16,6 +16,9 @@ Required env vars (set by the workflow):
   RELEASE_OUTCOME    Outcome of the release step ('success', 'failure', '').
   POLL_OUTCOME       Outcome of the OBS-build poll step (or empty when
                      polling has not happened yet — e.g. on the sync side).
+  OBS_INSTANCE       Name of the OBS instance this comment is about (empty
+                     for a single-instance setup).  Each instance owns one
+                     comment: the marker and the heading carry the name.
 
 Reads (when present):
   /tmp/sync-output.txt        Raw `sync push` output (parsed for counts).
@@ -42,6 +45,11 @@ def main() -> None:
     sync_ok = os.environ.get("SYNC_OUTCOME") == "success"
     release_outcome = os.environ.get("RELEASE_OUTCOME", "")
     poll_outcome = os.environ.get("POLL_OUTCOME", "")
+    instance = os.environ.get("OBS_INSTANCE", "")
+    marker = (
+        f"<!-- obs-pr-check:{instance} -->" if instance else "<!-- obs-pr-check -->"
+    )
+    suffix = f" ({instance})" if instance else ""
     workflow_run_url = os.environ["WORKFLOW_RUN_URL"]
     timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
@@ -57,13 +65,13 @@ def main() -> None:
 
     if is_release_pr:
         if release_outcome == "success":
-            heading = "## OBS Release Check — ✅ Release dry-run passed"
+            heading = "## OBS Release Check — ✅ Release dry-run passed" + suffix
         elif release_outcome == "failure":
-            heading = "## OBS Release Check — ❌ Release dry-run failed"
+            heading = "## OBS Release Check — ❌ Release dry-run failed" + suffix
         elif release_outcome == "skipped":
-            heading = "## OBS Release Check — ⏭️ Release test skipped"
+            heading = "## OBS Release Check — ⏭️ Release test skipped" + suffix
         else:
-            heading = "## OBS Release Check — ⚠️ dry-run not run"
+            heading = "## OBS Release Check — ⚠️ dry-run not run" + suffix
 
         # Derive the per-release OBS project links from the changed release.yaml
         # files.  The dry-run validates against the PRODUCTION release project
@@ -101,7 +109,7 @@ def main() -> None:
             "failure": "The release dry-run FAILED for",
         }.get(release_outcome, "No release dry-run ran for")
         lines = [
-            "<!-- obs-pr-check -->",
+            marker,
             heading,
             "",
             "This PR adds a release record. No packages are built in OBS.",
@@ -122,16 +130,16 @@ def main() -> None:
 
         # Determine heading based on poll outcome.
         if poll_outcome == "success":
-            heading = "## OBS Build Check — ✅ Builds passed"
+            heading = "## OBS Build Check — ✅ Builds passed" + suffix
         elif poll_outcome == "failure":
-            heading = "## OBS Build Check — ❌ Builds failed"
+            heading = "## OBS Build Check — ❌ Builds failed" + suffix
         elif poll_outcome == "cancelled":
-            heading = "## OBS Build Check — ⏱️ Build polling cancelled"
+            heading = "## OBS Build Check — ⏱️ Build polling cancelled" + suffix
         else:
-            heading = "## OBS Build Check"
+            heading = "## OBS Build Check" + suffix
 
         lines = [
-            "<!-- obs-pr-check -->",
+            marker,
             heading,
             "",
             f"Packages for this PR are being built at **[{pr_rootprj}]({project_url})**.",
@@ -171,8 +179,8 @@ def main() -> None:
         lines += ["", f"> _Updated: {timestamp}_"]
     else:
         lines = [
-            "<!-- obs-pr-check -->",
-            "## OBS Build Check — ❌ Sync failed",
+            marker,
+            "## OBS Build Check — ❌ Sync failed" + suffix,
             "",
             f"The OBS sync step failed. See the [workflow run]({workflow_run_url}) for details.",
             "",
@@ -193,7 +201,7 @@ def main() -> None:
             "--paginate",
             f"repos/{repo}/issues/{pr_number}/comments",
             "--jq",
-            '[.[] | select(.body | contains("<!-- obs-pr-check -->"))] | last | .id // empty',
+            f'[.[] | select(.body | contains("{marker}"))] | last | .id // empty',
         ],
         capture_output=True,
         text=True,
