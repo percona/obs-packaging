@@ -623,7 +623,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     project_config_parser = project_subparsers.add_parser(
         "config",
-        help="Show the project meta XML and build config that would be sent to OBS.",
+        help="Show the project meta XML and build config that would be sent to OBS, "
+        "the resolved project.yaml (--resolved), or a diff against OBS (--diff).",
     )
     project_config_parser.add_argument(
         "project",
@@ -638,6 +639,21 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         help="Do not connect to OBS. Show only the locally-generated meta "
         "without merging OBS-managed elements (person/group/lock/link).",
+    )
+    project_config_mode = project_config_parser.add_mutually_exclusive_group()
+    project_config_mode.add_argument(
+        "--resolved",
+        action="store_true",
+        default=False,
+        help="Print the resolved project.yaml (after inheritance and merging) as YAML "
+        "instead of the meta XML and build config.",
+    )
+    project_config_mode.add_argument(
+        "--diff",
+        action="store_true",
+        default=False,
+        help="Show unified diffs of the rendered meta XML and build config against what "
+        "OBS currently holds. Requires a profile (-P).",
     )
     project_config_parser.set_defaults(func=cmd_project_config)
 

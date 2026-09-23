@@ -1,6 +1,7 @@
 import argparse
 import concurrent.futures
 import datetime
+import difflib
 import re
 import shutil
 import subprocess
@@ -75,6 +76,13 @@ _YAML_FILENAMES = {"project.yaml", "package.yaml"}
 _OBS_FILENAMES = {"_service", "_aggregate", "_link"}
 
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _render_resolved_yaml(obs_project_name: str, config: dict) -> str:
+    """YAML rendering of a resolved project configuration, for ``project config --resolved``."""
+    return f"# project {obs_project_name}\n" + yaml.dump(
+        config, default_flow_style=False, allow_unicode=True, sort_keys=False, width=100
+    )
 
 
 def _extract_version_from_service(service_file: Path) -> "str | None":
@@ -728,6 +736,11 @@ def cmd_project_config(args) -> None:
     # `cmd_project_config` requires --rootprj (validated above) so always inject.
     env_vars = {**auto_rootprj_env(args.rootprj), **(env_vars or {})}
 
+    if getattr(args, "diff", False) and not args.profile:
+        raise SystemExit("error: --diff needs a profile (-P) to reach OBS")
+    if getattr(args, "diff", False) and getattr(args, "offline", False):
+        raise SystemExit("error: --diff and --offline are mutually exclusive")
+
     # When not in offline mode, initialise osc so we can fetch live project meta.
     apiurl: str | None = None
     if not getattr(args, "offline", False):
@@ -764,6 +777,10 @@ def cmd_project_config(args) -> None:
     sep = _col(_DIM, "─" * 60)
     for obs_project_name, project_path in projects:
         project_config = _load_project_config_with_inheritance(project_path, env_vars)
+        if getattr(args, "resolved", False):
+            print(sep)
+            print(_render_resolved_yaml(obs_project_name, project_config), end="")
+            continue
         meta = build_project_meta(
             obs_project_name,
             project_config.get("title", ""),
@@ -794,6 +811,53 @@ def cmd_project_config(args) -> None:
                         apiurl, root_obs_name
                     )
                     meta = _inject_obs_managed_elements(meta, inherited)
+
+        if getattr(args, "diff", False):
+            assert apiurl is not None
+            try:
+                current_meta = _decode_obs_response(
+                    osc.core.show_project_meta(apiurl, obs_project_name)
+                )
+            except urllib.error.HTTPError as e:
+                if e.code != 404:
+                    raise
+                current_meta = ""
+            try:
+                current_conf = _decode_obs_response(
+                    osc.core.show_project_conf(apiurl, obs_project_name)
+                ).strip()
+            except urllib.error.HTTPError as e:
+                if e.code != 404:
+                    raise
+                current_conf = ""
+            print(sep)
+            print(_col(_BOLD, f"project {obs_project_name}"))
+            if current_meta == "" and current_conf == "":
+                print(_col(_DIM, "(not on OBS yet)"))
+            meta_diff = list(
+                difflib.unified_diff(
+                    current_meta.strip().splitlines(),
+                    meta.strip().splitlines(),
+                    "obs/_meta",
+                    "local/_meta",
+                    lineterm="",
+                )
+            )
+            conf_diff = list(
+                difflib.unified_diff(
+                    current_conf.splitlines(),
+                    project_config_str.splitlines(),
+                    "obs/_config",
+                    "local/_config",
+                    lineterm="",
+                )
+            )
+            if not meta_diff and not conf_diff:
+                print(_col(_DIM, "meta and config identical"))
+            for line in meta_diff + conf_diff:
+                print(line)
+            print()
+            continue
 
         print(sep)
         print(_col(_BOLD, f"project meta  {obs_project_name}"))

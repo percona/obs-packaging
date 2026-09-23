@@ -490,3 +490,13 @@ def test_validate_subproject_refs_surfaces_merge_errors(repo):
     )
     with pytest.raises(SystemExit, match="cannot remove unknown repository"):
         _validate_subproject_refs(root)
+
+
+def test_render_resolved_yaml(repo):
+    from percona_obs.cmd_project import _render_resolved_yaml
+
+    root = repo({"project.yaml": _ROOT_REPOS, "a/project.yaml": "title: A\n"})
+    out = _render_resolved_yaml("ROOT:a", resolve_project_config(root / "a"))
+    assert out.startswith("# project ROOT:a\n")
+    assert "repositories:" in out and "name: RockyLinux_9" in out
+    assert out.endswith("\n")
