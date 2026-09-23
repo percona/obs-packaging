@@ -42,8 +42,11 @@ descendants define; a token left in the *resolved* config is an error.
 from __future__ import annotations
 
 import copy
+import fnmatch
+import json
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import yaml
 
@@ -60,6 +63,142 @@ CONTROL_KEYS = frozenset(
 )
 SUBPROJECTS_ALLOWED_KEYS = frozenset({*MERGED_KEYS, *CONTROL_KEYS})
 REPO_ENTRY_KEYS = frozenset({"name", "paths", "archs", "paths-replace", "remove"})
+
+# (profile key, attribute) pairs; the attribute names double as the snake_case
+# keys of the CI JSON form (RepositoryFilter.from_env_json).
+FILTER_PROFILE_KEYS: tuple[tuple[str, str], ...] = (
+    ("include-repositories", "include_repos"),
+    ("exclude-repositories", "exclude_repos"),
+    ("include-projects", "include_projects"),
+    ("exclude-projects", "exclude_projects"),
+)
+
+
+def _glob_any(name: str, patterns: tuple[str, ...]) -> bool:
+    return any(fnmatch.fnmatchcase(name, p) for p in patterns)
+
+
+@dataclass(frozen=True)
+class RepositoryFilter:
+    """The slice of the tree one OBS instance carries (spec Section 1).
+
+    A repository *matches* iff (no include list or it matches an include glob)
+    and it matches no exclude glob; a project *passes* under the same rule on
+    its rootprj-less OBS name (``ppg:staging:17:containers``).  The root
+    project (name ``""``) always passes.  All four lists empty = unfiltered.
+    """
+
+    include_repos: tuple[str, ...] = ()
+    exclude_repos: tuple[str, ...] = ()
+    include_projects: tuple[str, ...] = ()
+    exclude_projects: tuple[str, ...] = ()
+
+    EMPTY: ClassVar["RepositoryFilter"]
+
+    @property
+    def is_empty(self) -> bool:
+        return not (
+            self.include_repos
+            or self.exclude_repos
+            or self.include_projects
+            or self.exclude_projects
+        )
+
+    def repo_matches(self, name: str) -> bool:
+        if self.include_repos and not _glob_any(name, self.include_repos):
+            return False
+        return not _glob_any(name, self.exclude_repos)
+
+    def project_passes(self, name: str) -> bool:
+        if name == "":
+            return True  # the root project is never excluded
+        if self.include_projects and not _glob_any(name, self.include_projects):
+            return False
+        return not _glob_any(name, self.exclude_projects)
+
+    def apply(self, config: dict, project_name: str) -> dict:
+        """Return *config* restricted to the repositories this filter keeps.
+
+        Same-project rescue: a kept repository whose ``paths`` reference a
+        sibling repository of *project_name* (``subproject:`` equal to it)
+        keeps that sibling too, transitively — OBS rejects meta whose kept
+        repo paths to a missing sibling.  ``debuginfo``/``publish``/``build``
+        maps lose the entries of dropped repositories; booleans and the
+        ``{disable: true}`` shorthand are left alone.  Returns *config* itself
+        when the filter is empty; never mutates its input otherwise.
+        """
+        if self.is_empty:
+            return config
+        repos = list(config.get("repositories") or [])
+        by_name = {r["name"]: r for r in repos}
+        keep = {n for n in by_name if self.repo_matches(n)}
+        queue = [by_name[n] for n in keep]
+        while queue:
+            for path in queue.pop().get("paths") or []:
+                if path.get("subproject") != project_name:
+                    continue
+                ref = path.get("repository")
+                if ref in by_name and ref not in keep:
+                    keep.add(ref)
+                    queue.append(by_name[ref])
+        out = dict(config)
+        out["repositories"] = [copy.deepcopy(r) for r in repos if r["name"] in keep]
+        for key in FLAG_KEYS:
+            value = out.get(key)
+            if isinstance(value, dict) and not set(value) <= {"disable", "enable"}:
+                out[key] = {k: v for k, v in value.items() if k in keep}
+        return out
+
+    def to_profile(self) -> dict[str, list[str]]:
+        """The non-empty lists as profile keys (what ``profile create`` writes)."""
+        return {
+            key: list(getattr(self, attr))
+            for key, attr in FILTER_PROFILE_KEYS
+            if getattr(self, attr)
+        }
+
+    @classmethod
+    def from_profile(cls, data: dict, source: str = "profile") -> "RepositoryFilter":
+        """Build from a ``.profile/<name>.yaml`` mapping; unknown keys are ignored."""
+        kwargs: dict[str, tuple[str, ...]] = {}
+        for key, attr in FILTER_PROFILE_KEYS:
+            raw = data.get(key)
+            if raw is None:
+                continue
+            if not isinstance(raw, list) or not all(
+                isinstance(x, str) and x.strip() for x in raw
+            ):
+                raise SystemExit(
+                    f"error: {source}: {key} must be a list of non-empty strings"
+                )
+            kwargs[attr] = tuple(x.strip() for x in raw)
+        return cls(**kwargs)
+
+    @classmethod
+    def from_env_json(cls, text: str) -> "RepositoryFilter":
+        """Build from the CI instance JSON (``include_repos`` etc.; strings are comma-separated)."""
+        if not text.strip():
+            return cls()
+        data = json.loads(text)
+        if not isinstance(data, dict):
+            raise SystemExit("error: OBS_REPO_FILTER must be a JSON object")
+        kwargs: dict[str, tuple[str, ...]] = {}
+        for _, attr in FILTER_PROFILE_KEYS:
+            raw = data.get(attr, "")
+            if isinstance(raw, str):
+                items = [x.strip() for x in raw.split(",") if x.strip()]
+            elif isinstance(raw, list) and all(isinstance(x, str) for x in raw):
+                items = [x.strip() for x in raw if x.strip()]
+            else:
+                raise SystemExit(
+                    f"error: OBS_REPO_FILTER: {attr} must be a string or a list of strings"
+                )
+            if items:
+                kwargs[attr] = tuple(items)
+        return cls(**kwargs)
+
+
+RepositoryFilter.EMPTY = RepositoryFilter()
 
 
 def _label(path: Path) -> str:
