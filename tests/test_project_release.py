@@ -519,3 +519,67 @@ def test_release_no_longer_touches_macros():
     source = Path(cmd_project.__file__).read_text("utf-8")
     assert "PPG_RELEASE" not in source
     assert "release_counter" not in source
+
+
+def test_write_release_tree_materializes_delta_source(tmp_path, monkeypatch):
+    """A staging subproject that only patches a tier subprojects.yaml still yields a full mirror."""
+    import percona_obs.common as common
+
+    root = tmp_path / "root"
+    (root / "ppg/staging/17/extras").mkdir(parents=True)
+    (root / "macros.yaml").write_text("- X: 1\n")
+    (root / "project.yaml").write_text(
+        yaml.dump(
+            {
+                "repositories": [
+                    {
+                        "name": "UBI_9",
+                        "paths": [{"project": "ext:UBI-9", "repository": "standard"}],
+                        "archs": ["x86_64"],
+                    }
+                ]
+            }
+        )
+    )
+    (root / "ppg/staging/subprojects.yaml").write_text(
+        yaml.dump(
+            {
+                "repositories": [
+                    {
+                        "name": "UBI_9",
+                        "paths": [{"subproject": "ppg:common:deps", "repository": "UBI_9"}],
+                    }
+                ],
+                "project-config": "Prefer: shared\n",
+            }
+        )
+    )
+    (root / "ppg/staging/17/project.yaml").write_text("title: S17\n")
+    (root / "ppg/staging/17/extras/project.yaml").write_text(
+        yaml.dump(
+            {
+                "repositories": [
+                    {
+                        "name": "UBI_9",
+                        "paths": [{"subproject": "ppg:staging:17", "repository": "UBI_9"}],
+                    }
+                ]
+            }
+        )
+    )
+    monkeypatch.setattr(common, "REPO_ROOT", root)
+    monkeypatch.setattr(cmd_project, "_REPO_DIR", tmp_path)
+    rel = root / "ppg/releases/17"
+    _write_release_tree(
+        rel, {"build": False, "repositories": []}, root / "ppg/staging/17",
+        "ppg:staging:17", "ppg:releases:17", "ppg", "17",
+    )
+    extras = yaml.safe_load((rel / "extras" / "project.yaml").read_text())
+    paths = [(p.get("subproject") or p.get("project"), p["repository"]) for p in extras["repositories"][0]["paths"]]
+    assert paths == [
+        ("ppg:releases:17", "UBI_9"),
+        ("ppg:common:deps", "UBI_9"),
+        ("ext:UBI-9", "standard"),
+    ]
+    assert extras["repositories"][0]["archs"] == ["x86_64"]
+    assert "Prefer: shared" in extras["project-config"]

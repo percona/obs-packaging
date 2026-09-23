@@ -453,3 +453,40 @@ def test_env_vars_are_substituted(repo):
     root = repo({"project.yaml": _ROOT_REPOS, "a/project.yaml": "title: A\n"})
     cfg = resolve_project_config(root / "a", {"REMOTE": "openSUSE.org:"})
     assert _paths(cfg, "Debian_12") == [("openSUSE.org:Debian:12", "standard")]
+
+
+# --- validators (cmd_project) ----------------------------------------------
+
+
+def test_validate_subproject_refs_sees_inherited_paths(repo):
+    from percona_obs.cmd_project import _validate_subproject_refs
+
+    root = repo(
+        {
+            "project.yaml": _ROOT_REPOS,
+            "tier/project.yaml": "title: T\n",
+            "tier/subprojects.yaml": (
+                "repositories:\n  - name: RockyLinux_9\n    paths:\n"
+                "      - subproject: does:not:exist\n        repository: RockyLinux_9\n"
+            ),
+            "tier/17/project.yaml": "title: S\n",
+            "common/deps/build/project.yaml": "title: B\n",
+        }
+    )
+    errors = _validate_subproject_refs(root)
+    assert [(str(p.relative_to(root)), m.split(" (")[0]) for p, m in errors] == [
+        ("tier/17/project.yaml", "subproject 'does:not:exist' not found"),
+    ]
+
+
+def test_validate_subproject_refs_surfaces_merge_errors(repo):
+    from percona_obs.cmd_project import _validate_subproject_refs
+
+    root = repo(
+        {
+            "project.yaml": _ROOT_REPOS,
+            "a/project.yaml": "repositories:\n  - name: Debian_21\n    remove: true\n",
+        }
+    )
+    with pytest.raises(SystemExit, match="cannot remove unknown repository"):
+        _validate_subproject_refs(root)
