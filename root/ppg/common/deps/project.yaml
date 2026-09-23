@@ -5,8 +5,9 @@ publish: false
 
 project-config: |
   # libverto-libev / Lmod settle "have choice" reports for krb5-server and
-  # friends in the common dependency projects.  They used to live in the root
-  # project.yaml; the PPG projects never needed them, so they moved here.
+  # friends in the dependency projects (this one and common:deps:runtime).
+  # They used to live in the root project.yaml; the per-major PPG build
+  # projects never needed them, so they live only where they are effective.
   %if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_8"
   Prefer: libverto-libev
   Prefer: Lmod
