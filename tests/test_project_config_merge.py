@@ -594,3 +594,21 @@ def test_repositories_inherit_false_drops_inherited_path_prefix(repo):
     )
     containers = resolve_project_config(root / "tier" / "17" / "containers")
     assert _paths(containers, "ubi9") == [("common:containers:ubi9", "images")]
+
+
+def test_validators_skip_shared_library_files(repo):
+    from percona_obs.cmd_project import _validate_subproject_refs
+
+    root = repo(
+        {
+            "project.yaml": _ROOT_REPOS,
+            "tier/_shared/tarballs/project.yaml": "title: %!{PG_MAJOR_VERSION} tarballs\n",
+            "tier/17/macros.yaml": "- PG_MAJOR_VERSION: 17\n",
+            "tier/17/project.yaml": "title: S\n",
+        }
+    )
+    os.symlink(
+        "../../_shared/tarballs/project.yaml", root / "tier" / "17" / "tarballs.yaml"
+    )
+    # the template itself has no macros and must not be validated as a project
+    assert _validate_subproject_refs(root) == []
