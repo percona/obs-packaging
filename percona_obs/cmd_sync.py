@@ -970,11 +970,11 @@ def _collect_chain_projects(
 
     Returns (local_project_names, all_projects):
 
-    * *local_project_names* holds every project on every target's chain,
-      including out-of-slice ancestors of in-slice projects.  Those are never
-      created, but they must never be orphan-deleted either: the cleanup
-      deletes recursively, so dropping an out-of-slice intermediate would take
-      its in-slice children with it.
+    * *local_project_names* holds the in-slice projects that are created
+      (subject to *active_projects*) plus every out-of-slice ancestor on the
+      chain.  Those ancestors are never created, but they must never be
+      orphan-deleted either: the cleanup deletes recursively, so dropping an
+      out-of-slice intermediate would take its in-slice children with it.
     * *all_projects* (raw name → (obs name, path)) holds only the in-slice
       projects, which are the ones actually created and configured.  With
       --branch-from, projects with no promoted package (*active_projects*) are
@@ -984,12 +984,15 @@ def _collect_chain_projects(
     all_projects: dict[str, tuple[str, Path]] = {}
     for obs_project, package_path in targets:
         project_path = package_path.parent
+        in_slice = list(_iter_project_chain(obs_project, project_path, slice_cache))
+        in_slice_names = {prj_name for _, prj_name, _ in in_slice}
+        # Out-of-slice ancestors: protected from the recursive orphan cleanup,
+        # never created.  In-slice projects are handled below (and, with
+        # --branch-from, only when they have a promoted package).
         for _raw, prj_name, _path in iter_project_ancestors(obs_project, project_path):
-            local_project_names.add(prj_name)
-        for raw_proj, prj_name, proj_path in _iter_project_chain(
-            obs_project, project_path, slice_cache
-        ):
-            # With --branch-from, skip projects with no promoted packages.
+            if prj_name not in in_slice_names:
+                local_project_names.add(prj_name)
+        for raw_proj, prj_name, proj_path in in_slice:
             if active_projects is not None and prj_name not in active_projects:
                 continue
             local_project_names.add(prj_name)
@@ -1849,15 +1852,19 @@ def cmd_sync(args):
             # using the same two-stage approach as the full-tree pre-pass.
             if not _obs_project_exists(apiurl, obs_project_name):
                 chain: dict[str, tuple[str, Path]] = {}
-                # Out-of-slice ancestors are protected from orphan cleanup but
-                # never created (see _collect_chain_projects).
+                _in_slice = list(
+                    _iter_project_chain(obs_project, project_path, _slice_cache)
+                )
+                _in_slice_names = {prj_name for _, prj_name, _ in _in_slice}
+                # Only out-of-slice ancestors are protected here: they are
+                # never created, but the orphan cleanup deletes recursively
+                # (see _collect_chain_projects).
                 for _raw, prj_name, _path in iter_project_ancestors(
                     obs_project, project_path
                 ):
-                    local_project_names.add(prj_name)
-                for raw_proj, prj_name, proj_path in _iter_project_chain(
-                    obs_project, project_path, _slice_cache
-                ):
+                    if prj_name not in _in_slice_names:
+                        local_project_names.add(prj_name)
+                for raw_proj, prj_name, proj_path in _in_slice:
                     local_project_names.add(prj_name)
                     if raw_proj not in chain:
                         chain[raw_proj] = (prj_name, proj_path)

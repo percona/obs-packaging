@@ -417,6 +417,16 @@ def test_collect_chain_projects_protects_but_never_creates(repo):
     for name in ("ROOT", "ROOT:ppg:staging:extras:containers"):
         assert name in local_names and name in created
 
+    # --branch-from: an in-slice project with no promoted package is neither
+    # created nor protected (the orphan sweep must still remove the stale PR
+    # subproject); the zero-repo ancestor stays protected.
+    local_names, all_projects = _collect_chain_projects(targets, {}, {"ROOT"})
+    created = {name for name, _ in all_projects.values()}
+    assert "ROOT:ppg:staging:extras:containers" not in local_names
+    assert "ROOT:ppg:staging:extras:containers" not in created
+    assert "ROOT:ppg:staging:extras" in local_names
+    assert "ROOT" in local_names and "ROOT" in created
+
 
 # --- verify: repository path integrity -----------------------------------------
 
