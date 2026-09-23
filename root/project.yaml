@@ -118,24 +118,22 @@ repositories:
     archs: [x86_64, aarch64]
 
 project-config: |
+  # Distro-wide build configuration inherited by every project under root/.
+  # Project-specific lines live in the project's own project.yaml (or in a
+  # tier's subprojects.yaml); the tool concatenates them and marks each block
+  # with a "# --- from <file> ---" header.  See root/README.md.
   %if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_8"
   ExpandFlags: module:llvm-toolset-rhel8
   ExpandFlags: module:perl-5.26
   ExpandFlags: module:perl-IO-Socket-SSL-2.066
   ExpandFlags: module:perl-libwww-perl-6.34
   Prefer: selinux-policy-targeted
-  Prefer: libverto-libev
-  Prefer: Lmod
   %endif
 
   %if "%_repository" == "RockyLinux_9" || "%_repository" == "RockyLinux_9.6"
   ExpandFlags: module:llvm-toolset-rhel9
   # hdf-libs (EPEL split package) and hdf both provide libdf.so.0 and libmfhdf.so.0
   Prefer: hdf-libs
-  # krb5-server needs libverto-module-base, provided by both libverto-libev
-  # and libverto-libevent on the 9.6 vault repo set ("have choice", seen on
-  # pr-2 ppg:common:deps/krb5). Same pick as the EL8 block above.
-  Prefer: libverto-libev
   %endif
 
   %if "%_repository" == "RockyLinux_9.6"
