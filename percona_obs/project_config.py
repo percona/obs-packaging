@@ -37,6 +37,9 @@ title / description / name / qa (and any unknown key)
 Macro substitution uses the leaf's macro set.  Ancestor layers are substituted
 leniently (undefined tokens stay) so a tier may reference macros that only its
 descendants define; a token left in the *resolved* config is an error.
+
+Slices: a ``RepositoryFilter`` (from the active profile) is applied to the
+resolved configuration; see spec 2026-09-23-multi-instance-repo-slices-design.md.
 """
 
 from __future__ import annotations
@@ -222,6 +225,18 @@ def _chain(project_path: Path) -> list[Path]:
     return [root.joinpath(*parts[:i]) for i in range(len(parts) + 1)]
 
 
+def project_slice_name(project_path: Path) -> str:
+    """OBS project name without the rootprj prefix (``ppg:staging:17``; ``""`` for root).
+
+    Derived from the directory path; ``name:`` overrides are not consulted
+    (none exist in the tree, and an override is a full OBS name).
+    """
+    root = common.REPO_ROOT
+    if project_path == root or not project_path.is_relative_to(root):
+        return ""
+    return ":".join(project_path.relative_to(root).parts)
+
+
 def _load_layer(
     path: Path,
     macros: dict[str, str],
@@ -375,7 +390,9 @@ def _fold(layers: list[tuple[Path, dict]], own: dict, own_path: Path) -> dict:
 
 
 def resolve_project_config(
-    project_path: Path, env_vars: dict[str, str] | None = None
+    project_path: Path,
+    env_vars: dict[str, str] | None = None,
+    repo_filter: "RepositoryFilter | None" = None,
 ) -> dict:
     """Return the effective configuration of the project at *project_path*.
 
@@ -383,6 +400,12 @@ def resolve_project_config(
     plus the merged ``repositories`` (always present, possibly empty),
     ``project-config`` (when any layer contributes text) and whichever of
     ``debuginfo``/``publish``/``build`` resolve to a non-null value.
+
+    *repo_filter* restricts ``repositories`` and the flag maps to the active
+    slice (``RepositoryFilter.apply``).  ``None`` means the process default
+    installed by ``cli.main()`` from the profile
+    (``common.get_default_repository_filter``); pass ``RepositoryFilter.EMPTY``
+    for an explicitly unfiltered view (release generator, gates).
     """
     macros = common.load_macros(project_path)
     layers: list[tuple[Path, dict]] = []
@@ -411,4 +434,6 @@ def resolve_project_config(
     layers.append((own_path, own))
     resolved = _fold(layers, own, own_path)
     _check_no_macro_leftovers(resolved, own_path)
-    return resolved
+    if repo_filter is None:
+        repo_filter = common.get_default_repository_filter()
+    return repo_filter.apply(resolved, project_slice_name(project_path))

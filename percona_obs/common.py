@@ -8,9 +8,12 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import yaml
+
+if TYPE_CHECKING:
+    from percona_obs.project_config import RepositoryFilter
 
 logger = logging.getLogger("percona-obs")
 
@@ -731,9 +734,28 @@ def find_projects(path: Path, obs_project: str):
             yield from find_projects(child, f"{obs_project}:{child.name}")
 
 
+# Process-wide repository/project slice, installed once by cli.main() from the
+# active profile so that no consumer of the resolver can forget it.  None
+# means unfiltered (RepositoryFilter.EMPTY).
+_default_repository_filter: "RepositoryFilter | None" = None
+
+
+def set_default_repository_filter(repo_filter: "RepositoryFilter | None") -> None:
+    """Install the slice every resolver call without an explicit filter uses."""
+    global _default_repository_filter
+    _default_repository_filter = repo_filter
+
+
+def get_default_repository_filter() -> "RepositoryFilter":
+    from percona_obs.project_config import RepositoryFilter
+
+    return _default_repository_filter or RepositoryFilter.EMPTY
+
+
 def _load_project_config_with_inheritance(
     project_path: Path,
     env_vars: dict[str, str] | None = None,
+    repo_filter: "RepositoryFilter | None" = None,
 ) -> dict:
     """Backward-compatible alias for ``project_config.resolve_project_config``.
 
@@ -742,7 +764,7 @@ def _load_project_config_with_inheritance(
     """
     from percona_obs.project_config import resolve_project_config
 
-    return resolve_project_config(project_path, env_vars)
+    return resolve_project_config(project_path, env_vars, repo_filter)
 
 
 def _decode_obs_response(raw) -> str:
