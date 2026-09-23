@@ -547,7 +547,9 @@ def test_write_release_tree_materializes_delta_source(tmp_path, monkeypatch):
                 "repositories": [
                     {
                         "name": "UBI_9",
-                        "paths": [{"subproject": "ppg:common:deps", "repository": "UBI_9"}],
+                        "paths": [
+                            {"subproject": "ppg:common:deps", "repository": "UBI_9"}
+                        ],
                     }
                 ],
                 "project-config": "Prefer: shared\n",
@@ -561,7 +563,9 @@ def test_write_release_tree_materializes_delta_source(tmp_path, monkeypatch):
                 "repositories": [
                     {
                         "name": "UBI_9",
-                        "paths": [{"subproject": "ppg:staging:17", "repository": "UBI_9"}],
+                        "paths": [
+                            {"subproject": "ppg:staging:17", "repository": "UBI_9"}
+                        ],
                     }
                 ]
             }
@@ -571,11 +575,19 @@ def test_write_release_tree_materializes_delta_source(tmp_path, monkeypatch):
     monkeypatch.setattr(cmd_project, "_REPO_DIR", tmp_path)
     rel = root / "ppg/releases/17"
     _write_release_tree(
-        rel, {"build": False, "repositories": []}, root / "ppg/staging/17",
-        "ppg:staging:17", "ppg:releases:17", "ppg", "17",
+        rel,
+        {"build": False, "repositories": []},
+        root / "ppg/staging/17",
+        "ppg:staging:17",
+        "ppg:releases:17",
+        "ppg",
+        "17",
     )
     extras = yaml.safe_load((rel / "extras" / "project.yaml").read_text())
-    paths = [(p.get("subproject") or p.get("project"), p["repository"]) for p in extras["repositories"][0]["paths"]]
+    paths = [
+        (p.get("subproject") or p.get("project"), p["repository"])
+        for p in extras["repositories"][0]["paths"]
+    ]
     assert paths == [
         ("ppg:releases:17", "UBI_9"),
         ("ppg:common:deps", "UBI_9"),

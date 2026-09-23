@@ -56,18 +56,25 @@ def _names(cfg):
 
 def _paths(cfg, name):
     repo = next(r for r in cfg["repositories"] if r["name"] == name)
-    return [(p.get("subproject") or p.get("project"), p["repository"]) for p in repo["paths"]]
+    return [
+        (p.get("subproject") or p.get("project"), p["repository"])
+        for p in repo["paths"]
+    ]
 
 
 def _directives(cfg):
-    return [l for l in cfg["project-config"].splitlines() if l and not l.startswith("#")]
+    return [
+        l for l in cfg["project-config"].splitlines() if l and not l.startswith("#")
+    ]
 
 
 # --- plain inheritance -----------------------------------------------------
 
 
 def test_child_without_fields_inherits_root_repos_and_prjconf(repo):
-    root = repo({"project.yaml": _ROOT_REPOS + _ROOT_PRJCONF, "a/project.yaml": "title: A\n"})
+    root = repo(
+        {"project.yaml": _ROOT_REPOS + _ROOT_PRJCONF, "a/project.yaml": "title: A\n"}
+    )
     cfg = resolve_project_config(root / "a")
     assert cfg["title"] == "A"
     assert _names(cfg) == ["RockyLinux_9", "Debian_12"]
@@ -76,7 +83,11 @@ def test_child_without_fields_inherits_root_repos_and_prjconf(repo):
         ("${REMOTE}RockyLinux:9", "standard"),
     ]
     assert cfg["project-config"].startswith("# --- from root/project.yaml ---\n%if")
-    assert _directives(cfg) == ['%if "%_repository" == "Debian_12"', "Release: <CI_CNT>.<B_CNT>.bookworm", "%endif"]
+    assert _directives(cfg) == [
+        '%if "%_repository" == "Debian_12"',
+        "Release: <CI_CNT>.<B_CNT>.bookworm",
+        "%endif",
+    ]
 
 
 def test_missing_project_yaml_resolves_from_ancestors(repo):
@@ -118,7 +129,10 @@ def test_project_config_inherit_false_discards_ancestors(repo):
     )
     assert _directives(resolve_project_config(root / "a")) == ["Prefer: only"]
     # descendants inherit from a onwards, not from root
-    assert _directives(resolve_project_config(root / "a" / "b")) == ["Prefer: only", "Prefer: child"]
+    assert _directives(resolve_project_config(root / "a" / "b")) == [
+        "Prefer: only",
+        "Prefer: child",
+    ]
 
 
 def test_empty_prjconf_everywhere_leaves_key_absent(repo):
@@ -155,7 +169,10 @@ def test_patch_for_unknown_repository_is_an_error(repo):
             ),
         }
     )
-    with pytest.raises(SystemExit, match=r"root/a/project.yaml: repository 'Debian_21' is not inherited"):
+    with pytest.raises(
+        SystemExit,
+        match=r"root/a/project.yaml: repository 'Debian_21' is not inherited",
+    ):
         resolve_project_config(root / "a")
 
 
@@ -193,21 +210,31 @@ def test_paths_replace(repo):
             ),
         }
     )
-    assert _paths(resolve_project_config(root / "a"), "RockyLinux_9") == [("only", "RockyLinux_9")]
+    assert _paths(resolve_project_config(root / "a"), "RockyLinux_9") == [
+        ("only", "RockyLinux_9")
+    ]
 
 
 def test_remove_repository(repo):
     root = repo(
-        {"project.yaml": _ROOT_REPOS, "a/project.yaml": "repositories:\n  - name: Debian_12\n    remove: true\n"}
+        {
+            "project.yaml": _ROOT_REPOS,
+            "a/project.yaml": "repositories:\n  - name: Debian_12\n    remove: true\n",
+        }
     )
     assert _names(resolve_project_config(root / "a")) == ["RockyLinux_9"]
 
 
 def test_remove_unknown_repository_is_an_error(repo):
     root = repo(
-        {"project.yaml": _ROOT_REPOS, "a/project.yaml": "repositories:\n  - name: Debian_21\n    remove: true\n"}
+        {
+            "project.yaml": _ROOT_REPOS,
+            "a/project.yaml": "repositories:\n  - name: Debian_21\n    remove: true\n",
+        }
     )
-    with pytest.raises(SystemExit, match=r"cannot remove unknown repository 'Debian_21'"):
+    with pytest.raises(
+        SystemExit, match=r"cannot remove unknown repository 'Debian_21'"
+    ):
         resolve_project_config(root / "a")
 
 
@@ -256,7 +283,7 @@ def test_path_prefix_applies_to_every_repo_with_token_substitution(repo):
         {
             "project.yaml": _ROOT_REPOS,
             "a/project.yaml": (
-                "path-prefix:\n  - subproject: ppg:staging:17\n    repository: \"%_repository\"\n"
+                'path-prefix:\n  - subproject: ppg:staging:17\n    repository: "%_repository"\n'
             ),
         }
     )
@@ -270,8 +297,8 @@ def test_path_prefix_layers_concatenate_child_first(repo):
     root = repo(
         {
             "project.yaml": _ROOT_REPOS,
-            "a/subprojects.yaml": "path-prefix:\n  - subproject: tier\n    repository: \"%_repository\"\n",
-            "a/b/project.yaml": "path-prefix:\n  - subproject: leaf\n    repository: \"%_repository\"\n",
+            "a/subprojects.yaml": 'path-prefix:\n  - subproject: tier\n    repository: "%_repository"\n',
+            "a/b/project.yaml": 'path-prefix:\n  - subproject: leaf\n    repository: "%_repository"\n',
         }
     )
     assert _paths(resolve_project_config(root / "a" / "b"), "Debian_12")[:3] == [
@@ -282,7 +309,12 @@ def test_path_prefix_layers_concatenate_child_first(repo):
 
 
 def test_path_prefix_entry_validation(repo):
-    root = repo({"project.yaml": _ROOT_REPOS, "a/project.yaml": "path-prefix:\n  - repository: x\n"})
+    root = repo(
+        {
+            "project.yaml": _ROOT_REPOS,
+            "a/project.yaml": "path-prefix:\n  - repository: x\n",
+        }
+    )
     with pytest.raises(SystemExit, match=r"path-prefix entry"):
         resolve_project_config(root / "a")
 
@@ -326,7 +358,9 @@ def test_subprojects_yaml_may_use_leaf_macros(repo):
             "tier/other/project.yaml": "project-config-inherit: false\nproject-config: |\n  Prefer: x\n",
         }
     )
-    assert _directives(resolve_project_config(root / "tier" / "17")) == ["Prefer: percona-postgresql17-server"]
+    assert _directives(resolve_project_config(root / "tier" / "17")) == [
+        "Prefer: percona-postgresql17-server"
+    ]
     # the tier itself and an opted-out descendant never see the undefined macro
     assert "project-config" not in resolve_project_config(root / "tier")
     assert _directives(resolve_project_config(root / "tier" / "other")) == ["Prefer: x"]
@@ -340,7 +374,10 @@ def test_leftover_macro_in_resolved_config_is_an_error(repo):
             "tier/x/project.yaml": "title: X\n",
         }
     )
-    with pytest.raises(SystemExit, match=r"root/tier/x/project.yaml: undefined macro %!\{PG_MAJOR_VERSION\}"):
+    with pytest.raises(
+        SystemExit,
+        match=r"root/tier/x/project.yaml: undefined macro %!\{PG_MAJOR_VERSION\}",
+    ):
         resolve_project_config(root / "tier" / "x")
 
 
@@ -352,7 +389,9 @@ def test_subprojects_yaml_rejects_unknown_keys(repo):
             "tier/x/project.yaml": "title: X\n",
         }
     )
-    with pytest.raises(SystemExit, match=r"root/tier/subprojects.yaml: unknown key\(s\) \['title'\]"):
+    with pytest.raises(
+        SystemExit, match=r"root/tier/subprojects.yaml: unknown key\(s\) \['title'\]"
+    ):
         resolve_project_config(root / "tier" / "x")
 
 
@@ -388,7 +427,10 @@ def test_standalone_drops_every_ancestor_layer(repo):
         }
     )
     # the tier itself still inherits from root
-    assert _names(resolve_project_config(root / "releases")) == ["RockyLinux_9", "Debian_12"]
+    assert _names(resolve_project_config(root / "releases")) == [
+        "RockyLinux_9",
+        "Debian_12",
+    ]
     r17 = resolve_project_config(root / "releases" / "17")
     assert _paths(r17, "RockyLinux_9") == [("frozen", "RockyLinux_9")]
     assert _directives(r17) == ["Prefer: frozen"]
@@ -422,7 +464,9 @@ def test_flags_child_wins_and_null_resets(repo):
             "a/d/project.yaml": "title: D\n",
         }
     )
-    assert resolve_project_config(root / "a" / "b")["debuginfo"] == {"RockyLinux_9": True}
+    assert resolve_project_config(root / "a" / "b")["debuginfo"] == {
+        "RockyLinux_9": True
+    }
     assert resolve_project_config(root / "a" / "b")["publish"] is False
     c = resolve_project_config(root / "a" / "c")
     assert "debuginfo" not in c
@@ -440,7 +484,10 @@ def test_publish_false_in_subprojects_yaml_is_inherited(repo):
         }
     )
     assert resolve_project_config(root / "a" / "b")["publish"] is False
-    assert common._load_project_config_with_inheritance(root / "a" / "b").get("publish") is False
+    assert (
+        common._load_project_config_with_inheritance(root / "a" / "b").get("publish")
+        is False
+    )
 
 
 def test_title_description_name_qa_are_leaf_only(repo):
@@ -458,7 +505,9 @@ def test_title_description_name_qa_are_leaf_only(repo):
 
 def test_alias_in_common_delegates(repo):
     root = repo({"project.yaml": _ROOT_REPOS, "a/project.yaml": "title: A\n"})
-    assert common._load_project_config_with_inheritance(root / "a") == resolve_project_config(root / "a")
+    assert common._load_project_config_with_inheritance(
+        root / "a"
+    ) == resolve_project_config(root / "a")
 
 
 def test_env_vars_are_substituted(repo):
