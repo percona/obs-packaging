@@ -179,16 +179,6 @@ def build_parser() -> argparse.ArgumentParser:
         "stay aggregated (container images included).",
     )
     sync_push_parser.add_argument(
-        "--only-repos",
-        metavar="REPO[,REPO...]",
-        type=lambda s: set(s.split(",")),
-        default=None,
-        dest="only_repos",
-        help="Restrict OBS project meta to these repositories (comma-separated). "
-        "Packages are still synced normally; only the repository list in "
-        "the project meta is filtered.",
-    )
-    sync_push_parser.add_argument(
         "--skip-unchanged",
         action="store_true",
         default=False,

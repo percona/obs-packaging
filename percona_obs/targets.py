@@ -26,7 +26,6 @@ def is_dockerfile_image(package_path: Path) -> bool:
 def image_dep_query_repos(
     package_path: Path,
     env_vars: "dict[str, str] | None" = None,
-    only_repos: "set[str] | None" = None,
     cache: "dict[Path, set[str]] | None" = None,
 ) -> set[str]:
     """Repository names to query for a container image's _buildinfo dep edges.
@@ -37,9 +36,9 @@ def image_dep_query_repos(
     its image repos after the flavor (e.g. "ubi8"/"ubi9").  Derive the names
     from the image's own project config rather than assuming "images".
 
-    *only_repos* (the effective --only-repos set) filters the result when
-    given; an empty return means no image repo of this package is in scope.
-    *cache* maps project_path → repo names across images in the same project.
+    The repository set is the sliced one (the active profile's filter is
+    applied by the loader).  *cache* maps project_path → repo names across
+    images in the same project.
     """
     project_path = package_path.parent
     repos = cache.get(project_path) if cache is not None else None
@@ -48,8 +47,6 @@ def image_dep_query_repos(
         repos = {r["name"] for r in config.get("repositories", []) if r.get("name")}
         if cache is not None:
             cache[project_path] = repos
-    if only_repos is not None:
-        repos = repos & only_repos
     return repos
 
 
