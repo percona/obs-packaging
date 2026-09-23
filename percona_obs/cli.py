@@ -574,6 +574,16 @@ def build_parser() -> argparse.ArgumentParser:
             help=f"Slice rule: {_what} (shell globs, repeatable). Written to the profile as "
             f"{_flag[2:].replace('repos', 'repositories')}. See docs/PERCONA_OBS_TOOL.md.",
         )
+    profile_create_parser.add_argument(
+        "--narrow-repos",
+        metavar="REPO[,REPO...]",
+        action="append",
+        default=[],
+        dest="narrow_repos",
+        help="Restrict the slice to these repository names (repeatable; used by the PR "
+        "workflow for repo labels). Only names the profile's own include/exclude rules "
+        "already accept are kept; exits 3 when none is left.",
+    )
     profile_create_parser.set_defaults(func=cmd_profile_create)
 
     profile_list_parser = profile_subparsers.add_parser(

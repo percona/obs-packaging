@@ -390,3 +390,58 @@ def test_validate_repo_path_refs(repo):
             "repository 'ubi9' paths to subproject 'ppg:staging:17', which is out of slice",
         ),
     ]
+
+
+# --- profile create --narrow-repos -------------------------------------------------
+
+
+def _create_args(profiles_dir, **over):
+    base = dict(
+        apiurl="https://x",
+        rootprj="r",
+        name="pr-1",
+        env_overrides=[],
+        profile=None,
+        include_repos=[],
+        exclude_repos=[],
+        include_projects=[],
+        exclude_projects=[],
+        narrow_repos=[],
+    )
+    base.update(over)
+    return SimpleNamespace(**base)
+
+
+def test_narrow_repos_intersects_with_instance_filter(profiles_dir):
+    # labs instance narrowed by labels RockyLinux_9, ubi9-images (→ ubi9, UBI_9) and ssl*
+    args = _create_args(
+        profiles_dir,
+        include_repos=["UBI_*,ubi*,images"],
+        exclude_projects=["common:containers:ubi8"],
+        narrow_repos=["RockyLinux_9,ubi9", "UBI_9", "ssl*"],
+    )
+    cmd_profile.cmd_profile_create(args)
+    data = yaml.safe_load((profiles_dir / "pr-1.yaml").read_text())
+    assert data["include-repositories"] == ["ubi9", "UBI_9"]
+    assert data["exclude-projects"] == ["common:containers:ubi8"]
+    # boo instance narrowed by the same labels keeps RockyLinux_9 and ssl*
+    args = _create_args(
+        profiles_dir,
+        name="pr-2",
+        exclude_repos=["UBI_*,ubi*,images"],
+        narrow_repos=["RockyLinux_9,ubi9,UBI_9,ssl*"],
+    )
+    cmd_profile.cmd_profile_create(args)
+    data = yaml.safe_load((profiles_dir / "pr-2.yaml").read_text())
+    assert data["include-repositories"] == ["RockyLinux_9", "ssl*"]
+    assert data["exclude-repositories"] == ["UBI_*", "ubi*", "images"]
+
+
+def test_narrow_repos_empty_result_exits_3(profiles_dir):
+    args = _create_args(
+        profiles_dir, include_repos=["UBI_*"], narrow_repos=["RockyLinux_9,Debian_13"]
+    )
+    with pytest.raises(SystemExit) as exc:
+        cmd_profile.cmd_profile_create(args)
+    assert exc.value.code == 3
+    assert not (profiles_dir / "pr-1.yaml").exists()
