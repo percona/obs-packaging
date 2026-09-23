@@ -1693,61 +1693,6 @@ def _upload_obs_files(
     return True
 
 
-def _obs_meta_to_yaml_repos(
-    repo_elems: list[ET.Element],
-    rootprj: str,
-) -> list[dict]:
-    """Convert OBS <repository> elements to the project.yaml repositories format.
-
-    Paths within rootprj are expressed as {subproject: X, repository: Y};
-    external paths use {project: <absolute OBS name>, repository: Y}.
-    """
-    repos: list[dict] = []
-    for repo in repo_elems:
-        name = repo.get("name", "")
-        if not name:
-            continue
-        paths: list[dict] = []
-        for path in repo.findall("path"):
-            proj = path.get("project", "")
-            rep = path.get("repository", "")
-            if not proj or not rep:
-                continue
-            if proj == rootprj:
-                paths.append({"subproject": "", "repository": rep})
-            elif proj.startswith(rootprj + ":"):
-                subprj = proj[len(rootprj) + 1 :]
-                paths.append({"subproject": subprj, "repository": rep})
-            else:
-                paths.append({"project": proj, "repository": rep})
-        archs = [a.text for a in repo.findall("arch") if a.text]
-        repos.append({"name": name, "paths": paths, "archs": archs})
-    return repos
-
-
-def _obs_meta_to_yaml_debuginfo(
-    meta_root: ET.Element,
-) -> dict[str, bool] | None:
-    """Parse <debuginfo> flags from an OBS project meta XML element.
-
-    Returns a {repository_name: True/False} dict, or None if no debuginfo
-    element is present.
-    """
-    debuginfo_elem = meta_root.find("debuginfo")
-    if debuginfo_elem is None:
-        return None
-    result: dict[str, bool] = {}
-    for enable in debuginfo_elem.findall("enable"):
-        repo = enable.get("repository")
-        if repo:
-            result[repo] = True
-    for disable in debuginfo_elem.findall("disable"):
-        repo = disable.get("repository")
-        if repo:
-            result[repo] = False
-    return result or None
-
-
 def _read_project_release_source(
     apiurl: str,
     obs_project: str,
