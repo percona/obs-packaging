@@ -191,8 +191,7 @@ jobs:
             -e "REMOTE_OBS_ORG_INTERCONNECT:" \
             -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
             -e "PERCONA_OBS_PACKAGING_REPO:${{ github.server_url }}/${{ github.repository }}.git" \
-            "${args[@]}" \
-            profile create main
+            profile create main "${args[@]}"
 
       # releases/ directories are excluded from sync push traversal (each
       # root/*/releases/<name>/ contains a release.yaml marker that prevents

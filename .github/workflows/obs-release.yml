@@ -33,15 +33,22 @@ name: OBS Release
 # sync job is already in-progress or pending in the group, that sync still
 # runs regardless of the lock.
 #
-# Job layout: `lock` takes the staging lock (it alone holds the plain
-# "sync-main-sync" concurrency group, so it still serializes against a
-# sync-main sync job), then the `release` job runs once per entry of the
-# `OBS_INSTANCES` repository variable -- each leg with its own apiurl,
-# rootprj, credentials (`OBS_PASSWORD_<NAME>`), repo/project slice and
-# per-instance concurrency group -- and finally `unlock` publishes the
-# GitHub release and hands back (or reports on) the lock.  `unlock` runs
-# with if: always() so a failed or cancelled release still gets the lock
-# state reported.
+# Job layout: `lock` takes the staging lock, then the `release` job runs
+# once per entry of the `OBS_INSTANCES` repository variable -- each leg with
+# its own apiurl, rootprj, credentials (`OBS_PASSWORD_<NAME>`), repo/project
+# slice and concurrency group -- and finally `unlock` publishes the GitHub
+# release and hands back (or reports on) the lock.  `unlock` runs with
+# if: always() so a failed or cancelled release still gets the lock state
+# reported.
+#
+# Where the mutual exclusion actually comes from: sync-main's sync jobs now
+# serialize on per-instance "sync-main-sync-<name>" groups, so the plain
+# "sync-main-sync" group held by `lock` no longer serializes against them --
+# it only serializes the lock steps of concurrently dispatched releases.
+# Exclusion against sync-main is provided by (a) the per-instance
+# "sync-main-sync-<name>" group on each `release` leg, which cannot run
+# alongside that instance's sync-main sync job, and (b) sync-main being
+# disabled for the whole duration of the release.
 #
 # Operationally important: a failed or cancelled release deliberately leaves
 # sync-main disabled until a person acts — this is intentional, not a bug, so
@@ -61,10 +68,12 @@ jobs:
   lock:
     name: Take the release lock
     runs-on: ubuntu-latest
-    # Never run concurrently with a sync-main source upload: the release
-    # freezes staging builds and must see a stable source state.  The lock
-    # job alone holds the plain group; the per-instance release legs hold
-    # the instance-suffixed ones.
+    # The plain group only serializes the lock steps of concurrently
+    # dispatched releases; sync-main's sync jobs live in per-instance
+    # "sync-main-sync-<name>" groups and are NOT held off by this one.
+    # Mutual exclusion with sync-main comes from those per-instance groups
+    # on the `release` legs below, plus sync-main being disabled for the
+    # release's duration.
     concurrency:
       group: sync-main-sync
       cancel-in-progress: false
@@ -160,8 +169,7 @@ jobs:
             -e "REMOTE_OBS_ORG_INTERCONNECT:" \
             -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
             -e "PERCONA_OBS_PACKAGING_REPO:${{ github.server_url }}/${{ github.repository }}.git" \
-            "${args[@]}" \
-            profile create main
+            profile create main "${args[@]}"
 
       # Derive the release project from the tag name.
       # Tag ppg/17.9-1 → product=ppg, version=17.9-1, major=17
@@ -255,8 +263,6 @@ jobs:
         if: needs.release.result == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
-        # Container-job steps default to plain `sh`, which rejects
-        # `set -o pipefail`; this script is bash.
         shell: bash
         run: |
           set -euo pipefail
@@ -288,8 +294,11 @@ jobs:
       # cancelled while still pending in the concurrency group, because no
       # step of that run ever executes and this step never runs either.
       # That case is called out in the header comment instead.
+      # `|| failure()`: the lock-release step above can itself fail after
+      # the release legs succeeded (e.g. the catch-up dispatch fails), and
+      # that case needs the annotation just as much.
       - name: Report lock state on failure or cancellation
-        if: needs.release.result != 'success'
+        if: needs.release.result != 'success' || failure()
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
