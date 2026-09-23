@@ -29,6 +29,13 @@ OBS_SYNC_REPORT         Path to the JSON report written by `sync push
                         monitoring is scoped to the projects the sync actually
                         touched, with a final full-tree sweep to adopt
                         cross-project rebuild cascades
+OBS_REPO_FILTER         JSON object with the instance's slice (include_repos,
+                        exclude_repos, include_projects, exclude_projects as
+                        comma-separated strings or lists; the matrix entry of
+                        OBS_INSTANCES can be passed as is).  Projects and
+                        packages out of the slice are never polled.
+OBS_DISCOVER_ONLY       When set, print the monitored project list and exit 0
+                        (offline self-test of the discovery/slice logic)
 """
 
 import json
@@ -45,8 +52,10 @@ from percona_obs.common import (
     find_packages,
     load_project_yaml,
     next_poll_interval,
+    set_default_repository_filter,
 )
 from percona_obs.http_throttle import install as _install_http_throttle
+from percona_obs.project_config import RepositoryFilter, package_in_slice
 
 # ---------------------------------------------------------------------------
 # Configuration from environment
@@ -64,10 +73,22 @@ sync_report_path = os.environ.get("OBS_SYNC_REPORT", "")
 # (colon-notation relative to rootprj, e.g. "ppg:releases:17").
 scope_project = os.environ.get("OBS_SCOPE_PROJECT", "")
 
+# The instance's slice: projects/packages it does not hold must not be polled.
+repo_filter = RepositoryFilter.from_env_json(os.environ.get("OBS_REPO_FILTER", ""))
+set_default_repository_filter(repo_filter)
+discover_only = bool(os.environ.get("OBS_DISCOVER_ONLY"))
+
 # ---------------------------------------------------------------------------
 # Initialise osc (reads credentials from ~/.config/osc/oscrc)
 # ---------------------------------------------------------------------------
-osc.conf.get_config(override_apiurl=apiurl)
+try:
+    osc.conf.get_config(override_apiurl=apiurl)
+except Exception:
+    # If discover_only is set, we don't need OBS connectivity; allow it to
+    # continue. For production runs (discover_only=False), this will cause
+    # failures later when trying to fetch actual build results.
+    if not discover_only:
+        raise
 _install_http_throttle()
 
 # ---------------------------------------------------------------------------
@@ -92,7 +113,10 @@ else:
 scope_is_devel = "devel" in scope_project.split(":") if scope_project else False
 
 obs_projects: set[str] = set()
+_slice_cache: dict = {}
 for obs_project, package_path in find_packages(scope_path, scope_obs):
+    if not package_in_slice(package_path, cache=_slice_cache):
+        continue
     project_config = load_project_yaml(package_path.parent / "project.yaml")
     obs_name = project_config.get("name") or obs_project
     # When rootprj differs from root_obs (e.g. a PR-specific project like
@@ -173,6 +197,9 @@ if touched is not None:
 print(
     f"Monitoring {len(obs_projects)} OBS project(s): {', '.join(sorted(obs_projects))}"
 )
+
+if discover_only:
+    sys.exit(0)
 
 # ---------------------------------------------------------------------------
 # Build-state classification
