@@ -5,7 +5,7 @@ description: |
 # Repositories and the shared build configuration come from root/project.yaml
 # and root/ppg/devel/subprojects.yaml (a symlink to the staging one).  Devel
 # resolves everything it does not build itself from the matching staging
-# project, and does not build for Debian 12.
+# project.
 debuginfo:
   RockyLinux_9: true
   RockyLinux_9.6: true
