@@ -33,6 +33,10 @@ repositories:
     paths:
       - subproject: ppg:common:deps
         repository: RockyLinux_9.6
+  - name: RockyLinux_10
+    paths:
+      - subproject: ppg:common:deps
+        repository: RockyLinux_10
   - name: UBI_9
     paths:
       - subproject: ppg:common:deps

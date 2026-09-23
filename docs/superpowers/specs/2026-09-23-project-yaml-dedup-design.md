@@ -212,15 +212,27 @@ a descendant declines a map inherited from a tier.
 
 ### Known residual duplication (accepted for this iteration)
 
-- The per-major prjconf delta is written in both `staging/<V>` and
-  `devel/<V>` (devel mirrors staging by design).
+- The per-major prjconf delta is written in both `staging/_shared` and
+  `devel/_shared` (devel mirrors staging by design). Within a tier the
+  majors share two files: `project.pre18.yaml` (14–17, symlinked) and
+  `project.post18.yaml` (18+, symlinked; the SUSE line uses
+  `PG_PREV_MAJOR_VERSION`).
 - The per-major `containers` and `extras/containers` files stay verbatim;
   their only cross-major difference is a `Prefer: percona-postgresql<N>-libs`
   line that a later change can express with the macro.
-- `devel/19` has no path to `staging:19` and `staging/19` ignores
-  `postgresql19-server` on Leap but `postgresql18-server` on Tumbleweed. Both
-  look accidental; both are preserved because the gate forbids effective
-  changes. Flagged for a separate follow-up.
+
+### Deliberate effective changes made during review (user decisions)
+
+- `RockyLinux_10` was the only repository whose path list lacked
+  `ppg:common:deps` in majors 14–18 (19 had it). Declared a typo; the path now
+  comes from the staging tier file for every major. Meta change for
+  staging/devel 14–18 on the first sync.
+- `devel/19` was a verbatim copy of staging/19 (staging title, no path to
+  `ppg:staging:19`). Declared a mistake; it is now a thin devel project like
+  devel/18. Meta change for devel/19 on the first sync.
+- `staging/19` and `devel/19` ignored `postgresql19-server` on Leap but
+  `postgresql18-server` on Tumbleweed. Declared a typo; both now ignore the
+  previous major. Effective prjconf change for those two projects.
 
 ## Section 2: tool changes
 

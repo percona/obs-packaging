@@ -1,0 +1,81 @@
+# Shared project.yaml for the PostgreSQL 18+ majors of this tier: each
+# <V>/project.yaml is a symlink to this file and renders it with its own
+# macros.yaml (PG_MAJOR_VERSION, PG_PREV_MAJOR_VERSION, ...).  14-17 use
+# project.pre18.yaml because their llvm and SUSE Ignore policy differs.
+title: Percona Distribution for PostgreSQL %!{PG_MAJOR_VERSION}
+description: |
+  Packages for Percona Distribution for PostgreSQL %!{PG_MAJOR_VERSION} — the server, extensions,
+  HA components (Patroni, etcd, HAProxy, pgBouncer, pgPool-II), and companion tools.
+
+# Repositories, debuginfo flags and the shared build configuration come from
+# root/project.yaml and root/ppg/staging/subprojects.yaml.  Only what is
+# specific to this major is declared here.
+project-config: |
+  %if "%_repository" == "openSUSE_Tumbleweed" || "%_repository" == "openSUSE_Leap_16"
+  # Suppress the previous major's system package so that this project does not
+  # pick it up when both majors are present in the interconnect.
+  Ignore: postgresql%!{PG_PREV_MAJOR_VERSION}-server
+  %endif
+
+  %if "%_repository" == "Debian_12" || "%_repository" == "Ubuntu_22.04"
+  # PG 18 JIT requires LLVM >= 19; use repackaged llvm-21 from common:deps:build.
+  Prefer: llvm-21-dev
+  Prefer: clang-21
+  Substitute: llvm-dev llvm-21-dev
+  Substitute: clang clang-21
+  # Force the whole llvm-21 toolchain into every Debian 12 build root. clang-21/
+  # llvm-21-dev pull the rest transitively but an inherited Ignore strips them,
+  # and extensions (pgvector, postgis) need clang-21 for PGXS bitcode yet only
+  # Build-Depend on the server-dev package. Support: beats the Ignore.
+  Support: clang-21
+  Support: llvm-21-dev
+  Support: libllvm21
+  Support: libclang-cpp21
+  Support: libclang-common-21-dev
+  Support: llvm-21-linker-tools
+  Support: libclang1-21
+  Support: llvm-21
+  Support: llvm-21-runtime
+  Support: llvm-21-tools
+  Support: libc++-21-dev
+  Support: libc++abi-21-dev
+  Support: libc++1-21
+  Support: libc++abi1-21
+  %endif
+
+  %if "%_repository" == "Debian_12"
+  # Prefer repackaged llvm-21 over Bookworm's system LLVM 14.
+  Ignore: libllvm14
+  Ignore: llvm-14-runtime
+  Ignore: llvm-14-linker-tools
+  Ignore: libclang-cpp14
+  Ignore: libclang-common-14-dev
+  Ignore: libclang1-14
+  Ignore: llvm-14-tools
+  Ignore: llvm-14
+  Ignore: llvm-14-dev
+  Ignore: clang-14
+  %endif
+
+qa:
+  pipeline: ppg-obs
+  parameters:
+    REPO: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+    VERSION: ppg-%!{PG_VERSION}
+    PLATFORMS:
+      - rocky-9
+      - debian-13
+      - ubuntu-noble
+    TESTING_BRANCH: ricardo-work
+    IO_METHOD:
+      - worker
+      - sync
+      - io_uring
+    SCENARIO:
+      - pg-%!{PG_MAJOR_VERSION}
+      - pg-%!{PG_MAJOR_VERSION}-meta-server
+      - pg-%!{PG_MAJOR_VERSION}-meta-ha
+  matrix:
+    - IO_METHOD
+    - SCENARIO
+
