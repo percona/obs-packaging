@@ -4,9 +4,11 @@ description: |
   HA components (Patroni, etcd, HAProxy, pgBouncer, pgPool-II), and companion tools.
 
 # Repositories and the shared build configuration come from root/project.yaml
-# and root/ppg/devel/subprojects.yaml (a symlink to the staging one).  Devel
-# resolves everything it does not build itself from the matching staging
-# project, and does not build for Debian 12.
+# and root/ppg/devel/subprojects.yaml (a symlink to the staging one).  Unlike
+# the other devel projects this one is a standalone copy of staging/19: it has
+# no path prefix to ppg:staging:19 and builds every repository staging does.
+# That looks accidental and is preserved here on purpose — see "Known residual
+# duplication" in the project.yaml dedup design spec.
 debuginfo:
   RockyLinux_9: true
   RockyLinux_9.6: true
