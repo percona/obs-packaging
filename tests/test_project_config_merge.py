@@ -322,7 +322,7 @@ def test_path_prefix_entry_validation(repo):
 # --- subprojects.yaml ------------------------------------------------------
 
 
-def test_subprojects_yaml_applies_to_descendants_only(repo):
+def test_subprojects_yaml_applies_to_direct_children_only(repo):
     root = repo(
         {
             "project.yaml": _ROOT_REPOS,
@@ -345,6 +345,16 @@ def test_subprojects_yaml_applies_to_descendants_only(repo):
     assert _paths(leaf, "RockyLinux_9")[0] == ("ppg:common:deps", "RockyLinux_9")
     assert _directives(leaf) == ["Prefer: tier-only"]
     assert "# --- from root/tier/subprojects.yaml ---" in leaf["project-config"]
+    # a grandchild inherits the child's project.yaml but not the tier file
+    (root / "tier" / "17" / "sub").mkdir()
+    (root / "tier" / "17" / "sub" / "project.yaml").write_text("title: Sub\n")
+    grandchild = resolve_project_config(root / "tier" / "17" / "sub")
+    assert "debuginfo" not in grandchild
+    assert _paths(grandchild, "RockyLinux_9")[0] == (
+        "common:deps:build",
+        "RockyLinux_9",
+    )
+    assert "project-config" not in grandchild
 
 
 def test_subprojects_yaml_may_use_leaf_macros(repo):

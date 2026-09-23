@@ -1,6 +1,7 @@
-# Configuration folded into every project below root/ppg/staging/ — the
-# per-major staging projects and their subprojects.  It does NOT apply to the
-# package-less ppg:staging container project itself.
+# Configuration folded into the direct children of root/ppg/staging/ — the
+# per-major staging projects (and ppg:staging:containers / ppg:staging:extras,
+# which opt out).  It does NOT apply to the package-less ppg:staging project
+# itself, nor to deeper subprojects such as ppg:staging:17:tarballs.
 #
 # root/ppg/devel/subprojects.yaml is a symlink to this file: devel mirrors
 # staging.  Per-major differences live in <V>/project.yaml.  Subprojects whose

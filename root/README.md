@@ -19,7 +19,7 @@ root/
 │   ├── releases/           # release definitions (see below)
 │   ├── staging/
 │   │   ├── project.yaml       # staging container project configuration
-│   │   ├── subprojects.yaml   # config merged into every subproject under staging
+│   │   ├── subprojects.yaml   # config merged into the direct children of staging
 │   │   └── <major-version>/   # full package set for this version, e.g. 17/
 │   │       ├── <package>/     # source packages for this version
 │   │       ├── containers/    # container images for this version
@@ -397,7 +397,7 @@ build repositories, and project configuration. The root `project.yaml` defines t
 and the repositories available to all subprojects.
 
 Every other `project.yaml` is a **delta**: it inherits the root repositories and build
-configuration, merged with the tier's `subprojects.yaml` (for example
+configuration, merged with its parent directory's `subprojects.yaml` (for example
 `ppg/staging/subprojects.yaml`, which `ppg/devel/subprojects.yaml` symlinks), and declares only
 what differs for that project. Subprojects with unrelated repository sets (tarballs, containers,
 extras) opt out with `repositories-inherit: false`. Where several majors need the same delta, the file lives once under the tier's

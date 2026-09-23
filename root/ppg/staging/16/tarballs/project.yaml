@@ -21,8 +21,6 @@ description: |
 # parent's: declare them in full here instead of patching the inherited ones.
 repositories-inherit: false
 project-config-inherit: false
-# no debuginfo repositories here; do not inherit the staging map
-debuginfo: ~
 
 repositories:
   - name: RockyLinux_8

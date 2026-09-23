@@ -8,9 +8,10 @@ folded in this order::
     A0/project.yaml, A0/subprojects.yaml, A1/project.yaml, A1/subprojects.yaml, …, P/project.yaml
 
 ``project.yaml`` applies to the project itself and is inherited by its
-descendants; ``subprojects.yaml`` applies to strict descendants only.  A
-``subprojects.yaml`` holding just ``standalone: true`` makes every strict
-descendant resolve from its own project.yaml alone.
+descendants; ``subprojects.yaml`` applies to the *direct* children of its
+directory only.  The one exception is a ``subprojects.yaml`` holding just
+``standalone: true``: it is recursive and makes every strict descendant
+resolve from its own project.yaml alone.
 
 Merge rules, applied per layer in fold order:
 
@@ -260,8 +261,9 @@ def resolve_project_config(
             if data.get("standalone"):
                 if set(data) != {"standalone"}:
                     raise _err(sfile, "standalone: true must be the only key")
-                standalone = True
-            else:
+                standalone = True  # recursive: freezes every descendant
+            elif directory == project_path.parent:
+                # Ordinary subprojects.yaml content reaches direct children only.
                 layers.append((sfile, data))
     own_path = project_path / "project.yaml"
     own = _load_layer(own_path, macros, env_vars, strict=True)
