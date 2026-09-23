@@ -1,4 +1,5 @@
 import argparse
+import sys
 
 import yaml
 
@@ -124,6 +125,22 @@ def cmd_profile_create(args: argparse.Namespace) -> None:
     # profile from its current state (like -e does for env): keep its slice.
     if repo_filter.is_empty and getattr(args, "profile", None):
         repo_filter = _load_profile_filter(args.profile)
+    narrow = _split_globs(getattr(args, "narrow_repos", []) or [])
+    if narrow:
+        kept = tuple(n for n in narrow if repo_filter.repo_matches(n))
+        if not kept:
+            print(
+                "error: --narrow-repos leaves no repository for this profile "
+                f"(narrowed to {', '.join(narrow)}; profile rules: {repo_filter.to_profile()})",
+                file=sys.stderr,
+            )
+            raise SystemExit(3)
+        repo_filter = RepositoryFilter(
+            include_repos=kept,
+            exclude_repos=repo_filter.exclude_repos,
+            include_projects=repo_filter.include_projects,
+            exclude_projects=repo_filter.exclude_projects,
+        )
     data: dict[str, object] = {"apiurl": args.apiurl, "rootprj": args.rootprj}
     if env_vars:
         data["env"] = [{"name": k, "value": v} for k, v in sorted(env_vars.items())]
