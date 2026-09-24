@@ -13,7 +13,7 @@ repositories:
     paths:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
         repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+      - project: RedHat:UBI-9
         repository: standard
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
         repository: devel
@@ -22,7 +22,7 @@ repositories:
     paths:
       - subproject: common:containers:ubi9
         repository: UBI_9
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+      - project: RedHat:UBI-9
         repository: standard
     archs: [x86_64, aarch64]
 
