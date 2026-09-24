@@ -1964,6 +1964,19 @@ def cmd_sync(args):
             _print_aggregate(f"files  {obs_project_name}/{package_path.name}")
             continue
 
+        # Package flags are keyed by repository name, so they must be pruned to
+        # the repositories this instance's slice actually keeps: OBS rejects a
+        # flag naming a repository the project does not have.
+        _pkg_proj_path = package_path.parent
+        if _pkg_proj_path not in _target_repos_cache:
+            _pkg_proj_cfg = _load_project_config_with_inheritance(
+                _pkg_proj_path, env_vars
+            )
+            _target_repos_cache[_pkg_proj_path] = {
+                r["name"]
+                for r in _pkg_proj_cfg.get("repositories", [])
+                if r.get("name")
+            }
         _apply_package_config(
             apiurl,
             obs_project_name,
@@ -1971,6 +1984,7 @@ def cmd_sync(args):
             package_path,
             force=args.force,
             dry_run=dry_run_obs,
+            kept_repos=_target_repos_cache[_pkg_proj_path],
         )
         local_packages_by_project.setdefault(obs_project_name, set()).add(
             package_path.name

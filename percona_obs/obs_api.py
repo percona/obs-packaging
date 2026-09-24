@@ -9,6 +9,7 @@ import osc.connection
 import osc.core
 import osc.oscerr
 
+from .project_config import prune_flag_map
 from .common import (
     _YELLOW,
     _GREEN,
@@ -1434,6 +1435,7 @@ def _apply_package_config(
     package_path: Path,
     force: bool = False,
     dry_run: bool = False,
+    kept_repos: "set[str] | None" = None,
 ) -> None:
     """Create or update OBS package metadata from package.yaml.
 
@@ -1446,6 +1448,12 @@ def _apply_package_config(
     package_config = load_package_yaml(package_path / "package.yaml")
     build_flags: dict[str, bool] | None = package_config.get("build") or None
     publish_flags: dict[str, bool] | None = package_config.get("publish") or None
+    # A flag naming a repository the project does not carry makes OBS reject
+    # the whole record ("Flags is invalid"), which is what a slice that drops
+    # repositories produces from an unfiltered package.yaml.
+    if kept_repos is not None:
+        build_flags = prune_flag_map(build_flags, kept_repos) or None
+        publish_flags = prune_flag_map(publish_flags, kept_repos) or None
     meta = build_package_meta(
         obs_project_name,
         package_name,

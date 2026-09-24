@@ -543,3 +543,53 @@ def test_narrow_repos_empty_result_exits_3(profiles_dir):
         cmd_profile.cmd_profile_create(args)
     assert exc.value.code == 3
     assert not (profiles_dir / "pr-1.yaml").exists()
+
+
+# --- package flags are pruned to the slice ---------------------------------
+
+
+def test_package_flags_are_pruned_to_the_kept_repositories():
+    """OBS rejects a flag naming a repository the project does not have."""
+    from percona_obs.project_config import prune_flag_map
+
+    kept = {"RockyLinux_9", "Debian_13"}
+    assert prune_flag_map({"RockyLinux_9": False, "UBI_9": False}, kept) == {
+        "RockyLinux_9": False
+    }
+    # shorthand and booleans carry no repository and pass through untouched
+    assert prune_flag_map({"disable": True}, kept) == {"disable": True}
+    assert prune_flag_map({"enable": False}, kept) == {"enable": False}
+    assert prune_flag_map(False, kept) is False
+    assert prune_flag_map(None, kept) is None
+    # a map naming only dropped repositories collapses to empty
+    assert prune_flag_map({"UBI_8": False, "UBI_9": False}, kept) == {}
+
+
+def test_apply_package_config_prunes_out_of_slice_flags(tmp_path, monkeypatch):
+    """The uploaded package meta must not mention a repository outside the slice."""
+    import percona_obs.obs_api as obs_api
+
+    pkg = tmp_path / "llvm-21"
+    (pkg / "obs").mkdir(parents=True)
+    (pkg / "package.yaml").write_text(
+        "title: t\nbuild:\n  RockyLinux_9: false\n  UBI_8: false\n  UBI_9: false\n"
+    )
+    captured: dict[str, str] = {}
+
+    def fake_show_package_meta(apiurl, prj, name):
+        return [b"<package name='llvm-21' project='p'><title/><description/></package>"]
+
+    def fake_edit_meta(metatype, path_args, data, force, apiurl):
+        captured["meta"] = data[0]
+
+    monkeypatch.setattr(obs_api.osc.core, "show_package_meta", fake_show_package_meta)
+    monkeypatch.setattr(obs_api.osc.core, "edit_meta", fake_edit_meta)
+    obs_api._apply_package_config(
+        "http://obs",
+        "isv:percona:common:deps:build",
+        "llvm-21",
+        pkg,
+        kept_repos={"RockyLinux_9", "Debian_13"},
+    )
+    assert "RockyLinux_9" in captured["meta"]
+    assert "UBI_8" not in captured["meta"] and "UBI_9" not in captured["meta"]
