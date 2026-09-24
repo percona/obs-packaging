@@ -460,6 +460,14 @@ def build_parser() -> argparse.ArgumentParser:
         "Use when the project has multiple qa: entries to run exactly one.",
     )
     qa_run_parser.add_argument(
+        "--name",
+        metavar="NAME",
+        default=None,
+        help="Restrict execution to the qa: entry whose optional `name:` key "
+        "matches. Needed when two entries share a pipeline. Combinable with "
+        "--pipeline (both filters apply).",
+    )
+    qa_run_parser.add_argument(
         "--report-json",
         metavar="PATH",
         default=None,

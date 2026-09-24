@@ -71,5 +71,5 @@ qa:
       OLD_SERVER_VERSION: "16.15"
       NEW_SERVER_VERSION: %!{PG_VERSION}
       UPGRADE_DOCKER_TAG: %!{PG_MAJOR_VERSION}-%!{PG_PREV_MAJOR_VERSION}
-      OLD_DOCKER_REPOSITORY: registry.opensuse.org/isv/percona/ppg/staging/%!{PG_PREV_MAJOR_VERSION}/extras/containers/ubi9
+      OLD_DOCKER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/isv/percona/ppg/staging/%!{PG_PREV_MAJOR_VERSION}/extras/containers/ubi9
       TESTING_BRANCH: ricardo-work

@@ -24,3 +24,15 @@ def test_qa_project_type():
     assert m.qa_project_type("x:ppg:staging:17:extras:containers") == "containers"
     assert m.qa_project_type("x:ppg:staging:17:tarballs") == "packages"
     assert m.qa_project_type("x:ppg:staging:17") == "packages"
+
+
+def test_normalize_entry_name_filter():
+    m = _load()
+    # qa show already emits name_filter → passed through untouched
+    e = m.normalize_entry({"name": "ubi8", "name_filter": "--name ubi8"})
+    assert e["name_filter"] == "--name ubi8"
+    # derived from `name` when absent
+    assert m.normalize_entry({"name": "ubi9"})["name_filter"] == "--name ubi9"
+    # unnamed entries get the empty string, mirroring axis_filters
+    assert m.normalize_entry({"name": ""})["name_filter"] == ""
+    assert m.normalize_entry({})["name_filter"] == ""

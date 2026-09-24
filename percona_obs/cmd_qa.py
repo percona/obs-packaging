@@ -90,14 +90,24 @@ def _load_qa_block(
         entries = qa
     else:
         raise SystemExit(f"error: {project}: qa block must be a mapping or a list")
+    seen_names: set[str] = set()
     for entry in entries:
         _validate_qa(entry, project)
+        name = entry.get("name") if isinstance(entry, dict) else None
+        if isinstance(name, str):
+            if name in seen_names:
+                raise SystemExit(f"error: {project}: duplicate qa entry name {name!r}")
+            seen_names.add(name)
     return entries
 
 
 def _validate_qa(qa: Any, project: str) -> None:
     if not isinstance(qa, dict):
         raise SystemExit(f"error: {project}: qa entry must be a mapping")
+    if "name" in qa:
+        name = qa.get("name")
+        if not isinstance(name, str) or not name:
+            raise SystemExit(f"error: {project}: qa.name must be a non-empty string")
     pipeline = qa.get("pipeline")
     if not isinstance(pipeline, str) or not pipeline:
         raise SystemExit(f"error: {project}: qa.pipeline must be a non-empty string")
@@ -294,8 +304,14 @@ def cmd_qa_show(args: argparse.Namespace) -> None:
         multi_pipeline = len(entries) > 1
         for entry in entries:
             pipeline = entry["pipeline"]
+            name = entry.get("name")
             combos = _expand_matrix(entry)
             matrix_axes = list(entry.get("matrix") or [])
+            # Disambiguating segment for a multi-entry block: the entry `name`
+            # when it has one (two entries may share a pipeline), else the
+            # pipeline, which keeps unnamed entries' contexts byte-for-byte.
+            entry_segment = name or pipeline
+            name_filter = f"--name {name}" if name else ""
             for label, params in combos:
                 entry_label = label or "default"
                 axis_filters = " ".join(
@@ -303,9 +319,9 @@ def cmd_qa_show(args: argparse.Namespace) -> None:
                 )
                 if multi_pipeline:
                     status_context = (
-                        f"OBS QA / {args.project} / {pipeline} / {entry_label}"
+                        f"OBS QA / {args.project} / {entry_segment} / {entry_label}"
                         if matrix_axes
-                        else f"OBS QA / {args.project} / {pipeline}"
+                        else f"OBS QA / {args.project} / {entry_segment}"
                     )
                 else:
                     status_context = (
@@ -317,8 +333,10 @@ def cmd_qa_show(args: argparse.Namespace) -> None:
                     {
                         "project": args.project,
                         "pipeline": pipeline,
+                        "name": name or "",
                         "label": entry_label,
                         "axis_filters": axis_filters,
+                        "name_filter": name_filter,
                         "status_context": status_context,
                         "params": params,
                     }
@@ -328,9 +346,13 @@ def cmd_qa_show(args: argparse.Namespace) -> None:
 
     for entry in entries:
         pipeline = entry["pipeline"]
+        name = entry.get("name")
         combos = _expand_matrix(entry)
         matrix_axes = list(entry.get("matrix") or [])
-        print(_col(_BOLD, f"{args.project}  →  pipeline: {pipeline}"))
+        heading = f"{args.project}  →  pipeline: {pipeline}"
+        if name:
+            heading += f"  (name: {name})"
+        print(_col(_BOLD, heading))
         print(f"{_col(_DIM, 'matrix:')} {', '.join(matrix_axes) or '(none)'}")
         print(f"{_col(_DIM, 'combos:')} {len(combos)}")
         for label, params in combos:
@@ -470,11 +492,19 @@ def cmd_qa_run(args: argparse.Namespace) -> None:
     if entries is None:
         raise SystemExit(f"error: {args.project} has no qa: block in its project.yaml")
 
+    name = getattr(args, "name", None)
+    if name:
+        entries = [e for e in entries if e.get("name") == name]
+        if not entries:
+            raise SystemExit(f"error: {args.project}: no qa entry with name {name!r}")
+
     if args.pipeline:
         entries = [e for e in entries if e["pipeline"] == args.pipeline]
         if not entries:
+            suffix = f" (after --name {name})" if name else ""
             raise SystemExit(
-                f"error: {args.project}: no qa entry with pipeline {args.pipeline!r}"
+                f"error: {args.project}: no qa entry with pipeline "
+                f"{args.pipeline!r}{suffix}"
             )
 
     filters = _parse_filter(args.filter or [])
