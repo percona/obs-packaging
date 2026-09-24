@@ -159,9 +159,12 @@ entry.
 `qa_types` is a comma-separated subset of `packages,containers` naming the QA kinds that live on
 that instance. `obs-pr-check` intersects it with the types the `qa-packages`/`qa-containers`
 labels ask for; an empty intersection means that instance discovers no QA combos. Leaving it
-unset means "everything this instance carries", which is only safe while no two instances host
-the same project — the merge step fails the run when two instances produce the same QA
-`status_context`, since that value is the check-run name.
+unset means "everything this instance carries". When two instances discover the same QA
+`status_context` — which is the check-run name, so it can only belong to one of them — the merge
+step keeps the instance listed first in `OBS_INSTANCES` and reports the dropped one as a warning.
+Some projects cannot be split by `qa_types` at all: `ppg:staging:16:tde` keeps UBI repositories on
+one instance and distro repositories on the other, and both classify as package QA, so instance
+order is what settles it.
 
 `OBS_INSTANCES` and the matching `OBS_PASSWORD_<NAME>` secrets must be created before the
 workflow change merges, or the matrix jobs have nothing to iterate over and no credentials to
