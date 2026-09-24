@@ -92,7 +92,25 @@ def test_duplicate_name_is_rejected(tmp_path, monkeypatch):
     )
     with pytest.raises(SystemExit) as exc:
         cmd_qa._load_qa_block(p, {})
-    assert "duplicate qa entry name 'ubi8'" in str(exc.value)
+    assert "same check segment 'ubi8'" in str(exc.value)
+    assert "rename one of them" in str(exc.value)
+
+
+def test_same_pipeline_without_names_is_rejected(tmp_path, monkeypatch):
+    """The defect that hid the ubi8 lane: two entries collapsing onto one check."""
+    p = _write_project(
+        tmp_path,
+        monkeypatch,
+        f"qa:\n"
+        f"  - pipeline: {_SHARED_PIPELINE}\n"
+        f"    parameters:\n      A: b\n"
+        f"  - pipeline: {_SHARED_PIPELINE}\n"
+        f"    parameters:\n      A: c\n",
+    )
+    with pytest.raises(SystemExit) as exc:
+        cmd_qa._load_qa_block(p, {})
+    assert f"same check segment '{_SHARED_PIPELINE}'" in str(exc.value)
+    assert "give each one a distinct 'name'" in str(exc.value)
 
 
 def test_named_entry_loads(tmp_path, monkeypatch):

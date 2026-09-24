@@ -90,15 +90,31 @@ def _load_qa_block(
         entries = qa
     else:
         raise SystemExit(f"error: {project}: qa block must be a mapping or a list")
-    seen_names: set[str] = set()
+    # Two entries that disambiguate to the same segment would render the same
+    # status_context, i.e. the same check-run name: CI would drop one lane and
+    # `qa run` would trigger both under one check.  Reject it here instead.
+    seen_segments: dict[str, int] = {}
     for entry in entries:
         _validate_qa(entry, project)
-        name = entry.get("name") if isinstance(entry, dict) else None
-        if isinstance(name, str):
-            if name in seen_names:
-                raise SystemExit(f"error: {project}: duplicate qa entry name {name!r}")
-            seen_names.add(name)
+        segment = _entry_segment(entry)
+        if segment in seen_segments:
+            hint = (
+                f"give each one a distinct 'name'"
+                if not entry.get("name")
+                else "rename one of them"
+            )
+            raise SystemExit(
+                f"error: {project}: two qa entries resolve to the same check segment "
+                f"{segment!r}; {hint}"
+            )
+        seen_segments[segment] = 1
     return entries
+
+
+def _entry_segment(entry: "dict[str, Any]") -> str:
+    """The part of ``status_context`` that tells two entries of one block apart."""
+    name = entry.get("name")
+    return name if isinstance(name, str) and name else str(entry["pipeline"])
 
 
 def _validate_qa(qa: Any, project: str) -> None:

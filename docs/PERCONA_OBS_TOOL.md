@@ -97,9 +97,9 @@ exclude-repositories: ["UBI_*", "ubi*", "images"]
 
 # .profile/labs.yaml — UBI RPMs and images on obs.pg.labs.percona.com
 apiurl: https://obs.pg.labs.percona.com
-rootprj: percona
+rootprj: isv:percona
 include-repositories: ["UBI_*", "ubi*", "images"]
-registry: registry.pg.labs.percona.com   # optional, see below
+registry: obs.pg.labs.percona.com   # optional, see below
 ```
 
 Rules (globs are `fnmatch`, case-sensitive):
@@ -648,9 +648,9 @@ qa:
 
 `name` is **required when two entries in one block share a pipeline** (e.g. the
 `ubi8` and `ubi9` container lanes, both on `docker-server-parallel-generic`):
-without it both lanes render the same `status_context`, the `merge-qa-matrix`
-job de-duplicates by that context and silently drops one lane, and
-`qa run --pipeline …` would trigger both under a single check.
+without it both lanes would render the same `status_context`, so `qa show`
+rejects the block: one check run cannot carry two lanes, and
+`qa run --pipeline …` would trigger both under it.
 
 `${VAR}` tokens in any value are substituted from the active profile's `env:`
 section, plus auto-injected `OBS_ROOTPRJ` and `OBS_CONTAINER_REGISTRY_ROOTPRJ` (the root
