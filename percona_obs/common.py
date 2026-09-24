@@ -790,6 +790,20 @@ def auto_rootprj_env(rootprj: str) -> dict[str, str]:
     }
 
 
+DEFAULT_CONTAINER_REGISTRY = "registry.opensuse.org"
+
+
+def registry_env_override(registry: str | None) -> str:
+    """The ``-e``-style override that exposes ``${OBS_CONTAINER_REGISTRY}``.
+
+    *registry* is a profile's ``registry:`` key (or ``None`` when the profile
+    does not declare one, and for plain ``-A``/``-R`` invocations); the
+    default keeps every pre-existing profile and invocation rendering, since
+    ``project verify`` fails on any ``${VAR}`` it cannot resolve.
+    """
+    return f"OBS_CONTAINER_REGISTRY:{registry or DEFAULT_CONTAINER_REGISTRY}"
+
+
 def next_poll_interval(current: int, changed: bool, base: int, cap: int) -> int:
     """Return the next poll sleep: reset to *base* on change, else ramp 1.5x to *cap*."""
     if changed:

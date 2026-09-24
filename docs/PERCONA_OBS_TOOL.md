@@ -99,6 +99,7 @@ exclude-repositories: ["UBI_*", "ubi*", "images"]
 apiurl: https://obs.pg.labs.percona.com
 rootprj: percona
 include-repositories: ["UBI_*", "ubi*", "images"]
+registry: registry.pg.labs.percona.com   # optional, see below
 ```
 
 Rules (globs are `fnmatch`, case-sensitive):
@@ -115,6 +116,23 @@ Create the profiles with flags instead of editing YAML (flags are repeatable and
 ./percona-obs -A https://obs.pg.labs.percona.com -R percona \
   profile create labs --include-repos 'UBI_*,ubi*,images'
 ```
+
+### `registry`: the container registry host
+
+Container images built by an instance are published by *its* registry, so the host cannot be
+baked into the tree. The profile key `registry:` is exposed to `${VAR}` substitution as
+`${OBS_CONTAINER_REGISTRY}`, which the container `project.yaml` files use together with
+`${OBS_CONTAINER_REGISTRY_ROOTPRJ}`:
+
+```yaml
+REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/…
+```
+
+The default is `registry.opensuse.org`, so profiles and plain `-A`/`-R` invocations that do not
+declare the key keep rendering exactly as before. Precedence is
+default < profile `registry:` < profile `env:` entry < explicit `-e OBS_CONTAINER_REGISTRY:…`.
+Write the key with `profile create --registry HOST`; omitting the flag on
+`-P name profile create name` keeps the profile's current value (like the slice flags).
 
 `--narrow-repos RockyLinux_9,ssl*` keeps only the named repositories the profile already accepts
 and exits 3 when nothing is left; the PR workflow uses it for repo labels. Entries are matched
@@ -133,8 +151,17 @@ generates the full, instance-agnostic release tree.
 CI: the repository variable `OBS_INSTANCES` is a JSON list, one object per instance —
 `{"name": "boo", "apiurl": "…", "rootprj": "isv:percona", "pr_rootprj": "isv:percona:pr",
 "exclude_repos": "UBI_*,ubi*,images"}` (also `include_repos`, `include_projects`,
-`exclude_projects`, optional `user`). The password secret is `OBS_PASSWORD_<NAME>` (upper-case
-name). `sync-main`, `obs-pr-check` and `obs-release` run their OBS jobs once per entry.
+`exclude_projects`, optional `user`, optional `registry` — written into the CI profile's
+`registry:` key — and optional `qa_types`). The password secret is `OBS_PASSWORD_<NAME>`
+(upper-case name). `sync-main`, `obs-pr-check` and `obs-release` run their OBS jobs once per
+entry.
+
+`qa_types` is a comma-separated subset of `packages,containers` naming the QA kinds that live on
+that instance. `obs-pr-check` intersects it with the types the `qa-packages`/`qa-containers`
+labels ask for; an empty intersection means that instance discovers no QA combos. Leaving it
+unset means "everything this instance carries", which is only safe while no two instances host
+the same project — the merge step fails the run when two instances produce the same QA
+`status_context`, since that value is the check-run name.
 
 `OBS_INSTANCES` and the matching `OBS_PASSWORD_<NAME>` secrets must be created before the
 workflow change merges, or the matrix jobs have nothing to iterate over and no credentials to

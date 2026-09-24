@@ -7,9 +7,9 @@ name: OBS PR Check
 #
 # Job DAG:
 #
-#   resolve ──> sync ──┬──> build ─────────────────────────┐
-#                      │                                    │
-#                      └──> detect-qa-matrix ───────────────┴──> qa  (matrix)
+#   resolve ──> sync ──┬──> build ───────────────────────────────────────┐
+#                      │                                                  │
+#                      └──> detect-qa-matrix ──> merge-qa-matrix ─────────┴──> qa  (matrix)
 #
 # `resolve` fetches PR context from the GitHub API and gates the DAG on the
 # presence of a trigger label so that non-trigger events produce no check runs.
@@ -37,8 +37,11 @@ name: OBS PR Check
 # own PR comment (see post_pr_comment.py's per-instance marker).  Repo
 # labels only ever narrow an instance's slice, never widen it; a leg left
 # with no repository at all skips its sync steps and posts no comment.
-# `detect-qa-matrix` and `qa` still target the legacy single-instance
-# variables; per-instance QA routing is a follow-up.
+# `detect-qa-matrix` is matrixed the same way: each leg discovers the QA
+# combos of its own instance's PR project (narrowed by that instance's
+# optional `qa_types` field), `merge-qa-matrix` concatenates the shares and
+# stamps each combo with the instance that found it, and `qa` fans out over
+# the merged list, talking to that instance.
 
 on:
   pull_request:
@@ -524,14 +527,20 @@ jobs:
         run: python .github/scripts/post_pr_comment.py
 
   # ──────────────────────────────────────────────────────────────────────────
-  # detect-qa-matrix: discover QA-enabled OBS subprojects.  Runs in parallel
-  # with `build`; once it finishes, the `qa` matrix job's check runs appear in
-  # the PR's check list as queued, signalling the upcoming QA work.
-  # QA still targets the legacy single-instance variables; per-instance
-  # routing is a follow-up.
+  # detect-qa-matrix: discover QA-enabled OBS subprojects, once per entry of
+  # the `OBS_INSTANCES` repository variable.  Each leg scans only its own
+  # instance's PR project and uploads its share of the matrix as an artifact;
+  # `merge-qa-matrix` concatenates them.  Runs in parallel with `build`; once
+  # the merge finishes, the `qa` matrix job's check runs appear in the PR's
+  # check list as queued, signalling the upcoming QA work.
+  #
+  # An instance may carry `qa_types` (a comma-separated subset of
+  # packages,containers) to declare which QA kinds live on it; the label-
+  # derived type list is intersected with it, and an empty intersection means
+  # this leg discovers nothing.
   # ──────────────────────────────────────────────────────────────────────────
   detect-qa-matrix:
-    name: Detect QA matrix
+    name: Detect QA matrix (${{ matrix.instance.name }})
     needs: [resolve, sync]
     # needs.sync.result: the aggregate over all instance legs -- per-leg sync
     # success cannot be a job output (matrix outputs are last-writer-wins).
@@ -540,26 +549,27 @@ jobs:
       (contains(fromJSON(needs.resolve.outputs.labels_json), 'qa-packages') || contains(fromJSON(needs.resolve.outputs.labels_json), 'qa-containers'))
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: ${{ fromJSON(vars.OBS_INSTANCES) }}
     permissions:
       packages: read
-
-    outputs:
-      has_matrix: ${{ steps.matrix.outputs.has_matrix }}
-      matrix: ${{ steps.matrix.outputs.matrix }}
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: ./.github/actions/obs-setup
         with:
-          obs-apiurl: ${{ vars.OBS_APIURL }}
-          obs-user: ${{ vars.OBS_USER }}
-          obs-password: ${{ secrets.OBS_PASSWORD }}
+          obs-apiurl: ${{ matrix.instance.apiurl }}
+          obs-user: ${{ matrix.instance.user || vars.OBS_USER }}
+          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance.name)] }}
 
       - name: Write CI profile
         env:
-          OBS_APIURL: ${{ vars.OBS_APIURL }}
-          OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
+          OBS_APIURL: ${{ matrix.instance.apiurl }}
+          OBS_PR_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}
+          OBS_REGISTRY: ${{ matrix.instance.registry }}
           PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
           JENKINS_URL: ${{ vars.JENKINS_URL }}
           JENKINS_USER: ${{ vars.JENKINS_USER }}
@@ -568,6 +578,7 @@ jobs:
           cat > .profile/ci.yaml <<EOF
           apiurl: ${OBS_APIURL}
           rootprj: ${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}
+          ${OBS_REGISTRY:+registry: ${OBS_REGISTRY}}
           jenkins:
             url: ${JENKINS_URL}
             user: ${JENKINS_USER}
@@ -576,35 +587,125 @@ jobs:
               value: 'openSUSE.org:'
           EOF
 
-      # Build QA_TYPES from qa-packages / qa-containers labels.
-      # Passed to list_qa_matrix.py to restrict which subproject types are scanned.
+      # Build QA_TYPES from the qa-packages / qa-containers labels, then
+      # intersect with this instance's declared `qa_types` (when non-empty).
+      # An empty intersection means this instance hosts none of the requested
+      # QA kinds, so its discovery is skipped entirely.
       - name: Resolve QA type filter
         id: qa-types
+        env:
+          LABELS_JSON: ${{ needs.resolve.outputs.labels_json }}
+          INSTANCE_NAME: ${{ matrix.instance.name }}
+          INSTANCE_QA_TYPES: ${{ matrix.instance.qa_types }}
         run: |
-          LABELS='${{ needs.resolve.outputs.labels_json }}'
+          set -eu
           TYPES=""
-          if echo "$LABELS" | jq -e '[.[] | select(. == "qa-packages")] | length > 0' > /dev/null; then
+          if echo "$LABELS_JSON" | jq -e '[.[] | select(. == "qa-packages")] | length > 0' > /dev/null; then
             TYPES="packages"
           fi
-          if echo "$LABELS" | jq -e '[.[] | select(. == "qa-containers")] | length > 0' > /dev/null; then
+          if echo "$LABELS_JSON" | jq -e '[.[] | select(. == "qa-containers")] | length > 0' > /dev/null; then
             TYPES="${TYPES:+$TYPES,}containers"
+          fi
+          if [ -n "${INSTANCE_QA_TYPES:-}" ]; then
+            KEPT=""
+            for t in $(echo "$TYPES" | tr ',' ' '); do
+              for a in $(echo "$INSTANCE_QA_TYPES" | tr ',' ' '); do
+                if [ "$t" = "$a" ]; then KEPT="${KEPT:+$KEPT,}$t"; fi
+              done
+            done
+            TYPES="$KEPT"
+            if [ -z "$TYPES" ]; then
+              echo "::notice::instance ${INSTANCE_NAME}: no requested QA type is hosted here; skipping discovery"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            fi
           fi
           echo "qa_types=${TYPES}" >> "$GITHUB_OUTPUT"
 
-      # Iterate every immediate subproject of the PR's OBS root project, call
-      # `percona-obs qa show <project> --json` for each, and concatenate the
-      # results into a single matrix array (empty for subprojects without a
-      # `qa:` block).
+      # Iterate every immediate subproject of this instance's PR OBS root
+      # project, call `percona-obs qa show <project> --json` for each, and
+      # concatenate the results into this leg's share of the matrix.
       - name: Discover QA matrix from OBS PR subprojects
         id: matrix
         env:
-          OBS_APIURL: ${{ vars.OBS_APIURL }}
-          OBS_PROJECT: ${{ vars.OBS_PR_ROOTPRJ }}:pr-${{ needs.resolve.outputs.pr_number }}
+          OBS_APIURL: ${{ matrix.instance.apiurl }}
+          OBS_PROJECT: ${{ matrix.instance.pr_rootprj }}:pr-${{ needs.resolve.outputs.pr_number }}
           PYTHONPATH: ${{ github.workspace }}
           QA_TYPES: ${{ steps.qa-types.outputs.qa_types }}
+          SKIP: ${{ steps.qa-types.outputs.skip }}
         run: |
-          venv/bin/python .github/scripts/list_qa_matrix.py > /tmp/qa-matrix.json
-          MATRIX=$(cat /tmp/qa-matrix.json)
+          set -eu
+          if [ "${SKIP:-}" = "true" ]; then
+            echo '[]' > /tmp/qa-matrix.json
+          else
+            venv/bin/python .github/scripts/list_qa_matrix.py > /tmp/qa-matrix.json
+          fi
+
+      - name: Upload QA matrix share
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-matrix-${{ matrix.instance.name }}
+          path: /tmp/qa-matrix.json
+          retention-days: 1
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # merge-qa-matrix: concatenate the per-instance matrix shares into the one
+  # matrix the `qa` job fans out over, stamping every entry with flat scalar
+  # fields naming the instance it came from (instance_name, instance_apiurl,
+  # instance_pr_rootprj, instance_registry).  Flat scalars, not a nested
+  # object, so `matrix.include` access stays unambiguous.
+  # ──────────────────────────────────────────────────────────────────────────
+  merge-qa-matrix:
+    name: Merge QA matrix
+    needs: [resolve, sync, detect-qa-matrix]
+    if: |
+      needs.sync.outputs.is_release_pr != 'true' && needs.sync.result == 'success' &&
+      needs.detect-qa-matrix.result == 'success' &&
+      (contains(fromJSON(needs.resolve.outputs.labels_json), 'qa-packages') || contains(fromJSON(needs.resolve.outputs.labels_json), 'qa-containers'))
+    runs-on: ubuntu-latest
+
+    outputs:
+      has_matrix: ${{ steps.merge.outputs.has_matrix }}
+      matrix: ${{ steps.merge.outputs.matrix }}
+
+    steps:
+      - name: Download QA matrix shares
+        uses: actions/download-artifact@v4
+        with:
+          pattern: qa-matrix-*
+          path: /tmp/qa-shares
+
+      # Each share lands in /tmp/qa-shares/qa-matrix-<name>/qa-matrix.json, so
+      # the instance name comes from the directory name and is looked up in
+      # OBS_INSTANCES for the remaining fields.
+      - name: Merge shares
+        id: merge
+        env:
+          OBS_INSTANCES: ${{ vars.OBS_INSTANCES }}
+        run: |
+          set -euo pipefail
+          MATRIX='[]'
+          for d in /tmp/qa-shares/qa-matrix-*; do
+            [ -d "$d" ] || continue
+            name="${d##*/qa-matrix-}"
+            share=$(jq -c --arg n "$name" --argjson inst "$OBS_INSTANCES" '
+              ($inst[] | select(.name == $n)) as $i
+              | map(. + {
+                  instance_name: $i.name,
+                  instance_apiurl: $i.apiurl,
+                  instance_pr_rootprj: $i.pr_rootprj,
+                  instance_registry: ($i.registry // "")
+                })' "$d/qa-matrix.json")
+            MATRIX=$(jq -c -n --argjson a "$MATRIX" --argjson b "$share" '$a + $b')
+          done
+          # status_context becomes the check-run name; two legs sharing one
+          # would fight over a single check run.
+          DUPES=$(echo "$MATRIX" | jq -r '
+            group_by(.status_context) | map(select(length > 1) | .[0].status_context) | join(", ")')
+          if [ -n "$DUPES" ]; then
+            echo "::error::duplicate QA status_context across OBS instances: ${DUPES}."
+            echo "::error::Set 'qa_types' on the instances so they do not both discover the same project."
+            exit 1
+          fi
           echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
           if [ "$(echo "${MATRIX}" | jq 'length')" -gt 0 ]; then
             echo "has_matrix=true" >> "$GITHUB_OUTPUT"
@@ -613,12 +714,14 @@ jobs:
           fi
 
   # ──────────────────────────────────────────────────────────────────────────
-  # qa: trigger and poll Jenkins, once per matrix combo (in parallel).
+  # qa: trigger and poll Jenkins, once per matrix combo (in parallel).  Each
+  # combo carries the instance_* fields stamped in by `merge-qa-matrix`, so a
+  # combo talks to the OBS instance that discovered it.
   # ──────────────────────────────────────────────────────────────────────────
   qa:
     name: ${{ matrix.status_context }}
-    needs: [resolve, build, detect-qa-matrix]
-    if: needs.detect-qa-matrix.outputs.has_matrix == 'true' && needs.build.result == 'success'
+    needs: [resolve, build, merge-qa-matrix]
+    if: needs.merge-qa-matrix.outputs.has_matrix == 'true' && needs.build.result == 'success'
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     permissions:
@@ -626,7 +729,7 @@ jobs:
 
     strategy:
       matrix:
-        include: ${{ fromJSON(needs.detect-qa-matrix.outputs.matrix) }}
+        include: ${{ fromJSON(needs.merge-qa-matrix.outputs.matrix) }}
       fail-fast: false
 
     steps:
@@ -634,16 +737,18 @@ jobs:
 
       - uses: ./.github/actions/obs-setup
         with:
-          obs-apiurl: ${{ vars.OBS_APIURL }}
+          obs-apiurl: ${{ matrix.instance_apiurl }}
           obs-user: ${{ vars.OBS_USER }}
-          obs-password: ${{ secrets.OBS_PASSWORD }}
+          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance_name)] }}
 
       # Same CI profile as the detect job so `qa run` re-resolves project.yaml
-      # parameters identically (same OBS_ROOTPRJ → same ${OBS_ROOTPRJ_SLASHES}).
+      # parameters identically (same OBS_ROOTPRJ → same ${OBS_ROOTPRJ_SLASHES},
+      # same registry → same ${OBS_CONTAINER_REGISTRY}).
       - name: Write CI profile
         env:
-          OBS_APIURL: ${{ vars.OBS_APIURL }}
-          OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
+          OBS_APIURL: ${{ matrix.instance_apiurl }}
+          OBS_PR_ROOTPRJ: ${{ matrix.instance_pr_rootprj }}
+          OBS_REGISTRY: ${{ matrix.instance_registry }}
           PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
           JENKINS_URL: ${{ vars.JENKINS_URL }}
           JENKINS_USER: ${{ vars.JENKINS_USER }}
@@ -652,6 +757,7 @@ jobs:
           cat > .profile/ci.yaml <<EOF
           apiurl: ${OBS_APIURL}
           rootprj: ${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}
+          ${OBS_REGISTRY:+registry: ${OBS_REGISTRY}}
           jenkins:
             url: ${JENKINS_URL}
             user: ${JENKINS_USER}

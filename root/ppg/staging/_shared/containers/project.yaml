@@ -93,7 +93,7 @@ qa:
     DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
     SERVER_VERSION: "%!{PG_VERSION}"
     TESTING_BRANCH: ricardo-work
-    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi8
+    REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi8
     WITH_POSTGIS:
       - true
       - false
@@ -105,7 +105,7 @@ qa:
     DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
     SERVER_VERSION: "%!{PG_VERSION}"
     TESTING_BRANCH: ricardo-work
-    REPOSITORY: registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi9
+    REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi9
     WITH_POSTGIS:
       - true
       - false
