@@ -685,15 +685,19 @@ jobs:
           OBS_INSTANCES: ${{ vars.OBS_INSTANCES }}
         run: |
           set -euo pipefail
+          names=$(jq -r '.[].name' <<<"$OBS_INSTANCES")
+          if [ -z "$names" ]; then
+            echo "::error::OBS_INSTANCES is empty or malformed; QA shares cannot be attributed"
+            exit 1
+          fi
           MATRIX='[]'
-          for name in $(jq -r '.[].name' <<<"$OBS_INSTANCES"); do
+          consumed=0
+          while IFS= read -r name; do
+            [ -n "$name" ] || continue
             d="/tmp/qa-shares/qa-matrix-${name}"
             [ -d "$d" ] || continue
+            consumed=$((consumed + 1))
             inst=$(jq -c --arg n "$name" '.[] | select(.name == $n)' <<<"$OBS_INSTANCES")
-            if [ -z "$inst" ]; then
-              echo "::error::no OBS_INSTANCES entry named '${name}' for artifact ${d}"
-              exit 1
-            fi
             share=$(jq -c --argjson i "$inst" '
               map(. + {
                   instance_name: $i.name,
@@ -703,7 +707,15 @@ jobs:
                   instance_registry: ($i.registry // "")
                 })' "$d/qa-matrix.json")
             MATRIX=$(jq -c -n --argjson a "$MATRIX" --argjson b "$share" '$a + $b')
-          done
+          done <<<"$names"
+          # A share that matches no instance would vanish silently, taking that
+          # instance's whole QA lane with it (e.g. a rename between the detect
+          # and merge jobs), so account for every uploaded share.
+          uploaded=$(find /tmp/qa-shares -mindepth 1 -maxdepth 1 -type d -name 'qa-matrix-*' | wc -l)
+          if [ "$consumed" -ne "$uploaded" ]; then
+            echo "::error::${uploaded} QA share(s) uploaded but ${consumed} matched an OBS_INSTANCES entry"
+            exit 1
+          fi
           # status_context becomes the check-run name, so two entries sharing
           # one would fight over a single check run.  A project can legitimately
           # be in slice on more than one instance (ppg:staging:16:tde keeps UBI
