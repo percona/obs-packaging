@@ -141,7 +141,14 @@ def cmd_profile_create(args: argparse.Namespace) -> None:
             include_projects=repo_filter.include_projects,
             exclude_projects=repo_filter.exclude_projects,
         )
+    # `-P name profile create name` without --registry keeps the current value
+    # (same round-trip rule as the filter keys above).
+    registry = getattr(args, "registry", None)
+    if not registry and getattr(args, "profile", None):
+        registry = _load_profile(args.profile).get("registry")
     data: dict[str, object] = {"apiurl": args.apiurl, "rootprj": args.rootprj}
+    if registry:
+        data["registry"] = registry
     if env_vars:
         data["env"] = [{"name": k, "value": v} for k, v in sorted(env_vars.items())]
     data.update(repo_filter.to_profile())

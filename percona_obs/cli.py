@@ -34,7 +34,13 @@ from .cmd_sync import (
     cmd_sync_promote,
     cmd_sync_release,
 )
-from .common import _DIM, _col, logger, set_default_repository_filter
+from .common import (
+    _DIM,
+    _col,
+    logger,
+    registry_env_override,
+    set_default_repository_filter,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -575,6 +581,16 @@ def build_parser() -> argparse.ArgumentParser:
             f"{_flag[2:].replace('repos', 'repositories')}. See docs/PERCONA_OBS_TOOL.md.",
         )
     profile_create_parser.add_argument(
+        "--registry",
+        metavar="HOST",
+        default=None,
+        dest="registry",
+        help="Container registry host published as ${OBS_CONTAINER_REGISTRY} to "
+        "project.yaml rendering (default: registry.opensuse.org). Written to the "
+        "profile as 'registry'; omitting the flag on '-P name profile create name' "
+        "keeps the profile's current value.",
+    )
+    profile_create_parser.add_argument(
         "--narrow-repos",
         metavar="REPO[,REPO...]",
         action="append",
@@ -766,6 +782,7 @@ def main() -> None:
     args = parser.parse_args()
 
     # Resolve profile values; explicit -A / -R / -e always take precedence.
+    profile: dict[str, str] = {}
     if args.profile:
         profile = _load_profile(args.profile)
         if not args.apiurl:
@@ -777,6 +794,17 @@ def main() -> None:
             _load_profile_env_strings(args.profile) + args.env_overrides
         )
         set_default_repository_filter(_load_profile_filter(args.profile))
+
+    # ${OBS_CONTAINER_REGISTRY}: default < profile `registry:` key < profile
+    # `env:` section < explicit -e.  Prepended after the profile env above so
+    # it lands *before* it in the list (parse_env_overrides is last-wins).
+    # Skipped for `profile` so `profile create` never bakes this derived value
+    # into the new profile's env section, where it would shadow the profile's
+    # own `registry:` key on every later invocation.
+    if args.command != "profile":
+        args.env_overrides = [
+            registry_env_override(profile.get("registry"))
+        ] + args.env_overrides
 
     _local_only_commands = ("profile", "project")
 

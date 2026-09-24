@@ -231,9 +231,13 @@ env:                                 # optional: variables for ${VAR} substituti
 exclude-repositories: ["UBI_*", "ubi*", "images"]   # b.o.o: no UBI RPM repos, no images
 # include-repositories: ["UBI_*", "ubi*", "images"] # labs: only those
 # include-projects / exclude-projects: globs on the OBS project name without the rootprj
+registry: registry.opensuse.org      # optional: container registry host, exposed as
+                                     # ${OBS_CONTAINER_REGISTRY} (this is also the default)
 ```
 
 **Slices.** A profile may declare which repositories and projects its instance carries. The tree stays instance-agnostic; `percona_obs/project_config.py::RepositoryFilter` is applied to every resolved configuration by the loader (`cli.main()` installs the active profile's filter as the process default). A project is *in slice* iff its name passes the project globs and it keeps at least one repository (a project with zero repositories is never created); a package is in slice iff its project is and it is not `build: false` on every surviving repository. Out-of-slice projects and packages are treated exactly like things absent from the tree: `sync push` neither creates nor uploads them, and a full-tree push deletes them from that instance as orphans. `profile create --include-repos/--exclude-repos/--include-projects/--exclude-projects GLOB[,GLOB]` write the keys; `--narrow-repos REPO[,REPO]` intersects the slice with the given names (used by the PR workflow for repo labels; exits 3 when nothing is left). See `docs/PERCONA_OBS_TOOL.md`.
+
+**Container registry.** `registry:` names the registry that publishes the images this instance builds; it is substituted as `${OBS_CONTAINER_REGISTRY}` (default `registry.opensuse.org`, so profiles without the key are unaffected). Precedence: default < `registry:` < the profile's `env:` section < explicit `-e`. Write it with `profile create --registry HOST`.
 
 **Example** — create a `dev` profile and use it:
 ```sh
