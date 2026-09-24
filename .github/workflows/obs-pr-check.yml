@@ -676,7 +676,9 @@ jobs:
 
       # Each share lands in /tmp/qa-shares/qa-matrix-<name>/qa-matrix.json, so
       # the instance name comes from the directory name and is looked up in
-      # OBS_INSTANCES for the remaining fields.
+      # OBS_INSTANCES for the remaining fields.  Shares are merged in
+      # OBS_INSTANCES order, which is also the precedence order used to settle
+      # duplicates below.
       - name: Merge shares
         id: merge
         env:
@@ -684,27 +686,38 @@ jobs:
         run: |
           set -euo pipefail
           MATRIX='[]'
-          for d in /tmp/qa-shares/qa-matrix-*; do
+          for name in $(jq -r '.[].name' <<<"$OBS_INSTANCES"); do
+            d="/tmp/qa-shares/qa-matrix-${name}"
             [ -d "$d" ] || continue
-            name="${d##*/qa-matrix-}"
-            share=$(jq -c --arg n "$name" --argjson inst "$OBS_INSTANCES" '
-              ($inst[] | select(.name == $n)) as $i
-              | map(. + {
+            inst=$(jq -c --arg n "$name" '.[] | select(.name == $n)' <<<"$OBS_INSTANCES")
+            if [ -z "$inst" ]; then
+              echo "::error::no OBS_INSTANCES entry named '${name}' for artifact ${d}"
+              exit 1
+            fi
+            share=$(jq -c --argjson i "$inst" '
+              map(. + {
                   instance_name: $i.name,
                   instance_apiurl: $i.apiurl,
                   instance_pr_rootprj: $i.pr_rootprj,
+                  instance_user: ($i.user // ""),
                   instance_registry: ($i.registry // "")
                 })' "$d/qa-matrix.json")
             MATRIX=$(jq -c -n --argjson a "$MATRIX" --argjson b "$share" '$a + $b')
           done
-          # status_context becomes the check-run name; two legs sharing one
-          # would fight over a single check run.
-          DUPES=$(echo "$MATRIX" | jq -r '
-            group_by(.status_context) | map(select(length > 1) | .[0].status_context) | join(", ")')
+          # status_context becomes the check-run name, so two entries sharing
+          # one would fight over a single check run.  A project can legitimately
+          # be in slice on more than one instance (ppg:staging:16:tde keeps UBI
+          # repos on labs and distro repos on b.o.o), and qa_types cannot split
+          # those — both classify as the same QA kind.  Settle it by instance
+          # order instead of failing: the first instance in OBS_INSTANCES that
+          # discovered the context keeps it, and the drop is reported.
+          DUPES=$(jq -r '
+            group_by(.status_context) | map(select(length > 1)
+            | "\(.[0].status_context) (kept on \(.[0].instance_name), dropped on \([.[1:][].instance_name] | join(", ")))")
+            | join("; ")' <<<"$MATRIX")
           if [ -n "$DUPES" ]; then
-            echo "::error::duplicate QA status_context across OBS instances: ${DUPES}."
-            echo "::error::Set 'qa_types' on the instances so they do not both discover the same project."
-            exit 1
+            echo "::warning::QA context discovered on several instances: ${DUPES}"
+            MATRIX=$(jq -c 'group_by(.status_context) | map(.[0])' <<<"$MATRIX")
           fi
           echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
           if [ "$(echo "${MATRIX}" | jq 'length')" -gt 0 ]; then
@@ -738,7 +751,7 @@ jobs:
       - uses: ./.github/actions/obs-setup
         with:
           obs-apiurl: ${{ matrix.instance_apiurl }}
-          obs-user: ${{ vars.OBS_USER }}
+          obs-user: ${{ matrix.instance_user || vars.OBS_USER }}
           obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance_name)] }}
 
       # Same CI profile as the detect job so `qa run` re-resolves project.yaml
