@@ -178,6 +178,7 @@ jobs:
           EXCLUDE_REPOS: ${{ matrix.instance.exclude_repos }}
           INCLUDE_PROJECTS: ${{ matrix.instance.include_projects }}
           EXCLUDE_PROJECTS: ${{ matrix.instance.exclude_projects }}
+          INSTANCE_ENV: ${{ toJSON(matrix.instance.env) }}
         run: |
           set -euo pipefail
           args=()
@@ -185,12 +186,26 @@ jobs:
           if [ -n "${EXCLUDE_REPOS:-}" ]; then args+=(--exclude-repos "$EXCLUDE_REPOS"); fi
           if [ -n "${INCLUDE_PROJECTS:-}" ]; then args+=(--include-projects "$INCLUDE_PROJECTS"); fi
           if [ -n "${EXCLUDE_PROJECTS:-}" ]; then args+=(--exclude-projects "$EXCLUDE_PROJECTS"); fi
+          # Per-instance env from the OBS_INSTANCES entry, appended after the
+          # defaults above so an instance can override them (parse_env_overrides
+          # is last-wins, and splits KEY:VALUE on the first colon so a value
+          # such as "openSUSE.org:" survives intact).
+          env_args=()
+          if [ -n "${INSTANCE_ENV:-}" ] && [ "$INSTANCE_ENV" != "null" ]; then
+            while IFS= read -r kv; do
+              # `if`, not `[ … ] &&`: with an empty env object the test fails on
+              # the last line and, as the loop body's final command, would make
+              # the loop exit non-zero and trip `set -e`.
+              if [ -n "$kv" ]; then env_args+=(-e "$kv"); fi
+            done <<<"$(jq -r 'to_entries[] | "\(.key):\(.value)"' <<<"$INSTANCE_ENV")"
+          fi
           venv/bin/python -m percona_obs \
             -A "$OBS_APIURL" \
             -R "${{ matrix.instance.rootprj }}" \
             -e "REMOTE_OBS_ORG_INTERCONNECT:" \
             -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
             -e "PERCONA_OBS_PACKAGING_REPO:${{ github.server_url }}/${{ github.repository }}.git" \
+            "${env_args[@]}" \
             profile create main "${args[@]}"
 
       # releases/ directories are excluded from sync push traversal (each
