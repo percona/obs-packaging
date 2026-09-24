@@ -77,6 +77,19 @@ FILTER_PROFILE_KEYS: tuple[tuple[str, str], ...] = (
 )
 
 
+def prune_flag_map(value: Any, kept_repos: "set[str]") -> Any:
+    """Drop per-repository entries naming a repository outside *kept_repos*.
+
+    ``build``/``publish``/``debuginfo`` maps are keyed by repository name, and
+    OBS rejects a flag naming a repository its project does not have
+    ("invalid_record: Flags is invalid").  Booleans and the ``{disable: true}``
+    /``{enable: true}`` shorthand carry no repository and pass through.
+    """
+    if not isinstance(value, dict) or set(value) <= {"disable", "enable"}:
+        return value
+    return {k: v for k, v in value.items() if k in kept_repos}
+
+
 def _glob_any(name: str, patterns: tuple[str, ...]) -> bool:
     return any(fnmatch.fnmatchcase(name, p) for p in patterns)
 
@@ -147,9 +160,8 @@ class RepositoryFilter:
         out = dict(config)
         out["repositories"] = [copy.deepcopy(r) for r in repos if r["name"] in keep]
         for key in FLAG_KEYS:
-            value = out.get(key)
-            if isinstance(value, dict) and not set(value) <= {"disable", "enable"}:
-                out[key] = {k: v for k, v in value.items() if k in keep}
+            if key in out:
+                out[key] = prune_flag_map(out[key], keep)
         return out
 
     def to_profile(self) -> dict[str, list[str]]:
