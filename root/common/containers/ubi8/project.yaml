@@ -11,16 +11,16 @@ publish: false
 repositories:
   - name: UBI_8
     paths:
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
+      - project: RedHat:UBI-8
         repository: standard
     archs: [x86_64, aarch64]
   - name: images
     paths:
       - subproject: common:containers:ubi8
         repository: UBI_8
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
+      - project: RedHat:UBI-8
         repository: appstream
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
+      - project: RedHat:UBI-8
         repository: baseos
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
         repository: appstream

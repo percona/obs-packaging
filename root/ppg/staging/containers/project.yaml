@@ -34,9 +34,9 @@ repositories:
         repository: UBI_8
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:8
         repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
+      - project: RedHat:UBI-8
         repository: appstream
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
+      - project: RedHat:UBI-8
         repository: baseos
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
         repository: appstream
@@ -65,7 +65,7 @@ repositories:
         repository: UBI_9
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
         repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+      - project: RedHat:UBI-9
         repository: standard
     archs: [x86_64, aarch64]
 
