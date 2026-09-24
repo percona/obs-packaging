@@ -8,6 +8,13 @@ name: OBS Stale PR Cleanup
 # Staleness is measured from the last commit (not updatedAt) so that posting
 # the warning comment does not reset the deletion countdown.
 # Can also be triggered manually via workflow_dispatch.
+#
+# Two jobs: `warn` posts one comment per stale PR, naming that PR's project on
+# every instance, while `delete` runs once per entry of the `OBS_INSTANCES`
+# repository variable — each instance holds its own PR project under its own
+# pr_rootprj and authenticates with its own secret `OBS_PASSWORD_<NAME>`.
+# WARN_DAYS and DELETE_DAYS are declared in both jobs and MUST stay in sync:
+# a warning that never precedes its deletion is worse than no warning.
 
 on:
   schedule:
@@ -15,38 +22,122 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  cleanup:
-    name: Clean up OBS projects for stale PRs
+  warn:
+    name: Warn about stale PR builds
     runs-on: ubuntu-latest
-    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     permissions:
       contents: read
-      packages: read
       pull-requests: write
-
-    env:
-      OBS_APIURL: ${{ vars.OBS_APIURL }}
-      OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: ./.github/actions/obs-setup
-        with:
-          obs-apiurl: ${{ vars.OBS_APIURL }}
-          obs-user: ${{ vars.OBS_USER }}
-          obs-password: ${{ secrets.OBS_PASSWORD }}
-
-      - name: Warn or delete OBS projects for stale PRs
+      - name: Post deletion warnings for stale PRs
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          OBS_INSTANCES: ${{ vars.OBS_INSTANCES }}
           WARN_DAYS: "6"
           DELETE_DAYS: "7"
           WARN_MARKER: "<!-- percona-obs-stale-warning -->"
         run: |
           now_ts=$(date -u +%s)
           failures=$(mktemp)
+          gh pr list \
+            --state open \
+            --limit 200 \
+            --json number,labels \
+          | jq -c '.[]' \
+          | while read -r pr; do
+              number=$(jq -r '.number' <<<"$pr")
+              has_keep=$(jq -r 'any(.labels[]; .name == "keep-pr-build")' <<<"$pr")
+
+              if [ "$has_keep" = "true" ]; then
+                echo "PR #${number}: keep-pr-build label present, skipping"
+                continue
+              fi
+
+              last_commit=$(gh pr view "$number" --json commits \
+                --jq '.commits | sort_by(.committedDate) | last.committedDate // empty')
+              if [ -z "$last_commit" ]; then
+                echo "PR #${number}: no commits found, skipping"
+                continue
+              fi
+
+              last_ts=$(date -u -d "$last_commit" +%s)
+              age_days=$(( (now_ts - last_ts) / 86400 ))
+
+              # Past DELETE_DAYS the `delete` job acts; warning now would be
+              # both too late and permanent (the marker suppresses reposts).
+              if [ "$age_days" -ge "$DELETE_DAYS" ]; then
+                echo "PR #${number}: ${age_days}d stale, deletion handled by the delete job"
+                continue
+              fi
+              if [ "$age_days" -lt "$WARN_DAYS" ]; then
+                echo "PR #${number}: ${age_days}d stale, no action"
+                continue
+              fi
+              if gh pr view "$number" --json comments --jq '.comments[].body' \
+                   | grep -qF "$WARN_MARKER"; then
+                echo "PR #${number}: ${age_days}d stale, warning already posted"
+                continue
+              fi
+
+              # Name the PR project on every instance, e.g.
+              # "`isv:percona:PR:pr-85` on boo, `isv:percona:PR:pr-85` on labs".
+              projects=$(jq -r --arg n "$number" \
+                '[.[] | "`\(.pr_rootprj):pr-\($n)` on \(.name)"] | join(", ")' \
+                <<<"$OBS_INSTANCES")
+              echo "PR #${number}: ${age_days}d stale, posting warning"
+              warn_body=$(printf '%s\n\n:warning: This PR has had no new commits for %d days. Its OBS PR build projects (%s) will be deleted in 1 day unless:\n\n- new commits are pushed, **or**\n- the `keep-pr-build` label is added.\n' \
+                "$WARN_MARKER" "$age_days" "$projects")
+              if ! gh pr comment "$number" --body "$warn_body"; then
+                echo "PR #${number}: failed to post warning comment" >&2
+                echo "$number" >>"$failures"
+              fi
+            done
+
+          # One unpostable comment must not hide the rest of the sweep, but it
+          # still has to fail the job so the problem is visible.
+          if [ -s "$failures" ]; then
+            echo "::error::could not post stale warnings on PRs: $(tr '\n' ' ' <"$failures")"
+            exit 1
+          fi
+
+  # One leg per OBS instance: each holds its own PR projects and credentials.
+  delete:
+    name: Delete stale PR projects (${{ matrix.instance.name }})
+    runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: ${{ fromJSON(vars.OBS_INSTANCES) }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: read
+
+    env:
+      OBS_APIURL: ${{ matrix.instance.apiurl }}
+      OBS_PR_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/obs-setup
+        with:
+          obs-apiurl: ${{ matrix.instance.apiurl }}
+          obs-user: ${{ matrix.instance.user || vars.OBS_USER }}
+          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance.name)] }}
+
+      - name: Delete OBS projects for stale PRs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DELETE_DAYS: "7"
+        run: |
+          now_ts=$(date -u +%s)
           gh pr list \
             --state open \
             --limit 200 \
@@ -81,27 +172,7 @@ jobs:
                   --yes \
                   --recursive \
                   --from-obs
-              elif [ "$age_days" -ge "$WARN_DAYS" ]; then
-                if gh pr view "$number" --json comments --jq '.comments[].body' \
-                     | grep -qF "$WARN_MARKER"; then
-                  echo "PR #${number}: ${age_days}d stale, warning already posted"
-                  continue
-                fi
-                echo "PR #${number}: ${age_days}d stale, posting warning"
-                warn_body=$(printf '%s\n\n:warning: This PR has had no new commits for %d days. Its OBS PR build project (`%s`) will be deleted in 1 day unless:\n\n- new commits are pushed, **or**\n- the `keep-pr-build` label is added.\n' \
-                  "$WARN_MARKER" "$age_days" "$PR_ROOTPRJ")
-                if ! gh pr comment "$number" --body "$warn_body"; then
-                  echo "PR #${number}: failed to post warning comment" >&2
-                  echo "$number" >>"$failures"
-                fi
               else
                 echo "PR #${number}: ${age_days}d stale, no action"
               fi
             done
-
-          # One unpostable comment must not hide the rest of the sweep, but it
-          # still has to fail the job so the problem is visible.
-          if [ -s "$failures" ]; then
-            echo "::error::could not post stale warnings on PRs: $(tr '\n' ' ' <"$failures")"
-            exit 1
-          fi

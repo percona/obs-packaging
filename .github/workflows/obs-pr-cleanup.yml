@@ -8,6 +8,12 @@ name: OBS PR Cleanup
 #     for the default token, and this repo has no PAT).
 #   - every PR: delete the PR-specific OBS project created by
 #     obs-pr-check.yml (no-op if it never existed) and the PR's Actions caches.
+#
+# Two jobs: `release-dispatch` runs once per PR (release detection, tagging,
+# the obs-release dispatch with its sync-main lock, and cache deletion), while
+# `delete` runs once per entry of the `OBS_INSTANCES` repository variable —
+# every instance holds its own PR project under its own pr_rootprj and
+# authenticates with its own secret `OBS_PASSWORD_<NAME>`.
 
 on:
   pull_request:
@@ -16,8 +22,8 @@ on:
     types: [closed]
 
 jobs:
-  cleanup:
-    name: percona-obs sync delete pr-${{ github.event.number }}
+  release-dispatch:
+    name: Tag release and dispatch obs-release
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     permissions:
@@ -29,38 +35,24 @@ jobs:
 
     env:
       PR_NUMBER: ${{ github.event.number }}
-      OBS_APIURL: ${{ vars.OBS_APIURL }}
-      OBS_PR_ROOTPRJ: ${{ vars.OBS_PR_ROOTPRJ }}
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # This job never talks to OBS; it needs only the venv this action links.
+      # The action requires credentials, so the first instance's are passed.
       - uses: ./.github/actions/obs-setup
         with:
-          obs-apiurl: ${{ vars.OBS_APIURL }}
-          obs-user: ${{ vars.OBS_USER }}
-          obs-password: ${{ secrets.OBS_PASSWORD }}
-
-      # Create the pr-N profile so subsequent steps can use -P "pr-N" instead
-      # of repeating -A and -R.
-      - name: Create percona-obs profiles
-        run: |
-          PR_ROOTPRJ="${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}"
-
-          venv/bin/python -m percona_obs \
-            -A "$OBS_APIURL" \
-            -R "$PR_ROOTPRJ" \
-            -e "REMOTE_OBS_ORG_INTERCONNECT:" \
-            -e "PERCONA_OBS_PACKAGING_BRANCH:refs/pull/${PR_NUMBER}/head" \
-            -e "PERCONA_OBS_PACKAGING_REPO:${{ github.event.pull_request.head.repo.clone_url }}" \
-            profile create "pr-${PR_NUMBER}"
+          obs-apiurl: ${{ fromJSON(vars.OBS_INSTANCES)[0].apiurl }}
+          obs-user: ${{ fromJSON(vars.OBS_INSTANCES)[0].user || vars.OBS_USER }}
+          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', fromJSON(vars.OBS_INSTANCES)[0].name)] }}
 
       # Detect whether this is a release-only PR (all changed root/** files are
-      # under root/*/releases/).  This output gates tag creation below; it also
-      # still tells us that a release-only PR never created a PR OBS project,
-      # so the delete step below runs as a no-op for it.
+      # under root/*/releases/).  This output gates tag creation below.  A
+      # release-only PR never created a PR OBS project, so the `delete` job
+      # below runs as a no-op for it.
       - name: Detect release-only PR
         id: detect
         env:
@@ -176,20 +168,6 @@ jobs:
             DISPATCHED_ANY=true
           done <<< "$FILES"
 
-      # Delete the PR's root project and all its sub-projects.
-      # --yes skips the confirmation prompt.
-      # --recursive ensures OBS deletes projects that still contain packages
-      # (e.g. if a build was in progress when the PR was closed).
-      # 404 responses are handled gracefully by percona-obs (no error).
-      - name: Delete PR OBS project
-        run: |
-          venv/bin/python -m percona_obs --verbose \
-            -P "pr-${PR_NUMBER}" \
-            sync delete \
-            --yes \
-            --recursive \
-            --from-obs
-
       # Delete this PR's Actions caches (created by obs-pr-check.yml on the
       # refs/pull/N/merge ref).  Caches on PR merge refs can never be
       # restored by main-branch runs, so leaving them around only churns the
@@ -207,3 +185,57 @@ jobs:
             gh api -X DELETE \
               "repos/${GITHUB_REPOSITORY}/actions/caches/${cache_id}" || true
           done
+
+  # One leg per OBS instance: each holds its own PR project and credentials.
+  # Independent of release-dispatch — a failed tag or dispatch must not leave
+  # PR projects behind.
+  delete:
+    name: Delete PR OBS project (${{ matrix.instance.name }})
+    runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: ${{ fromJSON(vars.OBS_INSTANCES) }}
+    permissions:
+      packages: read
+
+    env:
+      PR_NUMBER: ${{ github.event.number }}
+      OBS_APIURL: ${{ matrix.instance.apiurl }}
+      OBS_PR_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/obs-setup
+        with:
+          obs-apiurl: ${{ matrix.instance.apiurl }}
+          obs-user: ${{ matrix.instance.user || vars.OBS_USER }}
+          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance.name)] }}
+
+      # Create the pr-N profile so the delete step can use -P "pr-N" instead
+      # of repeating -A and -R.
+      - name: Create percona-obs profile
+        run: |
+          venv/bin/python -m percona_obs \
+            -A "$OBS_APIURL" \
+            -R "${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}" \
+            -e "REMOTE_OBS_ORG_INTERCONNECT:" \
+            -e "PERCONA_OBS_PACKAGING_BRANCH:refs/pull/${PR_NUMBER}/head" \
+            -e "PERCONA_OBS_PACKAGING_REPO:${{ github.event.pull_request.head.repo.clone_url }}" \
+            profile create "pr-${PR_NUMBER}"
+
+      # Delete the PR's root project and all its sub-projects.
+      # --yes skips the confirmation prompt.
+      # --recursive ensures OBS deletes projects that still contain packages
+      # (e.g. if a build was in progress when the PR was closed).
+      # 404 responses are handled gracefully by percona-obs (no error).
+      - name: Delete PR OBS project
+        run: |
+          venv/bin/python -m percona_obs --verbose \
+            -P "pr-${PR_NUMBER}" \
+            sync delete \
+            --yes \
+            --recursive \
+            --from-obs
