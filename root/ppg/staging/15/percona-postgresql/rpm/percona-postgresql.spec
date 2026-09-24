@@ -166,6 +166,16 @@ BuildRequires:	lz4-devel
 Requires:	lz4
 %endif
 
+# zstd dependency
+%if 0%{?suse_version} >= 1499
+BuildRequires:	libzstd-devel >= 1.4.0
+Requires:	libzstd1 >= 1.4.0
+%endif
+%if 0%{?rhel} >= 8 || 0%{?fedora}
+BuildRequires:	libzstd-devel >= 1.4.0
+Requires:	libzstd >= 1.4.0
+%endif
+
 # This dependency is needed for Source 16:
 %if 0%{?fedora} || 0%{?rhel} > 7
 BuildRequires:  perl-generators
@@ -777,6 +787,9 @@ export CLANG=%{_bindir}/clang-19
         --libdir=%{pgbaseinstdir}/lib \
         --with-lz4 \
         --with-extra-version=" - Percona Distribution" \
+%if 0%{?rhel} >= 8 || 0%{?suse_version} >= 1499 || 0%{?fedora}
+        --with-zstd \
+%endif
 %if %beta
         --enable-debug \
         --enable-cassert \
