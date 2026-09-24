@@ -788,4 +788,5 @@ jobs:
             --pipeline "${{ matrix.pipeline }}" \
             --wait \
             --report-json /tmp/qa-report.json \
+            ${{ matrix.name_filter }} \
             ${{ matrix.axis_filters }}

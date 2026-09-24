@@ -618,6 +618,7 @@ status posted per combo on the PR head.
 ```yaml
 # project.yaml
 qa:
+  name: <entry-name>                    # optional, string
   pipeline: <jenkins-job-name>          # required
   parameters:                           # required
     SCALAR_PARAM: value                 # passed as-is
@@ -628,6 +629,26 @@ qa:
     - LIST_PARAM
 ```
 
+`qa:` may also be a **list** of such entries, one per pipeline lane.
+
+#### `name:` — disambiguating two entries
+
+`name` is optional and must be a non-empty string, unique within one project's
+`qa:` block. It changes two things:
+
+* **The check-run name.** For a multi-entry block, the disambiguating segment of
+  `status_context` (`OBS QA / <project> / <segment> / <combo>`) is the entry's
+  `name` when it has one, and the pipeline name otherwise. Entries without a
+  `name` therefore keep their historical contexts unchanged.
+* **Selection.** `qa run --name <name>` runs exactly that entry; it combines
+  with `--pipeline` (both filters apply).
+
+`name` is **required when two entries in one block share a pipeline** (e.g. the
+`ubi8` and `ubi9` container lanes, both on `docker-server-parallel-generic`):
+without it both lanes render the same `status_context`, the `merge-qa-matrix`
+job de-duplicates by that context and silently drops one lane, and
+`qa run --pipeline …` would trigger both under a single check.
+
 `${VAR}` tokens in any value are substituted from the active profile's `env:`
 section, plus auto-injected `OBS_ROOTPRJ` and `OBS_CONTAINER_REGISTRY_ROOTPRJ` (the root
 project name with `:` replaced by `/`, useful for registry URLs).
@@ -636,8 +657,8 @@ project name with `:` replaced by `/`, useful for registry URLs).
 
 | Command | Purpose |
 |---|---|
-| `qa show <project>` | Print the resolved matrix (humans). `--json` emits one entry per combo with `project`, `pipeline`, `label`, `axis_filters`, `status_context`, `params` — used by CI to drive a GitHub matrix. Empty `[]` when the project has no `qa:` block. |
-| `qa run <project>` | Trigger Jenkins for every matrix combo. Fire-and-forget by default; pass `--wait` to block until terminal results arrive. `--filter AXIS=val[,val…]` narrows the matrix; `--param NAME=VAL` overrides a parameter at runtime; `--dry-run` prints the POST bodies without calling Jenkins; `--report-json PATH` writes the per-combo result table for CI. |
+| `qa show <project>` | Print the resolved matrix (humans). `--json` emits one entry per combo with `project`, `pipeline`, `name`, `label`, `axis_filters`, `name_filter`, `status_context`, `params` — used by CI to drive a GitHub matrix. Empty `[]` when the project has no `qa:` block. |
+| `qa run <project>` | Trigger Jenkins for every matrix combo. Fire-and-forget by default; pass `--wait` to block until terminal results arrive. `--filter AXIS=val[,val…]` narrows the matrix; `--name NAME` selects one entry of a multi-entry `qa:` block (combinable with `--pipeline`); `--param NAME=VAL` overrides a parameter at runtime; `--dry-run` prints the POST bodies without calling Jenkins; `--report-json PATH` writes the per-combo result table for CI. |
 | `qa status --run-id <id>` | Re-poll non-terminal combos of a previous run and print the current state. |
 | `qa retry --run-id <id>` | Re-trigger only the combos whose latest attempt is non-`SUCCESS`. Re-uses the recorded `params` so retries are reproducible. By default skips `ABORTED` combos; pass `--include-aborted` to retry them too. |
 | `qa list` | Tabulate recent runs (run-id, project, pipeline, summary). |

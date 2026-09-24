@@ -35,6 +35,19 @@ def qa_project_type(full_name: str) -> str:
     return "packages"
 
 
+def normalize_entry(entry: dict) -> dict:
+    """Ensure a combo carries a ready-to-use ``name_filter`` flag string.
+
+    Mirrors the ``axis_filters`` convention: the workflow interpolates the
+    value straight into the ``qa run`` command line, so it is either
+    ``--name <name>`` or the empty string (entry without a ``name:``).
+    """
+    if not entry.get("name_filter"):
+        name = entry.get("name") or ""
+        entry["name_filter"] = f"--name {name}" if name else ""
+    return entry
+
+
 def main() -> None:
     import osc.conf
 
@@ -90,7 +103,7 @@ def main() -> None:
             continue
         if entries:
             print(f"  {project}: {len(entries)} combo(s)", file=sys.stderr)
-            matrix.extend(entries)
+            matrix.extend(normalize_entry(e) for e in entries)
 
     print(json.dumps(matrix))
 

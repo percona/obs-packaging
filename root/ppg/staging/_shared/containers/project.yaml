@@ -88,26 +88,28 @@ project-config: |
 
 
 qa:
-  pipeline: docker-server-parallel-generic
-  parameters:
-    DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
-    SERVER_VERSION: "%!{PG_VERSION}"
-    TESTING_BRANCH: ricardo-work
-    REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi8
-    WITH_POSTGIS:
-      - true
-      - false
-  matrix:
-    - WITH_POSTGIS
+  - name: ubi8
+    pipeline: docker-server-parallel-generic
+    parameters:
+      DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
+      SERVER_VERSION: "%!{PG_VERSION}"
+      TESTING_BRANCH: ricardo-work
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi8
+      WITH_POSTGIS:
+        - true
+        - false
+    matrix:
+      - WITH_POSTGIS
 
-  pipeline: docker-server-parallel-generic
-  parameters:
-    DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
-    SERVER_VERSION: "%!{PG_VERSION}"
-    TESTING_BRANCH: ricardo-work
-    REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi9
-    WITH_POSTGIS:
-      - true
-      - false
-  matrix:
-    - WITH_POSTGIS
+  - name: ubi9
+    pipeline: docker-server-parallel-generic
+    parameters:
+      DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
+      SERVER_VERSION: "%!{PG_VERSION}"
+      TESTING_BRANCH: ricardo-work
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi9
+      WITH_POSTGIS:
+        - true
+        - false
+    matrix:
+      - WITH_POSTGIS
