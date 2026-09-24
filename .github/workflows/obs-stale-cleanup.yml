@@ -13,13 +13,17 @@ name: OBS Stale PR Cleanup
 # every instance, while `delete` runs once per entry of the `OBS_INSTANCES`
 # repository variable — each instance holds its own PR project under its own
 # pr_rootprj and authenticates with its own secret `OBS_PASSWORD_<NAME>`.
-# WARN_DAYS and DELETE_DAYS are declared in both jobs and MUST stay in sync:
-# a warning that never precedes its deletion is worse than no warning.
 
 on:
   schedule:
     - cron: '0 2 * * *'   # 02:00 UTC daily
   workflow_dispatch: {}
+
+# Declared once at workflow level: both jobs read them, and a warning that
+# never precedes its deletion is worse than no warning.
+env:
+  WARN_DAYS: "6"
+  DELETE_DAYS: "7"
 
 jobs:
   warn:
@@ -30,15 +34,14 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v4
-
+      # No checkout: this job only calls gh and jq.  GH_REPO below is what
+      # tells gh which repository to act on without a git remote.
       - name: Post deletion warnings for stale PRs
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           OBS_INSTANCES: ${{ vars.OBS_INSTANCES }}
-          WARN_DAYS: "6"
-          DELETE_DAYS: "7"
           WARN_MARKER: "<!-- percona-obs-stale-warning -->"
         run: |
           now_ts=$(date -u +%s)
@@ -135,7 +138,6 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          DELETE_DAYS: "7"
         run: |
           now_ts=$(date -u +%s)
           gh pr list \
