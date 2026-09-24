@@ -152,9 +152,25 @@ CI: the repository variable `OBS_INSTANCES` is a JSON list, one object per insta
 `{"name": "boo", "apiurl": "…", "rootprj": "isv:percona", "pr_rootprj": "isv:percona:pr",
 "exclude_repos": "UBI_*,ubi*,images"}` (also `include_repos`, `include_projects`,
 `exclude_projects`, optional `user`, optional `registry` — written into the CI profile's
-`registry:` key — and optional `qa_types`). The password secret is `OBS_PASSWORD_<NAME>`
-(upper-case name). `sync-main`, `obs-pr-check` and `obs-release` run their OBS jobs once per
-entry.
+`registry:` key — optional `qa_types`, and optional `env`). The password secret is
+`OBS_PASSWORD_<NAME>` (upper-case name). `sync-main`, `obs-pr-check`, `obs-release` and the two
+cleanup workflows run their OBS jobs once per entry.
+
+`env` is a JSON object of environment variables for that instance, applied on top of the defaults
+every profile gets, so an instance can override one without affecting the others:
+
+```json
+{"name": "labs", "apiurl": "https://obs.pg.labs.percona.com", "rootprj": "isv:percona",
+ "pr_rootprj": "isv:percona:PR", "include_repos": "UBI_*,ubi*,images",
+ "registry": "obs.pg.labs.percona.com", "qa_types": "containers",
+ "env": {"REMOTE_OBS_ORG_INTERCONNECT": "openSUSE.org:"}}
+```
+
+`REMOTE_OBS_ORG_INTERCONNECT` is the usual reason to set it: an instance that reaches
+`RedHat:UBI-9`, `Fedora:EPEL:9` and friends through an interconnect needs the remote's prefix,
+while an instance hosting them locally needs the empty default. Values may contain colons — the
+`KEY:VALUE` form splits on the first one — and the same map is written into the QA `ci` profile,
+so discovery and Jenkins runs render the tree the same way the sync did.
 
 `qa_types` is a comma-separated subset of `packages,containers` naming the QA kinds that live on
 that instance. `obs-pr-check` intersects it with the types the `qa-packages`/`qa-containers`

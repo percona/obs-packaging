@@ -217,13 +217,30 @@ jobs:
       # Create the pr-N profile so the delete step can use -P "pr-N" instead
       # of repeating -A and -R.
       - name: Create percona-obs profile
+        shell: bash
+        env:
+          INSTANCE_ENV: ${{ toJSON(matrix.instance.env) }}
         run: |
+          # Per-instance env from the OBS_INSTANCES entry, appended after the
+          # defaults above so an instance can override them (parse_env_overrides
+          # is last-wins, and splits KEY:VALUE on the first colon so a value
+          # such as "openSUSE.org:" survives intact).
+          env_args=()
+          if [ -n "${INSTANCE_ENV:-}" ] && [ "$INSTANCE_ENV" != "null" ]; then
+            while IFS= read -r kv; do
+              # `if`, not `[ … ] &&`: with an empty env object the test fails on
+              # the last line and, as the loop body's final command, would make
+              # the loop exit non-zero and trip `set -e`.
+              if [ -n "$kv" ]; then env_args+=(-e "$kv"); fi
+            done <<<"$(jq -r 'to_entries[] | "\(.key):\(.value)"' <<<"$INSTANCE_ENV")"
+          fi
           venv/bin/python -m percona_obs \
             -A "$OBS_APIURL" \
             -R "${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}" \
             -e "REMOTE_OBS_ORG_INTERCONNECT:" \
             -e "PERCONA_OBS_PACKAGING_BRANCH:refs/pull/${PR_NUMBER}/head" \
             -e "PERCONA_OBS_PACKAGING_REPO:${{ github.event.pull_request.head.repo.clone_url }}" \
+            "${env_args[@]}" \
             profile create "pr-${PR_NUMBER}"
 
       # Delete the PR's root project and all its sub-projects.

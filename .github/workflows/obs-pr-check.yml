@@ -268,8 +268,23 @@ jobs:
           EXCLUDE_PROJECTS: ${{ matrix.instance.exclude_projects }}
           CLONE_URL: ${{ needs.resolve.outputs.clone_url }}
           MAIN_REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+          INSTANCE_ENV: ${{ toJSON(matrix.instance.env) }}
         run: |
           set -euo pipefail
+          # Per-instance env from the OBS_INSTANCES entry, appended after the
+          # defaults so an instance can override them (parse_env_overrides is
+          # last-wins and splits KEY:VALUE on the first colon, so a value such
+          # as "openSUSE.org:" survives intact).
+          env_args=()
+          if [ -n "${INSTANCE_ENV:-}" ] && [ "$INSTANCE_ENV" != "null" ]; then
+            while IFS= read -r kv; do
+              # `if`, not `[ … ] &&`: with an empty env object the test fails on
+              # the last line and, as the loop body's final command, would make
+              # the loop exit non-zero and trip `set -e`.
+              if [ -n "$kv" ]; then env_args+=(-e "$kv"); fi
+            done <<<"$(jq -r 'to_entries[] | "\(.key):\(.value)"' <<<"$INSTANCE_ENV")"
+          fi
+
           inst=()
           if [ -n "${INCLUDE_REPOS:-}" ]; then inst+=(--include-repos "$INCLUDE_REPOS"); fi
           if [ -n "${EXCLUDE_REPOS:-}" ]; then inst+=(--exclude-repos "$EXCLUDE_REPOS"); fi
@@ -302,13 +317,14 @@ jobs:
 
           venv/bin/python -m percona_obs -A "$OBS_APIURL" -R "$OBS_ROOTPRJ" \
             -e "REMOTE_OBS_ORG_INTERCONNECT:" -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
-            -e "PERCONA_OBS_PACKAGING_REPO:${MAIN_REPO_URL}" profile create main "${inst[@]}"
+            -e "PERCONA_OBS_PACKAGING_REPO:${MAIN_REPO_URL}" "${env_args[@]}" \
+            profile create main "${inst[@]}"
 
           PR_ROOTPRJ="${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}"
           set +e
           venv/bin/python -m percona_obs -A "$OBS_APIURL" -R "$PR_ROOTPRJ" \
             -e "REMOTE_OBS_ORG_INTERCONNECT:" -e "PERCONA_OBS_PACKAGING_BRANCH:refs/pull/${PR_NUMBER}/head" \
-            -e "PERCONA_OBS_PACKAGING_REPO:${CLONE_URL}" \
+            -e "PERCONA_OBS_PACKAGING_REPO:${CLONE_URL}" "${env_args[@]}" \
             profile create "pr-${PR_NUMBER}" "${inst[@]}" "${labels[@]}"
           rc=$?
           set -e
@@ -345,6 +361,7 @@ jobs:
           INCLUDE_PROJECTS: ${{ matrix.instance.include_projects }}
           EXCLUDE_PROJECTS: ${{ matrix.instance.exclude_projects }}
           MAIN_REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+          INSTANCE_ENV: ${{ toJSON(matrix.instance.env) }}
         run: |
           set -euo pipefail
           inst=()
@@ -352,9 +369,19 @@ jobs:
           if [ -n "${EXCLUDE_REPOS:-}" ]; then inst+=(--exclude-repos "$EXCLUDE_REPOS"); fi
           if [ -n "${INCLUDE_PROJECTS:-}" ]; then inst+=(--include-projects "$INCLUDE_PROJECTS"); fi
           if [ -n "${EXCLUDE_PROJECTS:-}" ]; then inst+=(--exclude-projects "$EXCLUDE_PROJECTS"); fi
+          env_args=()
+          if [ -n "${INSTANCE_ENV:-}" ] && [ "$INSTANCE_ENV" != "null" ]; then
+            while IFS= read -r kv; do
+              # `if`, not `[ … ] &&`: with an empty env object the test fails on
+              # the last line and, as the loop body's final command, would make
+              # the loop exit non-zero and trip `set -e`.
+              if [ -n "$kv" ]; then env_args+=(-e "$kv"); fi
+            done <<<"$(jq -r 'to_entries[] | "\(.key):\(.value)"' <<<"$INSTANCE_ENV")"
+          fi
           venv/bin/python -m percona_obs -A "$OBS_APIURL" -R "$OBS_ROOTPRJ" \
             -e "REMOTE_OBS_ORG_INTERCONNECT:" -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
-            -e "PERCONA_OBS_PACKAGING_REPO:${MAIN_REPO_URL}" profile create main "${inst[@]}"
+            -e "PERCONA_OBS_PACKAGING_REPO:${MAIN_REPO_URL}" "${env_args[@]}" \
+            profile create main "${inst[@]}"
 
       - name: Release dry-run
         id: release-dryrun
@@ -566,10 +593,12 @@ jobs:
           obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance.name)] }}
 
       - name: Write CI profile
+        shell: bash
         env:
           OBS_APIURL: ${{ matrix.instance.apiurl }}
           OBS_PR_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}
           OBS_REGISTRY: ${{ matrix.instance.registry }}
+          INSTANCE_ENV: ${{ toJSON(matrix.instance.env) }}
           PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
           JENKINS_URL: ${{ vars.JENKINS_URL }}
           JENKINS_USER: ${{ vars.JENKINS_USER }}
@@ -584,8 +613,14 @@ jobs:
             user: ${JENKINS_USER}
           env:
             - name: REMOTE_OBS_ORG_INTERCONNECT
-              value: 'openSUSE.org:'
+              value: ''
           EOF
+          # Instance env last: profile entries are read in order and the last
+          # value for a key wins, so an instance overrides the default above.
+          if [ -n "${INSTANCE_ENV:-}" ] && [ "$INSTANCE_ENV" != "null" ]; then
+            jq -r 'to_entries[] | "  - name: \(.key)\n    value: '"'"'\(.value)'"'"'"' \
+              <<<"$INSTANCE_ENV" >> .profile/ci.yaml
+          fi
 
       # Build QA_TYPES from the qa-packages / qa-containers labels, then
       # intersect with this instance's declared `qa_types` (when non-empty).
@@ -704,7 +739,8 @@ jobs:
                   instance_apiurl: $i.apiurl,
                   instance_pr_rootprj: $i.pr_rootprj,
                   instance_user: ($i.user // ""),
-                  instance_registry: ($i.registry // "")
+                  instance_registry: ($i.registry // ""),
+                  instance_env: (($i.env // {}) | tojson)
                 })' "$d/qa-matrix.json")
             MATRIX=$(jq -c -n --argjson a "$MATRIX" --argjson b "$share" '$a + $b')
           done <<<"$names"
@@ -770,10 +806,12 @@ jobs:
       # parameters identically (same OBS_ROOTPRJ → same ${OBS_ROOTPRJ_SLASHES},
       # same registry → same ${OBS_CONTAINER_REGISTRY}).
       - name: Write CI profile
+        shell: bash
         env:
           OBS_APIURL: ${{ matrix.instance_apiurl }}
           OBS_PR_ROOTPRJ: ${{ matrix.instance_pr_rootprj }}
           OBS_REGISTRY: ${{ matrix.instance_registry }}
+          INSTANCE_ENV: ${{ matrix.instance_env }}
           PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
           JENKINS_URL: ${{ vars.JENKINS_URL }}
           JENKINS_USER: ${{ vars.JENKINS_USER }}
@@ -788,8 +826,14 @@ jobs:
             user: ${JENKINS_USER}
           env:
             - name: REMOTE_OBS_ORG_INTERCONNECT
-              value: 'openSUSE.org:'
+              value: ''
           EOF
+          # Instance env last: profile entries are read in order and the last
+          # value for a key wins, so an instance overrides the default above.
+          if [ -n "${INSTANCE_ENV:-}" ] && [ "$INSTANCE_ENV" != "null" ]; then
+            jq -r 'to_entries[] | "  - name: \(.key)\n    value: '"'"'\(.value)'"'"'"' \
+              <<<"$INSTANCE_ENV" >> .profile/ci.yaml
+          fi
 
       - name: Run qa pipeline
         env:
