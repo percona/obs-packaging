@@ -1,0 +1,5 @@
+<services>
+  <service name="download_url">
+    <param name="url">https://files.pythonhosted.org/packages/source/F/Flask-SocketIO/flask_socketio-5.6.1.tar.gz</param>
+  </service>
+</services>

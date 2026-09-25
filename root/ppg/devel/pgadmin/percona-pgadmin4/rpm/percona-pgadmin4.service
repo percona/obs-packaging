@@ -1,0 +1,23 @@
+[Unit]
+Description=pgAdmin 4 (gunicorn)
+Documentation=https://www.pgadmin.org/docs/
+After=network.target
+
+[Service]
+Type=exec
+User=pgadmin
+Group=pgadmin
+RuntimeDirectory=pgadmin4
+Environment=PGADMIN_LISTEN_ADDRESS=127.0.0.1
+Environment=PGADMIN_LISTEN_PORT=5050
+EnvironmentFile=-/etc/sysconfig/percona-pgadmin4
+ExecStart=/usr/bin/percona-pgadmin4-gunicorn
+Restart=on-failure
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pgadmin /var/log/pgadmin
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

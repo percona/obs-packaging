@@ -1,0 +1,7 @@
+<services>
+  <!-- Upstream release tarball: dist/ (compiled TypeScript) and node_modules/
+       (the runtime dependency `ssri`) are pre-bundled, so nothing is built. -->
+  <service name="download_url">
+    <param name="url">https://github.com/openSUSE/npm-localhost-proxy/releases/download/v%!{LOCAL_NPM_REGISTRY_VERSION}/local_npm_registry-v%!{LOCAL_NPM_REGISTRY_VERSION}.tar.gz</param>
+  </service>
+</services>

@@ -1,0 +1,13 @@
+<services>
+  <service name="download_url">
+    <param name="url">https://files.pythonhosted.org/packages/source/m/maturin/maturin-1.15.0.tar.gz</param>
+  </service>
+  <!-- Vendor the Rust crate dependencies (Cargo.toml + Cargo.lock at the tree
+       root) for an offline OBS build; produces vendor.tar.gz incl. .cargo/config. -->
+  <service mode="buildtime" name="cargo_vendor">
+    <param name="src">maturin-1.15.0.tar.gz</param>
+    <param name="cargotoml">Cargo.toml</param>
+    <param name="compression">gz</param>
+    <param name="update">false</param>
+  </service>
+</services>

@@ -1,0 +1,7 @@
+title: pgAdmin 4 (server mode) for UBI-9
+description: |
+  pgAdmin 4 built from the upstream git tag (REL-9_17) with the SP1 npm vendoring
+  chain (obs_scm -> npm_lockfile -> node_modules) and the Python 3.12 stack of this
+  project. Subpackages: -gunicorn (launcher + systemd unit; the container runtime),
+  -httpd (Apache httpd + mod_wsgi integration for hosts), -doc (documentation
+  sources). Design: docs/superpowers/specs/2026-08-28-pgadmin4-package-design.md
