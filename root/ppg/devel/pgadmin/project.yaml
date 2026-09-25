@@ -4,6 +4,13 @@ description: |
   dependency stack, built for UBI 9 only. Independent of the PostgreSQL major
   version, hence a version-less devel project rather than a ppg:devel:<V> entry.
   Design: docs/superpowers/specs/2026-08-26-pgadmin4-tooling-design.md
+# UBI_9-only and PostgreSQL-version-independent: this project's repository set
+# and build config are unrelated to the inherited per-major staging map (which
+# references the per-major PG_MAJOR_VERSION macro this project does not define).
+# Declare them in full here instead of inheriting; debuginfo not inherited either.
+repositories-inherit: false
+project-config-inherit: false
+debuginfo: ~
 repositories:
   - name: UBI_9
     paths:
