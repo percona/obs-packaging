@@ -6,6 +6,13 @@ description: |
   Query Tool features work against any supported server version.
   Design: docs/superpowers/specs/2026-09-02-pgadmin4-container-design.md
 
+# A container project: its repository set and build config are its own, not the
+# parent ppg:devel:pgadmin RPM project's. Declare them in full here instead of
+# inheriting (same opt-out as the staging containers subprojects).
+repositories-inherit: false
+project-config-inherit: false
+debuginfo: ~
+
 repositories:
   - name: ubi9
     paths:
