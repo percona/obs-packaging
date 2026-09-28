@@ -15,7 +15,12 @@ from pathlib import Path
 import osc.conf
 import osc.core
 
-from .cmd_profile import _load_profile, _load_profile_env_strings, _load_profile_env
+from .cmd_profile import (
+    _load_profile,
+    _load_profile_env_strings,
+    _load_profile_env,
+    _load_profile_filter,
+)
 from .cmd_project import (
     _validate_obs_scm_revisions,
     _validate_project_path_refs,
@@ -49,7 +54,7 @@ from .common import (
     parse_env_overrides,
     resolve_project_path,
 )
-from .project_config import package_in_slice, project_in_slice
+from .project_config import RepositoryFilter, package_in_slice, project_in_slice
 from .git_utils import (
     _generate_sync_message,
     _has_package_changes_since,
@@ -1167,8 +1172,12 @@ def cmd_sync(args):
     branch_apiurl: str = apiurl  # defaults to the target OBS instance
     branch_rootprj: str | None = None
     branch_env_vars: dict[str, str] | None = None
+    # The branch profile's slice, not the active (possibly label-narrowed) one:
+    # the production project it is compared against was written under this slice.
+    branch_repo_filter: "RepositoryFilter | None" = None
     if args.branch_from:
         branch_profile = _load_profile(args.branch_from)
+        branch_repo_filter = _load_profile_filter(args.branch_from)
         _raw_branch_apiurl = branch_profile.get("apiurl", "")
         if _raw_branch_apiurl:
             branch_apiurl = _raw_branch_apiurl
@@ -1640,6 +1649,7 @@ def cmd_sync(args):
                     env_vars=branch_env_vars,
                     active_projects=None,
                     branch_rootprj=None,
+                    repo_filter=branch_repo_filter,
                 )
                 if _prod_is_new:
                     # Production project doesn't exist yet — treat as new (no
