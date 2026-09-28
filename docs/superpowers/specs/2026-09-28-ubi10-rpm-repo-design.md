@@ -1,7 +1,7 @@
 # UBI 10 RPM build repository (`UBI_10`)
 
 **Date:** 2026-09-28
-**Status:** draft, awaiting review
+**Status:** approved 2026-09-28
 **Scope:** PR 1 of 3. Adds the `UBI_10` RPM repository to every project that
 already builds for `UBI_8` and `UBI_9`. Container images on UBI 10 (PR 2) and
 dropping the kiwi-built `percona-ubi-minimal` base image (PR 3) are separate
@@ -38,9 +38,8 @@ on `UBI_10`, for x86_64 and aarch64, so that PR 2 can install them into
 
 ## Prerequisite outside git
 
-`RedHat:UBI-10` on labs currently lists only `x86_64`. Ricardo adds
-`aarch64` to its `baseos`, `appstream`, `CRB` and `standard` repositories
-before the PR's sync runs, otherwise every aarch64 build is `unresolvable`.
+Done 2026-09-28: `RedHat:UBI-10` on labs now matches `RedHat:UBI-8`/`UBI-9`
+(same repository names, x86_64 and aarch64).
 
 ## Design
 
