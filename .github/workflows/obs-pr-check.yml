@@ -419,10 +419,12 @@ jobs:
         id: sync
         if: steps.detect.outputs.is_release_pr != 'true' && steps.profiles.outputs.skip != 'true'
         run: |
+          rm -f /tmp/sync-report.json
           venv/bin/python -u -m percona_obs --verbose \
             -P "pr-${PR_NUMBER}" sync push \
             --branch-from main \
             --no-scm-validate \
+            --report-json /tmp/sync-report.json \
             ${{ steps.profiles.outputs.no_dep_cascade_arg }} \
             | tee /tmp/sync-output.txt
 
@@ -467,6 +469,19 @@ jobs:
           path: /tmp/sync-output.txt
           retention-days: 1
 
+      # Hand the sync report to the `build` job, as sync-main does for its
+      # poll job.  Without it the poll script falls back to monitoring every
+      # project the local tree declares, including ones this instance never
+      # synced -- those never report a result, so the poll loop cannot reach
+      # its terminal condition and spins until the job times out.
+      - name: Upload sync report
+        if: steps.sync.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-report-${{ matrix.instance.name }}
+          path: /tmp/sync-report.json
+          retention-days: 1
+
   # ──────────────────────────────────────────────────────────────────────────
   # build: poll OBS for build completion and post the build-status PR
   # comment.  Runs in parallel with `detect-qa-matrix`.
@@ -481,6 +496,11 @@ jobs:
     if: needs.sync.outputs.is_release_pr != 'true' && needs.sync.result == 'success'
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    # Backstop only: the poll is meant to end when every monitored build is
+    # terminal.  Well above a full PR build (the largest so far is ~90
+    # packages), but below the 6 h GitHub default so a stuck poll surfaces as
+    # a failure in a reasonable time instead of occupying a runner all day.
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -521,6 +541,17 @@ jobs:
           name: sync-output-${{ matrix.instance.name }}
           path: /tmp
 
+      # Scopes the poll to the projects this instance's sync actually touched
+      # and to the packages it uploaded.  continue-on-error for the same
+      # reason as above; the poll script falls back to the full tree when the
+      # report is missing, corrupt or stale.
+      - name: Download sync report
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: sync-report-${{ matrix.instance.name }}
+          path: /tmp
+
       # Poll OBS until all builds in the PR project reach a terminal state.
       # Fails the job (and PR check) if any build fails, is broken, or is
       # unresolvable.  OBS_REPO_FILTER restricts polling to this instance's
@@ -532,6 +563,7 @@ jobs:
           OBS_APIURL: ${{ matrix.instance.apiurl }}
           OBS_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}:pr-${{ needs.resolve.outputs.pr_number }}
           OBS_REPO_FILTER: ${{ toJSON(matrix.instance) }}
+          OBS_SYNC_REPORT: /tmp/sync-report.json
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/poll_obs_builds.py
 
