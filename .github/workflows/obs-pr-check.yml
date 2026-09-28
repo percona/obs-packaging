@@ -497,10 +497,10 @@ jobs:
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     # Backstop only: the poll is meant to end when every monitored build is
-    # terminal.  Well above a full PR build (the largest so far is ~90
-    # packages), but below the 6 h GitHub default so a stuck poll surfaces as
-    # a failure in a reasonable time instead of occupying a runner all day.
-    timeout-minutes: 240
+    # terminal.  Stated explicitly (it matches the GitHub default) so the
+    # ceiling is visible next to the job it guards and can be tuned here,
+    # rather than being inherited silently.  Same value as sync-main's poll.
+    timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
