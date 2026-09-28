@@ -9,7 +9,7 @@ import osc.connection
 import osc.core
 import osc.oscerr
 
-from .project_config import prune_flag_map
+from .project_config import RepositoryFilter, prune_flag_map
 from .common import (
     _YELLOW,
     _GREEN,
@@ -1367,16 +1367,26 @@ def check_project_config_changed(
     env_vars: "dict[str, str] | None" = None,
     active_projects: "set[str] | None" = None,
     branch_rootprj: "str | None" = None,
+    repo_filter: "RepositoryFilter | None" = None,
 ) -> "tuple[bool, bool]":
     """Return (changed, is_new) describing the project's config state on OBS.
 
     changed  -- True if the local config differs from OBS (or the project is new).
     is_new   -- True if the project does not yet exist on OBS (HTTP 404).
 
+    *repo_filter* is the slice the desired config is rendered under.  It must
+    match the instance whose project is being compared: rendering under a
+    narrower slice than the one that wrote *obs_project_name* makes every
+    project look changed (its repositories are a strict subset), which in
+    --branch-from mode force-promotes every package in the tree.  ``None``
+    falls back to the process default installed from the active profile.
+
     Read-only: never writes to OBS. Used before Phase 1 decisions to detect
     projects whose config changed so packages can be triggered/promoted.
     """
-    project_config = _load_project_config_with_inheritance(project_path, env_vars)
+    project_config = _load_project_config_with_inheritance(
+        project_path, env_vars, repo_filter
+    )
     desired_meta = build_project_meta(
         obs_project_name,
         project_config.get("title", ""),
