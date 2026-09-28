@@ -54,7 +54,12 @@ from .common import (
     parse_env_overrides,
     resolve_project_path,
 )
-from .project_config import RepositoryFilter, package_in_slice, project_in_slice
+from .project_config import (
+    RepositoryFilter,
+    package_in_slice,
+    project_in_slice,
+    prune_flag_map,
+)
 from .git_utils import (
     _generate_sync_message,
     _has_package_changes_since,
@@ -598,7 +603,11 @@ def _content_matches_branch(
             shutil.rmtree(workdir, ignore_errors=True)
 
 
-def _package_meta_flags_match(branch_meta: bytes, package_config: dict) -> bool:
+def _package_meta_flags_match(
+    branch_meta: bytes,
+    package_config: dict,
+    kept_repos: "set[str] | None" = None,
+) -> bool:
     """Return True if package.yaml's build/publish flags match the branch package meta.
 
     The ``build:``/``publish:`` maps in package.yaml are emitted into the OBS
@@ -606,14 +615,26 @@ def _package_meta_flags_match(branch_meta: bytes, package_config: dict) -> bool:
     uploaded source file, so the file-content check cannot see them.  Compares
     only the flag sections; title/description do not affect binaries and must
     not force a promotion.
+
+    *kept_repos* are the repositories the branch project carries.
+    ``_apply_package_config`` prunes flags to the project's repository set
+    before writing them, so on a sliced instance the branch meta holds the
+    pruned map; comparing it against the unpruned package.yaml would report a
+    difference for every package whose flags name a repository outside the
+    slice.  ``None`` compares unpruned.
     """
+    build_flags = package_config.get("build") or None
+    publish_flags = package_config.get("publish") or None
+    if kept_repos is not None:
+        build_flags = prune_flag_map(build_flags, kept_repos) or None
+        publish_flags = prune_flag_map(publish_flags, kept_repos) or None
     desired = build_package_meta(
         "flags-check",
         "flags-check",
         "",
         "",
-        build=package_config.get("build") or None,
-        publish=package_config.get("publish") or None,
+        build=build_flags,
+        publish=publish_flags,
     )
     try:
         current_elem = ET.fromstring(branch_meta)
@@ -828,6 +849,7 @@ def _resolve_branch_decision(
     package_path: Path,
     env_vars: dict[str, str] | None = None,
     branch_env_vars: dict[str, str] | None = None,
+    branch_repos: "set[str] | None" = None,
 ) -> bool:
     """Return True if the package should be aggregated from branch_project.
 
@@ -856,9 +878,16 @@ def _resolve_branch_decision(
             apiurl, branch_project, package_name
         )
         package_config = load_package_yaml(package_path / "package.yaml")
-        if branch_meta is None or not _package_meta_flags_match(
-            branch_meta, package_config
-        ):
+        if branch_meta is None:
+            # The package does not exist on this instance yet (new package, or
+            # a project the branch instance has not been synced yet): there is
+            # nothing to aggregate from, which is not a flag difference.
+            logger.debug(
+                f"branch decision: sync  {label}  "
+                f"(no package meta in {branch_project})"
+            )
+            return False
+        if not _package_meta_flags_match(branch_meta, package_config, branch_repos):
             logger.debug(
                 f"branch decision: sync  {label}  "
                 "(build/publish flags differ from branch package meta)"
@@ -1199,6 +1228,10 @@ def cmd_sync(args):
     # project.yaml.  Avoids repeated YAML parsing for packages in the same
     # project.
     _target_repos_cache: dict[Path, set[str]] = {}
+    # Same, but resolved under the --branch-from profile's env and slice: the
+    # repository set the branch project carries, which is what its package
+    # flags were pruned to when that instance was synced.
+    _branch_repos_cache: dict[Path, set[str]] = {}
 
     # --- Phase 1: compute branch/promote decisions upfront ---
     # Running this before the project pre-pass lets us know which projects
@@ -1317,6 +1350,16 @@ def cmd_sync(args):
                 obs_project_name, args.rootprj, branch_rootprj
             )
             pkg_env = _pkg_env_vars(package_path)
+            _branch_proj_path = package_path.parent
+            if _branch_proj_path not in _branch_repos_cache:
+                _branch_proj_cfg = _load_project_config_with_inheritance(
+                    _branch_proj_path, branch_env_vars, branch_repo_filter
+                )
+                _branch_repos_cache[_branch_proj_path] = {
+                    r["name"]
+                    for r in _branch_proj_cfg.get("repositories", [])
+                    if r.get("name")
+                }
             use_aggregate = _resolve_branch_decision(
                 apiurl,
                 branch_project,
@@ -1328,6 +1371,7 @@ def cmd_sync(args):
                     if branch_env_vars is not None
                     else None
                 ),
+                branch_repos=_branch_repos_cache[_branch_proj_path],
             )
             if use_aggregate:
                 # Guard: only aggregate when the branch project has every

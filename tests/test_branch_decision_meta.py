@@ -132,3 +132,78 @@ def test_decision_promotes_when_branch_meta_unavailable(monkeypatch, tmp_path):
         _resolve_branch_decision("http://obs", "prod:common:deps:build", "llvm-21", pkg)
         is False
     )
+
+
+# --- slice-pruned flags --------------------------------------------------------
+# `_apply_package_config` prunes build/publish maps to the project's repository
+# set before writing them, so on a sliced instance the branch meta holds the
+# pruned map.  The decision must prune the same way or every package whose
+# flags name an out-of-slice repository looks changed and gets promoted.
+
+DISABLE_UBI9 = '  <build>\n    <disable repository="UBI_9"/>\n  </build>\n'
+
+
+def test_match_when_out_of_slice_flag_is_pruned():
+    # Branch project carries UBI_9 only; its meta was written with Debian_12
+    # pruned away.  The local package.yaml still names Debian_12.
+    config = {"build": {"Debian_12": False, "UBI_9": False}}
+    assert _package_meta_flags_match(_meta(DISABLE_UBI9), config, kept_repos={"UBI_9"})
+
+
+def test_unpruned_comparison_reports_the_spurious_difference():
+    # Guard the regression: without kept_repos the same inputs mismatch.
+    config = {"build": {"Debian_12": False, "UBI_9": False}}
+    assert not _package_meta_flags_match(_meta(DISABLE_UBI9), config)
+
+
+def test_pruning_still_detects_a_real_in_slice_difference():
+    # UBI_9 disabled on the branch but enabled locally: a genuine difference
+    # inside the slice must still promote.
+    config = {"build": {"Debian_12": False}}
+    assert not _package_meta_flags_match(
+        _meta(DISABLE_UBI9), config, kept_repos={"UBI_9"}
+    )
+
+
+def test_decision_aggregates_with_out_of_slice_flags(monkeypatch, tmp_path):
+    pkg = _make_package(tmp_path, "build:\n  Debian_12: false\n  UBI_9: false\n")
+    monkeypatch.setattr(
+        cmd_sync, "_fetch_obs_package_meaningful_comment", lambda *a: None
+    )
+    monkeypatch.setattr(cmd_sync, "_content_matches_branch", lambda *a, **k: True)
+    monkeypatch.setattr(
+        cmd_sync, "_fetch_obs_package_meta_bytes", lambda *a: _meta(DISABLE_UBI9)
+    )
+    assert (
+        _resolve_branch_decision(
+            "http://obs",
+            "prod:common:deps:build",
+            "llvm-21",
+            pkg,
+            branch_repos={"UBI_9"},
+        )
+        is True
+    )
+
+
+# --- logged reason -------------------------------------------------------------
+
+
+def test_missing_branch_meta_is_not_reported_as_a_flag_difference(
+    monkeypatch, tmp_path, caplog
+):
+    pkg = _make_package(tmp_path, "")
+    monkeypatch.setattr(
+        cmd_sync, "_fetch_obs_package_meaningful_comment", lambda *a: None
+    )
+    monkeypatch.setattr(cmd_sync, "_content_matches_branch", lambda *a, **k: True)
+    monkeypatch.setattr(cmd_sync, "_fetch_obs_package_meta_bytes", lambda *a: None)
+    with caplog.at_level("DEBUG", logger="percona-obs"):
+        assert (
+            _resolve_branch_decision(
+                "http://obs", "prod:common:deps:build", "llvm-21", pkg
+            )
+            is False
+        )
+    assert "no package meta in prod:common:deps:build" in caplog.text
+    assert "build/publish flags differ" not in caplog.text
