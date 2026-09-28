@@ -22,8 +22,8 @@ interconnect already serves `Fedora:EPEL:10` and `RockyLinux:10` (including
 its `devel` repository). `RockyLinux_10` has been a root-level build
 repository for a while, so every package already builds against EL10 content.
 
-Goal of this PR: every package that builds on `UBI_8` or `UBI_9` also builds
-on `UBI_10`, for x86_64 and aarch64, so that PR 2 can install them into
+Goal of this PR: every package that builds on `UBI_8` or `UBI_9` in the
+inheriting projects also builds on `UBI_10`, for x86_64 and aarch64, so that PR 2 can install them into
 `ubi10` container images.
 
 ## Non-goals
@@ -75,14 +75,15 @@ project that does not opt out: `common:deps:build`, `common:deps:runtime`,
 `UBI_9` today.
 
 Projects that opt out with `repositories-inherit: false` and declare UBI
-repositories themselves get an explicit `UBI_10` block following their own
-`UBI_9` block:
+repositories themselves do **not** get `UBI_10` (correction 2026-09-28):
 
 - `root/ppg/staging/_shared/extras/project.yaml` (all `<V>/extras` symlink
-  to it): paths `ppg:common:deps`, `common:deps:build`,
-  `ppg:staging:%!{PG_MAJOR_VERSION}`, then EPEL 10, `RedHat:UBI-10`,
-  Rocky 10 devel.
-- `root/ppg/staging/16/tde/project.yaml`: same shape as its `UBI_9` entry.
+  to it) stays `UBI_9` only.
+- `root/ppg/staging/16/tde/project.yaml` builds on no UBI repository at
+  all: its existing `UBI_8` and `UBI_9` entries are removed too, and its
+  prjconf conditions revert to the RockyLinux-only forms. On labs the
+  project then has no repositories in the `UBI_*` slice and is dropped as
+  an orphan by the next full sync.
 
 The container projects (`_shared/containers`, `staging/containers`,
 `_shared/extras/containers`, `<V>/extras/containers`) also opt out, but they
@@ -99,12 +100,7 @@ UBI-specific. Concretely:
   (`Prefer: selinux-policy-targeted`, `Prefer: hdf-libs`, the
   `%__brp_check_rpaths %{nil}` macro) becomes
   `%if "%_repository" == "RockyLinux_10" || "%_repository" == "UBI_10"`.
-- `root/ppg/staging/_shared/extras/project.yaml`: a `UBI_10` block with the
-  same three settings. This file cannot rely on `subprojects.yaml` because it
-  is one level deeper than the staging tier's direct children.
-- `root/ppg/staging/16/tde/project.yaml`: its own `RockyLinux_10`-equivalent
-  block does not exist yet, so a `UBI_10` block with the same three settings
-  is added next to the existing UBI blocks.
+- extras and tde: nothing (see the correction above).
 - `root/project.yaml`, `root/ppg/common/deps/project.yaml`,
   `root/common/deps/runtime/project.yaml`: no `RockyLinux_10` block exists in
   any of them, so nothing is added up front. If the first build round reports
