@@ -49,9 +49,11 @@ import osc.conf
 from percona_obs.cmd_build import _fetch_build_results
 from percona_obs.common import (
     REPO_ROOT,
+    builds_are_terminal,
     find_packages,
     load_project_yaml,
     next_poll_interval,
+    pending_upload_results,
     set_default_repository_filter,
 )
 from percona_obs.http_throttle import install as _install_http_throttle
@@ -208,9 +210,27 @@ if touched is not None:
         f"monitoring {len(obs_projects)} after devel filter"
     )
 
+# Packages this sync uploaded, as "project/package".  A build is only complete
+# once every one of them has reported; without this the loop treats a partially
+# scheduled project as terminal and returns a verdict on a handful of results.
+expected_uploads: set[str] = set()
+if touched is not None and isinstance(report, dict):
+    raw_promoted = report.get("promoted", [])
+    if isinstance(raw_promoted, list):
+        expected_uploads = {
+            u
+            for u in raw_promoted
+            if isinstance(u, str) and u.rsplit("/", 1)[0] in all_projects
+        }
+
 print(
     f"Monitoring {len(obs_projects)} OBS project(s): {', '.join(sorted(obs_projects))}"
 )
+# A consumed report tells us exactly which packages to expect, so an empty
+# result set is meaningful rather than ambiguous.
+scoped = touched is not None
+if expected_uploads:
+    print(f"Awaiting results for {len(expected_uploads)} uploaded package(s)")
 
 if discover_only:
     sys.exit(0)
@@ -227,18 +247,30 @@ FAILURE_STATES = FAILED_STATES | BROKEN_STATES | UNRESOLVABLE_STATES
 
 
 def collect(projects):
-    """One pass over *projects*; returns (state_counts, per_repo_counts)."""
+    """One pass over *projects*.
+
+    Returns (state_counts, per_repo_counts, reported), where *reported* holds
+    the ``project/package`` keys that produced at least one build result.  OBS
+    reports a package only once it has been scheduled, so a package that is
+    uploaded but not yet scheduled is absent from every count — which is why
+    the caller needs this set to tell "nothing left to build" apart from
+    "OBS has not got to it yet".
+    """
     state_counts: dict[str, int] = {}
     per_repo_counts: dict[str, dict[str, int]] = {}
+    reported: set[str] = set()
     for obs_name in projects:
         results, _ = _fetch_build_results(apiurl, obs_name)
         for _pkg, repos in results.items():
+            # Multibuild flavours report as "pkg:flavour"; the sync report
+            # names the base package.
+            reported.add(f"{obs_name}/{_pkg.split(':')[0]}")
             for repo, flavors in repos.items():
                 repo_counts = per_repo_counts.setdefault(repo, {})
                 for _flavor, code in flavors.items():
                     state_counts[code] = state_counts.get(code, 0) + 1
                     repo_counts[code] = repo_counts.get(code, 0) + 1
-    return state_counts, per_repo_counts
+    return state_counts, per_repo_counts, reported
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +343,7 @@ if not obs_projects:
     # them to completion — a downstream step (e.g. release tagging) may
     # depend on those builds, and exiting on a still-building snapshot would
     # let it fire early.  Only a fully terminal snapshot exits immediately.
-    state_counts, per_repo_counts = collect(all_projects)
+    state_counts, per_repo_counts, _ = collect(all_projects)
     _snapshot_building = sum(state_counts.get(s, 0) for s in NON_TERMINAL)
     if _snapshot_building:
         print(
@@ -331,12 +363,18 @@ if run_loop:
     interval = poll_interval
     prev_counts: dict[str, int] = {}
     while True:
-        state_counts, per_repo_counts = collect(obs_projects)
+        state_counts, per_repo_counts, reported = collect(obs_projects)
         total = sum(state_counts.values())
         still_building = sum(state_counts.get(s, 0) for s in NON_TERMINAL)
+        # Uploaded packages OBS has not scheduled yet.  They carry no result,
+        # so they are invisible to the counts above; treating them as done
+        # would end the poll on a partial picture.
+        pending = pending_upload_results(expected_uploads, reported, obs_projects)
         summary = ", ".join(f"{s}={n}" for s, n in sorted(state_counts.items()))
+        if pending:
+            summary = f"{summary or 'no results yet'}, {len(pending)} unscheduled"
         print(f"{summary or 'no results yet'}", flush=True)
-        if total > 0 and still_building == 0:
+        if builds_are_terminal(total, still_building, len(pending), scoped):
             # Monitored set is terminal.  One sweep over the rest of the tree
             # adopts projects rebuilt by cross-project cascades (e.g.
             # containers aggregating freshly built packages).
@@ -345,10 +383,10 @@ if run_loop:
                 # Already monitoring the full tree — the loop's counts are
                 # the final counts; no sweep or re-collect needed.
                 break
-            sweep_counts, _ = collect(remaining)
+            sweep_counts, _, _ = collect(remaining)
             sweep_building = sum(sweep_counts.get(s, 0) for s in NON_TERMINAL)
             if sweep_building == 0:
-                state_counts, per_repo_counts = collect(all_projects)
+                state_counts, per_repo_counts, _ = collect(all_projects)
                 break
             print(
                 f"Adopting {sweep_building} still-building result(s) from full tree",

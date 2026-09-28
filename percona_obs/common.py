@@ -811,6 +811,39 @@ def next_poll_interval(current: int, changed: bool, base: int, cap: int) -> int:
     return min(int(current * 1.5), cap)
 
 
+def pending_upload_results(
+    expected: "set[str]", reported: "set[str]", projects: "set[str]"
+) -> "set[str]":
+    """Uploaded ``project/package`` keys in *projects* with no build result yet.
+
+    OBS lists a package in its build results only once it has been scheduled,
+    so a freshly uploaded package contributes to no state count at all.  Without
+    this set a caller cannot tell "nothing left to build" from "OBS has not got
+    to it yet", and ends the poll on whatever handful of results exist.
+    """
+    return {u for u in expected if u.rsplit("/", 1)[0] in projects} - reported
+
+
+def builds_are_terminal(
+    total: int, still_building: int, pending: int, scoped: bool
+) -> bool:
+    """Return True when the monitored builds have all reached a terminal state.
+
+    *total* is how many build results were seen, *still_building* how many of
+    them are non-terminal, and *pending* how many uploaded packages have not
+    reported yet.
+
+    *scoped* says whether the caller knows which packages to expect (i.e. a
+    sync report was consumed).  When it does, an empty result set means nothing
+    was uploaded and there is nothing to wait for.  Without that knowledge an
+    empty result set is ambiguous — OBS may simply not have scheduled anything
+    yet — so the caller keeps waiting, as it did before.
+    """
+    if still_building or pending:
+        return False
+    return scoped or total > 0
+
+
 def parse_env_overrides(entries: list[str]) -> dict[str, str]:
     """Parse a list of ``KEY:VALUE`` strings from ``-e`` flags.
 
