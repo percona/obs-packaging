@@ -1,0 +1,95 @@
+# regression tests
+Depends:
+ python3-boto3,
+ python3-consul (>= 0.7.0),
+ python3-etcd (>= 0.4.3),
+ python3-flake8,
+ python3-kazoo,
+ python3-kubernetes,
+ python3-pysyncobj,
+ python3-pytest-cov,
+ @,
+Tests: test
+Restrictions: allow-stderr
+
+# Acceptance test matrix: the full feature set is run only against the latest
+# PostgreSQL version with etcd3, while the basic_replication feature is run
+# against every PostgreSQL version (etcd3) and against every DCS backend with
+# the latest PostgreSQL version (see PG_VERSIONS in debian/tests/acceptance).
+
+# etc3
+Features: test-name=acceptance-etcd3-basic
+Depends:
+ etcd-server,
+ moreutils,
+ procps,
+ postgresql,
+ python3-behave,
+ python3-coverage,
+ python3-etcd (>= 0.4.3),
+ @,
+# every PostgreSQL version
+Test-Command: debian/tests/acceptance etcd3 features/basic_replication.feature
+# needs-root is required in order to stop a possibly already running etcd
+Restrictions: needs-root, allow-stderr
+
+Features: test-name=acceptance-etcd3-full
+Depends:
+ etcd-server,
+ moreutils,
+ procps,
+ postgresql,
+ python3-behave,
+ python3-coverage,
+ python3-etcd (>= 0.4.3),
+ @,
+# only the latest PostgreSQL version
+Test-Command: env PG_VERSIONS=latest debian/tests/acceptance etcd3
+# needs-root is required in order to stop a possibly already running etcd
+Restrictions: needs-root, allow-stderr
+
+# etcd
+Features: test-name=acceptance-etcd-basic
+Depends:
+ etcd-server,
+ moreutils,
+ procps,
+ postgresql,
+ python3-behave,
+ python3-coverage,
+ python3-etcd (>= 0.4.3),
+ @,
+# only the latest PostgreSQL version
+Test-Command: env PG_VERSIONS=latest debian/tests/acceptance etcd features/basic_replication.feature
+# needs-root is required in order to stop a possibly already running etcd
+Restrictions: needs-root, allow-stderr
+
+# zookeeper
+Features: test-name=acceptance-zookeeper-basic
+Depends:
+ zookeeperd,
+ moreutils,
+ procps,
+ postgresql,
+ python3-behave,
+ python3-coverage,
+ python3-kazoo,
+ procps,
+ @,
+# only the latest PostgreSQL version
+Test-Command: env PG_VERSIONS=latest debian/tests/acceptance zookeeper features/basic_replication.feature
+Restrictions: needs-root, allow-stderr, skip-not-installable
+
+# raft
+Features: test-name=acceptance-raft-basic
+Depends:
+ moreutils,
+ procps,
+ postgresql,
+ python3-behave,
+ python3-coverage,
+ python3-pysyncobj,
+ @,
+# only the latest PostgreSQL version
+Test-Command: env PG_VERSIONS=latest debian/tests/acceptance raft features/basic_replication.feature
+Restrictions: allow-stderr

@@ -12,18 +12,17 @@ Build-Depends:
  libjs-underscore,
  pyflakes3,
  python3,
- python3-boto | python3-boto3,
+ python3-boto3,
  python3-click (>= 4.1),
- python3-consul,
+ python3-consul (>= 0.7.0),
  python3-dateutil,
  python3-dnspython,
  python3-doc,
- python3-etcd,
+ python3-etcd (>= 0.4.3),
  python3-flake8,
  python3-kazoo,
  python3-mccabe,
  python3-kubernetes,
- python3-mock,
  python3-prettytable (>= 0.7),
  python3-psutil,
  python3-psycopg2 (>= 2.6.1),
@@ -39,7 +38,6 @@ Build-Depends:
  python3-yaml,
  python3-ydiff,
  sphinx-common,
- python3-systemd
 Debtransform-Release: 1
 Debtransform-Files-Tar: debian.tar.gz
 

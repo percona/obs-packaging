@@ -1,0 +1,10 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = configure ] && [ -z "$2" ]; then
+	chown postgres:postgres /etc/pgbouncer/pgbouncer.ini /etc/pgbouncer/userlist.txt
+	chmod u=rw,g=r,o= /etc/pgbouncer/pgbouncer.ini /etc/pgbouncer/userlist.txt
+fi
+
+#DEBHELPER#

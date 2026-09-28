@@ -5,7 +5,7 @@ Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper-compat (= 13),
  percona-postgresql-server-dev-all (>= 153~),
-Standards-Version: 4.6.2
+Standards-Version: 4.7.4
 Rules-Requires-Root: no
 Homepage: https://github.com/pgvector/pgvector
 Vcs-Browser: https://salsa.debian.org/postgresql/pgvector

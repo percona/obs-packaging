@@ -1,4 +1,2 @@
 doc/output/
 obj-*/
-src/command/help/help.auto.c.inc
-src/postgres/interface.auto.c.inc

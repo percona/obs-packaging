@@ -4,4 +4,5 @@ pg_buildext \
 	-o wal_level=logical \
 	-o max_replication_slots=5 \
 	-o extra_float_digits=0 \
+	-o output_plugin_libraries=wal2json \
 	installcheck

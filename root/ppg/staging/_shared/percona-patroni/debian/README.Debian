@@ -1,0 +1,105 @@
+Patroni for Debian
+------------------
+
+The Debian patroni package has been adjusted in order to interoperate with
+Debian's postgresql-common (pg-common) framework for the administration of
+PostgreSQL instances.  A particular pg-common instance (or cluster) is
+identified by the PostgreSQL major version (e.g. 10) and the cluster name
+(e.g. `main' as the default cluster), i.e. `10/main' or `10-main'.
+
+Automatic Patroni configuration generation
+------------------------------------------
+
+The Debian patroni package provides the pg_createconfig_patroni program that
+allows one to create a Patroni configuration for the desired Debian pg-common
+cluster, e.g. /etc/patroni/10-main for the `10/main' or `10-main' cluster,
+similar to pg_createcluster:
+
+ # pg_createconfig_patroni 10 main
+
+The configuration is assembled from the /etc/patroni/dcs.yml fragment for the
+DCS configuration (see below) and a generic /etc/patroni/config.yml.in.  The
+cluster-specific variables are substituted from config.yml.in into the specific
+instance configuration file.
+
+Distributed Consensus Store (DCS)
+---------------------------------
+
+A DCS needs to be configured and this is out-of-scope for the patroni package.
+The DCS-specific parts of the Patroni configuration can be configured in
+/etc/patroni/dcs.yml and will get integrated by pg_createconfig_patroni.
+
+Patroni service
+---------------
+
+Similar to the postgresql@ service, a patroni@ service unit is provided that
+allows the administration of an arbitrary pg-common cluster without having to
+define a systemd unit for each cluster, e.g.:
+
+ # systemctl start patroni@10-main
+
+Due to systemd limitations, the cluster definition has to be provided with a `-'
+not a `/' between version and cluster name.
+
+Note that due to Patron insisting on managing the Postgres server, the
+corresponding systemd service (postgresql@10-main) cannot be used anymore.  It
+is possible to reload the Postgres configuration via `pg_ctlcluster 10 main
+reload', though.
+
+Integration of vip-manager
+--------------------------
+
+The vip-manager package allows to expose a virtual ip (VIP) for the leader node
+by monitoring the leader key in the DCS and setting or removing the configured
+VIP for the local node depending on leader status.
+
+The Debian vip-manager package provides a /etc/patroni/vip.in template which
+can be used to write a vip-manager configuration for a patroni cluster via
+the --vip option:
+
+ # pg_createconfig_patroni --vip=10.0.1.1 10 main
+
+Similarly to the patroni package, the vip-manager service can then be started
+via a systemd unit specific for the cluster:
+
+ # systemctl start vip-manager@10-main
+
+Cluster Bootstrap
+-----------------
+
+After Patroni is started on a node for a particular cluster, it tried to acquire
+the leader lock in the DCS.  If it can acquire the lock, it will be the master of
+the cluster and bootstrap the instance. The pg_createconfig_patroni-generated
+configuration defines a custom bootstrap via the pg_createcluster_patroni
+script, which is a shell wrapper around the usual pg_createcluster utility.
+
+The standby nodes cannot be bootstrapped this way, as the cluster id is
+unique and Patroni expects a single cluster id among all members.  To this end,
+the pg_clonecluster_patroni shell script is provided, which sets up a cluster
+and then clones from the master node via pg_basebackup.
+
+pg_hba.conf
+-----------
+
+In order to have the identical pg_hba.conf on each cluster node, the default
+pg_hba.conf gets overwritten by the lines specified in the
+bootstrap.dcs.postgresql section of the Patroni configuration. By default,
+replication connections from the local network and regular password (md5) based
+connections from localhost are allowed.
+
+pg_rewind and postgres password
+-------------------------------
+
+By default, no postgres database password is set; i.e. the postgres superuser
+can only connect via the local socket.  Likewise, pg_rewind is disabled (as
+pg_rewind requires remote superuser access) and Patroni will re-clone a former
+primary if its timeline has diverged from the cluster.
+
+If pg_rewind is to be used, then the `bootstrap.use_pg_rewind' parameter in
+/etc/patroni/config.yml.in needs to be set to `true' and either the
+`postgresql.authentication.superuser.password' parameter needs to be set to the
+desired postgres password or (for PostgreSQL versions 11 and up) the
+`postgresql.authenticaion.rewind.{user,password}` needs to be set.  If the
+`rewind` user is set, Patroni will grant it the necessary rights to run
+pg_rewind without superuser privileges. Finally, password (md5) connections
+need to be allowed on the local network.

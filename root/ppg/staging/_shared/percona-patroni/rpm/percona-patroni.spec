@@ -43,6 +43,7 @@ URL:            https://github.com/zalando/%{sname}
 
 BuildRequires:  python%{python3_pkgversion}-setuptools
 BuildRequires:  python%{python3_pkgversion}-devel
+BuildRequires:  systemd-rpm-macros
 
 Requires:       %{python3_pkgprefix}-six
 Requires:       %{python3_pkgprefix}-dateutil
@@ -51,6 +52,11 @@ Requires:       %{python3_pkgprefix}-ydiff < 1.5
 Requires:       %{python3_pkgprefix}-ydiff >= 1.4.2
 Requires:       %{name}-etcd
 
+%if 0%{?fedora} && 0%{?fedora} <= 44
+Requires:        python3-click python3-cryptography >= 1.4 python3-psutil
+Requires:        python3-prettytable python%{python3_pkgversion}-pyyaml
+Requires:        python3-urllib3 >= 1.19.1 python3-psycopg2 python3-wcwidth
+%endif
 
 %if !0%{?suse_version} && 0%{?rhel} != 10
 Requires:        %{python3_pkgprefix}-click
@@ -107,11 +113,17 @@ Summary:        Related components to use patroni with Consul
 Requires:        %{name} = %{epoch}:%{version}-%{release}
 Requires:        consul
 Requires:        %{python3_pkgprefix}-py-consul >= 1.6.0
+%if 0%{?fedora} && 0%{?fedora} <= 44
+Requires:        python3-requests
+%endif
 %if 0%{?rhel} != 10
 Requires:        %{python3_pkgprefix}-requests
 %endif
 %if 0%{?rhel} && 0%{?rhel} == 10
 Requires:        python3-requests
+%endif
+%if 0%{?suse_version} >= 1500
+Requires:        %{python3_pkgprefix}-requests
 %endif
 %description -n %{name}-consul
 Meta package to pull consul related dependencies for patroni
@@ -119,6 +131,10 @@ Meta package to pull consul related dependencies for patroni
 %package -n %{name}-etcd
 Summary:        Related components to use patroni with etcd
 Requires:        %{name} = %{epoch}:%{version}-%{release}
+%if 0%{?fedora} && 0%{?fedora} <= 44
+Requires:        python3-etcd >= 0.4.3
+Requires:        python3-dns
+%endif
 %if !0%{?suse_version} && 0%{?rhel} != 10
 Requires:        %{python3_pkgprefix}-etcd >= 0.4.3
 Requires:        %{python3_pkgprefix}-dns
@@ -137,11 +153,17 @@ Meta package to pull etcd related dependencies for patroni
 %package -n %{name}-aws
 Summary:        Related components to use patroni on AWS
 Requires:        %{name} = %{epoch}:%{version}-%{release}
+%if 0%{?fedora} && 0%{?fedora} <= 44
+Requires:        python3-boto3
+%endif
 %if 0%{?rhel} != 10
 Requires:        %{python3_pkgprefix}-boto3
 %endif
 %if 0%{?rhel} && 0%{?rhel} == 10
 Requires:        python3-boto3
+%endif
+%if 0%{?suse_version} >= 1500
+Requires:        %{python3_pkgprefix}-boto3
 %endif
 %description -n %{name}-aws
 Meta package to pull AWS related dependencies for patroni
@@ -149,11 +171,17 @@ Meta package to pull AWS related dependencies for patroni
 %package -n %{name}-zookeeper
 Summary:        Related components to use patroni with Zookeeper
 Requires:        %{name} = %{epoch}:%{version}-%{release}
+%if 0%{?fedora} && 0%{?fedora} <= 44
+Requires:        python3-kazoo >= 1.3.1
+%endif
 %if 0%{?rhel} != 10
 Requires:        %{python3_pkgprefix}-kazoo >= 1.3.1
 %endif
 %if 0%{?rhel} && 0%{?rhel} == 10
 Requires:        python3-kazoo >= 1.3.1
+%endif
+%if 0%{?suse_version} >= 1500
+Requires:        python%{python3_pkgversion}-kazoo >= 1.3.1
 %endif
 %description -n %{name}-zookeeper
 Meta package to pull zookeeper related dependencies for patroni

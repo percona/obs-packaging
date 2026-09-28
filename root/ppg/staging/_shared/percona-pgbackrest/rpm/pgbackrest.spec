@@ -1,6 +1,8 @@
 %define pgmajorversion %!{PG_MAJOR_VERSION}
 %global pginstdir /usr/pgsql-%{pgmajorversion}
 
+%global sname pgbackrest
+
 Summary:        Reliable PostgreSQL Backup & Restore
 Name:           percona-pgbackrest
 Version:        1.0.0
@@ -9,14 +11,14 @@ License:        MIT
 Group:          Applications/Databases
 URL:            http://www.pgbackrest.org
 Source:         %{name}-%{version}.tar.gz
-Source1:        pgbackrest.conf
-Source2:	pgbackrest-tmpfiles.d
-Source3:	pgbackrest.logrotate
-Source4:	pgbackrest.service
-BuildRequires:	gcc openssl-devel zlib-devel percona-postgresql%{pgmajorversion}-devel
-BuildRequires:	libzstd-devel libxml2-devel libyaml-devel meson
-BuildRequires:	libssh2-devel
-BuildRequires:	libcurl-devel
+Source1:        %{sname}.conf
+Source2:	       %{sname}-tmpfiles.d
+Source3:	       %{sname}.logrotate
+Source4:	       %{sname}.service
+Source6:        %{sname}-sysusers.conf
+BuildRequires:	gcc zlib-devel percona-postgresql%{pgmajorversion}-devel
+BuildRequires:	libzstd-devel libxml2-devel meson
+BuildRequires:	libssh2-devel libyaml-devel libcurl-devel
 
 %if 0%{?suse_version} >= 1500
 Requires:	libopenssl3 libsystemd0
@@ -28,19 +30,15 @@ BuildRequires:	openssl-devel
 %endif
 
 %if 0%{?fedora} >= 42 || 0%{?rhel} >= 8
-Requires:	lz4-libs libzstd
+Requires:	lz4-libs libzstd libssh2
 BuildRequires:	lz4-devel bzip2-devel ninja-build
-%endif
-%if 0%{?fedora} >= 42 || 0%{?rhel} >= 8
-Requires:	libssh2
 %endif
 %if 0%{?suse_version} && 0%{?suse_version} >= 1500
 Requires:	liblz4-1 libzstd1 libssh2-1 libsystemd0
-BuildRequires:	liblz4-devel libbz2-devel libssh2-devel ninja
+BuildRequires:	liblz4-devel libbz2-devel ninja
 %endif
 
 Requires:	postgresql-libs
-Requires(pre):	/usr/sbin/useradd /usr/sbin/groupadd
 
 BuildRequires:		systemd, systemd-devel
 # We require this to be present for %%{_prefix}/lib/tmpfiles.d
@@ -79,67 +77,63 @@ unset PKG_CONFIG_PATH
 export PG_CONFIG=/usr/pgsql-%{pgmajorversion}/bin/pg_config
 %meson_install
 %{__install} -D -d -m 0755 %{buildroot}%{perl_vendorlib} %{buildroot}%{_bindir}
-%{__install} -D -d -m 0700 %{buildroot}/%{_sharedstatedir}/pgbackrest
-%{__install} -D -d -m 0700 %{buildroot}/var/log/pgbackrest
-%{__install} -D -d -m 0700 %{buildroot}/var/spool/pgbackrest
+%{__install} -D -d -m 0700 %{buildroot}/%{_sharedstatedir}/%{sname}
+%{__install} -D -d -m 0700 %{buildroot}/var/log/%{sname}
+%{__install} -D -d -m 0700 %{buildroot}/var/spool/%{sname}
 %{__install} -D -d -m 0755 %{buildroot}%{_sysconfdir}
-%{__install} %{SOURCE1} %{buildroot}/%{_sysconfdir}/pgbackrest.conf
+%{__install} %{SOURCE1} %{buildroot}/%{_sysconfdir}/%{sname}.conf
 
 # Install logrotate file:
 %{__install} -p -d %{buildroot}%{_sysconfdir}/logrotate.d
-%{__install} -p -m 644 %{SOURCE3} %{buildroot}%{_sysconfdir}/logrotate.d/pgbackrest
+%{__install} -p -m 644 %{SOURCE3} %{buildroot}%{_sysconfdir}/logrotate.d/%{sname}
 
 # ... and make a tmpfiles script to recreate it at reboot.
 %{__mkdir} -p %{buildroot}/%{_tmpfilesdir}
-%{__install} -m 0644 %{SOURCE2} %{buildroot}/%{_tmpfilesdir}/pgbackrest.conf
+%{__install} -m 0644 %{SOURCE2} %{buildroot}/%{_tmpfilesdir}/%{sname}.conf
 
 # Install unit file:
 %{__install} -d %{buildroot}%{_unitdir}
-%{__install} -m 644 %{SOURCE4} %{buildroot}%{_unitdir}/pgbackrest.service
+%{__install} -m 644 %{SOURCE4} %{buildroot}%{_unitdir}/%{sname}.service
 
 %pre
-%{__install} -d -m 700 /var/lib/pgsql/
-groupadd -g 26 -o -r postgres >/dev/null 2>&1 || :
-useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
-	-c "PostgreSQL Server" -u 26 postgres >/dev/null 2>&1 || :
-%{__chown} postgres: /var/lib/pgsql
+%sysusers_create_package %{sname} %SOURCE6
 
 %post
 if [ $1 -eq 1 ] ; then
-   /bin/systemctl daemon-reload >/dev/null 2>&1 || :
+   /usr/bin/systemctl daemon-reload >/dev/null 2>&1 || :
    %if 0%{?suse_version} >= 1500
-   %service_add_pre pgbackrest.service
+   %service_add_pre %{sname}.service
    %else
-   %systemd_post pgbackrest.service
+   %systemd_post %{sname}.service
    %endif
 fi
 
 %preun
 if [ $1 -eq 0 ] ; then
 	# Package removal, not upgrade
-	/bin/systemctl --no-reload disable %{name}.service >/dev/null 2>&1 || :
-	/bin/systemctl stop %{name}.service >/dev/null 2>&1 || :
+	/usr/bin/systemctl --no-reload disable %{sname}.service >/dev/null 2>&1 || :
+	/usr/bin/systemctl stop %{sname}.service >/dev/null 2>&1 || :
 fi
 
 %postun
-/bin/systemctl daemon-reload >/dev/null 2>&1 || :
+/usr/bin/systemctl daemon-reload >/dev/null 2>&1 || :
 
 if [ $1 -ge 1 ] ; then
 	# Package upgrade, not uninstall
-	/bin/systemctl try-restart %{name}.service >/dev/null 2>&1 || :
+	/usr/bin/systemctl try-restart %{sname}.service >/dev/null 2>&1 || :
 fi
 
 %files
 %defattr(-,root,root)
 %license LICENSE
-%{_bindir}/pgbackrest
-%config(noreplace) %attr (644,root,root) %{_sysconfdir}/pgbackrest.conf
-%config(noreplace) %{_sysconfdir}/logrotate.d/pgbackrest
-%{_tmpfilesdir}/pgbackrest.conf
-%{_unitdir}/pgbackrest.service
-%attr(-,postgres,postgres) /var/log/pgbackrest
-%attr(-,postgres,postgres) %{_sharedstatedir}/pgbackrest
-%attr(-,postgres,postgres) /var/spool/pgbackrest
+%{_bindir}/%{sname}
+%config(noreplace) %attr (644,root,root) %{_sysconfdir}/%{sname}.conf
+%config(noreplace) %{_sysconfdir}/logrotate.d/%{sname}
+%{_tmpfilesdir}/%{sname}.conf
+%{_unitdir}/%{sname}.service
+%attr(-,postgres,postgres) /var/log/%{sname}
+%attr(-,postgres,postgres) %{_sharedstatedir}/%{sname}
+%attr(-,postgres,postgres) /var/spool/%{sname}
 
 %changelog
 * %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PGBACKREST_VERSION}-1
