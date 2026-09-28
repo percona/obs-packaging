@@ -1,0 +1,13 @@
+Index: patroni/features/environment.py
+===================================================================
+--- patroni.orig/features/environment.py
++++ patroni/features/environment.py
+@@ -157,7 +157,7 @@ class PatroniController(AbstractControll
+         if os.name == 'nt':
+             env['BEHAVE_DEBUG'] = 'true'
+         patroni = subprocess.Popen([sys.executable, '-m', 'coverage', 'run',
+-                                   '--source=patroni', '-p', 'patroni.py', self._config], env=env,
++                                   '-p', '/usr/bin/patroni', self._config], env=env,
+                                    stdout=self._log, stderr=subprocess.STDOUT, cwd=self._work_directory)
+         if os.name == 'nt':
+             patroni.terminate = self.terminate

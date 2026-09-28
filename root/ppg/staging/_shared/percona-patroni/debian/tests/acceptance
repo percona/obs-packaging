@@ -1,0 +1,112 @@
+#!/bin/bash
+
+set -eu
+
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+export TZ=UTC # suppress UnknownTimeZoneError('Etc/UTC',)
+DCS=$1
+shift
+
+if [ $(id -u) -eq 0 ]
+then
+        # required so that the postgres user can create .coverage* and features/output/
+        chmod 777 .
+        chmod 777 features
+        SU='su postgres -p -c'
+
+        # zookeeper must be started manually (as root)
+        if [ "$DCS" = "zookeeper" ]; then
+		JAVA_OPTS="-Djava.net.preferIPv4Stack=true" /usr/bin/java -cp /etc/zookeeper/conf:/usr/share/java/jline.jar:/usr/share/java/log4j-1.2.jar:/usr/share/java/xercesImpl.jar:/usr/share/java/xmlParserAPIs.jar:/usr/share/java/netty.jar:/usr/share/java/slf4j-api.jar:/usr/share/java/slf4j-log4j12.jar:/usr/share/java/zookeeper.jar -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.local.only=true -Dzookeeper.log.dir=/var/log/zookeeper -Dzookeeper.root.logger=INFO,ROLLINGFILE org.apache.zookeeper.server.quorum.QuorumPeerMain /etc/zookeeper/conf/zoo.cfg &
+		# let Java have some more time to startup
+		sleep 5
+        fi
+else
+        SU='bash -c'
+fi
+
+# clean up afterwards
+trap 'rm -f /tmp/pgpass_postgres-?; if [ $(id -u) -eq 0 ] && [ -x /etc/init.d/zookeeper ]; then /etc/init.d/zookeeper stop; fi' EXIT
+
+# set ETCD_ARCH for ETCD_UNSUPPORTED_ARCH
+# see https://github.com/etcd-io/etcd/blob/master/Documentation/op-guide/supported-platform.md#current-support
+ETCD_ARCH=
+DEB_HOST_ARCH=$(dpkg-architecture -qDEB_HOST_ARCH)
+case $DEB_HOST_ARCH in
+	arm64|s390x)
+		ETCD_ARCH=$DEB_HOST_ARCH
+		;;
+	armel|armhf)
+		ETCD_ARCH=arm
+		;;
+	i386)
+		ETCD_ARCH=386
+		;;
+esac
+
+if [ $(id -u) -eq 0 ]
+then
+	# ensure no etcd server is running.
+	if [ "$DCS" = "etcd" -o "$DCS" = "etcd3" ]
+	then
+		if [ -x /etc/init.d/etcd ]
+		then
+			service etcd stop
+			service etcd status || true
+		else
+			if [ -d /run/systemd/system ]
+			then
+				systemctl stop etcd
+			fi
+		fi
+	fi
+	# make sure various directories are writable by the postgres user
+	for dir in features/output data /tmp/pgpass_postgres-?; do
+		if [ -d $dir ]
+		then
+			if [ "$(stat -c "%U" $dir)" != "postgres" ]
+			then
+				echo "removing directory $dir not belonging to postgres"
+				rm -rf $dir
+			fi
+		fi
+	done
+fi
+
+set -x
+
+# PG_VERSIONS selects which installed PostgreSQL versions to run against:
+#   all    - every installed version (skipping anything < 12)
+#   latest - only the newest installed version
+# The test matrix runs the full feature set only on the latest version, while
+# the basic_replication feature covers every version (etcd3) and every DCS
+# backend (latest version).
+PG_VERSIONS=${PG_VERSIONS:-all}
+if [ "${PG_VERSIONS}" = "latest" ]; then
+	pg_versions=$(ls -1 /usr/lib/postgresql/ | sort -V | tail -n 1)
+else
+	pg_versions=$(ls -1 /usr/lib/postgresql/ | sort -Vr)
+fi
+
+for PG_VERSION in $pg_versions; do
+	case $PG_VERSION in
+	    8.*|9.*|10|11)
+		echo "PostgreSQL ${PG_VERSION} skipped"
+		continue
+		;;
+	esac
+	echo "### PostgreSQL $PG_VERSION acceptance-$DCS $@ ###"
+	if ! $SU "set -o pipefail; ETCD_UNSUPPORTED_ARCH=$ETCD_ARCH DCS=$DCS \
+		PATH=/usr/lib/postgresql/${PG_VERSION}/bin:$PATH \
+		behave $@ | ts"; then
+		for file in features/output/*_failed/*; do
+			case $file in *.journal*) continue ;; esac # skip RAFT journal files
+			echo "$file:"
+			cat $file
+		done
+		exit 1
+	else
+		$SU "rm -rf features/output"
+	fi
+	echo "### End $PG_VERSION acceptance-$DCS $@ ###"
+done

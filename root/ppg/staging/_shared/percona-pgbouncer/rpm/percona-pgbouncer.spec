@@ -1,4 +1,3 @@
-%global systemd_enabled 1
 %global sname pgbouncer
 
 Name:		percona-pgbouncer
@@ -10,32 +9,32 @@ URL:		https://www.pgbouncer.org/
 Packager:       Percona Development Team <https://jira.percona.com>
 Vendor:         Percona, LLC
 Source0:	%{name}-%{version}.tar.gz
-Source1:        %{sname}.init
 Source2:	%{sname}.sysconfig
 Source3:	%{sname}.logrotate
 Source4:	%{sname}.service
-Source5:	%{sname}.service.rhel7
+Source5:	%{sname}-sysusers.conf
+Source6:        %{sname}-tmpfiles.d
 Patch0:		%{sname}-ini.patch
 
-BuildRequires:	libevent-devel >= 2.0 libtool pandoc systemd-devel
+BuildRequires:	gcc libevent-devel >= 2.0 libtool pandoc systemd-devel
 Requires:	libevent >= 2.0
 %if 0%{?rhel} >= 8
 Requires:	python3.12 python3.12-psycopg2
 %else
 Requires:	python3 python3-psycopg2
 %endif
-BuildRequires:	openssl-devel pam-devel
+BuildRequires:	pam-devel
 
 %if 0%{?suse_version} >= 1500
 Requires:	libopenssl3
 BuildRequires:	libopenssl-3-devel
 %endif
-%if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
+%if 0%{?fedora} >= 43 || 0%{?rhel} >= 8
 Requires:	openssl-libs >= 1.1.1k
 BuildRequires:	openssl-devel
 %endif
 
-%if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
+%if 0%{?fedora} >= 43 || 0%{?rhel} >= 8
 BuildRequires:	c-ares-devel >= 1.13
 Requires:	c-ares >= 1.13
 %endif
@@ -56,7 +55,7 @@ Requires:	libldap-2
 BuildRequires:	openldap2-devel
 Requires:	libldap-2_5-0
 %endif
-%if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
+%if 0%{?fedora} >= 43 || 0%{?rhel} >= 8
 BuildRequires:	openldap-devel
 Requires:	openldap
 %endif
@@ -64,7 +63,6 @@ Requires:	openldap
 BuildRequires:	python3.12
 %endif
 
-%if %{systemd_enabled}
 BuildRequires:		systemd
 Requires:		systemd
 %if !0%{?suse_version}
@@ -73,7 +71,7 @@ Requires(post):		systemd-sysv
 Requires(post):		systemd
 Requires(preun):	systemd
 Requires(postun):	systemd
-%endif
+
 %if 0%{?suse_version}
 Requires(pre):	shadow
 %else
@@ -124,23 +122,14 @@ sed -i.fedora \
 sed -i 's|/usr/bin/env python3|/usr/bin/python3.12|' %{buildroot}%{_sysconfdir}/%{sname}/mkauth.py
 %endif
 
-%if %{systemd_enabled}
 %{__install} -d %{buildroot}%{_unitdir}
-%if 0%{?rhel} == 7
-%{__install} -m 644 %{SOURCE5} %{buildroot}%{_unitdir}/%{sname}.service
-%else
 %{__install} -m 644 %{SOURCE4} %{buildroot}%{_unitdir}/%{sname}.service
-%endif
 
 %{__mkdir} -p %{buildroot}%{_tmpfilesdir}
-cat > %{buildroot}%{_tmpfilesdir}/%{sname}.conf <<EOF
-d %{_rundir}/%{sname} 0700 pgbouncer pgbouncer -
-EOF
+%{__install} -m 0644 %{SOURCE6} %{buildroot}/%{_tmpfilesdir}/%{sname}.conf
 
-%else
-%{__install} -p -d %{buildroot}%{_initrddir}
-%{__install} -p -m 755 %{SOURCE1} %{buildroot}%{_initrddir}/%{sname}
-%endif
+# Install sysusers.d config file to allow rpm to create users/groups automatically.
+%{__install} -m 0644 -D %{SOURCE5} %{buildroot}%{_sysusersdir}/%{name}.conf
 
 %{__install} -d -m 755 %{buildroot}/var/run/%{sname}
 %{__install} -p -d %{buildroot}%{_sysconfdir}/logrotate.d
@@ -148,9 +137,7 @@ EOF
 
 
 %post
-%if %{systemd_enabled}
 %systemd_post %{sname}.service
-%endif
 if [ ! -d %{_localstatedir}/log/pgbouncer ] ; then
 %{__mkdir} -m 700 %{_localstatedir}/log/pgbouncer
 fi
@@ -158,41 +145,30 @@ fi
 %{__chown} -R pgbouncer:pgbouncer %{_rundir}/%{sname} >/dev/null 2>&1 || :
 
 %pre
-groupadd -r pgbouncer >/dev/null 2>&1 || :
-useradd -m -g pgbouncer -r -s /bin/bash \
-	-c "PgBouncer Server" pgbouncer >/dev/null 2>&1 || :
+%sysusers_create_package %{sname} %SOURCE5
 
 %preun
-%if %{systemd_enabled}
 %systemd_preun %{sname}.service
-%endif
 
 %postun
 if [ $1 -eq 0 ]; then
 %{__rm} -rf %{_rundir}/%{sname}
 fi
-%if %{systemd_enabled}
 %systemd_postun_with_restart %{sname}.service
-%endif
 
 %clean
 %{__rm} -rf %{buildroot}
 
 %files
 %doc /usr/share/doc/%{sname}
-%if %{systemd_enabled}
 %license COPYRIGHT
-%endif
 %dir %{_sysconfdir}/%{sname}
 %{_bindir}/%{sname}
 %config(noreplace) %{_sysconfdir}/%{sname}/%{sname}.ini
-%if %{systemd_enabled}
 %ghost %{_rundir}/%{sname}
 %{_tmpfilesdir}/%{sname}.conf
+%{_sysusersdir}/%{name}.conf
 %attr(644,root,root) %{_unitdir}/%{sname}.service
-%else
-%{_initrddir}/%{sname}
-%endif
 %config(noreplace) %{_sysconfdir}/sysconfig/%{sname}
 %config(noreplace) %{_sysconfdir}/logrotate.d/%{sname}
 %{_mandir}/man1/%{sname}.*

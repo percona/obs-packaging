@@ -15,8 +15,17 @@ Build-Depends:
  libc-ares-dev (>> 1.12),
  libpq-dev,
  libsystemd-dev [linux-any],
- pkg-config,
+ pkgconf,
  pandoc,
- python3
+ python3,
+ python3-pytest <!nocheck>,
+ python3-pytest <!nocheck>,
+ python3-pytest-asyncio <!nocheck>,
+ python3-pytest-timeout <!nocheck>,
+ python3-pytest-xdist <!nocheck>,
+ python3-psycopg2 <!nocheck>,
+ python3-filelock <!nocheck>,
+ slapd <!nocheck>,
+ socat <!nocheck>,
 Debtransform-Release: 1
 Debtransform-Files-Tar: debian.tar.gz

@@ -1,4 +1,8 @@
-better-startup-script.patch
-add-sample-config.patch
-disable-sphinx-github-style.patch
-
+startup_scripts.patch
+acceptance_tests_system_patroni.patch
+offline_intersphinx.patch
+avoid_overwriting_configuration_during_boostrap.patch
+regression_tests_skip_citus_test.patch
+disable_sphinx_github_style.patch
+reproducible_docs.patch
+acceptance_tests_increase_timeouts.patch

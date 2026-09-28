@@ -24,7 +24,7 @@ Build-Depends:
  percona-postgresql-server-dev-all,
  postgresql-common,
  xsltproc,
-Standards-Version: 4.7.2
+Standards-Version: 4.7.4
 Homepage: https://www.pgpool.net/mediawiki/index.php/Main_Page
 
 Package: percona-pgpool2

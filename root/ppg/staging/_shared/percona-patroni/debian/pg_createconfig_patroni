@@ -1,0 +1,236 @@
+#!/bin/sh
+
+for i in "$@"
+do
+case $i in
+    --hostip=*)
+    HOSTIP="${i#*=}"
+    shift # past argument=value
+    ;;
+    --network=*)
+    NETWORK="${i#*=}"
+    shift # past argument=value
+    ;;
+    --port=*)
+    PORT="${i#*=}"
+    shift # past argument=value
+    ;;
+    --force)
+    FORCE="y"
+    shift # past argument=value
+    ;;
+    --vip=*)
+    VIP_IP="${i#*=}"
+    shift # past argument=value
+    ;;
+    --endpoint=*)
+    # one or more endpoints joined by commas are allowed
+    DCS_ENDPOINT="${i#*=}"
+    shift # past argument=value
+    ;;
+    *)
+       # unknown option
+    ;;
+esac
+done
+
+if [ -z "$2" ];
+then
+    echo "Usage: pg_creatconfig_patroni [options] <version> <cluster name>"
+    exit 1
+else
+    VERSION=$1
+    echo $VERSION | egrep -q '^[[:digit:]]+\.?[[:digit:]]+$'
+    if [ $? -ne 0 ]; then
+	echo "Error: invalid version ${VERSION}"
+	exit 1
+    fi
+    if [ ! -f /usr/lib/postgresql/${VERSION}/bin/initdb ]; then
+	echo "Error: no initdb program for version ${VERSION} found"
+	exit 1
+    fi
+fi
+
+if [ -z "$2" ];
+then
+    echo "Usage: pg_creatconfig_patroni [options] <version> <cluster name>"
+    exit 1
+else
+    CLUSTER=$2
+fi
+
+# find port of the cluster if it is already running
+EXISTING_PORT=$(pg_lsclusters -h | grep -E "^$VERSION[[:space:]]+$CLUSTER[[:space:]]+" | awk '{print $3}')
+
+if [ -z "$PORT" ]; then
+    # no port was specified
+
+    if [ -n "$EXISTING_PORT" ]; then
+        # if our cluster is already running yet, then reuse the same port
+        PORT="$EXISTING_PORT"
+    else
+        # if our cluster isn't running yet, try to guess next free port
+        PORT=$(($(pg_lsclusters -h | awk '{print $3}' | sort -n | tail -1) + 1))
+        if [ "$PORT" -eq 1 ]; then
+	    # No cluster exists yet, use default port
+	    PORT=5432
+        fi
+    fi
+else
+    # validate specified port
+    if [ "$PORT" = "$EXISTING_PORT" ]; then
+        # reuse existing port
+        true
+    else
+        # fail if port is already in use
+        pg_lsclusters -h | awk '{print $3}' | grep -q $PORT && echo "Port $PORT already in use" && exit 1
+    fi
+fi
+
+# determine API port (default is 8008) by incrementing for each additional
+# Postgres port.  2576 is 8008 - 5432.
+API_PORT=$((2576+$PORT))
+
+# set base data directory
+if [ -f /etc/postgresql-common/createcluster.conf ]; then
+    DATADIR_BASE=$(grep ^data_directory /etc/postgresql-common/createcluster.conf | sed -e 's/^[^\/]*\//\//g' -e 's/\%.*//' -e 's/\/$//')
+fi
+if [ -z "${DATADIR_BASE}" ]; then
+    DATADIR_BASE=/var/lib/postgresql
+fi
+
+# check DCS configuration
+if [ ! -f /etc/patroni/dcs.yml ]; then
+    echo "DCS not configured yet, edit /etc/patroni/dcs.yml"
+    exit 1
+fi
+grep -v "^#" /etc/patroni/dcs.yml | grep -v "^$" > /dev/null 2>&1
+if [ $? != 0 ]; then
+    echo "DCS not configured yet, edit /etc/patroni/dcs.yml"
+    exit 1
+fi
+DCS_CONFIG="$(egrep -v '^[[:space:]]*$|^ *#' /etc/patroni/dcs.yml | sed -e ':a;N;$!ba;s/\n/\\n/g' -e 's/\$/\\$/g')"
+
+# check vip configuration
+if [ -n "$VIP_IP" ]; then
+    VIP_FILE=/etc/patroni/${VERSION}-${CLUSTER}.vip
+    if [ -f $VIP_FILE -a -z "$FORCE" ]; then
+        echo "VIP configuration file already exists"
+        exit 1
+    else
+        rm -f $VIP_FILE
+        touch $VIP_FILE
+    fi
+    if [ ! -e /etc/patroni/vip.in ]; then
+        echo "VIP template /etc/patroni/vip.in does not exist, cannot write VIP file"
+        exit 1
+    fi
+    if [ $(grep -q LISTEN_VIP /etc/patroni/config.yml.in) ]; then
+        echo "Patroni configuration template does not have @LISTEN_VIP@ tag"
+        echo "Postgres will not be able to bind to the VIP $VIP_IP."
+        exit 1
+    fi
+    VIP_IFACE="$(ip -4 route get 8.8.8.8 | grep ^8.8.8.8 | sed -e s/.*dev.// -e s/\ .*//)"
+    if [ -z "$VIP_IFACE" ]; then
+        echo "Network interface could not be determined, cannot write VIP file"
+        exit 1
+    fi
+    VIP_MASK="$(ip -o -f inet addr show $VIP_IFACE | awk '{print $4}' | sed -e 's/.*\///' | uniq)"
+    if [ -z "$VIP_MASK" ]; then
+        echo "Netmask could not be determined, cannot write VIP file"
+        exit 1
+    fi
+    VIP_KEY="/postgresql-common/${VERSION}-${CLUSTER}/leader"
+    DCS_TYPE="$(egrep -v '^[[:space:]]*$|^ *#' /etc/patroni/dcs.yml | egrep -v '[[:space:]]-' | egrep '(etcd|consul|zookeeper)' | sed s/:.*//)"
+    if [ -z "$DCS_TYPE" ]; then
+        echo "DCS type could not be determined from /etc/patroni/dcs.yml, cannot write VIP file"
+	exit 1
+    fi
+    if [ -z "$DCS_ENDPOINT" ]; then
+	# determine DCS_ENDPOINTS from dcs.yml. This currently assumes that DCS
+	# hosts are listed with their ip-addresses, while hostnames appear to
+	# be valid as well. If DCS servers are to be specified by hostname,
+	# they can be explicitly passed via the --endpoint option.
+        DCS_ENDPOINT="$(egrep -v '^[[:space:]]*$|^ *#' /etc/patroni/dcs.yml | egrep '(host|-)' | egrep -v '^[[:space:]]*$' | egrep '[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+' | sed -r -e 's/.*(host|hosts)://' -e s/-// -e 's/ //g' | grep -v ^$ | sed -r -e 's/^([0-9])/http:\/\/\1/')"
+        if [ -z "$DCS_ENDPOINT" ]; then
+            echo "DCS endpoint URL could not be determined from /etc/patroni/dcs.yml and --endpoint not provided, cannot write VIP file"
+	    exit 1
+        fi
+        if [ $(echo "$DCS_ENDPOINT" | wc -l) != 1 ]; then
+	    # join multiple lines with commas
+	    # sed -> remove trailing comma
+	    DCS_ENDPOINT=$( echo "$DCS_ENDPOINT" | tr '\n' ',' | sed 's/,$//' )
+        fi
+    fi
+    LISTEN_VIP=",$VIP_IP"
+else
+    LISTEN_VIP=
+fi
+
+CONFIG_FILE=/etc/patroni/${VERSION}-${CLUSTER}.yml
+
+if [ -f $CONFIG_FILE -a -z "$FORCE" ]; then
+    echo "Patroni configuration file already exists"
+    exit 1
+else
+    rm -f $CONFIG_FILE
+    touch $CONFIG_FILE
+fi
+
+HOSTNAME=$(hostname)
+
+# set default ipv4 address in case it was not provided
+if [ -z "$HOSTIP" ]; then
+    if [ -x /bin/ip ]; then
+        HOSTIP=$(/bin/ip -4 route get 8.8.8.8 | grep ^8.8.8.8 | sed -e s/.*src.// -e s/\ .*//g)
+    else
+        echo "iproute2 package missing, cannot determine host ip addresss and --hostip is not set"
+        rm -f $CONFIG_FILE
+        exit 1
+    fi
+fi
+
+if [ -z "$NETWORK" ]; then
+    if [ -x /bin/ip ]; then
+	ROUTE=$(/bin/ip -4 route get 8.8.8.8 | grep ^8.8.8.8)
+	DEV=$(echo "$ROUTE" | grep -P -o "(?<=dev )[^ ]+")
+	ADDRESS=$(echo "$ROUTE" | grep -P -o "(?<=src )[^ ]+")
+	PREFIX=$(ip -4 address show $DEV | grep -P -o "(?<=inet $ADDRESS/)[0-9]+")
+        NETWORK="$ADDRESS/$PREFIX"
+    else
+        echo "iproute2 package missing, cannot determine network and --network is not set"
+        rm -f $CONFIG_FILE
+        exit 1
+    fi
+fi
+
+# add remaining patroni configuration from template
+cat /etc/patroni/config.yml.in |		\
+    sed -e "s/@VERSION@/${VERSION}/g"		\
+        -e "s/@CLUSTER@/${CLUSTER}/g"		\
+        -e "s/@HOSTNAME@/${HOSTNAME}/g"		\
+        -e "s/@HOSTIP@/${HOSTIP}/g"		\
+        -e "s/@LISTEN_VIP@/${LISTEN_VIP}/g"	\
+        -e "s#@DATADIR_BASE@#${DATADIR_BASE}#g"	\
+        -e "s#@NETWORK@#${NETWORK}#g"		\
+        -e "s/@API_PORT@/${API_PORT}/g"		\
+        -e "s/@PORT@/${PORT}/g"			\
+        -e "s/@DCS_CONFIG@/${DCS_CONFIG}/g"	\
+>> $CONFIG_FILE
+
+# write vip configuration, if requested
+if [ -n "$VIP_IP" ]; then
+    cat /etc/patroni/vip.in |				\
+        sed -e "s/@VIP_IP@/${VIP_IP}/g"			\
+            -e "s/@VIP_MASK@/${VIP_MASK}/g"		\
+            -e "s/@VIP_IFACE@/${VIP_IFACE}/g"		\
+            -e "s#@VIP_KEY@#${VIP_KEY}#g"		\
+            -e "s/@VIP_HOST@/${HOSTNAME}/g"		\
+            -e "s/@VIP_TYPE@/${DCS_TYPE}/g"		\
+            -e "s#@VIP_ENDPOINT@#${DCS_ENDPOINT}#g"	\
+    >> $VIP_FILE
+fi
+
+# Set permissions
+chown postgres:postgres $CONFIG_FILE
+chmod 660 $CONFIG_FILE

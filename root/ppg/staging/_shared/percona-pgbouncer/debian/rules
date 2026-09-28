@@ -41,7 +41,7 @@ override_dh_auto_configure:
 		--bindir=/usr/sbin \
 		--with-cares=yes \
 		--with-pam \
-		--with-ldap\
+		--with-ldap \
 		$(SYSTEMD)
 
 # "make check" broken in 1.12: https://github.com/pgbouncer/pgbouncer/issues/431

@@ -1,0 +1,21 @@
+[Unit]
+Description=sockets for PgBouncer
+
+[Socket]
+ListenStream=/var/run/postgresql/.s.PGSQL.6432
+ListenStream=6432
+
+# additional settings that might be useful
+#Backlog=
+#SocketUser=
+#SocketGroup=
+#SocketMode=
+#KeepAlive=
+#KeepAliveTimeSec=
+#KeepAliveIntervalSec=
+#KeepAliveProbes=
+#DeferAcceptSec=
+#ReusePort=
+
+[Install]
+WantedBy=sockets.target
