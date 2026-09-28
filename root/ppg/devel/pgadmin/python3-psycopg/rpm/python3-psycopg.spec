@@ -34,8 +34,6 @@ BuildRequires:  libpq
 
 Requires:       %{python3_pkgprefix}-typing-extensions >= 4.6
 Requires:       libpq
-# not mirrored as BuildRequires: the dependency BuildRequires this package for its %check
-Requires:       %{python3_pkgprefix}-psycopg-c
 
 %description
 PostgreSQL database adapter for Python.
