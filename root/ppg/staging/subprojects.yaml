@@ -37,7 +37,7 @@ project-config: |
   Prefer: hdf-libs
   %endif
 
-  %if "%_repository" == "RockyLinux_10"
+  %if "%_repository" == "RockyLinux_10" || "%_repository" == "UBI_10"
   Prefer: selinux-policy-targeted
   Prefer: hdf-libs
 
