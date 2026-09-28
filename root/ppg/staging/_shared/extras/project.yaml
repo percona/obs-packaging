@@ -25,21 +25,6 @@ repositories:
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
         repository: devel
     archs: [x86_64, aarch64]
-  - name: UBI_10
-    paths:
-      - subproject: ppg:common:deps
-        repository: UBI_10
-      - subproject: common:deps:build
-        repository: UBI_10
-      - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
-        repository: UBI_10
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:10
-        repository: standard
-      - project: RedHat:UBI-10
-        repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
-        repository: devel
-    archs: [x86_64, aarch64]
 
 # UBI_9 build configuration, same as the PPG-wide block in
 # root/ppg/staging/subprojects.yaml (which reaches direct children of the
@@ -49,15 +34,4 @@ project-config: |
   ExpandFlags: module:llvm-toolset-rhel9
   # hdf-libs (EPEL split package) and hdf both provide libdf.so.0 and libmfhdf.so.0
   Prefer: hdf-libs
-  %endif
-
-  %if "%_repository" == "UBI_10"
-  # Same settings as the RockyLinux_10 || UBI_10 block in
-  # root/ppg/staging/subprojects.yaml, which does not reach this project.
-  Prefer: selinux-policy-targeted
-  Prefer: hdf-libs
-
-  Macros:
-  %__brp_check_rpaths %{nil}
-  :Macros
   %endif
