@@ -155,6 +155,9 @@ Patch: 0001-CVE-2026-25547-braces-expansion.patch
 Patch: 0002-CVE-2026-42338-npm-ip-address-security-fix.patch
 Patch: 0003-CVE-2026-13149-brace-expansion-unbound-recursion.patch
 Patch: 0003-CVE-2026-59873-CVE-2026-59874-tar-rebase-to-7.5.19.patch
+# Test-only: OpenSSL >= 3.5.8 can finalize an empty CCM message (openssl#32427),
+# which this release's test still asserts must throw.
+Patch: 0004-test-tolerate-OpenSSL-3.5.8-empty-CCM-finalize.patch
 
 %global pkgname nodejs
 

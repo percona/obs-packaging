@@ -11,6 +11,5 @@
       <size unit="G">8</size>
     </memory>
   </hardware>
-  <sandbox>kvm</sandbox>
   <hostlabel exclude="true">SLOW_CPU</hostlabel>
 </constraints>

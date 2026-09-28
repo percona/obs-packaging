@@ -1,0 +1,75 @@
+From: Percona OBS packaging
+Subject: [PATCH] test: tolerate OpenSSL >= 3.5.8 finalizing an empty CCM message
+
+openssl/openssl#32427 (released in 3.5.8, 3.6.4, 3.4.7, 3.0.22 and 4.0) makes
+CCM process an empty payload during Final instead of treating a NULL-input
+update as a no-op -- previously an empty CCM message could skip tag
+verification on decrypt and produce no tag on encrypt.
+
+With that fix `cipher.final()` on an AES-128-CCM cipher that never saw an
+update() now succeeds, so the test's `assert.throws(...)` fails with "Missing
+expected exception".  The version gate in this release is `hasOpenSSL3`, i.e.
+>= 3.0 with no upper bound, so it cannot distinguish the two behaviours.
+
+UBI 9 ships openssl 3.5.8, which carries the fix.
+
+Taken from nodejs/node upstream, which relaxed the assertion to accept either
+behaviour and additionally verifies the produced tag against a control cipher.
+Upstream calls `hasOpenSSL(3)`; this release imports the equivalent
+`hasOpenSSL3` binding, so that name is kept to avoid touching the imports.
+
+Upstream: https://github.com/nodejs/node/blob/main/test/parallel/test-crypto-authenticated.js
+See also: https://github.com/nodejs/node/issues/38035
+---
+--- a/test/parallel/test-crypto-authenticated.js
++++ b/test/parallel/test-crypto-authenticated.js
+@@ -626,19 +626,37 @@
+ 
+ {
+   // CCM cipher without data should not crash, see https://github.com/nodejs/node/issues/38035.
+-  const algo = 'aes-128-ccm';
+-  const key = Buffer.alloc(16);
+-  const iv = Buffer.alloc(12);
+-  const opts = { authTagLength: 10 };
++  if (!ciphers.includes('aes-128-ccm')) {
++    common.printSkipMessage(`unsupported aes-128-ccm test`);
++  } else {
++    const key = Buffer.alloc(16);
++    const iv = Buffer.alloc(12);
++    const opts = { authTagLength: 10 };
+ 
+-  const cipher = crypto.createCipheriv(algo, key, iv, opts);
+-  assert.throws(() => {
+-    cipher.final();
+-  }, hasOpenSSL3 ? {
+-    code: 'ERR_OSSL_TAG_NOT_SET'
+-  } : {
+-    message: /Unsupported state/
+-  });
++    const control = crypto.createCipheriv('aes-128-ccm', key, iv, opts);
++    control.update(Buffer.alloc(0));
++    control.final();
++    const expectedTag = control.getAuthTag();
++
++    const cipher = crypto.createCipheriv('aes-128-ccm', key, iv, opts);
++    let output;
++    try {
++      output = cipher.final();
++    } catch (err) {
++      // OpenSSL without https://github.com/openssl/openssl/pull/32427
++      // cannot finalize an empty CCM message unless update() was called.
++      if (hasOpenSSL3) {
++        assert.strictEqual(err.code, 'ERR_OSSL_TAG_NOT_SET');
++      } else {
++        assert.match(err.message, /Unsupported state/);
++      }
++    }
++
++    if (output !== undefined) {
++      assert.deepStrictEqual(output, Buffer.alloc(0));
++      assert.deepStrictEqual(cipher.getAuthTag(), expectedTag);
++    }
++  }
+ }
+ 
+ {
