@@ -5,7 +5,8 @@
 - PG_VERSION: %!{PG_MAJOR_VERSION}.%!{PG_MINOR_VERSION}
 
 - PG_SOURCE_GIT_URL: https://github.com/percona/postgres.git
-- PG_SOURCE_GIT_REVISION: 8d3bd20cbf647490ab2b88550213e9b478c9093a  # TODO: replace by beta4 tag
+# TODO: replace the pinned commit by the beta4 tag once it exists
+- PG_SOURCE_GIT_REVISION: 8d3bd20cbf647490ab2b88550213e9b478c9093a
 - PG_PACKAGE_VERSION: %!{PG_VERSION}.%!{PERCONA_PG_PATCH_VERSION}%!{PG_VERSION_SUFFIX}
 
 - PPG_IMAGE_VERSION: %!{PG_VERSION}.%!{PERCONA_PG_PATCH_VERSION}
