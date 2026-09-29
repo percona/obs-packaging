@@ -9,3 +9,5 @@ build:
   Ubuntu_26.04: false
   openSUSE_Tumbleweed: false
   openSUSE_Leap_16: false
+  # UBI 10 ships python3-systemd (baseos) and its system python is 3.12.
+  UBI_10: false

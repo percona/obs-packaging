@@ -3,8 +3,10 @@
 %else
 %bcond_with mingw
 %endif
-
+# RHEL 10 ships gcc 14 natively; gcc-toolset only exists (and is needed for C23) on EL8/EL9.
+%if 0%{?rhel} && 0%{?rhel} < 10
 %global gts_version 14
+%endif
 
 # proj-data contains grid tool scripts with #!/usr/bin/env python shebangs;
 # these are not RPM-managed executables and should not be mangled.
