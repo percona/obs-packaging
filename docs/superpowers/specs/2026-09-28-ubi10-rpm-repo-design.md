@@ -197,3 +197,43 @@ it gets `UBI_10: false` with a one-line comment, as `geos` and `proj` do for
 - PR 3: switch `ubi8`/`ubi9` to `RedHat:UBI:Registry`, delete the kiwi
   `minimal-image` stack from `common:containers:ubi8/9`, prune the tool's
   kiwi handling.
+
+## Addendum 2026-09-29: `ppg:common:deps` on UBI 10 is a publication set, not a mirror of UBI 9
+
+First build round on the labs PR project (pr-97) showed the "UBI_10 mirrors
+UBI_9" rule is wrong for `ppg:common:deps`. Verified from `_buildinfo`:
+
+- Build-wise `UBI_N` is a Rocky N build: `RedHat:UBI-N/standard` is an empty
+  aggregate listed mid-path, so the buildroot comes from `RockyLinux:N/devel`
+  (610 of 650 PostGIS build deps on `UBI_9`; 1 from `RedHat:UBI-9`).
+- The purpose of building deps on `UBI_N` is publication: a UBI container can
+  only install from UBI repos plus the Percona repo, so `ppg:common:deps`
+  rebuilds the RHEL-N versions of libraries RHEL ships but UBI does not
+  (boost 1.75, c-ares 1.19.1, lapack 3.9.0, flexiblas 3.0.4, perl-JSON 4.03
+  on UBI 9 are exactly RHEL 9's), plus EPEL bits (geos, proj, SFCGAL, blis,
+  atlas, python3.12 stack).
+
+RHEL 10 / UBI 10 change that set (user decision: package every dependency
+UBI 10 lacks, at RHEL 10 versions, starting from the CentOS Stream 10 specs,
+in version-suffixed directories like `cargo-pgrx-0.16.1`):
+
+| package | UBI_10 outcome |
+|---|---|
+| boost | new `boost-1.83` (Name `boost`, 1.83.0, Stream 10 spec, MPI off); `boost` gets `UBI_10: false` |
+| lapack | new `lapack-3.12` (Name `lapack`, 3.12.0, Stream 10 spec); `lapack` gets `UBI_10: false` |
+| perl-JSON | new `perl-JSON-4.10` (Name `perl-JSON`, 4.10, Stream 10 spec); `perl-JSON` gets `UBI_10: false` |
+| proj | stays enabled; spec makes `gts_version 14` conditional on `0%{?rhel} < 10` (RHEL 10 has no gcc-toolset, gcc 14 is native) |
+| geos, SFCGAL, python3.12-*, etcd, gosu, … | unchanged, build on UBI_10 |
+| c-ares, flexiblas, python3-systemd | `UBI_10: false`: UBI 10 ships them (baseos / appstream) |
+| atlas, blis | `UBI_10: false`: only our flexiblas needed them; RHEL 10 dropped atlas |
+| cargo-pgrx-* | `Prefer: llvm-libs` on UBI_10 in root prjconf (RHEL 10 llvm-libs 21 vs EPEL llvm21-libs) |
+
+Variant package layout (`root/ppg/common/deps/<name>-<version>/`): `rpm/<name>.spec`
+with the unversioned `Name:`, `Release: 1%{?dist}`, bare-filename `Source`/`Patch`
+lines, a Percona changelog entry on top of Stream's; `obs/_service` with
+`download_url` (and `obs_scm` for lapack, as today); `package.yaml` with
+`title`, `description` and a `build:` map disabling every repository except
+`UBI_10`. Tarball checksums are verified against Stream 10's `sources` file.
+
+Known limitation: the PR project holds no `ppg:staging:*` packages (nothing was
+promoted), so the staging package set is only proven on `UBI_10` after merge.
