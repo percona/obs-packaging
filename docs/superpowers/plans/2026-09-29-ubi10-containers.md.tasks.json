@@ -4,14 +4,14 @@
     {
       "id": 1,
       "subject": "Task 1: `common:containers:ubi10` with `createrepo_c`",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [],
       "description": "**Goal:** A build-helper project for the ubi10 images that provides `createrepo_c` on a `UBI_10` repository (EPEL 10 + UBI 10 + Rocky 10 devel build path).\n\n**Files:**\n- Create: `root/common/containers/ubi10/project.yaml`\n- Create: `root/common/containers/ubi10/createrepo_c/obs/createrepo_c.spec`, `…/obs/createrepo_c-0.20.1.tar.gz` (byte copies of `root/common/containers/ubi9/createrepo_c/obs/*`)\n\n**Acceptance Criteria:**\n- [ ] `project.yaml` is:\n```yaml\ntitle: Percona UBI-10 Container Build Helpers\ndescription: |\n  Build-time helpers for the UBI-10 based container images (createrepo_c for\n  #!UseOBSRepositories). The images themselves are built from the official\n  registry.access.redhat.com/ubi10/ubi-minimal image via RedHat:UBI:Registry.\n\n# This project's repository set and build configuration are unrelated to its\n# parent's: declare them in full here instead of patching the inherited ones.\nrepositories-inherit: false\nproject-config-inherit: false\n\npublish: false\nrepositories:\n  - name: UBI_10\n    paths:\n      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:10\n        repository: standard\n      - project: RedHat:UBI-10\n        repository: standard\n      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10\n        repository: devel\n    archs: [x86_64, aarch64]\n\nproject-config: |\n  %if \"%_repository\" == \"UBI_10\"\n  Type: spec\n  %endif\n```\n- [ ] `cmp root/common/containers/ubi9/createrepo_c/obs/createrepo_c.spec root/common/containers/ubi10/createrepo_c/obs/createrepo_c.spec` and the same for the tarball report no difference.\n- [ ] `venv/bin/python -m percona_obs -P labsmain project config --offline common:containers:ubi10 | grep -o 'repository name=\"[^\"]*\"'` → `repository name=\"UBI_10\"` only.\n- [ ] black/pyright/pytest pass; `project verify` prints nothing for ubi10.\n\n**Verify:** `ls root/common/containers/ubi10 root/common/containers/ubi10/createrepo_c/obs` → `createrepo_c project.yaml` and `createrepo_c-0.20.1.tar.gz createrepo_c.spec`.\n\n```json:metadata\n{\"files\": [\"root/common/containers/ubi10/project.yaml\", \"root/common/containers/ubi10/createrepo_c/obs/createrepo_c.spec\", \"root/common/containers/ubi9/createrepo_c/obs/*\"], \"verifyCommand\": \"ls root/common/containers/ubi10 root/common/containers/ubi10/createrepo_c/obs\", \"acceptanceCriteria\": [\"`project.yaml` is:\", \"`cmp root/common/containers/ubi9/createrepo_c/obs/createrepo_c.spec root/common/containers/ubi10/createrepo_c/obs/createrepo_c.spec` and the same for the tarbal\", \"`venv/bin/python -m percona_obs -P labsmain project config --offline common:containers:ubi10 | grep -o 'repository name=\\\"[^\\\"]*\\\"'` \\u2192 `repository name=\\\"UBI_10\\\"` o\", \"black/pyright/pytest pass; `project verify` prints nothing for ubi10.\"], \"modelTier\": \"mechanical\"}\n```"
     },
     {
       "id": 2,
       "subject": "Task 2: `ubi10` in the per-major and cross-major containers ",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         1
       ],
@@ -19,8 +19,8 @@
     },
     {
       "id": 3,
-      "subject": "Task 3: `ubi10` in the extras container projects",
-      "status": "pending",
+      "subject": "Task 3: extras containers → official ubi9 image (amended)",
+      "status": "completed",
       "blockedBy": [
         1
       ],
@@ -29,7 +29,7 @@
     {
       "id": 4,
       "subject": "Task 4: Dockerfiles take the base image from `UBI_BASE`",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [],
       "description": "**Goal:** All seven Dockerfiles select their base image through the `UBI_BASE` build arg.\n\n**Files:**\n- Modify (line 7 or 8, the `FROM` line): `root/ppg/staging/_shared/containers/percona-distribution-postgresql/obs/Dockerfile`, `…/percona-distribution-postgresql-with-postgis/obs/Dockerfile`, `…/percona-pgbackrest/obs/Dockerfile`, `…/percona-pgbouncer/obs/Dockerfile`, `root/ppg/staging/_shared/extras/containers/percona-distribution-postgresql-custom/obs/Dockerfile`, `root/ppg/staging/containers/percona-distribution-postgresql-upgrade/obs/Dockerfile`, `root/ppg/staging/extras/containers/percona-distribution-postgresql-upgrade-custom/obs/Dockerfile`\n\n**Acceptance Criteria:**\n- [ ] `grep -rn \"^FROM\" root --include=Dockerfile` → seven lines, all `FROM $UBI_BASE`, each preceded by `ARG UBI_BASE=percona-ubi-minimal:latest`.\n- [ ] `git diff --stat` shows 7 files, each `+1 -1` plus one added line (2 insertions, 1 deletion).\n- [ ] black/pyright/pytest pass.\n\n**Verify:** `grep -rn -B1 \"^FROM\" root --include=Dockerfile | grep -c \"ARG UBI_BASE=percona-ubi-minimal:latest\"` → `7`.\n\n```json:metadata\n{\"files\": [\"root/ppg/staging/_shared/containers/percona-distribution-postgresql/obs/Dockerfile\", \"root/ppg/staging/_shared/extras/containers/percona-distribution-postgresql-custom/obs/Dockerfile\", \"root/ppg/staging/containers/percona-distribution-postgresql-upgrade/obs/Dockerfile\", \"root/ppg/staging/extras/containers/percona-distribution-postgresql-upgrade-custom/obs/Dockerfile\"], \"verifyCommand\": \"grep -rn -B1 \\\"^FROM\\\" root --include=Dockerfile | grep -c \\\"ARG UBI_BASE=percona-ubi-minimal:latest\\\"\", \"acceptanceCriteria\": [\"`grep -rn \\\"^FROM\\\" root --include=Dockerfile` \\u2192 seven lines, all `FROM $UBI_BASE`, each preceded by `ARG UBI_BASE=percona-ubi-minimal:latest`.\", \"`git diff --stat` shows 7 files, each `+1 -1` plus one added line (2 insertions, 1 deletion).\", \"black/pyright/pytest pass.\"], \"modelTier\": \"mechanical\"}\n```"
     },
@@ -57,7 +57,7 @@
     {
       "id": 7,
       "subject": "Task 7: Retire the kiwi minimal image (ubi8/ubi9)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         2,
         3
@@ -65,5 +65,5 @@
       "description": "**Goal:** common:containers:ubi8 and ubi9 keep only the build helpers the docker builds still pull; the kiwi image and its toolchain are deleted.\n\n**Files:** see plan Task 7 (delete kiwi package dirs; edit both project.yaml).\n\n**Acceptance Criteria:** see plan Task 7 (ubi9 = createrepo_c umoci; ubi8 = createrepo_c file-devel popt-devel rpm-devel umoci; project.yaml only UBI_N repo + Type: spec block; no kiwi/images/Preinstall strings; releases untouched).\n\n**Verify:** `find root/common/containers -mindepth 2 -maxdepth 2 -type d | sort` → the eight kept directories.\n\n```json:metadata\n{\"files\": [\"root/common/containers/ubi8\", \"root/common/containers/ubi9\"], \"verifyCommand\": \"find root/common/containers -mindepth 2 -maxdepth 2 -type d | sort\", \"acceptanceCriteria\": [\"only helper packages remain\", \"images repo and kiwi prjconf removed\", \"no staging consumer of ubiN/images\", \"tests pass\"], \"modelTier\": \"mechanical\"}\n```"
     }
   ],
-  "lastUpdated": "2026-09-29T15:50:12.676860+00:00"
+  "lastUpdated": "2026-09-29T16:08:34.070256+00:00"
 }

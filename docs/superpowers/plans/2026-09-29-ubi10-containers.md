@@ -136,9 +136,11 @@ percona-ubi-minimal to the official ubi8/ubi9 ubi-minimal images."
 
 ---
 
-### Task 3: `ubi10` in the extras container projects
+### Task 3: extras container projects move to the official ubi9 image
 
-**Goal:** `ppg:staging:{16,17,18}:extras:containers` and `ppg:staging:extras:containers` build a `ubi10` flavour, with named QA lanes.
+> **Amended during execution:** the extras subprojects build only on `UBI_9` (PR 1 decision), so `ppg:staging:<V>:extras/UBI_10` does not exist and `project verify` rejects a `ubi10` repository here. The task was reduced to the `ubi9` edit rule (registry path first, kiwi `images` path removed) plus the `UBI_BASE` flag in the `%if ubi9` block; no ubi10 repository/prjconf/QA lanes, no QA lane renames, titles unchanged. Commit 1d311651. The original text below is kept for history.
+
+**Goal (original):** `ppg:staging:{16,17,18}:extras:containers` and `ppg:staging:extras:containers` build a `ubi10` flavour, with named QA lanes.
 
 **Files:**
 - Modify: `root/ppg/staging/16/extras/containers/project.yaml`, `…/17/…`, `…/18/…` (repos after line 29, prjconf lines 31–53, qa lines 55–end; title/description lines 1–3)
@@ -203,7 +205,7 @@ image; each repository's prjconf sets the value."
 - [ ] The loop lists `ubi8 ubi9 ubi10`; nothing else in the workflow changes.
 - [ ] Offline renders (`-P labsmain --offline`) of `common:containers:ubi10`, `ppg:staging:18:containers`, `ppg:staging:containers`, `ppg:staging:18:extras:containers`, `ppg:staging:extras:containers` show every image repository with the registry path first, no `common:containers:ubi*/images` path anywhere (`grep -rn 'repository: images' root/ppg/staging --include=project.yaml | grep -vc 'RedHat:UBI:Registry' ` is not needed: instead `grep -rn -B1 'repository: images' root/ppg/staging --include=project.yaml | grep -c 'common:containers'` → 0), and the `UBI_BASE` flags for every flavour; `common:containers:ubi8`/`ubi9` render only a `UBI_8`/`UBI_9` repository.
 - [ ] `venv/bin/python -m percona_obs -P labsmain project config --diff ppg:staging:18:containers | grep '^[-+]' | grep -v '^[-+][-+]' | grep -v 'ubi10\|UBI_10\|UBI_BASE'` prints only pre-existing drift (self-closing tag spacing, container path reorders) — no other `-` lines.
-- [ ] `git log percona/main..HEAD --oneline` shows the spec/plan commits plus six implementation commits (Tasks 1–4, 7, 5); `git status` clean apart from `venv`/`.profile`.
+- [ ] `git log percona/main..HEAD --oneline` shows the docs commits plus six implementation commits (Tasks 1, 4, 3, 2, 7, 5); `git status` clean apart from `venv`/`.profile`.
 
 **Verify:** `grep -n 'for other in' .github/workflows/obs-pr-check.yml` → one line with `ubi8 ubi9 ubi10`.
 
