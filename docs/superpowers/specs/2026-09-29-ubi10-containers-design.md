@@ -167,18 +167,21 @@ picks up the new layout.
 
 - `root/ppg/releases/*` (frozen; next release train).
 - `percona_obs/` (image repo names are derived from config, the flavour is
-  never hardcoded) and `tests/`.
+  never hardcoded). In `tests/` only the lane-count assertion of
+  `test_qa_entry_name.py` moves from two to three lanes.
 - The dev OBS instance.
 
 ## Verification
 
 1. black / pyright / pytest pass; `project verify` clean.
-2. `percona-obs -P labsmain project config --offline` for `ppg:staging:18:containers`,
-   `ppg:staging:containers`, `ppg:staging:18:extras:containers`,
-   `ppg:staging:extras:containers` and `common:containers:ubi10` renders the
-   `ubi10` repository with the path order above and the `UBI_BASE` build
-   flags for every flavour.
-3. `qa show` for the extras projects lists the four named lanes.
+2. `percona-obs -P labsmain project config --offline` for `ppg:staging:18:containers`
+   and `ppg:staging:containers` renders the `ubi10` repository with the path
+   order above and the `UBI_BASE` build flags for all three flavours;
+   `ppg:staging:18:extras:containers` and `ppg:staging:extras:containers`
+   render their `ubi9` repository with the registry path first and the ubi9
+   `UBI_BASE` flag only; `common:containers:ubi10` renders `UBI_10` only.
+3. `qa show` for `ppg:staging:18:containers` and `ppg:staging:containers` lists
+   `ubi8`, `ubi9`, `ubi10`; the extras lanes are unchanged.
 4. PR against `percona/obs-packaging` with the `ubi8-images`, `ubi9-images`
    and `ubi10-images` labels (the user adds `obs-sync`). Gate on the labs PR
    project: `createrepo_c` succeeded on `common:containers:ubi10/UBI_10`;
