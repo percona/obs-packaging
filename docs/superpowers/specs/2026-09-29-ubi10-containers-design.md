@@ -2,12 +2,13 @@
 
 **Date:** 2026-09-29
 **Status:** approved by the user in brainstorming (2026-09-28/29); plan pending approval
-**Scope:** PR 2 of 3. Adds a `ubi10` image repository to every PPG container
-project, built `FROM registry.access.redhat.com/ubi10/ubi-minimal:latest`
-through OBS download-on-demand, and makes the Dockerfiles base-image
-parametric. PR 1 (`UBI_10` RPM repository, merged 2026-09-29) supplies the
-packages; PR 3 will switch `ubi8`/`ubi9` to the registry image and delete the
-kiwi-built `percona-ubi-minimal` stack.
+**Scope:** PR 2 of 2 (amended 2026-09-29: the user folded the former PR 3 into
+this one). Adds a `ubi10` image repository to every PPG container project,
+switches **all three flavours** (`ubi8`, `ubi9`, `ubi10`) to the official
+`registry.access.redhat.com/ubi<N>/ubi-minimal:latest` images through OBS
+download-on-demand, makes the Dockerfiles base-image parametric, and retires
+the kiwi-built `percona-ubi-minimal` stack in `common:containers:ubi8/ubi9`.
+PR 1 (`UBI_10` RPM repository, merged 2026-09-29) supplies the packages.
 
 ## Background
 
@@ -23,7 +24,8 @@ repository lists it as a path and OBS fetches the image a `FROM` line names
 User decisions from brainstorming: always the `latest` tag (release projects
 are build-disabled, so no drift there); keep the labels the Dockerfiles set
 today; keep `RUN microdnf -y update`; no change to the dev OBS instance;
-UBI 10 first, in its own PR, before the kiwi stack is dropped.
+and (2026-09-29) transition ubi8 and ubi9 to the real UBI images in this same
+PR rather than a later one.
 
 ## What UBI 10 provides (verified on labs, 2026-09-29)
 
@@ -50,10 +52,12 @@ A new project with one repository, `UBI_10`, whose paths are EPEL 10,
 `createrepo_c`, a copy of `root/common/containers/ubi9/createrepo_c`. No
 `images` repository, no kiwi packages, no `umoci` (EPEL 10's is used).
 
-### The `ubi10` image repository
+### The image repositories
 
-Every container project file gains a `ubi10` repository. The path list,
-in order:
+Every container project file gains a `ubi10` repository, and its existing
+`ubi8`/`ubi9` repositories change in the same way: `RedHat:UBI:Registry/images`
+becomes the first path and the `common:containers:ubi<N>/images` path (the
+kiwi image) is removed. The `ubi10` path list, in order:
 
 1. `project: RedHat:UBI:Registry`, `repository: images` (the base image);
 2. the same PPG RPM sources the project's `ubi9` entry lists, with
@@ -77,8 +81,10 @@ Each of those files gets a `%if "%_repository" == "ubi10"` block with
 `BuildFlags: dockerarg:RHEL_VER=el10` and
 `BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi10/ubi-minimal:latest`.
 The existing `ubi8` and `ubi9` blocks get
-`BuildFlags: dockerarg:UBI_BASE=percona-ubi-minimal:latest` so the base image
-is always chosen by the repository, never by the Dockerfile default. The
+`BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi8/ubi-minimal:latest`
+and `…/ubi9/ubi-minimal:latest` respectively (both tags verified on the
+registry), so the base image is always chosen by the repository, never by the
+Dockerfile default. The
 extras files, which wrap their whole config in `%if ubi9`, get the ubi10 block
 as a second conditional with the same body plus the el10 args.
 
@@ -98,9 +104,11 @@ FROM percona-ubi-minimal:latest
 with
 
 ```
-ARG UBI_BASE=percona-ubi-minimal:latest
+ARG UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
 FROM $UBI_BASE
 ```
+
+(the default only matters outside OBS; every repository sets the flag).
 
 OBS's Dockerfile parser substitutes `ARG` defaults and `dockerarg` build
 flags into `FROM`, resolving the base-image dependency per repository (this
@@ -128,10 +136,34 @@ excludes the other flavours' `common:containers:*` projects becomes
 `ubi8 ubi9 ubi10`. The `ubi10-images` label already exists on GitHub and the
 `<flavor>-images` expansion (`ubi10`, `UBI_10`, `images`) needs no change.
 
+### Retiring the kiwi minimal image
+
+Nothing consumes `common:containers:ubi8/ubi9`'s `images` repository once the
+paths above are gone, so those projects shrink to the build helpers the docker
+builds still pull (verified from `_buildinfo` on labs):
+
+- ubi9 keeps `createrepo_c` and `umoci`; ubi8 keeps `createrepo_c`, `umoci`
+  and the repackaged `rpm-devel`, `file-devel`, `popt-devel` that
+  createrepo_c needs on EL8.
+- Deleted from both: `minimal-image` (kiwi description, `config.sh`, helper
+  services), `python-kiwi`, `obs-service-kiwi_label_helper`,
+  `obs-service-kiwi_metainfo_helper`, `python3-docopt`, `python3-poetry-core`,
+  `python3-simplejson`, `python3-xmltodict`; from ubi8 also `python3-tomli`
+  and `dnf4` (kiwi's dnf backend). None of them is a build dependency of the
+  kept packages (checked against the specs and `_buildinfo`).
+- Both `project.yaml` files lose the `images` repository and its whole kiwi
+  prjconf block (`Type: kiwi`, `Preinstall:` list, kiwi `Ignore:`s,
+  `BuildFlags: container-*`); the `UBI_N` repository and its `Type: spec`
+  block stay.
+
+On labs, the next full sync deletes the removed packages as orphans; the
+`percona-ubi-minimal` images stop being published. Releases 17/18 still
+reference `common:containers:ubi9/images` in their frozen config; their
+projects are build-disabled, so nothing breaks, and the next release train
+picks up the new layout.
+
 ### Not changed
 
-- `common:containers:ubi8/ubi9`, the kiwi image, the `ubi8`/`ubi9` base
-  image (PR 3).
 - `root/ppg/releases/*` (frozen; next release train).
 - `percona_obs/` (image repo names are derived from config, the flavour is
   never hardcoded) and `tests/`.
@@ -146,27 +178,33 @@ excludes the other flavours' `common:containers:*` projects becomes
    `ubi10` repository with the path order above and the `UBI_BASE` build
    flags for every flavour.
 3. `qa show` for the extras projects lists the four named lanes.
-4. PR against `percona/obs-packaging` with the `ubi10-images` label (the user
-   adds `obs-sync`). Gate on the labs PR project: `createrepo_c` succeeded on
-   `common:containers:ubi10/UBI_10`; all seven images succeeded on `ubi10`
-   for x86_64 and aarch64; the `_buildinfo` of one image lists
-   `container:registry.access.redhat.com-ubi10-ubi-minimal-latest` from
-   `RedHat:UBI:Registry`; the `ubi8`/`ubi9` images still build (their base
-   now comes from the `UBI_BASE` build flag) — at least one per-major
-   project's `ubi9` image is rebuilt in the PR project and succeeds.
+4. PR against `percona/obs-packaging` with the `ubi8-images`, `ubi9-images`
+   and `ubi10-images` labels (the user adds `obs-sync`). Gate on the labs PR
+   project: `createrepo_c` succeeded on `common:containers:ubi10/UBI_10`;
+   every image succeeded on `ubi8`, `ubi9` and `ubi10` for x86_64 and
+   aarch64; the `_buildinfo` of one image per flavour lists
+   `container:registry.access.redhat.com-ubi<N>-ubi-minimal-latest` from
+   `RedHat:UBI:Registry`; no package of the PR's `common:containers:ubi8/9`
+   is anything but `createrepo_c`/`umoci`/the three ubi8 `-devel` repackages.
 5. Optional smoke test by the user: pull one `ubi10` image from the labs
    registry, `podman run … cat /etc/os-release` shows RHEL 10, `psql --version`
    matches the major.
 
 ## Risks
 
-- `FROM $UBI_BASE` with a default that is a local kiwi image name: proven for
-  registry names on the dev instance; the `dockerarg` for ubi8/ubi9 is set
-  explicitly so the default is never relied on.
+- `FROM $UBI_BASE`: proven for registry names on the dev instance; every
+  repository sets the flag so the default is never relied on.
+- The real UBI 8/9 minimal images differ from our kiwi image in what is
+  pre-installed (the kiwi image added e.g. `langpacks-en`, `dejavu-sans-fonts`,
+  `libusbx`, `rootfiles`); a `microdnf install` in a Dockerfile may now pull
+  something the kiwi base already had, or a later `RUN` may miss a file. Found
+  in the build round and fixed in the Dockerfile only if needed for all
+  flavours alike.
 - `createrepo_c` 0.20.1 may need spec tweaks on EL10 (it built on UBI_9's
   Rocky 9 devel path); triaged in the build round.
-- Red Hat certification labels: the real base image carries Red Hat labels the
-  images now inherit; the user chose to keep the current label set for now.
+- Red Hat certification labels: the real base images carry Red Hat labels
+  that all three flavours now inherit; the user chose to keep the current
+  label set for now.
   A later pass can add the `/licenses` EULA and clear `com.redhat.component`
   (see `Percona:Test/hello-image-el`).
 - The registry download is per digest; a new upstream `latest` triggers OBS

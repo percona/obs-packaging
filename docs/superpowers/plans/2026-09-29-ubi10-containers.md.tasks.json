@@ -40,7 +40,8 @@
       "blockedBy": [
         2,
         3,
-        4
+        4,
+        7
       ],
       "description": "**Goal:** CI knows the third flavour; the whole branch renders as designed; the user gets push/PR instructions.\n\n**Files:**\n- Modify: `.github/workflows/obs-pr-check.yml:307` (`for other in ubi8 ubi9; do` → `for other in ubi8 ubi9 ubi10; do`)\n\n**Acceptance Criteria:**\n- [ ] The loop lists `ubi8 ubi9 ubi10`; nothing else in the workflow changes.\n- [ ] Offline renders (`-P labsmain --offline`) of `common:containers:ubi10`, `ppg:staging:18:containers`, `ppg:staging:containers`, `ppg:staging:18:extras:containers`, `ppg:staging:extras:containers` show the `ubi10` repository with the registry path first and the three/two `UBI_BASE` flags.\n- [ ] `venv/bin/python -m percona_obs -P labsmain project config --diff ppg:staging:18:containers | grep '^[-+]' | grep -v '^[-+][-+]' | grep -v 'ubi10\\|UBI_10\\|UBI_BASE'` prints only pre-existing drift (self-closing tag spacing, container path reorders) — no other `-` lines.\n- [ ] `git log percona/main..HEAD --oneline` shows the spec/plan commit plus five implementation commits; `git status` clean apart from `venv`/`.profile`.\n\n**Verify:** `grep -n 'for other in' .github/workflows/obs-pr-check.yml` → one line with `ubi8 ubi9 ubi10`.\n\n```json:metadata\n{\"files\": [\".github/workflows/obs-pr-check.yml:307\"], \"verifyCommand\": \"grep -n 'for other in' .github/workflows/obs-pr-check.yml\", \"acceptanceCriteria\": [\"The loop lists `ubi8 ubi9 ubi10`; nothing else in the workflow changes.\", \"Offline renders (`-P labsmain --offline`) of `common:containers:ubi10`, `ppg:staging:18:containers`, `ppg:staging:containers`, `ppg:staging:18:extras:containers\", \"`venv/bin/python -m percona_obs -P labsmain project config --diff ppg:staging:18:containers | grep '^[-+]' | grep -v '^[-+][-+]' | grep -v 'ubi10\\\\|UBI_10\\\\|UBI_B\", \"`git log percona/main..HEAD --oneline` shows the spec/plan commit plus five implementation commits; `git status` clean apart from `venv`/`.profile`.\"], \"modelTier\": \"mechanical\"}\n```"
     },
@@ -52,7 +53,17 @@
         5
       ],
       "description": "**Goal:** All ubi10 images and the helper package build green in `isv:percona:PR:pr-N`, and the ubi8/ubi9 images still build with the base image taken from `UBI_BASE`.\n\n**Files:**\nnone unless triage fixes (then one commit per fix naming the OBS symptom).\n\n**Acceptance Criteria:**\n- [ ] `common:containers:ubi10/createrepo_c` succeeded on `UBI_10` x86_64 + aarch64.\n- [ ] Every image package in `ppg:staging:14–18:containers`, `ppg:staging:containers`, `ppg:staging:16–18:extras:containers`, `ppg:staging:extras:containers` is `succeeded` on `ubi10` for both arches (`build status --repo ubi10 <prj>`).\n- [ ] `osc api /build/<PR>:ppg:staging:18:containers/ubi10/x86_64/percona-pgbouncer/_buildinfo` lists a `container:registry.access.redhat.com-ubi10-ubi-minimal-latest` bdep from `RedHat:UBI:Registry`.\n- [ ] At least one `ubi9` image in the PR project (any that was rebuilt) is `succeeded`, proving the `UBI_BASE` default/flag path for the kiwi base still resolves.\n\n**Verify:** the commands above, with a profile `labspr` whose `rootprj` is `isv:percona:PR:pr-N` (copy `.profile/labsmain.yaml`, change `rootprj`).\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"the commands above, with a profile `labspr` whose `rootprj` is `isv:percona:PR:pr-N` (copy `.profile/labsmain.yaml`, change `rootprj`).\", \"acceptanceCriteria\": [\"`common:containers:ubi10/createrepo_c` succeeded on `UBI_10` x86_64 + aarch64.\", \"Every image package in `ppg:staging:14\\u201318:containers`, `ppg:staging:containers`, `ppg:staging:16\\u201318:extras:containers`, `ppg:staging:extras:containers` is `succ\", \"`osc api /build/<PR>:ppg:staging:18:containers/ubi10/x86_64/percona-pgbouncer/_buildinfo` lists a `container:registry.access.redhat.com-ubi10-ubi-minimal-latest\", \"At least one `ubi9` image in the PR project (any that was rebuilt) is `succeeded`, proving the `UBI_BASE` default/flag path for the kiwi base still resolves.\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 7: Retire the kiwi minimal image (ubi8/ubi9)",
+      "status": "pending",
+      "blockedBy": [
+        2,
+        3
+      ],
+      "description": "**Goal:** common:containers:ubi8 and ubi9 keep only the build helpers the docker builds still pull; the kiwi image and its toolchain are deleted.\n\n**Files:** see plan Task 7 (delete kiwi package dirs; edit both project.yaml).\n\n**Acceptance Criteria:** see plan Task 7 (ubi9 = createrepo_c umoci; ubi8 = createrepo_c file-devel popt-devel rpm-devel umoci; project.yaml only UBI_N repo + Type: spec block; no kiwi/images/Preinstall strings; releases untouched).\n\n**Verify:** `find root/common/containers -mindepth 2 -maxdepth 2 -type d | sort` → the eight kept directories.\n\n```json:metadata\n{\"files\": [\"root/common/containers/ubi8\", \"root/common/containers/ubi9\"], \"verifyCommand\": \"find root/common/containers -mindepth 2 -maxdepth 2 -type d | sort\", \"acceptanceCriteria\": [\"only helper packages remain\", \"images repo and kiwi prjconf removed\", \"no staging consumer of ubiN/images\", \"tests pass\"], \"modelTier\": \"mechanical\"}\n```"
     }
   ],
-  "lastUpdated": "2026-09-29T15:28:00.456560+00:00"
+  "lastUpdated": "2026-09-29T15:50:12.676860+00:00"
 }
