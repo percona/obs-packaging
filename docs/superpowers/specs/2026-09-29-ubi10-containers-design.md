@@ -54,10 +54,12 @@ A new project with one repository, `UBI_10`, whose paths are EPEL 10,
 
 ### The image repositories
 
-Every container project file gains a `ubi10` repository, and its existing
-`ubi8`/`ubi9` repositories change in the same way: `RedHat:UBI:Registry/images`
+Every container project file's existing `ubi8`/`ubi9` repositories change in
+the same way: `RedHat:UBI:Registry/images`
 becomes the first path and the `common:containers:ubi<N>/images` path (the
-kiwi image) is removed. The `ubi10` path list, in order:
+kiwi image) is removed. The per-major and cross-major containers projects
+(not the extras ones, see below) additionally gain a `ubi10` repository whose
+path list, in order, is:
 
 1. `project: RedHat:UBI:Registry`, `repository: images` (the base image);
 2. the same PPG RPM sources the project's `ubi9` entry lists, with
@@ -67,13 +69,18 @@ kiwi image) is removed. The `ubi10` path list, in order:
 5. `project: RedHat:UBI-10`, `repository: standard` (last, so OBS expands it
    transitively into baseos/appstream/codeready-builder).
 
-Files: `root/ppg/staging/_shared/containers/project.yaml` (per-major
-containers, symlinked by 14–18), `root/ppg/staging/containers/project.yaml`
-(cross-major upgrade image; staging 18…14 `UBI_10` paths),
-`root/ppg/staging/extras/containers/project.yaml` (cross-major custom
-upgrade; extras 18…16 and staging 18…16), and the three per-major
-`root/ppg/staging/{16,17,18}/extras/containers/project.yaml` (real files, not
-symlinks).
+Files with a `ubi10` repository: `root/ppg/staging/_shared/containers/project.yaml`
+(per-major containers, symlinked by 14–18) and
+`root/ppg/staging/containers/project.yaml` (cross-major upgrade image;
+staging 18…14 `UBI_10` paths).
+
+**Extras get no `ubi10` flavour** (found during execution): the extras
+subprojects build only on `UBI_9` by the PR 1 decision, so
+`ppg:staging:<V>:extras/UBI_10` does not exist and the custom images cannot be
+built for UBI 10 yet. `root/ppg/staging/extras/containers/project.yaml` and the
+three per-major `root/ppg/staging/{16,17,18}/extras/containers/project.yaml`
+only get the `ubi9` edit (registry path first, kiwi path removed) and the
+`UBI_BASE` flag. Extending extras to UBI 10 is a separate decision.
 
 ### Build configuration
 
@@ -85,8 +92,7 @@ The existing `ubi8` and `ubi9` blocks get
 and `…/ubi9/ubi-minimal:latest` respectively (both tags verified on the
 registry), so the base image is always chosen by the repository, never by the
 Dockerfile default. The
-extras files, which wrap their whole config in `%if ubi9`, get the ubi10 block
-as a second conditional with the same body plus the el10 args.
+extras files keep their single `%if ubi9` block, plus the `UBI_BASE` flag.
 
 `Prefer: percona-postgresql%!{PG_MAJOR_VERSION}-libs` and the other
 `Prefer`/`Ignore` lines are repository-independent and stay as they are.
@@ -121,13 +127,8 @@ package lists and entrypoints are untouched (user decision).
 - `_shared/containers` and `staging/containers` already use named lanes
   (`ubi8`, `ubi9`); they get a `ubi10` lane, a copy of `ubi9` with the
   registry path ending in `/ubi10`.
-- The extras files use unnamed lanes today. Two flavours on one pipeline need
-  names, so the existing entries become `name: ubi9` (server pipeline) and
-  `name: ubi9-upgrade` (`ppg-obs-upgrade`), and `ubi10` / `ubi10-upgrade`
-  copies are added. Consequence: the extras QA check-run names change from
-  `OBS QA / <project> / <pipeline> / …` to `OBS QA / <project> / ubi9… / …`.
-  The cross-major `staging/extras/containers` block has a single unnamed
-  entry; it becomes `ubi9` + `ubi10`.
+- The extras files keep their unnamed single-flavour lanes unchanged (no
+  ubi10 flavour there).
 
 ### CI
 
@@ -181,8 +182,8 @@ picks up the new layout.
 4. PR against `percona/obs-packaging` with the `ubi8-images`, `ubi9-images`
    and `ubi10-images` labels (the user adds `obs-sync`). Gate on the labs PR
    project: `createrepo_c` succeeded on `common:containers:ubi10/UBI_10`;
-   every image succeeded on `ubi8`, `ubi9` and `ubi10` for x86_64 and
-   aarch64; the `_buildinfo` of one image per flavour lists
+   every image succeeded on `ubi8`, `ubi9` and (containers projects only)
+   `ubi10` for x86_64 and aarch64; the `_buildinfo` of one image per flavour lists
    `container:registry.access.redhat.com-ubi<N>-ubi-minimal-latest` from
    `RedHat:UBI:Registry`; no package of the PR's `common:containers:ubi8/9`
    is anything but `createrepo_c`/`umoci`/the three ubi8 `-devel` repackages.
