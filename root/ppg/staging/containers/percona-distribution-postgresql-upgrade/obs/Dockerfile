@@ -5,7 +5,8 @@
 #!BuildTag: percona-distribution-postgresql-upgrade:18-17-16-15-14
 #!BuildTag: percona-distribution-postgresql-upgrade:18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-14.%!{PG_14_MINOR_VERSION}
 
-FROM percona-ubi-minimal:latest
+ARG UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
+FROM $UBI_BASE
 
 LABEL name="Percona Distribution for PostgreSQL Upgrade" \
       description="Upgrade container for Percona Distribution for PostgreSQL. Facilitates major version upgrades from PostgreSQL 14, 15, 16, or 17 to %!{PG_MAJOR_VERSION} using pg_upgrade." \

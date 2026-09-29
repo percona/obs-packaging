@@ -4,7 +4,8 @@
 #!BuildTag: percona-distribution-postgresql-with-postgis:%!{PG_VERSION}
 #!BuildTag: percona-distribution-postgresql-with-postgis:%!{PG_MAJOR_VERSION}
 
-FROM percona-ubi-minimal:latest
+ARG UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
+FROM $UBI_BASE
 
 LABEL name="Percona Distribution for PostgreSQL" \
       description="Essential / key PostgreSQL%!{PG_MAJOR_VERSION} components with PostGIS. Percona Distribution for PostgreSQL features core components, tools and add-ons from the community, tested to work together in demanding enterprise environments." \

@@ -5,7 +5,8 @@
 #!BuildTag: percona-distribution-postgresql-upgrade-custom:18-17-16
 #!BuildTag: percona-distribution-postgresql-upgrade-custom:18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}
 
-FROM percona-ubi-minimal:latest
+ARG UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
+FROM $UBI_BASE
 
 LABEL name="Percona PostgreSQL Distribution upgrade" \
       description="Percona Distribution for PostgreSQL is a collection of tools to assist you in managing your PostgreSQL database system" \
