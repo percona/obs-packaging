@@ -1,0 +1,232 @@
+# UBI 10 Container Images Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers-extended-cc:subagent-driven-development (recommended) or superpowers-extended-cc:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Every PPG container project builds a `ubi10` flavour of its images from `registry.access.redhat.com/ubi10/ubi-minimal:latest` through OBS download-on-demand, with one Dockerfile per image serving ubi8, ubi9 and ubi10.
+
+**Architecture:** Packaging-config change plus a two-line Dockerfile edit. A new `common:containers:ubi10` project supplies `createrepo_c` (the only build helper UBI 10 lacks). Each container project file gains a `ubi10` repository whose first path is `RedHat:UBI:Registry/images`, a `%if ubi10` prjconf block, and a `ubi10` QA lane; the base image is selected per repository through a `UBI_BASE` docker build arg that the Dockerfiles consume with `ARG UBI_BASE=… / FROM $UBI_BASE`. No tool or release changes.
+
+**Tech Stack:** YAML packaging tree under `root/`, OBS Dockerfile builds (`Type: docker`, `BuildEngine: podman`, `#!UseOBSRepositories`), `percona-obs` CLI, labs OBS via the `labsmain` profile.
+
+**Spec:** `docs/superpowers/specs/2026-09-29-ubi10-containers-design.md`
+
+## Global Constraints
+
+- Work only in the worktree `.claude/worktrees/ubi10-containers` (branch `ubi10-containers`, based on `percona/main` 07c60bd5). `venv` and `.profile` are symlinks to the primary checkout. `project config` needs `-P labsmain --offline`; that profile slices to `UBI_*`/`ubi*`/`images`, so other repositories are absent from its output by design.
+- **`ubi10` repository block rule** (every container project file): copy the file's own `ubi9` block, then (a) insert `- project: RedHat:UBI:Registry` / `repository: images` as the FIRST path, (b) delete the `common:containers:ubi9` / `images` path, (c) replace `UBI_9` → `UBI_10`, `common:containers:ubi9` → `common:containers:ubi10`, `Fedora:EPEL:9` → `Fedora:EPEL:10`, `RedHat:UBI-9` → `RedHat:UBI-10`, `name: ubi9` → `name: ubi10`. Everything else (subproject order, archs) identical. Place it directly after the `ubi9` block.
+- **prjconf rule:** the `%if "%_repository" == "ubi10"` block = the file's `ubi9` block with `RHEL_VER=el9` → `RHEL_VER=el10` and one extra line `BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi10/ubi-minimal:latest`. The existing `ubi8` and `ubi9` blocks each gain `BuildFlags: dockerarg:UBI_BASE=percona-ubi-minimal:latest` directly after their `RHEL_VER` line. Two-space indentation inside `project-config: |`, blank lines as in the neighbours.
+- **QA rule:** a `ubi10` lane is a copy of the `ubi9` lane with `/ubi9` → `/ubi10` in `REPOSITORY` (and `OLD_DOCKER_REPOSITORY`) and `name: ubi9` → `name: ubi10` (`ubi9-upgrade` → `ubi10-upgrade`). Nothing else in a lane changes.
+- **Dockerfile rule:** replace the single line `FROM percona-ubi-minimal:latest` with the two lines `ARG UBI_BASE=percona-ubi-minimal:latest` and `FROM $UBI_BASE`. Nothing else changes in any Dockerfile.
+- No changes under `root/ppg/releases/`, `root/common/containers/ubi8`, `root/common/containers/ubi9`, `percona_obs/`, `tests/`. In `.github/` only the one-word loop change.
+- Commits: `git commit -s`, no `Co-Authored-By`. Never `git push`, never `gh pr create`; the user does both (the user also adds the `obs-sync` label).
+- After every task: `venv/bin/black percona_obs/ && venv/bin/pyright && venv/bin/pytest -q` → "left unchanged", "0 errors", `369 passed`; `venv/bin/python -m percona_obs -P labsmain project verify 2>&1 | grep -i ubi10` → nothing.
+
+**User decisions (already made):**
+- "Always use `latest`" for the base image tag.
+- "Just keep the labels that are already set in PPG images. No change here."
+- "keep it" — `RUN microdnf -y update` stays.
+- "no changes to dev instance".
+- UBI 10 images in their own PR before the kiwi minimal-image is dropped (PR 3).
+
+---
+
+### Task 1: `common:containers:ubi10` with `createrepo_c`
+
+**Goal:** A build-helper project for the ubi10 images that provides `createrepo_c` on a `UBI_10` repository (EPEL 10 + UBI 10 + Rocky 10 devel build path).
+
+**Files:**
+- Create: `root/common/containers/ubi10/project.yaml`
+- Create: `root/common/containers/ubi10/createrepo_c/obs/createrepo_c.spec`, `…/obs/createrepo_c-0.20.1.tar.gz` (byte copies of `root/common/containers/ubi9/createrepo_c/obs/*`)
+
+**Acceptance Criteria:**
+- [ ] `project.yaml` is:
+```yaml
+title: Percona UBI-10 Container Build Helpers
+description: |
+  Build-time helpers for the UBI-10 based container images (createrepo_c for
+  #!UseOBSRepositories). The images themselves are built from the official
+  registry.access.redhat.com/ubi10/ubi-minimal image via RedHat:UBI:Registry.
+
+# This project's repository set and build configuration are unrelated to its
+# parent's: declare them in full here instead of patching the inherited ones.
+repositories-inherit: false
+project-config-inherit: false
+
+publish: false
+repositories:
+  - name: UBI_10
+    paths:
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:10
+        repository: standard
+      - project: RedHat:UBI-10
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
+        repository: devel
+    archs: [x86_64, aarch64]
+
+project-config: |
+  %if "%_repository" == "UBI_10"
+  Type: spec
+  %endif
+```
+- [ ] `cmp root/common/containers/ubi9/createrepo_c/obs/createrepo_c.spec root/common/containers/ubi10/createrepo_c/obs/createrepo_c.spec` and the same for the tarball report no difference.
+- [ ] `venv/bin/python -m percona_obs -P labsmain project config --offline common:containers:ubi10 | grep -o 'repository name="[^"]*"'` → `repository name="UBI_10"` only.
+- [ ] black/pyright/pytest pass; `project verify` prints nothing for ubi10.
+
+**Verify:** `ls root/common/containers/ubi10 root/common/containers/ubi10/createrepo_c/obs` → `createrepo_c project.yaml` and `createrepo_c-0.20.1.tar.gz createrepo_c.spec`.
+
+**Steps:**
+- [ ] Step 1: `mkdir -p root/common/containers/ubi10/createrepo_c/obs && cp root/common/containers/ubi9/createrepo_c/obs/* root/common/containers/ubi10/createrepo_c/obs/`; write `project.yaml` as above.
+- [ ] Step 2: run the acceptance commands and the checks.
+- [ ] Step 3: commit:
+```bash
+git add root/common/containers/ubi10
+git commit -s -m "containers: common:containers:ubi10 with createrepo_c
+
+UBI 10 images are built from the official ubi10/ubi-minimal image via the
+RedHat:UBI:Registry download-on-demand project, so this project only needs
+createrepo_c (#!UseOBSRepositories), which neither UBI 10 nor EPEL 10 ships;
+umoci comes from EPEL 10 and podman/skopeo from UBI 10 appstream."
+```
+
+---
+
+### Task 2: `ubi10` in the per-major and cross-major containers projects
+
+**Goal:** `ppg:staging:<V>:containers` (14–18) and `ppg:staging:containers` build a `ubi10` flavour.
+
+**Files:**
+- Modify: `root/ppg/staging/_shared/containers/project.yaml` (repos after line 52, prjconf lines 75–88, qa after line 116; description line 7)
+- Modify: `root/ppg/staging/containers/project.yaml` (repos after line 70, prjconf lines 93–106, qa after line 134; description line 7)
+
+**Acceptance Criteria:**
+- [ ] Both files have a `ubi10` repository per the block rule. For `_shared/containers` the rendered paths (`project config --offline ppg:staging:18:containers`) are, in order: `RedHat:UBI:Registry/images`, `isv:percona:ppg:staging:18/UBI_10`, `isv:percona:ppg:common:deps/UBI_10`, `isv:percona:common:containers:ubi10/UBI_10`, `openSUSE.org:Fedora:EPEL:10/standard`, `RedHat:UBI-10/standard`. For `staging/containers` the same with staging 18,17,16,15,14 `UBI_10` paths in place of the single staging path.
+- [ ] prjconf per the prjconf rule: three blocks; `grep -c 'dockerarg:UBI_BASE' <file>` → 3 per file; the ubi10 block has `RHEL_VER=el10`.
+- [ ] qa: a third lane `- name: ubi10` per the QA rule.
+- [ ] Line 7 of both descriptions reads `We currently build our images based on UBI-8, UBI-9 and UBI-10 base containers.`
+- [ ] `venv/bin/python -m percona_obs -P labsmain qa show ppg:staging:18:containers` lists lanes `ubi8`, `ubi9`, `ubi10` (same for `ppg:staging:containers`).
+- [ ] black/pyright/pytest pass; `project verify` clean.
+
+**Verify:** `for p in ppg:staging:18:containers ppg:staging:containers; do venv/bin/python -m percona_obs -P labsmain project config --offline $p | grep -c 'repository name="ubi10"\|dockerarg:UBI_BASE'; done` → `4` for each (one repo element + three build flags).
+
+**Steps:**
+- [ ] Step 1: in each file, insert the `ubi10` repository block (block rule) after the `ubi9` block's `archs:` line.
+- [ ] Step 2: prjconf: add `  BuildFlags: dockerarg:UBI_BASE=percona-ubi-minimal:latest` after the `RHEL_VER=el8` and `RHEL_VER=el9` lines; append after the `ubi9` block:
+```
+
+  %if "%_repository" == "ubi10"
+
+  BuildFlags: dockerarg:RHEL_VER=el10
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi10/ubi-minimal:latest
+
+  %endif
+```
+- [ ] Step 3: qa: append the `ubi10` lane (QA rule). Step 4: description line. Step 5: checks. Step 6: commit:
+```bash
+git add root/ppg/staging/_shared/containers/project.yaml root/ppg/staging/containers/project.yaml
+git commit -s -m "containers: ubi10 flavour for the PPG and upgrade images
+
+New ubi10 repository built from registry.access.redhat.com/ubi10/ubi-minimal
+via RedHat:UBI:Registry, with UBI_10 RPMs and common:containers:ubi10's
+createrepo_c. The base image is now chosen per repository through the
+UBI_BASE docker build arg; ubi8/ubi9 keep percona-ubi-minimal:latest."
+```
+
+---
+
+### Task 3: `ubi10` in the extras container projects
+
+**Goal:** `ppg:staging:{16,17,18}:extras:containers` and `ppg:staging:extras:containers` build a `ubi10` flavour, with named QA lanes.
+
+**Files:**
+- Modify: `root/ppg/staging/16/extras/containers/project.yaml`, `…/17/…`, `…/18/…` (repos after line 29, prjconf lines 31–53, qa lines 55–end; title/description lines 1–3)
+- Modify: `root/ppg/staging/extras/containers/project.yaml` (repos after line 43, prjconf lines 45–66, qa lines 67–end; description)
+
+**Acceptance Criteria:**
+- [ ] Each file has a `ubi10` repository per the block rule (per-major: extras, staging, prev-major staging, common:deps, then ubi10 helper, EPEL 10, UBI-10, all preceded by the registry path).
+- [ ] prjconf: the existing `%if "%_repository" == "ubi9"` block gains `BuildFlags: dockerarg:UBI_BASE=percona-ubi-minimal:latest` after its `RHEL_VER=el9` line; a second block `%if "%_repository" == "ubi10"` with the identical body except `RHEL_VER=el10` and `UBI_BASE=registry.access.redhat.com/ubi10/ubi-minimal:latest` follows it.
+- [ ] qa, per-major files: the two existing entries get `name: ubi9` and `name: ubi9-upgrade` (as the first key of each entry); two copies follow with `name: ubi10` / `name: ubi10-upgrade` and `/ubi9` → `/ubi10` in `REPOSITORY` and `OLD_DOCKER_REPOSITORY`. Cross-major file: its single mapping-style `qa:` becomes a list of two entries `name: ubi9` and `name: ubi10` (same pipeline/parameters, `/ubi9` → `/ubi10`).
+- [ ] Titles/descriptions: per-major `title: Percona Container Custom Images for PostgreSQL %!{PG_MAJOR_VERSION}` and description `This project contains UBI-9 and UBI-10 based container custom images for Percona Software for PostgreSQL %!{PG_MAJOR_VERSION}.`; cross-major description sentence `We currently build these images based on UBI-9 only, …` → `We currently build these images based on UBI-9 and UBI-10, matching the per-version extras/containers projects.`
+- [ ] `venv/bin/python -m percona_obs -P labsmain qa show ppg:staging:17:extras:containers` lists `ubi9`, `ubi9-upgrade`, `ubi10`, `ubi10-upgrade`; `qa show ppg:staging:extras:containers` lists `ubi9`, `ubi10`; no "same check segment" error.
+- [ ] black/pyright/pytest pass; `project verify` clean.
+
+**Verify:** `for p in ppg:staging:16:extras:containers ppg:staging:17:extras:containers ppg:staging:18:extras:containers ppg:staging:extras:containers; do venv/bin/python -m percona_obs -P labsmain project config --offline $p | grep -c 'repository name="ubi10"\|dockerarg:UBI_BASE'; done` → `3` for each (one repo element + two build flags).
+
+**Steps:** apply the rules file by file (the three per-major files differ only in the hardcoded major in `REPOSITORY` paths and `OLD_SERVER_VERSION`; keep those as they are), run the checks, commit:
+```bash
+git add root/ppg/staging/16/extras/containers/project.yaml root/ppg/staging/17/extras/containers/project.yaml root/ppg/staging/18/extras/containers/project.yaml root/ppg/staging/extras/containers/project.yaml
+git commit -s -m "containers: ubi10 flavour for the extras (custom) images
+
+Same registry-based ubi10 repository as the main images. The extras QA
+lanes get names (ubi9/ubi9-upgrade, ubi10/ubi10-upgrade) because two
+flavours now share each pipeline; their check-run names change accordingly."
+```
+
+---
+
+### Task 4: Dockerfiles take the base image from `UBI_BASE`
+
+**Goal:** All seven Dockerfiles select their base image through the `UBI_BASE` build arg.
+
+**Files:**
+- Modify (line 7 or 8, the `FROM` line): `root/ppg/staging/_shared/containers/percona-distribution-postgresql/obs/Dockerfile`, `…/percona-distribution-postgresql-with-postgis/obs/Dockerfile`, `…/percona-pgbackrest/obs/Dockerfile`, `…/percona-pgbouncer/obs/Dockerfile`, `root/ppg/staging/_shared/extras/containers/percona-distribution-postgresql-custom/obs/Dockerfile`, `root/ppg/staging/containers/percona-distribution-postgresql-upgrade/obs/Dockerfile`, `root/ppg/staging/extras/containers/percona-distribution-postgresql-upgrade-custom/obs/Dockerfile`
+
+**Acceptance Criteria:**
+- [ ] `grep -rn "^FROM" root --include=Dockerfile` → seven lines, all `FROM $UBI_BASE`, each preceded by `ARG UBI_BASE=percona-ubi-minimal:latest`.
+- [ ] `git diff --stat` shows 7 files, each `+1 -1` plus one added line (2 insertions, 1 deletion).
+- [ ] black/pyright/pytest pass.
+
+**Verify:** `grep -rn -B1 "^FROM" root --include=Dockerfile | grep -c "ARG UBI_BASE=percona-ubi-minimal:latest"` → `7`.
+
+**Steps:** `sed -i 's|^FROM percona-ubi-minimal:latest$|ARG UBI_BASE=percona-ubi-minimal:latest\nFROM $UBI_BASE|' <each file>`; verify; commit:
+```bash
+git add root/ppg/staging/_shared/containers/*/obs/Dockerfile root/ppg/staging/_shared/extras/containers/*/obs/Dockerfile root/ppg/staging/containers/*/obs/Dockerfile root/ppg/staging/extras/containers/*/obs/Dockerfile
+git commit -s -m "containers: select the base image with the UBI_BASE build arg
+
+ARG UBI_BASE before FROM lets one Dockerfile serve ubi8/ubi9 (kiwi
+percona-ubi-minimal) and ubi10 (registry.access.redhat.com/ubi10/ubi-minimal);
+each repository's prjconf sets the value."
+```
+
+---
+
+### Task 5: PR-check flavour loop, render checks, hand-over
+
+**Goal:** CI knows the third flavour; the whole branch renders as designed; the user gets push/PR instructions.
+
+**Files:**
+- Modify: `.github/workflows/obs-pr-check.yml:307` (`for other in ubi8 ubi9; do` → `for other in ubi8 ubi9 ubi10; do`)
+
+**Acceptance Criteria:**
+- [ ] The loop lists `ubi8 ubi9 ubi10`; nothing else in the workflow changes.
+- [ ] Offline renders (`-P labsmain --offline`) of `common:containers:ubi10`, `ppg:staging:18:containers`, `ppg:staging:containers`, `ppg:staging:18:extras:containers`, `ppg:staging:extras:containers` show the `ubi10` repository with the registry path first and the three/two `UBI_BASE` flags.
+- [ ] `venv/bin/python -m percona_obs -P labsmain project config --diff ppg:staging:18:containers | grep '^[-+]' | grep -v '^[-+][-+]' | grep -v 'ubi10\|UBI_10\|UBI_BASE'` prints only pre-existing drift (self-closing tag spacing, container path reorders) — no other `-` lines.
+- [ ] `git log percona/main..HEAD --oneline` shows the spec/plan commit plus five implementation commits; `git status` clean apart from `venv`/`.profile`.
+
+**Verify:** `grep -n 'for other in' .github/workflows/obs-pr-check.yml` → one line with `ubi8 ubi9 ubi10`.
+
+**Steps:** edit, run checks, commit (`ci: PR check knows the ubi10 image flavour`), then report to the user:
+```
+Branch ubi10-containers in .claude/worktrees/ubi10-containers is ready.
+Push:   git push percona ubi10-containers
+PR:     against percona/obs-packaging main, label ubi10-images (you add obs-sync).
+Then:   tell me the PR number for the build round.
+```
+
+---
+
+### Task 6: Build round on the labs PR project
+
+**Goal:** All ubi10 images and the helper package build green in `isv:percona:PR:pr-N`, and the ubi8/ubi9 images still build with the base image taken from `UBI_BASE`.
+
+**Files:** none unless triage fixes (then one commit per fix naming the OBS symptom).
+
+**Acceptance Criteria:**
+- [ ] `common:containers:ubi10/createrepo_c` succeeded on `UBI_10` x86_64 + aarch64.
+- [ ] Every image package in `ppg:staging:14–18:containers`, `ppg:staging:containers`, `ppg:staging:16–18:extras:containers`, `ppg:staging:extras:containers` is `succeeded` on `ubi10` for both arches (`build status --repo ubi10 <prj>`).
+- [ ] `osc api /build/<PR>:ppg:staging:18:containers/ubi10/x86_64/percona-pgbouncer/_buildinfo` lists a `container:registry.access.redhat.com-ubi10-ubi-minimal-latest` bdep from `RedHat:UBI:Registry`.
+- [ ] At least one `ubi9` image in the PR project (any that was rebuilt) is `succeeded`, proving the `UBI_BASE` default/flag path for the kiwi base still resolves.
+
+**Verify:** the commands above, with a profile `labspr` whose `rootprj` is `isv:percona:PR:pr-N` (copy `.profile/labsmain.yaml`, change `rootprj`).
+
+**Steps:** (1) wait for the PR check sync; (2) sweep; (3) triage per the PR-1 rules: `unresolvable` → path/prjconf fix; `failed` with a Dockerfile/`microdnf` error → report with the log excerpt (base-image content difference between the kiwi image and the real UBI image, e.g. a package pre-installed in one but not the other) and fix in the Dockerfile only if it is a one-liner that keeps ubi8/ubi9 identical; (4) ask the user to push after each fix batch; (5) report the final state.
