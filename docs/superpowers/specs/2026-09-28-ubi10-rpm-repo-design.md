@@ -32,8 +32,10 @@ inheriting projects also builds on `UBI_10`, for x86_64 and aarch64, so that PR 
   Dockerfile changes. That is PR 2.
 - No change to `root/ppg/releases/*`. Release snapshots are frozen and pick up
   `UBI_10` at the next release train, like every other repository change.
-- No change to the `percona-obs` tool or the CI workflows. The `UBI_*` slice
-  glob and the repository-name PR labels already cover a new `UBI_10` name.
+- No change to the `percona-obs` tool. In CI only a comment in
+  `obs-pr-check.yml` is reworded (it named tde as an example of a project
+  split across instances). The `UBI_*` slice glob and the repository-name
+  PR labels already cover a new `UBI_10` name.
 - No change to the dev OBS instance (`192.168.1.103`).
 
 ## Prerequisite outside git
@@ -70,7 +72,7 @@ of CRB, appstream and baseos, so it is listed as a single path.
 
 Because the repository is declared at root level it is inherited by every
 project that does not opt out: `common:deps:build`, `common:deps:runtime`,
-`ppg:common:deps`, `ppg:staging:14`–`18`, `ppg:devel:*` (via the symlinked
+`ppg:common:deps`, `ppg:staging:14`–`19`, `ppg:devel:14`–`19` (via the symlinked
 `subprojects.yaml` and `path-prefix`). That matches the reach of `UBI_8` and
 `UBI_9` today.
 
@@ -145,8 +147,8 @@ it gets `UBI_10: false` with a one-line comment, as `geos` and `proj` do for
   The `for other in ubi8 ubi9` loop concerns image flavours and is extended
   in PR 2.
 - `docs/PERCONA_OBS_TOOL.md` and `root/README.md` list no per-repository
-  table that enumerates `UBI_9`; no doc change beyond a changelog-style note
-  in the PR description.
+  table that enumerates `UBI_9`; `docs/PERCONA_OBS_TOOL.md` loses its
+  tde-specific example sentence (tde no longer has UBI repositories).
 - `tests/`: the repository-merge tests build their own fixtures and do not
   assert on the root file's repository list. `pytest` must still pass.
 
@@ -156,17 +158,16 @@ it gets `UBI_10: false` with a one-line comment, as `geos` and `proj` do for
    pass (no Python changes expected, this guards the YAML through the
    config-merge tests).
 2. `percona-obs -P labsmain project config` (and `--diff`) for
-   `ppg:staging:18`, `ppg:staging:18:extras`, `ppg:staging:16:tde`,
-   `ppg:common:deps` and `common:deps:build` shows a `UBI_10` repository with
-   the expected paths, and the rendered prjconf contains the `UBI_10` blocks.
+   `ppg:staging:18`, `ppg:devel:18`, `ppg:common:deps` and `common:deps:build`
+   shows a `UBI_10` repository with the expected paths, and the rendered
+   prjconf contains the `UBI_10` blocks.
 3. `sync push --dry-run` against `labsmain` lists only additions (the new
    repository on the affected projects) and no orphan deletions.
 4. Open the PR against `percona/obs-packaging` with the `UBI_10` label so the
    PR check builds only the new repository on the labs PR project. The gate:
    every package that is `succeeded` on `UBI_9` is `succeeded` on `UBI_10`
-   for both architectures, across `ppg:staging:14`–`18`, their `extras`
-   (16–18), `ppg:staging:16:tde`, `ppg:common:deps`, `common:deps:build` and
-   `common:deps:runtime`.
+   for both architectures, across `ppg:staging:14`–`19`, `ppg:devel:14`–`19`,
+   `ppg:common:deps`, `common:deps:build` and `common:deps:runtime`.
 5. Triage loop for the first round: `unresolvable` means a missing
    `-devel`/module in the UBI 10 path set (candidate fix: prjconf `Prefer`,
    `Ignore`, `Substitute`, or a `UBI_10: false` flag with a comment);
@@ -197,6 +198,23 @@ it gets `UBI_10: false` with a one-line comment, as `geos` and `proj` do for
 - PR 3: switch `ubi8`/`ubi9` to `RedHat:UBI:Registry`, delete the kiwi
   `minimal-image` stack from `common:containers:ubi8/9`, prune the tool's
   kiwi handling.
+
+## Also in this PR (2026-09-29)
+
+- `root/ppg/common/deps/sfcgal/obs/_constraints` drops `<sandbox>kvm</sandbox>`:
+  the labs aarch64 workers have no kvm sandbox and every sfcgal aarch64 job
+  died in the dispatcher; the labs production copy already had the line
+  removed by hand. Memory constraints and the SLOW_CPU exclusion stay.
+  Because `_constraints` is part of the package sources, sfcgal rebuilds on
+  every repository at merge and PostGIS follows it everywhere.
+- `root/ppg/staging/_shared/python3-systemd` (aggregate) gets `UBI_10: false`
+  like its source package.
+- proj: the spec change (gcc-toolset only on EL8/EL9) rebuilds proj and its
+  PostGIS consumers on RockyLinux_9.6 and UBI_9; the rendered EL9 spec is
+  unchanged.
+- On labs, `ppg:staging:16:tde` falls out of the `UBI_*` slice and is deleted
+  as an orphan by the next full sync, together with its published UBI_8/UBI_9
+  binaries (intended).
 
 ## Addendum 2026-09-29: `ppg:common:deps` on UBI 10 is a publication set, not a mirror of UBI 9
 
