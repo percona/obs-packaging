@@ -5,6 +5,7 @@ description: |
   does not ship it). The unversioned lapack directory carries the RHEL 9
   version for UBI 8/9.
 
+# UBI_10-only. The build map is a deny-list: add every new root repository here as false.
 build:
   RockyLinux_8: false
   RockyLinux_9: false
