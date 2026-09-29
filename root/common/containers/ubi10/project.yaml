@@ -1,0 +1,27 @@
+title: Percona UBI-10 Container Build Helpers
+description: |
+  Build-time helpers for the UBI-10 based container images (createrepo_c for
+  #!UseOBSRepositories). The images themselves are built from the official
+  registry.access.redhat.com/ubi10/ubi-minimal image via RedHat:UBI:Registry.
+
+# This project's repository set and build configuration are unrelated to its
+# parent's: declare them in full here instead of patching the inherited ones.
+repositories-inherit: false
+project-config-inherit: false
+
+publish: false
+repositories:
+  - name: UBI_10
+    paths:
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:10
+        repository: standard
+      - project: RedHat:UBI-10
+        repository: standard
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
+        repository: devel
+    archs: [x86_64, aarch64]
+
+project-config: |
+  %if "%_repository" == "UBI_10"
+  Type: spec
+  %endif
