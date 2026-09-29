@@ -4,7 +4,7 @@ description: |
   major versions (currently 14-18), such as the major-version upgrade image. It is not tied to
   a single staging/<V>, so its released counterpart is ppg:releases:containers rather than a
   per-version releases/<V> subproject.
-  We currently build our images based on UBI-8 and UBI-9 base containers.
+  We currently build our images based on UBI-8, UBI-9 and UBI-10 base containers.
 
 # This project's repository set and build configuration are unrelated to its
 # parent's: declare them in full here instead of patching the inherited ones.
@@ -16,6 +16,8 @@ debuginfo: ~
 repositories:
   - name: ubi8
     paths:
+      - project: RedHat:UBI:Registry
+        repository: images
       - subproject: ppg:staging:18
         repository: UBI_8
       - subproject: ppg:staging:17
@@ -28,8 +30,6 @@ repositories:
         repository: UBI_8
       - subproject: ppg:common:deps
         repository: UBI_8
-      - subproject: common:containers:ubi8
-        repository: images
       - subproject: common:containers:ubi8
         repository: UBI_8
       - project: Fedora:EPEL:8
@@ -47,6 +47,8 @@ repositories:
     archs: [x86_64, aarch64]
   - name: ubi9
     paths:
+      - project: RedHat:UBI:Registry
+        repository: images
       - subproject: ppg:staging:18
         repository: UBI_9
       - subproject: ppg:staging:17
@@ -60,12 +62,33 @@ repositories:
       - subproject: ppg:common:deps
         repository: UBI_9
       - subproject: common:containers:ubi9
-        repository: images
-      - subproject: common:containers:ubi9
         repository: UBI_9
       - project: Fedora:EPEL:9
         repository: standard
       - project: RedHat:UBI-9
+        repository: standard
+    archs: [x86_64, aarch64]
+  - name: ubi10
+    paths:
+      - project: RedHat:UBI:Registry
+        repository: images
+      - subproject: ppg:staging:18
+        repository: UBI_10
+      - subproject: ppg:staging:17
+        repository: UBI_10
+      - subproject: ppg:staging:16
+        repository: UBI_10
+      - subproject: ppg:staging:15
+        repository: UBI_10
+      - subproject: ppg:staging:14
+        repository: UBI_10
+      - subproject: ppg:common:deps
+        repository: UBI_10
+      - subproject: common:containers:ubi10
+        repository: UBI_10
+      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:10
+        repository: standard
+      - project: RedHat:UBI-10
         repository: standard
     archs: [x86_64, aarch64]
 
@@ -95,12 +118,21 @@ project-config: |
   ExpandFlags: module:container-tools-rhel8
 
   BuildFlags: dockerarg:RHEL_VER=el8
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi8/ubi-minimal:latest
 
   %endif
 
   %if "%_repository" == "ubi9"
 
   BuildFlags: dockerarg:RHEL_VER=el9
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+  %endif
+
+  %if "%_repository" == "ubi10"
+
+  BuildFlags: dockerarg:RHEL_VER=el10
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi10/ubi-minimal:latest
 
   %endif
 
@@ -126,6 +158,19 @@ qa:
       SERVER_VERSION: "%!{PG_VERSION}"
       TESTING_BRANCH: ricardo-work
       REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/containers/ubi9
+      WITH_POSTGIS:
+        - true
+        - false
+    matrix:
+      - WITH_POSTGIS
+
+  - name: ubi10
+    pipeline: docker-server-parallel-generic
+    parameters:
+      DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
+      SERVER_VERSION: "%!{PG_VERSION}"
+      TESTING_BRANCH: ricardo-work
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/containers/ubi10
       WITH_POSTGIS:
         - true
         - false
