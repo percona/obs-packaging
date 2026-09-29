@@ -70,7 +70,7 @@ kiwi image) is removed. The `ubi10` path list, in order:
 Files: `root/ppg/staging/_shared/containers/project.yaml` (per-major
 containers, symlinked by 14–18), `root/ppg/staging/containers/project.yaml`
 (cross-major upgrade image; staging 18…14 `UBI_10` paths),
-`root/ppg/staging/_shared/extras/containers/project.yaml` (cross-major custom
+`root/ppg/staging/extras/containers/project.yaml` (cross-major custom
 upgrade; extras 18…16 and staging 18…16), and the three per-major
 `root/ppg/staging/{16,17,18}/extras/containers/project.yaml` (real files, not
 symlinks).
@@ -126,7 +126,7 @@ package lists and entrypoints are untouched (user decision).
   `name: ubi9-upgrade` (`ppg-obs-upgrade`), and `ubi10` / `ubi10-upgrade`
   copies are added. Consequence: the extras QA check-run names change from
   `OBS QA / <project> / <pipeline> / …` to `OBS QA / <project> / ubi9… / …`.
-  The cross-major `_shared/extras/containers` block has a single unnamed
+  The cross-major `staging/extras/containers` block has a single unnamed
   entry; it becomes `ubi9` + `ubi10`.
 
 ### CI
