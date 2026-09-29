@@ -232,7 +232,7 @@ def test_qa_run_unknown_name_errors(tmp_path, monkeypatch):
 # --- the tree --------------------------------------------------------------------
 
 
-def test_container_projects_name_both_lanes():
+def test_container_projects_name_all_lanes():
     from pathlib import Path
 
     import yaml
@@ -244,5 +244,5 @@ def test_container_projects_name_both_lanes():
     ):
         text = (repo_root / rel).read_text(encoding="utf-8")
         qa = yaml.safe_load(text.replace("%!{", "${"))["qa"]
-        assert isinstance(qa, list) and len(qa) == 2, rel
-        assert [e["name"] for e in qa] == ["ubi8", "ubi9"], rel
+        assert isinstance(qa, list) and len(qa) == 3, rel
+        assert [e["name"] for e in qa] == ["ubi8", "ubi9", "ubi10"], rel
