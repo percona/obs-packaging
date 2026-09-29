@@ -5,6 +5,10 @@ build:
   # proj-devel from the distro devel repo, but the 9.6 vault snapshot
   # does not carry it, so percona-postgis needs our build there.
   RockyLinux_10: false
+  # UBI_10: the spec hardcodes gcc-toolset-14, which RHEL 10 does not ship
+  # (gcc 14 is the system compiler); proj-devel comes from RockyLinux:10/devel
+  # on this repository just as it does on RockyLinux_10.
+  UBI_10: false
   UBI_8: false
   Debian_13: false
   Ubuntu_22.04: false
