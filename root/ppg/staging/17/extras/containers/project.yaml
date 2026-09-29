@@ -10,6 +10,8 @@ project-config-inherit: false
 repositories:
   - name: ubi9
     paths:
+      - project: RedHat:UBI:Registry
+        repository: images
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}:extras
         repository: UBI_9
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
@@ -18,8 +20,6 @@ repositories:
         repository: UBI_9
       - subproject: ppg:common:deps
         repository: UBI_9
-      - subproject: common:containers:ubi9
-        repository: images
       - subproject: common:containers:ubi9
         repository: UBI_9
       - project: Fedora:EPEL:9
@@ -34,6 +34,7 @@ project-config: |
   BuildEngine: podman
   BuildFlags: dockerarg:PPG_REPO=staging
   BuildFlags: dockerarg:RHEL_VER=el9
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
 
   Preinstall: skopeo
 

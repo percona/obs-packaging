@@ -18,6 +18,8 @@ debuginfo: ~
 repositories:
   - name: ubi9
     paths:
+      - project: RedHat:UBI:Registry
+        repository: images
       - subproject: ppg:staging:18:extras
         repository: UBI_9
       - subproject: ppg:staging:17:extras
@@ -33,8 +35,6 @@ repositories:
       - subproject: ppg:common:deps
         repository: UBI_9
       - subproject: common:containers:ubi9
-        repository: images
-      - subproject: common:containers:ubi9
         repository: UBI_9
       - project: Fedora:EPEL:9
         repository: standard
@@ -48,6 +48,7 @@ project-config: |
   BuildEngine: podman
   BuildFlags: dockerarg:PPG_REPO=staging
   BuildFlags: dockerarg:RHEL_VER=el9
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
 
   Preinstall: skopeo
 
