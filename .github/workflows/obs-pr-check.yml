@@ -304,7 +304,7 @@ jobs:
             narrow+=("ssl*")
             labels+=(--narrow-repos "$(IFS=,; echo "${narrow[*]}")")
             if [ ${#flavors[@]} -gt 0 ]; then
-              for other in ubi8 ubi9; do
+              for other in ubi8 ubi9 ubi10; do
                 if ! printf '%s\n' "${flavors[@]}" | grep -qx "$other"; then
                   labels+=(--exclude-projects "common:containers:${other}")
                 fi
