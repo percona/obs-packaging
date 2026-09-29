@@ -8,3 +8,5 @@ build:
   Ubuntu_26.04: false
   openSUSE_Leap_16: false
   openSUSE_Tumbleweed: false
+  # UBI_10 builds the RHEL 10 version from lapack-3.12/ instead.
+  UBI_10: false

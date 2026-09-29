@@ -10,3 +10,5 @@ build:
   Ubuntu_26.04: false
   openSUSE_Leap_16: false
   openSUSE_Tumbleweed: false
+  # UBI 10 ships c-ares (baseos); nothing to publish there.
+  UBI_10: false
