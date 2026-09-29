@@ -162,6 +162,14 @@ project-config: |
   Prefer: blas
   %endif
 
+  %if "%_repository" == "UBI_10"
+  # RHEL 10 appstream ships llvm-libs 21 and EPEL 10 ships llvm21-libs; both
+  # provide libLLVM.so.21.1, so OBS reports "have choice" for rust (seen on
+  # common:deps:build/cargo-pgrx-*). Prefer the distro package, as the
+  # RockyLinux_9.6 block above does.
+  Prefer: llvm-libs
+  %endif
+
   %if "%_repository" == "Debian_12" || "%_repository" == "Ubuntu_22.04"
   # llvm-*-dev needs libtinfo-dev; both libncurses-dev and libtinfo-dev satisfy
   # it and OBS reports "have choice" without a Prefer.
