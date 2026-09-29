@@ -4,7 +4,8 @@
 #!BuildTag: percona-pgbackrest:<VERSION>
 #!BuildTag: percona-pgbackrest:latest
 
-FROM percona-ubi-minimal:latest
+ARG UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
+FROM $UBI_BASE
 
 LABEL name="Percona pgBackRest" \
       description="pgBackRest is a simple, reliable backup and restore system for PostgreSQL that can seamlessly scale up to the largest databases and workloads." \

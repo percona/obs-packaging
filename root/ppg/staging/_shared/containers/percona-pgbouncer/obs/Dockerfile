@@ -4,7 +4,8 @@
 #!BuildTag: percona-pgbouncer:<VERSION>
 #!BuildTag: percona-pgbouncer:latest
 
-FROM percona-ubi-minimal:latest
+ARG UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
+FROM $UBI_BASE
 
 LABEL name="Percona PgBouncer" \
       description="PgBouncer is a lightweight connection pooler for PostgreSQL that offers various pooling modes (session, transaction, statement), low memory usage, support for multiple backend hosts, and the ability to reconfigure or restart it online without downtime." \
