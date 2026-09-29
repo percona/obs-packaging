@@ -6,6 +6,7 @@ description: |
   neither is available in UBI 10. The unversioned boost directory carries the
   RHEL 9 version (1.75.0) for UBI 8/9.
 
+# UBI_10-only. The build map is a deny-list: add every new root repository here as false.
 build:
   RockyLinux_8: false
   RockyLinux_9: false

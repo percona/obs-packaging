@@ -786,8 +786,7 @@ jobs:
           fi
           # status_context becomes the check-run name, so two entries sharing
           # one would fight over a single check run.  A project can legitimately
-          # be in slice on more than one instance (a project whose repositories
-          # are sliced across two instances), and qa_types cannot split
+          # be in slice on more than one instance, and qa_types cannot split
           # those — both classify as the same QA kind.  Settle it by instance
           # order instead of failing: the first instance in OBS_INSTANCES that
           # discovered the context keeps it, and the drop is reported.
