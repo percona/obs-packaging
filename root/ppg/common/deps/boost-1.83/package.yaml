@@ -1,0 +1,22 @@
+title: boost 1.83.0 for UBI 10
+description: |
+  RHEL 10's boost (1.83.0), rebuilt from the CentOS Stream 10 spec so that
+  UBI 10 based containers can install it from the Percona repository (UBI 10
+  does not ship boost). MPI sub-packages (mpich/openmpi) are disabled since
+  neither is available in UBI 10. The unversioned boost directory carries the
+  RHEL 9 version (1.75.0) for UBI 8/9.
+
+build:
+  RockyLinux_8: false
+  RockyLinux_9: false
+  RockyLinux_9.6: false
+  RockyLinux_10: false
+  UBI_8: false
+  UBI_9: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Tumbleweed: false
+  openSUSE_Leap_16: false

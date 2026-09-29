@@ -1,0 +1,117 @@
+commit 1be6822473b78278af1779fc6f642128996473d8
+Author: Zayd Rajab <zaydr@amazon.com>
+Date:   Fri Aug 15 22:13:10 2025 +0000
+
+    [AArch64][BTI] Add BTI hint + GNU property to fcontext trampolines (ELF/GAS)
+    
+    The AArch64 fcontext trampolines (jump_fcontext, make_fcontext, ontop_fcontext)
+    are indirect-entry-points. On BTI-enforcing systems they must begin with a BTI
+    or the first resume can trap with SIGILL.
+    
+    Insert `bti c` (hint #34) at each entry under `__ARM_FEATURE_BTI_DEFAULT`, and
+    emit `GNU_PROPERTY_AARCH64_FEATURE_1_BTI` from each AArch64 assembly file so
+    linkers map the DSO with PROT_BTI without requiring -z force-bti.
+    
+    Scope: ELF/GAS AArch64 trampolines only; +4 bytes per entry
+    
+    Fixes #308
+
+diff --git a/src/asm/jump_arm64_aapcs_elf_gas.S b/src/asm/jump_arm64_aapcs_elf_gas.S
+index 7c1f075..b8abb2e 100644
+--- a/libs/context/src/asm/jump_arm64_aapcs_elf_gas.S
++++ b/libs/context/src/asm/jump_arm64_aapcs_elf_gas.S
+@@ -53,10 +53,28 @@
+ 
+ .file "jump_arm64_aapcs_elf_gas.S"
+ .text
++#if defined(__ARM_FEATURE_BTI_DEFAULT) && (__ARM_FEATURE_BTI_DEFAULT == 1)
++/* Mark this object as requiring BTI, enabling the linker to set BTI on the output */
++    .pushsection .note.gnu.property, "a", %note
++    .p2align 3
++    .long 4                      /* namesz */
++    .long 16                     /* descsz (16 bytes) */
++    .long 5                      /* type = NT_GNU_PROPERTY_TYPE_0 */
++    .asciz "GNU"
++    .p2align 3
++    .long 0xc0000000             /* GNU_PROPERTY_AARCH64_FEATURE_1_AND */
++    .long 4                      /* datasz = 4 */
++    .long 1                      /* GNU_PROPERTY_AARCH64_FEATURE_1_BTI */
++    .long 0                      /* pad to 8-byte alignment */
++    .popsection
++#endif
+ .align  2
+ .global jump_fcontext
+ .type   jump_fcontext, %function
+ jump_fcontext:
++#if defined(__ARM_FEATURE_BTI_DEFAULT) && (__ARM_FEATURE_BTI_DEFAULT == 1)
++    hint    #34                    /* bti c: valid indirect-entry target */
++#endif
+     # prepare stack for GP + FPU
+     sub  sp, sp, #0xb0
+ 
+diff --git a/src/asm/make_arm64_aapcs_elf_gas.S b/src/asm/make_arm64_aapcs_elf_gas.S
+index 8ac825b..2465254 100644
+--- a/libs/context/src/asm/make_arm64_aapcs_elf_gas.S
++++ b/libs/context/src/asm/make_arm64_aapcs_elf_gas.S
+@@ -53,10 +53,28 @@
+ 
+ .file "make_arm64_aapcs_elf_gas.S"
+ .text
++#if defined(__ARM_FEATURE_BTI_DEFAULT) && (__ARM_FEATURE_BTI_DEFAULT == 1)
++/* Mark this object as requiring BTI, enabling the linker to set BTI on the output */
++    .pushsection .note.gnu.property, "a", %note
++    .p2align 3
++    .long 4                      /* namesz */
++    .long 16                     /* descsz (16 bytes) */
++    .long 5                      /* type = NT_GNU_PROPERTY_TYPE_0 */
++    .asciz "GNU"
++    .p2align 3
++    .long 0xc0000000             /* GNU_PROPERTY_AARCH64_FEATURE_1_AND */
++    .long 4                      /* datasz = 4 */
++    .long 1                      /* GNU_PROPERTY_AARCH64_FEATURE_1_BTI */
++    .long 0                      /* pad to 8-byte alignment */
++    .popsection
++#endif
+ .align  2
+ .global make_fcontext
+ .type   make_fcontext, %function
+ make_fcontext:
++#if defined(__ARM_FEATURE_BTI_DEFAULT) && (__ARM_FEATURE_BTI_DEFAULT == 1)
++    hint    #34    /* bti c */
++#endif
+     # shift address in x0 (allocated stack) to lower 16 byte boundary
+     and x0, x0, ~0xF
+ 
+diff --git a/src/asm/ontop_arm64_aapcs_elf_gas.S b/src/asm/ontop_arm64_aapcs_elf_gas.S
+index 8e40fc7..1e6b466 100644
+--- a/libs/context/src/asm/ontop_arm64_aapcs_elf_gas.S
++++ b/libs/context/src/asm/ontop_arm64_aapcs_elf_gas.S
+@@ -53,10 +53,28 @@
+ 
+ .file "ontop_arm64_aapcs_elf_gas.S"
+ .text
++#if defined(__ARM_FEATURE_BTI_DEFAULT) && (__ARM_FEATURE_BTI_DEFAULT == 1)
++/* Mark this object as requiring BTI, enabling the linker to set BTI on the output */
++    .pushsection .note.gnu.property, "a", %note
++    .p2align 3
++    .long 4                      /* namesz */
++    .long 16                     /* descsz (16 bytes) */
++    .long 5                      /* type = NT_GNU_PROPERTY_TYPE_0 */
++    .asciz "GNU"
++    .p2align 3
++    .long 0xc0000000             /* GNU_PROPERTY_AARCH64_FEATURE_1_AND */
++    .long 4                      /* datasz = 4 */
++    .long 1                      /* GNU_PROPERTY_AARCH64_FEATURE_1_BTI */
++    .long 0                      /* pad to 8-byte alignment */
++    .popsection
++#endif
+ .align  2
+ .global ontop_fcontext
+ .type   ontop_fcontext, %function
+ ontop_fcontext:
++#if defined(__ARM_FEATURE_BTI_DEFAULT) && (__ARM_FEATURE_BTI_DEFAULT == 1)
++    hint    #34    /* bti c */
++#endif
+     # prepare stack for GP + FPU
+     sub  sp, sp, #0xb0
+ 
