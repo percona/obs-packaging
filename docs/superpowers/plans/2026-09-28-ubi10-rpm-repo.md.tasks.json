@@ -66,7 +66,7 @@
     {
       "id": 8,
       "subject": "Task 8: perl-JSON-4.10 and lapack-3.12 EL10 variants",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         6
       ],
@@ -75,7 +75,7 @@
     {
       "id": 9,
       "subject": "Task 9: boost-1.83 EL10 variant",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         6
       ],
@@ -84,7 +84,7 @@
     {
       "id": 10,
       "subject": "Task 10: UBI_10 flags + proj toolset fix",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         8,
         9
@@ -101,5 +101,5 @@
       "description": "**Goal:** Every package of common:deps:build, common:deps:runtime, ppg:common:deps green on UBI_10 in pr-97; published UBI_10 repo has boost 1.83.0, lapack 3.12.0, perl-JSON 4.10, SFCGAL, geos, proj and no boost 1.75/lapack 3.9/c-ares/flexiblas/atlas/blis.\n\n**Files:** none unless triage fixes.\n\n**Acceptance Criteria:** see plan Task 11.\n\n**Verify:** the build status awk sweep prints nothing; _repository names contain boost-devel/lapack/perl-JSON/SFCGAL and not atlas/blis/c-ares/flexiblas; boost fileinfo version 1.83.0.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"venv/bin/python -m percona_obs -P labspr build status --repo UBI_10 ppg:common:deps\", \"acceptanceCriteria\": [\"no non-green UBI_10 results in the three deps projects\", \"published set matches the spec addendum table\"], \"modelTier\": \"standard\"}\n```"
     }
   ],
-  "lastUpdated": "2026-09-29T10:44:26.026911+00:00"
+  "lastUpdated": "2026-09-29T10:55:40.670868+00:00"
 }
