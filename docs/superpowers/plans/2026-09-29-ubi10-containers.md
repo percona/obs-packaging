@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers-extended-cc:subagent-driven-development (recommended) or superpowers-extended-cc:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Every PPG container project builds `ubi8`, `ubi9` and `ubi10` flavours of its images from the official `registry.access.redhat.com/ubi<N>/ubi-minimal:latest` images through OBS download-on-demand, with one Dockerfile per image, and the kiwi-built `percona-ubi-minimal` stack is retired.
+**Goal:** Every PPG container project builds `ubi8`, `ubi9` and `ubi10` flavours of its images (extras: `ubi9` only) from the official `registry.access.redhat.com/ubi<N>/ubi-minimal:latest` images through OBS download-on-demand, with one Dockerfile per image, and the kiwi-built `percona-ubi-minimal` stack is retired.
 
-**Architecture:** Packaging-config change plus a two-line Dockerfile edit. A new `common:containers:ubi10` project supplies `createrepo_c` (the only build helper UBI 10 lacks). Each container project file gains a `ubi10` repository whose first path is `RedHat:UBI:Registry/images`, a `%if ubi10` prjconf block, and a `ubi10` QA lane; the base image is selected per repository through a `UBI_BASE` docker build arg that the Dockerfiles consume with `ARG UBI_BASE=… / FROM $UBI_BASE`. No tool or release changes.
+**Architecture:** Packaging-config change plus a two-line Dockerfile edit. A new `common:containers:ubi10` project supplies `createrepo_c` (the only build helper UBI 10 lacks). Each containers project file (not extras, which build on UBI_9 only) gains a `ubi10` repository whose first path is `RedHat:UBI:Registry/images`, a `%if ubi10` prjconf block, and a `ubi10` QA lane; every existing image repository gets the registry path first and loses the kiwi image path; the base image is selected per repository through a `UBI_BASE` docker build arg that the Dockerfiles consume with `ARG UBI_BASE=… / FROM $UBI_BASE`. No tool or release changes.
 
 **Tech Stack:** YAML packaging tree under `root/`, OBS Dockerfile builds (`Type: docker`, `BuildEngine: podman`, `#!UseOBSRepositories`), `percona-obs` CLI, labs OBS via the `labsmain` profile.
 
@@ -18,7 +18,7 @@
 - **prjconf rule:** the `%if "%_repository" == "ubi10"` block = the file's `ubi9` block with `RHEL_VER=el9` → `RHEL_VER=el10` and one extra line `BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi10/ubi-minimal:latest`. The existing `ubi8` and `ubi9` blocks each gain `BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi8/ubi-minimal:latest` (ubi8) / `…/ubi9/ubi-minimal:latest` (ubi9) directly after their `RHEL_VER` line. Two-space indentation inside `project-config: |`, blank lines as in the neighbours.
 - **QA rule:** a `ubi10` lane is a copy of the `ubi9` lane with `/ubi9` → `/ubi10` in `REPOSITORY` (and `OLD_DOCKER_REPOSITORY`) and `name: ubi9` → `name: ubi10` (`ubi9-upgrade` → `ubi10-upgrade`). Nothing else in a lane changes.
 - **Dockerfile rule:** replace the single line `FROM percona-ubi-minimal:latest` with the two lines `ARG UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest` and `FROM $UBI_BASE`. Nothing else changes in any Dockerfile.
-- No changes under `root/ppg/releases/`, `percona_obs/`, `tests/`. In `.github/` only the one-word loop change. `root/common/containers/ubi8` and `ubi9` change only in Task 7.
+- No changes under `root/ppg/releases/`, `percona_obs/`; in `tests/` only the lane-count assertion of `test_qa_entry_name.py` (ruling during Task 2). In `.github/` only the one-word loop change. `root/common/containers/ubi8` and `ubi9` change only in Task 7.
 - Commits: `git commit -s`, no `Co-Authored-By`. Never `git push`, never `gh pr create`; the user does both (the user also adds the `obs-sync` label).
 - After every task: `venv/bin/black percona_obs/ && venv/bin/pyright && venv/bin/pytest -q` → "left unchanged", "0 errors", `369 passed`; `venv/bin/python -m percona_obs -P labsmain project verify 2>&1 | grep -i ubi10` → nothing.
 
@@ -227,7 +227,7 @@ Then:   tell me the PR number for the build round.
 
 **Acceptance Criteria:**
 - [ ] `common:containers:ubi10/createrepo_c` succeeded on `UBI_10` x86_64 + aarch64.
-- [ ] Every image package in `ppg:staging:14–18:containers`, `ppg:staging:containers`, `ppg:staging:16–18:extras:containers`, `ppg:staging:extras:containers` is `succeeded` on `ubi8` (where the project has it), `ubi9` and `ubi10` for both arches (`build status --repo <flavour> <prj>`).
+- [ ] Every image package in `ppg:staging:14–18:containers` and `ppg:staging:containers` is `succeeded` on `ubi8`, `ubi9` and `ubi10`, and every image in `ppg:staging:16–18:extras:containers` and `ppg:staging:extras:containers` on `ubi9`, for both arches (`build status --repo <flavour> <prj>`).
 - [ ] For each flavour, `osc api /build/<PR>:ppg:staging:18:containers/<flavour>/x86_64/percona-pgbouncer/_buildinfo` lists a `container:registry.access.redhat.com-ubi<N>-ubi-minimal-latest` bdep from `RedHat:UBI:Registry` and no bdep from `common:containers:ubi<N>` other than `createrepo_c*`/`umoci`.
 - [ ] `osc ls <PR>:common:containers:ubi9` → `createrepo_c umoci`; `osc ls <PR>:common:containers:ubi8` → `createrepo_c file-devel popt-devel rpm-devel umoci`; both `UBI_N` builds succeeded.
 
