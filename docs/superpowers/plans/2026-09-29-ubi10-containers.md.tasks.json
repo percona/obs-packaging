@@ -36,7 +36,7 @@
     {
       "id": 5,
       "subject": "Task 5: PR-check flavour loop, render checks, hand-over",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         2,
         3,
@@ -65,5 +65,5 @@
       "description": "**Goal:** common:containers:ubi8 and ubi9 keep only the build helpers the docker builds still pull; the kiwi image and its toolchain are deleted.\n\n**Files:** see plan Task 7 (delete kiwi package dirs; edit both project.yaml).\n\n**Acceptance Criteria:** see plan Task 7 (ubi9 = createrepo_c umoci; ubi8 = createrepo_c file-devel popt-devel rpm-devel umoci; project.yaml only UBI_N repo + Type: spec block; no kiwi/images/Preinstall strings; releases untouched).\n\n**Verify:** `find root/common/containers -mindepth 2 -maxdepth 2 -type d | sort` → the eight kept directories.\n\n```json:metadata\n{\"files\": [\"root/common/containers/ubi8\", \"root/common/containers/ubi9\"], \"verifyCommand\": \"find root/common/containers -mindepth 2 -maxdepth 2 -type d | sort\", \"acceptanceCriteria\": [\"only helper packages remain\", \"images repo and kiwi prjconf removed\", \"no staging consumer of ubiN/images\", \"tests pass\"], \"modelTier\": \"mechanical\"}\n```"
     }
   ],
-  "lastUpdated": "2026-09-29T16:08:34.070256+00:00"
+  "lastUpdated": "2026-09-29T16:11:09.350414+00:00"
 }
