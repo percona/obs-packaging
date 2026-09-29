@@ -10,6 +10,5 @@
       <size unit="M">1200</size>
     </memoryperjob>
   </hardware>
-  <sandbox>kvm</sandbox>
   <hostlabel exclude="true">SLOW_CPU</hostlabel>
 </constraints>
