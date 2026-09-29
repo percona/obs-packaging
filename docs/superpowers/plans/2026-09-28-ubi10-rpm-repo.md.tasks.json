@@ -53,7 +53,53 @@
         5
       ],
       "description": "**Goal:** Every package that is `succeeded` on `UBI_9` in the PR project is `succeeded` on `UBI_10` for both architectures; each exception is either fixed on the branch or given a documented `UBI_10: false`.\n\n**Files:**\n- Modify (as needed, only these kinds): `root/**/package.yaml` (`UBI_10: false` with a one-line comment), `root/project.yaml`, `root/ppg/common/deps/project.yaml`, `root/common/deps/runtime/project.yaml`, `root/ppg/staging/subprojects.yaml`, `root/ppg/staging/_shared/extras/project.yaml`, `root/ppg/staging/16/tde/project.yaml` (a `UBI_10` `Prefer:`/`Ignore:`/`Substitute:` line inside an existing or new `%if` block).\n\n**Acceptance Criteria:**\n- [ ] For each of `common:deps:build`, `common:deps:runtime`, `ppg:common:deps`, `ppg:staging:14`…`18`, `ppg:staging:16:extras`, `17:extras`, `18:extras`, `ppg:staging:16:tde`: the set of packages `succeeded` on `UBI_10` (x86_64 and aarch64) equals the set `succeeded` on `UBI_9`, minus packages explicitly given `UBI_10: false` with a comment on this branch.\n- [ ] No package is `unresolvable`, `failed` or `broken` on `UBI_10` in the PR project.\n- [ ] Every fix commit explains the OBS symptom it addresses in its message.\n\n**Verify:** `venv/bin/python -m percona_obs -P labspr build status --repo UBI_10 ppg:staging:18 | awk '/^[├└]── /{pkg=$2} /UBI_10/ && !/succeeded|disabled|excluded/{print pkg\": \"$0}'` → no output (repeat for each project in the list above).\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"venv/bin/python -m percona_obs -P labspr build status --repo UBI_10 ppg:staging:18 | awk '/^[├└]── /{pkg=$2} /UBI_10/ && !/succeeded|disabled|excluded/{print pkg\\\": \\\"$0}'\", \"acceptanceCriteria\": [\"UBI_10 succeeded set equals UBI_9 succeeded set minus commented UBI_10: false packages, per project\", \"no unresolvable/failed/broken on UBI_10 in the PR project\", \"each fix commit cites the OBS symptom\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 7: extras UBI_9 only, tde no UBI (done)",
+      "status": "completed",
+      "blockedBy": [
+        5
+      ],
+      "description": "**Goal:** user correction, complete. **Files:** extras/tde project.yaml, docs, workflow comment. **Acceptance Criteria:** see ledger. **Verify:** ledger.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"\", \"acceptanceCriteria\": [], \"modelTier\": \"mechanical\"}\n```"
+    },
+    {
+      "id": 8,
+      "subject": "Task 8: perl-JSON-4.10 and lapack-3.12 EL10 variants",
+      "status": "pending",
+      "blockedBy": [
+        6
+      ],
+      "description": "**Goal:** Two new RPM-only packages in root/ppg/common/deps/ that build only on UBI_10 and publish RHEL 10's perl-JSON 4.10 and lapack 3.12.0.\n\n**Files:**\n- Create: root/ppg/common/deps/perl-JSON-4.10/{package.yaml,obs/_service,rpm/perl-JSON.spec}\n- Create: root/ppg/common/deps/lapack-3.12/{package.yaml,obs/_service,rpm/lapack.spec,+Stream 10 Source files}\n\n**Acceptance Criteria:** see plan Task 8 (Stream 10 specs, Release 1%{?dist}, bare Source filenames, Percona changelog entry, sha512 check, 13-repo build map, project verify clean, black/pyright/pytest).\n\n**Verify:** `for d in perl-JSON-4.10 lapack-3.12; do ls root/ppg/common/deps/$d root/ppg/common/deps/$d/obs root/ppg/common/deps/$d/rpm; grep -m1 '^Release:' root/ppg/common/deps/$d/rpm/*.spec; done`\n\n```json:metadata\n{\"files\": [\"root/ppg/common/deps/perl-JSON-4.10\", \"root/ppg/common/deps/lapack-3.12\"], \"verifyCommand\": \"ls root/ppg/common/deps/perl-JSON-4.10/rpm root/ppg/common/deps/lapack-3.12/rpm\", \"acceptanceCriteria\": [\"Stream 10 specs with Release 1, bare Source names, Percona changelog\", \"_service files fetch 4.10 / v3.12.0\", \"build map disables the 13 non-UBI_10 repos\", \"sha512 matches Stream sources\", \"project verify clean, tests pass\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 9,
+      "subject": "Task 9: boost-1.83 EL10 variant",
+      "status": "pending",
+      "blockedBy": [
+        6
+      ],
+      "description": "**Goal:** A new RPM-only boost-1.83 package building only on UBI_10 that publishes RHEL 10's boost 1.83.0 with MPI off.\n\n**Files:**\n- Create: root/ppg/common/deps/boost-1.83/{package.yaml,obs/_service,rpm/boost.spec,rpm/libboost_thread.so,rpm/b2.1,rpm/<11 c10s patches>}\n\n**Acceptance Criteria:** see plan Task 9 (c10s spec with only Release/Source/Patch/MPI-bcond/changelog hunks changed, sha512 check, 13-repo build map, rpmspec -P ok, project verify clean, tests pass).\n\n**Verify:** `diff <(curl -sL https://gitlab.com/redhat/centos-stream/rpms/boost/-/raw/c10s/boost.spec) root/ppg/common/deps/boost-1.83/rpm/boost.spec | grep '^[<>]'` shows only the expected hunks.\n\n```json:metadata\n{\"files\": [\"root/ppg/common/deps/boost-1.83\"], \"verifyCommand\": \"grep -c '^Patch' root/ppg/common/deps/boost-1.83/rpm/boost.spec\", \"acceptanceCriteria\": [\"c10s spec + Release 1 + bare sources + MPI off + changelog only\", \"11 patches present\", \"tarball sha512 matches\", \"build map disables 13 repos\", \"verify/tests pass\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 10,
+      "subject": "Task 10: UBI_10 flags + proj toolset fix",
+      "status": "pending",
+      "blockedBy": [
+        8,
+        9
+      ],
+      "description": "**Goal:** Stop building on UBI_10 what UBI 10 ships or what now has an EL10 variant, and let proj build on EL10 without gcc-toolset.\n\n**Files:**\n- Modify: root/ppg/common/deps/{boost,lapack,perl-JSON,c-ares,flexiblas,python3-systemd,atlas,blis}/package.yaml (UBI_10: false + comment)\n- Modify: root/ppg/common/deps/proj/package.yaml (drop the UBI_10 block from d3c62a6f)\n- Modify: root/ppg/common/deps/proj/rpm/proj.spec:7 (gts_version conditional on rhel < 10)\n\n**Acceptance Criteria:** 12 package.yaml files with UBI_10: false (not proj); proj.spec has the conditional block with comment; verify/tests pass.\n\n**Verify:** `grep -c UBI_10 root/ppg/common/deps/proj/package.yaml` → 0; `grep -n 'gts_version 14' root/ppg/common/deps/proj/rpm/proj.spec` inside the rhel<10 block.\n\n```json:metadata\n{\"files\": [\"root/ppg/common/deps/boost/package.yaml\", \"root/ppg/common/deps/lapack/package.yaml\", \"root/ppg/common/deps/perl-JSON/package.yaml\", \"root/ppg/common/deps/c-ares/package.yaml\", \"root/ppg/common/deps/flexiblas/package.yaml\", \"root/ppg/common/deps/python3-systemd/package.yaml\", \"root/ppg/common/deps/atlas/package.yaml\", \"root/ppg/common/deps/blis/package.yaml\", \"root/ppg/common/deps/proj/package.yaml\", \"root/ppg/common/deps/proj/rpm/proj.spec\"], \"verifyCommand\": \"grep -rlI 'UBI_10: false' root --include=package.yaml | sort\", \"acceptanceCriteria\": [\"12 flagged files, proj not among them\", \"proj gts_version conditional\", \"tests pass\"], \"modelTier\": \"mechanical\"}\n```"
+    },
+    {
+      "id": 11,
+      "subject": "Task 11: Second labs build round",
+      "status": "pending",
+      "blockedBy": [
+        10
+      ],
+      "description": "**Goal:** Every package of common:deps:build, common:deps:runtime, ppg:common:deps green on UBI_10 in pr-97; published UBI_10 repo has boost 1.83.0, lapack 3.12.0, perl-JSON 4.10, SFCGAL, geos, proj and no boost 1.75/lapack 3.9/c-ares/flexiblas/atlas/blis.\n\n**Files:** none unless triage fixes.\n\n**Acceptance Criteria:** see plan Task 11.\n\n**Verify:** the build status awk sweep prints nothing; _repository names contain boost-devel/lapack/perl-JSON/SFCGAL and not atlas/blis/c-ares/flexiblas; boost fileinfo version 1.83.0.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"venv/bin/python -m percona_obs -P labspr build status --repo UBI_10 ppg:common:deps\", \"acceptanceCriteria\": [\"no non-green UBI_10 results in the three deps projects\", \"published set matches the spec addendum table\"], \"modelTier\": \"standard\"}\n```"
     }
   ],
-  "lastUpdated": "2026-09-28T15:46:20.143739+00:00"
+  "lastUpdated": "2026-09-29T10:44:26.026911+00:00"
 }
