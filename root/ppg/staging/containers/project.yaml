@@ -154,7 +154,7 @@ project-config: |
   # … and ours where only EPEL has it (the Percona repo must work without EPEL)
   # or where ours is built against Percona libpq (psycopg2).
   Prefer: python3.12-click python3.12-boto3 python3.12-botocore python3.12-lz4 python3.12-s3transfer
-  Prefer: python3.12-psycopg2
+  Prefer: python3.12-psycopg2 python3.12-etcd
 
   %endif
 
