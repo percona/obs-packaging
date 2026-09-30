@@ -1,0 +1,52 @@
+From c1eadf4e3dd49a344b38d70a46bd66c2d749e65f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Dagfinn=20Ilmari=20Manns=C3=A5ker?= <ilmari@ilmari.org>
+Date: Tue, 9 Apr 2019 18:50:35 +0100
+Subject: [PATCH] Fix ->ping error detection on PostgreSQL 12
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The libpq write error handling was revamped in PostgreSQL 12, so it
+can return a non-NULL pointer even if it encouters a fatal error.
+
+Instead rely on PQresultStatus() to detect fatal errors (including
+NULL pointers).
+
+Petr Písař: Ported to 3.7.4 from 3e1a89a8e5557607932e57b85a2bbc875c2821b6.
+
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ dbdimp.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/dbdimp.c b/dbdimp.c
+index f5c8703..0f7941a 100644
+--- a/dbdimp.c
++++ b/dbdimp.c
+@@ -493,19 +493,19 @@ int dbd_db_ping (SV * dbh)
+ 	tstatus = pg_db_txn_status(aTHX_ imp_dbh);
+ 	if (TRACE5_slow) TRC(DBILOGFP, "%sdbd_db_ping txn_status is %d\n", THEADER_slow, tstatus);
+ 
+-	if (tstatus >= 4) { /* Unknown, so we err on the side of "bad" */
++	if (tstatus >= PQTRANS_UNKNOWN) { /* Unknown, so we err on the side of "bad" */
+ 		if (TEND_slow) TRC(DBILOGFP, "%sEnd dbd_pg_ping (result: -2 unknown/bad)\n", THEADER_slow);
+ 		return -2;
+ 	}
+ 
+ 	/* No matter what state we are in, send an empty query to the backend */
+ 	result = PQexec(imp_dbh->conn, "/* DBD::Pg ping test v3.7.4 */");
+-	if (NULL == result) {
++	status = PQresultStatus(result);
++	PQclear(result);
++	if (PGRES_FATAL_ERROR == status) {
+ 		/* Something very bad, usually indicating the backend is gone */
+ 		return -3;
+ 	}
+-	status = PQresultStatus(result);
+-	PQclear(result);
+ 
+ 	/* We expect to see an empty query most times */
+ 	if (PGRES_EMPTY_QUERY == status) {
+-- 
+2.21.0
+

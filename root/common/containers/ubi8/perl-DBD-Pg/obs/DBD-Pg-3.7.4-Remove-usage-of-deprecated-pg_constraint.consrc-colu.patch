@@ -1,0 +1,32 @@
+From 35080ce5535e233428a7e17320e111962daec7e1 Mon Sep 17 00:00:00 2001
+From: Dagfinn Ilmari Mannsaker <ilmari@sid.internal>
+Date: Tue, 9 Apr 2019 17:40:55 +0100
+Subject: [PATCH] Remove usage of deprecated pg_constraint.consrc column
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+It doesn't track outside change that might affect the representation,
+and will be removed in PostgreSQL 12.
+
+Petr Písař: Ported to 3.7.4 from 35080ce5535e233428a7e17320e111962daec7e1.
+---
+ Pg.pm   | 3 ++-
+
+diff --git a/Pg.pm b/Pg.pm
+index 9e0e9d7..13cd68f 100644
+--- a/Pg.pm
++++ b/Pg.pm
+@@ -530,7 +530,8 @@ use 5.008001;
+ 			$row->[$col_map{DATA_TYPE}] = DBD::Pg::db::pg_type_info($dbh,$row->[$col_map{DATA_TYPE}]);
+ 
+ 			# Add pg_constraint
+-			my $SQL = q{SELECT consrc FROM pg_catalog.pg_constraint WHERE contype = 'c' AND }.
++			my $SQL = q{SELECT pg_catalog.pg_get_constraintdef(oid) }.
++				q{FROM pg_catalog.pg_constraint WHERE contype = 'c' AND }.
+ 				qq{conrelid = $aid AND conkey = '{$attnum}'};
+ 			my $info = $dbh->selectall_arrayref($SQL);
+ 			if (@$info) {
+-- 
+2.21.0
+

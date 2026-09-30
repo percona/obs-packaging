@@ -1,0 +1,30 @@
+From 575c869da97a9f387cb26016f521e02b2708eb71 Mon Sep 17 00:00:00 2001
+From: Erik Rijkers <er@xs4all.nl>
+Date: Mon, 8 Apr 2019 21:53:17 -0400
+Subject: [PATCH] Fix test to allow for changed message of pg_ctl output. CPAN
+ RT #128966
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ t/dbdpg_test_setup.pl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/dbdpg_test_setup.pl b/t/dbdpg_test_setup.pl
+index 24f44ab..8dd17a2 100644
+--- a/t/dbdpg_test_setup.pl
++++ b/t/dbdpg_test_setup.pl
+@@ -331,7 +331,7 @@ version: $version
+ 			$info = qx{$pg_ctl --help 2>&1};
+ 		};
+ 		last GETHANDLE if $@; ## Fail - pg_ctl bad
+-		if (!defined $info or ($info !~ /\@postgresql\.org/ and $info !~ /run as root/)) {
++		if (!defined $info or ($info !~ /\@[a-z.-]*?postgresql\.org/ and $info !~ /run as root/)) {
+ 			$@ = defined $initdb ? "Bad pg_ctl output: $info" : 'Bad pg_ctl output';
+ 			last GETHANDLE; ## Fail - pg_ctl bad
+ 		}
+-- 
+2.21.0
+

@@ -1,0 +1,8 @@
+<services>
+  <service name="download_url">
+    <param name="host">cpan.metacpan.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/authors/id/T/TU/TURNSTEP/DBD-Pg-3.7.4.tar.gz</param>
+    <param name="filename">DBD-Pg-3.7.4.tar.gz</param>
+  </service>
+</services>

@@ -1,0 +1,32 @@
+From 5c5269ef7e9c3db2d6090c411e5aa71fffdc4c04 Mon Sep 17 00:00:00 2001
+From: Dagfinn Ilmari Mannsaker <ilmari@sid.internal>
+Date: Tue, 9 Apr 2019 17:49:10 +0100
+Subject: [PATCH] Don't try to silence ERRORs in test
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+PostrgreSQL 12 no longer allows setting client_min_messages='FATAL',
+and ERROR is sufficient in this case anyway.
+
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ t/04misc.t | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/04misc.t b/t/04misc.t
+index f739f8a..21b9261 100644
+--- a/t/04misc.t
++++ b/t/04misc.t
+@@ -113,7 +113,7 @@ $BC$
+ 
+ 	is( $sth->err, undef, q{Statement attribute 'err' is initially undef});
+ 
+-	$dbh->do(q{SET client_min_messages = 'FATAL'});
++	$dbh->do(q{SET client_min_messages = 'ERROR'});
+ 
+   TODO: {
+ 		local $TODO = q{Known bug: notice and warnings should set err to 6};
+-- 
+2.21.0
+
