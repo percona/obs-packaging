@@ -285,7 +285,7 @@ removed packages as orphans on the next full sync."
 **Acceptance Criteria:**
 - [ ] `ls root/common/containers/ubi8` → `createrepo_c file-devel llvm perl-DBD-Pg popt-devel project.yaml rpm-devel umoci`.
 - [ ] Each perl spec differs from Stream 8's only in Release, bare Source/Patch names, the changelog entry (and `libpq-devel` for DBD-Pg); tarball sha512 matches Stream's `sources`.
-- [ ] `rpmspec -P` succeeds for all five specs; no `.module+` string anywhere in the specs' `Release`.
+- [ ] `rpmspec -P` succeeds for both specs; no `.module+` string anywhere in the specs' `Release`.
 - [ ] `venv/bin/python -m percona_obs -P labsmain project config --offline ppg:staging:18:containers | grep -c 'module:perl-IO-Socket-SSL\|module:perl-DBD-Pg'` → 0 and `grep -c 'module:perl-5.26'` → 1.
 - [ ] black/pyright/pytest pass; `project verify` prints nothing for `common:containers:ubi8`.
 - [ ] Build round: perl-DBD-Pg and llvm `succeeded` on `common:containers:ubi8/UBI_8` (both arches); every ubi8 image `succeeded`; the image `_buildinfo` lists `perl-IO-Socket-SSL`, `perl-DBD-Pg` (PostGIS images) and `llvm-libs` from `…:common:containers:ubi8`, none from `RedHat:UBI-8`.
