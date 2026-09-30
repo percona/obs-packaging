@@ -1,0 +1,3 @@
+build:
+  # UBI 10 ships python3-dateutil (baseos); nothing to publish there.
+  UBI_10: false
