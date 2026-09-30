@@ -270,3 +270,24 @@ python-kiwi, the kiwi helper services, their python3 deps and dnf4 go, as
 does the images repository and its kiwi build config. Labs deletes the
 removed packages as orphans on the next full sync."
 ```
+
+---
+
+### Task 8: non-modular EL8 packages for the ubi8 images (`common:containers:ubi8`)
+
+**Goal:** The ubi8 images install no module-stream package: `common:containers:ubi8` provides non-modular perl-IO-Socket-SSL 2.066, perl-Net-SSLeay 1.88, perl-Mozilla-CA 20160104, perl-DBD-Pg 3.7.4 and llvm/llvm-libs/llvm-filesystem 21.1.8.
+
+**Files:**
+- Create: `root/common/containers/ubi8/{perl-IO-Socket-SSL,perl-Net-SSLeay,perl-Mozilla-CA,perl-DBD-Pg}/obs/{_service,<name>.spec,patches…}` (CentOS Stream 8 specs, `https://gitlab.com/redhat/centos-stream/rpms/<name>/-/raw/c8s/<file>`, CPAN tarballs by `download_url`, `Release: 1%{?dist}`, bare Source/Patch names, Percona changelog entry; perl-DBD-Pg: `BuildRequires: postgresql-devel >= 7.4` → `libpq-devel`)
+- Create: `root/common/containers/ubi8/llvm/obs/{_service,llvm.spec}`: `download_url` of the six Rocky 8 AppStream RPMs (`https://dl.rockylinux.org/pub/rocky/8/AppStream/<arch>/os/Packages/l/<llvm|llvm-libs|llvm-filesystem>-21.1.8-1.module+el8.10.0+40180+8e26bdb3.<arch>.rpm`, `+` URL-encoded as `%2B`), spec `Name: llvm`, `Version: 21.1.8`, `Release: 1%{?dist}`, subpackages `libs` and `filesystem`, `%prep`/`%install` extracting the matching-arch RPMs with `rpm2cpio | cpio -idm` into the buildroot and generating per-subpackage `%files -f` lists from `rpm -qlp`; `Requires` copied from the originals (`llvm` requires `llvm-libs = %{version}-%{release}`, `llvm-libs` requires `llvm-filesystem`); `%define debug_package %{nil}`; `ExclusiveArch: x86_64 aarch64`.
+- Modify: `root/ppg/staging/_shared/containers/project.yaml`, `root/ppg/staging/containers/project.yaml` (`%if ubi8` block: remove the `ExpandFlags: module:perl-IO-Socket-SSL-2.066` and `module:perl-DBD-Pg-3.7` lines and adjust the comment)
+
+**Acceptance Criteria:**
+- [ ] `ls root/common/containers/ubi8` → `createrepo_c file-devel llvm perl-DBD-Pg perl-IO-Socket-SSL perl-Mozilla-CA perl-Net-SSLeay popt-devel project.yaml rpm-devel umoci`.
+- [ ] Each perl spec differs from Stream 8's only in Release, bare Source/Patch names, the changelog entry (and `libpq-devel` for DBD-Pg); tarball sha512 matches Stream's `sources`.
+- [ ] `rpmspec -P` succeeds for all five specs; no `.module+` string anywhere in the specs' `Release`.
+- [ ] `venv/bin/python -m percona_obs -P labsmain project config --offline ppg:staging:18:containers | grep -c 'module:perl-IO-Socket-SSL\|module:perl-DBD-Pg'` → 0 and `grep -c 'module:perl-5.26'` → 1.
+- [ ] black/pyright/pytest pass; `project verify` prints nothing for `common:containers:ubi8`.
+- [ ] Build round: the five packages `succeeded` on `common:containers:ubi8/UBI_8` (both arches); every ubi8 image `succeeded`; the image `_buildinfo` lists `perl-IO-Socket-SSL`, `perl-DBD-Pg` (PostGIS images) and `llvm-libs` from `…:common:containers:ubi8`, none from `RedHat:UBI-8`.
+
+**Verify:** `grep -rn "module+" root/common/containers/ubi8/*/obs/*.spec` → nothing; `ls root/common/containers/ubi8 | wc -l` → 11.
