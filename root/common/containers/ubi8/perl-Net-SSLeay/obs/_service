@@ -1,8 +1,0 @@
-<services>
-  <service name="download_url">
-    <param name="host">cpan.metacpan.org</param>
-    <param name="protocol">https</param>
-    <param name="path">/authors/id/C/CH/CHRISN/Net-SSLeay-1.88.tar.gz</param>
-    <param name="filename">Net-SSLeay-1.88.tar.gz</param>
-  </service>
-</services>

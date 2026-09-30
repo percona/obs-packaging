@@ -1,8 +1,0 @@
-<services>
-  <service name="download_url">
-    <param name="host">cpan.metacpan.org</param>
-    <param name="protocol">https</param>
-    <param name="path">/authors/id/A/AB/ABH/Mozilla-CA-20160104.tar.gz</param>
-    <param name="filename">Mozilla-CA-20160104.tar.gz</param>
-  </service>
-</services>
