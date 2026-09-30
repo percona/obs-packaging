@@ -1,2 +1,9 @@
 title: llvm
-description: "Non-modular llvm 21.1.8 (repackaged from Rocky Linux 8 AppStream for UBI-8 builds)"
+description: |
+  Non-modular repackaging of the Rocky Linux 8 AppStream llvm-toolset:rhel8
+  llvm 21.1.8 RPMs (llvm, llvm-libs, llvm-filesystem) for the UBI 8 container
+  images, which cannot install module-stream packages from an OBS build.
+  Pinned to the exact version the -llvmjit packages on UBI_8 are built
+  against: when RHEL 8's llvm-toolset moves on, bump the six URLs in
+  obs/_service together with the Version. Each source revision fetches
+  about 135 MB of RPMs at sync time.

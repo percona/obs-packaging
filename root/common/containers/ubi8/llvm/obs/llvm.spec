@@ -4,6 +4,8 @@
 %global __brp_check_rpaths %{nil}
 %define debug_package %{nil}
 %define _enable_debug_packages 0
+# the payload already carries its .build-id links
+%global _build_id_links none
 
 Name:           llvm
 Version:        21.1.8
@@ -33,6 +35,7 @@ BuildRequires:  cpio
 # dependencies that rpm's automatic dependency generator re-derives from
 # the packaged binaries.
 Requires:       llvm-libs%{?_isa} = %{version}-%{release}
+Provides:       llvm(major) = 21
 
 %description
 LLVM is a compiler infrastructure designed for compile-time, link-time,
@@ -66,9 +69,9 @@ mkdir -p llvm-filesystem && cd llvm-filesystem && rpm2cpio %{SOURCE2} | cpio -id
 %install
 cp -a llvm-filesystem/. llvm-libs/. llvm/. %{buildroot}/
 
-rpm -qlp %{SOURCE0} | sed 's/^/\//' | grep -v '^//$' > llvm.files.raw
-rpm -qlp %{SOURCE1} | sed 's/^/\//' | grep -v '^//$' > llvm-libs.files.raw
-rpm -qlp %{SOURCE2} | sed 's/^/\//' | grep -v '^//$' > llvm-filesystem.files.raw
+rpm -qlp %{SOURCE0} > llvm.files.raw
+rpm -qlp %{SOURCE1} > llvm-libs.files.raw
+rpm -qlp %{SOURCE2} > llvm-filesystem.files.raw
 
 for base in llvm llvm-libs llvm-filesystem; do
   > ${base}.files
