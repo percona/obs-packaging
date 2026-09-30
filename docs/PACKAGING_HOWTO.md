@@ -558,7 +558,8 @@ Rules:
   `staging/macros.yaml`, set in `staging/17` and `staging/18`) for the pg_tde / pg_oidc_validator
   install lines. An empty macro value renders to an empty string.
 - Every `%!{VAR}` the shared files use must be defined at or above each linking major
-  (`staging/macros.yaml` or every `staging/<V>/macros.yaml`).
+  (`root/macros.yaml` for the shared component versions, `staging/macros.yaml`, or every
+  `staging/<V>/macros.yaml`).
 - `_shared/` itself is never synced; only the symlinks are, each rendered with its own
   major's macros.
 - Do not use this for packages whose `_service` revision or packaging differs per major.

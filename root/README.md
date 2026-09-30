@@ -365,8 +365,9 @@ Each package in `devel/<V>/` is one of two classes:
   `package.yaml` if present) is duplicated into `devel/<V>/<package>/`, with `obs/_service`
   retargeted from a release tag to a development branch. The packaging is deliberately duplicated
   so it can be edited independently of the staging copy while the dev branch is being worked on.
-  `devel/<V>/macros.yaml` is likewise a copy of staging's `macros.yaml`, so `%!{VAR}` macros in the
-  copied packaging files resolve identically in both tiers. A Class A package whose devel packaging
+  Component versions (`PGBOUNCER_VERSION`, `PG_TDE_VERSION`, ...) live in `root/macros.yaml`, above
+  both tiers, so `%!{VAR}` macros in the copied packaging files resolve identically in devel and
+  staging; `devel/<V>/macros.yaml` only holds the PG version macros and devel-specific overrides. A Class A package whose devel packaging
   is identical across devel majors can live once in `devel/_shared/<package>/` with per-major
   symlinks, following the same convention as `staging/_shared/` described above (its `_service`
   keeps the devel-tier branch revision and `versionformat`).
