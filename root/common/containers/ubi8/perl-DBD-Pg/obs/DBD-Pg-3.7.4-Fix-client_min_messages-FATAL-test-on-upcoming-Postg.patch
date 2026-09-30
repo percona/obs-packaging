@@ -1,0 +1,50 @@
+From 2b60151aea6f03ac7e846aae0d21e7f335cad99c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Dagfinn=20Ilmari=20Manns=C3=A5ker?= <ilmari@ilmari.org>
+Date: Wed, 9 Jan 2019 21:24:09 +0000
+Subject: [PATCH] Fix client_min_messages=FATAL test on upcoming PostgreSQL
+ releases
+
+The upcoming minor releases of PostgreSQL cap client_min_messages to
+ERROR to avoid the case this test was testing for.  Skip the test if
+client_min_messages doesn't come back as 'fatal' after we set it.
+---
+ t/02attribs.t | 23 ++++++++++++++---------
+ 1 file changed, 14 insertions(+), 9 deletions(-)
+
+diff --git a/t/02attribs.t b/t/02attribs.t
+index b9ecd90..75e8f48 100644
+--- a/t/02attribs.t
++++ b/t/02attribs.t
+@@ -1204,15 +1204,20 @@ $sth->execute();
+ is ($warning, undef, $t);
+ 
+ ## Special case in which errors are not sent to the client!
+-$t = q{When client_min_messages is FATAL, we do our best to alert the caller it's a Bad Idea};
+-$dbh->do(q{SET client_min_messages = 'FATAL'});
+-$dbh->{RaiseError} = 0;
+-$dbh->{AutoCommit} = 1;
+-eval {
+-    $dbh->do('SELECT 1 FROM nonesuh');
+-};
+-my $errorstring = $dbh->errstr;
+-like ( $errorstring, qr/Perhaps client_min_messages/, $t);
++SKIP: {
++    $t = q{When client_min_messages is FATAL, we do our best to alert the caller it's a Bad Idea};
++    $dbh->do(q{SET client_min_messages = 'FATAL'});
++    skip "This version of PostgreSQL caps client_min_messages to ERROR", 1
++        unless $dbh->selectrow_array('SHOW client_min_messages') eq 'fatal';
++
++    $dbh->{RaiseError} = 0;
++    $dbh->{AutoCommit} = 1;
++    eval {
++        $dbh->do('SELECT 1 FROM nonesuh');
++    };
++    my $errorstring = $dbh->errstr;
++    like ( $errorstring, qr/Perhaps client_min_messages/, $t);
++}
+ $dbh->rollback();
+ $dbh->do(q{SET client_min_message = 'NOTICE'});
+ $dbh->{RaiseError} = 1;
+-- 
+2.20.1
+

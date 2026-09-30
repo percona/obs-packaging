@@ -1,0 +1,66 @@
+From c73d40c6e219621c4bdc1fe9cadd52b7f09e8560 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Dagfinn=20Ilmari=20Manns=C3=A5ker?= <ilmari@ilmari.org>
+Date: Mon, 31 Dec 2018 18:45:57 +0100
+Subject: [PATCH] Inline no-longer-conditional catalog query fragments
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Some bits of catalog queries needed version-specific variants, but when
+support for the versions that necessitated them was removed, the
+variables were left in place.  This removes these now-unnecessary
+variables and puts the SQL fragments back in the query.
+
+The pg_get_expr() call does not need to be conditional, it exists in 7.4
+too: https://www.postgresql.org/docs/7.4/functions-misc.html
+
+Petr Písař: Ported to 3.7.4 from
+c7ea8fd90b5fc09f28e090e0e00cbb2708eda4cc.
+
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ Pg.pm | 14 +++-----------
+ 1 file changed, 3 insertions(+), 11 deletions(-)
+
+diff --git a/Pg.pm b/Pg.pm
+index 9c664e9..5658d1b 100644
+--- a/Pg.pm
++++ b/Pg.pm
+@@ -443,14 +443,6 @@ use 5.008001;
+ 
+ 		my $whereclause = join "\n\t\t\t\tAND ", '', @search;
+ 
+-		my $schemajoin = 'JOIN pg_catalog.pg_namespace n ON (n.oid = c.relnamespace)';
+-
+-		my $remarks = 'pg_catalog.col_description(a.attrelid, a.attnum)';
+-
+-		my $column_def = $dbh->{private_dbdpg}{version} >= 80000
+-			? 'pg_catalog.pg_get_expr(af.adbin, af.adrelid)'
+-			: 'af.adsrc';
+-
+ 		my $col_info_sql = qq!
+             SELECT
+                 NULL::text AS "TABLE_CAT"
+@@ -464,8 +456,8 @@ use 5.008001;
+                 , NULL::text AS "DECIMAL_DIGITS"
+                 , NULL::text AS "NUM_PREC_RADIX"
+                 , CASE a.attnotnull WHEN 't' THEN 0 ELSE 1 END AS "NULLABLE"
+-                , $remarks AS "REMARKS"
+-                , $column_def AS "COLUMN_DEF"
++                , pg_catalog.col_description(a.attrelid, a.attnum) AS "REMARKS"
++                , pg_catalog.pg_get_expr(af.adbin, af.adrelid) AS "COLUMN_DEF"
+                 , NULL::text AS "SQL_DATA_TYPE"
+                 , NULL::text AS "SQL_DATETIME_SUB"
+                 , NULL::text AS "CHAR_OCTET_LENGTH"
+@@ -486,7 +478,7 @@ use 5.008001;
+                 JOIN pg_catalog.pg_attribute a ON (t.oid = a.atttypid)
+                 JOIN pg_catalog.pg_class c ON (a.attrelid = c.oid)
+                 LEFT JOIN pg_catalog.pg_attrdef af ON (a.attnum = af.adnum AND a.attrelid = af.adrelid)
+-                $schemajoin
++                JOIN pg_catalog.pg_namespace n ON (n.oid = c.relnamespace)
+             WHERE
+                 a.attnum >= 0
+                 AND c.relkind IN ('r','v','m')
+-- 
+2.21.0
+

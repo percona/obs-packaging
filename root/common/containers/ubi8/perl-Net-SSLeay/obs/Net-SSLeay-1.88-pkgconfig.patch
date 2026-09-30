@@ -1,0 +1,45 @@
+From 67d9ad2238c6b58ea160df731208cc6f50b64e96 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Petr=20P=C3=ADsa=C5=99?= <ppisar@redhat.com>
+Date: Thu, 13 Jun 2019 13:14:26 +0200
+Subject: [PATCH] pkgconfig
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Link to OpenSSL library according to pkgconfig output if available.
+
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ Makefile.PL | 16 +++++++++++-----
+ 1 file changed, 11 insertions(+), 5 deletions(-)
+
+diff --git a/Makefile.PL b/Makefile.PL
+index 31d9c74..6d7ceba 100644
+--- a/Makefile.PL
++++ b/Makefile.PL
+@@ -200,11 +200,17 @@ EOM
+         @{ $opts->{lib_links} } = map { $_ =~ s/32\b//g } @{ $opts->{lib_links} } if $Config{use64bitall};
+     }
+     else {
+-        push @{ $opts->{lib_links} },
+-             ($rsaref
+-              ? qw( ssl crypto RSAglue rsaref z )
+-              : qw( ssl crypto z )
+-             );
++        my $libsflags = `pkg-config --libs-only-l openssl`;
++        if ( $libsflags ne '' ) {
++            push @{ $opts->{lib_links} }, map { s/^-l//; $_ } split(' ', $libsflags);
++        }
++        else {
++            push @{ $opts->{lib_links} },
++                 ($rsaref
++                  ? qw( ssl crypto RSAglue rsaref z )
++                  : qw( ssl crypto z )
++                 );
++        }
+ 
+         if (($Config{cc} =~ /aCC/i) && $^O eq 'hpux') {
+             print "*** Enabling HPUX aCC options (+e)\n";
+-- 
+2.20.1
+

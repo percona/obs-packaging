@@ -1,0 +1,37 @@
+From 88d2f8f1fc95bcd16e95d3fc667783fb7a9ab05b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Dagfinn=20Ilmari=20Manns=C3=A5ker?= <ilmari@ilmari.org>
+Date: Fri, 11 Jan 2019 23:47:29 +0000
+Subject: [PATCH] Remove usage of deprecated pg_attrdef.adsrc column
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+It doesn't track outside change that might affect the representation,
+and will be removed in PostgreSQL 12.
+
+Petr Písař: Ported to 3.7.4 from 88d2f8f1fc95bcd16e95d3fc667783fb7a9ab05b.
+---
+ Pg.pm             | 4 ++--
+
+diff --git a/Pg.pm b/Pg.pm
+index 2b46800..0ffe083 100644
+--- a/Pg.pm
++++ b/Pg.pm
+@@ -349,12 +349,12 @@ use 5.008001;
+ 			$oid =~ /(\d+)/ or die qq{OID was not numeric?!?\n};
+ 			$oid = $1;
+ 			## This table has a primary key. Is there a sequence associated with it via a unique, indexed column?
+-			$SQL = "SELECT a.attname, i.indisprimary, pg_catalog.pg_get_expr(adbin,adrelid)\n".
++			$SQL = "SELECT a.attname, i.indisprimary, pg_catalog.pg_get_expr(d.adbin, d.adrelid)\n".
+ 				"FROM pg_catalog.pg_index i, pg_catalog.pg_attribute a, pg_catalog.pg_attrdef d\n ".
+ 				"WHERE i.indrelid = $oid AND d.adrelid=a.attrelid AND d.adnum=a.attnum\n".
+ 				"  AND a.attrelid = $oid AND i.indisunique IS TRUE\n".
+ 				"  AND a.atthasdef IS TRUE AND i.indkey[0]=a.attnum\n".
+-				q{ AND d.adsrc ~ '^nextval'};
++				"  AND pg_catalog.pg_get_expr(d.adbin, d.adrelid) ~ '^nextval'";
+ 			$sth = $dbh->prepare($SQL);
+ 			$count = $sth->execute();
+ 			if (!defined $count or $count eq '0E0') {
+-- 
+2.21.0
+
