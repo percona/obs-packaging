@@ -232,17 +232,18 @@ packages install, the modular set does not).
 Decision (user, 2026-09-30): keep ubi8 on the official image and remove the
 need for modular packages, JIT included. Only seven packages are affected,
 the ones with `.module+el8` in the kiwi image: perl-IO-Socket-SSL 2.066,
-perl-Net-SSLeay 1.88, perl-Mozilla-CA 20160104 (the `perl-IO-Socket-SSL:2.066`
-stream, pulled in by `perl`), perl-DBD-Pg 3.7.4 (`perl-DBD-Pg:3.7`, PostGIS
-utils) and llvm, llvm-libs, llvm-filesystem 21.1.8 (`llvm-toolset:rhel8`,
-required by every `-llvmjit` subpackage as `llvm >= 19`).
+perl-Net-SSLeay 1.88, perl-Mozilla-CA 20160104 (from the `perl-IO-Socket-SSL:2.066`
+and `perl-libwww-perl:6.34` streams, pulled in by `perl`), perl-DBD-Pg 3.7.4
+(`perl-DBD-Pg:3.7`, PostGIS utils) and llvm, llvm-libs, llvm-filesystem 21.1.8
+(`llvm-toolset:rhel8`, required by every `-llvmjit` subpackage as `llvm >= 19`).
 
-`common:containers:ubi8` (already in every ubi8 image path) gains:
+`common:containers:ubi8` (already in every ubi8 image path) gains only what
+UBI 8 does not ship non-modular:
 
-- `perl-IO-Socket-SSL`, `perl-Net-SSLeay`, `perl-Mozilla-CA`, `perl-DBD-Pg`:
-  built from the CentOS Stream 8 specs (same versions Red Hat ships, plain
-  `1%{?dist}` releases, so no modularity label), CPAN tarballs via
-  `download_url`. perl-DBD-Pg builds against `libpq-devel`.
+- `perl-DBD-Pg` 3.7.4, built from the CentOS Stream 8 spec (plain
+  `1%{?dist}` release, so no modularity label; CPAN tarball via
+  `download_url`; builds against `libpq-devel`; the live-database tests are
+  skipped because they need `postgresql-server`, itself a module stream).
 - `llvm`: a binary repackaging of the Rocky Linux 8 AppStream llvm 21.1.8
   RPMs (`llvm`, `llvm-libs`, `llvm-filesystem`, x86_64 and aarch64) into
   non-modular RPMs with the same names and version, the same technique as
@@ -250,10 +251,13 @@ required by every `-llvmjit` subpackage as `llvm >= 19`).
   exactly the version the `-llvmjit` subpackages on `UBI_8` were built
   against, so the ABI matches.
 
-The ubi8 image build config keeps `ExpandFlags: module:perl-5.26`,
-`module:perl-libwww-perl-6.34` and `module:perl-DBI-1.641` (their packages
-are non-modular RPMs that OBS only exposes with the flag) but drops
-`module:perl-IO-Socket-SSL-2.066` and `module:perl-DBD-Pg-3.7`, so that only
-our rebuilds satisfy those names; `llvm-toolset-rhel8` is not enabled in image
-projects, so only our llvm is visible there. The RPM build projects are
-unchanged: they keep building against the module toolchain.
+perl-IO-Socket-SSL, perl-Net-SSLeay and perl-Mozilla-CA need no rebuild:
+UBI 8 AppStream ships them without a module stream; the kiwi image carried
+the `.module+` copies only because the stream flags were enabled.
+
+The ubi8 image build config enables only `module:perl-5.26` (its artifacts
+are plain RPMs) and `module:container-tools-rhel8`; the perl-IO-Socket-SSL,
+perl-libwww-perl, perl-DBI, perl-DBD-Pg and llvm-toolset streams are not
+enabled in image projects, so OBS resolves those names to UBI's non-modular
+packages or our rebuilds. The RPM build projects are unchanged: they keep
+building against the module toolchain.
