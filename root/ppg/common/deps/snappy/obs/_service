@@ -1,0 +1,8 @@
+<services>
+  <service name="download_url">
+    <param name="host">github.com</param>
+    <param name="protocol">https</param>
+    <param name="path">/google/snappy/archive/refs/tags/1.1.10.tar.gz</param>
+    <param name="filename">snappy-1.1.10.tar.gz</param>
+  </service>
+</services>

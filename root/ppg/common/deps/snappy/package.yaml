@@ -1,0 +1,22 @@
+title: snappy 1.1.10 for UBI 10
+description: |
+  RHEL 10's snappy (1.1.10), rebuilt from the CentOS Stream 10 spec so that
+  UBI 10 based container images can install blosc/hdf5 (EPEL 10, pulled by
+  gdal for PostGIS): UBI 10 does not ship snappy. Not needed on UBI 8/9,
+  where EPEL's hdf5 does not depend on blosc.
+
+# UBI_10-only. The build map is a deny-list: add every new root repository here as false.
+build:
+  RockyLinux_8: false
+  RockyLinux_9: false
+  RockyLinux_9.6: false
+  RockyLinux_10: false
+  UBI_8: false
+  UBI_9: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Tumbleweed: false
+  openSUSE_Leap_16: false
