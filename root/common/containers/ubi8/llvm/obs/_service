@@ -1,0 +1,38 @@
+<services>
+  <service name="download_url">
+    <param name="host">dl.rockylinux.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/pub/rocky/8/AppStream/x86_64/os/Packages/l/llvm-21.1.8-1.module%2Bel8.10.0%2B40180%2B8e26bdb3.x86_64.rpm</param>
+    <param name="filename">llvm-21.1.8-x86_64.rpm</param>
+  </service>
+  <service name="download_url">
+    <param name="host">dl.rockylinux.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/pub/rocky/8/AppStream/x86_64/os/Packages/l/llvm-libs-21.1.8-1.module%2Bel8.10.0%2B40180%2B8e26bdb3.x86_64.rpm</param>
+    <param name="filename">llvm-libs-21.1.8-x86_64.rpm</param>
+  </service>
+  <service name="download_url">
+    <param name="host">dl.rockylinux.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/pub/rocky/8/AppStream/x86_64/os/Packages/l/llvm-filesystem-21.1.8-1.module%2Bel8.10.0%2B40180%2B8e26bdb3.x86_64.rpm</param>
+    <param name="filename">llvm-filesystem-21.1.8-x86_64.rpm</param>
+  </service>
+  <service name="download_url">
+    <param name="host">dl.rockylinux.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/pub/rocky/8/AppStream/aarch64/os/Packages/l/llvm-21.1.8-1.module%2Bel8.10.0%2B40180%2B8e26bdb3.aarch64.rpm</param>
+    <param name="filename">llvm-21.1.8-aarch64.rpm</param>
+  </service>
+  <service name="download_url">
+    <param name="host">dl.rockylinux.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/pub/rocky/8/AppStream/aarch64/os/Packages/l/llvm-libs-21.1.8-1.module%2Bel8.10.0%2B40180%2B8e26bdb3.aarch64.rpm</param>
+    <param name="filename">llvm-libs-21.1.8-aarch64.rpm</param>
+  </service>
+  <service name="download_url">
+    <param name="host">dl.rockylinux.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/pub/rocky/8/AppStream/aarch64/os/Packages/l/llvm-filesystem-21.1.8-1.module%2Bel8.10.0%2B40180%2B8e26bdb3.aarch64.rpm</param>
+    <param name="filename">llvm-filesystem-21.1.8-aarch64.rpm</param>
+  </service>
+</services>
