@@ -116,12 +116,12 @@ project-config: |
   %if "%_repository" == "ubi8"
 
   ExpandFlags: module:container-tools-rhel8
-  # EL8 module streams the images need; they used to reach these builds via
-  # the kiwi base image project's build config, which is gone.
+  # EL8 module streams whose packages are plain RPMs the images need. The
+  # perl-IO-Socket-SSL and perl-DBD-Pg streams are NOT enabled: their packages
+  # carry a modularity label microdnf rejects in the image, so
+  # common:containers:ubi8 provides non-modular rebuilds instead.
   ExpandFlags: module:perl-5.26
-  ExpandFlags: module:perl-IO-Socket-SSL-2.066
   ExpandFlags: module:perl-libwww-perl-6.34
-  ExpandFlags: module:perl-DBD-Pg-3.7
   ExpandFlags: module:perl-DBI-1.641
   # redhat-rpm-config (pulled by perl -> perl-devel on EL8) requires these files;
   # OBS needs the mapping to put findutils into the image's package repository.
