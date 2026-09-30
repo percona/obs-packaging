@@ -57,16 +57,21 @@ project-config: |
   Ignore: clang-14
   %endif
 
+# QA: the QA team's test jobs for this major's packages, run by the PR check
+# (qa-packages label), the nightly QA and release QA. OBS_PROJECT points the
+# jobs at ${OBS_ROOTPRJ}:ppg:staging:<major>: this project on main, the PR's
+# own copy (isv:percona:PR:pr-<N>:ppg:staging:<major>) in a PR.
 qa:
-  pipeline: ppg-obs
+  pipeline: ppg-multiOS-parallel
   parameters:
-    REPO: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+    USE_OBS_REPO: true
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
     VERSION: ppg-%!{PG_VERSION}
     PLATFORMS:
       - rocky-9
       - debian-13
       - ubuntu-noble
-    TESTING_BRANCH: ricardo-work
+    TESTING_BRANCH: main
     IO_METHOD:
       - worker
       - sync
@@ -78,4 +83,3 @@ qa:
   matrix:
     - IO_METHOD
     - SCENARIO
-
