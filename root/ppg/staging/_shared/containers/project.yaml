@@ -119,6 +119,10 @@ project-config: |
   BuildFlags: dockerarg:RHEL_VER=el10
   BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi10/ubi-minimal:latest
 
+  # EL10's atk pulls in at-spi2-core, which requires /usr/bin/xprop; the
+  # expander needs the hint to pull xprop (UBI 10 AppStream) into the build root.
+  FileProvides: /usr/bin/xprop xprop
+
   # containers-common-extra: UBI 10 ships crun, not runc.
   Prefer: crun
   # EL10's system Python is 3.12, so the distro python3-* packages also
