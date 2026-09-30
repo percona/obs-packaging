@@ -1,0 +1,8 @@
+<services>
+  <service name="download_url">
+    <param name="host">github.com</param>
+    <param name="protocol">https</param>
+    <param name="path">/rpm-software-management/createrepo_c/archive/1.1.2/createrepo_c-1.1.2.tar.gz</param>
+    <param name="filename">createrepo_c-1.1.2.tar.gz</param>
+  </service>
+</services>

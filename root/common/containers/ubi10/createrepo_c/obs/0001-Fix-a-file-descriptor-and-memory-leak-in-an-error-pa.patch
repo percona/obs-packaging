@@ -1,0 +1,43 @@
+From 424616d851d6fe58e89ae9b1b318853f8a899195 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Petr=20P=C3=ADsa=C5=99?= <ppisar@redhat.com>
+Date: Mon, 1 Jul 2024 15:30:31 +0200
+Subject: [PATCH] Fix a file descriptor and memory leak in an error path of
+ cr_detect_compression()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Covscan reported:
+
+    createrepo_c-1.1.2/src/compression_wrapper.c:197: error[resourceLeak]: Resource leak: file
+
+It's a real bug and this patch fixes it.
+
+Resolves: https://issues.redhat.com/browse/RHEL-45645
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ src/compression_wrapper.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/compression_wrapper.c b/src/compression_wrapper.c
+index 60e8cbd..bcaa661 100644
+--- a/src/compression_wrapper.c
++++ b/src/compression_wrapper.c
+@@ -190,13 +190,13 @@ cr_detect_compression(const char *filename, GError **err)
+     }
+ 
+     size_t bytesRead = fread(magic, 1, sizeof(magic), file);
++    fclose(file);
+     if (bytesRead != sizeof(magic)) {
+         // Assume that if there's less than 5 bytes in the file, it's uncompressed
+         g_debug("%s: Unable to read bytes from file for magic number detection, assuming uncompressed (%s)",
+             __func__, filename);
+         return CR_CW_NO_COMPRESSION;
+     }
+-    fclose(file);
+ 
+     if (!memcmp(magic, "\x1F\x8B", 2)) {
+         return CR_CW_GZ_COMPRESSION;
+-- 
+2.45.2
+
