@@ -653,6 +653,14 @@ def build_parser() -> argparse.ArgumentParser:
         "(git ls-remote) and the project: path check against the live OBS; "
         "run only the static checks.",
     )
+    project_verify_parser.add_argument(
+        "--no-scm-validate",
+        action="store_true",
+        default=False,
+        dest="no_scm_validate",
+        help="Skip the obs_scm revision check (git ls-remote) but still "
+        "validate project: path entries against the live OBS (needs -P).",
+    )
     project_verify_parser.set_defaults(func=cmd_project_verify)
 
     project_install_parser = project_subparsers.add_parser(
