@@ -60,7 +60,7 @@ repositories:
         repository: UBI_10
       - subproject: common:containers:ubi10
         repository: UBI_10
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:10
+      - project: Fedora:EPEL:10
         repository: standard
       - project: RedHat:UBI-10
         repository: standard
