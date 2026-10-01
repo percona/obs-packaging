@@ -695,6 +695,12 @@ def _fetch_combined_depinfo(
     path_chains: dict[tuple[str, str], list[str]] = {}
     # queried_repo[P] = the repository whose builddepinfo was fetched for P.
     queried_repo: dict[str, str] = {}
+    # project_repos[P] = every repository listed by /build/P (empty set when
+    # the project does not exist).  Used to skip per-image _buildinfo queries
+    # for repositories the branch-source project does not have yet (a PR
+    # adding a brand-new repo): OBS 404s those, but only after tens of
+    # seconds each.
+    project_repos: dict[str, set[str]] = {}
     # Each entry: (pkg_elem, home_project, src) where home_project is the
     # OBS project this <package> belongs to (the queried project, after
     # filtering out inherited entries).
@@ -707,6 +713,7 @@ def _fetch_combined_depinfo(
             repos = [
                 e.get("name", "") for e in repo_root.findall("entry") if e.get("name")
             ]
+            project_repos[obs_project] = set(repos)
             if not repos:
                 continue
             arch_url = osc.core.makeurl(apiurl, ["build", obs_project, repos[0]])
@@ -724,6 +731,10 @@ def _fetch_combined_depinfo(
             logger.debug(
                 f"_fetch_combined_depinfo: error fetching {obs_project}: {exc}"
             )
+            # A failed listing (e.g. project not on OBS yet) means no repos
+            # are known; remember that so the image loop below does not
+            # re-list the project.
+            project_repos.setdefault(obs_project, set())
             continue
 
         queried_repo[obs_project] = repos[0]
@@ -778,6 +789,17 @@ def _fetch_combined_depinfo(
     if image_pkgs:
         for pkg_name, entries in image_pkgs.items():
             for branch_project, repo, arch in entries:
+                if branch_project not in project_repos:
+                    project_repos[branch_project] = _fetch_obs_project_repository_names(
+                        apiurl, branch_project
+                    )
+                if repo not in project_repos[branch_project]:
+                    logger.debug(
+                        f"_fetch_combined_depinfo: skipping image dep query for "
+                        f"{branch_project}/{repo}/{arch}/{pkg_name}: repository "
+                        f"not present in branch-source project"
+                    )
+                    continue
                 chain_key = (branch_project, repo)
                 if chain_key not in path_chains:
                     path_chains[chain_key] = _fetch_repo_path_projects(
