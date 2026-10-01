@@ -7,6 +7,8 @@
 ARG UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
 FROM $UBI_BASE
 
+ARG RHEL_VER
+
 LABEL name="Percona PgBouncer" \
       description="PgBouncer is a lightweight connection pooler for PostgreSQL that offers various pooling modes (session, transaction, statement), low memory usage, support for multiple backend hosts, and the ability to reconfigure or restart it online without downtime." \
       vendor="Percona" \
@@ -37,6 +39,10 @@ RUN useradd -u 1001 -r -g 1001 -s /sbin/nologin -c "Default Application User" pg
 
 RUN microdnf -y install percona-pgbouncer
 
+# The perl metapackage drags in perl-Archive-Tar and perl-IO-Compress, which
+# nothing in the image uses and which carry open CVEs on EL8. Drop them the
+# way the retired kiwi base image did; UBI 9/10 ship fixed versions.
+RUN if [ "$RHEL_VER" = "el8" ]; then rpm -e --nodeps perl-Archive-Tar perl-IO-Compress; fi
 RUN microdnf clean all && rm -rf /var/cache/dnf /var/cache/yum
 
 COPY LICENSE /licenses/LICENSE.Dockerfile

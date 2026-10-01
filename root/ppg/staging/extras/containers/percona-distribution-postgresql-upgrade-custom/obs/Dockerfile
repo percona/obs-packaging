@@ -117,6 +117,10 @@ RUN set -ex; \
     microdnf clean all
 {{ENDFOR}}
 
+# The perl metapackage drags in perl-Archive-Tar and perl-IO-Compress, which
+# nothing in the image uses and which carry open CVEs on EL8. Drop them the
+# way the retired kiwi base image did; UBI 9/10 ship fixed versions.
+RUN if [ "$RHEL_VER" = "el8" ]; then rpm -e --nodeps perl-Archive-Tar perl-IO-Compress; fi
 RUN rm -rf /var/cache/dnf /var/cache/yum
 
 COPY LICENSE /licenses/LICENSE.Dockerfile
