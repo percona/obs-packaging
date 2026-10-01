@@ -69,7 +69,12 @@ mkdir -p llvm-filesystem && cd llvm-filesystem && rpm2cpio %{SOURCE2} | cpio -id
 %install
 cp -a llvm-filesystem/. llvm-libs/. llvm/. %{buildroot}/
 
-rpm -qlp %{SOURCE0} > llvm.files.raw
+# The optimisation-record viewer scripts are the only files that need
+# /usr/bin/python3.12; the images would otherwise have to carry the whole
+# python3.12 interpreter for developer tooling nobody runs in a container.
+rm -rf %{buildroot}%{_datadir}/opt-viewer %{buildroot}%{_libdir}/llvm21/share/opt-viewer
+
+rpm -qlp %{SOURCE0} | grep -v "/share/opt-viewer" > llvm.files.raw
 rpm -qlp %{SOURCE1} > llvm-libs.files.raw
 rpm -qlp %{SOURCE2} > llvm-filesystem.files.raw
 
