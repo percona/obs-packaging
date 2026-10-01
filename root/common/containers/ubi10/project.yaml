@@ -13,11 +13,11 @@ publish: false
 repositories:
   - name: UBI_10
     paths:
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:10
+      - project: Fedora:EPEL:10
         repository: standard
       - project: RedHat:UBI-10
         repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
+      - project: RockyLinux:10
         repository: devel
     archs: [x86_64, aarch64]
 
