@@ -22,17 +22,17 @@ repositories:
         repository: images
       - subproject: common:containers:ubi8
         repository: UBI_8
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:8
+      - project: Fedora:EPEL:8
         repository: standard
       - project: RedHat:UBI-8
         repository: appstream
       - project: RedHat:UBI-8
         repository: baseos
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+      - project: RockyLinux:8
         repository: appstream
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+      - project: RockyLinux:8
         repository: baseos
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+      - project: RockyLinux:8
         repository: devel
     archs: [x86_64, aarch64]
   - name: ubi9
@@ -45,7 +45,7 @@ repositories:
         repository: images
       - subproject: common:containers:ubi9
         repository: UBI_9
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+      - project: Fedora:EPEL:9
         repository: standard
       - project: RedHat:UBI-9
         repository: standard

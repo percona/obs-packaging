@@ -21,13 +21,13 @@ repositories:
         repository: RockyLinux_8
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
         repository: RockyLinux_8
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:8
+      - project: Fedora:EPEL:8
         repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+      - project: RockyLinux:8
         repository: appstream
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+      - project: RockyLinux:8
         repository: baseos
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+      - project: RockyLinux:8
         repository: devel
     archs: [x86_64, aarch64]
   - name: RockyLinux_9
@@ -38,9 +38,9 @@ repositories:
         repository: RockyLinux_9
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
         repository: RockyLinux_9
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+      - project: Fedora:EPEL:9
         repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+      - project: RockyLinux:9
         repository: standard
     archs: [x86_64, aarch64]
   - name: RockyLinux_9.6
@@ -51,7 +51,7 @@ repositories:
         repository: RockyLinux_9.6
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
         repository: RockyLinux_9.6
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+      - project: Fedora:EPEL:9
         repository: standard
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9.6
         repository: standard
@@ -62,9 +62,9 @@ repositories:
         repository: RockyLinux_10
       - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
         repository: RockyLinux_10
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:10
+      - project: Fedora:EPEL:10
         repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:10
+      - project: RockyLinux:10
         repository: standard
     archs: [x86_64, aarch64]
   - name: Debian_13

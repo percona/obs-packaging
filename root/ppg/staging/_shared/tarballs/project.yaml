@@ -34,14 +34,14 @@ repositories:
         repository: RockyLinux_8
       - subproject: ppg:common:deps
         repository: RockyLinux_8
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:8
+      - project: Fedora:EPEL:8
         repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+      - project: RockyLinux:8
         repository: appstream
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+      - project: RockyLinux:8
         repository: baseos
       # libedit-devel lives in PowerTools == RockyLinux:8/devel.
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+      - project: RockyLinux:8
         repository: devel
     archs: [x86_64, aarch64]
   - name: RockyLinux_9.6
@@ -52,7 +52,7 @@ repositories:
         repository: RockyLinux_9.6
       - subproject: ppg:common:deps
         repository: RockyLinux_9.6
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+      - project: Fedora:EPEL:9
         repository: standard
       # libedit-devel is in CRB, part of RockyLinux:9.6/standard (same
       # layout as RockyLinux:9 — watch the first build in case the 9.6
@@ -70,10 +70,10 @@ repositories:
         repository: RockyLinux_9
       - subproject: ppg:common:deps
         repository: RockyLinux_9
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+      - project: Fedora:EPEL:9
         repository: standard
       # libedit-devel is in CRB, part of RockyLinux:9/standard.
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+      - project: RockyLinux:9
         repository: standard
     archs: [x86_64, aarch64]
   - name: ssl1.1
@@ -88,13 +88,13 @@ repositories:
         repository: RockyLinux_8
       - subproject: ppg:common:deps
         repository: RockyLinux_8
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:8
+      - project: Fedora:EPEL:8
         repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+      - project: RockyLinux:8
         repository: appstream
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+      - project: RockyLinux:8
         repository: baseos
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+      - project: RockyLinux:8
         repository: devel
     archs: [x86_64, aarch64]
   # ssl3 builds on the RockyLinux_9.6 base (RHEL 9.6 EUS vault, OpenSSL
@@ -120,7 +120,7 @@ repositories:
         repository: RockyLinux_9.6
       - subproject: ppg:common:deps
         repository: RockyLinux_9.6
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+      - project: Fedora:EPEL:9
         repository: standard
       - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9.6
         repository: standard
@@ -142,9 +142,9 @@ repositories:
         repository: RockyLinux_9
       - subproject: ppg:common:deps
         repository: RockyLinux_9
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+      - project: Fedora:EPEL:9
         repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+      - project: RockyLinux:9
         repository: standard
     archs: [x86_64, aarch64]
 

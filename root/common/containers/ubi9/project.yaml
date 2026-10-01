@@ -11,11 +11,11 @@ publish: false
 repositories:
   - name: UBI_9
     paths:
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+      - project: Fedora:EPEL:9
         repository: standard
       - project: RedHat:UBI-9
         repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+      - project: RockyLinux:9
         repository: devel
     archs: [x86_64, aarch64]
   - name: images

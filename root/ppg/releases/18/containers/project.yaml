@@ -74,17 +74,17 @@ repositories:
     subproject: common:containers:ubi8
   - repository: UBI_8
     subproject: common:containers:ubi8
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:8
+  - project: Fedora:EPEL:8
     repository: standard
   - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
     repository: appstream
   - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
     repository: baseos
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+  - project: RockyLinux:8
     repository: appstream
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+  - project: RockyLinux:8
     repository: baseos
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:8
+  - project: RockyLinux:8
     repository: devel
 - archs:
   - x86_64
@@ -99,7 +99,7 @@ repositories:
     subproject: common:containers:ubi9
   - repository: UBI_9
     subproject: common:containers:ubi9
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+  - project: Fedora:EPEL:9
     repository: standard
   - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
     repository: standard
