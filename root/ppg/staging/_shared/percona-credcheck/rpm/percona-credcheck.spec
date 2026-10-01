@@ -57,7 +57,7 @@ check_password_hook hook.
 %if %llvm
 %package llvmjit
 Summary:        Just-in-time compilation support for credcheck
-Requires:       %{name}%{?_isa} = %{version}-%{release}
+Requires:       %{name}%{?_isa} = %{epoch}:%{version}-%{release}
 BuildRequires:  clang llvm
 
 %description llvmjit
