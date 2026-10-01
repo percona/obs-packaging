@@ -141,6 +141,7 @@ jobs:
       # Same profile as the check job above; the credentials come from the
       # oscrc that obs-setup wrote, not from the profile.
       - name: Create percona-obs profile (${{ matrix.instance.name }})
+        shell: bash  # the obs-tools container defaults to sh (no pipefail)
         env:
           OBS_APIURL: ${{ matrix.instance.apiurl }}
           OBS_ROOTPRJ: ${{ matrix.instance.rootprj }}
@@ -171,4 +172,5 @@ jobs:
             profile create main "${inst[@]}"
 
       - name: Verify project paths against OBS
+        shell: bash
         run: venv/bin/python -m percona_obs -P main project verify --no-scm-validate
