@@ -68,10 +68,10 @@ repositories:
     subproject: common:deps:build
   - repository: UBI_9
     subproject: ppg:releases:17
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+  - project: Fedora:EPEL:9
     repository: standard
   - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
     repository: standard
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+  - project: RockyLinux:9
     repository: devel
 title: ppg releases 17 — extras

@@ -36,7 +36,7 @@ repositories:
         repository: images
       - subproject: common:containers:ubi9
         repository: UBI_9
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+      - project: Fedora:EPEL:9
         repository: standard
       - project: RedHat:UBI-9
         repository: standard
