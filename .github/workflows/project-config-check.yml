@@ -1,0 +1,106 @@
+name: Project Config Check
+
+# Renders and statically validates the packaging tree, once per entry of the
+# OBS_INSTANCES repository variable, on PRs that touch root/ (or the tool
+# that renders it).  Each leg creates the same credential-less `main`
+# profile the OBS PR Check sync job uses (apiurl, rootprj, repo/project
+# slice, instance env) and runs:
+#
+#   project config --offline -P main   every project's meta XML and build
+#                                      config, uploaded as an artifact so
+#                                      reviewers can inspect the rendering
+#   project verify --offline -P main   subproject: references, repository
+#                                      path references within the slice,
+#                                      ${VAR} coverage
+#
+# Nothing talks to OBS or to upstream git hosts, so no secrets are needed
+# and the job also runs on PRs from forks.  It does not replace the OBS PR
+# Check: that one needs a trigger label and actually syncs and builds.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'root/**'
+      - 'percona_obs/**'
+      - 'requirements.txt'
+      - '.github/workflows/project-config-check.yml'
+
+concurrency:
+  group: project-config-check-pr-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check (${{ matrix.instance.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: ${{ fromJSON(vars.OBS_INSTANCES) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Create venv and install dependencies
+        run: |
+          python3 -m venv venv
+          venv/bin/pip install --upgrade pip
+          venv/bin/pip install -r requirements.txt
+
+      # Same profile recipe as obs-pr-check's "Create percona-obs profiles"
+      # step, minus the PR profile, the label narrowing and the credentials.
+      - name: Create percona-obs profile (${{ matrix.instance.name }})
+        env:
+          OBS_APIURL: ${{ matrix.instance.apiurl }}
+          OBS_ROOTPRJ: ${{ matrix.instance.rootprj }}
+          INCLUDE_REPOS: ${{ matrix.instance.include_repos }}
+          EXCLUDE_REPOS: ${{ matrix.instance.exclude_repos }}
+          INCLUDE_PROJECTS: ${{ matrix.instance.include_projects }}
+          EXCLUDE_PROJECTS: ${{ matrix.instance.exclude_projects }}
+          MAIN_REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+          INSTANCE_ENV: ${{ toJSON(matrix.instance.env) }}
+        run: |
+          set -euo pipefail
+          env_args=()
+          if [ -n "${INSTANCE_ENV:-}" ] && [ "$INSTANCE_ENV" != "null" ]; then
+            while IFS= read -r kv; do
+              if [ -n "$kv" ]; then env_args+=(-e "$kv"); fi
+            done <<<"$(jq -r 'to_entries[] | "\(.key):\(.value)"' <<<"$INSTANCE_ENV")"
+          fi
+
+          inst=()
+          if [ -n "${INCLUDE_REPOS:-}" ]; then inst+=(--include-repos "$INCLUDE_REPOS"); fi
+          if [ -n "${EXCLUDE_REPOS:-}" ]; then inst+=(--exclude-repos "$EXCLUDE_REPOS"); fi
+          if [ -n "${INCLUDE_PROJECTS:-}" ]; then inst+=(--include-projects "$INCLUDE_PROJECTS"); fi
+          if [ -n "${EXCLUDE_PROJECTS:-}" ]; then inst+=(--exclude-projects "$EXCLUDE_PROJECTS"); fi
+
+          venv/bin/python -m percona_obs -A "$OBS_APIURL" -R "$OBS_ROOTPRJ" \
+            -e "REMOTE_OBS_ORG_INTERCONNECT:" -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
+            -e "PERCONA_OBS_PACKAGING_REPO:${MAIN_REPO_URL}" "${env_args[@]}" \
+            profile create main "${inst[@]}"
+
+      - name: Render project meta and build config
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          venv/bin/python -m percona_obs -P main project config --offline \
+            > "out/project-config-${{ matrix.instance.name }}.txt"
+          wc -l "out/project-config-${{ matrix.instance.name }}.txt"
+
+      - name: Verify project configuration
+        run: venv/bin/python -m percona_obs -P main project verify --offline
+
+      - name: Upload rendered project config
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: project-config-${{ matrix.instance.name }}
+          path: out/
+          if-no-files-found: ignore
