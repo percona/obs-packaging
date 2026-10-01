@@ -659,9 +659,9 @@ listed after all trees as isolated packages. Cycles are detected and printed as
 5. Print trees with `_print_dep_tree()`, then isolated packages (no deps, not depended
    on by anything).
 
-### `project verify [project] [-P <profile>] [-e KEY:VALUE ...] [--offline]`
+### `project verify [project] [-P <profile>] [-e KEY:VALUE ...] [--offline | --no-scm-validate]`
 
-Validates local project configuration. With `--offline` nothing is contacted: the obs_scm revision check (`git ls-remote`) and the `project:` path check against the live OBS are skipped and only the static checks below run. CI's `Project Config Check` workflow uses this form.
+Validates local project configuration. With `--offline` nothing is contacted: the obs_scm revision check (`git ls-remote`) and the `project:` path check against the live OBS are skipped and only the static checks below run. With `--no-scm-validate` only the obs_scm revision check is skipped; the `project:` path check still runs and needs a profile with valid osc credentials. CI's `Project Config Check` workflow uses the first form for every PR and the second for PRs from branches of the repository itself.
 
 The optional `project` argument (colon notation, e.g. `ppg:staging:17`) restricts validation to that subtree. If omitted, the entire `root/` tree is validated.
 
@@ -688,6 +688,8 @@ Env resolution for the check (same precedence as all other commands):
 Exit code is 0 on success, 1 if any check fails.
 
 **Check 3 — repository path integrity**: for every in-slice project and every kept repository, each `subproject:` path must name a project that is in slice and a repository that is kept there. Unfiltered, this is plain repo-level reference validation. Release trees (`root/ppg/releases/`) are frozen snapshots and are skipped: they may reference repositories the live tree no longer defines.
+
+**Check 4 — `project:` paths against the live OBS** (needs `-P <profile>`, skipped by `--offline`): for every in-slice project and every kept repository, each `project:` path (after `${VAR}` substitution; entries with unresolved variables are skipped) must name a project that exists on the profile's OBS instance and a repository that project defines. Interconnect references (`openSUSE.org:Debian:12`) are checked too: OBS serves a remote project's meta through the local instance, so a 404 means the name is wrong on that instance. One meta request per unique project name; a 401/403 aborts with a single credentials error.
 
 **Slice summary**: `project verify -P <profile>` prints `slice: N project(s), M package(s) out of slice`; `--verbose` lists them.
 

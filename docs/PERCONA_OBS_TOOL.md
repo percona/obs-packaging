@@ -145,8 +145,13 @@ Inspect a slice offline: `./percona-obs -P labs -e REMOTE_OBS_ORG_INTERCONNECT:x
 (prints `slice: N project(s), M package(s) out of slice`, `--verbose` lists them, and fails if a kept
 repository paths into a repository the slice does not carry). `project verify --offline` skips the
 two network checks (obs_scm revisions via `git ls-remote`, `project:` paths against the live OBS)
-and runs only the static ones; the `Project Config Check` workflow runs it that way, once per
-`OBS_INSTANCES` entry, together with `project config --offline`, on every PR that touches `root/`.
+and runs only the static ones; `--no-scm-validate` skips only the first, so the `project:` path
+check runs alone: every `project:` entry of an in-slice project, interconnect references such as
+`openSUSE.org:Debian:12` included, must name a project and a repository that exist on the
+profile's OBS instance (one meta GET per unique project name; a 401/403 aborts with a credentials
+error). The `Project Config Check` workflow runs both forms once per `OBS_INSTANCES` entry on every
+PR that touches `root/`: `--offline` together with `project config --offline` for all PRs, and
+`--no-scm-validate` with the instance credentials for PRs from branches of the repository itself.
 
 `sync release -P <profile>` releases the subprojects that instance holds; `project release` always
 generates the full, instance-agnostic release tree.

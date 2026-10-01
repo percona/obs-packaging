@@ -476,6 +476,10 @@ def _validate_repo_path_refs(
     return errors
 
 
+class ObsAuthError(SystemExit):
+    """Raised when the live OBS path check cannot authenticate."""
+
+
 def _validate_project_path_refs(
     root: Path,
     env_vars: dict[str, str] | None,
@@ -484,105 +488,103 @@ def _validate_project_path_refs(
 ) -> list[tuple[Path, str]]:
     """Validate project: path entries in project.yaml files against the live OBS.
 
-    For each ``project:`` entry (after env var substitution), verifies that:
+    For each ``project:`` entry (after env var substitution) of every in-slice
+    project and kept repository, verifies that:
     1. The referenced OBS project exists on the server.
     2. The referenced repository name exists in that project.
 
-    Only locally-managed projects (those with a corresponding directory under
-    REPO_ROOT) are validated.  External interconnect references such as
-    ``openSUSE.org:openSUSE:Factory`` are skipped automatically because they
-    will not appear in the local directory tree.
-
-    Entries whose ``project:`` or ``repository:`` value contains unresolvable
-    ``${VAR}`` tokens (env_vars is None or var is absent) are skipped.
+    Every resolvable reference is checked, including interconnect references
+    such as ``openSUSE.org:Debian:12``: OBS serves the meta of a remote
+    project through the local instance, so a 404 means the name is wrong on
+    *this* instance.  Out-of-slice projects and repositories are skipped (the
+    instance never creates them), as are entries whose ``project:`` or
+    ``repository:`` value contains unresolvable ``${VAR}`` tokens.
 
     Returns a list of (yaml_path, error_message) for each invalid reference.
     The OBS project meta is fetched at most once per unique project name.
+    Raises :class:`ObsAuthError` on a 401/403 so that a missing credential is
+    reported once rather than as one false "not found" per project.
     """
     errors: list[tuple[Path, str]] = []
+    repo_filter = get_default_repository_filter()
+    configs: dict[Path, dict] = {}
+    slice_cache: dict[Path, bool] = {}
 
-    # Build the set of locally-managed OBS project names by scanning the
-    # directory tree under REPO_ROOT.  Only these names are validated against
-    # the live OBS instance; everything else is an external interconnect.
-    local_obs_project_names: set[str] = set()
-    if rootprj:
-        root_config = load_project_yaml(REPO_ROOT / "project.yaml", env_vars)
-        root_obs_name = root_config.get("name") or rootprj
-        for obs_name, _ in find_projects(REPO_ROOT, root_obs_name):
-            local_obs_project_names.add(obs_name)
+    def cfg(p: Path) -> dict:
+        if p not in configs:
+            configs[p] = _load_project_config_with_inheritance(p, env_vars, repo_filter)
+        return configs[p]
 
-    # Collect (yaml_path, resolved_project, resolved_repository) triples.
-    triples: list[tuple[Path, str, str]] = []
+    def resolve(raw: str) -> str | None:
+        tokens = _ENV_VAR_RE.findall(raw)
+        if not tokens:
+            return raw
+        if env_vars is None or any(t not in env_vars for t in tokens):
+            return None
+        resolved = env_vars
+        return _ENV_VAR_RE.sub(lambda m: resolved[m.group(1)], raw)
+
+    # Collect (yaml_path, repo_name, resolved_project, resolved_repository).
+    refs: list[tuple[Path, str, str, str]] = []
     for yaml_path in _project_yaml_files(root):
-        config = _load_project_config_with_inheritance(yaml_path.parent, env_vars)
-        for repo in config.get("repositories", []):
+        proj = yaml_path.parent
+        if not project_in_slice(proj, env_vars, repo_filter, cfg(proj), slice_cache):
+            continue
+        for repo in cfg(proj).get("repositories", []):
             for path_info in repo.get("paths", []):
                 raw_project = path_info.get("project")
                 if raw_project is None:
                     continue  # subproject: entry, validated by _validate_subproject_refs
-                raw_repository = str(path_info.get("repository", ""))
+                project = resolve(str(raw_project))
+                repository = resolve(str(path_info.get("repository", "")))
+                if project is None or repository is None:
+                    continue
+                refs.append((yaml_path, str(repo.get("name", "")), project, repository))
 
-                # Resolve env vars in project name; skip if any var is absent.
-                proj_tokens = _ENV_VAR_RE.findall(raw_project)
-                if proj_tokens:
-                    if env_vars is None or any(t not in env_vars for t in proj_tokens):
-                        continue
-                    resolved_project = _ENV_VAR_RE.sub(
-                        lambda m: env_vars[m.group(1)], raw_project
-                    )
-                else:
-                    resolved_project = raw_project
+    # Fetch each project's meta once.  project_repos[project] is the set of
+    # repository names, or an error string when the meta could not be read.
+    project_repos: dict[str, set[str] | str] = {}
 
-                # Resolve env vars in repository name; skip if any var is absent.
-                repo_tokens = _ENV_VAR_RE.findall(raw_repository)
-                if repo_tokens:
-                    if env_vars is None or any(t not in env_vars for t in repo_tokens):
-                        continue
-                    resolved_repository = _ENV_VAR_RE.sub(
-                        lambda m: env_vars[m.group(1)], raw_repository
-                    )
-                else:
-                    resolved_repository = raw_repository
-
-                triples.append((yaml_path, resolved_project, resolved_repository))
-
-    # Verify each (project, repository) pair against OBS, caching per project.
-    # project_repos[project] = set of repo names, or None if project not found.
-    project_repos: dict[str, set[str] | None] = {}
-    for yaml_path, project, repository in triples:
-        # Skip projects that are not locally managed (external interconnects).
-        # When rootprj was provided, only names found in the local directory
-        # tree are validated; everything else is skipped silently.
-        if local_obs_project_names and project not in local_obs_project_names:
-            continue
-        if project not in project_repos:
-            try:
-                raw = osc.core.show_project_meta(apiurl, project)
-                meta_bytes = raw if isinstance(raw, bytes) else b"".join(raw)
-                root_el = ET.fromstring(meta_bytes)
-                project_repos[project] = {
-                    r.get("name", "") for r in root_el.findall("repository")
-                }
-            except urllib.error.HTTPError as e:
-                project_repos[project] = None if e.code == 404 else None
-            except Exception:
-                project_repos[project] = None
-
-        repos = project_repos[project]
-        if repos is None:
-            errors.append(
-                (
-                    yaml_path,
-                    f"OBS project {project!r} not found — "
-                    "check env var values for project: path entries",
+    def fetch(project: str) -> set[str] | str:
+        try:
+            raw = osc.core.show_project_meta(apiurl, project)
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                raise ObsAuthError(
+                    f"error: OBS {apiurl} refused the project meta request for "
+                    f"{project!r} (HTTP {e.code}) — the live project: path check "
+                    "needs valid osc credentials for this instance"
                 )
+            if e.code == 404:
+                return "not found"
+            return f"HTTP {e.code} fetching meta"
+        except Exception as e:  # network / parse trouble
+            return f"could not fetch meta ({e})"
+        meta_bytes = raw if isinstance(raw, bytes) else b"".join(raw)
+        root_el = ET.fromstring(meta_bytes)
+        return {r.get("name", "") for r in root_el.findall("repository")}
+
+    for yaml_path, repo_name, project, repository in refs:
+        if project not in project_repos:
+            logger.debug(f"checking OBS project meta: {project}")
+            project_repos[project] = fetch(project)
+        repos = project_repos[project]
+        if isinstance(repos, str):
+            # One line per (repository, project): several paths into the same
+            # missing project (e.g. appstream + baseos) share the cause.
+            err = (
+                yaml_path,
+                f"repository '{repo_name}' paths to OBS project {project!r}: "
+                f"{repos} on {apiurl}",
             )
+            if err not in errors:
+                errors.append(err)
         elif repository not in repos:
             errors.append(
                 (
                     yaml_path,
-                    f"repository {repository!r} not found in OBS project {project!r} — "
-                    "check env var values for repository: path entries",
+                    f"repository '{repo_name}' paths to {project}/{repository}, "
+                    f"but that OBS project defines no repository {repository!r}",
                 )
             )
 
@@ -767,10 +769,11 @@ def cmd_project_verify(args) -> None:
     env_errors = _validate_env_vars(scan_root, env_vars)
     # --offline skips the two network-bound checks (git ls-remote per obs_scm
     # revision, and project: path lookups on the live OBS) so the static
-    # checks can run without credentials, e.g. in CI.
+    # checks can run without credentials, e.g. in CI.  --no-scm-validate
+    # skips only the first, so CI can run the live OBS path check alone.
     offline = getattr(args, "offline", False)
     scm_errors: list[tuple[Path, str, str]] = []
-    if not offline:
+    if not offline and not getattr(args, "no_scm_validate", False):
         service_files = sorted(scan_root.rglob("obs/_service"))
         scm_errors = _validate_obs_scm_revisions([(f, env_vars) for f in service_files])
 
