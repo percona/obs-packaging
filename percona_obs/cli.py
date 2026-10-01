@@ -645,6 +645,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Restrict validation to this package within the project. Requires project.",
     )
+    project_verify_parser.add_argument(
+        "--offline",
+        action="store_true",
+        default=False,
+        help="Do not connect to anything: skip the obs_scm revision check "
+        "(git ls-remote) and the project: path check against the live OBS; "
+        "run only the static checks.",
+    )
     project_verify_parser.set_defaults(func=cmd_project_verify)
 
     project_install_parser = project_subparsers.add_parser(

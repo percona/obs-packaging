@@ -659,9 +659,9 @@ listed after all trees as isolated packages. Cycles are detected and printed as
 5. Print trees with `_print_dep_tree()`, then isolated packages (no deps, not depended
    on by anything).
 
-### `project verify [project] [-P <profile>] [-e KEY:VALUE ...]`
+### `project verify [project] [-P <profile>] [-e KEY:VALUE ...] [--offline]`
 
-Validates local project configuration without connecting to OBS.
+Validates local project configuration. With `--offline` nothing is contacted: the obs_scm revision check (`git ls-remote`) and the `project:` path check against the live OBS are skipped and only the static checks below run. CI's `Project Config Check` workflow uses this form.
 
 The optional `project` argument (colon notation, e.g. `ppg:staging:17`) restricts validation to that subtree. If omitted, the entire `root/` tree is validated.
 
