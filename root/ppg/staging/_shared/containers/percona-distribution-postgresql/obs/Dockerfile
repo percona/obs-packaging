@@ -66,6 +66,8 @@ RUN microdnf install -y \
         percona-postgresql${PPG_MAJOR_VERSION}-llvmjit \
         percona-pgvector_${PPG_MAJOR_VERSION}-llvmjit \
         percona-wal2json${PPG_MAJOR_VERSION} \
+        percona-credcheck${PPG_MAJOR_VERSION} \
+        percona-credcheck${PPG_MAJOR_VERSION}-llvmjit \
         percona-pg_cron_${PPG_MAJOR_VERSION} \
         percona-patroni
 
