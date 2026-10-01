@@ -7,6 +7,8 @@
 ARG UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
 FROM $UBI_BASE
 
+ARG RHEL_VER
+
 LABEL name="Percona pgBackRest" \
       description="pgBackRest is a simple, reliable backup and restore system for PostgreSQL that can seamlessly scale up to the largest databases and workloads." \
       vendor="Percona" \
@@ -32,6 +34,10 @@ RUN microdnf -y install \
         gettext \
         nss_wrapper
 
+# The perl metapackage drags in perl-Archive-Tar and perl-IO-Compress, which
+# nothing in the image uses and which carry open CVEs on EL8. Drop them the
+# way the retired kiwi base image did; UBI 9/10 ship fixed versions.
+RUN if [ "$RHEL_VER" = "el8" ]; then rpm -e --nodeps perl-Archive-Tar perl-IO-Compress; fi
 RUN microdnf clean all && rm -rf /var/cache/dnf /var/cache/yum
 
 COPY LICENSE /licenses/LICENSE.Dockerfile
