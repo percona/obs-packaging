@@ -20,6 +20,7 @@ BuildRequires:  percona-pg_cron_%!{PG_MAJOR_VERSION}
 BuildRequires:  percona-wal2json%!{PG_MAJOR_VERSION}
 BuildRequires:  percona-pgvector_%!{PG_MAJOR_VERSION}
 BuildRequires:  percona-postgis35_%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-credcheck%!{PG_MAJOR_VERSION}
 # Per-major extension deltas, defined in each major's staging macros.yaml:
 # the majors do not ship an identical extension set (pg-telemetry exists on
 # <= 17 only, pg_oidc_validator on >= 18, pg_tde on >= 17 — PG 16's TDE is

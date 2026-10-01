@@ -74,7 +74,6 @@ RUN microdnf install -y \
         percona-postgis35_${PPG_MAJOR_VERSION}-utils \
         percona-wal2json${PPG_MAJOR_VERSION} \
         percona-credcheck${PPG_MAJOR_VERSION} \
-        percona-credcheck${PPG_MAJOR_VERSION}-llvmjit \
         percona-pg_cron_${PPG_MAJOR_VERSION} \
         percona-patroni
 
