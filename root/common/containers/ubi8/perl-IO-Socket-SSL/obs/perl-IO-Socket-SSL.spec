@@ -8,9 +8,8 @@ Source0:	IO-Socket-SSL-%{version}.tar.gz
 # Default to a system-wide crypto-policy, bug #1775167
 Patch0:		IO-Socket-SSL-2.066-use-system-default-cipher-list.patch
 Patch1:		IO-Socket-SSL-2.066-use-system-default-SSL-version.patch
-# A test for Enable-Post-Handshake-Authentication-TLSv1.3-feature.patch,
-# bug #1633636, requires openssl tool
-Patch2:		IO-Socket-SSL-2.066-Test-client-performs-Post-Handshake-Authentication.patch
+# Stream 8 also carries a post-handshake-authentication test patch; it needs
+# perl(IPC::Run), which UBI 8 does not ship, so it is not applied here.
 BuildArch:	noarch
 # Module Build
 BuildRequires:	coreutils
@@ -28,11 +27,9 @@ BuildRequires:	perl(Errno)
 BuildRequires:	perl(Exporter)
 BuildRequires:	perl(HTTP::Tiny)
 BuildRequires:	perl(IO::Socket)
-BuildRequires:	perl(IO::Socket::INET6) >= 2.62
 BuildRequires:	perl(Net::SSLeay) >= 1.46
 BuildRequires:	perl(Scalar::Util)
 BuildRequires:	perl(Socket)
-BuildRequires:	perl(Socket6)
 BuildRequires:	perl(strict)
 BuildRequires:	perl(vars)
 BuildRequires:	perl(warnings)
@@ -42,8 +39,6 @@ BuildRequires:	perl(File::Temp)
 BuildRequires:	perl(FindBin)
 BuildRequires:	perl(IO::Select)
 BuildRequires:	perl(IO::Socket::INET)
-# IPC::Run for Test-client-performs-Post-Handshake-Authentication.patch
-BuildRequires:	perl(IPC::Run)
 BuildRequires:	perl(Test::More) >= 0.88
 BuildRequires:	perl(utf8)
 BuildRequires:	procps
@@ -63,8 +58,8 @@ Requires:	perl(IO::Socket::INET6) >= 2.62, perl(Socket6)
 
 # IDN back-ends: URI::_idna (from URI ≥ 1.50) is preferred
 # but Net::IDN::Encode (next pref) and Net::LibIDN are also tested
-BuildRequires:	perl(Net::IDN::Encode)
-BuildRequires:	perl(Net::LibIDN)
+# UBI 8 ships neither perl(Net::IDN::Encode) nor perl(Net::LibIDN); the
+# URI::_idna back-end below is the one used on EL8.
 %if 0%{?fedora:1} || 0%{?rhel} > 6
 BuildRequires:	perl(URI::_idna)
 Requires:	perl(URI::_idna)
@@ -92,8 +87,6 @@ mod_perl.
 # Use system-default SSL version too
 %patch1
 
-# Add a test for PHA
-%patch2 -p1
 
 %build
 NO_NETWORK_TESTING=1 perl Makefile.PL INSTALLDIRS=vendor
