@@ -67,6 +67,8 @@ RUN set -ex; \
         percona-postgis35_${PPG_MAJOR_VERSION}-gui \
         percona-postgis35_${PPG_MAJOR_VERSION}-llvmjit \
         percona-postgis35_${PPG_MAJOR_VERSION}-utils \
+        percona-credcheck${PPG_MAJOR_VERSION} \
+        percona-credcheck${PPG_MAJOR_VERSION}-llvmjit \
         percona-pg_cron_${PPG_MAJOR_VERSION}; \
     microdnf clean all
 
@@ -91,6 +93,8 @@ RUN set -ex; \
         percona-wal2json${pg_version} \
         percona-postgis35_${pg_version} \
         percona-postgis35_${pg_version}-llvmjit \
+        percona-credcheck${PPG_MAJOR_VERSION} \
+        percona-credcheck${PPG_MAJOR_VERSION}-llvmjit \
         percona-pg_cron_${pg_version}; \
     microdnf clean all
 {{ENDFOR}}
