@@ -765,13 +765,19 @@ def cmd_project_verify(args) -> None:
     ref_errors = _validate_subproject_refs(scan_root)
     repo_path_errors = _validate_repo_path_refs(scan_root, env_vars)
     env_errors = _validate_env_vars(scan_root, env_vars)
-    service_files = sorted(scan_root.rglob("obs/_service"))
-    scm_errors = _validate_obs_scm_revisions([(f, env_vars) for f in service_files])
+    # --offline skips the two network-bound checks (git ls-remote per obs_scm
+    # revision, and project: path lookups on the live OBS) so the static
+    # checks can run without credentials, e.g. in CI.
+    offline = getattr(args, "offline", False)
+    scm_errors: list[tuple[Path, str, str]] = []
+    if not offline:
+        service_files = sorted(scan_root.rglob("obs/_service"))
+        scm_errors = _validate_obs_scm_revisions([(f, env_vars) for f in service_files])
 
     # Validate project: path entries against the live OBS instance when a
     # profile is available (provides the apiurl and env var values).
     path_ref_errors: list[tuple[Path, str]] = []
-    if args.profile:
+    if args.profile and not offline:
         profile = _load_profile(args.profile)
         apiurl = profile.get("apiurl", "")
         if apiurl:

@@ -143,7 +143,10 @@ containing the same glob.
 Inspect a slice offline: `./percona-obs -P labs -e REMOTE_OBS_ORG_INTERCONNECT:x project config --offline --resolved`
 (out-of-slice projects print `# project <name>: out of slice`) and `./percona-obs -P labs project verify`
 (prints `slice: N project(s), M package(s) out of slice`, `--verbose` lists them, and fails if a kept
-repository paths into a repository the slice does not carry).
+repository paths into a repository the slice does not carry). `project verify --offline` skips the
+two network checks (obs_scm revisions via `git ls-remote`, `project:` paths against the live OBS)
+and runs only the static ones; the `Project Config Check` workflow runs it that way, once per
+`OBS_INSTANCES` entry, together with `project config --offline`, on every PR that touches `root/`.
 
 `sync release -P <profile>` releases the subprojects that instance holds; `project release` always
 generates the full, instance-agnostic release tree.
