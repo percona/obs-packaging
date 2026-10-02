@@ -1108,6 +1108,18 @@ Permissions: `contents: write` (tag creation), `actions: write` (dispatch + cach
 
 **Required repository config**: `OBS_APIURL`, `OBS_PR_ROOTPRJ`, `OBS_USER` (vars); `OBS_PASSWORD` (secret).
 
+### Workflow 5 — `obs-qa-run.yml` (manual QA run of one project)
+
+**Trigger**: `workflow_dispatch` only. Inputs: `project` (required, colon notation such as `ppg:staging:18` or `ppg:staging:18:containers`), `pr_number` (optional: test `<pr_rootprj>:pr-<N>` instead of the production root), `name` (optional: one entry of a multi-entry `qa:` block, e.g. `ubi9`) and `filter` (optional: space-separated `AXIS=val[,val…]` over `matrix:` axes, e.g. `IO_METHOD=worker SCENARIO=pg-18`). The branch chosen in the dispatch dialog decides which `project.yaml` definitions are expanded, so a feature branch's `qa:` block can be exercised before merge.
+
+**What it does**: `resolve` validates the free-text inputs (they are later interpolated into shell) and runs `.github/scripts/resolve_qa_instance.py`, which keeps the `OBS_INSTANCES` entries whose `include_projects`/`exclude_projects` globs admit the project and whose `qa_types` (when set) cover its kind (`containers` for `:containers` subprojects, `packages` otherwise); exactly one must remain, otherwise the job fails naming the candidates. `detect` writes the same CI profile shape as `obs-pr-check`'s QA jobs (rootprj = instance root or PR root), runs `qa show <project> --json` and narrows the combos with `.github/scripts/filter_qa_matrix.py`; a `name`/`filter` that matches nothing fails the job listing the entry names or axis values that exist. `qa` fans out one job per selected combo (`fail-fast: false`, named by `status_context`) running `qa run --wait --report-json` with the combo's `--name`/`--filter` flags, and uploads each report as an artifact. No badge aggregation.
+
+**Why a separate file**: the nightly's change check looks up the last successful run of `obs-nightly-qa.yml`; a project-scoped run recorded there would suppress the next real nightly.
+
+**Concurrency**: group `obs-qa-run-<project>-<pr_number>` without cancel-in-progress, so a repeat dispatch of the same target queues instead of racing the first on Jenkins.
+
+**Required repository config**: `OBS_INSTANCES`, `OBS_USER`, `JENKINS_URL`, `JENKINS_USER` (vars); `OBS_PASSWORD_<NAME>` per instance and `JENKINS_API_TOKEN` (secrets).
+
 ### Service file env vars
 
 `${VAR}` tokens in `obs/_service`, `obs/_aggregate`, and `obs/_link` files are substituted by `apply_env_substitution()` before the file is uploaded to OBS. The following variables are available:
