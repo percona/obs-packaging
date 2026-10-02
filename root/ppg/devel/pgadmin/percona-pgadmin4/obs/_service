@@ -13,6 +13,10 @@
     <param name="subdir">web</param>
   </service>
   <service name="node_modules" mode="manual">
+    <!-- obs-service-node_modules now refuses the cpio parameter unless legacy
+         mode is asked for explicitly: its default is the git workflow, which
+         wants the unpacked node_modules tree committed to the repository. -->
+    <param name="legacy-container">true</param>
     <param name="cpio">node_modules.obscpio</param>
     <param name="output">node_modules.spec.inc</param>
     <param name="source-offset">10000</param>
