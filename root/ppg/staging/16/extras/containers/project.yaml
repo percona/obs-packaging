@@ -32,6 +32,10 @@ project-config: |
   %if "%_repository" == "ubi9"
   Type: docker
   BuildEngine: podman
+  # The retired kiwi base project set these for every image; the image
+  # projects carry them themselves now that the base comes from the registry.
+  BuildFlags: container-compression-format:zstd
+  BuildFlags: container-build-format:oci
   BuildFlags: dockerarg:PPG_REPO=staging
   BuildFlags: dockerarg:RHEL_VER=el9
   BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest

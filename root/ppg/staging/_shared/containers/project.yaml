@@ -72,6 +72,10 @@ project-config: |
   BuildFlags: sbom:spdx
   BuildFlags: sbom:cyclonedx
   PublishFlags: withsbom
+  # The retired kiwi base project set these for every image; the image
+  # projects carry them themselves now that the base comes from the registry.
+  BuildFlags: container-compression-format:zstd
+  BuildFlags: container-build-format:oci
 
   Preinstall: skopeo
 
