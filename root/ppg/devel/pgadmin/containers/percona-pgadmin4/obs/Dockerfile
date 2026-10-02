@@ -4,7 +4,8 @@
 #!BuildTag: percona-pgadmin4:<VERSION>
 #!BuildTag: percona-pgadmin4:latest
 
-FROM percona-ubi-minimal:latest
+ARG UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
+FROM $UBI_BASE
 
 LABEL name="Percona pgAdmin 4" \
       description="pgAdmin 4 is the leading open source management tool for PostgreSQL. This image runs it in server mode under gunicorn, built from the Percona Distribution for PostgreSQL packages. Compared to the upstream dpage/pgadmin4 image: listens on 8080 as UID 5050, no bundled MTA, no PUID/PGID remapping." \
