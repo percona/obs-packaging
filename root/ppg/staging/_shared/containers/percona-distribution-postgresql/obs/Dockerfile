@@ -53,10 +53,13 @@ RUN microdnf -y install \
         gosu \
         tzdata
 
-# ubi-minimal ships tzdata with /usr/share/zoneinfo stripped, so the install
-# above is a no-op for it and PostgreSQL (built with --with-system-tzdata)
-# would not know any named time zone. Reinstall to get the zone files back.
-RUN microdnf -y reinstall tzdata
+# ubi-minimal ships tzdata with /usr/share/zoneinfo stripped, and the install
+# above is a no-op for an already-installed package, so PostgreSQL (built with
+# --with-system-tzdata) would not know any named time zone. Inside OBS only
+# `microdnf install/update` reach the build repository, so drop the package
+# with rpm and install it again instead of using `microdnf reinstall`.
+RUN if rpm -q tzdata >/dev/null; then rpm -e --nodeps tzdata; fi; \
+    microdnf -y install tzdata
 
 RUN microdnf install -y \
         percona-postgresql${PPG_MAJOR_VERSION}-server \

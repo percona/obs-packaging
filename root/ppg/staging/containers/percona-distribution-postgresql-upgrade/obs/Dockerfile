@@ -42,7 +42,11 @@ RUN microdnf -y install \
         shadow-utils \
         libedit
 
-RUN microdnf -y reinstall tzdata; \
+# ubi-minimal ships tzdata with /usr/share/zoneinfo stripped. Inside OBS only
+# `microdnf install/update` reach the build repository (`reinstall` fails
+# silently here), so drop the package with rpm and install it again.
+RUN if rpm -q tzdata >/dev/null; then rpm -e --nodeps tzdata; fi; \
+    microdnf -y install tzdata; \
     microdnf clean all
 
 # pg_upgrade ships in percona-postgresqlN-server at /usr/pgsql-N/bin/pg_upgrade
