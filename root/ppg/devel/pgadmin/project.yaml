@@ -20,11 +20,11 @@ repositories:
       # local-npm-registry (npm offline registry used at build time)
       - subproject: common:deps:build
         repository: UBI_9
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+      - project: Fedora:EPEL:9
         repository: standard
       - project: RedHat:UBI-9
         repository: standard
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9
+      - project: RockyLinux:9
         repository: devel
     archs: [x86_64, aarch64]
 project-config: |

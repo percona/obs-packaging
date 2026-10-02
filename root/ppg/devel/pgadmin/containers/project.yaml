@@ -16,6 +16,8 @@ debuginfo: ~
 repositories:
   - name: ubi9
     paths:
+      - project: RedHat:UBI:Registry
+        repository: images
       - subproject: ppg:devel:pgadmin
         repository: UBI_9
       - subproject: ppg:staging:18
@@ -31,10 +33,8 @@ repositories:
       - subproject: ppg:common:deps
         repository: UBI_9
       - subproject: common:containers:ubi9
-        repository: images
-      - subproject: common:containers:ubi9
         repository: UBI_9
-      - project: ${REMOTE_OBS_ORG_INTERCONNECT}Fedora:EPEL:9
+      - project: Fedora:EPEL:9
         repository: standard
       - project: RedHat:UBI-9
         repository: standard
@@ -46,6 +46,12 @@ project-config: |
   BuildFlags: sbom:spdx
   BuildFlags: sbom:cyclonedx
   PublishFlags: withsbom
+  # The retired kiwi base project set these for every image; the image
+  # projects carry them themselves now that the base comes from the registry.
+  BuildFlags: container-compression-format:zstd
+  BuildFlags: container-build-format:oci
+
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
 
   Preinstall: skopeo
 
