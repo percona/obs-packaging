@@ -55,6 +55,11 @@ RUN microdnf -y install \
         tzdata \
         gosu
 
+# ubi-minimal ships tzdata with /usr/share/zoneinfo stripped, so the install
+# above is a no-op for it and PostgreSQL (built with --with-system-tzdata)
+# would not know any named time zone. Reinstall to get the zone files back.
+RUN microdnf -y reinstall tzdata
+
 RUN microdnf install -y \
         percona-postgresql${PPG_MAJOR_VERSION}-server \
         percona-postgresql${PPG_MAJOR_VERSION}-contrib \
