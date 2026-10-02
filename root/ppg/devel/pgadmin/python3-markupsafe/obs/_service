@@ -1,0 +1,5 @@
+<services>
+  <service name="download_url">
+    <param name="url">https://files.pythonhosted.org/packages/source/M/MarkupSafe/markupsafe-3.0.3.tar.gz</param>
+  </service>
+</services>

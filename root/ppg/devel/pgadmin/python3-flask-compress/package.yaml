@@ -1,0 +1,5 @@
+title: Flask-Compress 1.24 for Python 3.12
+description: |
+  Compress responses in your Flask app with gzip, deflate, brotli or zstandard. RPM-only python3.12-* build from the PyPI sdist,
+  consumed by pgAdmin 4 (percona-pgadmin4). Bump by editing obs/_service (sdist URL) and
+  rpm/*.spec (Version + changelog).

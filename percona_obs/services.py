@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from typing import Callable
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -76,13 +77,57 @@ def _has_runnable_services(service_file: Path) -> bool:
     )
 
 
-def _has_cargo_vendor_service(service_file: Path) -> bool:
-    """Return True if *service_file* declares a cargo_vendor service."""
+def _cargo_vendor_patterns(svc: ET.Element) -> list[re.Pattern[str]]:
+    """vendor.tar.<compression> — the crate tree cargo_vendor downloads."""
+    return [re.compile(r"^vendor\.tar\.[a-z0-9]+$")]
+
+
+def _node_modules_patterns(svc: ET.Element) -> list[re.Pattern[str]]:
+    """The npm tarball cpio, its Source-line include, and the npm lockfile.
+
+    Names follow the service's own params (openSUSE convention:
+    cpio=node_modules.obscpio, output=node_modules.spec.inc,
+    input=package-lock.json).  The lockfile is matched by suffix because the
+    node_modules service itself globs ``*<input>``.
+    """
+    params = {p.get("name", ""): (p.text or "").strip() for p in svc.findall("param")}
+    cpio = params.get("cpio") or "node_modules.obscpio"
+    output = params.get("output") or "node_modules.spec.inc"
+    lockfile = params.get("input") or "package-lock.json"
+    return [
+        re.compile("^" + re.escape(cpio) + "$"),
+        re.compile("^" + re.escape(output) + "$"),
+        re.compile(re.escape(lockfile) + "$"),
+    ]
+
+
+# Services whose outputs are a function of an external registry's state at
+# generation time (crates.io, registry.npmjs.org) rather than of any input
+# under git.  The branch content check compares those outputs by presence
+# only: a byte difference must not flip a decision to "promote", but a file
+# missing on either side still must.  Keyed by service name.
+_DRIFT_TOLERANT_SERVICES: dict[str, Callable[[ET.Element], list[re.Pattern[str]]]] = {
+    "cargo_vendor": _cargo_vendor_patterns,
+    "node_modules": _node_modules_patterns,
+}
+
+
+def drift_tolerant_patterns(service_file: Path) -> list[re.Pattern[str]]:
+    """Return filename regexes for drift-tolerant outputs declared in *service_file*.
+
+    Returns an empty list when the file is missing or unparsable, or when it
+    declares none of the services in _DRIFT_TOLERANT_SERVICES.
+    """
     try:
         root = ET.parse(service_file).getroot()
     except (ET.ParseError, OSError):
-        return False
-    return any(svc.get("name") == "cargo_vendor" for svc in root.findall("service"))
+        return []
+    patterns: list[re.Pattern[str]] = []
+    for svc in root.findall("service"):
+        factory = _DRIFT_TOLERANT_SERVICES.get(svc.get("name", ""))
+        if factory is not None:
+            patterns.extend(factory(svc))
+    return patterns
 
 
 def _get_upstream_obs_scm_info(
@@ -749,7 +794,9 @@ def _run_local_services(
                     are restored from cache.
       Phase 2 — manual services (go_modules etc.): run on a cache miss.
                 Results are stored to the service cache on success.
-      Extraction — ``.obscpio`` archives are extracted via ``cpio``.
+      Extraction — ``.obscpio`` archives produced by Phase 1 are extracted via
+                   ``cpio``; ``.obscpio`` files produced by manual services
+                   (e.g. node_modules.obscpio) are kept for upload.
       Local packaging — debian/ and rpm/ files are copied from the local
                         package directory.
       Phase 3 — buildtime services (tar, recompress, set_version): always
@@ -983,6 +1030,12 @@ def _run_local_services(
     # directories, not .obscpio files.  The OBS build script extracts
     # these before running buildtime services; we replicate that here.
     for obscpio in sorted(workdir.glob("*.obscpio")):
+        if obscpio.name in manual_artifacts:
+            # Produced by a mode="manual" service (e.g. node_modules.obscpio).
+            # It is a source artifact in its own right — OBS unpacks it into
+            # SOURCES at build time — so it must reach the upload set intact.
+            logger.debug(f"keeping manual artifact {obscpio.name}")
+            continue
         logger.debug(f"extracting {obscpio.name}")
         result = subprocess.run(
             [
@@ -1060,7 +1113,7 @@ def _run_local_services(
     for child in list(workdir.iterdir()):
         if child.is_dir():
             shutil.rmtree(child, ignore_errors=True)
-        elif child.suffix == ".obscpio":
+        elif child.suffix == ".obscpio" and child.name not in manual_artifacts:
             child.unlink()
 
     return workdir

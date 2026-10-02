@@ -1,0 +1,5 @@
+title: ldap3 2.9.1 for Python 3.12
+description: |
+  A strictly RFC 4510 conforming LDAP V3 pure Python client library. RPM-only python3.12-* build from the PyPI sdist,
+  consumed by pgAdmin 4 (percona-pgadmin4). Bump by editing obs/_service (sdist URL) and
+  rpm/*.spec (Version + changelog).

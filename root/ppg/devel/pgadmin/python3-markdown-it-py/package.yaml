@@ -1,0 +1,5 @@
+title: markdown-it-py 4.2.0 for Python 3.12
+description: |
+  Python port of markdown-it. Markdown parsing, done right!. RPM-only python3.12-* build from the PyPI sdist,
+  consumed by pgAdmin 4 (percona-pgadmin4). Bump by editing obs/_service (sdist URL) and
+  rpm/*.spec (Version + changelog).
