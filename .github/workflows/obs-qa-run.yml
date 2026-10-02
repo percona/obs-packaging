@@ -145,8 +145,10 @@ jobs:
               <<<"$INSTANCE_ENV" >> .profile/ci.yaml
           fi
 
+      # `shell: bash`: the container's default `sh` has no `pipefail`.
       - name: Expand and narrow the QA matrix
         id: matrix
+        shell: bash
         env:
           QA_PROJECT: ${{ inputs.project }}
           QA_NAME: ${{ inputs.name }}
