@@ -1,0 +1,246 @@
+name: OBS QA Run
+
+# Manually run the QA pipelines of ONE OBS project.
+#
+# A narrowed, on-demand counterpart of obs-nightly-qa.yml: instead of
+# discovering every QA-enabled subproject, it takes a project name (and
+# optionally a PR number, a `qa:` entry name and an axis filter), resolves the
+# OBS instance that hosts the project from `OBS_INSTANCES`, expands that
+# project's `qa:` block from the checked-out project.yaml, narrows the combos
+# and triggers Jenkins via `percona-obs qa run` once per combo.
+#
+# It is a separate workflow (not more inputs on the nightly) on purpose: the
+# nightly's change check looks up the last successful run of its own file, so
+# a project-scoped run recorded there would suppress the next real nightly.
+#
+# The git ref the dispatch dialog selects ("Use workflow from") decides which
+# project.yaml definitions are used, so a feature branch's `qa:` block can be
+# exercised before it is merged.  The QA target itself lives on OBS: the
+# production root of the resolved instance, or `<pr_rootprj>:pr-<N>` when
+# `pr_number` is given.
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Project to test, colon notation (e.g. ppg:staging:18 or ppg:staging:18:containers)'
+        required: true
+        type: string
+      pr_number:
+        description: 'PR number: test the PR OBS subproject instead of the production root (empty = production)'
+        required: false
+        default: ''
+        type: string
+      name:
+        description: 'qa: entry name for multi-entry blocks (e.g. ubi9); empty = every entry'
+        required: false
+        default: ''
+        type: string
+      filter:
+        description: 'Matrix-axis filter, space-separated AXIS=val[,val...] (e.g. "IO_METHOD=worker SCENARIO=pg-18"); empty = full matrix'
+        required: false
+        default: ''
+        type: string
+
+# Same project on the same OBS root queues behind a running instance instead
+# of racing it on Jenkins; different projects / PRs run side by side.
+concurrency:
+  group: obs-qa-run-${{ inputs.project }}-${{ inputs.pr_number }}
+  cancel-in-progress: false
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # resolve: validate the free-text inputs (they are interpolated into shell
+  # later) and pick the one OBS_INSTANCES entry that hosts the project.  No
+  # OBS access; the container is only for the venv the resolver imports.
+  # ──────────────────────────────────────────────────────────────────────────
+  resolve:
+    name: Resolve OBS instance
+    runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    permissions:
+      packages: read
+      contents: read
+
+    outputs:
+      instance_name: ${{ steps.resolve.outputs.instance_name }}
+      instance_apiurl: ${{ steps.resolve.outputs.instance_apiurl }}
+      instance_user: ${{ steps.resolve.outputs.instance_user }}
+      instance_registry: ${{ steps.resolve.outputs.instance_registry }}
+      instance_env: ${{ steps.resolve.outputs.instance_env }}
+      rootprj: ${{ steps.resolve.outputs.rootprj }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve instance and validate inputs
+        id: resolve
+        env:
+          OBS_INSTANCES: ${{ vars.OBS_INSTANCES }}
+          QA_PROJECT: ${{ inputs.project }}
+          QA_PR_NUMBER: ${{ inputs.pr_number }}
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          if [ -z "${OBS_INSTANCES:-}" ]; then
+            echo "::error::OBS_INSTANCES repository variable is empty"
+            exit 1
+          fi
+          /opt/obs-tools/venv/bin/python .github/scripts/resolve_qa_instance.py
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # detect: expand the project's qa: block from the checked-out project.yaml
+  # and narrow it by `name` / `filter`.  Fails (listing what exists) when the
+  # selection matches nothing, so a typo never silently runs zero combos.
+  # ──────────────────────────────────────────────────────────────────────────
+  detect:
+    name: Detect QA matrix
+    needs: resolve
+    runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    permissions:
+      packages: read
+      contents: read
+
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/obs-setup
+        with:
+          obs-apiurl: ${{ needs.resolve.outputs.instance_apiurl }}
+          obs-user: ${{ needs.resolve.outputs.instance_user || vars.OBS_USER }}
+          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', needs.resolve.outputs.instance_name)] }}
+
+      # Same profile shape as obs-pr-check's QA jobs, so `qa show` / `qa run`
+      # resolve ${OBS_ROOTPRJ} / ${OBS_CONTAINER_REGISTRY} parameters the same
+      # way the automated runs do.
+      - name: Write CI profile
+        shell: bash
+        env:
+          OBS_APIURL: ${{ needs.resolve.outputs.instance_apiurl }}
+          OBS_ROOTPRJ: ${{ needs.resolve.outputs.rootprj }}
+          OBS_REGISTRY: ${{ needs.resolve.outputs.instance_registry }}
+          INSTANCE_ENV: ${{ needs.resolve.outputs.instance_env }}
+          JENKINS_URL: ${{ vars.JENKINS_URL }}
+          JENKINS_USER: ${{ vars.JENKINS_USER }}
+        run: |
+          mkdir -p .profile
+          cat > .profile/ci.yaml <<EOF
+          apiurl: ${OBS_APIURL}
+          rootprj: ${OBS_ROOTPRJ}
+          ${OBS_REGISTRY:+registry: ${OBS_REGISTRY}}
+          jenkins:
+            url: ${JENKINS_URL}
+            user: ${JENKINS_USER}
+          env:
+            - name: REMOTE_OBS_ORG_INTERCONNECT
+              value: ''
+          EOF
+          # Instance env last: profile entries are read in order and the last
+          # value for a key wins, so an instance overrides the default above.
+          if [ -n "${INSTANCE_ENV:-}" ] && [ "$INSTANCE_ENV" != "null" ]; then
+            jq -r 'to_entries[] | "  - name: \(.key)\n    value: '"'"'\(.value)'"'"'"' \
+              <<<"$INSTANCE_ENV" >> .profile/ci.yaml
+          fi
+
+      - name: Expand and narrow the QA matrix
+        id: matrix
+        env:
+          QA_PROJECT: ${{ inputs.project }}
+          QA_NAME: ${{ inputs.name }}
+          QA_FILTER: ${{ inputs.filter }}
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          venv/bin/python -m percona_obs -P ci qa show "$QA_PROJECT" --json \
+            > /tmp/qa-matrix-full.json
+          echo "full matrix: $(jq 'length' /tmp/qa-matrix-full.json) combo(s)"
+          venv/bin/python .github/scripts/filter_qa_matrix.py \
+            < /tmp/qa-matrix-full.json > /tmp/qa-matrix.json
+          echo "selected: $(jq 'length' /tmp/qa-matrix.json) combo(s)"
+          {
+            echo "matrix<<EOF"
+            cat /tmp/qa-matrix.json
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # qa: trigger Jenkins for each selected combo (in parallel) and upload the
+  # per-combo report JSON as an artifact.
+  # ──────────────────────────────────────────────────────────────────────────
+  qa:
+    name: ${{ matrix.status_context }}
+    needs: [resolve, detect]
+    runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    permissions:
+      packages: read
+      contents: read
+
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.matrix) }}
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/obs-setup
+        with:
+          obs-apiurl: ${{ needs.resolve.outputs.instance_apiurl }}
+          obs-user: ${{ needs.resolve.outputs.instance_user || vars.OBS_USER }}
+          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', needs.resolve.outputs.instance_name)] }}
+
+      # Same CI profile as the detect job so `qa run` re-resolves project.yaml
+      # parameters identically.
+      - name: Write CI profile
+        shell: bash
+        env:
+          OBS_APIURL: ${{ needs.resolve.outputs.instance_apiurl }}
+          OBS_ROOTPRJ: ${{ needs.resolve.outputs.rootprj }}
+          OBS_REGISTRY: ${{ needs.resolve.outputs.instance_registry }}
+          INSTANCE_ENV: ${{ needs.resolve.outputs.instance_env }}
+          JENKINS_URL: ${{ vars.JENKINS_URL }}
+          JENKINS_USER: ${{ vars.JENKINS_USER }}
+        run: |
+          mkdir -p .profile
+          cat > .profile/ci.yaml <<EOF
+          apiurl: ${OBS_APIURL}
+          rootprj: ${OBS_ROOTPRJ}
+          ${OBS_REGISTRY:+registry: ${OBS_REGISTRY}}
+          jenkins:
+            url: ${JENKINS_URL}
+            user: ${JENKINS_USER}
+          env:
+            - name: REMOTE_OBS_ORG_INTERCONNECT
+              value: ''
+          EOF
+          if [ -n "${INSTANCE_ENV:-}" ] && [ "$INSTANCE_ENV" != "null" ]; then
+            jq -r 'to_entries[] | "  - name: \(.key)\n    value: '"'"'\(.value)'"'"'"' \
+              <<<"$INSTANCE_ENV" >> .profile/ci.yaml
+          fi
+
+      # `name_filter` / `axis_filters` come from `qa show --json` (tool-generated
+      # flag strings), so interpolating them unquoted is the same contract as
+      # obs-pr-check.yml.
+      - name: Run qa pipeline
+        env:
+          JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
+          PYTHONUNBUFFERED: "1"
+        run: |
+          venv/bin/python -m percona_obs -P ci qa run "${{ matrix.project }}" \
+            --pipeline "${{ matrix.pipeline }}" \
+            --wait \
+            --report-json /tmp/qa-report.json \
+            ${{ matrix.name_filter }} \
+            ${{ matrix.axis_filters }}
+
+      - name: Upload QA report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-report-${{ strategy.job-index }}
+          path: /tmp/qa-report.json
+          if-no-files-found: ignore

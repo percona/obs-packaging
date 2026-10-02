@@ -639,6 +639,15 @@ matrices into the GitHub Actions matrix, and the `qa` job runs
 `qa run --wait --report-json ... --filter ...` once per combo with one commit
 status posted per combo on the PR head.
 
+To run the QA of **one** project on demand, dispatch `.github/workflows/obs-qa-run.yml`
+(Actions → "OBS QA Run" → *Run workflow*). It takes the project name (`ppg:staging:18`,
+`ppg:staging:18:containers`, …), an optional PR number (tests the PR's OBS subproject
+instead of the production root), an optional `qa:` entry `name` and an optional
+`matrix:`-axis `filter` (`IO_METHOD=worker SCENARIO=pg-18`). The OBS instance is resolved
+from `OBS_INSTANCES` by the project's include/exclude globs and `qa_types`; the branch
+selected in the dispatch dialog supplies the `project.yaml` definitions. A selection that
+matches no combo fails before Jenkins is called, listing the names/values that exist.
+
 ### `qa:` block schema
 
 ```yaml
