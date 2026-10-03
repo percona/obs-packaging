@@ -1,0 +1,10 @@
+qa:
+  - name: pgbouncer
+    pipeline: component-generic-parallel
+    parameters:
+      PRODUCT: pgbouncer
+      COMPONENT_REF: "%!{PGBOUNCER_TAG}"
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      TEST_BRANCH: main

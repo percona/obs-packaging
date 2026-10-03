@@ -1,0 +1,10 @@
+qa:
+  - name: pg_repack
+    pipeline: component-generic-parallel
+    parameters:
+      PRODUCT: pg_repack
+      COMPONENT_REF: "%!{PG_REPACK_TAG}"
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      TEST_BRANCH: main
