@@ -58,28 +58,59 @@ project-config: |
   %endif
 
 # QA: the QA team's test jobs for this major's packages, run by the PR check
-# (qa-packages label), the nightly QA and release QA. OBS_PROJECT points the
-# jobs at ${OBS_ROOTPRJ}:ppg:staging:<major>: this project on main, the PR's
-# own copy (isv:percona:PR:pr-<N>:ppg:staging:<major>) in a PR.
+# (qa-packages label), the nightly QA, obs-qa-run and release QA. OBS_PROJECT
+# points the jobs at ${OBS_ROOTPRJ}:ppg:staging:<major>: this project on main,
+# the PR's own copy (isv:percona:PR:pr-<N>:ppg:staging:<major>) in a PR.
+#
+# server: PPG server and meta-package tests (ppg-multiOS-parallel).
+# One entry per component: that component's own upstream test suite
+# (component-generic-parallel), checked out at the same repository and tag
+# the package's obs/_service builds from, so QA tests the packaged source.
 qa:
-  pipeline: ppg-multiOS-parallel
-  parameters:
-    USE_OBS_REPO: true
-    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
-    VERSION: ppg-%!{PG_VERSION}
-    PLATFORMS:
-      - rocky-9
-      - debian-13
-      - ubuntu-noble
-    TESTING_BRANCH: main
-    IO_METHOD:
-      - worker
-      - sync
-      - io_uring
-    SCENARIO:
-      - pg-%!{PG_MAJOR_VERSION}
-      - pg-%!{PG_MAJOR_VERSION}-meta-server
-      - pg-%!{PG_MAJOR_VERSION}-meta-ha
-  matrix:
-    - IO_METHOD
-    - SCENARIO
+  - name: server
+    pipeline: ppg-multiOS-parallel
+    parameters:
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      PLATFORMS:
+        - debian-12
+        - debian-12-arm
+        - debian-13
+        - debian-13-arm
+        - ubuntu-jammy
+        - ubuntu-jammy-arm
+        - ubuntu-noble
+        - ubuntu-noble-arm
+        - ubuntu-resolute
+        - ubuntu-resolute-arm
+        - rocky-8
+        - rocky-8-arm
+        - rocky-9
+        - rocky-9-arm
+        - rocky-10
+        - rocky-10-arm
+        - ol-8
+        - ol-8-arm
+        - ol-9
+        - ol-9-arm
+        - ol-10
+        - ol-10-arm
+        - rhel-8
+        - rhel-8-arm
+        - rhel-9
+        - rhel-9-arm
+        - rhel-10
+        - rhel-10-arm
+      TESTING_BRANCH: main
+      IO_METHOD:
+        - worker
+        - sync
+        - io_uring
+      SCENARIO:
+        - pg-%!{PG_MAJOR_VERSION}
+        - pg-%!{PG_MAJOR_VERSION}-meta-server
+        - pg-%!{PG_MAJOR_VERSION}-meta-ha
+    matrix:
+      - IO_METHOD
+      - SCENARIO

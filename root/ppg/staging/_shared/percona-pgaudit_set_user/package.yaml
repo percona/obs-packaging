@@ -1,0 +1,10 @@
+qa:
+  - name: pgaudit13_set_user
+    pipeline: component-generic-parallel
+    parameters:
+      PRODUCT: pgaudit13_set_user
+      COMPONENT_REF: "%!{PGAUDIT_SET_USER_TAG}"
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      TEST_BRANCH: main
