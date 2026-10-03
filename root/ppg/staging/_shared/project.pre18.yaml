@@ -33,23 +33,150 @@ project-config: |
   %endif
 
 # QA: the QA team's test jobs for this major's packages, run by the PR check
-# (qa-packages label), the nightly QA and release QA. OBS_PROJECT points the
-# jobs at ${OBS_ROOTPRJ}:ppg:staging:<major>: this project on main, the PR's
-# own copy (isv:percona:PR:pr-<N>:ppg:staging:<major>) in a PR.
+# (qa-packages label), the nightly QA, obs-qa-run and release QA. OBS_PROJECT
+# points the jobs at ${OBS_ROOTPRJ}:ppg:staging:<major>: this project on main,
+# the PR's own copy (isv:percona:PR:pr-<N>:ppg:staging:<major>) in a PR.
+#
+# server: PPG server and meta-package tests (ppg-multiOS-parallel).
+# One entry per component: that component's own upstream test suite
+# (component-generic-parallel), checked out at the same repository and tag
+# the package's obs/_service builds from, so QA tests the packaged source.
 qa:
-  pipeline: ppg-multiOS-parallel
-  parameters:
-    USE_OBS_REPO: true
-    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
-    VERSION: ppg-%!{PG_VERSION}
-    PLATFORMS:
-      - rocky-9
-      - debian-13
-      - ubuntu-noble
-    TESTING_BRANCH: main
-    SCENARIO:
-      - pg-%!{PG_MAJOR_VERSION}
-      - pg-%!{PG_MAJOR_VERSION}-meta-server
-      - pg-%!{PG_MAJOR_VERSION}-meta-ha
-  matrix:
-    - SCENARIO
+  - name: server
+    pipeline: ppg-multiOS-parallel
+    parameters:
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      PLATFORMS:
+        - rocky-9
+        - debian-13
+        - ubuntu-noble
+      TESTING_BRANCH: main
+      SCENARIO:
+        - pg-%!{PG_MAJOR_VERSION}
+        - pg-%!{PG_MAJOR_VERSION}-meta-server
+        - pg-%!{PG_MAJOR_VERSION}-meta-ha
+    matrix:
+      - SCENARIO
+
+  - name: pgbackrest
+    pipeline: component-generic-parallel
+    parameters:
+      PRODUCT: pgbackrest
+      COMPONENT_REPO: https://github.com/pgbackrest/pgbackrest.git
+      COMPONENT_VERSION: "release/%!{PGBACKREST_VERSION}"
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      TEST_BRANCH: main
+
+  - name: patroni
+    pipeline: component-generic-parallel
+    parameters:
+      PRODUCT: patroni
+      COMPONENT_REPO: https://github.com/zalando/patroni.git
+      COMPONENT_VERSION: "v%!{PATRONI_VERSION}"
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      TEST_BRANCH: main
+
+  - name: pgbouncer
+    pipeline: component-generic-parallel
+    parameters:
+      PRODUCT: pgbouncer
+      COMPONENT_REPO: https://github.com/pgbouncer/pgbouncer.git
+      COMPONENT_VERSION: "%!{PGBOUNCER_TAG}"
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      TEST_BRANCH: main
+
+  - name: pgpool
+    pipeline: component-generic-parallel
+    parameters:
+      PRODUCT: pgpool
+      COMPONENT_REPO: https://github.com/pgpool/pgpool2.git
+      COMPONENT_VERSION: "%!{PGPOOL_TAG}"
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      TEST_BRANCH: main
+
+  - name: pg_repack
+    pipeline: component-generic-parallel
+    parameters:
+      PRODUCT: pg_repack
+      COMPONENT_REPO: https://github.com/reorg/pg_repack.git
+      COMPONENT_VERSION: "%!{PG_REPACK_TAG}"
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      TEST_BRANCH: main
+
+  - name: pg_audit
+    pipeline: component-generic-parallel
+    parameters:
+      PRODUCT: pg_audit
+      COMPONENT_REPO: https://github.com/pgaudit/pgaudit.git
+      COMPONENT_VERSION: "%!{PGAUDIT_VERSION}"
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      TEST_BRANCH: main
+
+  - name: pgaudit13_set_user
+    pipeline: component-generic-parallel
+    parameters:
+      PRODUCT: pgaudit13_set_user
+      COMPONENT_REPO: https://github.com/pgaudit/set_user.git
+      COMPONENT_VERSION: "%!{PGAUDIT_SET_USER_TAG}"
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      TEST_BRANCH: main
+
+  - name: pgbadger
+    pipeline: component-generic-parallel
+    parameters:
+      PRODUCT: pgbadger
+      COMPONENT_REPO: https://github.com/darold/pgbadger.git
+      COMPONENT_VERSION: "v%!{PGBADGER_VERSION}"
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      TEST_BRANCH: main
+
+  - name: pgvector
+    pipeline: component-generic-parallel
+    parameters:
+      PRODUCT: pgvector
+      COMPONENT_REPO: https://github.com/pgvector/pgvector.git
+      COMPONENT_VERSION: "v%!{PGVECTOR_VERSION}"
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      TEST_BRANCH: main
+
+  - name: postgis
+    pipeline: component-generic-parallel
+    parameters:
+      PRODUCT: postgis
+      COMPONENT_REPO: https://github.com/postgis/postgis.git
+      COMPONENT_VERSION: "%!{POSTGIS_VERSION}"
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      TEST_BRANCH: main
+
+  - name: wal2json
+    pipeline: component-generic-parallel
+    parameters:
+      PRODUCT: wal2json
+      COMPONENT_REPO: https://github.com/eulerto/wal2json.git
+      COMPONENT_VERSION: "%!{WAL2JSON_TAG}"
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      TEST_BRANCH: main
