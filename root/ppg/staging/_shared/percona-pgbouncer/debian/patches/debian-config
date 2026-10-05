@@ -1,0 +1,21 @@
+--- a/etc/pgbouncer.ini
++++ b/etc/pgbouncer.ini
+@@ -45,8 +45,8 @@
+ ;;; Administrative settings
+ ;;;
+ 
+-logfile = /var/log/pgbouncer/pgbouncer.log
+-pidfile = /var/run/pgbouncer/pgbouncer.pid
++logfile = /var/log/postgresql/pgbouncer.log
++pidfile = /var/run/postgresql/pgbouncer.pid
+ 
+ ;;;
+ ;;; Where to wait for clients
+@@ -60,6 +60,7 @@
+ ;unix_socket_dir = /tmp
+ ;unix_socket_mode = 0777
+ ;unix_socket_group =
++unix_socket_dir = /var/run/postgresql
+ 
+ ;; The peer id used to identify this pgbouncer process in a group of pgbouncer
+ ;; processes that are peered together. When set to 0 pgbouncer peering is disabled
