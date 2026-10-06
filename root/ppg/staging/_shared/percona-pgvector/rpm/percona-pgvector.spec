@@ -26,6 +26,10 @@ License:	PostgreSQL
 URL:		https://github.com/%{sname}/%{sname}/
 Source0:	%{name}-%{version}.tar.gz
 
+# To be removed when upstream releases a version with this patch:
+# https://github.com/pgvector/pgvector/pull/311
+Patch0: pgvector-0.6.2-fixillegalinstructionrror.patch
+
 BuildRequires:	percona-postgresql%{pgmajorversion}-devel
 %if 0%{?rhel} || 0%{?fedora}
 BuildRequires:	clang llvm
@@ -70,6 +74,7 @@ This packages provides JIT support for pgvector
 
 %prep
 %setup -q -n %{sname}-%{version}
+%patch -P 0 -p0
 
 %build
 %if 0%{?gts_version}
