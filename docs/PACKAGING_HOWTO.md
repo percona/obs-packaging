@@ -168,7 +168,14 @@ Debtransform-Release: 1
 Debtransform-Files-Tar: debian.tar.gz rpm.tar.gz
 ```
 
-- `Version:` is always `1.0.0` — a placeholder replaced by OBS at service run time.
+- `Version:` is `1.0.0` — a placeholder replaced by OBS at service run time — unless the
+  package needs an epoch (see below).
+- **Epoch.** If the package also ships in Percona Repo with an epoch (`1:`, `2:`, …), the OBS
+  deb must carry the *same* epoch, or apt ranks every Percona Repo version above every OBS
+  version. `set_version` rewrites the whole `Version:` line and would drop it, so instead:
+  write `Version: <epoch>:%!{<PKG>_VERSION}` in `debian.dsc`, and restrict `set_version` in
+  `obs/_service` to the spec with `<param name="file"><name>.spec</param>`. `debtransform`
+  then produces `<epoch>:<version>-1+<release>`. Never raise or drop an epoch once shipped.
 - `Binary:` lists all binary package names from `control`, space-separated.
 - `Debtransform-Files-Tar:` lists the tarballs OBS must produce. Always include `debian.tar.gz`
   and `rpm.tar.gz`. For Go packages with vendored modules, also list the vendor tarballs
@@ -574,7 +581,7 @@ Rules:
 | `debian/rules` | yes | Build rules; always override `dh_builddeb` to force gzip |
 | `debian/changelog` | yes | Placeholder version `1.0.0`; source name must match `control` |
 | `debian/compat` | yes* | Omit if `debhelper-compat (= N)` is in `Build-Depends` |
-| `debian/debian.dsc` | yes | OBS-specific; `Version: 1.0.0`; `Debtransform-Files-Tar` must be complete |
+| `debian/debian.dsc` | yes | OBS-specific; `Version: 1.0.0` (or `<epoch>:%!{<PKG>_VERSION}` if Percona Repo uses an epoch); `Debtransform-Files-Tar` must be complete |
 | `debian/source/format` | yes | `3.0 (quilt)` or `3.0 (native)` |
 | `debian/source/options` | yes | Always include `extend-diff-ignore = rpm/` |
 | `debian/patches/` | if needed | Quilt patches applied to upstream source |

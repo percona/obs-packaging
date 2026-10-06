@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: percona-pgbouncer
 Binary: percona-pgbouncer
 Architecture: any
-Version: 1.0.0
+Version: 1:%!{PGBOUNCER_VERSION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  ca-certificates,

@@ -15,5 +15,6 @@
   </service>
   <service mode="buildtime" name="set_version">
     <param name="basename">percona-pg_cron_%!{PG_MAJOR_VERSION}</param>
+    <param name="file">pg_cron.spec</param>
   </service>
 </services>

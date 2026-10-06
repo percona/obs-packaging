@@ -15,5 +15,6 @@
   </service>
   <service mode="buildtime" name="set_version">
     <param name="basename">percona-pgaudit%!{PG_MAJOR_VERSION}_set_user</param>
+    <param name="file">percona-pgaudit_set_user.spec</param>
   </service>
 </services>

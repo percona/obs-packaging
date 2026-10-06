@@ -15,5 +15,6 @@
   </service>
   <service mode="buildtime" name="set_version">
     <param name="basename">percona-pg_gather</param>
+    <param name="file">pg_gather.spec</param>
   </service>
 </services>

@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: percona-pg-gather
 Binary: percona-pg-gather
 Architecture: any
-Version: 1
+Version: 1:%!{PG_GATHER_VERSION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends: debhelper (>= 10)
 Debtransform-Release: 1

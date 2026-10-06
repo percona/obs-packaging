@@ -13,5 +13,6 @@
   </service>
   <service mode="buildtime" name="set_version">
     <param name="basename">percona-postgis</param>
+    <param name="file">percona-postgis.spec</param>
   </service>
 </services>

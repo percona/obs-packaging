@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: percona-pg-repack
 Binary: percona-postgresql-%!{PG_MAJOR_VERSION}-repack
 Architecture: any
-Version: 1.0.0
+Version: 1:%!{PG_REPACK_VERSION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 13),

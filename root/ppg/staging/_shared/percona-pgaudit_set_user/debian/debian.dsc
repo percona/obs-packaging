@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: percona-pgaudit%!{PG_MAJOR_VERSION}-set-user
 Binary: percona-pgaudit%!{PG_MAJOR_VERSION}-set-user
 Architecture: any
-Version: 1.0.0
+Version: 1:%!{PGAUDIT_SET_USER_VERSION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  mawk,

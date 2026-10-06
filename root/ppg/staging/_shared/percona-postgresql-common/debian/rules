@@ -22,6 +22,23 @@ DEFAULT_VER := %!{PG_MAJOR_VERSION}
 override_dh_builddeb:
 	dh_builddeb -- -Zgzip
 
+# The upstream Makefile derives DPKG_VERSION from debian/changelog and uses it
+# in a target name; the epoch's ':' makes make reject the whole Makefile.
+# Override it with the epoch-less version on every make invocation.
+MAKE_VERSION_ARG := DPKG_VERSION=$(DEB_VERSION_UPSTREAM_REVISION)
+
+override_dh_auto_clean:
+	dh_auto_clean -- $(MAKE_VERSION_ARG)
+
+override_dh_auto_build:
+	dh_auto_build -- $(MAKE_VERSION_ARG)
+
+override_dh_auto_test:
+	dh_auto_test -- $(MAKE_VERSION_ARG)
+
+override_dh_auto_install:
+	dh_auto_install -- $(MAKE_VERSION_ARG)
+
 override_dh_auto_configure:
 	@echo "### Building percona-postgresql-common flavor $(FLAVOR)"
 	@echo "### Supported PostgreSQL versions: $(SUPPORTED_VERSIONS) (default version: $(DEFAULT_VER))"

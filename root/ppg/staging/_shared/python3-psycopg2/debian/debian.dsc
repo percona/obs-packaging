@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: psycopg2
 Binary: python3-psycopg2, python3-psycopg2-dbg
 Architecture: any
-Version: 1.0.0
+Version: 1:%!{PSYCOPG2_VERSION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 9),

@@ -95,6 +95,13 @@ Debtransform-Files-Tar: debian.tar.gz vendor.tar.gz rpm.tar.gz
 
 **Epoch: 1** is set on PostgreSQL-related packages to allow version management.
 
+**Debian epochs** must match the epoch Percona Repo uses for the same source package
+(e.g. `1:` for pgbackrest, `2:` for haproxy/postgis). They live in `debian/debian.dsc` as
+`Version: <epoch>:%!{<PKG>_VERSION}`, and the package's `set_version` buildtime service is
+restricted to the spec (`<param name="file"><name>.spec</param>`) so it does not overwrite the
+dsc `Version:` line. `percona-postgresql` instead runs `set_version` twice (epoch version for
+all files, then plain version for the spec).
+
 ## Project Configuration (project.yaml)
 
 Each project directory may contain a `project.yaml` that defines its OBS project metadata.
