@@ -27,6 +27,7 @@ from .common import (
     _col,
     _print_pending,
     auto_rootprj_env,
+    load_macros,
     load_project_yaml,
     parse_env_overrides,
     resolve_project_path,
@@ -305,9 +306,53 @@ def _summarize(state: RunState) -> bool:
 # ---------------------------------------------------------------------------
 
 
+EXPECTED_VERSIONS_PARAM = "EXPECTED_VERSIONS"
+
+
+def _expected_versions(project: str) -> str:
+    """The project's ``*_VERSION`` macros as ``NAME=value`` lines, sorted.
+
+    These are the versions OBS builds for this project, resolved from its
+    macros.yaml chain in the current checkout, so a PR run gets the PR's own
+    values.  Test jobs compare installed software with them instead of keeping
+    their own copy.  Empty when the project has no ``*_VERSION`` macros.
+    """
+    macros = load_macros(resolve_project_path(project))
+    return "\n".join(
+        f"{name}={value}"
+        for name, value in sorted(macros.items())
+        if name.endswith("_VERSION")
+    )
+
+
+def _with_expected_versions(
+    entries: list[dict[str, Any]] | None, project: str
+) -> list[dict[str, Any]] | None:
+    """Add ``EXPECTED_VERSIONS`` (see ``_expected_versions``) to the parameters
+    of every entry, unless the entry sets it itself.
+
+    Done here rather than in each qa: entry so the versions are not repeated
+    in every job declaration.  Jobs that do not declare the parameter ignore
+    it (Jenkins drops unknown build parameters).
+    """
+    if not entries:
+        return entries
+    versions = _expected_versions(project)
+    if not versions:
+        return entries
+    out = []
+    for entry in entries:
+        params = dict(entry.get("parameters") or {})
+        params.setdefault(EXPECTED_VERSIONS_PARAM, versions)
+        out.append({**entry, "parameters": params})
+    return out
+
+
 def cmd_qa_show(args: argparse.Namespace) -> None:
     env_vars = _qa_env_vars(args)
-    entries = _load_qa_block(args.project, env_vars)
+    entries = _with_expected_versions(
+        _load_qa_block(args.project, env_vars), args.project
+    )
     json_mode: bool = bool(getattr(args, "json", False))
 
     if entries is None:
@@ -504,7 +549,9 @@ def _wait_and_record(
 
 def cmd_qa_run(args: argparse.Namespace) -> None:
     env_vars = _qa_env_vars(args)
-    entries = _load_qa_block(args.project, env_vars)
+    entries = _with_expected_versions(
+        _load_qa_block(args.project, env_vars), args.project
+    )
     if entries is None:
         raise SystemExit(f"error: {args.project} has no qa: block in its project.yaml")
 

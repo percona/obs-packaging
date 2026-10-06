@@ -684,6 +684,16 @@ without it both lanes would render the same `status_context`, so `qa show`
 rejects the block: one check run cannot carry two lanes, and
 `qa run --pipeline …` would trigger both under it.
 
+#### `EXPECTED_VERSIONS` (added automatically)
+
+`qa run` and `qa show` add one parameter to every entry: `EXPECTED_VERSIONS`,
+the project's `*_VERSION` macros resolved from its `macros.yaml` chain, one
+`NAME=value` per line, sorted (`PGBACKREST_VERSION=2.59.2`, `PG_VERSION=18.6`,
+...). Test jobs use it to check installed software against the versions OBS
+builds for exactly this project, instead of keeping their own copy; in a PR the
+values are the PR's. An entry that sets `EXPECTED_VERSIONS` itself keeps its
+value. Jobs that do not declare the parameter are unaffected.
+
 `${VAR}` tokens in any value are substituted from the active profile's `env:`
 section, plus auto-injected `OBS_ROOTPRJ` and `OBS_CONTAINER_REGISTRY_ROOTPRJ` (the root
 project name with `:` replaced by `/`, useful for registry URLs).
