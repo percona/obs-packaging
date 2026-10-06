@@ -2,8 +2,8 @@
   <service name="obs_scm">
     <param name="url">https://github.com/ymattw/ydiff.git</param>
     <param name="scm">git</param>
-    <param name="revision">1.4.2</param>
-    <param name="version">1.4.2</param>
+    <param name="revision">%!{YDIFF_VERSION}</param>
+    <param name="version">%!{YDIFF_VERSION}</param>
     <param name="filename">ydiff</param>
   </service>
   <service mode="buildtime" name="tar" />
@@ -11,5 +11,7 @@
     <param name="file">*.tar</param>
     <param name="compression">gz</param>
   </service>
-  <service mode="buildtime" name="set_version" />
+  <service mode="buildtime" name="set_version">
+    <param name="file">ydiff.spec</param>
+  </service>
 </services>

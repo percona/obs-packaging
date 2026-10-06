@@ -14,5 +14,6 @@
   </service>
   <service mode="buildtime" name="set_version">
     <param name="basename">percona-pg_tde%!{PG_MAJOR_VERSION}</param>
+    <param name="file">pg_tde.spec</param>
   </service>
 </services>

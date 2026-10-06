@@ -15,5 +15,6 @@
   </service>
   <service mode="buildtime" name="set_version">
     <param name="basename">percona-wal2json</param>
+    <param name="file">percona-wal2json.spec</param>
   </service>
 </services>

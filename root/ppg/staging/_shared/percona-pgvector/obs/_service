@@ -14,5 +14,6 @@
   </service>
   <service mode="buildtime" name="set_version">
     <param name="basename">percona-pgvector_%!{PG_MAJOR_VERSION}</param>
+    <param name="file">percona-pgvector.spec</param>
   </service>
 </services>

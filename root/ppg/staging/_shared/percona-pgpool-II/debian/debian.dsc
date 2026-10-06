@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: percona-pgpool2
 Binary: percona-pgpool2, libpgpool2, libpgpool-dev, postgresql-%!{PG_MAJOR_VERSION}-pgpool2
 Architecture: any
-Version: 1.0.0
+Version: 1:%!{PGPOOL_VERSION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 10),

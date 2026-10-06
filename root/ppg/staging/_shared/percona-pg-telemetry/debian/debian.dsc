@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: percona-pg-telemetry
 Binary: percona-pg-telemetry%!{PG_MAJOR_VERSION}
 Architecture: any
-Version: 1.0.0
+Version: 1:%!{PG_TELEMETRY_VERSION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 9), percona-postgresql-server-dev-all (>= 153~)

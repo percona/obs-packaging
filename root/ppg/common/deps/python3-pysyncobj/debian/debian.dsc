@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: python3-pysyncobj
 Binary: python3-pysyncobj
 Architecture: all
-Version: 1.0.0
+Version: 1:%!{PYSYNCOBJ_VERSION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 9),
