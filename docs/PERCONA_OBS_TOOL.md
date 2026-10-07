@@ -687,12 +687,17 @@ rejects the block: one check run cannot carry two lanes, and
 #### `EXPECTED_VERSIONS` (added automatically)
 
 `qa run` and `qa show` add one parameter to every entry: `EXPECTED_VERSIONS`,
-the project's `*_VERSION` macros resolved from its `macros.yaml` chain, one
-`NAME=value` per line, sorted (`PGBACKREST_VERSION=2.59.2`, `PG_VERSION=18.6`,
-...). Test jobs use it to check installed software against the versions OBS
-builds for exactly this project, instead of keeping their own copy; in a PR the
-values are the PR's. An entry that sets `EXPECTED_VERSIONS` itself keeps its
-value. Jobs that do not declare the parameter are unaffected.
+the versions OBS builds for the packages under test, one `package=version` per
+line, sorted, keyed by OBS package name (`percona-pgbackrest=2.59.2`,
+`etcd=3.5.33`, ...). Each version is the package's `obs/_service` `version`
+(an aggregate's is its source package's), with macros resolved from the
+package's `macros.yaml` chain in the current checkout, so in a PR the values
+are the PR's. A project entry gets every package of the project (not its
+subprojects); an entry declared for a single package gets only that package.
+Packages whose `_service` declares no version are left out. Test jobs check
+installed software against these values instead of keeping their own copy,
+without depending on macro names. An entry that sets `EXPECTED_VERSIONS`
+itself keeps its value; jobs that do not declare the parameter ignore it.
 
 `${VAR}` tokens in any value are substituted from the active profile's `env:`
 section, plus auto-injected `OBS_ROOTPRJ` and `OBS_CONTAINER_REGISTRY_ROOTPRJ` (the root
