@@ -58,6 +58,10 @@ class RunState:
     pipeline: str
     created_at: str
     combos: list[Combo]
+    # Package of a package-lane run (``package.yaml`` qa: block); "" for the
+    # project's own block.  Defaulted so state files written before the
+    # field existed still load.
+    package: str = ""
 
 
 def _state_path(run_id: str) -> Path:
@@ -93,6 +97,7 @@ def load_state(run_id: str) -> RunState:
         pipeline=data["pipeline"],
         created_at=data["created_at"],
         combos=combos,
+        package=data.get("package", ""),
     )
 
 
@@ -147,10 +152,12 @@ def write_report_json(state: RunState, path: Path) -> None:
     payload = {
         "run_id": state.run_id,
         "project": state.project,
+        "package": state.package,
         "pipeline": state.pipeline,
         "created_at": state.created_at,
         "combos": [
             {
+                "package": state.package,
                 "label": c.label,
                 "params": c.params,
                 "queue_url": c.attempts[-1].queue_url if c.attempts else None,

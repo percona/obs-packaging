@@ -304,6 +304,11 @@ def _apply_param_overrides(
 # ---------------------------------------------------------------------------
 
 
+def _run_target(state: RunState) -> str:
+    """``<project>`` or ``<project>/<package>`` for headings and `qa list` rows."""
+    return f"{state.project}/{state.package}" if state.package else state.project
+
+
 def _print_params(params: dict[str, str], indent: str = "    ") -> None:
     for k in sorted(params):
         v = params[k]
@@ -674,20 +679,49 @@ def _wait_and_record(
 
 def cmd_qa_run(args: argparse.Namespace) -> None:
     env_vars = _qa_env_vars(args)
-    lanes = _load_qa_lanes(args.project, env_vars)
-    entries = _with_expected_versions(lanes[0].entries if lanes else None, args.project)
-    if entries is None:
-        raise SystemExit(f"error: {args.project} has no qa: block in its project.yaml")
+    lanes = _lanes_with_expected_versions(
+        _load_qa_lanes(args.project, env_vars), args.project
+    )
+    if not lanes:
+        raise SystemExit(
+            f"error: {args.project} has no qa: block in its project.yaml "
+            "or in any package.yaml"
+        )
+
+    package = getattr(args, "package", None)
+    if package:
+        lanes = [lane for lane in lanes if lane.package == package]
+        if not lanes:
+            have = sorted(
+                lane.package
+                for lane in _load_qa_lanes(args.project, env_vars)
+                if lane.package
+            )
+            raise SystemExit(
+                f"error: {args.project}: no package with a qa: block named "
+                f"{package!r}; packages: {', '.join(have) or '(none)'}"
+            )
 
     name = getattr(args, "name", None)
     if name:
-        entries = [e for e in entries if e.get("name") == name]
-        if not entries:
+        lanes = [
+            Lane(lane.package, [e for e in lane.entries if e.get("name") == name])
+            for lane in lanes
+        ]
+        lanes = [lane for lane in lanes if lane.entries]
+        if not lanes:
             raise SystemExit(f"error: {args.project}: no qa entry with name {name!r}")
 
     if args.pipeline:
-        entries = [e for e in entries if e["pipeline"] == args.pipeline]
-        if not entries:
+        lanes = [
+            Lane(
+                lane.package,
+                [e for e in lane.entries if e["pipeline"] == args.pipeline],
+            )
+            for lane in lanes
+        ]
+        lanes = [lane for lane in lanes if lane.entries]
+        if not lanes:
             suffix = f" (after --name {name})" if name else ""
             raise SystemExit(
                 f"error: {args.project}: no qa entry with pipeline "
@@ -698,22 +732,25 @@ def cmd_qa_run(args: argparse.Namespace) -> None:
     overrides = _parse_param_overrides(args.param or [])
 
     # Pre-expand all entries so we can detect the no-match case before triggering.
-    active: list[tuple[str, list[tuple[str, dict[str, str]]]]] = []
-    for entry in entries:
-        pipeline = entry["pipeline"]
-        combos = _expand_matrix(entry)
-        combos = _apply_filters(combos, filters)
-        combos = _apply_param_overrides(combos, overrides)
-        if combos:
-            active.append((pipeline, combos))
+    active: list[tuple[str, str, list[tuple[str, dict[str, str]]]]] = []
+    for lane in lanes:
+        for entry in lane.entries:
+            pipeline = entry["pipeline"]
+            combos = _expand_matrix(entry)
+            combos = _apply_filters(combos, filters)
+            combos = _apply_param_overrides(combos, overrides)
+            if combos:
+                active.append((lane.package or "", pipeline, combos))
 
     if not active:
         raise SystemExit("error: no matrix combinations match the given --filter")
 
     if args.dry_run:
-        for pipeline, combos in active:
+        for lane_package, pipeline, combos in active:
             print(_col(_BOLD, f"DRY RUN: would trigger pipeline {pipeline!r}"))
             print(f"  project: {args.project}")
+            if lane_package:
+                print(f"  package: {lane_package}")
             print(f"  combos:  {len(combos)}")
             for label, params in combos:
                 print()
@@ -725,18 +762,20 @@ def cmd_qa_run(args: argparse.Namespace) -> None:
     cfg = load_jenkins_config(args.profile)
 
     any_failed = False
-    for pipeline, combos in active:
+    for lane_package, pipeline, combos in active:
         state = RunState(
             run_id=new_run_id(),
             project=args.project,
             pipeline=pipeline,
             created_at=_utcnow_iso(),
             combos=[],
+            package=lane_package,
         )
+        target = _run_target(state)
         print(
             _col(
                 _BOLD,
-                f"qa run {args.project}  pipeline: {pipeline}  (run-id: {state.run_id})",
+                f"qa run {target}  pipeline: {pipeline}  (run-id: {state.run_id})",
             )
         )
         queue_urls = _trigger_combos(
@@ -824,7 +863,7 @@ def cmd_qa_retry(args: argparse.Namespace) -> None:
     print(
         _col(
             _BOLD,
-            f"qa retry {state.project}  "
+            f"qa retry {_run_target(state)}  "
             f"(run-id: {state.run_id}, retrying {len(todo)} combo(s))",
         )
     )
@@ -874,6 +913,6 @@ def cmd_qa_list(args: argparse.Namespace) -> None:
         summary = f"{success}✔  {failure}✗  {pending}◌"
         print(
             f"  {_col(_BOLD, state.run_id)}  "
-            f"{state.project}  {state.pipeline}  "
+            f"{_run_target(state)}  {state.pipeline}  "
             f"{_col(_DIM, state.created_at)}  {summary}"
         )
