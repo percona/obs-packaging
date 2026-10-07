@@ -9,6 +9,12 @@ Reads the combo list on stdin and prints the kept combos on stdout.
              (same shape as ``qa run --filter``).  Only ``matrix:`` axes
              qualify: a list parameter outside ``matrix:`` is joined into one
              value and cannot narrow anything.
+  QA_PACKAGE  keep only combos of the package.yaml ``qa:`` block of this
+              package (combos whose ``package`` equals it)
+
+  QA_PACKAGES_PRESENT_ONLY  "true" (manual runs against a PR project): drop
+              package lanes whose package is not in ``$OBS_PROJECT`` on
+              ``$OBS_APIURL`` before narrowing, same rule as list_qa_matrix.py.
 
 A selection that matches nothing is an error, and the message lists the entry
 names / axis values that exist so a typo is caught before Jenkins is called.
@@ -19,7 +25,14 @@ from __future__ import annotations
 import json
 import os
 import sys
+from pathlib import Path
 from typing import Any
+
+# Scripts in this directory share the presence helpers.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from list_qa_matrix import drop_absent_packages, fetch_present_packages  # noqa: E402
 
 
 def _parse_filter(text: str) -> dict[str, set[str]]:
@@ -42,10 +55,20 @@ def _matrix_axes(combo: dict[str, Any]) -> list[str]:
 
 
 def filter_matrix(
-    matrix: list[dict[str, Any]], name: str, filter_text: str
+    matrix: list[dict[str, Any]], name: str, filter_text: str, package: str = ""
 ) -> list[dict[str, Any]]:
     if not matrix:
         raise SystemExit("error: no QA combos found: the project has no qa: block")
+
+    package = package.strip()
+    if package:
+        packages = sorted({str(c.get("package") or "") for c in matrix})
+        matrix = [c for c in matrix if (c.get("package") or "") == package]
+        if not matrix:
+            shown = ", ".join(p or "(project)" for p in packages)
+            raise SystemExit(
+                f"error: no qa: block for package {package!r}; lanes: {shown}"
+            )
 
     name = name.strip()
     if name:
@@ -77,6 +100,12 @@ def filter_matrix(
     return matrix
 
 
+def _configure_osc(apiurl: str) -> None:
+    import osc.conf
+
+    osc.conf.get_config(override_apiurl=apiurl)
+
+
 def main() -> None:
     try:
         matrix = json.load(sys.stdin)
@@ -84,8 +113,34 @@ def main() -> None:
         raise SystemExit(f"error: matrix on stdin is not valid JSON: {exc}")
     if not isinstance(matrix, list):
         raise SystemExit("error: matrix on stdin must be a JSON list")
+
+    package = os.environ.get("QA_PACKAGE", "").strip()
+    if os.environ.get("QA_PACKAGES_PRESENT_ONLY", "") == "true" and any(
+        c.get("package") for c in matrix
+    ):
+        apiurl = os.environ["OBS_APIURL"]
+        obs_project = os.environ["OBS_PROJECT"]
+        _configure_osc(apiurl)
+        matrix, dropped = drop_absent_packages(
+            matrix, fetch_present_packages(apiurl, obs_project)
+        )
+        if dropped:
+            print(
+                f"package lane(s) skipped, not present in {obs_project}: "
+                + ", ".join(dropped),
+                file=sys.stderr,
+            )
+        if package and package in dropped:
+            raise SystemExit(
+                f"error: package {package!r} declares a qa: block but is not "
+                f"present in {obs_project}; it was not promoted into this PR project"
+            )
+
     kept = filter_matrix(
-        matrix, os.environ.get("QA_NAME", ""), os.environ.get("QA_FILTER", "")
+        matrix,
+        os.environ.get("QA_NAME", ""),
+        os.environ.get("QA_FILTER", ""),
+        package=package,
     )
     for combo in kept:
         print(f"  {combo.get('status_context')}", file=sys.stderr)
