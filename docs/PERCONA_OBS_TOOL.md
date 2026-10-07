@@ -627,10 +627,11 @@ at the bottom as isolated packages. Scope can be narrowed to a subproject:
 
 ## Triggering Jenkins QA pipelines
 
-`qa run` reads a project's `qa:` block from `project.yaml`, expands its matrix
-into one Jenkins job per combination, triggers each via Jenkins'
-`buildWithParameters` REST endpoint, and (with `--wait`) polls every triggered
-build until it reaches a terminal state.
+`qa run` reads a project's QA *lanes* — the optional `qa:` block of its
+`project.yaml` plus the optional `qa:` block of each direct package's
+`package.yaml` — expands every matrix into one Jenkins job per combination,
+triggers each via Jenkins' `buildWithParameters` REST endpoint, and (with
+`--wait`) polls every triggered build until it reaches a terminal state.
 
 The same machinery powers the QA jobs in `.github/workflows/obs-pr-check.yml`:
 the `detect-qa-matrix` job discovers the QA-enabled subprojects of the PR's
@@ -642,11 +643,13 @@ status posted per combo on the PR head.
 To run the QA of **one** project on demand, dispatch `.github/workflows/obs-qa-run.yml`
 (Actions → "OBS QA Run" → *Run workflow*). It takes the project name (`ppg:staging:18`,
 `ppg:staging:18:containers`, …), an optional PR number (tests the PR's OBS subproject
-instead of the production root), an optional `qa:` entry `name` and an optional
+instead of the production root), an optional `qa:` entry `name`, an optional `package` (only that package's
+`package.yaml` block) and an optional
 `matrix:`-axis `filter` (`IO_METHOD=worker SCENARIO=pg-18`). The OBS instance is resolved
 from `OBS_INSTANCES` by the project's include/exclude globs and `qa_types`; the branch
 selected in the dispatch dialog supplies the `project.yaml` definitions. A selection that
-matches no combo fails before Jenkins is called, listing the names/values that exist.
+matches no combo fails before Jenkins is called, listing the names/values that exist. A
+`package` that is absent from the PR project fails with a "not present in <project>" error.
 
 ### `qa:` block schema
 
@@ -665,6 +668,51 @@ qa:
 ```
 
 `qa:` may also be a **list** of such entries, one per pipeline lane.
+
+The same schema applies to a package's `package.yaml`. Package blocks are
+discovered on disk from the project's direct package directories (symlinks into
+`_shared/` are followed and `%!{...}` macros resolve from the link's location,
+so one block under `_shared/<pkg>/package.yaml` renders per major), without
+descending into subprojects. The package's `obs/_link`, if any, is irrelevant.
+The tool never calls OBS for QA.
+
+```yaml
+# root/ppg/staging/_shared/pg_tde/package.yaml
+qa:
+  pipeline: pg-tde-parallel
+  parameters:
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+    VERSION: ppg-%!{PG_VERSION}
+    PLATFORMS: [rocky-9, debian-13]
+  matrix: [PLATFORMS]
+```
+
+The segment-uniqueness rule below is checked per block: the project block and
+each package block are separate namespaces.
+
+#### Status contexts
+
+| lane | entries | `status_context` |
+|---|---|---|
+| project | one | `OBS QA / <project>[ / <combo>]` |
+| project | several | `OBS QA / <project> / <segment>[ / <combo>]` |
+| package | one | `OBS QA / <project> / <package>[ / <combo>]` |
+| package | several | `OBS QA / <project> / <package> / <segment>[ / <combo>]` |
+
+`<segment>` is the entry `name` when set, else the pipeline; `<combo>` is the
+matrix label and is absent for entries without `matrix:`.
+
+#### When package lanes run
+
+* `qa run <project>` with no `--package` triggers the project block and every
+  package block. This is what the nightly does.
+* On PR checks (`obs-pr-check.yml`) and on `obs-qa-run` dispatches with a PR
+  number, `.github/scripts/list_qa_matrix.py` / `filter_qa_matrix.py` run with
+  `QA_PACKAGES_PRESENT_ONLY=true` and drop the package lanes whose package is
+  not listed in the PR's OBS subproject (which holds only promoted packages,
+  including dep-cascade rebuilds). Project lanes are never dropped. The OBS
+  listing is strict: a 404 means no packages, any other OBS error fails the
+  detect job instead of silently dropping lanes. The nightly never sets it.
 
 #### `name:` — disambiguating two entries
 
@@ -707,11 +755,11 @@ project name with `:` replaced by `/`, useful for registry URLs).
 
 | Command | Purpose |
 |---|---|
-| `qa show <project>` | Print the resolved matrix (humans). `--json` emits one entry per combo with `project`, `pipeline`, `name`, `label`, `axis_filters`, `name_filter`, `status_context`, `params` — used by CI to drive a GitHub matrix. Empty `[]` when the project has no `qa:` block. |
-| `qa run <project>` | Trigger Jenkins for every matrix combo. Fire-and-forget by default; pass `--wait` to block until terminal results arrive. `--filter AXIS=val[,val…]` narrows the matrix; `--name NAME` selects one entry of a multi-entry `qa:` block (combinable with `--pipeline`); `--param NAME=VAL` overrides a parameter at runtime; `--dry-run` prints the POST bodies without calling Jenkins; `--report-json PATH` writes the per-combo result table for CI. |
+| `qa show <project>` | Print the resolved matrix (humans). `--json` emits one entry per combo with `project`, `package` (empty for project lanes), `pipeline`, `name`, `label`, `axis_filters`, `name_filter`, `package_filter` (`--package <pkg>`, or empty), `status_context`, `params` — used by CI to drive a GitHub matrix. Empty `[]` when the project has no lane. |
+| `qa run <project>` | Trigger Jenkins for every matrix combo. Fire-and-forget by default; pass `--wait` to block until terminal results arrive. `--filter AXIS=val[,val…]` narrows the matrix; `--name NAME` selects one entry of a multi-entry `qa:` block (combinable with `--pipeline`); `--package PKG` runs only that package's `package.yaml` block (combinable with `--name`/`--pipeline`; unknown packages are rejected, listing those that declare `qa:`); without it every lane runs; `--param NAME=VAL` overrides a parameter at runtime; `--dry-run` prints the POST bodies without calling Jenkins; `--report-json PATH` writes the per-combo result table for CI. |
 | `qa status --run-id <id>` | Re-poll non-terminal combos of a previous run and print the current state. |
 | `qa retry --run-id <id>` | Re-trigger only the combos whose latest attempt is non-`SUCCESS`. Re-uses the recorded `params` so retries are reproducible. By default skips `ABORTED` combos; pass `--include-aborted` to retry them too. |
-| `qa list` | Tabulate recent runs (run-id, project, pipeline, summary). |
+| `qa list` | Tabulate recent runs (run-id, project or project/package, pipeline, summary). |
 
 State files for `qa run` / `qa retry` live at `.percona-obs/qa/<run-id>.json`
 (gitignored). Each combo records every trigger attempt, so the file accumulates
