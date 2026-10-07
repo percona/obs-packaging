@@ -1,6 +1,7 @@
 """Implements `percona-obs qa` subcommands.
 
-Reads the optional ``qa:`` block of a project's ``project.yaml``, expands its
+Reads the optional ``qa:`` block of a project's ``project.yaml`` and of each
+direct package's ``package.yaml`` (one *lane* per block), expands every
 matrix into one Jenkins job per combination, optionally polls for completion,
 and persists per-combo state under ``.percona-obs/qa/<run-id>.json``.
 """
@@ -9,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import dataclasses
 import itertools
 import json
 import os
@@ -32,6 +34,7 @@ from .common import (
     find_packages,
     load_macros,
     load_project_yaml,
+    load_yaml_with_env,
     parse_env_overrides,
     resolve_project_path,
 )
@@ -73,47 +76,89 @@ def _qa_env_vars(args: argparse.Namespace) -> dict[str, str]:
     return env_vars
 
 
-def _load_qa_block(
-    project: str, env_vars: dict[str, str]
-) -> list[dict[str, Any]] | None:
-    """Load and validate the ``qa:`` block of a project's project.yaml.
+@dataclasses.dataclass
+class Lane:
+    """One ``qa:`` block: the project's own (``package is None``) or a package's."""
 
-    Returns a list of validated pipeline entry dicts, or ``None`` if the
-    project has no ``qa:`` block.  A single-dict ``qa:`` is normalised to a
-    one-element list so callers can always iterate.
+    package: str | None
+    entries: list[dict[str, Any]]
+
+
+def _lane_where(project: str, package: str | None) -> str:
+    """Error-message prefix for a lane: ``<project>`` or ``<project>/<package>``."""
+    return project if package is None else f"{project}/{package}"
+
+
+def _normalise_qa_block(qa: Any, where: str) -> list[dict[str, Any]]:
+    """Validate one loaded ``qa:`` value and return it as a list of entries.
+
+    A single-dict ``qa:`` is normalised to a one-element list so callers can
+    always iterate.  ``where`` prefixes error messages.
     """
-    project_path = resolve_project_path(project)
-    if not project_path.is_dir():
-        raise SystemExit(f"error: project {project!r} not found at {project_path}")
-    cfg = load_project_yaml(project_path / "project.yaml", env_vars)
-    qa = cfg.get("qa")
-    if qa is None:
-        return None
     if isinstance(qa, dict):
         entries: list[Any] = [qa]
     elif isinstance(qa, list):
         entries = qa
     else:
-        raise SystemExit(f"error: {project}: qa block must be a mapping or a list")
+        raise SystemExit(f"error: {where}: qa block must be a mapping or a list")
     # Two entries that disambiguate to the same segment would render the same
     # status_context, i.e. the same check-run name: CI would drop one lane and
     # `qa run` would trigger both under one check.  Reject it here instead.
-    seen_segments: dict[str, int] = {}
+    seen_segments: set[str] = set()
     for entry in entries:
-        _validate_qa(entry, project)
+        _validate_qa(entry, where)
         segment = _entry_segment(entry)
         if segment in seen_segments:
             hint = (
-                f"give each one a distinct 'name'"
+                "give each one a distinct 'name'"
                 if not entry.get("name")
                 else "rename one of them"
             )
             raise SystemExit(
-                f"error: {project}: two qa entries resolve to the same check segment "
+                f"error: {where}: two qa entries resolve to the same check segment "
                 f"{segment!r}; {hint}"
             )
-        seen_segments[segment] = 1
+        seen_segments.add(segment)
     return entries
+
+
+def _load_qa_lanes(project: str, env_vars: dict[str, str]) -> list[Lane]:
+    """Load every ``qa:`` block of a project: its own, then its direct packages'.
+
+    The project's ``project.yaml`` block (when present) comes first as
+    ``Lane(None, ...)``; then one ``Lane(<dirname>, ...)`` per direct package
+    whose ``package.yaml`` declares ``qa:``, in ``find_packages`` order.
+    Packages are enumerated on disk only (symlinks into ``_shared/`` are
+    followed, and macros resolve from the link's location); subprojects are
+    not descended into because CI calls this once per OBS subproject.
+    Returns ``[]`` when the project declares no QA at all.
+    """
+    project_path = resolve_project_path(project)
+    if not project_path.is_dir():
+        raise SystemExit(f"error: project {project!r} not found at {project_path}")
+    lanes: list[Lane] = []
+    cfg = load_project_yaml(project_path / "project.yaml", env_vars)
+    if cfg.get("qa") is not None:
+        lanes.append(Lane(None, _normalise_qa_block(cfg["qa"], project)))
+    for _obs_project, package_path in find_packages(
+        project_path, project, recursive=False
+    ):
+        pkg_yaml = package_path / "package.yaml"
+        if not pkg_yaml.is_file():
+            continue
+        pkg_cfg = load_yaml_with_env(
+            pkg_yaml, env_vars, macros=load_macros(package_path)
+        )
+        if pkg_cfg.get("qa") is None:
+            continue
+        package = package_path.name
+        lanes.append(
+            Lane(
+                package,
+                _normalise_qa_block(pkg_cfg["qa"], _lane_where(project, package)),
+            )
+        )
+    return lanes
 
 
 def _entry_segment(entry: "dict[str, Any]") -> str:
@@ -387,9 +432,8 @@ def _with_expected_versions(
 
 def cmd_qa_show(args: argparse.Namespace) -> None:
     env_vars = _qa_env_vars(args)
-    entries = _with_expected_versions(
-        _load_qa_block(args.project, env_vars), args.project
-    )
+    lanes = _load_qa_lanes(args.project, env_vars)
+    entries = _with_expected_versions(lanes[0].entries if lanes else None, args.project)
     json_mode: bool = bool(getattr(args, "json", False))
 
     if entries is None:
@@ -586,9 +630,8 @@ def _wait_and_record(
 
 def cmd_qa_run(args: argparse.Namespace) -> None:
     env_vars = _qa_env_vars(args)
-    entries = _with_expected_versions(
-        _load_qa_block(args.project, env_vars), args.project
-    )
+    lanes = _load_qa_lanes(args.project, env_vars)
+    entries = _with_expected_versions(lanes[0].entries if lanes else None, args.project)
     if entries is None:
         raise SystemExit(f"error: {args.project} has no qa: block in its project.yaml")
 
