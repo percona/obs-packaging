@@ -41,8 +41,8 @@ def test_normalize_entry_name_filter():
 def test_normalize_entry_package_filter():
     m = _load()
     assert m.normalize_entry({"package": "pkg"})["package_filter"] == "--package pkg"
-    assert m.normalize_entry({"package": ""})["package_filter"] == ""
-    assert m.normalize_entry({})["package_filter"] == ""
+    assert m.normalize_entry({"package": ""})["package_filter"] == "--project-only"
+    assert m.normalize_entry({})["package_filter"] == "--project-only"
     e = m.normalize_entry({"package": "pkg", "package_filter": "--package pkg"})
     assert e["package_filter"] == "--package pkg"
 

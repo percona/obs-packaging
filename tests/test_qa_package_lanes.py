@@ -161,8 +161,8 @@ def test_show_json_lists_project_then_package_combos(tree, capsys):
         ("pkg", "OBS QA / ppg:17 / pkg / PLATFORMS=debian-13"),
     ]
     assert [e["package_filter"] for e in out] == [
-        "",
-        "",
+        "--project-only",
+        "--project-only",
         "--package pkg",
         "--package pkg",
     ]
@@ -229,6 +229,7 @@ def _run_args(project: str, **kw):
         rootprj="isv:percona",
         env_overrides=[],
         package=None,
+        project_only=False,
         name=None,
         pipeline=None,
         filter=[],
@@ -280,6 +281,88 @@ def test_run_package_combines_with_name(tree, capsys):
     with pytest.raises(SystemExit) as exc:
         cmd_qa.cmd_qa_run(_run_args("ppg:17", name="zzz"))
     assert "no qa entry with name 'zzz'" in str(exc.value)
+
+
+def test_show_json_project_lane_package_filter_is_project_only(tree, capsys):
+    out = _show_json("ppg:17", capsys)
+    assert {e["package_filter"] for e in out if not e["package"]} == {"--project-only"}
+    assert {e["package_filter"] for e in out if e["package"]} == {"--package pkg"}
+
+
+def test_run_project_only_excludes_package_lanes_on_same_pipeline(tree, capsys):
+    # the exact CI command line: qa run <project> --pipeline x --project-only
+    _write(
+        tree,
+        "ppg/17/project.yaml",
+        "qa:\n  pipeline: x\n  parameters:\n    A: projval\n",
+    )
+    _write(
+        tree,
+        "ppg/_shared/pkg/package.yaml",
+        "qa:\n  pipeline: x\n  parameters:\n    A: pkgval\n",
+    )
+    cmd_qa.cmd_qa_run(_run_args("ppg:17", pipeline="x", project_only=True))
+    out = capsys.readouterr().out
+    assert "A: projval" in out
+    assert "pkgval" not in out
+    assert "package:" not in out
+
+
+def test_run_project_only_without_project_block_errors(tree):
+    _write(tree, "ppg/17/project.yaml", "title: P\n")
+    with pytest.raises(SystemExit) as exc:
+        cmd_qa.cmd_qa_run(_run_args("ppg:17", project_only=True))
+    assert str(exc.value) == "error: ppg:17 has no qa: block in its project.yaml"
+
+
+def test_run_package_and_pipeline_combine(tree, capsys):
+    cmd_qa.cmd_qa_run(_run_args("ppg:17", package="pkg", pipeline="pkg-parallel"))
+    out = capsys.readouterr().out
+    assert "would trigger pipeline 'pkg-parallel'" in out
+    assert "ppg-multiOS-parallel" not in out
+
+    with pytest.raises(SystemExit) as exc:
+        cmd_qa.cmd_qa_run(_run_args("ppg:17", package="pkg", pipeline="nope"))
+    assert "(after --package pkg)" in str(exc.value)
+
+    with pytest.raises(SystemExit) as exc:
+        cmd_qa.cmd_qa_run(_run_args("ppg:17", project_only=True, pipeline="nope"))
+    assert "(after --project-only)" in str(exc.value)
+
+
+def test_run_project_only_and_package_are_exclusive(tree):
+    with pytest.raises(SystemExit) as exc:
+        cmd_qa.cmd_qa_run(_run_args("ppg:17", package="pkg", project_only=True))
+    assert (
+        str(exc.value) == "error: --project-only and --package are mutually exclusive"
+    )
+
+
+def test_package_name_colliding_with_project_segment_is_rejected(tree):
+    _write(
+        tree,
+        "ppg/17/project.yaml",
+        "qa:\n"
+        "  - name: pkg\n    pipeline: x\n    parameters:\n      A: b\n"
+        "  - name: other\n    pipeline: y\n    parameters:\n      A: b\n",
+    )
+    with pytest.raises(SystemExit) as exc:
+        cmd_qa._load_qa_lanes("ppg:17", {})
+    assert "rename the project entry" in str(exc.value)
+    assert "'pkg'" in str(exc.value)
+
+
+def test_single_project_entry_named_like_package_is_allowed(tree):
+    # a single-entry block renders no segment, so no context can collide
+    _write(
+        tree,
+        "ppg/17/project.yaml",
+        "qa:\n  name: pkg\n  pipeline: x\n  parameters:\n    A: b\n",
+    )
+    assert [lane.package for lane in cmd_qa._load_qa_lanes("ppg:17", {})] == [
+        None,
+        "pkg",
+    ]
 
 
 # --- run state -------------------------------------------------------------------

@@ -246,3 +246,22 @@ def test_container_projects_name_all_lanes():
         qa = yaml.safe_load(text.replace("%!{", "${"))["qa"]
         assert isinstance(qa, list) and len(qa) == 3, rel
         assert [e["name"] for e in qa] == ["ubi8", "ubi9", "ubi10"], rel
+
+
+def test_qa_name_charset_is_validated(tmp_path, monkeypatch):
+    # name is interpolated into a shell command line in CI
+    p = _write_project(
+        tmp_path,
+        monkeypatch,
+        f'qa:\n  name: "ubi 9"\n  pipeline: {_SHARED_PIPELINE}\n  parameters:\n    A: b\n',
+    )
+    with pytest.raises(SystemExit) as exc:
+        cmd_qa._load_qa_lanes(p, {})
+    assert "qa.name 'ubi 9' must match" in str(exc.value)
+
+    p = _write_project(
+        tmp_path / "ok",
+        monkeypatch,
+        f"qa:\n  name: ubi9\n  pipeline: {_SHARED_PIPELINE}\n  parameters:\n    A: b\n",
+    )
+    assert cmd_qa._load_qa_lanes(p, {})[0].entries[0]["name"] == "ubi9"
