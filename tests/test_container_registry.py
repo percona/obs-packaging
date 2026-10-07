@@ -191,7 +191,7 @@ def test_qa_block_renders_registry(tmp_path, monkeypatch):
     )
     env_vars = cmd_qa._qa_env_vars(args)
     assert env_vars["OBS_CONTAINER_REGISTRY"] == "registry.labs.example"
-    entries = cmd_qa._load_qa_block("ppg:staging:containers", env_vars)
+    entries = cmd_qa._load_qa_lanes("ppg:staging:containers", env_vars)[0].entries
     assert entries is not None
     assert entries[0]["parameters"]["REPOSITORY"] == (
         "registry.labs.example/isv/percona/ppg"
@@ -203,7 +203,7 @@ def test_qa_block_renders_registry(tmp_path, monkeypatch):
             rootprj="isv:percona", env_overrides=[registry_env_override(None)]
         )
     )
-    entries = cmd_qa._load_qa_block("ppg:staging:containers", env_vars)
+    entries = cmd_qa._load_qa_lanes("ppg:staging:containers", env_vars)[0].entries
     assert entries is not None
     assert entries[0]["parameters"]["REPOSITORY"] == (
         f"{DEFAULT_CONTAINER_REGISTRY}/isv/percona/ppg"

@@ -76,7 +76,7 @@ def test_name_is_optional_and_must_be_a_non_empty_string(tmp_path, monkeypatch):
         "qa:\n  name: 7\n  pipeline: x\n  parameters:\n    A: b\n",
     )
     with pytest.raises(SystemExit) as exc:
-        cmd_qa._load_qa_block(p, {})
+        cmd_qa._load_qa_lanes(p, {})[0].entries
     assert "qa.name must be a non-empty string" in str(exc.value)
 
 
@@ -91,7 +91,7 @@ def test_duplicate_name_is_rejected(tmp_path, monkeypatch):
         f"    parameters:\n      A: c\n",
     )
     with pytest.raises(SystemExit) as exc:
-        cmd_qa._load_qa_block(p, {})
+        cmd_qa._load_qa_lanes(p, {})[0].entries
     assert "same check segment 'ubi8'" in str(exc.value)
     assert "rename one of them" in str(exc.value)
 
@@ -108,7 +108,7 @@ def test_same_pipeline_without_names_is_rejected(tmp_path, monkeypatch):
         f"    parameters:\n      A: c\n",
     )
     with pytest.raises(SystemExit) as exc:
-        cmd_qa._load_qa_block(p, {})
+        cmd_qa._load_qa_lanes(p, {})[0].entries
     assert f"same check segment '{_SHARED_PIPELINE}'" in str(exc.value)
     assert "give each one a distinct 'name'" in str(exc.value)
 
@@ -119,7 +119,7 @@ def test_named_entry_loads(tmp_path, monkeypatch):
         monkeypatch,
         "qa:\n  name: ubi8\n  pipeline: x\n  parameters:\n    A: b\n",
     )
-    entries = cmd_qa._load_qa_block(p, {})
+    entries = cmd_qa._load_qa_lanes(p, {})[0].entries
     assert entries is not None
     assert entries[0]["name"] == "ubi8"
 
