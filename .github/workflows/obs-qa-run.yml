@@ -4,10 +4,11 @@ name: OBS QA Run
 #
 # A narrowed, on-demand counterpart of obs-nightly-qa.yml: instead of
 # discovering every QA-enabled subproject, it takes a project name (and
-# optionally a PR number, a `qa:` entry name and an axis filter), resolves the
+# optionally a PR number, a `qa:` entry name, a package and an axis filter), resolves the
 # OBS instance that hosts the project from `OBS_INSTANCES`, expands that
 # project's `qa:` block from the checked-out project.yaml, narrows the combos
-# and triggers Jenkins via `percona-obs qa run` once per combo.
+# and triggers Jenkins via `percona-obs qa run` once per combo.  QA lanes come
+# from the project's project.yaml and from each direct package's package.yaml.
 #
 # It is a separate workflow (not more inputs on the nightly) on purpose: the
 # nightly's change check looks up the last successful run of its own file, so
@@ -33,6 +34,11 @@ on:
         type: string
       name:
         description: 'qa: entry name for multi-entry blocks (e.g. ubi9); empty = every entry'
+        required: false
+        default: ''
+        type: string
+      package:
+        description: 'Package whose package.yaml qa: block to run (e.g. pg_tde); empty = project block plus every package block'
         required: false
         default: ''
         type: string
@@ -79,6 +85,7 @@ jobs:
           OBS_INSTANCES: ${{ vars.OBS_INSTANCES }}
           QA_PROJECT: ${{ inputs.project }}
           QA_PR_NUMBER: ${{ inputs.pr_number }}
+          QA_PACKAGE: ${{ inputs.package }}
           PYTHONPATH: ${{ github.workspace }}
         run: |
           if [ -z "${OBS_INSTANCES:-}" ]; then
@@ -153,6 +160,12 @@ jobs:
           QA_PROJECT: ${{ inputs.project }}
           QA_NAME: ${{ inputs.name }}
           QA_FILTER: ${{ inputs.filter }}
+          QA_PACKAGE: ${{ inputs.package }}
+          # Against a PR project only promoted packages exist; skip the
+          # package lanes of absent packages, as obs-pr-check does.
+          QA_PACKAGES_PRESENT_ONLY: ${{ inputs.pr_number != '' && 'true' || '' }}
+          OBS_APIURL: ${{ needs.resolve.outputs.instance_apiurl }}
+          OBS_PROJECT: ${{ needs.resolve.outputs.rootprj }}:${{ inputs.project }}
           PYTHONPATH: ${{ github.workspace }}
         run: |
           set -euo pipefail
@@ -224,8 +237,8 @@ jobs:
               <<<"$INSTANCE_ENV" >> .profile/ci.yaml
           fi
 
-      # `name_filter` / `axis_filters` come from `qa show --json` (tool-generated
-      # flag strings), so interpolating them unquoted is the same contract as
+      # `name_filter` / `package_filter` / `axis_filters` come from `qa show --json`
+      # (tool-generated flag strings), so interpolating them unquoted is the same contract as
       # obs-pr-check.yml.
       - name: Run qa pipeline
         env:
@@ -237,6 +250,7 @@ jobs:
             --wait \
             --report-json /tmp/qa-report.json \
             ${{ matrix.name_filter }} \
+            ${{ matrix.package_filter }} \
             ${{ matrix.axis_filters }}
 
       - name: Upload QA report artifact
