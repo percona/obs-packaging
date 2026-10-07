@@ -179,7 +179,7 @@ def _combo(name: str, package: str = "", **params: str) -> dict:
         "label": ",".join(f"{k}={v}" for k, v in params.items()) or "default",
         "axis_filters": " ".join(f"--filter {k}={v}" for k, v in params.items()),
         "name_filter": f"--name {name}" if name else "",
-        "package_filter": f"--package {package}" if package else "",
+        "package_filter": f"--package {package}" if package else "--project-only",
         "status_context": f"OBS QA / x / {package or name}",
         "params": params,
     }

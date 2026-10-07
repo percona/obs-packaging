@@ -477,6 +477,13 @@ def build_parser() -> argparse.ArgumentParser:
         "package block are triggered. Combinable with --name/--pipeline.",
     )
     qa_run_parser.add_argument(
+        "--project-only",
+        dest="project_only",
+        action="store_true",
+        help="Restrict execution to the project's own project.yaml qa: block, "
+        "ignoring package.yaml blocks. Mutually exclusive with --package.",
+    )
+    qa_run_parser.add_argument(
         "--report-json",
         metavar="PATH",
         default=None,

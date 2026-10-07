@@ -14,6 +14,7 @@ import dataclasses
 import itertools
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -74,6 +75,10 @@ def _qa_env_vars(args: argparse.Namespace) -> dict[str, str]:
     if args.env_overrides:
         env_vars.update(parse_env_overrides(args.env_overrides))
     return env_vars
+
+
+# `name:` is interpolated into a shell command line in CI (``--name <name>``).
+_SEGMENT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]*$")
 
 
 @dataclasses.dataclass
@@ -158,6 +163,18 @@ def _load_qa_lanes(project: str, env_vars: dict[str, str]) -> list[Lane]:
                 _normalise_qa_block(pkg_cfg["qa"], _lane_where(project, package)),
             )
         )
+    # A multi-entry project block renders each entry's segment into its check
+    # name; a package lane named like one of those segments would render the
+    # same context (`OBS QA / <project> / <segment>`).
+    if lanes and lanes[0].package is None and len(lanes[0].entries) > 1:
+        segments = {_entry_segment(e) for e in lanes[0].entries}
+        for lane in lanes[1:]:
+            if lane.package in segments:
+                raise SystemExit(
+                    f"error: {project}: package {lane.package!r} declares a qa: "
+                    "block but the project block already has an entry with check "
+                    f"segment {lane.package!r}; rename the project entry (name:)"
+                )
     return lanes
 
 
@@ -174,6 +191,11 @@ def _validate_qa(qa: Any, project: str) -> None:
         name = qa.get("name")
         if not isinstance(name, str) or not name:
             raise SystemExit(f"error: {project}: qa.name must be a non-empty string")
+        if not _SEGMENT_NAME_RE.match(name):
+            raise SystemExit(
+                f"error: {project}: qa.name {name!r} must match "
+                "[A-Za-z0-9][A-Za-z0-9_.+-]*"
+            )
     pipeline = qa.get("pipeline")
     if not isinstance(pipeline, str) or not pipeline:
         raise SystemExit(f"error: {project}: qa.pipeline must be a non-empty string")
@@ -498,7 +520,10 @@ def cmd_qa_show(args: argparse.Namespace) -> None:
         out: list[dict[str, Any]] = []
         for lane in lanes:
             package = lane.package or ""
-            package_filter = f"--package {package}" if package else ""
+            # `qa run` selector for CI: a package lane runs only its package's
+            # block; a project lane must not also trigger package lanes that
+            # share its pipeline, hence --project-only.
+            package_filter = f"--package {package}" if package else "--project-only"
             multi_entry = len(lane.entries) > 1
             for entry in lane.entries:
                 pipeline = entry["pipeline"]
@@ -689,6 +714,20 @@ def cmd_qa_run(args: argparse.Namespace) -> None:
         )
 
     package = getattr(args, "package", None)
+    project_only = bool(getattr(args, "project_only", False))
+    if project_only and package:
+        raise SystemExit("error: --project-only and --package are mutually exclusive")
+    selectors = (
+        ["--project-only"]
+        if project_only
+        else [f"--package {package}"] if package else []
+    )
+    if project_only:
+        lanes = [lane for lane in lanes if lane.package is None]
+        if not lanes:
+            raise SystemExit(
+                f"error: {args.project} has no qa: block in its project.yaml"
+            )
     if package:
         lanes = [lane for lane in lanes if lane.package == package]
         if not lanes:
@@ -710,7 +749,10 @@ def cmd_qa_run(args: argparse.Namespace) -> None:
         ]
         lanes = [lane for lane in lanes if lane.entries]
         if not lanes:
-            raise SystemExit(f"error: {args.project}: no qa entry with name {name!r}")
+            suffix = f" (after {' '.join(selectors)})" if selectors else ""
+            raise SystemExit(
+                f"error: {args.project}: no qa entry with name {name!r}{suffix}"
+            )
 
     if args.pipeline:
         lanes = [
@@ -722,7 +764,8 @@ def cmd_qa_run(args: argparse.Namespace) -> None:
         ]
         lanes = [lane for lane in lanes if lane.entries]
         if not lanes:
-            suffix = f" (after --name {name})" if name else ""
+            applied = [*selectors, f"--name {name}"] if name else selectors
+            suffix = f" (after {' '.join(applied)})" if applied else ""
             raise SystemExit(
                 f"error: {args.project}: no qa entry with pipeline "
                 f"{args.pipeline!r}{suffix}"

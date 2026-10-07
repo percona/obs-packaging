@@ -46,14 +46,16 @@ def normalize_entry(entry: dict) -> dict:
 
     Mirrors the ``axis_filters`` convention: the workflow interpolates the
     values straight into the ``qa run`` command line, so each is either
-    ``--name <name>`` / ``--package <pkg>`` or the empty string.
+    ``--name <name>`` (or empty) and ``--package <pkg>`` / ``--project-only``.
     """
     if not entry.get("name_filter"):
         name = entry.get("name") or ""
         entry["name_filter"] = f"--name {name}" if name else ""
     if not entry.get("package_filter"):
         package = entry.get("package") or ""
-        entry["package_filter"] = f"--package {package}" if package else ""
+        entry["package_filter"] = (
+            f"--package {package}" if package else "--project-only"
+        )
     return entry
 
 
