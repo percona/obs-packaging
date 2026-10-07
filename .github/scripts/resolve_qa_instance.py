@@ -8,9 +8,9 @@ objects, see docs/PERCONA_OBS_TOOL.md) and keeps the entries whose
 ``:containers`` subproject, ``packages`` otherwise).  Exactly one instance
 must remain; zero or several is an error naming the candidates.
 
-Also validates the two free-text workflow inputs that are later interpolated
-into shell: ``QA_PROJECT`` (strict colon-notation name) and ``QA_PR_NUMBER``
-(digits or empty).
+Also validates the free-text workflow inputs that are later interpolated
+into shell: ``QA_PROJECT`` (strict colon-notation name), ``QA_PR_NUMBER``
+(digits or empty) and ``QA_PACKAGE`` (package directory name or empty).
 
 Writes flat scalars to ``$GITHUB_OUTPUT``: instance_name, instance_apiurl,
 instance_user, instance_registry, instance_env (JSON object or ``null``) and
@@ -24,6 +24,7 @@ Required env vars:
 
 Optional:
   QA_PR_NUMBER    PR number; empty for the production root
+  QA_PACKAGE      package name; empty for none
 """
 
 from __future__ import annotations
@@ -48,6 +49,7 @@ from percona_obs.project_config import RepositoryFilter  # noqa: E402
 _SEGMENT = r"[A-Za-z0-9][A-Za-z0-9_.+-]*"
 _PROJECT_RE = re.compile(rf"^{_SEGMENT}(:{_SEGMENT})*$")
 _PR_RE = re.compile(r"^(|[1-9][0-9]*)$")
+_PACKAGE_RE = re.compile(r"^(|[A-Za-z0-9][A-Za-z0-9_.+-]*)$")
 
 
 def validate_project(project: str) -> None:
@@ -62,6 +64,14 @@ def validate_pr_number(pr_number: str) -> None:
     if not _PR_RE.match(pr_number):
         raise SystemExit(
             f"error: invalid pr_number {pr_number!r}; expected a positive integer or empty"
+        )
+
+
+def validate_package(package: str) -> None:
+    if not _PACKAGE_RE.match(package):
+        raise SystemExit(
+            f"error: invalid package name {package!r}; expected a package "
+            "directory name such as pg_tde, or empty"
         )
 
 
@@ -115,6 +125,7 @@ def main() -> None:
     pr_number = os.environ.get("QA_PR_NUMBER", "")
     validate_project(project)
     validate_pr_number(pr_number)
+    validate_package(os.environ.get("QA_PACKAGE", ""))
 
     instances = _load_instances(os.environ.get("OBS_INSTANCES", ""))
     inst = resolve_instance(instances, project)

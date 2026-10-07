@@ -170,15 +170,17 @@ def test_resolve_main_malformed_instances(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def _combo(name: str, **params: str) -> dict:
+def _combo(name: str, package: str = "", **params: str) -> dict:
     return {
         "project": "ppg:staging:18:containers",
+        "package": package,
         "pipeline": "docker",
         "name": name,
         "label": ",".join(f"{k}={v}" for k, v in params.items()) or "default",
         "axis_filters": " ".join(f"--filter {k}={v}" for k, v in params.items()),
         "name_filter": f"--name {name}" if name else "",
-        "status_context": f"OBS QA / x / {name}",
+        "package_filter": f"--package {package}" if package else "",
+        "status_context": f"OBS QA / x / {package or name}",
         "params": params,
     }
 
@@ -275,3 +277,90 @@ def test_filter_empty_matrix_fails():
     with pytest.raises(SystemExit) as exc:
         m.filter_matrix([], "", "")
     assert "no qa" in str(exc.value).lower()
+
+
+# --- package selection -----------------------------------------------------------
+
+_WITH_PKG = [
+    _combo("", WITH_POSTGIS="true"),
+    _combo("", "pg_tde", PLATFORMS="rocky-9"),
+    _combo("", "pgbackrest", PLATFORMS="rocky-9"),
+]
+
+
+def test_filter_by_package():
+    m = _load("filter_qa_matrix")
+    out = m.filter_matrix(_WITH_PKG, "", "", package="pg_tde")
+    assert [c["package"] for c in out] == ["pg_tde"]
+
+
+def test_filter_unknown_package_lists_packages():
+    m = _load("filter_qa_matrix")
+    with pytest.raises(SystemExit) as exc:
+        m.filter_matrix(_WITH_PKG, "", "", package="nope")
+    msg = str(exc.value)
+    assert "(project)" in msg and "pg_tde" in msg and "pgbackrest" in msg
+
+
+def test_filter_empty_package_keeps_everything():
+    m = _load("filter_qa_matrix")
+    assert m.filter_matrix(_WITH_PKG, "", "", package="") == _WITH_PKG
+
+
+def _presence_env(monkeypatch, tmp_path, present: set[str], **env: str):
+    m = _load("filter_qa_matrix")
+    monkeypatch.setenv("QA_PACKAGES_PRESENT_ONLY", "true")
+    monkeypatch.setenv("OBS_APIURL", "https://obs.example")
+    monkeypatch.setenv("OBS_PROJECT", "isv:percona:PR:pr-7:ppg:staging:18")
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setattr(m, "fetch_present_packages", lambda a, p: present)
+    monkeypatch.setattr(m, "_configure_osc", lambda apiurl: None)
+    return m
+
+
+def test_main_presence_drop_then_narrow(monkeypatch, tmp_path, capsys):
+    m = _presence_env(
+        monkeypatch, tmp_path, {"pg_tde"}, QA_NAME="", QA_FILTER="", QA_PACKAGE=""
+    )
+    monkeypatch.setattr("sys.stdin", __import__("io").StringIO(json.dumps(_WITH_PKG)))
+    m.main()
+    out = json.loads(capsys.readouterr().out)
+    assert [c["package"] for c in out] == ["", "pg_tde"]
+
+
+def test_main_presence_requested_absent_package_errors(monkeypatch, tmp_path):
+    m = _presence_env(
+        monkeypatch,
+        tmp_path,
+        {"pg_tde"},
+        QA_NAME="",
+        QA_FILTER="",
+        QA_PACKAGE="pgbackrest",
+    )
+    monkeypatch.setattr("sys.stdin", __import__("io").StringIO(json.dumps(_WITH_PKG)))
+    with pytest.raises(SystemExit) as exc:
+        m.main()
+    msg = str(exc.value)
+    assert (
+        "pgbackrest" in msg
+        and "not present in isv:percona:PR:pr-7:ppg:staging:18" in msg
+    )
+
+
+# --- package input validation ----------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "pkg", ["", "pg_tde", "percona-postgresql18", "python3-psycopg2"]
+)
+def test_valid_package_names(pkg):
+    m = _load("resolve_qa_instance")
+    m.validate_package(pkg)
+
+
+@pytest.mark.parametrize("pkg", ["a b", "a;b", "$(x)", "a/b", "-x"])
+def test_invalid_package_names(pkg):
+    m = _load("resolve_qa_instance")
+    with pytest.raises(SystemExit):
+        m.validate_package(pkg)
