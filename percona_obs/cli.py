@@ -407,14 +407,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     qa_parser = subparsers.add_parser(
         "qa",
-        help="Trigger Jenkins QA pipelines declared in project.yaml.",
+        help="Trigger Jenkins QA pipelines declared in project.yaml / package.yaml.",
     )
     qa_subparsers = qa_parser.add_subparsers(dest="qa_command", metavar="<subcommand>")
     qa_subparsers.required = True
 
     _qa_project_help = (
         "Project name (colon notation, e.g. ppg:18:containers:ubi9). "
-        "The project's project.yaml must declare a top-level qa: block."
+        "QA lanes come from the project's project.yaml qa: block and from the "
+        "qa: block of each direct package's package.yaml."
     )
 
     qa_run_parser = qa_subparsers.add_parser(
@@ -466,6 +467,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Restrict execution to the qa: entry whose optional `name:` key "
         "matches. Needed when two entries share a pipeline. Combinable with "
         "--pipeline (both filters apply).",
+    )
+    qa_run_parser.add_argument(
+        "--package",
+        metavar="PKG",
+        default=None,
+        help="Restrict execution to the qa: block of this package's "
+        "package.yaml. Without it, the project's own block and every "
+        "package block are triggered. Combinable with --name/--pipeline.",
     )
     qa_run_parser.add_argument(
         "--report-json",

@@ -218,3 +218,138 @@ def test_show_human_output_names_the_package(tree, capsys):
     out = capsys.readouterr().out
     assert "ppg:17  →  pipeline: ppg-multiOS-parallel" in out
     assert "ppg:17 / pkg  →  pipeline: pkg-parallel" in out
+
+
+# --- qa run --package ------------------------------------------------------------
+
+
+def _run_args(project: str, **kw):
+    base = dict(
+        project=project,
+        rootprj="isv:percona",
+        env_overrides=[],
+        package=None,
+        name=None,
+        pipeline=None,
+        filter=[],
+        param=[],
+        dry_run=True,
+        wait=False,
+        report_json=None,
+        profile=None,
+    )
+    base.update(kw)
+    return SimpleNamespace(**base)
+
+
+def test_run_without_package_triggers_every_lane(tree, capsys):
+    cmd_qa.cmd_qa_run(_run_args("ppg:17"))
+    out = capsys.readouterr().out
+    assert "would trigger pipeline 'ppg-multiOS-parallel'" in out
+    assert "would trigger pipeline 'pkg-parallel'" in out
+
+
+def test_run_package_selects_one_lane(tree, capsys):
+    cmd_qa.cmd_qa_run(_run_args("ppg:17", package="pkg"))
+    out = capsys.readouterr().out
+    assert "would trigger pipeline 'pkg-parallel'" in out
+    assert "ppg-multiOS-parallel" not in out
+    assert "package: pkg" in out
+
+
+def test_run_unknown_package_errors_listing_packages(tree):
+    with pytest.raises(SystemExit) as exc:
+        cmd_qa.cmd_qa_run(_run_args("ppg:17", package="nope"))
+    assert str(exc.value) == (
+        "error: ppg:17: no package with a qa: block named 'nope'; packages: pkg"
+    )
+
+
+def test_run_package_combines_with_name(tree, capsys):
+    _write(
+        tree,
+        "ppg/_shared/pkg/package.yaml",
+        "qa:\n"
+        "  - name: a\n    pipeline: x\n    parameters:\n      P: va\n"
+        "  - name: b\n    pipeline: x\n    parameters:\n      P: vb\n",
+    )
+    cmd_qa.cmd_qa_run(_run_args("ppg:17", package="pkg", name="a"))
+    out = capsys.readouterr().out
+    assert "P: va" in out and "P: vb" not in out
+
+    with pytest.raises(SystemExit) as exc:
+        cmd_qa.cmd_qa_run(_run_args("ppg:17", name="zzz"))
+    assert "no qa entry with name 'zzz'" in str(exc.value)
+
+
+# --- run state -------------------------------------------------------------------
+
+
+def test_run_state_round_trips_package(tmp_path, monkeypatch):
+    import percona_obs.qa_state as qa_state
+
+    monkeypatch.setattr(qa_state, "_STATE_DIR", tmp_path / "qa")
+    state = qa_state.RunState(
+        run_id="r1",
+        project="ppg:17",
+        pipeline="x",
+        created_at="t",
+        combos=[qa_state.Combo(label="", params={"A": "b"})],
+        package="pkg",
+    )
+    qa_state.save_state(state)
+    assert qa_state.load_state("r1").package == "pkg"
+
+    # a state file written before the field existed loads with ""
+    path = tmp_path / "qa" / "r0.json"
+    path.write_text(
+        json.dumps(
+            {
+                "run_id": "r0",
+                "project": "ppg:17",
+                "pipeline": "x",
+                "created_at": "t",
+                "combos": [],
+            }
+        )
+    )
+    assert qa_state.load_state("r0").package == ""
+
+
+def test_report_json_carries_package(tmp_path):
+    import percona_obs.qa_state as qa_state
+
+    state = qa_state.RunState(
+        run_id="r1",
+        project="ppg:17",
+        pipeline="x",
+        created_at="t",
+        combos=[qa_state.Combo(label="P=1", params={"P": "1"})],
+        package="pkg",
+    )
+    out = tmp_path / "report.json"
+    qa_state.write_report_json(state, out)
+    data = json.loads(out.read_text())
+    assert data["package"] == "pkg"
+    assert data["combos"][0]["package"] == "pkg"
+
+
+def test_qa_list_shows_project_slash_package(tmp_path, monkeypatch, capsys):
+    import percona_obs.qa_state as qa_state
+
+    monkeypatch.setattr(qa_state, "_STATE_DIR", tmp_path / "qa")
+    for run_id, package in (("r1", "pkg"), ("r2", "")):
+        qa_state.save_state(
+            qa_state.RunState(
+                run_id=run_id,
+                project="ppg:17",
+                pipeline="x",
+                created_at="t",
+                combos=[],
+                package=package,
+            )
+        )
+    cmd_qa.cmd_qa_list(SimpleNamespace(running=False))
+    out = capsys.readouterr().out
+    assert "ppg:17/pkg  x" in out
+    assert "ppg:17  x" in out
