@@ -2,6 +2,7 @@
 
 **Date:** 2026-10-07
 **Status:** approved design, awaiting implementation plan
+**Amended after final review:** `--project-only` selector (§2, §3), `qa.name` charset and cross-block collision rule (§1).
 
 ## Goal
 
@@ -20,6 +21,11 @@ subproject, and always on nightly and manual runs.
   subproject.
 
 ## 1. `package.yaml` `qa:` block
+
+(Amended: `name` must match `[A-Za-z0-9][A-Za-z0-9_.+-]*` since CI interpolates
+it into a shell command. A package whose name equals a check segment of a
+multi-entry project block is rejected by the loader, as both would render the
+same status context.)
 
 Same schema as the project block: a mapping, or a list of entries, each with
 optional `name`, required `pipeline`, required non-empty `parameters`, optional
@@ -98,7 +104,7 @@ Each combo dict gains:
 | field | value |
 |---|---|
 | `package` | package directory name, or `""` for project lanes |
-| `package_filter` | `--package <pkg>` or `""`, mirroring `name_filter` |
+| `package_filter` | `--package <pkg>` for package lanes, `--project-only` for project lanes (amended: was `""`, which let a project lane's `qa run` also trigger package lanes on the same pipeline) |
 
 `status_context`:
 
@@ -114,14 +120,17 @@ contexts are byte-for-byte identical to today's.
 
 ## 3. `qa run` selection and run state
 
-New flag `qa run <project> --package PKG`. Selection order:
+New flags `qa run <project> --package PKG` and `--project-only` (project's own
+block only; mutually exclusive with `--package`, error if the project has no
+block). Selection order:
 
+0. `--project-only`: keep only the project lane.
 1. `--package`: keep only lanes with `package == PKG`. No match → error listing
    the packages of the project that declare `qa:`.
 2. `--name`: keep entries with that name, across all surviving lanes.
 3. `--pipeline`: keep entries with that pipeline, across all surviving lanes.
 
-Without `--package`, every lane (project and all packages) is eligible. This
+Without `--package`/`--project-only`, every lane (project and all packages) is eligible. This
 is the nightly behaviour.
 
 Run state: one `RunState` per lane and pipeline (today: one per pipeline).

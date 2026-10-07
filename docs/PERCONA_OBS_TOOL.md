@@ -688,7 +688,12 @@ qa:
 ```
 
 The segment-uniqueness rule below is checked per block: the project block and
-each package block are separate namespaces.
+each package block are separate namespaces. One cross-block rule applies: when
+the project block has more than one entry, no package that declares `qa:` may
+share a name with one of its entry segments (both would render
+`OBS QA / <project> / <segment>`); the loader rejects it, so rename the project
+entry with `name:`. A single-entry project block renders no segment and is
+exempt.
 
 #### Status contexts
 
@@ -704,8 +709,11 @@ matrix label and is absent for entries without `matrix:`.
 
 #### When package lanes run
 
-* `qa run <project>` with no `--package` triggers the project block and every
-  package block. This is what the nightly does.
+* `qa run <project>` with neither `--package` nor `--project-only` triggers the
+  project block and every package block. This is what the nightly does. CI's
+  per-combo jobs pass `--project-only` for project lanes and `--package <pkg>`
+  for package lanes (the `package_filter` field), so a project lane never also
+  triggers package lanes that share its pipeline.
 * On PR checks (`obs-pr-check.yml`) and on `obs-qa-run` dispatches with a PR
   number, `.github/scripts/list_qa_matrix.py` / `filter_qa_matrix.py` run with
   `QA_PACKAGES_PRESENT_ONLY=true` and drop the package lanes whose package is
@@ -713,11 +721,17 @@ matrix label and is absent for entries without `matrix:`.
   including dep-cascade rebuilds). Project lanes are never dropped. The OBS
   listing is strict: a 404 means no packages, any other OBS error fails the
   detect job instead of silently dropping lanes. The nightly never sets it.
+* Testing a new package `qa:` block: a PR that changes only a package's `qa:`
+  block does not change its sources, so the package is usually aggregated and
+  absent from the PR project and its lane is dropped. To exercise the block,
+  dispatch `obs-qa-run` from the feature branch with `package` set and no
+  `pr_number` (production root).
 
 #### `name:` — disambiguating two entries
 
-`name` is optional and must be a non-empty string, unique within one project's
-`qa:` block. It changes two things:
+`name` is optional and must be a non-empty string matching
+`[A-Za-z0-9][A-Za-z0-9_.+-]*` (it is interpolated into a shell command line in
+CI), unique within one `qa:` block (project or package). It changes two things:
 
 * **The check-run name.** For a multi-entry block, the disambiguating segment of
   `status_context` (`OBS QA / <project> / <segment> / <combo>`) is the entry's
@@ -755,8 +769,8 @@ project name with `:` replaced by `/`, useful for registry URLs).
 
 | Command | Purpose |
 |---|---|
-| `qa show <project>` | Print the resolved matrix (humans). `--json` emits one entry per combo with `project`, `package` (empty for project lanes), `pipeline`, `name`, `label`, `axis_filters`, `name_filter`, `package_filter` (`--package <pkg>`, or empty), `status_context`, `params` — used by CI to drive a GitHub matrix. Empty `[]` when the project has no lane. |
-| `qa run <project>` | Trigger Jenkins for every matrix combo. Fire-and-forget by default; pass `--wait` to block until terminal results arrive. `--filter AXIS=val[,val…]` narrows the matrix; `--name NAME` selects one entry of a multi-entry `qa:` block (combinable with `--pipeline`); `--package PKG` runs only that package's `package.yaml` block (combinable with `--name`/`--pipeline`; unknown packages are rejected, listing those that declare `qa:`); without it every lane runs; `--param NAME=VAL` overrides a parameter at runtime; `--dry-run` prints the POST bodies without calling Jenkins; `--report-json PATH` writes the per-combo result table for CI. |
+| `qa show <project>` | Print the resolved matrix (humans). `--json` emits one entry per combo with `project`, `package` (empty for project lanes), `pipeline`, `name`, `label`, `axis_filters`, `name_filter`, `package_filter` (`--package <pkg>` for package lanes, `--project-only` for project lanes), `status_context`, `params` — used by CI to drive a GitHub matrix. Empty `[]` when the project has no lane. |
+| `qa run <project>` | Trigger Jenkins for every matrix combo. Fire-and-forget by default; pass `--wait` to block until terminal results arrive. `--filter AXIS=val[,val…]` narrows the matrix; `--name NAME` selects one entry of a multi-entry `qa:` block (combinable with `--pipeline`); `--package PKG` runs only that package's `package.yaml` block (combinable with `--name`/`--pipeline`; unknown packages are rejected, listing those that declare `qa:`); `--project-only` runs only the project's own `project.yaml` block, ignoring package blocks (mutually exclusive with `--package`); with neither, every lane runs; `--param NAME=VAL` overrides a parameter at runtime; `--dry-run` prints the POST bodies without calling Jenkins; `--report-json PATH` writes the per-combo result table for CI. |
 | `qa status --run-id <id>` | Re-poll non-terminal combos of a previous run and print the current state. |
 | `qa retry --run-id <id>` | Re-trigger only the combos whose latest attempt is non-`SUCCESS`. Re-uses the recorded `params` so retries are reproducible. By default skips `ABORTED` combos; pass `--include-aborted` to retry them too. |
 | `qa list` | Tabulate recent runs (run-id, project or project/package, pipeline, summary). |
