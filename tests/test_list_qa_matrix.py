@@ -164,3 +164,17 @@ def test_main_skips_presence_filter_when_unset(monkeypatch, capsys):
     m.main()
     out = json.loads(capsys.readouterr().out)
     assert len(out) == 1 and out[0]["package_filter"] == "--package pgbackrest"
+
+
+def test_fetch_present_packages_propagates_listing_errors(monkeypatch):
+    import pytest
+
+    m = _load()
+    import percona_obs.obs_api as obs_api
+
+    def boom(apiurl: str, project: str) -> set[str]:
+        raise SystemExit("error listing packages")
+
+    monkeypatch.setattr(obs_api, "_fetch_obs_package_names_or_fail", boom)
+    with pytest.raises(SystemExit):
+        m.fetch_present_packages("https://x", "p")

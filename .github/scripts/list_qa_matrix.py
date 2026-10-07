@@ -58,10 +58,13 @@ def normalize_entry(entry: dict) -> dict:
 
 
 def fetch_present_packages(apiurl: str, full_project: str) -> set[str]:
-    """Package names currently in an OBS project (empty on 404 / error)."""
-    from percona_obs.obs_api import _fetch_obs_package_names
+    """Package names currently in an OBS project.
 
-    return _fetch_obs_package_names(apiurl, full_project)
+    Empty only on 404; any other OBS error aborts the run (SystemExit).
+    """
+    from percona_obs.obs_api import _fetch_obs_package_names_or_fail
+
+    return _fetch_obs_package_names_or_fail(apiurl, full_project)
 
 
 def drop_absent_packages(
