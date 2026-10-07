@@ -21,8 +21,10 @@ ARG PPG_REPO
 ARG RHEL_VER
 
 RUN microdnf -y update
+# glibc-minimal-langpack: see the percona-distribution-postgresql Dockerfile;
+# ubi-minimal pre-installs it and OBS must upload it for glibc to upgrade.
 RUN microdnf -y install \
-    glibc-langpack-en systemd-rpm-macros file \
+    glibc-langpack-en glibc-minimal-langpack systemd-rpm-macros file \
     mariadb-connector-c-config crypto-policies-scripts pkgconfig
 
 ENV PPG_VERSION %!{PG_VERSION}-%!{PPG_RELEASE}

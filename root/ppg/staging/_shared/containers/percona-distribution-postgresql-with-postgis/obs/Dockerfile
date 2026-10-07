@@ -33,8 +33,14 @@ ENV PATH="/pgdata:${PGROOT}/bin:${PATH}"
 
 RUN microdnf -y update
 
+# ubi-minimal ships glibc-minimal-langpack (strict `glibc = ver`). OBS only
+# uploads what this list expands to, and glibc-langpack-en already satisfies
+# glibc's langpack requirement, so without naming it here the minimal langpack
+# never reaches the build and glibc cannot upgrade once the UBI repository
+# moves ahead of the registry image.
 RUN microdnf -y install \
         glibc-langpack-en \
+        glibc-minimal-langpack \
         systemd-rpm-macros \
         file \
         mariadb-connector-c-config \
