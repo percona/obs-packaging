@@ -4,13 +4,13 @@
     {
       "id": 0,
       "subject": "Task 1: `Lane` and `_load_qa_lanes` loader",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Replace `_load_qa_block` with `_load_qa_lanes`, which returns the project's block plus one `Lane` per direct package whose `package.yaml` has a `qa:` key, rendered through the package directory's macro chain.\n\n**Files:**\n- Modify: `percona_obs/cmd_qa.py:1-152` (module docstring, imports, loader section)\n- Modify: `tests/test_qa_entry_name.py:70-120` (four tests call `_load_qa_block`)\n- Create: `tests/test_qa_package_lanes.py`\n\n**Acceptance Criteria:**\n- [ ] `_load_qa_lanes(\"ppg:17\", {})` on a tree with a project block and two packages (one with `qa:`, one without) returns two lanes: `Lane(None, [...])` then `Lane(\"pkg\", [...])`.\n- [ ] A `_shared/pkg/package.yaml` reached through `17/pkg` and `18/pkg` symlinks renders `%!{PG_MAJOR_VERSION}` as `17` and `18` respectively.\n- [ ] A package inside a subproject directory (`17/sub/deep/package.yaml`) is not discovered by `_load_qa_lanes(\"ppg:17\", ...)`.\n- [ ] A project with neither block returns `[]`.\n- [ ] Two unnamed entries sharing a pipeline inside one package block raise `SystemExit` whose message starts with `error: ppg:17/pkg:`; the same pipeline unnamed in the project block and in a package block does not raise.\n- [ ] Existing tests in `tests/test_qa_entry_name.py` pass using `_load_qa_lanes(p, {})[0].entries`.\n\n**Verify:** `venv/bin/python -m pytest tests/test_qa_package_lanes.py tests/test_qa_entry_name.py -q` \u2192 all pass; `venv/bin/black percona_obs/ tests/ && venv/bin/pyright` \u2192 \"0 errors\".\n\n```json:metadata\n{\"files\": [\"percona_obs/cmd_qa.py\", \"tests/test_qa_entry_name.py\", \"tests/test_qa_package_lanes.py\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/test_qa_package_lanes.py tests/test_qa_entry_name.py -q && venv/bin/black --check percona_obs/ tests/ && venv/bin/pyright\", \"acceptanceCriteria\": [\"`_load_qa_lanes(\\\"ppg:17\\\", {})` on a tree with a project block and two packages (one with `qa:`, one without) returns two lanes: `Lane(None, [...])` then `Lane(\\\"pkg\\\", [...])`.\", \"A `_shared/pkg/package.yaml` reached through `17/pkg` and `18/pkg` symlinks renders `%!{PG_MAJOR_VERSION}` as `17` and `18` respectively.\", \"A package inside a subproject directory (`17/sub/deep/package.yaml`) is not discovered by `_load_qa_lanes(\\\"ppg:17\\\", ...)`.\", \"A project with neither block returns `[]`.\", \"Two unnamed entries sharing a pipeline inside one package block raise `SystemExit` whose message starts with `error: ppg:17/pkg:`; the same pipeline unnamed in the project block and in a package block does not raise.\", \"Existing tests in `tests/test_qa_entry_name.py` pass using `_load_qa_lanes(p, {})[0].entries`.\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 1,
       "subject": "Task 2: `qa show` output with package lanes",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         0
       ],
@@ -19,7 +19,7 @@
     {
       "id": 2,
       "subject": "Task 3: `qa run --package`, run state and reports",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         1
       ],
@@ -28,7 +28,7 @@
     {
       "id": 3,
       "subject": "Task 4: CI discovery script: `package_filter` and OBS presence filter",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         2
       ],
@@ -37,7 +37,7 @@
     {
       "id": 4,
       "subject": "Task 5: Manual-run scripts: `QA_PACKAGE` and presence filter",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         3
       ],
@@ -46,7 +46,7 @@
     {
       "id": 5,
       "subject": "Task 6: Workflow wiring",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         4
       ],
@@ -55,7 +55,7 @@
     {
       "id": 6,
       "subject": "Task 7: Documentation",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         5
       ],
@@ -64,12 +64,12 @@
     {
       "id": 7,
       "subject": "Task 8: Full verification pass",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         6
       ],
       "description": "**Goal:** Confirm the whole suite, formatter and type checker pass on the finished branch, and that project-lane output is unchanged on the real tree.\n\n**Files:** none modified.\n\n**Acceptance Criteria:**\n- [ ] `venv/bin/python -m pytest tests -q` passes.\n- [ ] `venv/bin/black --check percona_obs/ tests/ .github/scripts/` and `venv/bin/pyright` pass.\n- [ ] `qa show --json` for `ppg:staging:18` and `ppg:staging:containers` with `-R isv:percona` produces the same `status_context` list as on `percona/main` (no package lanes exist in the tree yet, so output must match apart from the two new empty fields).\n\n**Verify:** the commands in the steps below.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"venv/bin/python -m pytest tests -q && venv/bin/black --check percona_obs/ tests/ .github/scripts/ && venv/bin/pyright\", \"acceptanceCriteria\": [\"`venv/bin/python -m pytest tests -q` passes.\", \"`venv/bin/black --check percona_obs/ tests/ .github/scripts/` and `venv/bin/pyright` pass.\", \"`qa show --json` for `ppg:staging:18` and `ppg:staging:containers` with `-R isv:percona` produces the same `status_context` list as on `percona/main` (no package lanes exist in the tree yet, so output must match apart from the two new empty fields).\"], \"modelTier\": \"mechanical\"}\n```"
     }
   ],
-  "lastUpdated": "2026-10-07T08:20:42Z"
+  "lastUpdated": "2026-10-07T08:43:50Z"
 }
