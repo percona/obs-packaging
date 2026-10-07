@@ -180,6 +180,10 @@ jobs:
               value: 'openSUSE.org:'
           EOF
 
+      # `name_filter` / `package_filter` / `axis_filters` are tool-generated
+      # flag strings from `qa show --json` (normalised by list_qa_matrix.py),
+      # same contract as obs-pr-check.yml.  No presence filter here: on the
+      # production root every package exists, so every package lane runs.
       - name: Run qa pipeline
         env:
           JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
@@ -189,6 +193,8 @@ jobs:
             --pipeline "${{ matrix.pipeline }}" \
             --wait \
             --report-json /tmp/qa-report.json \
+            ${{ matrix.name_filter }} \
+            ${{ matrix.package_filter }} \
             ${{ matrix.axis_filters }}
 
       # Upload the per-combo report so the aggregate job can build the badge.

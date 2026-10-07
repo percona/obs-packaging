@@ -41,7 +41,9 @@ name: OBS PR Check
 # combos of its own instance's PR project (narrowed by that instance's
 # optional `qa_types` field), `merge-qa-matrix` concatenates the shares and
 # stamps each combo with the instance that found it, and `qa` fans out over
-# the merged list, talking to that instance.
+# the merged list, talking to that instance.  Package-level qa: lanes
+# (package.yaml) are kept only when the package is present in the PR project
+# (QA_PACKAGES_PRESENT_ONLY).
 
 on:
   pull_request:
@@ -698,6 +700,9 @@ jobs:
           OBS_PROJECT: ${{ matrix.instance.pr_rootprj }}:pr-${{ needs.resolve.outputs.pr_number }}
           PYTHONPATH: ${{ github.workspace }}
           QA_TYPES: ${{ steps.qa-types.outputs.qa_types }}
+          # PR projects hold only promoted packages: a package.yaml qa: lane
+          # runs only when its package is present there.
+          QA_PACKAGES_PRESENT_ONLY: "true"
           SKIP: ${{ steps.qa-types.outputs.skip }}
         run: |
           set -eu
@@ -876,4 +881,5 @@ jobs:
             --wait \
             --report-json /tmp/qa-report.json \
             ${{ matrix.name_filter }} \
+            ${{ matrix.package_filter }} \
             ${{ matrix.axis_filters }}
