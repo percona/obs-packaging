@@ -27,11 +27,15 @@ from .common import (
     _col,
     _print_pending,
     auto_rootprj_env,
+    REPO_ROOT,
+    apply_macro_substitution,
+    find_packages,
     load_macros,
     load_project_yaml,
     parse_env_overrides,
     resolve_project_path,
 )
+from .cmd_project import _extract_version_from_service, _resolve_aggregate_source
 from .jenkins import (
     JenkinsConfig,
     load_jenkins_config,
@@ -309,41 +313,74 @@ def _summarize(state: RunState) -> bool:
 EXPECTED_VERSIONS_PARAM = "EXPECTED_VERSIONS"
 
 
-def _expected_versions(project: str) -> str:
-    """The project's ``*_VERSION`` macros as ``NAME=value`` lines, sorted.
+def _package_versions(project: str) -> dict[str, str]:
+    """Version of each package in *project*, keyed by OBS package name.
 
-    These are the versions OBS builds for this project, resolved from its
-    macros.yaml chain in the current checkout, so a PR run gets the PR's own
-    values.  Test jobs compare installed software with them instead of keeping
-    their own copy.  Empty when the project has no ``*_VERSION`` macros.
+    The version is the one OBS builds: the ``version`` of the package's
+    obs/_service (for an aggregate, of its source package), with ``%!{VAR}``
+    macros resolved from that package's macros.yaml chain in the current
+    checkout, so a PR run gets the PR's values.  Only the project's own
+    packages are listed (not subprojects); packages whose _service declares no
+    version, or whose version cannot be resolved, are left out.
     """
-    macros = load_macros(resolve_project_path(project))
-    return "\n".join(
-        f"{name}={value}"
-        for name, value in sorted(macros.items())
-        if name.endswith("_VERSION")
-    )
+    project_path = resolve_project_path(project)
+    versions: dict[str, str] = {}
+    for _, pkg_path in find_packages(project_path, project, recursive=False):
+        service = pkg_path / "obs" / "_service"
+        aggregate = pkg_path / "obs" / "_aggregate"
+        raw, macros_dir = None, pkg_path
+        if service.is_file():
+            raw = _extract_version_from_service(service)
+        elif aggregate.is_file():
+            source = _resolve_aggregate_source(aggregate)
+            if source is not None:
+                local_project, src_pkg = source
+                macros_dir = REPO_ROOT.joinpath(*local_project.split(":")) / src_pkg
+                raw = _extract_version_from_service(macros_dir / "obs" / "_service")
+        if not raw:
+            continue
+        version = apply_macro_substitution(raw, load_macros(macros_dir), strict=False)
+        if "%!{" not in version:
+            versions[pkg_path.name] = version
+    return versions
+
+
+def _expected_versions(versions: dict[str, str], package: str | None = None) -> str:
+    """``package=version`` lines, sorted by package name, for EXPECTED_VERSIONS.
+
+    With *package*, only that package's line (an entry declared for a single
+    package tests only that package).
+    """
+    if package is not None:
+        versions = {package: versions[package]} if package in versions else {}
+    return "\n".join(f"{name}={version}" for name, version in sorted(versions.items()))
 
 
 def _with_expected_versions(
     entries: list[dict[str, Any]] | None, project: str
 ) -> list[dict[str, Any]] | None:
-    """Add ``EXPECTED_VERSIONS`` (see ``_expected_versions``) to the parameters
-    of every entry, unless the entry sets it itself.
+    """Add ``EXPECTED_VERSIONS`` to the parameters of every entry, unless the
+    entry sets it itself.
 
-    Done here rather than in each qa: entry so the versions are not repeated
-    in every job declaration.  Jobs that do not declare the parameter ignore
-    it (Jenkins drops unknown build parameters).
+    The value lists the versions OBS builds for the packages under test, as
+    ``package=version`` lines keyed by OBS package name (so test scripts do
+    not depend on macro names): every package of *project* for a project
+    entry, only its own package for an entry marked with ``_package``
+    (package-level qa: blocks).  Added here rather than in each qa: entry so
+    the versions are not repeated in every job declaration; jobs that do not
+    declare the parameter ignore it.
     """
     if not entries:
         return entries
-    versions = _expected_versions(project)
+    versions = _package_versions(project)
     if not versions:
         return entries
     out = []
     for entry in entries:
+        value = _expected_versions(versions, entry.get("_package"))
         params = dict(entry.get("parameters") or {})
-        params.setdefault(EXPECTED_VERSIONS_PARAM, versions)
+        if value:
+            params.setdefault(EXPECTED_VERSIONS_PARAM, value)
         out.append({**entry, "parameters": params})
     return out
 
