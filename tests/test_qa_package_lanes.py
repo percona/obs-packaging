@@ -139,3 +139,82 @@ def test_env_substitution_applies_to_package_block(tree):
     )
     lane = cmd_qa._load_qa_lanes("ppg:17", {"OBS_ROOTPRJ": "isv:percona"})[1]
     assert lane.entries[0]["parameters"]["P"] == "isv:percona:ppg"
+
+
+# --- qa show ---------------------------------------------------------------------
+
+
+def _show_json(project: str, capsys) -> list[dict]:
+    args = SimpleNamespace(
+        project=project, rootprj="isv:percona", env_overrides=[], json=True
+    )
+    cmd_qa.cmd_qa_show(args)
+    return json.loads(capsys.readouterr().out)
+
+
+def test_show_json_lists_project_then_package_combos(tree, capsys):
+    out = _show_json("ppg:17", capsys)
+    assert [(e["package"], e["status_context"]) for e in out] == [
+        ("", "OBS QA / ppg:17 / IO_METHOD=worker"),
+        ("", "OBS QA / ppg:17 / IO_METHOD=sync"),
+        ("pkg", "OBS QA / ppg:17 / pkg / PLATFORMS=rocky-9"),
+        ("pkg", "OBS QA / ppg:17 / pkg / PLATFORMS=debian-13"),
+    ]
+    assert [e["package_filter"] for e in out] == [
+        "",
+        "",
+        "--package pkg",
+        "--package pkg",
+    ]
+    assert out[2]["params"]["PG_MAJOR"] == "17"
+    assert out[2]["pipeline"] == "pkg-parallel"
+
+
+def test_show_json_package_multi_entry_segment(tree, capsys):
+    _write(
+        tree,
+        "ppg/_shared/pkg/package.yaml",
+        "qa:\n"
+        "  - name: a\n    pipeline: x\n    parameters:\n      P: [1, 2]\n    matrix: [P]\n"
+        "  - name: b\n    pipeline: x\n    parameters:\n      Q: v\n",
+    )
+    out = _show_json("ppg:17", capsys)
+    pkg = [e["status_context"] for e in out if e["package"] == "pkg"]
+    assert pkg == [
+        "OBS QA / ppg:17 / pkg / a / P=1",
+        "OBS QA / ppg:17 / pkg / a / P=2",
+        "OBS QA / ppg:17 / pkg / b",
+    ]
+    assert {e["name_filter"] for e in out if e["package"] == "pkg"} == {
+        "--name a",
+        "--name b",
+    }
+
+
+def test_show_json_package_single_entry_no_matrix(tree, capsys):
+    _write(
+        tree,
+        "ppg/_shared/pkg/package.yaml",
+        "qa:\n  pipeline: x\n  parameters:\n    Q: v\n",
+    )
+    out = _show_json("ppg:17", capsys)
+    assert [e["status_context"] for e in out if e["package"] == "pkg"] == [
+        "OBS QA / ppg:17 / pkg"
+    ]
+    assert [e["label"] for e in out if e["package"] == "pkg"] == ["default"]
+
+
+def test_show_json_empty_when_no_lanes(tree, capsys):
+    _write(tree, "ppg/17/project.yaml", "title: P\n")
+    os.remove(tree / "ppg/_shared/pkg/package.yaml")
+    assert _show_json("ppg:17", capsys) == []
+
+
+def test_show_human_output_names_the_package(tree, capsys):
+    args = SimpleNamespace(
+        project="ppg:17", rootprj="isv:percona", env_overrides=[], json=False
+    )
+    cmd_qa.cmd_qa_show(args)
+    out = capsys.readouterr().out
+    assert "ppg:17  →  pipeline: ppg-multiOS-parallel" in out
+    assert "ppg:17 / pkg  →  pipeline: pkg-parallel" in out
