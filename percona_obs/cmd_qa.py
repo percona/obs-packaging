@@ -350,6 +350,26 @@ def _summarize(state: RunState) -> bool:
     return failure > 0
 
 
+def _status_context(
+    project: str, package: str | None, segment: str | None, label: str
+) -> str:
+    """Check-run name of one combo.
+
+    ``OBS QA / <project>[ / <package>][ / <segment>][ / <combo>]`` — the
+    package only for package lanes, the segment only for multi-entry blocks,
+    the combo label only when the entry has a ``matrix:``.  Project-lane
+    contexts are byte-for-byte what they were before package lanes existed.
+    """
+    parts = ["OBS QA", project]
+    if package:
+        parts.append(package)
+    if segment:
+        parts.append(segment)
+    if label:
+        parts.append(label)
+    return " / ".join(parts)
+
+
 # ---------------------------------------------------------------------------
 # `qa show`
 # ---------------------------------------------------------------------------
@@ -402,7 +422,10 @@ def _expected_versions(versions: dict[str, str], package: str | None = None) -> 
 
 
 def _with_expected_versions(
-    entries: list[dict[str, Any]] | None, project: str
+    entries: list[dict[str, Any]] | None,
+    project: str,
+    package: str | None = None,
+    versions: dict[str, str] | None = None,
 ) -> list[dict[str, Any]] | None:
     """Add ``EXPECTED_VERSIONS`` to the parameters of every entry, unless the
     entry sets it itself.
@@ -411,18 +434,23 @@ def _with_expected_versions(
     ``package=version`` lines keyed by OBS package name (so test scripts do
     not depend on macro names): every package of *project* for a project
     entry, only its own package for an entry marked with ``_package``
-    (package-level qa: blocks).  Added here rather than in each qa: entry so
+    or when *package* names the lane's package (package-level qa: blocks).
+    *versions* lets callers that process several lanes compute
+    :func:`_package_versions` once.  Added here rather than in each qa: entry so
     the versions are not repeated in every job declaration; jobs that do not
     declare the parameter ignore it.
     """
     if not entries:
         return entries
-    versions = _package_versions(project)
+    if versions is None:
+        versions = _package_versions(project)
     if not versions:
         return entries
     out = []
     for entry in entries:
-        value = _expected_versions(versions, entry.get("_package"))
+        value = _expected_versions(
+            versions, package if package is not None else entry.get("_package")
+        )
         params = dict(entry.get("parameters") or {})
         if value:
             params.setdefault(EXPECTED_VERSIONS_PARAM, value)
@@ -430,78 +458,94 @@ def _with_expected_versions(
     return out
 
 
+def _lanes_with_expected_versions(lanes: list[Lane], project: str) -> list[Lane]:
+    """Apply :func:`_with_expected_versions` to every lane.
+
+    The project lane lists every package of *project*; a package lane lists
+    only its own package.
+    """
+    if not lanes:
+        return lanes
+    versions = _package_versions(project)
+    return [
+        Lane(
+            lane.package,
+            _with_expected_versions(lane.entries, project, lane.package, versions)
+            or lane.entries,
+        )
+        for lane in lanes
+    ]
+
+
 def cmd_qa_show(args: argparse.Namespace) -> None:
     env_vars = _qa_env_vars(args)
-    lanes = _load_qa_lanes(args.project, env_vars)
-    entries = _with_expected_versions(lanes[0].entries if lanes else None, args.project)
+    lanes = _lanes_with_expected_versions(
+        _load_qa_lanes(args.project, env_vars), args.project
+    )
     json_mode: bool = bool(getattr(args, "json", False))
 
-    if entries is None:
+    if not lanes:
         if json_mode:
             print("[]")
         return
 
     if json_mode:
         out: list[dict[str, Any]] = []
-        multi_pipeline = len(entries) > 1
-        for entry in entries:
+        for lane in lanes:
+            package = lane.package or ""
+            package_filter = f"--package {package}" if package else ""
+            multi_entry = len(lane.entries) > 1
+            for entry in lane.entries:
+                pipeline = entry["pipeline"]
+                name = entry.get("name")
+                combos = _expand_matrix(entry)
+                matrix_axes = list(entry.get("matrix") or [])
+                # Disambiguating segment for a multi-entry block: the entry
+                # `name` when it has one (two entries may share a pipeline),
+                # else the pipeline, which keeps unnamed entries' contexts.
+                segment = (name or pipeline) if multi_entry else None
+                name_filter = f"--name {name}" if name else ""
+                for label, params in combos:
+                    axis_filters = " ".join(
+                        f"--filter {axis}={params[axis]}" for axis in matrix_axes
+                    )
+                    out.append(
+                        {
+                            "project": args.project,
+                            "package": package,
+                            "pipeline": pipeline,
+                            "name": name or "",
+                            "label": label or "default",
+                            "axis_filters": axis_filters,
+                            "name_filter": name_filter,
+                            "package_filter": package_filter,
+                            "status_context": _status_context(
+                                args.project, lane.package, segment, label
+                            ),
+                            "params": params,
+                        }
+                    )
+        print(json.dumps(out))
+        return
+
+    for lane in lanes:
+        where = _lane_where(args.project, lane.package).replace("/", " / ")
+        for entry in lane.entries:
             pipeline = entry["pipeline"]
             name = entry.get("name")
             combos = _expand_matrix(entry)
             matrix_axes = list(entry.get("matrix") or [])
-            # Disambiguating segment for a multi-entry block: the entry `name`
-            # when it has one (two entries may share a pipeline), else the
-            # pipeline, which keeps unnamed entries' contexts byte-for-byte.
-            entry_segment = name or pipeline
-            name_filter = f"--name {name}" if name else ""
+            heading = f"{where}  →  pipeline: {pipeline}"
+            if name:
+                heading += f"  (name: {name})"
+            print(_col(_BOLD, heading))
+            print(f"{_col(_DIM, 'matrix:')} {', '.join(matrix_axes) or '(none)'}")
+            print(f"{_col(_DIM, 'combos:')} {len(combos)}")
             for label, params in combos:
-                entry_label = label or "default"
-                axis_filters = " ".join(
-                    f"--filter {axis}={params[axis]}" for axis in matrix_axes
-                )
-                if multi_pipeline:
-                    status_context = (
-                        f"OBS QA / {args.project} / {entry_segment} / {entry_label}"
-                        if matrix_axes
-                        else f"OBS QA / {args.project} / {entry_segment}"
-                    )
-                else:
-                    status_context = (
-                        f"OBS QA / {args.project} / {entry_label}"
-                        if matrix_axes
-                        else f"OBS QA / {args.project}"
-                    )
-                out.append(
-                    {
-                        "project": args.project,
-                        "pipeline": pipeline,
-                        "name": name or "",
-                        "label": entry_label,
-                        "axis_filters": axis_filters,
-                        "name_filter": name_filter,
-                        "status_context": status_context,
-                        "params": params,
-                    }
-                )
-        print(json.dumps(out))
-        return
-
-    for entry in entries:
-        pipeline = entry["pipeline"]
-        name = entry.get("name")
-        combos = _expand_matrix(entry)
-        matrix_axes = list(entry.get("matrix") or [])
-        heading = f"{args.project}  →  pipeline: {pipeline}"
-        if name:
-            heading += f"  (name: {name})"
-        print(_col(_BOLD, heading))
-        print(f"{_col(_DIM, 'matrix:')} {', '.join(matrix_axes) or '(none)'}")
-        print(f"{_col(_DIM, 'combos:')} {len(combos)}")
-        for label, params in combos:
+                print()
+                print(_col(_CYAN, f"• {label or '(no matrix)'}"))
+                _print_params(params)
             print()
-            print(_col(_CYAN, f"• {label or '(no matrix)'}"))
-            _print_params(params)
-        print()
 
 
 # ---------------------------------------------------------------------------
