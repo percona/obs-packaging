@@ -104,10 +104,13 @@ from .obs_api import (
     _remove_release_targets,
     _upload_obs_files,
 )
+from .release_scope import collect_release_scope
 from .release_freeze import (
     assert_all_green,
     freeze_builds,
+    freeze_packages,
     restore_builds,
+    restore_packages,
     verify_release_landed,
     wait_for_quiesce,
 )
@@ -2587,6 +2590,29 @@ def _sync_release_subprojects(
             )
 
 
+def _build_freeze_scope(
+    source_obs_project: str,
+    source_sub_obs_projects: "list[str]",
+    source_path: Path,
+    source_project_id: str,
+    rootprj: str,
+    env_vars: "dict[str, str]",
+) -> "tuple[list[str], dict[str, set[str]]]":
+    """Return (whole_projects, package_scoped) for the release freeze.
+
+    whole_projects: the source, its subprojects and (container releases)
+    the path-prefix sources; package_scoped: aggregate sources restricted
+    to the aggregated packages (spec Section 2.1).
+    """
+    extra = collect_release_scope(source_path, source_project_id, rootprj, env_vars)
+    whole = [source_obs_project] + source_sub_obs_projects
+    for prj in extra.whole_projects:
+        if prj not in whole:
+            whole.append(prj)
+    packages = {prj: pkgs for prj, pkgs in extra.packages.items() if prj not in whole}
+    return whole, packages
+
+
 def cmd_sync_release(args) -> None:
     """Release packages from an OBS source project to a release target.
 
@@ -2634,7 +2660,19 @@ def cmd_sync_release(args) -> None:
     source_sub_obs_projects = [
         f"{source_obs_project}:{name}" for name, _ in subproject_pairs
     ]
-    freeze_scope = [source_obs_project] + source_sub_obs_projects
+    freeze_scope, freeze_packages_map = _build_freeze_scope(
+        source_obs_project,
+        source_sub_obs_projects,
+        resolve_project_path(source_project_id),
+        source_project_id,
+        args.rootprj,
+        shared_env_vars,
+    )
+    quiesce_scope = freeze_scope + sorted(freeze_packages_map)
+    for prj in freeze_scope[1 + len(source_sub_obs_projects) :]:
+        _print_same(f"+ {prj}  (whole)")
+    for prj in sorted(freeze_packages_map):
+        _print_same(f"+ {prj}  ({', '.join(sorted(freeze_packages_map[prj]))})")
 
     if getattr(args, "dry_run", False):
         failures: list[str] = []
@@ -2663,7 +2701,10 @@ def cmd_sync_release(args) -> None:
             failures.append(f"source project {source_obs_project} not found on OBS")
         else:
             failures.extend(
-                f"not green: {p}" for p in assert_all_green(apiurl, freeze_scope)
+                f"not green: {p}"
+                for p in assert_all_green(
+                    apiurl, quiesce_scope, packages=freeze_packages_map
+                )
             )
         if failures:
             for f in failures:
@@ -2684,10 +2725,18 @@ def cmd_sync_release(args) -> None:
 
     def _freeze_and_run(release_all) -> None:
         snapshots: dict[str, str] = {}
+        pkg_snapshots: dict[tuple[str, str], str] = {}
         if not args.no_freeze:
-            _print_pending(f"draining scheduler for {len(freeze_scope)} project(s)")
-            wait_for_quiesce(apiurl, freeze_scope, timeout_s=args.freeze_timeout)
-            problems = assert_all_green(apiurl, freeze_scope)
+            _print_pending(f"draining scheduler for {len(quiesce_scope)} project(s)")
+            wait_for_quiesce(
+                apiurl,
+                quiesce_scope,
+                timeout_s=args.freeze_timeout,
+                packages=freeze_packages_map,
+            )
+            problems = assert_all_green(
+                apiurl, quiesce_scope, packages=freeze_packages_map
+            )
             if problems:
                 listing = "\n".join(f"  {p}" for p in problems[:50])
                 raise SystemExit(
@@ -2695,9 +2744,16 @@ def cmd_sync_release(args) -> None:
                     "Fix the failures (or use --no-freeze to bypass at your own risk)."
                 )
             snapshots = freeze_builds(apiurl, freeze_scope)
+            try:
+                pkg_snapshots = freeze_packages(apiurl, freeze_packages_map)
+            except Exception:
+                restore_builds(apiurl, snapshots)
+                raise
         try:
             release_all()
         finally:
+            if pkg_snapshots:
+                restore_packages(apiurl, pkg_snapshots)
             if snapshots:
                 restore_builds(apiurl, snapshots)
 
