@@ -657,6 +657,24 @@ def test_derive_release_id_major_suffixed_package():
     assert rid == "18.6-1"
 
 
+def test_derive_release_id_pg_mode_uses_major_not_release_name():
+    seen = []
+
+    def _lookup(repo, arch, pkg):
+        seen.append(pkg)
+        return "17.11.1-2.1"
+
+    rid = cmd_project._derive_release_id(
+        pkg_archs={"percona-postgresql17": ("RockyLinux_9", "x86_64")},
+        existing_releases=["ppg/17.11-1"],
+        release_name="foo",
+        versrel_lookup=_lookup,
+        major="17",
+    )
+    assert rid == "17.11-2"
+    assert seen == ["percona-postgresql17"]
+
+
 def test_derive_release_id_counter_mode_without_server_package():
     def _fail(repo, arch, pkg):
         raise AssertionError("not called")
