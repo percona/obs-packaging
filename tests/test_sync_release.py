@@ -381,7 +381,7 @@ def test_dry_run_reports_all_failures(tmp_path, monkeypatch, capsys):
     (rel / "CHANGELOG.md").write_text("# Changelog\n")  # no release section
     _patch_dry_run_common(monkeypatch, tmp_path, src, rel)
     monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda a, p: False)
-    monkeypatch.setattr(cmd_sync, "assert_all_green", lambda a, p: [])
+    monkeypatch.setattr(cmd_sync, "assert_all_green", lambda a, p, **k: [])
     monkeypatch.setattr(
         cmd_sync.subprocess,
         "run",
@@ -404,7 +404,7 @@ def test_dry_run_passes_when_clean(tmp_path, monkeypatch, capsys):
     (rel / "CHANGELOG.md").write_text("# Changelog\n\n## [17.11-1] - 2026-09-03\n")
     _patch_dry_run_common(monkeypatch, tmp_path, src, rel)
     monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda a, p: True)
-    monkeypatch.setattr(cmd_sync, "assert_all_green", lambda a, p: [])
+    monkeypatch.setattr(cmd_sync, "assert_all_green", lambda a, p, **k: [])
     monkeypatch.setattr(
         cmd_sync.subprocess,
         "run",
@@ -445,3 +445,34 @@ def test_collect_release_subprojects_respects_slice(tmp_path, monkeypatch):
         assert [n for n, _ in pairs] == ["containers"] and missing == []
     finally:
         common.set_default_repository_filter(None)
+
+
+def test_build_freeze_scope_merges_extra_sources(tmp_path, monkeypatch):
+    import percona_obs.release_scope as rs
+
+    src, rel = _mk_tree(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        cmd_sync,
+        "collect_release_scope",
+        lambda *a, **k: rs.ReleaseScope(
+            whole_projects=["home:Admin:ppg:staging:18"],
+            packages={
+                "home:Admin:ppg:staging:tools": {"percona-pgbouncer"},
+                "home:Admin:ppg:staging:18": {"ignored-because-whole"},
+            },
+        ),
+    )
+    whole, packages = cmd_sync._build_freeze_scope(
+        "home:Admin:ppg:staging:17",
+        ["home:Admin:ppg:staging:17:containers"],
+        src,
+        "ppg:staging:17",
+        "home:Admin",
+        {},
+    )
+    assert whole == [
+        "home:Admin:ppg:staging:17",
+        "home:Admin:ppg:staging:17:containers",
+        "home:Admin:ppg:staging:18",
+    ]
+    assert packages == {"home:Admin:ppg:staging:tools": {"percona-pgbouncer"}}

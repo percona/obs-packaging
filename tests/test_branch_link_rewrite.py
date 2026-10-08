@@ -256,3 +256,23 @@ def test_order_handles_link_chains(tmp_path):
     }
     ordered = _order_targets_for_link_uploads([a, b, c], edges)
     assert ordered == [c, b, a]
+
+
+TOOLS = f"{ROOTPRJ}:ppg:staging:tools"
+TOOLS_PROD = f"{BRANCH}:ppg:staging:tools"
+
+
+def test_aggregate_from_tools_kept_when_tool_promoted():
+    promoted = {(TOOLS, "percona-pgbouncer")}
+    out = _rewrite_aggregate_for_branch(
+        _agg(TOOLS, "percona-pgbouncer"), ROOTPRJ, BRANCH, promoted
+    )
+    assert _agg_projs(out) == [TOOLS]
+
+
+def test_aggregate_from_tools_redirected_when_tool_not_promoted():
+    promoted = {(TOOLS, "percona-pgbadger")}
+    out = _rewrite_aggregate_for_branch(
+        _agg(TOOLS, "percona-pgbouncer"), ROOTPRJ, BRANCH, promoted
+    )
+    assert _agg_projs(out) == [TOOLS_PROD]
