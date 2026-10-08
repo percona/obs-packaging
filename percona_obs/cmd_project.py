@@ -2106,6 +2106,8 @@ def _derive_release_id(
     existing_releases: "list[str]",
     release_name: str,
     versrel_lookup: "Callable[[str, str, str], str | None]",
+    *,
+    counter_mode: bool = False,
 ) -> str:
     """Return the next release id for a source project.
 
@@ -2120,7 +2122,12 @@ def _derive_release_id(
         pg_pkg = f"percona-postgresql{release_name}"
         repo_arch = pkg_archs.get(pg_pkg)
     if not repo_arch:
-        return f"{release_name}-{len(existing_releases) + 1}"
+        if counter_mode:
+            return f"{release_name}-{len(existing_releases) + 1}"
+        raise SystemExit(
+            f"error: package percona-postgresql (or percona-postgresql{release_name}) "
+            "not found in the source project; use --release-id to specify manually"
+        )
     repo, arch = repo_arch
     versrel = versrel_lookup(repo, arch, pg_pkg)
     if not versrel:
@@ -2178,6 +2185,8 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         elif existing_data.get("revision"):
             existing_releases = [str(existing_data["revision"])]
 
+    source_is_container_project = _has_container_images(source_path)
+
     # Auto-derive release-id from OBS if not provided.
     release_id: str = args.release_id or ""
     if not release_id:
@@ -2189,6 +2198,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             lambda repo, arch, pkg: _fetch_pkg_versrel(
                 apiurl, source_obs_project, repo, arch, pkg
             ),
+            counter_mode=source_is_container_project,
         )
 
     tag = f"{product}/{release_id}"
@@ -2214,7 +2224,6 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     _print_pending("fetching package versions for CHANGELOG")
 
     source_versions = _fetch_project_pkg_versions(apiurl, source_obs_project)
-    source_is_container_project = _has_container_images(source_path)
     if source_is_container_project:
         source_versions = {}
     noncontainer_subs: list[str] = []
@@ -2238,7 +2247,11 @@ def cmd_project_release(args: argparse.Namespace) -> None:
 
     release_versions: dict[str, str] | None = None
     if not is_first_release and _obs_project_exists(apiurl, release_obs_project):
-        release_versions = _fetch_project_pkg_versions(apiurl, release_obs_project)
+        release_versions = (
+            {}
+            if source_is_container_project
+            else _fetch_project_pkg_versions(apiurl, release_obs_project)
+        )
         for subproject_name in noncontainer_subs:
             rel_sub = f"{release_obs_project}:{subproject_name}"
             if _obs_project_exists(apiurl, rel_sub):
