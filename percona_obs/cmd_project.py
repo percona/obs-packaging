@@ -2108,6 +2108,7 @@ def _derive_release_id(
     versrel_lookup: "Callable[[str, str, str], str | None]",
     *,
     counter_mode: bool = False,
+    major: "str | None" = None,
 ) -> str:
     """Return the next release id for a source project.
 
@@ -2115,17 +2116,20 @@ def _derive_release_id(
     where N counts existing releases of that minor.  Counter mode (no server
     package - cross-version projects such as ``ppg:staging:containers``):
     ``<release_name>-N`` where N is one plus the number of existing releases.
+    The major-suffixed server package name uses *major* (the last component
+    of the source project), falling back to *release_name*.
     """
+    suffixed = f"percona-postgresql{major or release_name}"
     pg_pkg = "percona-postgresql"
     repo_arch = pkg_archs.get(pg_pkg)
     if not repo_arch:
-        pg_pkg = f"percona-postgresql{release_name}"
+        pg_pkg = suffixed
         repo_arch = pkg_archs.get(pg_pkg)
     if not repo_arch:
         if counter_mode:
             return f"{release_name}-{len(existing_releases) + 1}"
         raise SystemExit(
-            f"error: package percona-postgresql (or percona-postgresql{release_name}) "
+            f"error: package percona-postgresql (or {suffixed}) "
             "not found in the source project; use --release-id to specify manually"
         )
     repo, arch = repo_arch
@@ -2199,6 +2203,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
                 apiurl, source_obs_project, repo, arch, pkg
             ),
             counter_mode=source_is_container_project,
+            major=major,
         )
 
     tag = f"{product}/{release_id}"
