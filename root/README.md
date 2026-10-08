@@ -110,11 +110,13 @@ one plus the number of releases already listed for the project's `PG_VERSION` in
 declare `PG_VERSION` as the upgrade target ahead of the rest of `staging/18`, so they
 simply track `staging/18`'s computed counter rather than having one of their own.
 
-Cross-version projects that have no `percona-postgresql` package
-(`ppg/staging/containers`) are released with a plain counter instead:
+Cross-version container projects whose images live directly in the project
+(`ppg/staging/containers`) have no `percona-postgresql` package; for them
+`project release` uses a plain counter instead:
 `./percona-obs -P <profile> project release ppg:staging:containers` writes
 `root/ppg/releases/containers/` and tags `ppg/containers-<N>`; `obs-release.yml`
-maps that tag shape to `ppg:releases:containers`.
+maps that tag shape to `ppg:releases:containers`. Any other project without a
+server package still fails and needs `--release-id`.
 
 #### Cutting a release
 
@@ -162,30 +164,6 @@ Each package directory contains the packaging sources split by format:
 ├── rpm/        # RPM spec and supporting files
 └── debian/     # Debian packaging files
 ```
-
-### `staging/tools/`
-
-`ppg:staging:tools` builds the components whose binaries do not depend on the
-PostgreSQL major — the PGDG "common" rule: anything whose binary package name
-carries no PG major. Today: `percona-pgbouncer`, `percona-pgbadger`,
-`percona-haproxy`, `percona-pgbackrest`, `percona-patroni`. Each per-major
-project lists the same package as an aggregate
-(`staging/_shared/<pkg>/obs/_aggregate` → `${OBS_ROOTPRJ}:ppg:staging:tools`),
-so its published repository stays self-contained while OBS builds the component
-once.
-
-`tools/macros.yaml` pins `PG_MAJOR_VERSION` (pgBackRest links that major's libpq;
-`tools/project.yaml` puts `ppg:staging:<that major>` on the repository path).
-Bump it by hand in the PR that adds a new GA major to `staging/`.
-
-OBS release counters (`<CI_CNT>.<B_CNT>`) are per project, so right after a
-component moves here the majors list an equal-version build with a lower counter
-than the one they built themselves. Nothing breaks (same bytes, same version); the
-next upstream bump supersedes it.
-
-`sync release` freezes the aggregated packages of `ppg:staging:tools` (and of
-`ppg:common:deps`) for the duration of the `osc release` copy; see
-`docs/PERCONA_OBS_TOOL.md`.
 
 A package whose packaging is byte-identical across majors (only `%!{PG_MAJOR_VERSION}` differs) is
 stored once in `staging/_shared/<package>/` and referenced from each major by a relative git symlink:
@@ -378,6 +356,30 @@ Operational note: if the `ssl1.1` SSL-ABI audit ever fires on
 `OPENSSL_1_1_1b`-class version nodes via libkrb5/libgssapi/libssh, the EL8
 distro has rebased krb5/libssh past the percona `-NN.percona` rebuilds in
 `ppg:common:deps` — bump those rebuilds.
+
+### `staging/tools/`
+
+`ppg:staging:tools` builds the components whose binaries do not depend on the
+PostgreSQL major — the PGDG "common" rule: anything whose binary package name
+carries no PG major. Today: `percona-pgbouncer`, `percona-pgbadger`,
+`percona-haproxy`, `percona-pgbackrest`, `percona-patroni`. Each per-major
+project lists the same package as an aggregate
+(`staging/_shared/<pkg>/obs/_aggregate` → `${OBS_ROOTPRJ}:ppg:staging:tools`),
+so its published repository stays self-contained while OBS builds the component
+once.
+
+`tools/macros.yaml` pins `PG_MAJOR_VERSION` (pgBackRest links that major's libpq;
+`tools/project.yaml` puts `ppg:staging:<that major>` on the repository path).
+Bump it by hand in the PR that adds a new GA major to `staging/`.
+
+OBS release counters (`<CI_CNT>.<B_CNT>`) are per project, so right after a
+component moves here the majors list an equal-version build with a lower counter
+than the one they built themselves. Nothing breaks (same bytes, same version); the
+next upstream bump supersedes it.
+
+`sync release` freezes the aggregated packages of `ppg:staging:tools` (and of
+`ppg:common:deps`) for the duration of the `osc release` copy; see
+`docs/PERCONA_OBS_TOOL.md`.
 
 ### `devel/<major-version>/`
 

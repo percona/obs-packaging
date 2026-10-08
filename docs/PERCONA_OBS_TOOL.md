@@ -940,6 +940,11 @@ get a counter release id `<name>-N` (tag `ppg/containers-<N>`) instead of `MAJOR
    - Extracts `MAJOR.MINOR` (e.g. `17.9` from `17.9.0-1.1`).
    - Counts existing entries in `release.yaml` whose tag matches `/<MAJOR.MINOR>-*`
      and appends the next counter (e.g. `17.9-1`, or `17.9-2` if `17.9-1` already exists).
+   - If the source project itself holds container images (an `obs/Dockerfile` package
+     directly in the project, i.e. `ppg:staging:containers`), there is no
+     `percona-postgresql` package and a plain counter `<name>-N` is used instead
+     (tag `ppg/containers-<N>`). Any other project without a server package still fails
+     with "package percona-postgresql ... not found; use --release-id".
 2. **Fetches** the source project's repository topology from OBS.
 3. **Regenerates the full mirror tree**, on every release, not just the first: the
    top-level `project.yaml` plus one nested mirror directory per staging subproject
@@ -1099,6 +1104,19 @@ Flags:
       `disabled`); any `failed` / `unresolvable` / `broken` aborts the release.
    3. **Freeze** — snapshot each project's meta, then disable builds on staging and
       every subproject.
+
+      **Freeze scope.** Before `osc release` the command drains and green-checks, then
+      build-disables for the duration of the copy:
+
+      - the release source project and its subprojects (whole);
+      - every local aggregate source referenced by an `obs/_aggregate` under the
+        source tree — `ppg:staging:tools`, `ppg:common:deps` — restricted to the
+        aggregated packages (package `_meta` build disable);
+      - for a container project release, the `subproject:` entries of its repository
+        paths (whole), since an image may consume any package of them.
+
+      `--dry-run` prints the extra sources as `+ <project>  (whole)` or
+      `+ <project>  (<pkg>, …)` and includes them in the green check.
    4. **Release** — `osc release` for the top-level project and every subproject.
    5. **Verify** — still inside the freeze window, polls (bounded by
       `--verify-timeout`) until each released repo holds binaries.
@@ -1106,18 +1124,6 @@ Flags:
       raises), re-apply each project's exact snapshotted meta last (never a blanket
       enable, since subprojects carry per-repo flags — e.g. tarballs' `publish:`
       flags — that must survive the round trip).
-   **Freeze scope.** Before `osc release` the command drains and green-checks, then
-   build-disables for the duration of the copy:
-
-   - the release source project and its subprojects (whole);
-   - every local aggregate source referenced by an `obs/_aggregate` under the
-     source tree — `ppg:staging:tools`, `ppg:common:deps` — restricted to the
-     aggregated packages (package `_meta` build disable);
-   - for a container project release, the `subproject:` entries of its repository
-     paths (whole), since an image may consume any package of them.
-
-   `--dry-run` prints the extra sources as `+ <project>  (whole)` or
-   `+ <project>  (<pkg>, …)` and includes them in the green check.
 5. Release-tier OBS projects with no local mirror are reported loudly as orphans;
    deletion is never automatic — run `sync delete` manually.
 
