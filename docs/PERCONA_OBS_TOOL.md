@@ -932,8 +932,7 @@ to override the arithmetic.
 ```
 
 `source-project` must be a `staging`-tier project — any other tier is rejected with an
-error. Cross-version projects with no `percona-postgresql` package (`ppg:staging:containers`)
-get a counter release id `<name>-N` (tag `ppg/containers-<N>`) instead of `MAJOR.MINOR-N`. `project release <source-project>` does the following:
+error. `project release <source-project>` does the following:
 
 1. **Auto-derives `release-id`** (if not given with `--release-id`):
    - Queries OBS for the built version of `percona-postgresql<major>` in the source project.
