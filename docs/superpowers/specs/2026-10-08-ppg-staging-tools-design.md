@@ -102,18 +102,22 @@ One behavioural change, the rest is verification of paths that already exist.
 ### 2.1 Release freeze scope
 
 `cmd_sync_release` builds `freeze_scope = [source] + source_subprojects`.
-It will additionally include every *local* aggregate source referenced by an
-`_aggregate` file under the release source tree (resolved with the existing
-`_resolve_aggregate_source`; external aggregates ignored), and, for a
-container project being released, the `path-prefix` subprojects its
-repositories consume (`ppg:staging:tools`, `ppg:common:deps`, the majors).
-For those extra projects:
+It will additionally include two kinds of extra sources:
 
-- `wait_for_quiesce` and `assert_all_green` consider only the referenced
-  packages, not the whole project (an unrelated red package in
-  `ppg:common:deps` must not block a release);
-- `freeze_builds` / `restore_builds` apply to those packages only (package
-  meta `build disable`, restored to the exact prior meta).
+- **Aggregate sources**, package-scoped: every *local* aggregate source
+  referenced by an `_aggregate` file under the release source tree (resolved
+  with the existing `_resolve_aggregate_source`; external aggregates
+  ignored). For these, `wait_for_quiesce` and `assert_all_green` consider only
+  the aggregated packages (an unrelated red package in `ppg:common:deps` must
+  not block a release) and `freeze_builds` / `restore_builds` disable only
+  those packages (package meta `build disable`, restored to the exact prior
+  meta).
+- **Path-prefix sources**, whole-project: when the release source is a
+  container project, the `subproject:` entries of its repository paths
+  (`ppg:staging:tools`, `ppg:common:deps`, the majors) are treated exactly
+  like the release source project itself today, since an image may consume
+  any package of those projects. The containers release is short and the
+  per-major projects are build-frozen only for the copy.
 
 The derivation is a pure function over the tree (`list[(obs_project,
 package)]`) so it is unit-testable without OBS. `--dry-run` prints the
