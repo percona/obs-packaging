@@ -436,3 +436,31 @@ def test_qa_list_shows_project_slash_package(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "ppg:17/pkg  x" in out
     assert "ppg:17  x" in out
+
+
+# --- EXPECTED_VERSIONS per lane --------------------------------------------------
+
+
+def test_expected_versions_project_lane_all_packages_package_lane_own(
+    tree, monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        cmd_qa, "_package_versions", lambda project: {"pkg": "1.0", "other": "2.0"}
+    )
+    out = _show_json("ppg:17", capsys)
+    project = next(e for e in out if e["package"] == "")
+    package = next(e for e in out if e["package"] == "pkg")
+    assert project["params"]["EXPECTED_VERSIONS"] == "other=2.0\npkg=1.0"
+    assert package["params"]["EXPECTED_VERSIONS"] == "pkg=1.0"
+
+
+def test_expected_versions_computed_once_per_show(tree, monkeypatch, capsys):
+    calls: list[str] = []
+
+    def fake(project: str) -> dict[str, str]:
+        calls.append(project)
+        return {"pkg": "1.0"}
+
+    monkeypatch.setattr(cmd_qa, "_package_versions", fake)
+    _show_json("ppg:17", capsys)
+    assert calls == ["ppg:17"]
