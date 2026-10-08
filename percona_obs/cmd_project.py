@@ -78,6 +78,7 @@ from .cmd_build import (
     _fetch_versrel_from_history,
 )
 from .cve_scan import ChangedPackage, scan_release_cves
+from .release_scope import has_container_images
 from .services import _git_head_sha, _git_tag_for_sha
 
 _YAML_FILENAMES = {"project.yaml", "package.yaml"}
@@ -2093,14 +2094,6 @@ def _commit_release_paths(
     )
 
 
-def _has_container_images(sub_path: Path) -> bool:
-    return any(
-        (sub_path / p.name / "obs" / "Dockerfile").is_file()
-        for p in sub_path.iterdir()
-        if p.is_dir()
-    )
-
-
 def _derive_release_id(
     pkg_archs: "dict[str, tuple[str, str]]",
     existing_releases: "list[str]",
@@ -2189,7 +2182,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         elif existing_data.get("revision"):
             existing_releases = [str(existing_data["revision"])]
 
-    source_is_container_project = _has_container_images(source_path)
+    source_is_container_project = has_container_images(source_path)
 
     # Auto-derive release-id from OBS if not provided.
     release_id: str = args.release_id or ""
@@ -2228,9 +2221,11 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     # Build CHANGELOG section by diffing source vs release OBS package versions.
     _print_pending("fetching package versions for CHANGELOG")
 
-    source_versions = _fetch_project_pkg_versions(apiurl, source_obs_project)
-    if source_is_container_project:
-        source_versions = {}
+    source_versions: dict[str, str] = (
+        {}
+        if source_is_container_project
+        else _fetch_project_pkg_versions(apiurl, source_obs_project)
+    )
     noncontainer_subs: list[str] = []
     container_subs: list[str] = []
     for sub_obs_id, sub_path in find_projects(source_path, args.project):
@@ -2239,7 +2234,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         if not (sub_path / "project.yaml").is_file():
             continue
         subproject_name = sub_obs_id[len(args.project) + 1 :]
-        if _has_container_images(sub_path):
+        if has_container_images(sub_path):
             container_subs.append(subproject_name)
         else:
             noncontainer_subs.append(subproject_name)
