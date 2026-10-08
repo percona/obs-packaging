@@ -755,7 +755,8 @@ line, sorted, keyed by OBS package name (`percona-pgbackrest=2.59.2`,
 (an aggregate's is its source package's), with macros resolved from the
 package's `macros.yaml` chain in the current checkout, so in a PR the values
 are the PR's. A project entry gets every package of the project (not its
-subprojects); an entry declared for a single package gets only that package.
+subprojects); an entry of a package-level `qa:` block (`package.yaml`) gets only
+that package.
 Packages whose `_service` declares no version are left out. Test jobs check
 installed software against these values instead of keeping their own copy,
 without depending on macro names. An entry that sets `EXPECTED_VERSIONS`
