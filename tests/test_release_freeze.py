@@ -197,6 +197,14 @@ def test_assert_all_green_package_scoped(monkeypatch):
     assert problems == ["deps/krb5 R9/x86_64: failed"]
 
 
+def test_assert_all_green_reports_scoped_package_absent_from_results(monkeypatch):
+    _patch_results(monkeypatch, _result_xml([("etcd", "R9", "x86_64", "succeeded")]))
+    problems = rf.assert_all_green(
+        "http://obs", ["deps"], packages={"deps": {"etcd", "ghost"}}
+    )
+    assert problems == ["deps/ghost: not found in build results"]
+
+
 def test_pending_items_package_scoped_ignores_repo_state(monkeypatch):
     _patch_results(
         monkeypatch,
