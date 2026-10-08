@@ -1,0 +1,35 @@
+Source: stormweaver
+Section: database
+Priority: optional
+Maintainer: Percona Development Team <info@percona.com>
+Build-Depends:
+ debhelper (>= 10),
+ cmake (>= 3.22),
+ ninja-build,
+ g++,
+ pkg-config,
+ libpq-dev (>= %!{STORMWEAVER_PG_MAJOR}~),
+ libmariadb-dev,
+ libcrypto++-dev,
+ libssl-dev,
+ zlib1g-dev,
+ percona-python%!{PYFT_MINOR}t,
+ percona-python%!{PYFT_MINOR}t-pytest,
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://github.com/Percona-Lab/stormweaver
+
+Package: stormweaver
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ percona-python%!{PYFT_MINOR}t,
+ libpq5 (>= %!{STORMWEAVER_PG_MAJOR}~),
+Recommends: percona-python%!{PYFT_MINOR}t-pytest
+Description: Concurrent database testing tool
+ StormWeaver is a concurrent database testing tool: a C++23 core (metadata,
+ actions, workers, SQL) driven from free-threaded Python scenarios. It
+ starts its own PostgreSQL or MySQL servers from an installation directory
+ given with -i, so no server package is required. Runs on
+ /opt/percona-python%!{PYFT_MINOR}t.

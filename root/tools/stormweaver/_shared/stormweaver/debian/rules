@@ -1,0 +1,56 @@
+#!/usr/bin/make -f
+export DH_VERBOSE=1
+include /usr/share/dpkg/buildflags.mk
+PYFT := /opt/percona-python%!{PYFT_MINOR}t/bin/python%!{PYFT_MINOR}t
+SITE := /opt/percona-python%!{PYFT_MINOR}t/lib/python%!{PYFT_MINOR}t/site-packages
+PG_CONFIG := /usr/lib/postgresql/%!{STORMWEAVER_PG_MAJOR}/bin/pg_config
+OBS_SOURCES := /usr/src/packages/SOURCES
+TMP := $(CURDIR)/debian/tmp
+
+# Debian 12 / Ubuntu 22.04: distro g++ lacks C++23, use the repackaged
+# clang-21 with a statically linked libc++ (common:deps:build is unpublished,
+# so no runtime dependency on it may leak). Same gate as pg_oidc_validator.
+DEBIAN_RELEASE := $(shell . /etc/os-release && echo $$ID$$VERSION_ID)
+ifneq ($(filter $(DEBIAN_RELEASE),debian12 ubuntu22.04),)
+ifneq ($(wildcard /usr/bin/clang++-21),)
+export CC = clang-21
+export CXX = clang++-21
+export CXXFLAGS += -stdlib=libc++
+export LDFLAGS += -stdlib=libc++ -static-libstdc++
+endif
+endif
+export CFLAGS CPPFLAGS CXXFLAGS LDFLAGS
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+	  -DPython_EXECUTABLE=$(PYFT) -DPG_CONFIG=$(PG_CONFIG) \
+	  -DSTORMWEAVER_PYTHON_INSTALL_DIR=$(SITE)
+
+override_dh_auto_build:
+	cmake --build build
+
+# tests need the installed layout for the python side, so they run after install
+override_dh_auto_test:
+
+override_dh_auto_install:
+	DESTDIR=$(TMP) cmake --install build
+	install -D -m 0755 $(OBS_SOURCES)/stormweaver.launcher $(TMP)/usr/bin/stormweaver
+	install -D -m 0644 config/stormweaver.toml $(TMP)/etc/stormweaver/stormweaver.toml
+	mkdir -p $(TMP)/usr/share/stormweaver
+	cp -r scenarios $(TMP)/usr/share/stormweaver/scenarios
+	find $(TMP)/usr/share/stormweaver -name __pycache__ -prune -exec rm -rf {} +
+	$(PYFT) -m compileall -q -s $(TMP) $(TMP)$(SITE)/stormweaver
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	build/core/tests/unit/test-stormweaver-unit
+	PYTHONPATH=$(TMP)$(SITE) $(PYFT) -m pytest tests/unit -q -p no:cacheprovider
+	! ldd $(TMP)$(SITE)/stormweaver/_stormweaver*.so | grep -E 'libc\+\+|libunwind'
+endif
+
+override_dh_python3:
+override_dh_strip_nondeterminism:
+
+override_dh_builddeb:
+	dh_builddeb -- -Zgzip

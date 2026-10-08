@@ -1,0 +1,5 @@
+percona-python3.14t-pytest (%!{PYTEST_VERSION}-%!{BUNDLE_RELEASE}) unstable; urgency=low
+
+  * pytest %!{PYTEST_VERSION} for percona-python%!{PYFT_MINOR}t
+
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}

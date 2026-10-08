@@ -1,0 +1,5 @@
+title: pytest for percona-python%!{PYFT_MINOR}t
+description: |
+  pytest %!{PYTEST_VERSION} with pluggy, iniconfig, packaging and pygments,
+  installed into /opt/percona-python%!{PYFT_MINOR}t from the pure-python
+  wheels. Needed by stormweaver.testing and the stormweaver pytest plugin.

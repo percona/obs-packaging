@@ -1,0 +1,36 @@
+#!/usr/bin/make -f
+export DH_VERBOSE=1
+include /usr/share/dpkg/buildflags.mk
+PREFIX := /opt/percona-python%!{PYFT_MINOR}t
+PYBIN := $(PREFIX)/bin/python%!{PYFT_MINOR}t
+TMP := $(CURDIR)/debian/tmp
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	./configure --prefix=$(PREFIX) --disable-gil --enable-shared \
+	  --without-static-libpython --with-ensurepip=install \
+	  CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS) -Wl,-rpath,$(PREFIX)/lib"
+
+override_dh_auto_install:
+	$(MAKE) install DESTDIR=$(TMP)
+	cd $(TMP)$(PREFIX)/lib/python%!{PYFT_MINOR}t && rm -rf test idlelib tkinter turtledemo turtle.py
+	rm -f $(TMP)$(PREFIX)/bin/idle%!{PYFT_MINOR}t $(TMP)$(PREFIX)/bin/idle3
+	rm -f $(TMP)$(PREFIX)/lib/python%!{PYFT_MINOR}t/lib-dynload/_test*.so \
+	  $(TMP)$(PREFIX)/lib/python%!{PYFT_MINOR}t/lib-dynload/_ctypes_test*.so \
+	  $(TMP)$(PREFIX)/lib/python%!{PYFT_MINOR}t/lib-dynload/_xxtestfuzz*.so
+	ln -sf python%!{PYFT_MINOR}t $(TMP)$(PREFIX)/bin/python3
+	ln -sf python%!{PYFT_MINOR}t $(TMP)$(PREFIX)/bin/python
+	LD_LIBRARY_PATH=$(TMP)$(PREFIX)/lib PYTHONHOME=$(TMP)$(PREFIX) $(TMP)$(PYBIN) -c \
+	  'import sys, ssl, hashlib, sqlite3, zlib, ctypes, bz2, lzma, readline, uuid, _uuid, curses, dbm.gnu, dbm.ndbm; assert not sys._is_gil_enabled(); print("free-threaded", sys.version)'
+
+# upstream test suite is not run here, the import check above is the gate
+override_dh_auto_test:
+
+# stdlib shebangs and .pyc files stay as CPython installed them
+override_dh_python3:
+override_dh_strip_nondeterminism:
+
+override_dh_builddeb:
+	dh_builddeb -- -Zgzip
