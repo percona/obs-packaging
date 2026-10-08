@@ -666,6 +666,7 @@ def test_derive_release_id_counter_mode_without_server_package():
         existing_releases=["ppg/containers-1", "ppg/containers-2"],
         release_name="containers",
         versrel_lookup=_fail,
+        counter_mode=True,
     )
     assert rid == "containers-3"
 
@@ -676,5 +677,16 @@ def test_derive_release_id_counter_mode_first_release():
         existing_releases=[],
         release_name="containers",
         versrel_lookup=lambda repo, arch, pkg: None,
+        counter_mode=True,
     )
     assert rid == "containers-1"
+
+
+def test_derive_release_id_without_server_package_errors_unless_counter_mode():
+    with pytest.raises(SystemExit, match="percona-postgresql"):
+        cmd_project._derive_release_id(
+            pkg_archs={},
+            existing_releases=[],
+            release_name="17",
+            versrel_lookup=lambda repo, arch, pkg: None,
+        )
