@@ -1,0 +1,45 @@
+#!/bin/sh
+
+for i in "$@"
+do
+case $i in
+    --scope=*)
+    SCOPE="${i#*=}"
+    shift # past argument=value
+    ;;
+    --role=*)
+    ROLE="${i#*=}"
+    shift # past argument=value
+    ;;
+    --datadir=*)
+    DATADIR="${i#*=}"
+    shift # past argument=value
+    ;;
+    --connstring=*)
+    CONNSTR="${i#*=}"
+    shift # past argument=value
+    ;;
+    *)
+       # unknown option
+    ;;
+esac
+done
+
+# support both '-' and '/' as separator
+if [ $(echo $SCOPE | grep -- -) ]
+then
+    VERSION=$(echo $SCOPE | sed -e 's/-.*//')
+    CLUSTER=$(echo $SCOPE | sed -e 's/.*-//')
+else
+    VERSION=$(echo $SCOPE | sed -e 's/\/.*//')
+    CLUSTER=$(echo $SCOPE | sed -e 's/.*\///')
+fi
+
+if [ -f /etc/postgresql/$VERSION/$CLUSTER/postgresql.conf ]
+then
+    pg_dropcluster $VERSION $CLUSTER
+    rm -f /etc/postgresql/$VERSION/$CLUSTER/postgresql.base.conf
+fi
+
+pg_createcluster --start-conf=manual --datadir=$DATADIR $VERSION $CLUSTER > /dev/null && rm -rf $DATADIR && /usr/lib/postgresql/$VERSION/bin/pg_basebackup --pgdata $DATADIR -X stream --dbname="$CONNSTR"
+exit $?

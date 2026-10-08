@@ -1,0 +1,26 @@
+#!/bin/sh
+
+set -e
+
+case $1 in
+    configure)
+	# Make sure we set the permissions only if no previous version
+	# was installed.
+	if test -z $2; then
+	    USER="postgres"
+	    GROUP="postgres"
+
+	    DIRS="/var/log/pgbackrest /var/lib/pgbackrest /var/spool/pgbackrest"
+	    for dir in $DIRS; do
+		mkdir -p $dir
+		chown ${USER}:${GROUP} $dir
+		chmod 0750 $dir
+	    done
+
+	    chown ${USER}:${GROUP} /etc/pgbackrest.conf
+	    chmod 0640 /etc/pgbackrest.conf
+	fi
+    ;;
+esac
+
+#DEBHELPER#

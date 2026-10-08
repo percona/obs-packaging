@@ -1,0 +1,24 @@
+pgbackrest (2.12-1) unstable; urgency=medium
+
+    pgBackRest no longer supports dots in S3 bucket names.
+
+    The new TLS/SSL implementation forbids dots in S3 bucket names per
+    RFC-2818. This security fix is required for compliant hostname
+    verification.
+
+ -- Adrian Vondendriesch <adrian.vondendriesch@credativ.de>  Sat, 13 Apr 2019 17:12:58 +0200
+
+pgbackrest (2.04-1) unstable; urgency=medium
+
+    Critical Bug Fix for Backup Resume:
+    This release fixes a critical bug in the backup resume feature. All
+    resumed backups prior to this release should be considered inconsistent.
+    A backup will be resumed after a prior backup fails, unless resume=n has
+    been specified. A resumed backup can be identified by checking the backup
+    log for the message "aborted backup of same type exists, will be cleaned
+    to remove invalid files and resumed". If the message exists, do not use
+    this backup or any backup in the same set for a restore and check the
+    restore logs to see if a resumed backup was restored. If so, there may be
+    inconsistent data in the cluster.
+
+ -- Adrian Vondendriesch <adrian.vondendriesch@credativ.de>  Fri, 06 Jul 2018 11:43:36 +0200

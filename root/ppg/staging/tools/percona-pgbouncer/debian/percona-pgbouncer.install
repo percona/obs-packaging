@@ -1,0 +1,2 @@
+etc/mkauth.py usr/share/pgbouncer
+etc/pgbouncer.ini etc/pgbouncer
