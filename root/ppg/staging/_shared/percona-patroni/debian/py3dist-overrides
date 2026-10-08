@@ -1,1 +1,2 @@
 ipaddress python3:any (>= 3.3)
+py-consul
