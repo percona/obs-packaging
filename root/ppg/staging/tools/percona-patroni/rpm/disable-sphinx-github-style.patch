@@ -1,0 +1,11 @@
+Description: Comment out sphinx_github_style extension — not available in build environments
+Author: Percona Development Team <info@percona.com>
+--- a/docs/conf.py
++++ b/docs/conf.py
+@@ -47,5 +47,5 @@
+     'sphinx.ext.ifconfig',
+     # 'sphinx.ext.viewcode',
+-    'sphinx_github_style',  # Generate "View on GitHub" for source code
++    #'sphinx_github_style',  # Generate "View on GitHub" for source code
+     'sphinxcontrib.apidoc',  # For generating module docs from code
+     'sphinx.ext.autodoc',  # For generating module docs from docstrings

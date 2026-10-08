@@ -1,0 +1,13 @@
+Index: patroni/docs/conf.py
+===================================================================
+--- patroni.orig/docs/conf.py
++++ patroni/docs/conf.py
+@@ -58,7 +58,7 @@ apidoc_separate_modules = True
+ 
+ # Include autodoc for all members, including private ones and the ones that are missing a docstring.
+ autodoc_default_options = {
+-    "members": True,
++    "members": None,
+     "undoc-members": True,
+     "private-members": True,
+     "autodoc_preserve_defaults": True,

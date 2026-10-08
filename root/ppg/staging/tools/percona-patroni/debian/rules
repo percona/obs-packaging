@@ -1,0 +1,33 @@
+#!/usr/bin/make -f
+
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+export READTHEDOCS=no
+
+%:
+	dh $@ --with=python3 --buildsystem=pybuild
+
+override_dh_builddeb:
+	dh_builddeb -- -Zgzip
+
+
+override_dh_auto_clean:
+	-dh_auto_clean
+	rm -rf docs/build features/output coverage.xml .coverage*
+	rm -rf .cache .eggs dummy junit.xml .pybuild
+
+override_dh_auto_build:
+	dh_auto_build
+	(cd docs; $(MAKE) html)
+
+override_dh_installinit:
+	# init script installed via debian/percona-patroni.install
+	dh_installinit -ppercona-patroni --only-scripts
+
+override_dh_installdocs:
+	dh_installdocs
+	dh_sphinxdoc /usr/share/doc/patroni/html
+
+override_dh_auto_test:
+	python3 -m pytest tests
+

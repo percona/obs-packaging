@@ -1,0 +1,15 @@
+title: Percona Distribution for PostgreSQL — PG-independent tools
+description: |
+  Components whose binaries do not depend on the PostgreSQL major
+  (pgBouncer, pgBadger, HAProxy, pgBackRest, Patroni), built once here and
+  pulled into every ppg:staging:<V> through obs/_aggregate files
+  (root/ppg/staging/_shared/<pkg>/obs/_aggregate).  Mirrors PGDG's
+  rpm/redhat/main/common.
+
+# Repositories, debuginfo flags and the PPG-wide build configuration come
+# from root/project.yaml and root/ppg/staging/subprojects.yaml.  The only
+# addition is the path to the pinned major so that pgBackRest resolves
+# percona-postgresql18-devel / libpq-dev from our own packages.
+path-prefix:
+  - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
+    repository: "%_repository"
