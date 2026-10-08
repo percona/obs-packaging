@@ -85,8 +85,8 @@ jobs:
       - name: Validate tag input
         run: |
           TAG="${{ inputs.tag }}"
-          if ! echo "$TAG" | grep -Eq '^[a-z0-9-]+/[0-9]+(\.[0-9]+)+-[0-9]+$'; then
-            echo "::error::tag '$TAG' does not match <product>/<major.minor-N>"
+          if ! echo "$TAG" | grep -Eq '^[a-z0-9-]+/([0-9]+(\.[0-9]+)+|[a-z][a-z0-9]*)-[0-9]+$'; then
+            echo "::error::tag '$TAG' does not match <product>/<major.minor-N> or <product>/<name-N>"
             exit 1
           fi
 
@@ -187,15 +187,19 @@ jobs:
             profile create main "${args[@]}"
 
       # Derive the release project from the tag name.
-      # Tag ppg/17.9-1 → product=ppg, version=17.9-1, major=17
-      # → release project ppg:releases:17
+      # Tag ppg/17.9-1      → product=ppg, version=17.9-1, major=17 → ppg:releases:17
+      # Tag ppg/containers-3 → product=ppg, version=containers-3, name=containers
+      #                      → ppg:releases:containers (counter-tagged cross-version project)
       - name: Derive release project
         id: release-info
         run: |
           TAG="${{ inputs.tag }}"
           PRODUCT="${TAG%%/*}"
           VERSION="${TAG#*/}"
-          MAJOR_VERSION="${VERSION%%.*}"
+          case "$VERSION" in
+            [0-9]*) MAJOR_VERSION="${VERSION%%.*}" ;;
+            *)      MAJOR_VERSION="${VERSION%-*}" ;;
+          esac
           RELEASE_PROJECT="${PRODUCT}:releases:${MAJOR_VERSION}"
           RELEASE_ID="${VERSION}"
           echo "release_project=$RELEASE_PROJECT" >> "$GITHUB_OUTPUT"
@@ -239,7 +243,10 @@ jobs:
           TAG="${{ inputs.tag }}"
           PRODUCT="${TAG%%/*}"
           VERSION="${TAG#*/}"
-          MAJOR_VERSION="${VERSION%%.*}"
+          case "$VERSION" in
+            [0-9]*) MAJOR_VERSION="${VERSION%%.*}" ;;
+            *)      MAJOR_VERSION="${VERSION%-*}" ;;
+          esac
           RELEASE_PROJECT="${PRODUCT}:releases:${MAJOR_VERSION}"
           RELEASE_ID="${VERSION}"
           echo "release_project=$RELEASE_PROJECT" >> "$GITHUB_OUTPUT"
