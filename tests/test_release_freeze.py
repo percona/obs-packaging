@@ -182,3 +182,84 @@ def test_verify_release_landed_timeout(monkeypatch):
         rf.verify_release_landed(
             "http://obs", "x:src", "x:rel", timeout_s=0, poll_interval_s=0
         )
+
+
+def test_assert_all_green_package_scoped(monkeypatch):
+    _patch_results(
+        monkeypatch,
+        _result_xml(
+            [("etcd", "R9", "x86_64", "succeeded"), ("krb5", "R9", "x86_64", "failed")]
+        ),
+    )
+    problems = rf.assert_all_green("http://obs", ["deps"], packages={"deps": {"etcd"}})
+    assert problems == []
+    problems = rf.assert_all_green("http://obs", ["deps"])
+    assert problems == ["deps/krb5 R9/x86_64: failed"]
+
+
+def test_pending_items_package_scoped_ignores_repo_state(monkeypatch):
+    _patch_results(
+        monkeypatch,
+        _result_xml(
+            [
+                ("etcd", "R9", "x86_64", "succeeded"),
+                ("krb5", "R9", "x86_64", "building"),
+            ],
+            repo_state="building",
+        ),
+    )
+    assert rf._pending_items("http://obs", ["deps"], packages={"deps": {"etcd"}}) == []
+    assert rf._pending_items("http://obs", ["deps"], packages={"deps": {"krb5"}}) == [
+        "deps/krb5 R9/x86_64: building"
+    ]
+
+
+def test_freeze_packages_round_trip(monkeypatch):
+    metas = {("deps", "etcd"): '<package name="etcd" project="deps"><title/></package>'}
+    edits = []
+    monkeypatch.setattr(
+        rf.osc.core,
+        "show_package_meta",
+        lambda api, prj, pkg: [metas[(prj, pkg)].encode()],
+    )
+    monkeypatch.setattr(
+        rf, "_decode_obs_response", lambda data: b"".join(data).decode()
+    )
+
+    def fake_edit(metatype, path_args, data, force, apiurl):
+        edits.append((metatype, path_args, data[0]))
+
+    monkeypatch.setattr(rf.osc.core, "edit_meta", fake_edit)
+    snaps = rf.freeze_packages("http://obs", {"deps": {"etcd"}})
+    assert snaps == {("deps", "etcd"): metas[("deps", "etcd")]}
+    assert edits[0][0] == "pkg" and edits[0][1] == ("deps", "etcd")
+    assert "<disable" in edits[0][2]
+    rf.restore_packages("http://obs", snaps)
+    assert edits[1][2] == metas[("deps", "etcd")]
+
+
+def test_freeze_packages_restores_on_partial_failure(monkeypatch):
+    metas = {("deps", "a"): '<package name="a" project="deps"/>'}
+    edits = []
+
+    def fake_show(api, prj, pkg):
+        if (prj, pkg) not in metas:
+            raise RuntimeError("boom")
+        return [metas[(prj, pkg)].encode()]
+
+    monkeypatch.setattr(rf.osc.core, "show_package_meta", fake_show)
+    monkeypatch.setattr(
+        rf, "_decode_obs_response", lambda data: b"".join(data).decode()
+    )
+    monkeypatch.setattr(
+        rf.osc.core,
+        "edit_meta",
+        lambda metatype, path_args, data, force, apiurl: edits.append(
+            (path_args, data[0])
+        ),
+    )
+    with pytest.raises(RuntimeError):
+        rf.freeze_packages("http://obs", {"deps": {"a", "b"}})
+    # a was frozen then restored
+    assert edits[0][0] == ("deps", "a") and "<disable" in edits[0][1]
+    assert edits[-1] == (("deps", "a"), metas[("deps", "a")])

@@ -10,6 +10,10 @@ instant.  To guarantee a release ships a coherent, fully-built snapshot,
 
 The green assertion MUST run before the freeze: a disabled project reports
 ``disabled`` for every package, so it can no longer be verified.
+
+Aggregate sources shared with other releases are handled at package
+granularity (``packages`` maps project -> package names): only those
+packages are waited on, checked and build-frozen.
 """
 
 import time
@@ -60,15 +64,27 @@ def fetch_project_results(
     return pkg_codes, repo_states
 
 
-def _pending_items(apiurl: str, obs_projects: "list[str]") -> "list[str]":
-    """Return human-readable descriptions of everything still pending."""
+def _pending_items(
+    apiurl: str,
+    obs_projects: "list[str]",
+    packages: "dict[str, set[str]] | None" = None,
+) -> "list[str]":
+    """Return human-readable descriptions of everything still pending.
+
+    Projects listed in *packages* are package-scoped: only those packages
+    count and repository-level states are ignored.
+    """
     pending: list[str] = []
     for prj in obs_projects:
+        only = (packages or {}).get(prj)
         pkg_codes, repo_states = fetch_project_results(apiurl, prj)
-        for (repo, arch), state in sorted(repo_states.items()):
-            if state in PENDING_REPO_STATES or state == "dirty":
-                pending.append(f"{prj} {repo}/{arch}: repository {state}")
+        if only is None:
+            for (repo, arch), state in sorted(repo_states.items()):
+                if state in PENDING_REPO_STATES or state == "dirty":
+                    pending.append(f"{prj} {repo}/{arch}: repository {state}")
         for (pkg, repo, arch), code in sorted(pkg_codes.items()):
+            if only is not None and pkg not in only:
+                continue
             if code in PENDING_PKG_CODES:
                 pending.append(f"{prj}/{pkg} {repo}/{arch}: {code}")
     return pending
@@ -79,6 +95,7 @@ def wait_for_quiesce(
     obs_projects: "list[str]",
     timeout_s: int = 3600,
     poll_interval_s: int = 30,
+    packages: "dict[str, set[str]] | None" = None,
 ) -> None:
     """Block until no project has pending builds or unsettled repositories.
 
@@ -87,7 +104,7 @@ def wait_for_quiesce(
     """
     deadline = time.monotonic() + timeout_s
     while True:
-        pending = _pending_items(apiurl, obs_projects)
+        pending = _pending_items(apiurl, obs_projects, packages)
         if not pending:
             _print_same("source projects quiescent")
             return
@@ -104,19 +121,86 @@ def wait_for_quiesce(
         time.sleep(poll_interval_s)
 
 
-def assert_all_green(apiurl: str, obs_projects: "list[str]") -> "list[str]":
+def assert_all_green(
+    apiurl: str,
+    obs_projects: "list[str]",
+    packages: "dict[str, set[str]] | None" = None,
+) -> "list[str]":
     """Return [] when every package is green, else the list of problems.
 
     Anything not in GREEN_PKG_CODES is a problem — including pending codes,
-    which should not appear after wait_for_quiesce.
+    which should not appear after wait_for_quiesce.  Projects listed in
+    *packages* only have those packages checked.
     """
     problems: list[str] = []
     for prj in obs_projects:
+        only = (packages or {}).get(prj)
         pkg_codes, _ = fetch_project_results(apiurl, prj)
         for (pkg, repo, arch), code in sorted(pkg_codes.items()):
+            if only is not None and pkg not in only:
+                continue
             if code not in GREEN_PKG_CODES:
                 problems.append(f"{prj}/{pkg} {repo}/{arch}: {code}")
     return problems
+
+
+def _disabled_meta(raw: str) -> str:
+    root = ET.fromstring(raw)
+    for build_elem in root.findall("build"):
+        root.remove(build_elem)
+    ET.SubElement(ET.SubElement(root, "build"), "disable")
+    ET.indent(root, space="  ")
+    return ET.tostring(root, encoding="unicode")
+
+
+def freeze_packages(
+    apiurl: str, packages: "dict[str, set[str]]"
+) -> "dict[tuple[str, str], str]":
+    """Disable builds on the listed packages; return {(project, pkg): prior_meta}.
+
+    Mirrors freeze_builds at package granularity (aggregate sources such as
+    ppg:staging:tools and ppg:common:deps are shared with other releases, so
+    the whole project must not be frozen).  Partial failure restores what
+    was already frozen before re-raising.
+    """
+    snapshots: dict[tuple[str, str], str] = {}
+    try:
+        for prj in sorted(packages):
+            for pkg in sorted(packages[prj]):
+                raw = _decode_obs_response(osc.core.show_package_meta(apiurl, prj, pkg))
+                osc.core.edit_meta(
+                    metatype="pkg",
+                    path_args=(prj, pkg),
+                    data=[_disabled_meta(raw)],
+                    force=True,
+                    apiurl=apiurl,
+                )
+                snapshots[(prj, pkg)] = raw
+                _print_update(f"{prj}/{pkg}  (builds frozen)")
+    except Exception:
+        if snapshots:
+            restore_packages(apiurl, snapshots)
+        raise
+    return snapshots
+
+
+def restore_packages(apiurl: str, snapshots: "dict[tuple[str, str], str]") -> None:
+    """Push package meta snapshots back verbatim.  Never raises."""
+    for (prj, pkg), meta in snapshots.items():
+        try:
+            osc.core.edit_meta(
+                metatype="pkg",
+                path_args=(prj, pkg),
+                data=[meta],
+                force=True,
+                apiurl=apiurl,
+            )
+            _print_update(f"{prj}/{pkg}  (builds restored)")
+        except Exception as exc:
+            print(
+                f"warning: failed to restore build flags on {prj}/{pkg}: {exc}",
+                flush=True,
+            )
 
 
 def freeze_builds(apiurl: str, obs_projects: "list[str]") -> "dict[str, str]":
@@ -135,15 +219,7 @@ def freeze_builds(apiurl: str, obs_projects: "list[str]") -> "dict[str, str]":
     try:
         for prj in obs_projects:
             raw = _decode_obs_response(osc.core.show_project_meta(apiurl, prj))
-            root = ET.fromstring(raw)
-            for build_elem in root.findall("build"):
-                root.remove(build_elem)
-            build_elem = ET.SubElement(root, "build")
-            ET.SubElement(build_elem, "disable")
-            ET.indent(root, space="  ")
-            _edit_project_meta(
-                apiurl, prj, ET.tostring(root, encoding="unicode"), force=True
-            )
+            _edit_project_meta(apiurl, prj, _disabled_meta(raw), force=True)
             snapshots[prj] = raw
             _print_update(f"{prj}  (builds frozen)")
     except Exception:
