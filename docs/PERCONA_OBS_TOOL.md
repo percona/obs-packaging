@@ -932,7 +932,8 @@ to override the arithmetic.
 ```
 
 `source-project` must be a `staging`-tier project — any other tier is rejected with an
-error. `project release <source-project>` does the following:
+error. Cross-version projects with no `percona-postgresql` package (`ppg:staging:containers`)
+get a counter release id `<name>-N` (tag `ppg/containers-<N>`) instead of `MAJOR.MINOR-N`. `project release <source-project>` does the following:
 
 1. **Auto-derives `release-id`** (if not given with `--release-id`):
    - Queries OBS for the built version of `percona-postgresql<major>` in the source project.
@@ -1105,6 +1106,18 @@ Flags:
       raises), re-apply each project's exact snapshotted meta last (never a blanket
       enable, since subprojects carry per-repo flags — e.g. tarballs' `publish:`
       flags — that must survive the round trip).
+   **Freeze scope.** Before `osc release` the command drains and green-checks, then
+   build-disables for the duration of the copy:
+
+   - the release source project and its subprojects (whole);
+   - every local aggregate source referenced by an `obs/_aggregate` under the
+     source tree — `ppg:staging:tools`, `ppg:common:deps` — restricted to the
+     aggregated packages (package `_meta` build disable);
+   - for a container project release, the `subproject:` entries of its repository
+     paths (whole), since an image may consume any package of them.
+
+   `--dry-run` prints the extra sources as `+ <project>  (whole)` or
+   `+ <project>  (<pkg>, …)` and includes them in the green check.
 5. Release-tier OBS projects with no local mirror are reported loudly as orphans;
    deletion is never automatic — run `sync delete` manually.
 
