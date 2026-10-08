@@ -1,0 +1,15 @@
+Source: percona-python3.14t-pytest
+Section: python
+Priority: optional
+Maintainer: Percona Development Team <info@percona.com>
+Build-Depends: debhelper (>= 10), percona-python%!{PYFT_MINOR}t
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://pytest.org/
+
+Package: percona-python3.14t-pytest
+Architecture: all
+Depends: ${misc:Depends}, percona-python%!{PYFT_MINOR}t
+Description: pytest for percona-python%!{PYFT_MINOR}t
+ pytest %!{PYTEST_VERSION} with pluggy, iniconfig, packaging and pygments
+ installed into /opt/percona-python%!{PYFT_MINOR}t from their wheels.
