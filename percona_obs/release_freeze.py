@@ -130,12 +130,17 @@ def assert_all_green(
 
     Anything not in GREEN_PKG_CODES is a problem — including pending codes,
     which should not appear after wait_for_quiesce.  Projects listed in
-    *packages* only have those packages checked.
+    *packages* only have those packages checked, and a listed package with
+    no build result at all (absent on OBS) is a problem too.
     """
     problems: list[str] = []
     for prj in obs_projects:
         only = (packages or {}).get(prj)
         pkg_codes, _ = fetch_project_results(apiurl, prj)
+        if only is not None:
+            seen = {pkg for pkg, _, _ in pkg_codes}
+            for pkg in sorted(only - seen):
+                problems.append(f"{prj}/{pkg}: not found in build results")
         for (pkg, repo, arch), code in sorted(pkg_codes.items()):
             if only is not None and pkg not in only:
                 continue
