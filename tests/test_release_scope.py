@@ -3,10 +3,12 @@
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 import percona_obs.common as common
 import percona_obs.release_scope as rs
+from percona_obs.project_config import RepositoryFilter
 
 _AGG = (
     "<aggregatelist>\n"
@@ -154,6 +156,9 @@ def test_container_source_adds_path_prefix_projects(tmp_path, monkeypatch):
         )
     )
     _pkg(src / "percona-pgbouncer", {"Dockerfile": "FROM x\n"})
+    # path-prefix sources must exist in the tree (missing ones are skipped)
+    for sub in ("ppg/staging/18", "ppg/staging/tools", "ppg/common/deps"):
+        (root / sub).mkdir(parents=True)
     scope = rs.collect_release_scope(src, "ppg:staging:containers", "isv:percona", {})
     assert scope.whole_projects == [
         "isv:percona:ppg:staging:18",
@@ -179,3 +184,110 @@ def test_non_container_source_ignores_path_prefix(tmp_path, monkeypatch):
     _pkg(src / "percona-postgresql", {"_service": "<services/>"})
     scope = rs.collect_release_scope(src, "ppg:staging:17", "isv:percona", {})
     assert scope.whole_projects == []
+
+
+_UBI_ONLY = RepositoryFilter(include_repos=("UBI_*",))
+
+
+@pytest.fixture
+def ubi_only_slice():
+    common.set_default_repository_filter(_UBI_ONLY)
+    try:
+        yield
+    finally:
+        common.set_default_repository_filter(None)
+
+
+def _two_repo_root(root: Path) -> None:
+    (root / "project.yaml").write_text(
+        yaml.dump(
+            {
+                "repositories": [
+                    {"name": "RockyLinux_9", "archs": ["x86_64"], "paths": []},
+                    {"name": "UBI_9", "archs": ["x86_64"], "paths": []},
+                ]
+            }
+        )
+    )
+
+
+def test_aggregate_target_out_of_slice_is_skipped(
+    tmp_path, monkeypatch, ubi_only_slice
+):
+    root = _mk_root(tmp_path, monkeypatch)
+    _two_repo_root(root)
+    src = root / "ppg/staging/17"
+    src.mkdir(parents=True)
+    (src / "project.yaml").write_text("title: S\n")
+    _pkg(
+        src / "llvm-21",
+        {"_aggregate": _AGG.format(prj="ppg:common:deps", pkg="llvm-21")},
+    )
+    _pkg(src / "etcd", {"_aggregate": _AGG.format(prj="ppg:common:deps", pkg="etcd")})
+    deps = root / "ppg/common/deps"
+    _pkg(deps / "llvm-21", {"_service": "<services/>"})
+    (deps / "llvm-21" / "package.yaml").write_text(
+        yaml.dump({"build": {"UBI_9": False}})
+    )
+    _pkg(deps / "etcd", {"_service": "<services/>"})
+    scope = rs.collect_release_scope(src, "ppg:staging:17", "isv:percona", {})
+    assert scope.packages == {"isv:percona:ppg:common:deps": {"etcd"}}
+
+
+def test_missing_aggregate_target_package_is_skipped(tmp_path, monkeypatch):
+    root = _mk_root(tmp_path, monkeypatch)
+    src = root / "ppg/staging/17"
+    src.mkdir(parents=True)
+    (src / "project.yaml").write_text("title: S\n")
+    _pkg(src / "ghost", {"_aggregate": _AGG.format(prj="ppg:common:deps", pkg="ghost")})
+    (root / "ppg/common/deps").mkdir(parents=True)
+    scope = rs.collect_release_scope(src, "ppg:staging:17", "isv:percona", {})
+    assert scope.packages == {}
+
+
+def test_container_path_prefix_out_of_slice_is_skipped(
+    tmp_path, monkeypatch, ubi_only_slice
+):
+    root = _mk_root(tmp_path, monkeypatch)
+    _two_repo_root(root)
+    rocky_only = root / "ppg/staging/rocky-only"
+    rocky_only.mkdir(parents=True)
+    (rocky_only / "project.yaml").write_text(
+        yaml.dump(
+            {
+                "repositories-inherit": False,
+                "repositories": [
+                    {"name": "RockyLinux_9", "archs": ["x86_64"], "paths": []}
+                ],
+            }
+        )
+    )
+    (root / "ppg/staging/18").mkdir(parents=True)
+    (root / "ppg/staging/18/project.yaml").write_text("title: S18\n")
+    src = root / "ppg/staging/containers"
+    src.mkdir(parents=True)
+    (src / "project.yaml").write_text(
+        yaml.dump(
+            {
+                "repositories-inherit": False,
+                "project-config-inherit": False,
+                "repositories": [
+                    {
+                        "name": "ubi9",
+                        "archs": ["x86_64"],
+                        "paths": [
+                            {"subproject": "ppg:staging:18", "repository": "UBI_9"},
+                            {
+                                "subproject": "ppg:staging:rocky-only",
+                                "repository": "RockyLinux_9",
+                            },
+                            {"subproject": "ppg:staging:absent", "repository": "UBI_9"},
+                        ],
+                    }
+                ],
+            }
+        )
+    )
+    _pkg(src / "percona-pgbouncer", {"Dockerfile": "FROM x\n"})
+    scope = rs.collect_release_scope(src, "ppg:staging:containers", "isv:percona", {})
+    assert scope.whole_projects == ["isv:percona:ppg:staging:18"]
