@@ -110,6 +110,12 @@ one plus the number of releases already listed for the project's `PG_VERSION` in
 declare `PG_VERSION` as the upgrade target ahead of the rest of `staging/18`, so they
 simply track `staging/18`'s computed counter rather than having one of their own.
 
+Cross-version projects that have no `percona-postgresql` package
+(`ppg/staging/containers`) are released with a plain counter instead:
+`./percona-obs -P <profile> project release ppg:staging:containers` writes
+`root/ppg/releases/containers/` and tags `ppg/containers-<N>`; `obs-release.yml`
+maps that tag shape to `ppg:releases:containers`.
+
 #### Cutting a release
 
 Use the `project release` command — it auto-derives the release ID from OBS,
@@ -157,6 +163,30 @@ Each package directory contains the packaging sources split by format:
 └── debian/     # Debian packaging files
 ```
 
+### `staging/tools/`
+
+`ppg:staging:tools` builds the components whose binaries do not depend on the
+PostgreSQL major — the PGDG "common" rule: anything whose binary package name
+carries no PG major. Today: `percona-pgbouncer`, `percona-pgbadger`,
+`percona-haproxy`, `percona-pgbackrest`, `percona-patroni`. Each per-major
+project lists the same package as an aggregate
+(`staging/_shared/<pkg>/obs/_aggregate` → `${OBS_ROOTPRJ}:ppg:staging:tools`),
+so its published repository stays self-contained while OBS builds the component
+once.
+
+`tools/macros.yaml` pins `PG_MAJOR_VERSION` (pgBackRest links that major's libpq;
+`tools/project.yaml` puts `ppg:staging:<that major>` on the repository path).
+Bump it by hand in the PR that adds a new GA major to `staging/`.
+
+OBS release counters (`<CI_CNT>.<B_CNT>`) are per project, so right after a
+component moves here the majors list an equal-version build with a lower counter
+than the one they built themselves. Nothing breaks (same bytes, same version); the
+next upstream bump supersedes it.
+
+`sync release` freezes the aggregated packages of `ppg:staging:tools` (and of
+`ppg:common:deps`) for the duration of the `osc release` copy; see
+`docs/PERCONA_OBS_TOOL.md`.
+
 A package whose packaging is byte-identical across majors (only `%!{PG_MAJOR_VERSION}` differs) is
 stored once in `staging/_shared/<package>/` and referenced from each major by a relative git symlink:
 
@@ -185,10 +215,10 @@ through `staging/17/macros.yaml`. Porting the tarballs to another major is then 
 
 When the bare package name is already taken at `_shared/` top level, the shared copy sits in a
 subdirectory named after the subproject. The container images are the example: the
-`percona-pgbouncer` and `percona-pgbackrest` *images* live in `staging/_shared/containers/<pkg>/`
-(the RPM/deb packages of the same name are `staging/_shared/<pkg>/`), and every major links to them
-with `staging/<V>/containers/<pkg> -> ../../_shared/containers/<pkg>`. `_shared/containers/` is
-neither a project nor a package; `containers/project.yaml` stays per major. The extras tier follows the
+`percona-pgbouncer` and `percona-pgbackrest` *images* will live in `staging/containers/<pkg>/`
+(cross-version, one copy for all majors; the RPM/deb packages of the same name are
+`staging/_shared/<pkg>/`) (after PR B). `containers/project.yaml` stays per major for the
+remaining images. The extras tier follows the
 same pattern one level deeper: `staging/_shared/extras/<pkg>` holds the extras extension packages linked
 from `staging/<V>/extras/<pkg>` (`../../_shared/extras/<pkg>`), and
 `staging/_shared/extras/containers/percona-distribution-postgresql-custom` is linked from

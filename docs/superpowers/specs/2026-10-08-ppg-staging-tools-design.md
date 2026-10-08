@@ -168,8 +168,11 @@ paths render to `ppg/releases/containers/<ubi>`.
   is an unversioned capability every major's libs package provides; a
   pgbackrest linked against libpq 18 installs on any major (what PGDG ships).
 - **pgbouncer, pgbadger, haproxy**: no file change.
-- **Changelogs**: one entry per moved package noting the move, so consumers
-  see one new build replace five identical ones.
+- **No changelog or Release bump**: OBS overrides spec `Release:` with
+  `<CI_CNT>.<B_CNT>` (root prjconf), so nothing in the sources can raise the
+  published counter. Counters restart in the tools project; the majors list an
+  equal-version, lower-counter build until the next upstream bump. Staging-only
+  cosmetic effect, documented in root/README.md.
 
 Side effect worth recording: the five packages become byte-identical across
 majors, removing a latent file-conflict risk when two majors' repositories
@@ -198,7 +201,8 @@ are enabled on one host.
 - **Tree**: `root/ppg/releases/containers/` with `release.yaml`
   (`project: ppg:staging:containers`, `releases: [ppg/containers-1, …]`),
   `CHANGELOG.md` and a standalone `project.yaml` (`build: false`, three ubi
-  repos) materialised by `project release`. OBS project
+  repos) written by the first `project release ppg:staging:containers` run (the
+  release PR), not by PR B. OBS project
   `ppg:releases:containers`.
 - **Contents**: the upgrade image, `percona-pgbouncer`, `percona-pgbackrest`.
 - **Tag**: `ppg/containers-<N>`, N a plain counter (user decision).
@@ -221,9 +225,8 @@ majors are untouched. After merge, sync-main creates and builds
 linkage can differ.
 
 **PR B — switch consumers.** The five `_shared` directories become
-aggregate-only; changelog entries; the image move (Section 4);
-`root/ppg/releases/containers/` mirror and the containers project path
-addition (Section 5). OBS swaps each major's built package for the aggregate
+aggregate-only; the image move (Section 4); the containers
+project path addition (Section 5). OBS swaps each major's built package for the aggregate
 and republishes; old per-major build results are dropped by OBS.
 
 **Release PR** — `project release ppg:staging:containers` produces the first
