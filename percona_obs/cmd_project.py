@@ -8,7 +8,7 @@ import subprocess
 import sys
 import urllib.error
 import xml.etree.ElementTree as ET
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import osc.conf
@@ -2093,6 +2093,47 @@ def _commit_release_paths(
     )
 
 
+def _has_container_images(sub_path: Path) -> bool:
+    return any(
+        (sub_path / p.name / "obs" / "Dockerfile").is_file()
+        for p in sub_path.iterdir()
+        if p.is_dir()
+    )
+
+
+def _derive_release_id(
+    pkg_archs: "dict[str, tuple[str, str]]",
+    existing_releases: "list[str]",
+    release_name: str,
+    versrel_lookup: "Callable[[str, str, str], str | None]",
+) -> str:
+    """Return the next release id for a source project.
+
+    PG mode (a ``percona-postgresql[<major>]`` package is built): ``MAJOR.MINOR-N``
+    where N counts existing releases of that minor.  Counter mode (no server
+    package - cross-version projects such as ``ppg:staging:containers``):
+    ``<release_name>-N`` where N is one plus the number of existing releases.
+    """
+    pg_pkg = "percona-postgresql"
+    repo_arch = pkg_archs.get(pg_pkg)
+    if not repo_arch:
+        pg_pkg = f"percona-postgresql{release_name}"
+        repo_arch = pkg_archs.get(pg_pkg)
+    if not repo_arch:
+        return f"{release_name}-{len(existing_releases) + 1}"
+    repo, arch = repo_arch
+    versrel = versrel_lookup(repo, arch, pg_pkg)
+    if not versrel:
+        raise SystemExit(
+            f"error: could not get built version of {pg_pkg}; "
+            "use --release-id to specify manually"
+        )
+    ver_parts = versrel.split("-")[0].split(".")
+    major_minor = ".".join(ver_parts[:2])
+    matching_count = sum(1 for t in existing_releases if f"/{major_minor}-" in t)
+    return f"{major_minor}-{matching_count + 1}"
+
+
 def cmd_project_release(args: argparse.Namespace) -> None:
     """Create or update a release: release.yaml, CHANGELOG.md, project.yaml, commit, and open a PR."""
     product = args.project.split(":")[0]
@@ -2141,28 +2182,14 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     release_id: str = args.release_id or ""
     if not release_id:
         pkg_archs = _fetch_all_pkg_archs(apiurl, source_obs_project)
-        pg_pkg = "percona-postgresql"
-        repo_arch = pkg_archs.get(pg_pkg)
-        if not repo_arch:
-            pg_pkg = f"percona-postgresql{major}"
-            repo_arch = pkg_archs.get(pg_pkg)
-        if not repo_arch:
-            raise SystemExit(
-                f"error: package percona-postgresql (or percona-postgresql{major}) "
-                f"not found in {source_obs_project}; "
-                "use --release-id to specify manually"
-            )
-        repo, arch = repo_arch
-        versrel = _fetch_pkg_versrel(apiurl, source_obs_project, repo, arch, pg_pkg)
-        if not versrel:
-            raise SystemExit(
-                f"error: could not get built version of {pg_pkg} from {source_obs_project}; "
-                "use --release-id to specify manually"
-            )
-        ver_parts = versrel.split("-")[0].split(".")
-        major_minor = ".".join(ver_parts[:2])
-        matching_count = sum(1 for t in existing_releases if f"/{major_minor}-" in t)
-        release_id = f"{major_minor}-{matching_count + 1}"
+        release_id = _derive_release_id(
+            pkg_archs,
+            existing_releases,
+            release_name,
+            lambda repo, arch, pkg: _fetch_pkg_versrel(
+                apiurl, source_obs_project, repo, arch, pkg
+            ),
+        )
 
     tag = f"{product}/{release_id}"
 
@@ -2186,14 +2213,10 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     # Build CHANGELOG section by diffing source vs release OBS package versions.
     _print_pending("fetching package versions for CHANGELOG")
 
-    def _has_container_images(sub_path: Path) -> bool:
-        return any(
-            (sub_path / p.name / "obs" / "Dockerfile").is_file()
-            for p in sub_path.iterdir()
-            if p.is_dir()
-        )
-
     source_versions = _fetch_project_pkg_versions(apiurl, source_obs_project)
+    source_is_container_project = _has_container_images(source_path)
+    if source_is_container_project:
+        source_versions = {}
     noncontainer_subs: list[str] = []
     container_subs: list[str] = []
     for sub_obs_id, sub_path in find_projects(source_path, args.project):
@@ -2240,8 +2263,26 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             ),
             sub_full,
         )
+    if source_is_container_project:
+        _merge_container_pkgs(
+            source_container_pkgs,
+            _fetch_subproject_container_pkgs(
+                apiurl, source_obs_project, args.rootprj, source_obs_project
+            ),
+            source_obs_project,
+        )
     if not is_first_release and existing_releases:
         prev_release_id = existing_releases[-1].split("/")[-1]
+        if source_is_container_project and _obs_project_exists(
+            apiurl, release_obs_project
+        ):
+            _merge_container_pkgs(
+                release_container_pkgs,
+                _fetch_subproject_container_pkgs(
+                    apiurl, release_obs_project, args.rootprj, release_obs_project
+                ),
+                release_obs_project,
+            )
         # Diff against whatever release subprojects actually exist on OBS —
         # this is what makes the ubi9 old-layout → new-layout migration diff
         # correctly instead of dumping every image as "add".
@@ -2266,7 +2307,8 @@ def cmd_project_release(args: argparse.Namespace) -> None:
                 changed_pkgs,
                 source_path,
                 prev_tag_for_scan,
-                has_container_images=bool(container_subs),
+                has_container_images=bool(container_subs)
+                or source_is_container_project,
             )
             security_lines = scan_result.lines or None
         except Exception as exc:  # belt and braces: the scan must never kill a cut

@@ -635,3 +635,46 @@ def test_write_release_tree_ignores_the_process_default_filter(tmp_path, monkeyp
         common.set_default_repository_filter(None)
     extras = yaml.safe_load((rel / "extras" / "project.yaml").read_text())
     assert [r["name"] for r in extras["repositories"]] == ["UBI_9", "RockyLinux_9"]
+
+
+def test_derive_release_id_pg_mode():
+    rid = cmd_project._derive_release_id(
+        pkg_archs={"percona-postgresql": ("RockyLinux_9", "x86_64")},
+        existing_releases=["ppg/17.10-1", "ppg/17.11-1"],
+        release_name="17",
+        versrel_lookup=lambda repo, arch, pkg: "17.11.1-2.1",
+    )
+    assert rid == "17.11-2"
+
+
+def test_derive_release_id_major_suffixed_package():
+    rid = cmd_project._derive_release_id(
+        pkg_archs={"percona-postgresql18": ("RockyLinux_9", "x86_64")},
+        existing_releases=[],
+        release_name="18",
+        versrel_lookup=lambda repo, arch, pkg: "18.6-1.1",
+    )
+    assert rid == "18.6-1"
+
+
+def test_derive_release_id_counter_mode_without_server_package():
+    def _fail(repo, arch, pkg):
+        raise AssertionError("not called")
+
+    rid = cmd_project._derive_release_id(
+        pkg_archs={"percona-pgbouncer": ("ubi9", "x86_64")},
+        existing_releases=["ppg/containers-1", "ppg/containers-2"],
+        release_name="containers",
+        versrel_lookup=_fail,
+    )
+    assert rid == "containers-3"
+
+
+def test_derive_release_id_counter_mode_first_release():
+    rid = cmd_project._derive_release_id(
+        pkg_archs={},
+        existing_releases=[],
+        release_name="containers",
+        versrel_lookup=lambda repo, arch, pkg: None,
+    )
+    assert rid == "containers-1"
