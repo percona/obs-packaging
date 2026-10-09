@@ -1,12 +1,19 @@
-# PG-independent tools built once: `ppg:staging:tools`, cross-version images and their release
+# PG-independent tools built once: `ppg:staging:common:tools`, cross-version images and their release
 
-**Date:** 2026-10-08
-**Status:** approved by the user in brainstorming (2026-10-07/08); plan pending approval
-**Scope:** three PRs. PR A adds `ppg:staging:tools` and the tool changes. PR B
-switches the five per-major packages to aggregates, moves the pgbouncer and
-pgbackrest images to `ppg:staging:containers`, and adds the cross-version
-containers release flow. The first `ppg:releases:containers` release is a
-normal release PR produced by `project release` afterwards.
+**Date:** 2026-10-08, revised 2026-10-09
+**Status:** approved by the user in brainstorming (2026-10-07/08, revision 2026-10-09); plan being revised
+**Scope:** three PRs. PR A adds `ppg:staging:common:tools` and the tool changes
+(PR #123, reworked in place). PR B switches the five per-major packages to
+aggregates, moves the cross-version image projects under `common/`, and puts
+the pgbouncer/pgbackrest images in `common/tools/containers`. The first
+`ppg:releases:common` release is a normal release PR produced by
+`project release ppg:staging:common` afterwards.
+
+**Revision 2026-10-09.** The first version placed the tools project at
+`ppg:staging:tools` and released the cross-version images from a
+`ppg:releases:containers` unit. The user proposed a tier-level `common`
+parent for every cross-version product piece; Sections 1, 2.1, 2.2, 4, 5, 6
+and 7 were rewritten for it. `ppg:common:deps` is unaffected.
 
 ## Background
 
@@ -27,9 +34,10 @@ The repository already has the mechanism this design extends: `etcd`,
 `ydiff`, `geos`, `proj`, `sfcgal` and the python3 stack are built once in
 `ppg:common:deps` and reach every major through an `obs/_aggregate` file;
 release snapshots copy aggregated binaries with `osc release`, which the
-17.11-1 and 18.6-1 releases proved. `ppg:staging:containers` already exists
-as the cross-version image project (upgrade image) but has no release
-counterpart.
+17.11-1 and 18.6-1 releases proved. Two cross-version image projects already
+exist (`ppg:staging:containers` with the upgrade image,
+`ppg:staging:extras:containers` with the custom upgrade image) but neither
+has a release counterpart.
 
 ## Decisions taken in brainstorming
 
@@ -40,41 +48,73 @@ counterpart.
    `pg-telemetry`, `postgresql-common` and the `ppg-server*` meta packages
    stay per-major.
 2. **PG major for the tools project: explicit pin.** `PG_MAJOR_VERSION: 18`
-   in `root/ppg/staging/tools/macros.yaml`, bumped by hand in the PR that
-   adds a new GA major to staging. No derivation from the tree.
+   in `root/ppg/staging/common/tools/macros.yaml`, bumped by hand in the PR
+   that adds a new GA major to staging. No derivation from the tree.
 3. **Release coupling: tools joins the freeze.** `sync release` extends its
    quiesce / green / build-freeze scope to the local aggregate sources of the
    release source tree, restricted to the aggregated packages. The gap between
    QA sign-off and the `osc release` copy is not tooled today for anything
    (including `ppg:common:deps`) and stays a process rule.
-4. **Where the single build lives: a new `ppg:staging:tools`**, not
-   `ppg:common:deps` (that project is `publish: false`, has no PG path and
-   mixes third-party libraries with shipped components).
+4. **Where the single build lives: the product tier**, not `ppg:common:deps`
+   (that project is `publish: false`, has no PG path and mixes third-party
+   libraries with shipped components).
 5. **patroni Debian: drop the server Depends**, matching upstream Debian and
    our own RPM spec.
-6. **Images move too**, to the existing `ppg:staging:containers`, and that
-   project gets a release counterpart `ppg:releases:containers` in this
-   effort, tagged with a plain counter.
+6. **Images move too**, into the tools project's own image subproject, and
+   the cross-version pieces get one release unit tagged with a plain counter.
 7. **Two content PRs** (A then B) so the published staging repos never go
    through a window with the five packages missing while tools builds.
+8. **(2026-10-09) Tier-level `common` parent.** Every cross-version product
+   piece of a tier lives under `ppg:<tier>:common:` — `containers`, `tools`,
+   `tools:containers`, `extras:containers`. `ppg:common:deps` (and
+   `common:deps:*`) stay tier-less and shared.
+9. **(2026-10-09) One release unit** `ppg:releases:common`, tag
+   `ppg/common-<N>`, covering all four subprojects at once.
+10. **(2026-10-09) `devel/common` only when needed**: the layout allows it and
+    the docs describe it, but no directory is created until a devel package
+    or image needs a devel-tier tool or cross-version image.
 
 ## 1. Tree layout and project config
 
-New directory `root/ppg/staging/tools/` → OBS project `ppg:staging:tools`, a
-direct child of staging. `root/ppg/staging/subprojects.yaml` therefore folds
-in the shared repository set (all majors share the root `project.yaml`
-repositories), the debuginfo map, the `ppg:common:deps` path-prefix and the
-PPG-wide project config. The project's own files:
+```
+root/ppg/staging/
+├── 14 … 19/                 unchanged (containers, extras, tarballs per major)
+├── common/
+│   ├── project.yaml         package-less intermediate: repositories-inherit: false,
+│   │                        project-config-inherit: false, debuginfo: ~  (same as extras/ today)
+│   ├── subprojects.yaml -> ../subprojects.yaml
+│   ├── tools/               ppg:staging:common:tools                 (PR A)
+│   │   ├── project.yaml     path-prefix to ppg:staging:%!{PG_MAJOR_VERSION} only
+│   │   ├── macros.yaml      PG_MAJOR_VERSION: 18
+│   │   ├── percona-pgbouncer/ … percona-patroni/   five real package dirs
+│   │   └── containers/      ppg:staging:common:tools:containers      (PR B)
+│   ├── containers/          ppg:staging:common:containers            (PR B, from staging/containers)
+│   └── extras/
+│       └── containers/      ppg:staging:common:extras:containers     (PR B, from staging/extras/containers)
+└── extras/                  removed in PR B (its only child moved)
+```
 
-- `project.yaml`: title, description, and one extra `path-prefix` entry
-  `subproject: ppg:staging:18`, `repository: "%_repository"`, so pgbackrest
-  resolves `percona-postgresql18-devel` (RPM) and `libpq-dev` (Debian) from
-  our own packages. No `qa:` block. `project-config` additions only if a
-  moved package turns out to need one on a given repository (decided during
-  PR A from the first build results; none is expected).
-- `macros.yaml`: `PG_MAJOR_VERSION: 18` with the bump rule as a comment.
-  No `PG_VERSION`, so no computed `PPG_RELEASE` counter (none of the five
-  packages references it).
+- `common/project.yaml` is a package-less intermediate exactly like
+  `root/ppg/staging/extras/project.yaml` today: it opts out of repositories,
+  project config and debuginfo, holds no packages, and is never created on
+  OBS (zero repositories → out of every slice). OBS does not require the
+  parent `ppg:staging:common` to exist for `ppg:staging:common:tools`, as
+  `ppg:staging:extras:containers` proves today.
+- `common/subprojects.yaml` is a symlink to `../subprojects.yaml` (the
+  pattern `devel/subprojects.yaml` already uses). A `subprojects.yaml`
+  applies to the direct children of its directory only, so without the link
+  `common/tools` would miss the PPG repository set, the debuginfo map, the
+  `ppg:common:deps` path and the PPG-wide prjconf. The image projects under
+  `common/` opt out of inheritance as every image project does, so the link
+  does not affect them.
+- `common/tools/project.yaml`: title, description, one `path-prefix` entry
+  `subproject: ppg:staging:%!{PG_MAJOR_VERSION}`, `repository: "%_repository"`,
+  so pgbackrest resolves `percona-postgresql18-devel` (RPM) and `libpq-dev`
+  (Debian) from our own packages. No `qa:` block. `project-config` additions
+  only if a moved package turns out to need one on a given repository
+  (decided from the PR A build results; none is expected).
+- `common/tools/macros.yaml`: `PG_MAJOR_VERSION: 18` with the bump rule as a
+  comment. No `PG_VERSION`, so no computed `PPG_RELEASE` counter.
 - The five package directories with `rpm/`, `debian/` and `obs/_service`
   exactly as in `_shared` today.
 
@@ -83,7 +123,7 @@ single file, `obs/_aggregate`:
 
 ```xml
 <aggregatelist>
-  <aggregate project="${OBS_ROOTPRJ}:ppg:staging:tools">
+  <aggregate project="${OBS_ROOTPRJ}:ppg:staging:common:tools">
     <package>percona-pgbouncer</package>
   </aggregate>
 </aggregatelist>
@@ -91,71 +131,90 @@ single file, `obs/_aggregate`:
 
 The per-major symlinks (`root/ppg/staging/<V>/<pkg> -> ../_shared/<pkg>`)
 stay, so every major still lists the package and its published repositories
-stay self-contained. The devel tier does not build any of the five and needs
-nothing. `ppg:staging:19` is not touched either: it is a devel-only major
-today and gets the aggregates when it enters staging.
+stay self-contained. The devel tier does not build any of the five and gets
+no `common/` (decision 10). `ppg:staging:19` is not touched either: it is a
+devel-only major today and gets the aggregates when it enters staging.
+
+`root/ppg/releases/common/` mirrors `root/ppg/staging/common/` the way
+`releases/17/` mirrors `staging/17/`: `release.yaml`, `CHANGELOG.md`,
+`project.yaml` and one mirror per subproject, all written by
+`project release ppg:staging:common` (Section 5).
 
 ## 2. percona-obs changes
-
-One behavioural change, the rest is verification of paths that already exist.
 
 ### 2.1 Release freeze scope
 
 `cmd_sync_release` builds `freeze_scope = [source] + source_subprojects`.
-It will additionally include two kinds of extra sources:
+It additionally includes two kinds of extra sources (module
+`percona_obs/release_scope.py`, a pure function over the tree):
 
 - **Aggregate sources**, package-scoped: every *local* aggregate source
-  referenced by an `_aggregate` file under the release source tree (resolved
-  with the existing `_resolve_aggregate_source`; external aggregates
-  ignored). For these, `wait_for_quiesce` and `assert_all_green` consider only
-  the aggregated packages (an unrelated red package in `ppg:common:deps` must
-  not block a release) and `freeze_builds` / `restore_builds` disable only
-  those packages (package meta `build disable`, restored to the exact prior
-  meta).
-- **Path-prefix sources**, whole-project: when the release source is a
-  container project, the `subproject:` entries of its repository paths
-  (`ppg:staging:tools`, `ppg:common:deps`, the majors) are treated exactly
-  like the release source project itself today, since an image may consume
-  any package of those projects. The containers release is short and the
-  per-major projects are build-frozen only for the copy.
+  referenced by an `_aggregate` file under the release source tree (external
+  aggregates ignored; targets whose package directory is missing or out of
+  the active instance slice ignored). For these, `wait_for_quiesce` and
+  `assert_all_green` consider only the aggregated packages (an unrelated red
+  package in `ppg:common:deps` must not block a release; a scoped package
+  with no build results at all is a problem, so dry-run and the real freeze
+  agree) and `freeze_packages` / `restore_packages` disable only those
+  packages (package meta `build disable`, restored to the exact prior meta).
+- **Path-prefix sources**, whole-project: for every project under the
+  release source (the source itself and its subprojects) that holds
+  container images, the `subproject:` entries of its repository paths that
+  are in slice, minus the source and its own subprojects, are treated like
+  the release source project itself, since an image may consume any package
+  of those projects. For a `ppg:releases:common` release that is the five
+  majors and `ppg:common:deps` (`tools` is a subproject of the source and is
+  already whole); the release is short and those projects are build-frozen
+  only for the copy.
 
-The derivation is a pure function over the tree (`list[(obs_project,
-package)]`) so it is unit-testable without OBS. `--dry-run` prints the
-extended scope.
+`--dry-run` prints the extra sources as `+ <project>  (whole)` /
+`+ <project>  (<pkg>, …)`.
 
 ### 2.2 Cross-version release support in `project release`
 
-`cmd_project_release` currently derives `release_id` from the built
-`percona-postgresql` version. For a source project without that package it
-derives the next counter from `release.yaml`: `release_id = N+1` where N is
-the number of existing entries, tag `ppg/containers-<N+1>`. Everything else
-(materialised standalone `project.yaml` with `build: false`, CHANGELOG,
-release PR) is reused unchanged. The materialised `project.yaml` registry
-paths render to `ppg/releases/containers/<ubi>`.
+`cmd_project_release` derives `release_id` from the built `percona-postgresql`
+version. **Counter mode**: when no `percona-postgresql*` package directory
+exists anywhere under the source project tree (project and subprojects, read
+from git, not OBS), `release_id = <release_name>-<N+1>` where N is the number
+of existing `releases:` entries, so `project release ppg:staging:common` tags
+`ppg/common-1`, `ppg/common-2`, …. A PG major whose OBS listing is
+transiently empty still fails with the old hard error. Everything else
+(subproject mirrors, CHANGELOG with container and non-container subprojects,
+release PR) is reused unchanged; `ppg:staging:common` is a plain parent with
+subprojects, which is the shape the code already handles. The "source itself
+holds images" routing that PR #123 added for a `ppg:staging:containers`
+release source is removed.
 
 ### 2.3 Workflows
 
 - `obs-release.yml`: the tag validation accepts a second shape,
   `<product>/<name>-<N>`, and maps it to `<product>:releases:<name>`; the
-  existing `<product>/<major.minor>-<N>` shape is unchanged. The staging
-  lock logic is unchanged.
+  existing `<product>/<major.minor>-<N>` shape is unchanged. `ppg/common-3`
+  therefore releases `ppg:releases:common`. The staging lock logic is
+  unchanged.
 - `obs-pr-cleanup.yml` tags from any changed `release.yaml`, no change.
+- `obs-stale-cleanup.yml` deletes stale **PR** projects only; the orphaned
+  production projects of Section 6 need a manual delete.
 
 ### 2.4 Verified unchanged (covered by tests, not code changes)
 
 - `_rewrite_aggregate_for_branch` rewrites an aggregate whose source is a
-  sibling subproject (`${OBS_ROOTPRJ}:ppg:staging:tools`) to the PR root
-  when that package is promoted in the PR, exactly as it does for
+  sibling subproject (`${OBS_ROOTPRJ}:ppg:staging:common:tools`) to the PR
+  root when that package is promoted in the PR, exactly as it does for
   `ppg:common:deps` today.
-- The branch decision promotes a changed `tools/<pkg>` (content check) and
-  leaves unchanged ones aggregated.
+- The branch decision promotes a changed `common/tools/<pkg>` (content
+  check) and leaves unchanged ones aggregated.
 - `_follow_aggregate` yields the tools package version for CHANGELOG rows.
-- `_collect_release_subprojects` does not treat `tools` as a subproject of
-  a major, so per-major releases do not try to mirror it.
+- `_collect_release_subprojects` mirrors nested subprojects
+  (`tools:containers`, `extras:containers`) as it does `extras:containers`
+  under a major today; the changelog label for images in
+  `common:tools:containers` is `tools/<flavor>`, distinct from
+  `common:containers` images.
 - `project verify` (offline and live-check) resolves the new path-prefix
   target and the aggregate target.
-- sync-main discovers `root/ppg/staging/tools` like any project directory;
-  aggregates need no build ordering.
+- sync-main discovers `root/ppg/staging/common/*` like any project
+  directory; aggregates need no build ordering. PR QA discovery iterates the
+  PR root's subprojects at any depth.
 
 ## 3. Package-level changes
 
@@ -178,86 +237,102 @@ Side effect worth recording: the five packages become byte-identical across
 majors, removing a latent file-conflict risk when two majors' repositories
 are enabled on one host.
 
-## 4. Container images
+## 4. Container images (PR B)
 
+- `root/ppg/staging/containers/` → `root/ppg/staging/common/containers/`
+  (upgrade image) and `root/ppg/staging/extras/containers/` →
+  `root/ppg/staging/common/extras/containers/` (custom upgrade image), by
+  `git mv`; `root/ppg/staging/extras/` is removed. Their `project.yaml`
+  files change only in registry paths and the `qa:` `REPOSITORY` values.
 - `root/ppg/staging/_shared/containers/percona-pgbouncer` and
-  `percona-pgbackrest` move to `root/ppg/staging/containers/`; the per-major
-  symlinks under `root/ppg/staging/<V>/containers/` are deleted.
-- `ENV PG_VERSION` / `ARG PG_VERSION` are dropped from both Dockerfiles;
-  neither tool uses them. `LABEL release="1"` and the `#!BuildTag` lines stay.
-- `ppg:staging:containers` keeps `PG_MAJOR_VERSION: 18` (upgrade target and
-  the `Prefer: percona-postgresql18-libs` pick that pgbackrest's libpq
-  resolves through). Its repository paths already list every major,
-  `ppg:common:deps` and the UBI projects; `ppg:staging:tools` is added after
-  the majors so `percona-pgbouncer` / `percona-pgbackrest` resolve from the
-  tools build (the majors only hold aggregates of it).
-- Registry path changes from `ppg/staging/<V>/containers/<ubi>/<image>` to
-  `ppg/staging/containers/<ubi>/<image>`: one image per UBI flavour instead
-  of five identical ones. The existing `qa:` block of the containers project
-  is unchanged.
+  `percona-pgbackrest` move to `root/ppg/staging/common/tools/containers/`;
+  the per-major symlinks under `root/ppg/staging/<V>/containers/` are
+  deleted. `ENV PG_VERSION` / `ARG PG_VERSION` are dropped from both
+  Dockerfiles; `LABEL release="1"` and the `#!BuildTag` lines stay.
+- `common/tools/containers/project.yaml` is a copy of the cross-version
+  containers project config (ubi8/ubi9/ubi10, registry base, majors,
+  `ppg:common:deps`, UBI projects) with `ppg:staging:common:tools` on each
+  path after the majors, so `percona-pgbouncer` / `percona-pgbackrest`
+  resolve from the tools build (the majors only hold aggregates of it). Its
+  `macros.yaml` carries `PG_MAJOR_VERSION: 18` for the
+  `Prefer: percona-postgresql18-libs` pick that pgbackrest's libpq resolves
+  through.
+- Registry paths: `ppg/staging/common/containers/<ubi>/<image>`,
+  `ppg/staging/common/tools/containers/<ubi>/<image>`,
+  `ppg/staging/common/extras/containers/ubi9/<image>`. One tool image per
+  UBI flavour instead of five identical ones.
 
-## 5. Cross-version containers release
+## 5. Cross-version release
 
-- **Tree**: `root/ppg/releases/containers/` with `release.yaml`
-  (`project: ppg:staging:containers`, `releases: [ppg/containers-1, …]`),
-  `CHANGELOG.md` and a standalone `project.yaml` (`build: false`, three ubi
-  repos) written by the first `project release ppg:staging:containers` run (the
-  release PR), not by PR B. OBS project
-  `ppg:releases:containers`.
-- **Contents**: the upgrade image, `percona-pgbouncer`, `percona-pgbackrest`.
-- **Tag**: `ppg/containers-<N>`, N a plain counter (user decision).
-- **Freeze**: Section 2.1 covers the path-prefix sources.
-- **Release QA**: the project's `qa:` block runs against
-  `ppg/releases/containers/<ubi>` as per-major release QA does today.
+- **Unit**: `ppg:releases:common` with subprojects `containers`, `tools`,
+  `tools:containers`, `extras:containers`; `root/ppg/releases/common/`
+  (`release.yaml` with `project: ppg:staging:common`, `releases:
+  [ppg/common-1, …]`, `CHANGELOG.md`, standalone `project.yaml` and one
+  mirror per subproject) written by the first `project release
+  ppg:staging:common` run (the release PR), not by PR B.
+- **Tag**: `ppg/common-<N>`, N a plain counter (user decision).
+- **Freeze**: Section 2.1.
+- **Release QA**: each image subproject's `qa:` block runs against its
+  `ppg/releases/common/...` registry path as per-major release QA does today.
 - **Per-major releases**: `ppg:releases:17:containers` and `18:containers`
-  stop carrying the two images from their next release; their CHANGELOG gets
-  a one-line pointer to the containers release. Already-released snapshots
-  are untouched.
+  stop carrying the two tool images from their next release; their CHANGELOG
+  gets a one-line pointer to the `common` release. Already-released
+  snapshots are untouched.
 
 ## 6. Migration order
 
-**PR A — add the tools project.** `root/ppg/staging/tools/` with the five
-packages copied from `_shared`, the patroni Depends change, the freeze-scope
-and `project release` changes, the workflow tag shape, tests and docs. The
-majors are untouched. After merge, sync-main creates and builds
-`ppg:staging:tools`; compare its binaries against a major's current build
-(`rpm -qp --requires --provides`, `dpkg-deb -I`) to confirm only the libpq
-linkage can differ.
+**PR A — add the tools project (PR #123, reworked in place).**
+`root/ppg/staging/common/{project.yaml,subprojects.yaml}` and
+`common/tools/` with the five packages copied from `_shared`, the patroni
+Depends change, the freeze-scope and `project release` changes, the workflow
+tag shape, tests and docs. The majors and the existing image projects are
+untouched. After merge, sync-main creates and builds
+`ppg:staging:common:tools`; compare its binaries against a major's current
+build (`rpm -qp --requires --provides`, `dpkg-deb -I`) to confirm only the
+libpq linkage can differ.
 
-**PR B — switch consumers.** The five `_shared` directories become
-aggregate-only; the image move (Section 4); the containers
-project path addition (Section 5). OBS swaps each major's built package for the aggregate
-and republishes; old per-major build results are dropped by OBS.
+**PR B — switch consumers and move the images.** The five `_shared`
+directories become aggregate-only; the image moves of Section 4. OBS swaps
+each major's built package for the aggregate and republishes; old per-major
+build results are dropped by OBS. sync-main creates the three moved image
+projects at their new names; the old `ppg:staging:containers` and
+`ppg:staging:extras:containers` become orphans on every instance and are
+deleted by hand (`osc rdelete`), the same way stale packages are handled.
+Images under the old registry paths remain until that cleanup.
 
-**Release PR** — `project release ppg:staging:containers` produces the first
-`ppg/containers-1` release PR; merging it dispatches obs-release as usual.
+**Release PR** — `project release ppg:staging:common` produces the first
+`ppg/common-1` release PR; merging it dispatches obs-release as usual.
 
 Both content PRs go through the normal flow on the `percona` remote with the
-`obs-sync` label: PR A builds tools in `pr-N:ppg:staging:tools`; PR B's
-aggregates and images are rewritten to the PR root and `qa-packages` runs
-on every major from the tools binaries.
+`obs-sync` label: PR A builds tools in `pr-N:ppg:staging:common:tools`;
+PR B's aggregates and images are rewritten to the PR root and `qa-packages`
+runs on every major from the tools binaries.
 
 ## 7. Testing
 
 - **Unit tests** (`tests/`): freeze-scope derivation on a fixture tree
-  (aggregate and non-aggregate packages, an external aggregate to ignore, a
-  container project with path-prefix sources); `release_id` counter
-  derivation for a project without `percona-postgresql`; tag-shape parsing.
+  (aggregate and non-aggregate packages, an external aggregate to ignore,
+  out-of-slice and missing targets, image subprojects contributing
+  path-prefix sources); counter mode derived from the tree (a `common`-shaped
+  fixture without a server package, a major-shaped one with it); tag-shape
+  parsing.
 - **Offline checks**: `project verify --offline`, the project-config check
   workflow, `black` and `pyright` on both PRs.
-- **PR OBS root**: PR A, all tools packages green on every repository; PR B,
-  every major's five packages show as aggregates pointing at the PR tools
-  project, both images build in the PR containers project, `qa-packages`
-  green on all majors.
-- **Release dry-run** after PR B merges: `sync release --dry-run
-  ppg:releases:18` lists `ppg:staging:tools` and `ppg:common:deps` with the
-  aggregated package names; `sync release --dry-run ppg:releases:containers`
-  lists the path-prefix sources.
+- **PR OBS root**: PR A, all tools packages green on every repository (watch
+  pgbackrest on openSUSE: tools inherits no per-major `Ignore:
+  postgresqlNN-server`); PR B, every major's five packages show as aggregates
+  pointing at the PR tools project, the three image projects build at their
+  new names, `qa-packages` green on all majors.
+- **Release dry-runs** after PR B merges: `sync release --dry-run
+  ppg:releases:18` lists `ppg:staging:common:tools` and `ppg:common:deps`
+  with the aggregated package names; `sync release --dry-run
+  ppg:releases:common` lists the majors and `ppg:common:deps` whole.
 
 ## Out of scope / follow-ups
 
-- The open package-level QA blocks PR (#119) must treat aggregate packages as
-  present in the consuming major; noted there, not changed here.
+- The package-level QA blocks (PR #119, merged) must treat aggregate packages
+  as present in the consuming major; follow-up there, not changed here.
 - `ppg:staging:19` gets the aggregates when it enters staging.
+- `devel/common` is created only when a devel package or image needs it.
 - Moving `percona-pgbadger`, `percona-haproxy` or `patroni` images (none
   exist today).
