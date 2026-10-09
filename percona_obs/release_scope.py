@@ -66,6 +66,23 @@ def has_container_images(project_path: Path) -> bool:
     )
 
 
+_SERVER_PKG_RE = re.compile(r"^percona-postgresql\d*$")
+
+
+def tree_has_server_package(source_path: Path) -> bool:
+    """True when the source project or any subproject holds the server package.
+
+    Decides the release-id mode of ``project release`` from the git tree:
+    a PG major carries ``percona-postgresql`` (or ``percona-postgresqlNN``)
+    and gets ``MAJOR.MINOR-N`` ids; a cross-version parent such as
+    ``ppg:staging:common`` does not and gets a plain counter.
+    """
+    return any(
+        _SERVER_PKG_RE.match(pkg_path.name)
+        for _, pkg_path in find_packages(source_path, "")
+    )
+
+
 def collect_release_scope(
     source_path: Path,
     source_project_id: str,
