@@ -5,11 +5,12 @@
 Two further kinds of source hold binaries the release copies:
 
 * **aggregate sources** — every ``obs/_aggregate`` in the source tree pulls
-  binaries from another local project (``ppg:staging:tools``,
+  binaries from another local project (``ppg:staging:common:tools``,
   ``ppg:common:deps``).  Only the aggregated packages are frozen there.
-* **path-prefix sources** — a container project's images may consume any
-  package of the ``subproject:`` entries in its repository paths, so those
-  projects are frozen whole.
+* **path-prefix sources** — every image-holding project under the release
+  source (the source or any subproject) may consume any package of the
+  ``subproject:`` entries in its repository paths, so those projects are
+  frozen whole.
 
 Both kinds are limited to the active instance slice (the process default
 ``RepositoryFilter`` installed from the profile): a package or project that
@@ -106,9 +107,11 @@ def collect_release_scope(
                 continue
             scope.packages.setdefault(f"{rootprj}:{local_id}", set()).add(pkg)
 
-    if has_container_images(source_path):
+    for _, project_path in find_projects(source_path, source_project_id):
+        if not has_container_images(project_path):
+            continue
         cfg = resolve_project_config(
-            source_path, env_vars or {}, repo_filter=RepositoryFilter.EMPTY
+            project_path, env_vars or {}, repo_filter=RepositoryFilter.EMPTY
         )
         for repo in cfg.get("repositories", []):
             for entry in repo.get("paths", []):
