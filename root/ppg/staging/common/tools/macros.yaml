@@ -1,7 +1,8 @@
-# ppg:staging:tools builds PG-independent components once.  PG_MAJOR_VERSION
+# ppg:staging:common:tools builds PG-independent components once.  PG_MAJOR_VERSION
 # is the major whose libpq they link against (pgBackRest) and whose staging
 # project is on the repository path.  Bump it by hand in the PR that adds a
 # new GA major to root/ppg/staging/ — never derived from the tree, so a new
 # major directory cannot silently rebuild every tool.
+# The definition itself lives in ../macros.yaml (ppg:staging:common resolves the
+# same tier configuration and needs the macro too).
 # No PG_VERSION: nothing here uses the computed PPG_RELEASE counter.
-- PG_MAJOR_VERSION: 18
