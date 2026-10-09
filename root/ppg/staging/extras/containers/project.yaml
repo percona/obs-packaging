@@ -69,10 +69,34 @@ project-config: |
   PublishFlags: withsbom
   %endif
 
+# QA: major-version upgrades of the custom (extras) image with the mediator built
+# here (percona-distribution-postgresql-upgrade-custom). Extras ship for PG 16-18,
+# on UBI 9.
 qa:
-  pipeline: docker-server-parallel-generic
-  parameters:
-    DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
-    SERVER_VERSION: "%!{PG_VERSION}"
-    TESTING_BRANCH: ricardo-work
-    REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/extras/containers/ubi9
+  - name: ubi9-16-to-17
+    pipeline: docker-server-parallel-custom-upgrade
+    parameters:
+      OLD_SERVER_VERSION: "16.%!{PG_16_MINOR_VERSION}"
+      NEW_SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
+      OLD_VERSION_DOCKER_TAG: "16"
+      NEW_VERSION_DOCKER_TAG: "17"
+      UPGRADE_DOCKER_TAG: "18-17-16"
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/17/extras/containers/ubi9
+      OLD_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/16/extras/containers/ubi9
+      NEW_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/17/extras/containers/ubi9
+      UPGRADE_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/extras/containers/ubi9
+      TESTING_BRANCH: main
+
+  - name: ubi9-17-to-18
+    pipeline: docker-server-parallel-custom-upgrade
+    parameters:
+      OLD_SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
+      NEW_SERVER_VERSION: "18.%!{PG_18_MINOR_VERSION}"
+      OLD_VERSION_DOCKER_TAG: "17"
+      NEW_VERSION_DOCKER_TAG: "18"
+      UPGRADE_DOCKER_TAG: "18-17-16"
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/18/extras/containers/ubi9
+      OLD_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/17/extras/containers/ubi9
+      NEW_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/18/extras/containers/ubi9
+      UPGRADE_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/extras/containers/ubi9
+      TESTING_BRANCH: main
