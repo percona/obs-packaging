@@ -2600,7 +2600,7 @@ def _build_freeze_scope(
 ) -> "tuple[list[str], dict[str, set[str]]]":
     """Return (whole_projects, package_scoped) for the release freeze.
 
-    whole_projects: the source, its subprojects and (container releases)
+    whole_projects: the source, its subprojects and (cross-version releases)
     the path-prefix sources; package_scoped: aggregate sources restricted
     to the aggregated packages (spec Section 2.1).
     """

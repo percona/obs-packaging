@@ -804,7 +804,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Release ID (e.g. 17.9-1). Determines the git tag suffix. "
         "Defaults to auto-derived from OBS: MAJOR.MINOR-N where N counts "
         "existing releases of the same minor version; for projects without a "
-        "percona-postgresql package (e.g. ppg:staging:containers) a plain "
+        "percona-postgresql package (no percona-postgresql* package directory anywhere under the source tree, e.g. ppg:staging:common) a plain "
         "counter <name>-N.",
     )
     project_release_parser.add_argument(

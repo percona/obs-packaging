@@ -395,3 +395,20 @@ def test_common_parent_collects_paths_from_image_subprojects(tmp_path, monkeypat
         "isv:percona:ppg:staging:17",
     ]
     assert scope.packages == {}
+
+
+def test_major_with_image_subproject_keeps_aggregate_only_scope(tmp_path, monkeypatch):
+    root = _mk_root(tmp_path, monkeypatch)
+    for sub in ("ppg/common/deps", "ppg/staging/16"):
+        (root / sub).mkdir(parents=True)
+        (root / sub / "project.yaml").write_text("title: X\n")
+    src = root / "ppg/staging/17"
+    (src / "containers").mkdir(parents=True)
+    (src / "project.yaml").write_text("title: S\n")
+    _pkg(src / "percona-postgresql", {"_service": "<services/>"})
+    (src / "containers" / "project.yaml").write_text(
+        _image_project_yaml(["ppg:common:deps", "ppg:staging:16"])
+    )
+    _pkg(src / "containers" / "upgrade", {"Dockerfile": "FROM x\n"})
+    scope = rs.collect_release_scope(src, "ppg:staging:17", "isv:percona", {})
+    assert scope.whole_projects == []
