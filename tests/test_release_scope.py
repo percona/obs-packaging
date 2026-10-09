@@ -330,3 +330,53 @@ def test_tree_has_server_package_common_tree(tmp_path, monkeypatch):
         {"Dockerfile": "FROM x\n"},
     )
     assert rs.tree_has_server_package(src) is False
+
+
+def _image_project_yaml(paths: list[str]) -> str:
+    return yaml.dump(
+        {
+            "repositories-inherit": False,
+            "project-config-inherit": False,
+            "repositories": [
+                {
+                    "name": "ubi9",
+                    "archs": ["x86_64"],
+                    "paths": [{"subproject": p, "repository": "UBI_9"} for p in paths],
+                }
+            ],
+        }
+    )
+
+
+def test_common_parent_collects_paths_from_image_subprojects(tmp_path, monkeypatch):
+    root = _mk_root(tmp_path, monkeypatch)
+    for major in ("17", "18"):
+        (root / "ppg/staging" / major).mkdir(parents=True)
+        (root / "ppg/staging" / major / "project.yaml").write_text("title: S\n")
+    (root / "ppg/common/deps").mkdir(parents=True)
+    (root / "ppg/common/deps/project.yaml").write_text("title: D\n")
+    src = root / "ppg/staging/common"
+    (src / "tools" / "containers").mkdir(parents=True)
+    (src / "containers").mkdir()
+    (src / "project.yaml").write_text(
+        "repositories-inherit: false\nproject-config-inherit: false\n"
+    )
+    (src / "tools" / "project.yaml").write_text("title: T\n")
+    _pkg(src / "tools" / "percona-pgbouncer", {"_service": "<services/>"})
+    (src / "containers" / "project.yaml").write_text(
+        _image_project_yaml(
+            ["ppg:staging:18", "ppg:common:deps", "ppg:staging:common:tools"]
+        )
+    )
+    _pkg(src / "containers" / "upgrade", {"Dockerfile": "FROM x\n"})
+    (src / "tools" / "containers" / "project.yaml").write_text(
+        _image_project_yaml(["ppg:staging:17", "ppg:staging:common:tools"])
+    )
+    _pkg(src / "tools" / "containers" / "percona-pgbouncer", {"Dockerfile": "FROM x\n"})
+    scope = rs.collect_release_scope(src, "ppg:staging:common", "isv:percona", {})
+    assert scope.whole_projects == [
+        "isv:percona:ppg:staging:18",
+        "isv:percona:ppg:common:deps",
+        "isv:percona:ppg:staging:17",
+    ]
+    assert scope.packages == {}
