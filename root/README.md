@@ -193,9 +193,9 @@ through `staging/17/macros.yaml`. Porting the tarballs to another major is then 
 
 When the bare package name is already taken at `_shared/` top level, the shared copy sits in a
 subdirectory named after the subproject. The container images are the example: the
-`percona-pgbouncer` and `percona-pgbackrest` *images* move to `staging/common/tools/containers/` in PR B (cross-version,
-one copy for all majors; the RPM/deb packages of the same name are
-`staging/_shared/<pkg>/`); until then they live in `staging/_shared/containers/<pkg>/`
+`percona-pgbouncer` and `percona-pgbackrest` *images* are cross-version and live in
+`staging/common/tools/containers/` (the RPM/deb packages of the same name are
+`staging/_shared/<pkg>/`); the two server images stay in `staging/_shared/containers/<pkg>/`
 linked from every `staging/<V>/containers/`. `containers/project.yaml` stays per major for the
 remaining images. The extras tier follows the
 same pattern one level deeper: `staging/_shared/extras/<pkg>` holds the extras extension packages linked
@@ -388,7 +388,7 @@ component moves here the majors list an equal-version build with a lower counter
 than the one they built themselves. Nothing breaks (same bytes, same version); the
 next upstream bump supersedes it.
 
-PR B adds the image subprojects: `common/containers` (upgrade image, moved from
+The image subprojects are `common/containers` (upgrade image, moved from
 `staging/containers`), `common/extras/containers` (moved from
 `staging/extras/containers`) and `common/tools/containers` (the pgbouncer/pgbackrest
 images, moved from `_shared/containers`). `devel/common` is created only when a devel

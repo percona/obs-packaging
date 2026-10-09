@@ -1,0 +1,7 @@
+# Macros for the ppg:staging:common:tools:containers project (the pgbouncer and pgbackrest
+# images, built once for all PG majors). PG_MAJOR_VERSION selects percona-postgresql18-libs
+# for pgbackrest's libpq, and PG_VERSION gives the images their <RELEASE> tag. They are
+# bumped together with common/macros.yaml.
+- PG_MAJOR_VERSION: 18
+- PG_MINOR_VERSION: 6
+- PG_VERSION: %!{PG_MAJOR_VERSION}.%!{PG_MINOR_VERSION}

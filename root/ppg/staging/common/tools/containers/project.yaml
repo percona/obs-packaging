@@ -1,9 +1,9 @@
-title: Percona Container Images for PostgreSQL — shared across versions
+title: Percona Container Images for the PG-independent tools
 description: |
-  This project contains container images shared across all Percona Distribution for PostgreSQL
-  major versions (currently 14-18), such as the major-version upgrade image. It is not tied to
-  a single staging/<V>, so its released counterpart is ppg:releases:containers rather than a
-  per-version releases/<V> subproject.
+  This project builds the PG-independent tool container images (percona-pgbouncer and
+  percona-pgbackrest) once for all Percona Distribution for PostgreSQL major versions. Its OBS
+  project is ppg:staging:common:tools:containers and its released counterpart is
+  ppg:releases:common.
   We currently build our images based on UBI-8, UBI-9 and UBI-10 base containers.
 
 # This project's repository set and build configuration are unrelated to its
@@ -27,6 +27,9 @@ repositories:
       - subproject: ppg:staging:15
         repository: UBI_8
       - subproject: ppg:staging:14
+        repository: UBI_8
+      # tools builds percona-pgbouncer / percona-pgbackrest; the majors only aggregate them.
+      - subproject: ppg:staging:common:tools
         repository: UBI_8
       - subproject: ppg:common:deps
         repository: UBI_8
@@ -59,6 +62,9 @@ repositories:
         repository: UBI_9
       - subproject: ppg:staging:14
         repository: UBI_9
+      # tools builds percona-pgbouncer / percona-pgbackrest; the majors only aggregate them.
+      - subproject: ppg:staging:common:tools
+        repository: UBI_9
       - subproject: ppg:common:deps
         repository: UBI_9
       - subproject: common:containers:ubi9
@@ -81,6 +87,9 @@ repositories:
       - subproject: ppg:staging:15
         repository: UBI_10
       - subproject: ppg:staging:14
+        repository: UBI_10
+      # tools builds percona-pgbouncer / percona-pgbackrest; the majors only aggregate them.
+      - subproject: ppg:staging:common:tools
         repository: UBI_10
       - subproject: ppg:common:deps
         repository: UBI_10
@@ -167,43 +176,3 @@ project-config: |
 
   %endif
 
-
-qa:
-  - name: ubi8
-    pipeline: docker-server-parallel-generic
-    parameters:
-      DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
-      SERVER_VERSION: "%!{PG_VERSION}"
-      TESTING_BRANCH: ricardo-work
-      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/containers/ubi8
-      WITH_POSTGIS:
-        - true
-        - false
-    matrix:
-      - WITH_POSTGIS
-
-  - name: ubi9
-    pipeline: docker-server-parallel-generic
-    parameters:
-      DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
-      SERVER_VERSION: "%!{PG_VERSION}"
-      TESTING_BRANCH: ricardo-work
-      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/containers/ubi9
-      WITH_POSTGIS:
-        - true
-        - false
-    matrix:
-      - WITH_POSTGIS
-
-  - name: ubi10
-    pipeline: docker-server-parallel-generic
-    parameters:
-      DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
-      SERVER_VERSION: "%!{PG_VERSION}"
-      TESTING_BRANCH: ricardo-work
-      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/containers/ubi10
-      WITH_POSTGIS:
-        - true
-        - false
-    matrix:
-      - WITH_POSTGIS
