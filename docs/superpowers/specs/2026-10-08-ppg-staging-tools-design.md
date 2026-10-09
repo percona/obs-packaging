@@ -312,10 +312,10 @@ projects at their new names; the old `ppg:staging:containers` and
 automatically by sync-main's orphan cleanup (full-tree sync push); no manual
 `osc rdelete`. Images under the old registry paths disappear on merge; the new
 paths are listed in Section 4.
-`ppg:staging:16:tde` holds `_link`s to the five staging:16 packages, which are
-now aggregates: the PR OBS root must show the tde packages as aggregates with
-binaries; if OBS rejects a link to an aggregate, replace the five `_link`s
-with `_aggregate` files pointing at tools.
+`ppg:staging:16:tde` used to hold `_link`s to the five staging:16 tool
+packages; PR B replaces them with `_aggregate` files pointing at
+`ppg:staging:common:tools` as well (user decision 2026-10-09), so tde never
+depends on a link to an aggregate.
 
 **Release PR** — `project release ppg:staging:common` produces the first
 `ppg/common-1` release PR; merging it dispatches obs-release as usual.

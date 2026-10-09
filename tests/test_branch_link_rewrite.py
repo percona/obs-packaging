@@ -169,25 +169,25 @@ def test_parse_link_target_rejects_non_link():
 
 
 def test_collect_link_dep_edges_from_real_tree():
-    # root/ppg/staging/16/tde/percona-haproxy/obs/_link targets
-    # ${OBS_ROOTPRJ}:ppg:staging:16 / percona-haproxy.
+    # root/ppg/staging/16/tde/percona-pg_cron/obs/_link targets
+    # ${OBS_ROOTPRJ}:ppg:staging:16 / percona-pg_cron.
     tde_proj = f"{ROOTPRJ}:ppg:staging:16:tde"
     target_proj = f"{ROOTPRJ}:ppg:staging:16"
-    pkg_path = REPO_ROOT / "ppg" / "staging" / "16" / "tde" / "percona-haproxy"
+    pkg_path = REPO_ROOT / "ppg" / "staging" / "16" / "tde" / "percona-pg_cron"
     decisions = {
-        (target_proj, "percona-haproxy"): "promote",
-        (tde_proj, "percona-haproxy"): "aggregate",
+        (target_proj, "percona-pg_cron"): "promote",
+        (tde_proj, "percona-pg_cron"): "aggregate",
     }
     edges = _collect_link_dep_edges(
         [(tde_proj, pkg_path)], auto_rootprj_env(ROOTPRJ), decisions
     )
-    assert edges == {(target_proj, "percona-haproxy"): {(tde_proj, "percona-haproxy")}}
+    assert edges == {(target_proj, "percona-pg_cron"): {(tde_proj, "percona-pg_cron")}}
 
 
 def test_collect_link_dep_edges_ignores_targets_outside_sync_scope():
     tde_proj = f"{ROOTPRJ}:ppg:staging:16:tde"
-    pkg_path = REPO_ROOT / "ppg" / "staging" / "16" / "tde" / "percona-haproxy"
-    decisions = {(tde_proj, "percona-haproxy"): "aggregate"}
+    pkg_path = REPO_ROOT / "ppg" / "staging" / "16" / "tde" / "percona-pg_cron"
+    decisions = {(tde_proj, "percona-pg_cron"): "aggregate"}
     edges = _collect_link_dep_edges(
         [(tde_proj, pkg_path)], auto_rootprj_env(ROOTPRJ), decisions
     )
