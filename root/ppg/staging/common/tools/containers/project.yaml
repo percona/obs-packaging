@@ -18,6 +18,9 @@ repositories:
     paths:
       - project: RedHat:UBI:Registry
         repository: images
+      # tools must come before the majors: OBS takes the first path that provides a binary, and the majors only aggregate these packages (a tools-only PR would otherwise install production's old copy).
+      - subproject: ppg:staging:common:tools
+        repository: UBI_8
       - subproject: ppg:staging:18
         repository: UBI_8
       - subproject: ppg:staging:17
@@ -27,9 +30,6 @@ repositories:
       - subproject: ppg:staging:15
         repository: UBI_8
       - subproject: ppg:staging:14
-        repository: UBI_8
-      # tools builds percona-pgbouncer / percona-pgbackrest; the majors only aggregate them.
-      - subproject: ppg:staging:common:tools
         repository: UBI_8
       - subproject: ppg:common:deps
         repository: UBI_8
@@ -52,6 +52,9 @@ repositories:
     paths:
       - project: RedHat:UBI:Registry
         repository: images
+      # tools must come before the majors: OBS takes the first path that provides a binary, and the majors only aggregate these packages (a tools-only PR would otherwise install production's old copy).
+      - subproject: ppg:staging:common:tools
+        repository: UBI_9
       - subproject: ppg:staging:18
         repository: UBI_9
       - subproject: ppg:staging:17
@@ -61,9 +64,6 @@ repositories:
       - subproject: ppg:staging:15
         repository: UBI_9
       - subproject: ppg:staging:14
-        repository: UBI_9
-      # tools builds percona-pgbouncer / percona-pgbackrest; the majors only aggregate them.
-      - subproject: ppg:staging:common:tools
         repository: UBI_9
       - subproject: ppg:common:deps
         repository: UBI_9
@@ -78,6 +78,9 @@ repositories:
     paths:
       - project: RedHat:UBI:Registry
         repository: images
+      # tools must come before the majors: OBS takes the first path that provides a binary, and the majors only aggregate these packages (a tools-only PR would otherwise install production's old copy).
+      - subproject: ppg:staging:common:tools
+        repository: UBI_10
       - subproject: ppg:staging:18
         repository: UBI_10
       - subproject: ppg:staging:17
@@ -87,9 +90,6 @@ repositories:
       - subproject: ppg:staging:15
         repository: UBI_10
       - subproject: ppg:staging:14
-        repository: UBI_10
-      # tools builds percona-pgbouncer / percona-pgbackrest; the majors only aggregate them.
-      - subproject: ppg:staging:common:tools
         repository: UBI_10
       - subproject: ppg:common:deps
         repository: UBI_10
