@@ -1,0 +1,5 @@
+<aggregatelist>
+  <aggregate project="${OBS_ROOTPRJ}:ppg:staging:common:tools">
+    <package>percona-pgbadger</package>
+  </aggregate>
+</aggregatelist>
