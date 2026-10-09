@@ -106,7 +106,7 @@ for that minor version (resets to 1 when the minor version changes).
 one plus the number of releases already listed for the project's `PG_VERSION` in
 `root/<product>/releases/<major>/release.yaml`, so it resets to 1 by itself whenever
 `PG_MINOR_VERSION` is bumped. Declare it only to pin a project to its own counter —
-`ppg/staging/containers` and `ppg/staging/extras/containers` do not do this: they
+`ppg/staging/common/containers` and `ppg/staging/common/extras/containers` do not do this: they
 declare `PG_VERSION` as the upgrade target ahead of the rest of `staging/18`, so they
 simply track `staging/18`'s computed counter rather than having one of their own.
 

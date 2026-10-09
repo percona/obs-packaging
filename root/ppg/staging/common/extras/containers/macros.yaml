@@ -1,4 +1,4 @@
-# Macros for the ppg:staging:extras:containers project (custom/extras-bundling images
+# Macros for the ppg:staging:common:extras:containers project (custom/extras-bundling images
 # shared across the PG major versions that ship the "extras" package set: 16-18, not tied
 # to a single staging/<V>). PG_MAJOR_VERSION is the upgrade *target* (the newest supported
 # version); older source versions are installed via a hardcoded shell loop in the
