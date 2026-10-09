@@ -1,0 +1,45 @@
+title: pgAdmin 4 dependency stack
+description: |
+  The Python 3.12 runtime dependency closure of percona-pgadmin4 (ppg:staging:common:tools):
+  ~80 python3.12-* packages built from PyPI sdists, plus the setuptools /
+  pybind11 build tooling they need. PostgreSQL-version-independent and
+  UBI 9 only, like pgAdmin itself. Consumed solely over the repository path
+  by ppg:staging:common:tools (the percona-pgadmin4 build) and
+  ppg:staging:common:tools:containers (the percona-pgadmin4 image), hence
+  never published — nothing here is installed in a user environment.
+  The shared Python build backends (flit-core, hatchling, packaging,
+  pathspec, trove-classifiers) are not here: they serve other PG components
+  too and stay in ppg:common:deps.
+  Design: docs/superpowers/specs/2026-08-26-pgadmin4-tooling-design.md
+
+# UBI_9-only: this project's repository set is unrelated to the parent's
+# (ppg:common:deps builds for every distro). Declare it in full here instead
+# of patching the inherited one; the root prjconf is still inherited, the
+# UBI_9 block below adds what pgAdmin's stack needs on top. No debuginfo
+# repositories. Never published: consumed only through repository paths.
+repositories-inherit: false
+debuginfo: ~
+publish: false
+
+repositories:
+  - name: UBI_9
+    paths:
+      # python3.12-six / -dateutil / -psutil / -click / -dns already built there
+      - subproject: ppg:common:deps
+        repository: UBI_9
+      - subproject: common:deps:build
+        repository: UBI_9
+      - project: Fedora:EPEL:9
+        repository: standard
+      - project: RedHat:UBI-9
+        repository: standard
+      - project: RockyLinux:9
+        repository: devel
+    archs: [x86_64, aarch64]
+
+project-config: |
+  %if "%_repository" == "UBI_9"
+  ExpandFlags: module:llvm-toolset-rhel9
+  # hdf-libs (EPEL split package) and hdf both provide libdf.so.0 and libmfhdf.so.0
+  Prefer: hdf-libs
+  %endif

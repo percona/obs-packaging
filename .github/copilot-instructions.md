@@ -1033,7 +1033,7 @@ When branching is involved, always confirm which OBS instance is being queried:
 | OBS aggregate (mirrors another OBS project) | `obs-service-tar_scm/` |
 | Root project config | `root/project.yaml` |
 | Repo-owned OBS service (npm lockfile generation) | `tools/obs-services/npm_lockfile` |
-| Version-independent devel project (pgAdmin) | `root/ppg/devel/pgadmin/project.yaml` |
+| Version-independent tool with its own dependency project (pgAdmin) | `root/ppg/staging/common/tools/percona-pgadmin4/` + `root/ppg/common/deps/pgadmin/` |
 | Management script | `percona-obs` (commands: `sync push`, `sync delete`, `sync promote`, `build trigger`, `build status`, `build dependency`, `profile create`, `profile list`, `project verify`) |
 
 ---

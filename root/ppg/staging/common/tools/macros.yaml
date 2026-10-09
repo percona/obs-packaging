@@ -6,3 +6,8 @@
 # The definition itself lives in ../macros.yaml (ppg:staging:common resolves the
 # same tier configuration and needs the macro too).
 # No PG_VERSION: nothing here uses the computed PPG_RELEASE counter.
+
+# PGADMIN_VERSION is the single bump knob for the percona-pgadmin4 image tags
+# (containers/percona-pgadmin4/obs/Dockerfile); keep it in sync with the
+# obs_scm revision (REL-<major>_<minor>) in percona-pgadmin4/obs/_service.
+- PGADMIN_VERSION: 9.17

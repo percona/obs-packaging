@@ -4,7 +4,7 @@ description: |
   npm registry (github.com/openSUSE/npm-localhost-proxy). At build time it
   serves the npm tarballs unpacked from a node_modules.obscpio so that
   `npm install` works inside the network-less OBS build root. Consumed by
-  percona-pgadmin4 (ppg:devel:pgadmin) via `BuildRequires: local-npm-registry`.
+  percona-pgadmin4 (ppg:staging:common:tools) via `BuildRequires: local-npm-registry`.
   RPM-only, noarch; built for UBI 9 only because pgAdmin 4 is a UBI-9-only
   product and the package needs the nodejs:22 module stream.
 

@@ -1,7 +1,7 @@
 title: Percona Container Images for the PG-independent tools
 description: |
-  This project builds the PG-independent tool container images (percona-pgbouncer and
-  percona-pgbackrest) once for all Percona Distribution for PostgreSQL major versions. Its OBS
+  This project builds the PG-independent tool container images (percona-pgbouncer,
+  percona-pgbackrest and percona-pgadmin4) once for all Percona Distribution for PostgreSQL major versions. Its OBS
   project is ppg:staging:common:tools:containers and its released counterpart is
   ppg:releases:common.
   We currently build our images based on UBI-8, UBI-9 and UBI-10 base containers.
@@ -66,6 +66,9 @@ repositories:
       - subproject: ppg:staging:14
         repository: UBI_9
       - subproject: ppg:common:deps
+        repository: UBI_9
+      # percona-pgadmin4's Python 3.12 stack (ubi9 only: the image disables ubi8/ubi10)
+      - subproject: ppg:common:deps:pgadmin
         repository: UBI_9
       - subproject: common:containers:ubi9
         repository: UBI_9

@@ -408,7 +408,7 @@ After fixing packaging files, trigger a rebuild (the `_service` file has not cha
 RPM-only Python libraries for RHEL-family targets are built for `/usr/bin/python3.12`
 and named `python3.12-<name>` (`%{python3_pkgprefix}-<name>`; plain `python3-<name>` on
 openSUSE). The directory is `python3-<PyPI name lower-cased, `.`/`_` → `-`>`. Examples:
-everything under `root/ppg/devel/pgadmin/python3-*` and the build-backend stack in
+everything under `root/ppg/common/deps/pgadmin/python3-*` and the build-backend stack in
 `root/ppg/common/deps/` (`python3-flit-core`, `python3-packaging`, `python3-pathspec`,
 `python3-trove-classifiers`, `python3-hatchling`).
 
@@ -431,7 +431,7 @@ PEP 639 metadata; use ours from `ppg:common:deps` (see the conditional below).
 </services>
 ```
 
-**Spec header** (identical in every package; copy from `root/ppg/devel/pgadmin/python3-flask/rpm/python3-flask.spec`):
+**Spec header** (identical in every package; copy from `root/ppg/common/deps/pgadmin/python3-flask/rpm/python3-flask.spec`):
 
 ```rpmspec
 %global debug_package %{nil}          # noarch only; drop for C/Rust extensions
@@ -508,7 +508,7 @@ Self-hosting backends (hatchling, poetry-core, pdm-backend, flit-core) add
 `license = "SPDX-ID"` (a string) and/or `license-files = [...]` fail on RHEL's setuptools 68
 (`project.license must be valid exactly by one definition`). Add to `%prep`, after
 `%autosetup`: `sed -i -e 's/^license = "\(.*\)"$/license = {text = "\1"}/' -e '/^license-files = \[$/,/^\]$/d' -e '/^license-files = \[.*\]$/d' pyproject.toml`
-(see `root/ppg/devel/pgadmin/python3-greenlet/rpm/python3-greenlet.spec`).
+(see `root/ppg/common/deps/pgadmin/python3-greenlet/rpm/python3-greenlet.spec`).
 
 **Build/install — legacy `setup.py`-only packages** (no `pyproject.toml`): keep the
 `%{__ospython} setup.py build` / `setup.py install --single-version-externally-managed -O1

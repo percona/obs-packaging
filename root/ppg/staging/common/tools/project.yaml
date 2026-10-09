@@ -5,6 +5,8 @@ description: |
   pulled into every ppg:staging:<V> through obs/_aggregate files
   (root/ppg/staging/_shared/<pkg>/obs/_aggregate → ${OBS_ROOTPRJ}:ppg:staging:common:tools).  Mirrors PGDG's
   rpm/redhat/main/common.
+  Also percona-pgadmin4 (pgAdmin 4), which no major aggregates: it is UBI 9
+  only and consumed by the ppg:staging:common:tools:containers image.
 
 # Repositories, debuginfo flags and the PPG-wide build configuration come
 # from root/project.yaml and root/ppg/staging/subprojects.yaml.  The only
@@ -13,3 +15,19 @@ description: |
 path-prefix:
   - subproject: ppg:staging:%!{PG_MAJOR_VERSION}
     repository: "%_repository"
+
+# percona-pgadmin4 builds on UBI_9 only (its package.yaml disables the other
+# repositories) and needs its Python 3.12 dependency stack: this entry merges
+# into the inherited UBI_9 repository, ahead of its inherited paths.
+repositories:
+  - name: UBI_9
+    paths:
+      - subproject: ppg:common:deps:pgadmin
+        repository: UBI_9
+
+project-config: |
+  %if "%_repository" == "UBI_9"
+  # pgAdmin's webpack build and local-npm-registry need Node.js >= 20; the
+  # obs-tools image pins the same major for npm_lockfile — bump both together.
+  ExpandFlags: module:nodejs:22
+  %endif
