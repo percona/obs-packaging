@@ -1574,6 +1574,8 @@ git commit -s -m "ppg:staging:<V>: aggregate pgbouncer, pgbadger, haproxy, pgbac
 
 ### Task 9: Move the cross-version image projects under `common/`
 
+> Amended 2026-10-09 during execution: `common/tools/containers/project.yaml` has NO `qa:` block and NO `macros.yaml` (inherits `PG_MAJOR_VERSION` from `common/macros.yaml`), and the `ppg:staging:common:tools` path entry goes FIRST among the `subproject:` paths (before `ppg:staging:18`), not after `ppg:staging:14`. The text below shows the original wording.
+
 **Goal:** `ppg:staging:common:containers`, `ppg:staging:common:extras:containers` and the new `ppg:staging:common:tools:containers` replace `ppg:staging:containers`, `ppg:staging:extras:containers` and the five per-major tool images.
 
 **Files:**
