@@ -1,0 +1,7 @@
+# The subprojects of this directory render the tier-wide configuration from
+# ../subprojects.yaml, which references PG_MAJOR_VERSION.  ppg:staging:common
+# itself resolves that configuration too (it is a direct child of
+# ../subprojects.yaml's directory), so the macro must be defined at this level
+# rather than in a single child.  tools/macros.yaml explains what it means
+# and when to bump it.
+- PG_MAJOR_VERSION: 18

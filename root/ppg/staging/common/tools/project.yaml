@@ -3,7 +3,7 @@ description: |
   Components whose binaries do not depend on the PostgreSQL major
   (pgBouncer, pgBadger, HAProxy, pgBackRest, Patroni), built once here and
   pulled into every ppg:staging:<V> through obs/_aggregate files
-  (root/ppg/staging/_shared/<pkg>/obs/_aggregate).  Mirrors PGDG's
+  (root/ppg/staging/_shared/<pkg>/obs/_aggregate → ${OBS_ROOTPRJ}:ppg:staging:common:tools).  Mirrors PGDG's
   rpm/redhat/main/common.
 
 # Repositories, debuginfo flags and the PPG-wide build configuration come

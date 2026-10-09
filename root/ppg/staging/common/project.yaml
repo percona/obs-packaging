@@ -1,0 +1,13 @@
+title: Percona Distribution for PostgreSQL — Staging cross-version projects
+description: |
+  Container project for the cross-version subprojects of the staging tier
+  (ppg:staging:common:tools, ppg:staging:common:containers, …). It holds no
+  buildable packages.
+# Deliberately no repositories-inherit / project-config-inherit / debuginfo
+# opt-outs (unlike ../extras/project.yaml): the children of this directory
+# (tools) take their repositories from root/project.yaml through this layer,
+# and an opt-out here would discard them.  Like ppg:staging itself, this
+# package-less project therefore renders the inherited repositories.
+# root/ppg/staging/subprojects.yaml only reaches its direct children, so the
+# subprojects.yaml next to this file (a symlink to the tier's) hands the same
+# PPG-wide configuration on to the children of this directory.
