@@ -757,7 +757,14 @@ package's `macros.yaml` chain in the current checkout, so in a PR the values
 are the PR's. A project entry gets every package of the project (not its
 subprojects); an entry of a package-level `qa:` block (`package.yaml`) gets only
 that package.
-Packages whose `_service` declares no version are left out. Test jobs check
+Packages whose `_service` declares no version are left out. A project with no versioned
+packages of its own (a container project) gets the versions of the local
+projects its repositories build from (`subproject:` paths, in path order, the
+first project providing a package winning), i.e. what its images install:
+`ppg:staging:18:containers` gets `ppg:staging:18`'s versions. A project with no package versions of its own (a container project, whose
+images declare none) gets the versions of the local projects its repositories
+build from (`subproject:` paths), in path order, the first project providing a
+package winning: `ppg:staging:18:containers` gets `ppg:staging:18`'s versions. Test jobs check
 installed software against these values instead of keeping their own copy,
 without depending on macro names. An entry that sets `EXPECTED_VERSIONS`
 itself keeps its value; jobs that do not declare the parameter ignore it.
