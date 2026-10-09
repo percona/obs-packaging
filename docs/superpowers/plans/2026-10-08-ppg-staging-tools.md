@@ -1535,11 +1535,11 @@ Branch `staging-tools-b` from the updated `percona/main` (new worktree `.claude/
 - Modify (shrink): `root/ppg/staging/_shared/{percona-pgbouncer,percona-pgbadger,percona-haproxy,percona-pgbackrest,percona-patroni}/` → only `obs/_aggregate`
 
 **Acceptance Criteria:**
-- [ ] Each of the five `_shared` dirs contains exactly `obs/_aggregate` with project `${OBS_ROOTPRJ}:ppg:staging:common:tools` and the package name (etcd shape).
+- [ ] Each of the five `_shared` dirs contains exactly `obs/_aggregate` (project `${OBS_ROOTPRJ}:ppg:staging:common:tools`, the package name; etcd shape) and its pre-existing `package.yaml` (per-major QA lanes, PG-2830) — nothing else. (Amended 2026-10-09: keep `package.yaml`.)
 - [ ] The per-major symlinks `root/ppg/staging/{14,15,16,17,18}/<pkg>` are unchanged and resolve.
 - [ ] `project verify --offline` and pytest pass.
 
-**Verify:** `for p in percona-pgbouncer percona-pgbadger percona-haproxy percona-pgbackrest percona-patroni; do find root/ppg/staging/_shared/$p -type f; done` → five `.../obs/_aggregate` lines; verify passes.
+**Verify:** `for p in percona-pgbouncer percona-pgbadger percona-haproxy percona-pgbackrest percona-patroni; do find root/ppg/staging/_shared/$p -type f; done` → ten lines, `.../obs/_aggregate` and `.../package.yaml` per package; verify passes.
 
 **Steps:**
 
@@ -1548,7 +1548,7 @@ Branch `staging-tools-b` from the updated `percona/main` (new worktree `.claude/
 ```bash
 cd root/ppg/staging/_shared
 for p in percona-pgbouncer percona-pgbadger percona-haproxy percona-pgbackrest percona-patroni; do
-  git rm -r -q "$p"
+  git rm -r -q "$p/rpm" "$p/debian" "$p/obs"   # keep package.yaml (QA lanes)
   mkdir -p "$p/obs"
   cat > "$p/obs/_aggregate" <<EOF
 <aggregatelist>

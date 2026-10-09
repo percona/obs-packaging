@@ -119,10 +119,13 @@ root/ppg/staging/
 - `common/macros.yaml`: `PG_MAJOR_VERSION: 18` (amended 2026-10-09 during
   execution); `common/tools/macros.yaml` holds only the bump-rule comment. No `PG_VERSION`, so no computed `PPG_RELEASE` counter.
 - The five package directories with `rpm/`, `debian/` and `obs/_service`
-  exactly as in `_shared` today.
+  exactly as in `_shared` today — without `package.yaml`: the `qa:` lanes it
+  holds (component-generic-parallel, PG-2830) test the component against
+  each major's repository and stay per-major in `_shared/<pkg>/package.yaml`
+  next to the aggregate (amended 2026-10-09 during execution).
 
-In `root/ppg/staging/_shared/`, each of the five directories shrinks to a
-single file, `obs/_aggregate`:
+In `root/ppg/staging/_shared/`, each of the five directories shrinks to
+`obs/_aggregate` plus its existing `package.yaml` (QA lanes):
 
 ```xml
 <aggregatelist>
