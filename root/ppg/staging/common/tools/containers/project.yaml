@@ -175,4 +175,3 @@ project-config: |
   Prefer: python3.12-psycopg2 python3.12-etcd
 
   %endif
-

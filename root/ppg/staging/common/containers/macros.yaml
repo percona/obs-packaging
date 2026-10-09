@@ -1,4 +1,4 @@
-# Macros for the ppg:staging:containers project (images shared across PG major versions,
+# Macros for the ppg:staging:common:containers project (images shared across PG major versions,
 # not tied to a single staging/<V>). PG_MAJOR_VERSION is the upgrade *target* (the newest
 # supported version); older source versions are installed via a hardcoded shell loop in
 # the Dockerfile, expanded by percona-obs's {{FOR}} block templating (see

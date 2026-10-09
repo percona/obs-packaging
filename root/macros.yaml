@@ -3,8 +3,8 @@
 
 # Current PostgreSQL minor version of every major, in one place.  Each
 # devel/<V> and staging/<V> macros.yaml sets its own PG_MINOR_VERSION from the
-# matching entry, and the cross-major upgrade images (staging/containers,
-# staging/extras/containers) read several of them at once to build their tags.
+# matching entry, and the cross-major upgrade images (staging/common/containers,
+# staging/common/extras/containers) read several of them at once to build their tags.
 # Defined here, above every tier, so the devel and staging chains both see it.
 # Bump the minor here, nowhere else; PPG_RELEASE is computed from the resulting
 # PG_VERSION and resets on its own.
