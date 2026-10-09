@@ -1,0 +1,45 @@
+title: StormWeaver
+description: |
+  StormWeaver concurrent database testing tool, built from the release tag,
+  with the free-threaded CPython runtime it requires
+  (percona-python%!{PYFT_MINOR}t) and pytest for that runtime. libpq is
+  Percona's own from ppg:staging:%!{STORMWEAVER_PG_MAJOR}.
+
+# Inherits the 14 root repositories; only the libpq source is added to every path.
+path-prefix:
+  - subproject: ppg:staging:%!{STORMWEAVER_PG_MAJOR}
+    repository: "%_repository"
+
+project-config: |
+  %if "%_repository" == "Debian_12" || "%_repository" == "Ubuntu_22.04"
+  # The distro g++ cannot do C++23 here; stormweaver's debian/rules picks
+  # clang++-21 with libc++ when present. Same Support/Ignore set as
+  # root/ppg/devel/_shared/project.post18.yaml uses for the llvm-21 repackage.
+  Support: clang-21
+  Support: llvm-21-dev
+  Support: libllvm21
+  Support: libclang-cpp21
+  Support: libclang-common-21-dev
+  Support: llvm-21-linker-tools
+  Support: libclang1-21
+  Support: llvm-21
+  Support: llvm-21-runtime
+  Support: llvm-21-tools
+  Support: libc++-21-dev
+  Support: libc++abi-21-dev
+  Support: libc++1-21
+  Support: libc++abi1-21
+  %endif
+
+  %if "%_repository" == "Debian_12"
+  Ignore: libllvm14
+  Ignore: llvm-14-runtime
+  Ignore: llvm-14-linker-tools
+  Ignore: libclang-cpp14
+  Ignore: libclang-common-14-dev
+  Ignore: libclang1-14
+  Ignore: llvm-14-tools
+  Ignore: llvm-14
+  Ignore: llvm-14-dev
+  Ignore: clang-14
+  %endif

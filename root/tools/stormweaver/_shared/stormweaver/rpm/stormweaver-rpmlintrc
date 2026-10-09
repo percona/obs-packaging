@@ -1,0 +1,5 @@
+addFilter("dir-or-file-in-opt")
+addFilter("suse-filelist-forbidden-opt")
+addFilter("python-bytecode-.*")
+addFilter("wrong-script-interpreter")
+addFilter("dir-or-file-outside-snapshot")

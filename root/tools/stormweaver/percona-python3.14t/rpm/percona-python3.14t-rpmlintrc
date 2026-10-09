@@ -1,0 +1,7 @@
+addFilter("binary-or-shlib-defines-rpath")
+addFilter("devel-file-in-non-devel-package")
+addFilter("dir-or-file-in-opt")
+addFilter("suse-filelist-forbidden-opt")
+addFilter("python-bytecode-.*")
+addFilter("wrong-script-interpreter")
+addFilter("dir-or-file-outside-snapshot")

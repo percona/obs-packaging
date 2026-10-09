@@ -1,0 +1,8 @@
+- PYFT_MINOR: 3.14
+- PYTEST_VERSION: 9.1.1
+- PLUGGY_VERSION: 1.6.0
+- INICONFIG_VERSION: 2.3.0
+- PACKAGING_VERSION: 26.2
+- PYGMENTS_VERSION: 2.20.0
+# bump when only a dependency pin changes (the package version is pytest's)
+- BUNDLE_RELEASE: 1

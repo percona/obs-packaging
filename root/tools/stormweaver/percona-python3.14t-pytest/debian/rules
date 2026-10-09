@@ -1,0 +1,23 @@
+#!/usr/bin/make -f
+export DH_VERBOSE=1
+PYBIN := /opt/percona-python%!{PYFT_MINOR}t/bin/python%!{PYFT_MINOR}t
+SITE := /opt/percona-python%!{PYFT_MINOR}t/lib/python%!{PYFT_MINOR}t/site-packages
+OBS_SOURCES := /usr/src/packages/SOURCES
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+override_dh_auto_build:
+override_dh_auto_test:
+override_dh_python3:
+override_dh_strip_nondeterminism:
+
+override_dh_auto_install:
+	$(PYBIN) -m pip install --no-deps --no-index --no-warn-script-location \
+	  --root $(CURDIR)/debian/tmp $(OBS_SOURCES)/*.whl
+	$(PYBIN) -m compileall -q -f -d $(SITE) $(CURDIR)/debian/tmp$(SITE)
+	PYTHONPATH=$(CURDIR)/debian/tmp$(SITE) $(PYBIN) -m pytest --version
+
+override_dh_builddeb:
+	dh_builddeb -- -Zgzip
