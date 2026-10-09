@@ -1,0 +1,5 @@
+title: flask-babel 4.0.0 for Python 3.12
+description: |
+  Adds i18n/l10n support for Flask applications. RPM-only python3.12-* build from the PyPI sdist,
+  consumed by pgAdmin 4 (percona-pgadmin4). Bump by editing obs/_service (sdist URL) and
+  rpm/*.spec (Version + changelog).

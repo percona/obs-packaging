@@ -1,0 +1,12 @@
+title: Percona pgAdmin 4 container image
+description: |
+  pgAdmin 4 in server mode (percona-pgadmin4-gunicorn) on UBI 9, bundling the
+  Percona PostgreSQL client binaries for majors 14-18 so Backup/Restore and the
+  external Query Tool work against any supported server version. Built from
+  ppg:staging:common:tools (percona-pgadmin4) and ppg:common:deps:pgadmin.
+  Design: docs/superpowers/specs/2026-09-02-pgadmin4-container-design.md
+
+# UBI 9 only; the project builds the pgbouncer/pgbackrest images for ubi8/ubi10 too.
+build:
+  ubi8: false
+  ubi10: false

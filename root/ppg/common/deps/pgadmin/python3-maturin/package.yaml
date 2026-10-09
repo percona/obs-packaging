@@ -1,0 +1,8 @@
+title: maturin 1.15.0 for Python 3.12
+description: |
+  Build tool and PEP 517 backend for Rust-based Python packages — required to
+  build cryptography >= 43 (every such release builds only with maturin, which
+  no EL9 repository ships). The binary is a plain offline cargo build; the
+  backend module is the sdist's pure-python shim, so the sdist's
+  setuptools>=77 bootstrap is bypassed (RHEL 9 ships setuptools 68). Bump by
+  editing obs/_service (sdist URL) and rpm/*.spec (Version + changelog).

@@ -44,7 +44,7 @@ Additional products (e.g. `psmdb/` for Percona Server for MongoDB) follow the sa
 
 ## Common projects
 
-- **`common/deps/build/`** — build-time dependencies shared across all products (Go toolchain, OBS source
+- **`common/deps/build/`** — build-time dependencies shared across all products (Go toolchain, `local-npm-registry`, OBS source
   services such as `obs-service-tar_scm`). Product projects declare a path dependency on this project so
   its packages are available at build time.
 - **`common/deps/runtime/`** — runtime packages required by product packages across all products.
@@ -376,6 +376,23 @@ Each per-major project lists the same package as an aggregate
 (`staging/_shared/<pkg>/obs/_aggregate` → `${OBS_ROOTPRJ}:ppg:staging:common:tools`),
 so its published repository stays self-contained while OBS builds the component
 once.
+
+`percona-pgadmin4` (pgAdmin 4) is the sixth package here and the one no major
+aggregates: it is UBI 9 only (its `package.yaml` disables every other inherited
+repository) and is consumed only by its image in `common/tools/containers/`.
+Its Python 3.12 dependency closure — ~80 `python3-*` packages built from PyPI
+sdists, plus the `setuptools`/`pybind11` build tooling — is the separate
+`ppg:common:deps:pgadmin` (`ppg/common/deps/pgadmin/`), a UBI_9-only, never-published
+subproject that `tools/project.yaml` merges onto its UBI_9 path (ahead of the
+inherited paths) and the image project paths on `ubi9`; nothing in it is meant for
+a user environment. The shared Python build backends (`python3-flit-core`,
+`python3-hatchling`, `python3-packaging`, `python3-pathspec`,
+`python3-trove-classifiers`) stay in `ppg:common:deps` because other PG
+components need them. `tools/project.yaml` adds `ExpandFlags: module:nodejs:22`
+on UBI_9 for the webpack build, `tools/macros.yaml` pins `PGADMIN_VERSION` for the
+image tags, and the npm dependencies are vendored at sync time by the
+`npm_lockfile` → `node_modules` service pair (`docs/PERCONA_OBS_TOOL.md`; the
+Python side is "Python 3.12 packages" in `docs/PACKAGING_HOWTO.md`).
 
 `common/macros.yaml` pins `PG_MAJOR_VERSION: 18` (pgBackRest links that major's
 libpq; the tier prjconf references it at the `common` level, `tools` inherits it;

@@ -1,0 +1,5 @@
+title: pdm-backend 2.4.5 for Python 3.12
+description: |
+  The build backend used by PDM that supports latest packaging standards. RPM-only python3.12-* build from the PyPI sdist,
+  consumed by pgAdmin 4 (percona-pgadmin4). Bump by editing obs/_service (sdist URL) and
+  rpm/*.spec (Version + changelog).
