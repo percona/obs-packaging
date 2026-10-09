@@ -78,7 +78,7 @@ from .cmd_build import (
     _fetch_versrel_from_history,
 )
 from .cve_scan import ChangedPackage, scan_release_cves
-from .release_scope import has_container_images
+from .release_scope import has_container_images, tree_has_server_package
 from .services import _git_head_sha, _git_tag_for_sha
 
 _YAML_FILENAMES = {"project.yaml", "package.yaml"}
@@ -2182,8 +2182,6 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         elif existing_data.get("revision"):
             existing_releases = [str(existing_data["revision"])]
 
-    source_is_container_project = has_container_images(source_path)
-
     # Auto-derive release-id from OBS if not provided.
     release_id: str = args.release_id or ""
     if not release_id:
@@ -2195,7 +2193,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             lambda repo, arch, pkg: _fetch_pkg_versrel(
                 apiurl, source_obs_project, repo, arch, pkg
             ),
-            counter_mode=source_is_container_project,
+            counter_mode=not tree_has_server_package(source_path),
             major=major,
         )
 
@@ -2221,10 +2219,8 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     # Build CHANGELOG section by diffing source vs release OBS package versions.
     _print_pending("fetching package versions for CHANGELOG")
 
-    source_versions: dict[str, str] = (
-        {}
-        if source_is_container_project
-        else _fetch_project_pkg_versions(apiurl, source_obs_project)
+    source_versions: dict[str, str] = _fetch_project_pkg_versions(
+        apiurl, source_obs_project
     )
     noncontainer_subs: list[str] = []
     container_subs: list[str] = []
@@ -2247,11 +2243,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
 
     release_versions: dict[str, str] | None = None
     if not is_first_release and _obs_project_exists(apiurl, release_obs_project):
-        release_versions = (
-            {}
-            if source_is_container_project
-            else _fetch_project_pkg_versions(apiurl, release_obs_project)
-        )
+        release_versions = _fetch_project_pkg_versions(apiurl, release_obs_project)
         for subproject_name in noncontainer_subs:
             rel_sub = f"{release_obs_project}:{subproject_name}"
             if _obs_project_exists(apiurl, rel_sub):
@@ -2276,26 +2268,8 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             ),
             sub_full,
         )
-    if source_is_container_project:
-        _merge_container_pkgs(
-            source_container_pkgs,
-            _fetch_subproject_container_pkgs(
-                apiurl, source_obs_project, args.rootprj, source_obs_project
-            ),
-            source_obs_project,
-        )
     if not is_first_release and existing_releases:
         prev_release_id = existing_releases[-1].split("/")[-1]
-        if source_is_container_project and _obs_project_exists(
-            apiurl, release_obs_project
-        ):
-            _merge_container_pkgs(
-                release_container_pkgs,
-                _fetch_subproject_container_pkgs(
-                    apiurl, release_obs_project, args.rootprj, release_obs_project
-                ),
-                release_obs_project,
-            )
         # Diff against whatever release subprojects actually exist on OBS —
         # this is what makes the ubi9 old-layout → new-layout migration diff
         # correctly instead of dumping every image as "add".
@@ -2320,8 +2294,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
                 changed_pkgs,
                 source_path,
                 prev_tag_for_scan,
-                has_container_images=bool(container_subs)
-                or source_is_container_project,
+                has_container_images=bool(container_subs),
             )
             security_lines = scan_result.lines or None
         except Exception as exc:  # belt and braces: the scan must never kill a cut

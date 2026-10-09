@@ -291,3 +291,42 @@ def test_container_path_prefix_out_of_slice_is_skipped(
     _pkg(src / "percona-pgbouncer", {"Dockerfile": "FROM x\n"})
     scope = rs.collect_release_scope(src, "ppg:staging:containers", "isv:percona", {})
     assert scope.whole_projects == ["isv:percona:ppg:staging:18"]
+
+
+def test_tree_has_server_package_major_tree(tmp_path, monkeypatch):
+    root = _mk_root(tmp_path, monkeypatch)
+    src = root / "ppg/staging/17"
+    src.mkdir(parents=True)
+    (src / "project.yaml").write_text("title: S\n")
+    _pkg(src / "percona-postgresql", {"_service": "<services/>"})
+    _pkg(src / "percona-pgbouncer", {"_service": "<services/>"})
+    assert rs.tree_has_server_package(src) is True
+
+
+def test_tree_has_server_package_suffixed_name(tmp_path, monkeypatch):
+    root = _mk_root(tmp_path, monkeypatch)
+    src = root / "ppg/staging/18"
+    src.mkdir(parents=True)
+    (src / "project.yaml").write_text("title: S\n")
+    _pkg(src / "percona-postgresql18", {"_service": "<services/>"})
+    assert rs.tree_has_server_package(src) is True
+
+
+def test_tree_has_server_package_common_tree(tmp_path, monkeypatch):
+    root = _mk_root(tmp_path, monkeypatch)
+    src = root / "ppg/staging/common"
+    (src / "tools").mkdir(parents=True)
+    (src / "containers").mkdir()
+    (src / "project.yaml").write_text("repositories-inherit: false\n")
+    (src / "tools" / "project.yaml").write_text("title: T\n")
+    (src / "containers" / "project.yaml").write_text("repositories-inherit: false\n")
+    _pkg(src / "tools" / "percona-pgbouncer", {"_service": "<services/>"})
+    _pkg(
+        src / "tools" / "percona-postgresql-common-lookalike",
+        {"_service": "<services/>"},
+    )
+    _pkg(
+        src / "containers" / "percona-distribution-postgresql-upgrade",
+        {"Dockerfile": "FROM x\n"},
+    )
+    assert rs.tree_has_server_package(src) is False
