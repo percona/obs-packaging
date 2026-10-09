@@ -1,0 +1,209 @@
+title: Percona Container Images for PostgreSQL — shared across versions
+description: |
+  This project contains container images shared across all Percona Distribution for PostgreSQL
+  major versions (currently 14-18), such as the major-version upgrade image. It is not tied to
+  a single staging/<V>, so its OBS project is ppg:staging:common:containers and its released counterpart is
+  ppg:releases:common rather than a per-version releases/<V> subproject.
+  We currently build our images based on UBI-8, UBI-9 and UBI-10 base containers.
+
+# This project's repository set and build configuration are unrelated to its
+# parent's: declare them in full here instead of patching the inherited ones.
+repositories-inherit: false
+project-config-inherit: false
+# no debuginfo repositories here; do not inherit the staging map
+debuginfo: ~
+
+repositories:
+  - name: ubi8
+    paths:
+      - project: RedHat:UBI:Registry
+        repository: images
+      - subproject: ppg:staging:18
+        repository: UBI_8
+      - subproject: ppg:staging:17
+        repository: UBI_8
+      - subproject: ppg:staging:16
+        repository: UBI_8
+      - subproject: ppg:staging:15
+        repository: UBI_8
+      - subproject: ppg:staging:14
+        repository: UBI_8
+      - subproject: ppg:common:deps
+        repository: UBI_8
+      - subproject: common:containers:ubi8
+        repository: UBI_8
+      - project: Fedora:EPEL:8
+        repository: standard
+      - project: RedHat:UBI-8
+        repository: appstream
+      - project: RedHat:UBI-8
+        repository: baseos
+      - project: RockyLinux:8
+        repository: appstream
+      - project: RockyLinux:8
+        repository: baseos
+      - project: RockyLinux:8
+        repository: devel
+    archs: [x86_64, aarch64]
+  - name: ubi9
+    paths:
+      - project: RedHat:UBI:Registry
+        repository: images
+      - subproject: ppg:staging:18
+        repository: UBI_9
+      - subproject: ppg:staging:17
+        repository: UBI_9
+      - subproject: ppg:staging:16
+        repository: UBI_9
+      - subproject: ppg:staging:15
+        repository: UBI_9
+      - subproject: ppg:staging:14
+        repository: UBI_9
+      - subproject: ppg:common:deps
+        repository: UBI_9
+      - subproject: common:containers:ubi9
+        repository: UBI_9
+      - project: Fedora:EPEL:9
+        repository: standard
+      - project: RedHat:UBI-9
+        repository: standard
+    archs: [x86_64, aarch64]
+  - name: ubi10
+    paths:
+      - project: RedHat:UBI:Registry
+        repository: images
+      - subproject: ppg:staging:18
+        repository: UBI_10
+      - subproject: ppg:staging:17
+        repository: UBI_10
+      - subproject: ppg:staging:16
+        repository: UBI_10
+      - subproject: ppg:staging:15
+        repository: UBI_10
+      - subproject: ppg:staging:14
+        repository: UBI_10
+      - subproject: ppg:common:deps
+        repository: UBI_10
+      - subproject: common:containers:ubi10
+        repository: UBI_10
+      - project: Fedora:EPEL:10
+        repository: standard
+      - project: RedHat:UBI-10
+        repository: standard
+    archs: [x86_64, aarch64]
+
+project-config: |
+  Type: docker
+  BuildEngine: podman
+  BuildFlags: sbom:spdx
+  BuildFlags: sbom:cyclonedx
+  PublishFlags: withsbom
+  # The retired kiwi base project set these for every image; the image
+  # projects carry them themselves now that the base comes from the registry.
+  BuildFlags: container-compression-format:zstd
+  BuildFlags: container-build-format:oci
+
+  Preinstall: skopeo
+
+  ExpandFlags: filterbasecontainerpkgs
+
+  Prefer: redhat-release
+  Prefer: glibc-minimal-langpack
+  Prefer: gpgme
+  Prefer: iptables-nft
+  Prefer: percona-postgresql%!{PG_MAJOR_VERSION}-libs
+  Ignore: rocky-release
+  Substitute: rocky-release redhat-release
+
+  BuildFlags: dockerarg:PPG_REPO=staging
+
+  %if "%_repository" == "ubi8"
+
+  ExpandFlags: module:container-tools-rhel8
+  # Only the perl:5.26 stream is enabled: its artifacts are plain RPMs. Any
+  # other stream would expose .module+ packages that microdnf rejects inside
+  # the real ubi8/ubi-minimal image. UBI 8 AppStream carries BOTH copies of
+  # perl-IO-Socket-SSL, perl-Net-SSLeay and perl-Mozilla-CA and the expander
+  # takes the modular one (its release string sorts higher), so
+  # common:containers:ubi8 (earlier in the path) shadows them with non-modular
+  # rebuilds, and adds perl-DBD-Pg and llvm which UBI 8 only has as streams.
+  ExpandFlags: module:perl-5.26
+  # redhat-rpm-config (pulled by perl -> perl-devel on EL8) requires these files;
+  # OBS needs the mapping to put findutils into the image's package repository.
+  FileProvides: /usr/bin/find findutils
+  FileProvides: /usr/bin/xargs findutils
+
+  BuildFlags: dockerarg:RHEL_VER=el8
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi8/ubi-minimal:latest
+
+  %endif
+
+  %if "%_repository" == "ubi9"
+
+  BuildFlags: dockerarg:RHEL_VER=el9
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+  %endif
+
+  %if "%_repository" == "ubi10"
+
+  BuildFlags: dockerarg:RHEL_VER=el10
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi10/ubi-minimal:latest
+
+  # EL10's atk pulls in at-spi2-core, which requires /usr/bin/xprop; the
+  # expander needs the hint to pull xprop (UBI 10 AppStream) into the build root.
+  FileProvides: /usr/bin/xprop xprop
+
+  # containers-common-extra: UBI 10 ships crun, not runc.
+  Prefer: crun
+  # EL10's system Python is 3.12, so the distro python3-* packages also
+  # provide python3.12-*: take the distro package where UBI 10 ships it …
+  Prefer: python3-attrs python3-dateutil python3-dns python3-six python3-wcwidth
+  Prefer: python3-jmespath python3-prettytable python3-psutil
+  # … and ours where only EPEL has it (the Percona repo must work without EPEL)
+  # or where ours is built against Percona libpq (psycopg2).
+  Prefer: python3.12-click python3.12-boto3 python3.12-botocore python3.12-lz4 python3.12-s3transfer
+  Prefer: python3.12-psycopg2 python3.12-etcd
+
+  %endif
+
+
+qa:
+  - name: ubi8
+    pipeline: docker-server-parallel-generic
+    parameters:
+      DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
+      SERVER_VERSION: "%!{PG_VERSION}"
+      TESTING_BRANCH: ricardo-work
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/containers/ubi8
+      WITH_POSTGIS:
+        - true
+        - false
+    matrix:
+      - WITH_POSTGIS
+
+  - name: ubi9
+    pipeline: docker-server-parallel-generic
+    parameters:
+      DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
+      SERVER_VERSION: "%!{PG_VERSION}"
+      TESTING_BRANCH: ricardo-work
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/containers/ubi9
+      WITH_POSTGIS:
+        - true
+        - false
+    matrix:
+      - WITH_POSTGIS
+
+  - name: ubi10
+    pipeline: docker-server-parallel-generic
+    parameters:
+      DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
+      SERVER_VERSION: "%!{PG_VERSION}"
+      TESTING_BRANCH: ricardo-work
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/containers/ubi10
+      WITH_POSTGIS:
+        - true
+        - false
+    matrix:
+      - WITH_POSTGIS

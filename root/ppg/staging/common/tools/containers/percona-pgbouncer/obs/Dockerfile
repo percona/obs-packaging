@@ -19,10 +19,6 @@ LABEL name="Percona PgBouncer" \
 LABEL version="%!{PGBOUNCER_VERSION}"
 LABEL release="1"
 
-ARG PG_VERSION=%!{PG_VERSION}
-
-ENV PG_VERSION=${PG_VERSION}
-
 RUN microdnf -y update
 
 RUN microdnf -y install \
