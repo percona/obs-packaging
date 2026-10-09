@@ -2107,7 +2107,7 @@ def _derive_release_id(
 
     PG mode (a ``percona-postgresql[<major>]`` package is built): ``MAJOR.MINOR-N``
     where N counts existing releases of that minor.  Counter mode (no server
-    package - cross-version projects such as ``ppg:staging:containers``):
+    package - no percona-postgresql* package directory anywhere under the source tree, such as ``ppg:staging:common``):
     ``<release_name>-N`` where N is one plus the number of existing releases.
     The major-suffixed server package name uses *major* (the last component
     of the source project), falling back to *release_name*.

@@ -116,8 +116,7 @@ the source tree (e.g. `ppg/staging/common`), `project release` uses a plain coun
 instead (read from git, not from OBS):
 `./percona-obs -P <profile> project release ppg:staging:common` writes
 `root/ppg/releases/common/` and tags `ppg/common-<N>`; `obs-release.yml`
-maps that tag shape to `ppg:releases:common`. Any other project without a
-server package still fails and needs `--release-id`.
+maps that tag shape to `ppg:releases:common`. A PG major whose OBS listing is transiently empty still fails with the old error (use `--release-id` to override), so an OBS blip can never produce a counter tag for a major.
 
 #### Cutting a release
 
@@ -399,7 +398,8 @@ The release unit is `ppg:releases:common`, tagged `ppg/common-<N>` and cut with
 `project release ppg:staging:common`. `sync release` freezes the aggregated packages
 of `ppg:staging:common:tools` (and of `ppg:common:deps`) package-scoped for per-major
 releases; for a `common` release every image-holding subproject's path `subproject:`
-entries (the majors, `ppg:common:deps`) are frozen whole. See
+entries (the majors, `ppg:common:deps`) are frozen whole; per-major releases freeze only
+the aggregated packages. See
 `docs/PERCONA_OBS_TOOL.md`.
 
 ### `devel/<major-version>/`

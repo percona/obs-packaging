@@ -1203,6 +1203,8 @@ Executed on the existing worktree `.claude/worktrees/staging-tools`, branch `sta
 
 **Goal:** `root/ppg/staging/common/tools/` renders as `ppg:staging:common:tools` with the same effective configuration the project had at `root/ppg/staging/tools/`.
 
+> Amended 2026-10-09 during execution: `common/project.yaml` does NOT opt out of inherited repositories (an opt-out resets the list before `common/subprojects.yaml`, which declares none), and `PG_MAJOR_VERSION: 18` lives in `common/macros.yaml`; the heredoc below shows the original text.
+
 **Files:**
 - Create: `root/ppg/staging/common/project.yaml`, `root/ppg/staging/common/subprojects.yaml` (symlink)
 - Move: `root/ppg/staging/tools/` → `root/ppg/staging/common/tools/` (git mv)

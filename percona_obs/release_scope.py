@@ -7,8 +7,9 @@ Two further kinds of source hold binaries the release copies:
 * **aggregate sources** — every ``obs/_aggregate`` in the source tree pulls
   binaries from another local project (``ppg:staging:common:tools``,
   ``ppg:common:deps``).  Only the aggregated packages are frozen there.
-* **path-prefix sources** — every image-holding project under the release
-  source (the source or any subproject) may consume any package of the
+* **path-prefix sources** — for a release source without a server package
+  (a cross-version parent such as ``ppg:staging:common``), every
+  image-holding project under it may consume any package of the
   ``subproject:`` entries in its repository paths, so those projects are
   frozen whole.
 
@@ -107,21 +108,29 @@ def collect_release_scope(
                 continue
             scope.packages.setdefault(f"{rootprj}:{local_id}", set()).add(pkg)
 
-    for _, project_path in find_projects(source_path, source_project_id):
-        if not has_container_images(project_path):
-            continue
-        cfg = resolve_project_config(
-            project_path, env_vars or {}, repo_filter=RepositoryFilter.EMPTY
-        )
-        for repo in cfg.get("repositories", []):
-            for entry in repo.get("paths", []):
-                sub = entry.get("subproject")
-                if not sub or sub in own_ids:
-                    continue
-                sub_path = REPO_ROOT.joinpath(*sub.split(":"))
-                if not sub_path.is_dir() or not project_in_slice(sub_path, env_vars):
-                    continue
-                full = f"{rootprj}:{sub}"
-                if full not in scope.whole_projects:
-                    scope.whole_projects.append(full)
+    # A PG major's own containers/extras:containers subprojects list
+    # ppg:common:deps, common:containers:* and the previous major on their
+    # paths; those are aggregate-covered or unrelated, and per-major releases
+    # stay aggregate-scoped (spec Decision 3).  Only a cross-version parent
+    # (no server package) freezes its image projects' path sources whole.
+    if not tree_has_server_package(source_path):
+        for _, project_path in find_projects(source_path, source_project_id):
+            if not has_container_images(project_path):
+                continue
+            cfg = resolve_project_config(
+                project_path, env_vars or {}, repo_filter=RepositoryFilter.EMPTY
+            )
+            for repo in cfg.get("repositories", []):
+                for entry in repo.get("paths", []):
+                    sub = entry.get("subproject")
+                    if not sub or sub in own_ids:
+                        continue
+                    sub_path = REPO_ROOT.joinpath(*sub.split(":"))
+                    if not sub_path.is_dir() or not project_in_slice(
+                        sub_path, env_vars
+                    ):
+                        continue
+                    full = f"{rootprj}:{sub}"
+                    if full not in scope.whole_projects:
+                        scope.whole_projects.append(full)
     return scope

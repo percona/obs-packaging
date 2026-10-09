@@ -160,7 +160,9 @@ It additionally includes two kinds of extra sources (module
   with no build results at all is a problem, so dry-run and the real freeze
   agree) and `freeze_packages` / `restore_packages` disable only those
   packages (package meta `build disable`, restored to the exact prior meta).
-- **Path-prefix sources**, whole-project: for every project under the
+- **Path-prefix sources**, whole-project (amended 2026-10-09 during
+  execution: applies only to a release source without a server package;
+  PG-major releases keep the aggregate-only scope): for every project under the
   release source (the source itself and its subprojects) that holds
   container images, the `subproject:` entries of its repository paths that
   are in slice, minus the source and its own subprojects, are treated like
