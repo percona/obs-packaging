@@ -31,6 +31,7 @@ from .common import (
     _print_pending,
     auto_rootprj_env,
     REPO_ROOT,
+    _load_project_config_with_inheritance,
     apply_macro_substitution,
     find_packages,
     load_macros,
@@ -405,7 +406,7 @@ def _status_context(
 EXPECTED_VERSIONS_PARAM = "EXPECTED_VERSIONS"
 
 
-def _package_versions(project: str) -> dict[str, str]:
+def _own_package_versions(project: str) -> dict[str, str]:
     """Version of each package in *project*, keyed by OBS package name.
 
     The version is the one OBS builds: the ``version`` of the package's
@@ -434,6 +435,37 @@ def _package_versions(project: str) -> dict[str, str]:
         version = apply_macro_substitution(raw, load_macros(macros_dir), strict=False)
         if "%!{" not in version:
             versions[pkg_path.name] = version
+    return versions
+
+
+def _package_versions(project: str) -> dict[str, str]:
+    """Package versions for *project*'s EXPECTED_VERSIONS.
+
+    The project's own package versions (see ``_own_package_versions``). A
+    project with none of its own (a container project, whose images declare no
+    package version) tests what its images install: the packages of the local
+    projects its repositories build from (``subproject:`` paths), in path
+    order, the first project providing a package winning as in OBS's own
+    resolution. ppg:staging:18:containers thus gets ppg:staging:18's versions;
+    ppg:staging:18:extras:containers gets ppg:staging:18:extras's, then 18's,
+    before the previous major's.
+    """
+    own = _own_package_versions(project)
+    if own:
+        return own
+    config = _load_project_config_with_inheritance(resolve_project_path(project))
+    sources: list[str] = []
+    for repo in config.get("repositories", []) or []:
+        for path_info in repo.get("paths", []) or []:
+            sub = path_info.get("subproject") if isinstance(path_info, dict) else None
+            if sub and sub != project and sub not in sources:
+                sources.append(sub)
+    versions: dict[str, str] = {}
+    for sub in sources:
+        if not resolve_project_path(sub).is_dir():
+            continue
+        for name, version in _own_package_versions(sub).items():
+            versions.setdefault(name, version)
     return versions
 
 

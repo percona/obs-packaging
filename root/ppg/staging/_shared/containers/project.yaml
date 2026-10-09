@@ -141,14 +141,17 @@ project-config: |
 
   %endif
 
-
+# QA: one entry per image and UBI base. REPOSITORY is the image prefix in the
+# OBS registry; each job appends its image name:
+#   docker-server-parallel     percona-distribution-postgresql[-with-postgis]
+#   docker-component-parallel  percona-pgbackrest, percona-pgbouncer
 qa:
   - name: ubi8
-    pipeline: docker-server-parallel-generic
+    pipeline: docker-server-parallel
     parameters:
       DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
       SERVER_VERSION: "%!{PG_VERSION}"
-      TESTING_BRANCH: ricardo-work
+      TESTING_BRANCH: main
       REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi8
       WITH_POSTGIS:
         - true
@@ -157,11 +160,11 @@ qa:
       - WITH_POSTGIS
 
   - name: ubi9
-    pipeline: docker-server-parallel-generic
+    pipeline: docker-server-parallel
     parameters:
       DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
       SERVER_VERSION: "%!{PG_VERSION}"
-      TESTING_BRANCH: ricardo-work
+      TESTING_BRANCH: main
       REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi9
       WITH_POSTGIS:
         - true
@@ -170,14 +173,86 @@ qa:
       - WITH_POSTGIS
 
   - name: ubi10
-    pipeline: docker-server-parallel-generic
+    pipeline: docker-server-parallel
     parameters:
       DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
       SERVER_VERSION: "%!{PG_VERSION}"
-      TESTING_BRANCH: ricardo-work
+      TESTING_BRANCH: main
       REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi10
       WITH_POSTGIS:
         - true
         - false
     matrix:
       - WITH_POSTGIS
+
+  - name: ubi8-pgbackrest
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "%!{PG_MAJOR_VERSION}"
+      SERVER_VERSION: "%!{PG_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi8
+
+  - name: ubi8-pgbouncer
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "%!{PG_MAJOR_VERSION}"
+      SERVER_VERSION: "%!{PG_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi8
+
+  - name: ubi9-pgbackrest
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "%!{PG_MAJOR_VERSION}"
+      SERVER_VERSION: "%!{PG_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi9
+
+  - name: ubi9-pgbouncer
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "%!{PG_MAJOR_VERSION}"
+      SERVER_VERSION: "%!{PG_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi9
+
+  - name: ubi10-pgbackrest
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "%!{PG_MAJOR_VERSION}"
+      SERVER_VERSION: "%!{PG_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi10
+
+  - name: ubi10-pgbouncer
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "%!{PG_MAJOR_VERSION}"
+      SERVER_VERSION: "%!{PG_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi10
