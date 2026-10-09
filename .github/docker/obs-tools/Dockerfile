@@ -103,7 +103,7 @@ RUN TMP=$(mktemp -d) && \
 # (tools/obs-services), which generates package-lock.json for packages whose
 # frontend dependencies are vendored with node_modules (pgAdmin 4).  Major 22
 # matches the nodejs:22 module stream those packages build against on UBI_9
-# (ExpandFlags in root/ppg/devel/pgadmin/project.yaml) — bump both together.
+# (ExpandFlags in root/ppg/staging/common/tools/project.yaml) — bump both together.
 RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
       | gpg --dearmor -o /usr/share/keyrings/nodesource.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \

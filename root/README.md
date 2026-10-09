@@ -377,6 +377,23 @@ Each per-major project lists the same package as an aggregate
 so its published repository stays self-contained while OBS builds the component
 once.
 
+`percona-pgadmin4` (pgAdmin 4) is the sixth package here and the one no major
+aggregates: it is UBI 9 only (its `package.yaml` disables every other inherited
+repository) and is consumed only by its image in `common/tools/containers/`.
+Its Python 3.12 dependency closure — ~80 `python3-*` packages built from PyPI
+sdists, plus the `setuptools`/`pybind11` build tooling — is the separate
+`ppg:common:deps:pgadmin` (`ppg/common/deps/pgadmin/`), a UBI_9-only, never-published
+subproject that `tools/project.yaml` merges onto its UBI_9 path (ahead of the
+inherited paths) and the image project paths on `ubi9`; nothing in it is meant for
+a user environment. The shared Python build backends (`python3-flit-core`,
+`python3-hatchling`, `python3-packaging`, `python3-pathspec`,
+`python3-trove-classifiers`) stay in `ppg:common:deps` because other PG
+components need them. `tools/project.yaml` adds `ExpandFlags: module:nodejs:22`
+on UBI_9 for the webpack build, `tools/macros.yaml` pins `PGADMIN_VERSION` for the
+image tags, and the npm dependencies are vendored at sync time by the
+`npm_lockfile` → `node_modules` service pair (`docs/PERCONA_OBS_TOOL.md`; the
+Python side is "Python 3.12 packages" in `docs/PACKAGING_HOWTO.md`).
+
 `common/macros.yaml` pins `PG_MAJOR_VERSION: 18` (pgBackRest links that major's
 libpq; the tier prjconf references it at the `common` level, `tools` inherits it;
 `tools/project.yaml` puts `ppg:staging:<that major>` on the repository path).
@@ -443,29 +460,6 @@ it would silently resolve to nothing.
 Graduation: when a development cycle concludes and a new release tag is cut, the staging package's
 `obs/_service` revision is bumped to the new tag (staging always builds from tags), and the devel
 entry (Class A or B) is removed — or repointed at the next development branch if work continues.
-
-### `devel/pgadmin/` — a version-independent devel project
-
-`ppg:devel:pgadmin` is the one devel project that is not a PG-major subset: it holds
-`percona-pgadmin4` and its Python 3.12 / Node.js dependency stack, which do not depend on
-the PostgreSQL major version. Its `project.yaml` declares a single `UBI_9` repository
-(pgAdmin is built for UBI 9 only), so no per-package `build:` flags are needed, and adds
-`ExpandFlags: module:nodejs:22` for the frontend build. Packages there follow the
-normal `rpm/` + `obs/_service` layout. The Python side is the ~70 `python3-*` directories
-(pgAdmin's Python 3.12 closure, built from PyPI sdists — see "Python 3.12 packages" in
-`docs/PACKAGING_HOWTO.md`); the npm dependencies are vendored at sync time by the
-`npm_lockfile` → `node_modules` service pair (see `docs/PERCONA_OBS_TOOL.md`). The shared
-Python build-backend stack (`python3-flit-core`, `python3-packaging`, `python3-pathspec`,
-`python3-trove-classifiers`, `python3-hatchling`) lives in `ppg/common/deps/` because
-other products' Python packages need it too.
-
-`percona-pgadmin4` is the application package (pgAdmin 4 in server mode, built from the
-upstream git tag through `obs_scm` → `npm_lockfile` → `node_modules`, with webpack served by
-`local-npm-registry`). It ships `-gunicorn` (launcher + systemd unit; the runtime a container
-image uses), `-httpd` (Apache + `python3.12-mod_wsgi`) and `-doc` (rst sources). The
-`python3-*` packages are its Python 3.12 dependency stack; `python3-click`, `python3-six`,
-`python3-dateutil`, `python3-psutil` and `python3-dns` are `_aggregate`s of `ppg:common:deps`
-so the project repository installs on its own. UBI_9 only.
 
 ## project.yaml
 
