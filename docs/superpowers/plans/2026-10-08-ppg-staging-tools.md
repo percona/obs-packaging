@@ -1,4 +1,4 @@
-# ppg:staging:tools Implementation Plan
+# ppg:staging:common:tools Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers-extended-cc:subagent-driven-development (recommended) or superpowers-extended-cc:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -8,7 +8,9 @@
 
 **Tech Stack:** Python 3 (`percona_obs/`), pytest (`tests/`), black, pyright, OBS `_aggregate`/`_result`/package `_meta` APIs via `osc`, GitHub Actions bash.
 
-**Spec:** `docs/superpowers/specs/2026-10-08-ppg-staging-tools-design.md`
+**Spec:** `docs/superpowers/specs/2026-10-08-ppg-staging-tools-design.md` (revised 2026-10-09)
+
+> **Revision 2026-10-09.** Tasks 1–7 were executed against the first spec (`ppg:staging:tools`, `ppg:releases:containers`) and are complete on branch `staging-tools` (PR #123). The spec now places every cross-version piece under a tier-level `common/` parent with one release unit `ppg:releases:common`. Tasks 12–15 below rework PR A in place; Tasks 8–11 are rewritten for the new layout and supersede their earlier text. Global Constraints still bind, with `ppg:staging:tools` read as `ppg:staging:common:tools`.
 
 ## Global Constraints
 
@@ -1193,24 +1195,349 @@ git commit -s -m "docs: ppg:staging:tools, extended release freeze, counter-tagg
 
 ---
 
-## PR B — switch consumers and move the images
+## PR A rework (2026-10-09) — `common/` layout
 
-Branch `staging-tools-b` from the updated `percona/main` (new worktree `.claude/worktrees/staging-tools-b`), venv created as in CLAUDE.md.
+Executed on the existing worktree `.claude/worktrees/staging-tools`, branch `staging-tools` (PR #123). Per-task commits; the branch is force-pushed only after the user confirms at the end of Task 15.
+
+### Task 12: Move the tools project under `common/`
+
+**Goal:** `root/ppg/staging/common/tools/` renders as `ppg:staging:common:tools` with the same effective configuration the project had at `root/ppg/staging/tools/`.
+
+**Files:**
+- Create: `root/ppg/staging/common/project.yaml`, `root/ppg/staging/common/subprojects.yaml` (symlink)
+- Move: `root/ppg/staging/tools/` → `root/ppg/staging/common/tools/` (git mv)
+- Modify: `root/ppg/staging/common/tools/macros.yaml:1` (comment), `root/ppg/staging/common/tools/project.yaml` (description text)
+
+**Acceptance Criteria:**
+- [ ] `root/ppg/staging/tools/` no longer exists; `root/ppg/staging/common/tools/` holds `project.yaml`, `macros.yaml` and the five package directories unchanged (`git diff -M --stat` shows pure renames for the packages).
+- [ ] `root/ppg/staging/common/project.yaml` is a package-less intermediate with `repositories-inherit: false`, `project-config-inherit: false`, `debuginfo: ~`, like `root/ppg/staging/extras/project.yaml`.
+- [ ] `root/ppg/staging/common/subprojects.yaml` is a relative symlink to `../subprojects.yaml`.
+- [ ] `project config --offline ppg:staging:common:tools` renders the same repositories (14), the same path order (`ppg:staging:18` first, then `ppg:common:deps`, `common:deps:build`, distro) and the same prjconf as `ppg:staging:tools` rendered before the move.
+- [ ] `project verify --offline` passes; pytest passes.
+
+**Verify:** `test ! -e root/ppg/staging/tools && readlink root/ppg/staging/common/subprojects.yaml && venv/bin/python -m percona_obs -P verify project config --offline ppg:staging:common:tools | grep -c '<path project="isv:percona:ppg:staging:18"' && venv/bin/python -m percona_obs -P verify project verify --offline` → `../subprojects.yaml`, `14`, verify passes.
+
+**Steps:**
+
+- [ ] **Step 1: Capture the before-state**
+
+```bash
+venv/bin/python -m percona_obs -P verify project config --offline ppg:staging:tools > /tmp/claude-1000/-home-rdias-Work-percona-obs-packaging/8e247063-ce1c-44e6-9459-6e60b01ee28c/scratchpad/tools-before.txt
+```
+
+- [ ] **Step 2: Create the intermediate and move the project**
+
+```bash
+mkdir root/ppg/staging/common
+cat > root/ppg/staging/common/project.yaml <<'EOF'
+title: Percona Distribution for PostgreSQL — Staging cross-version projects
+description: |
+  Container project for the cross-version subprojects of the staging tier
+  (ppg:staging:common:tools, ppg:staging:common:containers, …). It holds no
+  buildable packages and therefore no build repositories.
+# A package-less intermediate: it must not pick up the per-major repository
+# patches, debuginfo flags or build configuration that
+# root/ppg/staging/subprojects.yaml folds into every project below it.
+# Its own subprojects.yaml (a symlink to the tier's) hands them on to the
+# direct children that do want them (tools).
+repositories-inherit: false
+project-config-inherit: false
+debuginfo: ~
+EOF
+ln -s ../subprojects.yaml root/ppg/staging/common/subprojects.yaml
+git mv root/ppg/staging/tools root/ppg/staging/common/tools
+```
+
+- [ ] **Step 3: Fix the two self-references**
+
+In `root/ppg/staging/common/tools/macros.yaml` line 1: `# ppg:staging:common:tools builds PG-independent components once.  PG_MAJOR_VERSION`.
+In `root/ppg/staging/common/tools/project.yaml` description: replace `(root/ppg/staging/_shared/<pkg>/obs/_aggregate)` context so it reads "pulled into every ppg:staging:<V> through obs/_aggregate files (root/ppg/staging/_shared/<pkg>/obs/_aggregate → ${OBS_ROOTPRJ}:ppg:staging:common:tools)".
+
+- [ ] **Step 4: Compare after-state and verify**
+
+```bash
+venv/bin/python -m percona_obs -P verify project config --offline ppg:staging:common:tools > /tmp/claude-1000/-home-rdias-Work-percona-obs-packaging/8e247063-ce1c-44e6-9459-6e60b01ee28c/scratchpad/tools-after.txt
+diff <(sed 's/ppg:staging:tools/ppg:staging:common:tools/g' /tmp/claude-1000/-home-rdias-Work-percona-obs-packaging/8e247063-ce1c-44e6-9459-6e60b01ee28c/scratchpad/tools-before.txt) /tmp/claude-1000/-home-rdias-Work-percona-obs-packaging/8e247063-ce1c-44e6-9459-6e60b01ee28c/scratchpad/tools-after.txt
+venv/bin/python -m percona_obs -P verify project verify --offline && venv/bin/python -m pytest tests -q
+```
+
+Expected: the diff is empty apart from the title/description lines you changed; verify passes; tests pass.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A root/ppg/staging/common
+git commit -s -m "ppg:staging:common: tier-level parent for cross-version projects; tools moves under it"
+```
+
+---
+
+### Task 13: Counter mode from the tree; drop the image-source routing
+
+**Goal:** `project release` chooses counter mode when no `percona-postgresql*` package directory exists under the source tree, and no longer special-cases a source project that holds images itself.
+
+**Files:**
+- Modify: `percona_obs/cmd_project.py` (`_derive_release_id` call site ~2185-2200, `source_versions`/`release_versions` ~2222-2260, source-image merges ~2279-2297, CVE flag ~2323)
+- Create helper in: `percona_obs/release_scope.py` (`tree_has_server_package`)
+- Test: `tests/test_release_scope.py`, `tests/test_project_release.py`
+
+**Acceptance Criteria:**
+- [ ] `release_scope.tree_has_server_package(source_path) -> bool` is true when any package directory under the source project or its subprojects (symlinks followed, `_shared` skipped as `find_packages` does) is named `percona-postgresql` or `percona-postgresql<digits>`.
+- [ ] `cmd_project_release` passes `counter_mode=not tree_has_server_package(source_path)`; `_derive_release_id` itself is unchanged.
+- [ ] Every `source_is_container_project` branch is removed: `source_versions` and `release_versions` are always fetched; no merge of the source or release project itself into the container dicts; CVE scan gets `has_container_images=bool(container_subs)`. `has_container_images` stays imported for the subproject loop.
+- [ ] Tests: `test_tree_has_server_package_major_tree` (fixture with `percona-postgresql/obs/_service` → True), `test_tree_has_server_package_common_tree` (fixture `common/` with `tools/percona-pgbouncer` and `containers/img/obs/Dockerfile` → False), `test_tree_has_server_package_suffixed_name` (`percona-postgresql18` → True); the four `_derive_release_id` tests stay as they are.
+- [ ] black, pyright, pytest green.
+
+**Verify:** `venv/bin/python -m pytest tests/test_release_scope.py tests/test_project_release.py -q` → all PASS; `grep -c source_is_container_project percona_obs/cmd_project.py` → `0`.
+
+**Steps:**
+
+- [ ] **Step 1: Write the failing tests** (append to `tests/test_release_scope.py`, reusing `_mk_root` and `_pkg`)
+
+```python
+def test_tree_has_server_package_major_tree(tmp_path, monkeypatch):
+    root = _mk_root(tmp_path, monkeypatch)
+    src = root / "ppg/staging/17"
+    src.mkdir(parents=True)
+    (src / "project.yaml").write_text("title: S\n")
+    _pkg(src / "percona-postgresql", {"_service": "<services/>"})
+    _pkg(src / "percona-pgbouncer", {"_service": "<services/>"})
+    assert rs.tree_has_server_package(src) is True
+
+
+def test_tree_has_server_package_suffixed_name(tmp_path, monkeypatch):
+    root = _mk_root(tmp_path, monkeypatch)
+    src = root / "ppg/staging/18"
+    src.mkdir(parents=True)
+    (src / "project.yaml").write_text("title: S\n")
+    _pkg(src / "percona-postgresql18", {"_service": "<services/>"})
+    assert rs.tree_has_server_package(src) is True
+
+
+def test_tree_has_server_package_common_tree(tmp_path, monkeypatch):
+    root = _mk_root(tmp_path, monkeypatch)
+    src = root / "ppg/staging/common"
+    (src / "tools").mkdir(parents=True)
+    (src / "containers").mkdir()
+    (src / "project.yaml").write_text("repositories-inherit: false\n")
+    (src / "tools" / "project.yaml").write_text("title: T\n")
+    (src / "containers" / "project.yaml").write_text("repositories-inherit: false\n")
+    _pkg(src / "tools" / "percona-pgbouncer", {"_service": "<services/>"})
+    _pkg(src / "tools" / "percona-postgresql-common-lookalike", {"_service": "<services/>"})
+    _pkg(src / "containers" / "percona-distribution-postgresql-upgrade", {"Dockerfile": "FROM x\n"})
+    assert rs.tree_has_server_package(src) is False
+```
+
+Note the lookalike: `percona-postgresql-common-lookalike` must NOT match, so the check is an exact name or `percona-postgresql` followed by digits only.
+
+- [ ] **Step 2: Run to see them fail**
+
+Run: `venv/bin/python -m pytest tests/test_release_scope.py -q -k tree_has_server_package`
+Expected: 3 FAIL `AttributeError: tree_has_server_package`
+
+- [ ] **Step 3: Implement the helper** (in `percona_obs/release_scope.py`, after `has_container_images`)
+
+```python
+_SERVER_PKG_RE = re.compile(r"^percona-postgresql\d*$")
+
+
+def tree_has_server_package(source_path: Path) -> bool:
+    """True when the source project or any subproject holds the server package.
+
+    Decides the release-id mode of ``project release`` from the git tree:
+    a PG major carries ``percona-postgresql`` (or ``percona-postgresqlNN``)
+    and gets ``MAJOR.MINOR-N`` ids; a cross-version parent such as
+    ``ppg:staging:common`` does not and gets a plain counter.
+    """
+    return any(
+        _SERVER_PKG_RE.match(pkg_path.name)
+        for _, pkg_path in find_packages(source_path, "")
+    )
+```
+
+Check `find_packages(source_path, "")` signature accepts an empty obs_project (it only prefixes names); if it needs a non-empty string pass `"x"` — the name is unused here.
+
+- [ ] **Step 4: Rewire `cmd_project_release`**
+
+Replace `source_is_container_project = has_container_images(source_path)` with nothing; at the `_derive_release_id` call use `counter_mode=not tree_has_server_package(source_path)` (add `tree_has_server_package` to the `.release_scope` import). Restore the plain forms:
+
+```python
+    source_versions = _fetch_project_pkg_versions(apiurl, source_obs_project)
+    ...
+        release_versions = _fetch_project_pkg_versions(apiurl, release_obs_project)
+```
+
+Delete the two `if source_is_container_project:` merge blocks (source and release project into the container dicts). CVE scan: `has_container_images=bool(container_subs)`.
+
+- [ ] **Step 5: Gate, full suite, commit**
+
+```bash
+venv/bin/python -m pytest tests -q && venv/bin/black percona_obs/ tests/ && venv/bin/pyright
+git add percona_obs/release_scope.py percona_obs/cmd_project.py tests/test_release_scope.py
+git commit -s -m "project release: counter mode when the source tree has no server package"
+```
+
+---
+
+### Task 14: Path-prefix freeze sources from every image subproject
+
+**Goal:** `collect_release_scope` gathers whole-project path-prefix sources from each image-holding project under the source, so a `ppg:releases:common` release freezes the majors and `ppg:common:deps`.
+
+**Files:**
+- Modify: `percona_obs/release_scope.py` (`collect_release_scope`, module docstring)
+- Test: `tests/test_release_scope.py`
+
+**Acceptance Criteria:**
+- [ ] For every `(sub_id, sub_path)` in `find_projects(source_path, source_project_id)` where `has_container_images(sub_path)` is true (the source itself included), the resolved repositories' `subproject:` entries are collected as today (skip own ids, missing dirs, out-of-slice; dedupe; first-seen order).
+- [ ] Existing tests `test_container_source_adds_path_prefix_projects`, `test_non_container_source_ignores_path_prefix`, `test_container_path_prefix_out_of_slice_is_skipped` pass unchanged.
+- [ ] New test `test_common_parent_collects_paths_from_image_subprojects`: a `common/` fixture with `tools/` (packages, no images), `containers/` (image, paths to `ppg:staging:18`, `ppg:common:deps`, `ppg:staging:common:tools`) and `tools/containers/` (image, paths to `ppg:staging:17`, `ppg:staging:common:tools`) → `whole_projects == ["<root>:ppg:staging:18", "<root>:ppg:common:deps", "<root>:ppg:staging:17"]` and `packages == {}` (tools is an own subproject and excluded).
+
+**Verify:** `venv/bin/python -m pytest tests/test_release_scope.py -q` → all PASS
+
+**Steps:**
+
+- [ ] **Step 1: Write the failing test** (append to `tests/test_release_scope.py`)
+
+```python
+def _image_project_yaml(paths: list[str]) -> str:
+    return yaml.dump(
+        {
+            "repositories-inherit": False,
+            "project-config-inherit": False,
+            "repositories": [
+                {
+                    "name": "ubi9",
+                    "archs": ["x86_64"],
+                    "paths": [{"subproject": p, "repository": "UBI_9"} for p in paths],
+                }
+            ],
+        }
+    )
+
+
+def test_common_parent_collects_paths_from_image_subprojects(tmp_path, monkeypatch):
+    root = _mk_root(tmp_path, monkeypatch)
+    for major in ("17", "18"):
+        (root / "ppg/staging" / major).mkdir(parents=True)
+        (root / "ppg/staging" / major / "project.yaml").write_text("title: S\n")
+    (root / "ppg/common/deps").mkdir(parents=True)
+    (root / "ppg/common/deps/project.yaml").write_text("title: D\n")
+    src = root / "ppg/staging/common"
+    (src / "tools" / "containers").mkdir(parents=True)
+    (src / "containers").mkdir()
+    (src / "project.yaml").write_text("repositories-inherit: false\nproject-config-inherit: false\n")
+    (src / "tools" / "project.yaml").write_text("title: T\n")
+    _pkg(src / "tools" / "percona-pgbouncer", {"_service": "<services/>"})
+    (src / "containers" / "project.yaml").write_text(
+        _image_project_yaml(["ppg:staging:18", "ppg:common:deps", "ppg:staging:common:tools"])
+    )
+    _pkg(src / "containers" / "upgrade", {"Dockerfile": "FROM x\n"})
+    (src / "tools" / "containers" / "project.yaml").write_text(
+        _image_project_yaml(["ppg:staging:17", "ppg:staging:common:tools"])
+    )
+    _pkg(src / "tools" / "containers" / "percona-pgbouncer", {"Dockerfile": "FROM x\n"})
+    scope = rs.collect_release_scope(src, "ppg:staging:common", "isv:percona", {})
+    assert scope.whole_projects == [
+        "isv:percona:ppg:staging:18",
+        "isv:percona:ppg:common:deps",
+        "isv:percona:ppg:staging:17",
+    ]
+    assert scope.packages == {}
+```
+
+- [ ] **Step 2: Run to see it fail**
+
+Run: `venv/bin/python -m pytest tests/test_release_scope.py -q -k common_parent`
+Expected: FAIL (whole_projects is `[]` because the parent holds no images itself)
+
+- [ ] **Step 3: Implement** — replace the `if has_container_images(source_path):` block in `collect_release_scope` with:
+
+```python
+    for _, project_path in find_projects(source_path, source_project_id):
+        if not has_container_images(project_path):
+            continue
+        cfg = resolve_project_config(
+            project_path, env_vars or {}, repo_filter=RepositoryFilter.EMPTY
+        )
+        for repo in cfg.get("repositories", []):
+            for entry in repo.get("paths", []):
+                sub = entry.get("subproject")
+                if not sub or sub in own_ids:
+                    continue
+                sub_path = REPO_ROOT.joinpath(*sub.split(":"))
+                if not sub_path.is_dir() or not project_in_slice(sub_path, env_vars):
+                    continue
+                full = f"{rootprj}:{sub}"
+                if full not in scope.whole_projects:
+                    scope.whole_projects.append(full)
+```
+
+Update the module docstring bullet: "path-prefix sources — every image-holding project under the release source (the source or any subproject) may consume any package of the `subproject:` entries in its repository paths, so those projects are frozen whole" and replace `ppg:staging:tools` with `ppg:staging:common:tools` in the docstring.
+
+- [ ] **Step 4: Gate and commit**
+
+```bash
+venv/bin/python -m pytest tests -q && venv/bin/black percona_obs/ tests/ && venv/bin/pyright
+git add percona_obs/release_scope.py tests/test_release_scope.py
+git commit -s -m "release_scope: path-prefix sources from every image subproject of the release source"
+```
+
+---
+
+### Task 15: Docs for the `common/` layout and PR #123 refresh
+
+**Goal:** Every doc and comment names the new projects and release unit; PR #123's title and body describe the reworked PR A.
+
+**Files:**
+- Modify: `root/README.md` (`### staging/tools/` → `### staging/common/`; release paragraph ~115-119; `_shared/containers` sentence ~198), `docs/PERCONA_OBS_TOOL.md` (~945 counter rule, ~1112 freeze scope), `docs/PACKAGING_HOWTO.md:459-461`, `.github/workflows/obs-release.yml:192` (comment)
+- PR: title/body via `gh pr edit 123` after user confirmation
+
+**Acceptance Criteria:**
+- [ ] `grep -rn "ppg:staging:tools\b\|releases:containers\|containers-<N>\|staging/tools/" root/README.md docs/PERCONA_OBS_TOOL.md docs/PACKAGING_HOWTO.md .github/workflows/obs-release.yml` → no output.
+- [ ] README has a `### staging/common/` section (same position, before `### devel/<major-version>/`) describing: the tier-level parent, the `subprojects.yaml` symlink, `common/tools` (PGDG rule, `PG_MAJOR_VERSION` pin, aggregates, counter caveat), the image subprojects arriving in PR B, `devel/common` only when needed, and the `ppg:releases:common` unit tagged `ppg/common-<N>` cut with `project release ppg:staging:common`.
+- [ ] README release paragraph states the counter rule as "no `percona-postgresql` package anywhere under the source tree (e.g. `ppg/staging/common`)"; PERCONA_OBS_TOOL.md step 1 says the same and the freeze-scope block names `ppg:staging:common:tools` and "every image-holding project under the source".
+- [ ] The branch is pushed and PR #123 updated ONLY after the user says yes.
+
+**Verify:** the grep above prints nothing; `grep -c "### \`staging/common/\`" root/README.md` → `1`.
+
+**Steps:**
+
+- [ ] **Step 1: Edit the docs** per the acceptance criteria (rename the README section heading and body; rewrite the release paragraph; the `_shared/containers` sentence becomes "`percona-pgbouncer` and `percona-pgbackrest` *images* move to `staging/common/tools/containers/` in PR B; until then they live in `staging/_shared/containers/<pkg>/` linked from every `staging/<V>/containers/`"; PACKAGING_HOWTO bullet and obs-release.yml comment use `ppg:staging:common:tools` / `ppg:releases:common` / `ppg/common-3`).
+
+- [ ] **Step 2: Gate and commit**
+
+```bash
+venv/bin/python -m percona_obs -P verify project verify --offline && venv/bin/python -m pytest tests -q
+git add root/README.md docs/PERCONA_OBS_TOOL.md docs/PACKAGING_HOWTO.md .github/workflows/obs-release.yml
+git commit -s -m "docs: common/ layout, ppg:releases:common release unit"
+```
+
+- [ ] **Step 3: Ask the user**, then force-push and refresh the PR
+
+```bash
+git push --force-with-lease percona staging-tools
+gh pr edit 123 -R percona/obs-packaging --title "ppg:staging:common:tools: build PG-independent components once (PR A)" --body-file <refreshed body: same structure as before with the common/ names, the ppg:releases:common unit, and a "Revision" line pointing at the spec>
+```
+
+---
+
+## PR B — switch consumers and move the images (rewritten 2026-10-09)
+
+Branch `staging-tools-b` from the updated `percona/main` (new worktree `.claude/worktrees/staging-tools-b`), venv and the `verify` profile created as in Global Constraints. Starts only after PR A is merged and `ppg:staging:common:tools` is green on OBS.
 
 ### Task 8: Per-major packages become aggregates
 
-**Goal:** Every `ppg:staging:<V>` lists the five components as aggregates of `ppg:staging:tools`.
+**Goal:** Every `ppg:staging:<V>` lists the five components as aggregates of `ppg:staging:common:tools`.
 
 **Files:**
 - Modify (shrink): `root/ppg/staging/_shared/{percona-pgbouncer,percona-pgbadger,percona-haproxy,percona-pgbackrest,percona-patroni}/` → only `obs/_aggregate`
 
 **Acceptance Criteria:**
-- [ ] Each of the five `_shared` dirs contains exactly `obs/_aggregate` and nothing else; content equals the etcd shape with project `${OBS_ROOTPRJ}:ppg:staging:tools` and the package name.
-- [ ] The per-major symlinks `root/ppg/staging/{14,15,16,17,18}/<pkg>` are unchanged and still resolve.
-- [ ] `project verify --offline` passes; `pytest` passes (test_shared_source relies on `_shared` discovery rules).
-- [ ] `git diff --stat` shows deletions only under `_shared/<five>/` plus five new `_aggregate` files.
+- [ ] Each of the five `_shared` dirs contains exactly `obs/_aggregate` with project `${OBS_ROOTPRJ}:ppg:staging:common:tools` and the package name (etcd shape).
+- [ ] The per-major symlinks `root/ppg/staging/{14,15,16,17,18}/<pkg>` are unchanged and resolve.
+- [ ] `project verify --offline` and pytest pass.
 
-**Verify:** `for p in percona-pgbouncer percona-pgbadger percona-haproxy percona-pgbackrest percona-patroni; do find root/ppg/staging/_shared/$p -type f; done` → exactly five lines, all `.../obs/_aggregate`; `venv/bin/python -m percona_obs -P verify project verify --offline` passes.
+**Verify:** `for p in percona-pgbouncer percona-pgbadger percona-haproxy percona-pgbackrest percona-patroni; do find root/ppg/staging/_shared/$p -type f; done` → five `.../obs/_aggregate` lines; verify passes.
 
 **Steps:**
 
@@ -1223,7 +1550,7 @@ for p in percona-pgbouncer percona-pgbadger percona-haproxy percona-pgbackrest p
   mkdir -p "$p/obs"
   cat > "$p/obs/_aggregate" <<EOF
 <aggregatelist>
-  <aggregate project="\${OBS_ROOTPRJ}:ppg:staging:tools">
+  <aggregate project="\${OBS_ROOTPRJ}:ppg:staging:common:tools">
     <package>$p</package>
   </aggregate>
 </aggregatelist>
@@ -1233,133 +1560,105 @@ cd - >/dev/null
 for v in 14 15 16 17 18; do for p in percona-pgbouncer percona-pgbackrest; do test -f root/ppg/staging/$v/$p/obs/_aggregate || echo "BROKEN $v/$p"; done; done
 ```
 
-Expected: no `BROKEN` lines.
-
 - [ ] **Step 2: Verify and commit**
 
 ```bash
 venv/bin/python -m percona_obs -P verify project verify --offline && venv/bin/python -m pytest tests -q
 git add -A root/ppg/staging/_shared
-git commit -s -m "ppg:staging:<V>: aggregate pgbouncer, pgbadger, haproxy, pgbackrest, patroni from ppg:staging:tools"
+git commit -s -m "ppg:staging:<V>: aggregate pgbouncer, pgbadger, haproxy, pgbackrest, patroni from ppg:staging:common:tools"
 ```
 
 ---
 
-### Task 9: Move the pgbouncer and pgbackrest images to the cross-version containers project
+### Task 9: Move the cross-version image projects under `common/`
 
-**Goal:** One `percona-pgbouncer` and one `percona-pgbackrest` image per UBI flavour, built in `ppg:staging:containers`, resolving the RPMs from `ppg:staging:tools`.
+**Goal:** `ppg:staging:common:containers`, `ppg:staging:common:extras:containers` and the new `ppg:staging:common:tools:containers` replace `ppg:staging:containers`, `ppg:staging:extras:containers` and the five per-major tool images.
 
 **Files:**
-- Move: `root/ppg/staging/_shared/containers/{percona-pgbouncer,percona-pgbackrest}/` → `root/ppg/staging/containers/`
-- Delete: `root/ppg/staging/{14,15,16,17,18}/containers/{percona-pgbouncer,percona-pgbackrest}` (symlinks)
-- Modify: both `obs/Dockerfile`s; `root/ppg/staging/containers/project.yaml` (three repos' paths); `root/README.md` `_shared/containers` paragraph
+- Move: `root/ppg/staging/containers/` → `root/ppg/staging/common/containers/`; `root/ppg/staging/extras/containers/` → `root/ppg/staging/common/extras/containers/`; `root/ppg/staging/_shared/containers/{percona-pgbouncer,percona-pgbackrest}/` → `root/ppg/staging/common/tools/containers/`
+- Delete: `root/ppg/staging/extras/project.yaml`; symlinks `root/ppg/staging/{14..18}/containers/{percona-pgbouncer,percona-pgbackrest}`
+- Create: `root/ppg/staging/common/extras/project.yaml` (intermediate, copy of the old `extras/project.yaml` with the name updated), `root/ppg/staging/common/tools/containers/{project.yaml,macros.yaml}`
+- Modify: the three image `project.yaml` `qa:` `REPOSITORY` values; both tool Dockerfiles (drop `PG_VERSION`); `root/README.md` `_shared/containers` sentence
 
 **Acceptance Criteria:**
-- [ ] No `PG_VERSION` token remains in either Dockerfile (`grep -c PG_VERSION` → 0 for both); every other line is unchanged.
-- [ ] In `root/ppg/staging/containers/project.yaml` each of `ubi8`, `ubi9`, `ubi10` has `- subproject: ppg:staging:tools` / `repository: UBI_<N>` immediately after the `ppg:staging:14` entry and before `ppg:common:deps`.
-- [ ] `_shared/containers/` holds only the two server images and `project.yaml`; no per-major `containers/` dir links to pgbouncer/pgbackrest.
-- [ ] `project verify --offline` and `pytest` pass; README no longer says the two images live in `_shared/containers/`.
+- [ ] `root/ppg/staging/containers` and `root/ppg/staging/extras` no longer exist; `root/ppg/staging/_shared/containers/` holds only the two server images and `project.yaml`; no per-major `containers/` links to the tool images.
+- [ ] `common/tools/containers/project.yaml` = the moved `common/containers/project.yaml` repositories/prjconf with `- subproject: ppg:staging:common:tools` / `repository: UBI_<N>` inserted after the `ppg:staging:14` entry in each of ubi8/ubi9/ubi10, a `qa:` block whose `REPOSITORY` is `${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/<ubi>` (keep the pipeline/matrix shape of the source block), and `macros.yaml` with `PG_MAJOR_VERSION: 18` (+ `PG_MINOR_VERSION`/`PG_VERSION` as in the source file).
+- [ ] `common/containers/project.yaml` and `common/extras/containers/project.yaml` differ from the originals only in description wording and `REPOSITORY` paths (`ppg/staging/common/containers/<ubi>`, `ppg/staging/common/extras/containers/ubi9`).
+- [ ] `grep -c PG_VERSION` is `0` for both tool Dockerfiles.
+- [ ] `project verify --offline` and pytest pass; `project config --offline ppg:staging:common:tools:containers` shows `ppg:staging:common:tools` on each repository path.
 
-**Verify:** `grep -c PG_VERSION root/ppg/staging/containers/percona-pgbouncer/obs/Dockerfile root/ppg/staging/containers/percona-pgbackrest/obs/Dockerfile` → `0` twice; `grep -c "ppg:staging:tools" root/ppg/staging/containers/project.yaml` → `3`; `venv/bin/python -m percona_obs -P verify project verify --offline` passes.
+**Verify:** `test ! -e root/ppg/staging/containers && test ! -e root/ppg/staging/extras && venv/bin/python -m percona_obs -P verify project config --offline ppg:staging:common:tools:containers | grep -c 'ppg:staging:common:tools"'` → `3`; verify passes.
 
 **Steps:**
 
-- [ ] **Step 1: Move and unlink**
+- [ ] **Step 1: Moves**
 
 ```bash
-git mv root/ppg/staging/_shared/containers/percona-pgbouncer root/ppg/staging/containers/percona-pgbouncer
-git mv root/ppg/staging/_shared/containers/percona-pgbackrest root/ppg/staging/containers/percona-pgbackrest
+git mv root/ppg/staging/containers root/ppg/staging/common/containers
+mkdir -p root/ppg/staging/common/extras
+git mv root/ppg/staging/extras/containers root/ppg/staging/common/extras/containers
+git mv root/ppg/staging/extras/project.yaml root/ppg/staging/common/extras/project.yaml
+mkdir -p root/ppg/staging/common/tools/containers
+git mv root/ppg/staging/_shared/containers/percona-pgbouncer root/ppg/staging/common/tools/containers/percona-pgbouncer
+git mv root/ppg/staging/_shared/containers/percona-pgbackrest root/ppg/staging/common/tools/containers/percona-pgbackrest
 for v in 14 15 16 17 18; do git rm -q root/ppg/staging/$v/containers/percona-pgbouncer root/ppg/staging/$v/containers/percona-pgbackrest; done
-ls root/ppg/staging/_shared/containers root/ppg/staging/17/containers
+cp root/ppg/staging/common/containers/project.yaml root/ppg/staging/common/tools/containers/project.yaml
+cp root/ppg/staging/common/containers/macros.yaml root/ppg/staging/common/tools/containers/macros.yaml
 ```
 
-Expected: `_shared/containers` = `percona-distribution-postgresql percona-distribution-postgresql-with-postgis project.yaml`; `17/containers` = the two server image links + `project.yaml`.
+- [ ] **Step 2: Edit** `common/extras/project.yaml` description (`ppg:staging:common:extras:containers`); `common/tools/containers/project.yaml`: title "Percona Container Images for the PG-independent tools", description, insert the tools path entry after `ppg:staging:14` in each repo (comment: `# tools builds percona-pgbouncer / percona-pgbackrest; the majors only aggregate them.`), set the three `REPOSITORY` values; set `REPOSITORY` in `common/containers/project.yaml` and `common/extras/containers/project.yaml` to their new paths; drop the `ARG PG_VERSION=%!{PG_VERSION}` / `ENV PG_VERSION=${PG_VERSION}` lines from both tool Dockerfiles; README `_shared/containers` sentence: "`percona-pgbouncer` and `percona-pgbackrest` *images* are cross-version and live in `staging/common/tools/containers/`; the two server images stay in `staging/_shared/containers/<pkg>/` linked from every `staging/<V>/containers/`"; README `### staging/common/` section: replace "arriving in PR B" wording with the present tense.
 
-- [ ] **Step 2: Drop PG_VERSION from both Dockerfiles** — delete these three lines (and the blank line after them) from each:
-
-```
-ARG PG_VERSION=%!{PG_VERSION}
-
-ENV PG_VERSION=${PG_VERSION}
-```
-
-- [ ] **Step 3: Add the tools path** — in `root/ppg/staging/containers/project.yaml`, for each repository insert after the `ppg:staging:14` entry:
-
-```yaml
-      - subproject: ppg:staging:tools
-        repository: UBI_8      # UBI_9 / UBI_10 in the other two repos
-```
-
-Add a comment above the first one: `# tools builds percona-pgbouncer / percona-pgbackrest; the majors only aggregate them.`
-
-- [ ] **Step 4: README** — rewrite the `_shared/containers` sentences at `root/README.md:188-190` to: "`percona-pgbouncer` and `percona-pgbackrest` *images* are cross-version and live in `staging/containers/<pkg>/` (see `staging/tools/` for the RPM/deb packages of the same name); the two server images stay in `staging/_shared/containers/<pkg>/` linked from every `staging/<V>/containers/`." Remove any "(after PR B)" marker left by Task 7.
-
-- [ ] **Step 5: Verify and commit**
+- [ ] **Step 3: Verify and commit**
 
 ```bash
 venv/bin/python -m percona_obs -P verify project verify --offline && venv/bin/python -m pytest tests -q
 git add -A root/ppg/staging root/README.md
-git commit -s -m "containers: build the pgbouncer and pgbackrest images once in ppg:staging:containers"
+git commit -s -m "containers: cross-version image projects move under ppg:staging:common; tool images built once"
 ```
 
-**End of PR B.** Full gate, then ask the user before pushing `staging-tools-b` and opening PR B (labels `obs-sync` and, on the user's say, `qa-packages` + `qa-containers`). Expected PR-check observations: every major's five packages show `aggregate` with the PR tools project as source; both images build in `pr-N:ppg:staging:containers`.
+**End of PR B.** Full gate, then ask the user before pushing `staging-tools-b` and opening PR B (labels `obs-sync` and, on the user's say, `qa-packages` + `qa-containers`). Expected PR-check observations: every major's five packages show `aggregate` with the PR tools project as source; the three image projects build at `pr-N:ppg:staging:common:{containers,tools:containers,extras:containers}`.
 
 ---
 
 ## Post-merge (user-driven; the agent prepares commands and reads results)
 
-### Task 10: Binary comparison and release dry-runs
+### Task 10: Binary comparison, orphan cleanup and release dry-runs
 
-**Goal:** Evidence that the tools build is equivalent to the per-major builds and that the extended freeze scope resolves on production.
+**Goal:** Evidence that the tools build is equivalent to the per-major builds, the orphaned projects are gone, and the extended freeze scope resolves on production.
 
-**Files:** none (read-only OBS queries)
+**Files:** none (OBS queries; one manual delete per orphan)
 
 **Acceptance Criteria:**
-- [ ] For pgbouncer and pgbackrest on `RockyLinux_9/x86_64`, `rpm -qp --requires --provides` of the tools RPM differs from the last per-major RPM only in the `libpq.so.5`/`postgresql-libs` lines (pgbackrest) or not at all (pgbouncer). Debian: `dpkg-deb -I` `Depends:` equal.
-- [ ] `sync release --dry-run ppg:releases:18` prints `+ <root>:ppg:staging:tools  (percona-haproxy, percona-patroni, percona-pgbackrest, percona-pgbadger, percona-pgbouncer)` and `+ <root>:ppg:common:deps  (etcd, …)`.
+- [ ] For pgbouncer and pgbackrest on `RockyLinux_9/x86_64`, `rpm -qp --requires --provides` of the tools RPM differs from the last released RPM only in libpq lines (pgbackrest) or not at all (pgbouncer).
+- [ ] `ppg:staging:containers` and `ppg:staging:extras:containers` are deleted on every instance after their replacements publish (user runs `osc rdelete`, labs and production).
+- [ ] `sync release --dry-run ppg:releases:18` prints `+ <root>:ppg:staging:common:tools  (percona-haproxy, percona-patroni, percona-pgbackrest, percona-pgbadger, percona-pgbouncer)` and `+ <root>:ppg:common:deps  (etcd, …)`.
 
-**Verify:** the two dry-run lines above appear; `diff` of the provides/requires lists is empty or libpq-only.
+**Verify:** the two dry-run lines appear; `osc ls <root>:ppg:staging:containers` returns 404 on both instances.
 
 **Steps:**
 
-- [ ] **Step 1: Fetch and compare binaries** (user runs with the production profile, read-only)
+- [ ] **Step 1:** binary comparison as before, with `<root>:ppg:staging:common:tools` as the source project.
+- [ ] **Step 2:** after sync-main has published the three new image projects: `venv/bin/osc -A <apiurl> rdelete -m "moved under ppg:staging:common" <root>:ppg:staging:containers <root>:ppg:staging:extras:containers` on each instance (user runs; production is a write and needs their explicit go).
+- [ ] **Step 3:** `venv/bin/python -m percona_obs -P <profile> sync release --dry-run ppg:releases:18`.
 
-```bash
-P=<profile>; R=RockyLinux_9; A=x86_64
-for pkg in percona-pgbouncer percona-pgbackrest; do
-  venv/bin/osc -A <apiurl> getbinaries <root>:ppg:staging:tools $pkg $R $A -d /tmp/tools-$pkg
-  venv/bin/osc -A <apiurl> getbinaries <root>:ppg:releases:18 $pkg $R $A -d /tmp/rel18-$pkg
-  diff <(rpm -qp --requires --provides /tmp/tools-$pkg/*.x86_64.rpm | sort) \
-       <(rpm -qp --requires --provides /tmp/rel18-$pkg/*.x86_64.rpm | sort)
-done
-```
+### Task 11: First `ppg:releases:common` release
 
-- [ ] **Step 2: Release dry-runs**
-
-```bash
-venv/bin/python -m percona_obs -P <profile> sync release --dry-run ppg:releases:18
-```
-
-Expected: the `+` lines listed in the acceptance criteria and `release dry-run passed` (or only the pre-existing "tag already exists" failure for the current tag, which is expected outside a release PR).
-
-### Task 11: First `ppg:releases:containers` release
-
-**Goal:** The three cross-version images are released under `ppg/containers-1`.
+**Goal:** The four cross-version subprojects are released under `ppg/common-1`.
 
 **Files:**
-- Created by the command: `root/ppg/releases/containers/{release.yaml,CHANGELOG.md,project.yaml}`
+- Created by the command: `root/ppg/releases/common/{release.yaml,CHANGELOG.md,project.yaml,containers/,tools/,tools/containers/,extras/containers/}`
 
 **Acceptance Criteria:**
-- [ ] `project release ppg:staging:containers` previews `Tag: ppg/containers-1`, `Directory: root/ppg/releases/containers/`, and a CHANGELOG with the upgrade, pgbouncer and pgbackrest images for ubi8/ubi9/ubi10.
-- [ ] `sync release --dry-run ppg:releases:containers` lists `+ <root>:ppg:staging:18 … (whole)`, `+ <root>:ppg:staging:tools  (whole)`, `+ <root>:ppg:common:deps  (whole)`.
-- [ ] After the release PR merges, obs-release runs for `ppg/containers-1`, `ppg:releases:containers` exists with the three images per flavour, and the GitHub release notes come from `root/ppg/releases/containers/CHANGELOG.md`.
-- [ ] The next `ppg:releases:17` / `18` CHANGELOG gets a one-line pointer: "pgBouncer and pgBackRest images are released from ppg:releases:containers (ppg/containers-N)." (added by hand when that release is cut).
+- [ ] `project release ppg:staging:common` previews `Tag: ppg/common-1`, `Directory: root/ppg/releases/common/`, a CHANGELOG with the five tool packages (suffixed `tools`) and the images of `containers`, `tools:containers`, `extras:containers`.
+- [ ] `sync release --dry-run ppg:releases:common` lists the five majors and `ppg:common:deps` with `(whole)`.
+- [ ] After the release PR merges, obs-release runs for `ppg/common-1`; `ppg:releases:common:{containers,tools,tools:containers,extras:containers}` exist with their binaries; the GitHub release notes come from `root/ppg/releases/common/CHANGELOG.md`.
+- [ ] The next `ppg:releases:17` / `18` CHANGELOG gets a one-line pointer: "pgBouncer and pgBackRest images are released from ppg:releases:common (ppg/common-N)." (by hand when that release is cut).
 
-**Verify:** `gh run list --workflow obs-release.yml --limit 1` shows success for `ppg/containers-1`; `venv/bin/osc -A <apiurl> ls <root>:ppg:releases:containers` lists `percona-distribution-postgresql-upgrade percona-pgbackrest percona-pgbouncer`.
+**Verify:** `gh run list --workflow obs-release.yml --limit 1` shows success for `ppg/common-1`; `venv/bin/osc -A <apiurl> ls <root>:ppg:releases:common:tools` lists the five packages.
 
 **Steps:**
 
-- [ ] **Step 1:** `venv/bin/python -m percona_obs -P <profile> project release ppg:staging:containers` → review preview → `y`.
-- [ ] **Step 2:** `venv/bin/python -m percona_obs -P <profile> sync release --dry-run ppg:releases:containers`.
-- [ ] **Step 3:** Ask the user before pushing the release branch and opening the release PR (release-only PR; the PR check validates it).
+- [ ] **Step 1:** `venv/bin/python -m percona_obs -P <profile> project release ppg:staging:common` → review preview → `y`.
+- [ ] **Step 2:** `venv/bin/python -m percona_obs -P <profile> sync release --dry-run ppg:releases:common`.
+- [ ] **Step 3:** Ask the user before pushing the release branch and opening the release PR.
 - [ ] **Step 4:** After merge, watch `obs-release.yml` and verify with the commands under **Verify**.
