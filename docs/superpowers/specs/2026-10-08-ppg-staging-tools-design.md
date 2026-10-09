@@ -138,8 +138,9 @@ In `root/ppg/staging/_shared/`, each of the five directories shrinks to
 The per-major symlinks (`root/ppg/staging/<V>/<pkg> -> ../_shared/<pkg>`)
 stay, so every major still lists the package and its published repositories
 stay self-contained. The devel tier does not build any of the five and gets
-no `common/` (decision 10). `ppg:staging:19` is not touched either: it is a
-devel-only major today and gets the aggregates when it enters staging.
+no `common/` (decision 10). `ppg:staging:19` keeps building the five tools from the same sources (its
+links point at `common/tools/<pkg>` and render with 19's macros, e.g. haproxy
+2.8.28) and gets the aggregates when it enters the aggregate scheme.
 
 `root/ppg/releases/common/` mirrors `root/ppg/staging/common/` the way
 `releases/17/` mirrors `staging/17/`: `release.yaml`, `CHANGELOG.md`,
@@ -202,7 +203,8 @@ release source is removed.
   unchanged.
 - `obs-pr-cleanup.yml` tags from any changed `release.yaml`, no change.
 - `obs-stale-cleanup.yml` deletes stale **PR** projects only; the orphaned
-  production projects of Section 6 need a manual delete.
+  production projects of Section 6 are deleted automatically by sync-main's
+  orphan cleanup (full-tree sync push), with no manual `osc rdelete`.
 
 ### 2.4 Verified unchanged (covered by tests, not code changes)
 
@@ -259,12 +261,13 @@ are enabled on one host.
   Dockerfiles; `LABEL release="1"` and the `#!BuildTag` lines stay.
 - `common/tools/containers/project.yaml` is a copy of the cross-version
   containers project config (ubi8/ubi9/ubi10, registry base, majors,
-  `ppg:common:deps`, UBI projects) with `ppg:staging:common:tools` on each
-  path after the majors, so `percona-pgbouncer` / `percona-pgbackrest`
-  resolve from the tools build (the majors only hold aggregates of it). Its
-  `macros.yaml` carries `PG_MAJOR_VERSION: 18` for the
-  `Prefer: percona-postgresql18-libs` pick that pgbackrest's libpq resolves
-  through.
+  `ppg:common:deps`, UBI projects) with `ppg:staging:common:tools` FIRST among
+  the subproject paths (amended 2026-10-09 during execution): OBS takes the
+  first path that provides a binary and the majors only aggregate these
+  packages, so a tools-only PR would otherwise install production's old copy.
+  `percona-pgbouncer` / `percona-pgbackrest` therefore resolve from the tools
+  build. It has no `qa:` block (the server-image pipeline does not apply) and
+  no `macros.yaml` (`PG_MAJOR_VERSION` is inherited from `common/macros.yaml`).
 - Registry paths: `ppg/staging/common/containers/<ubi>/<image>`,
   `ppg/staging/common/tools/containers/<ubi>/<image>`,
   `ppg/staging/common/extras/containers/ubi9/<image>`. One tool image per
@@ -304,9 +307,15 @@ directories become aggregate-only; the image moves of Section 4. OBS swaps
 each major's built package for the aggregate and republishes; old per-major
 build results are dropped by OBS. sync-main creates the three moved image
 projects at their new names; the old `ppg:staging:containers` and
-`ppg:staging:extras:containers` become orphans on every instance and are
-deleted by hand (`osc rdelete`), the same way stale packages are handled.
-Images under the old registry paths remain until that cleanup.
+`ppg:staging:extras:containers` and the per-major `percona-pgbouncer` /
+`percona-pgbackrest` image packages become orphans and are deleted
+automatically by sync-main's orphan cleanup (full-tree sync push); no manual
+`osc rdelete`. Images under the old registry paths disappear on merge; the new
+paths are listed in Section 4.
+`ppg:staging:16:tde` holds `_link`s to the five staging:16 packages, which are
+now aggregates: the PR OBS root must show the tde packages as aggregates with
+binaries; if OBS rejects a link to an aggregate, replace the five `_link`s
+with `_aggregate` files pointing at tools.
 
 **Release PR** — `project release ppg:staging:common` produces the first
 `ppg/common-1` release PR; merging it dispatches obs-release as usual.
@@ -340,7 +349,10 @@ runs on every major from the tools binaries.
 
 - The package-level QA blocks (PR #119, merged) must treat aggregate packages
   as present in the consuming major; follow-up there, not changed here.
-- `ppg:staging:19` gets the aggregates when it enters staging.
+- `ppg:staging:19` gets the aggregates when it enters the aggregate scheme.
+- A tools-only PR promotes no per-major aggregate, so the present-only
+  per-major QA lanes are skipped and tools has no `qa:` block: such a PR gets
+  no package QA; follow-up with the package-QA work.
 - `devel/common` is created only when a devel package or image needs it.
 - Moving `percona-pgbadger`, `percona-haproxy` or `patroni` images (none
   exist today).

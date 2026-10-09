@@ -1628,11 +1628,11 @@ git commit -s -m "containers: cross-version image projects move under ppg:stagin
 
 **Goal:** Evidence that the tools build is equivalent to the per-major builds, the orphaned projects are gone, and the extended freeze scope resolves on production.
 
-**Files:** none (OBS queries; one manual delete per orphan)
+**Files:** none (OBS queries)
 
 **Acceptance Criteria:**
 - [ ] For pgbouncer and pgbackrest on `RockyLinux_9/x86_64`, `rpm -qp --requires --provides` of the tools RPM differs from the last released RPM only in libpq lines (pgbackrest) or not at all (pgbouncer).
-- [ ] `ppg:staging:containers` and `ppg:staging:extras:containers` are deleted on every instance after their replacements publish (user runs `osc rdelete`, labs and production).
+- [ ] sync-main deletes the orphaned projects/packages automatically; `osc ls <root>:ppg:staging:containers` returns 404 on both instances after the first main sync.
 - [ ] `sync release --dry-run ppg:releases:18` prints `+ <root>:ppg:staging:common:tools  (percona-haproxy, percona-patroni, percona-pgbackrest, percona-pgbadger, percona-pgbouncer)` and `+ <root>:ppg:common:deps  (etcd, …)`.
 
 **Verify:** the two dry-run lines appear; `osc ls <root>:ppg:staging:containers` returns 404 on both instances.
@@ -1640,7 +1640,7 @@ git commit -s -m "containers: cross-version image projects move under ppg:stagin
 **Steps:**
 
 - [ ] **Step 1:** binary comparison as before, with `<root>:ppg:staging:common:tools` as the source project.
-- [ ] **Step 2:** after sync-main has published the three new image projects: `venv/bin/osc -A <apiurl> rdelete -m "moved under ppg:staging:common" <root>:ppg:staging:containers <root>:ppg:staging:extras:containers` on each instance (user runs; production is a write and needs their explicit go).
+- [ ] **Step 2:** sync-main deletes the orphaned projects/packages automatically; verify with `osc ls <root>:ppg:staging:containers` → 404 on both instances after the first main sync.
 - [ ] **Step 3:** `venv/bin/python -m percona_obs -P <profile> sync release --dry-run ppg:releases:18`.
 
 ### Task 11: First `ppg:releases:common` release

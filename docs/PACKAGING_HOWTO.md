@@ -560,8 +560,9 @@ Rules:
 - The symlink target must be relative (`../_shared/<pkg>`, or `../../_shared/<sub>/<pkg>` for
   a package inside a nested subproject such as `containers/` or `tarballs/`).
 - If the package name is already used at `_shared/` top level by a different package (the
-  `percona-pgbouncer` container image vs the `percona-pgbouncer` RPM/deb), put the shared copy in a
-  subdirectory named after the subproject: `_shared/containers/<pkg>`. Nested subprojects mirror
+  `percona-distribution-postgresql` or `percona-distribution-postgresql-with-postgis` server
+  container images vs an RPM/deb of the same name, the two images that remain in
+  `staging/_shared/containers/`), put the shared copy in a subdirectory named after the subproject: `_shared/containers/<pkg>`. Nested subprojects mirror
   their path (`_shared/extras/<pkg>`, `_shared/extras/containers/<pkg>`), with one more `../` per level.
 - A small per-major difference can often be turned into a macro instead of blocking sharing:
   the container images use `CONTAINER_PG_EXTRA_COMPONENTS` (empty by default in
