@@ -48,7 +48,9 @@ has a release counterpart.
    `pg-telemetry`, `postgresql-common` and the `ppg-server*` meta packages
    stay per-major.
 2. **PG major for the tools project: explicit pin.** `PG_MAJOR_VERSION: 18`
-   in `root/ppg/staging/common/tools/macros.yaml`, bumped by hand in the PR
+   in `root/ppg/staging/common/macros.yaml` (the tier prjconf references it at
+   the `common` level; `tools` inherits it) (amended 2026-10-09 during
+   execution), bumped by hand in the PR
    that adds a new GA major to staging. No derivation from the tree.
 3. **Release coupling: tools joins the freeze.** `sync release` extends its
    quiesce / green / build-freeze scope to the local aggregate sources of the
@@ -80,12 +82,13 @@ has a release counterpart.
 root/ppg/staging/
 ├── 14 … 19/                 unchanged (containers, extras, tarballs per major)
 ├── common/
-│   ├── project.yaml         package-less intermediate: repositories-inherit: false,
-│   │                        project-config-inherit: false, debuginfo: ~  (same as extras/ today)
+│   ├── project.yaml         package-less parent; does NOT opt out of inherited repositories
+│   │                        (amended 2026-10-09 during execution, see below)
+│   ├── macros.yaml          PG_MAJOR_VERSION: 18
 │   ├── subprojects.yaml -> ../subprojects.yaml
 │   ├── tools/               ppg:staging:common:tools                 (PR A)
 │   │   ├── project.yaml     path-prefix to ppg:staging:%!{PG_MAJOR_VERSION} only
-│   │   ├── macros.yaml      PG_MAJOR_VERSION: 18
+│   │   ├── macros.yaml      bump-rule comment only
 │   │   ├── percona-pgbouncer/ … percona-patroni/   five real package dirs
 │   │   └── containers/      ppg:staging:common:tools:containers      (PR B)
 │   ├── containers/          ppg:staging:common:containers            (PR B, from staging/containers)
@@ -94,12 +97,12 @@ root/ppg/staging/
 └── extras/                  removed in PR B (its only child moved)
 ```
 
-- `common/project.yaml` is a package-less intermediate exactly like
-  `root/ppg/staging/extras/project.yaml` today: it opts out of repositories,
-  project config and debuginfo, holds no packages, and is never created on
-  OBS (zero repositories → out of every slice). OBS does not require the
-  parent `ppg:staging:common` to exist for `ppg:staging:common:tools`, as
-  `ppg:staging:extras:containers` proves today.
+- `common/project.yaml` is a package-less parent that does NOT opt out of
+  inherited repositories (amended 2026-10-09 during execution). An opt-out
+  would reset the repository list before `common/subprojects.yaml`, which
+  declares none, leaving `tools` with zero repositories. So
+  `ppg:staging:common` renders the root repositories with no packages, like
+  `ppg:staging` itself.
 - `common/subprojects.yaml` is a symlink to `../subprojects.yaml` (the
   pattern `devel/subprojects.yaml` already uses). A `subprojects.yaml`
   applies to the direct children of its directory only, so without the link
@@ -113,8 +116,8 @@ root/ppg/staging/
   (Debian) from our own packages. No `qa:` block. `project-config` additions
   only if a moved package turns out to need one on a given repository
   (decided from the PR A build results; none is expected).
-- `common/tools/macros.yaml`: `PG_MAJOR_VERSION: 18` with the bump rule as a
-  comment. No `PG_VERSION`, so no computed `PPG_RELEASE` counter.
+- `common/macros.yaml`: `PG_MAJOR_VERSION: 18` (amended 2026-10-09 during
+  execution); `common/tools/macros.yaml` holds only the bump-rule comment. No `PG_VERSION`, so no computed `PPG_RELEASE` counter.
 - The five package directories with `rpm/`, `debian/` and `obs/_service`
   exactly as in `_shared` today.
 

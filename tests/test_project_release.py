@@ -681,7 +681,7 @@ def test_derive_release_id_counter_mode_without_server_package():
 
     rid = cmd_project._derive_release_id(
         pkg_archs={"percona-pgbouncer": ("ubi9", "x86_64")},
-        existing_releases=["ppg/containers-1", "ppg/containers-2"],
+        existing_releases=["ppg/common-1", "ppg/common-2"],
         release_name="containers",
         versrel_lookup=_fail,
         counter_mode=True,

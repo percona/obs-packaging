@@ -164,7 +164,7 @@ def freeze_packages(
     """Disable builds on the listed packages; return {(project, pkg): prior_meta}.
 
     Mirrors freeze_builds at package granularity (aggregate sources such as
-    ppg:staging:tools and ppg:common:deps are shared with other releases, so
+    ppg:staging:common:tools and ppg:common:deps are shared with other releases, so
     the whole project must not be frozen).  Partial failure restores what
     was already frozen before re-raising.
     """

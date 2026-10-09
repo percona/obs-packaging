@@ -457,7 +457,7 @@ def test_build_freeze_scope_merges_extra_sources(tmp_path, monkeypatch):
         lambda *a, **k: rs.ReleaseScope(
             whole_projects=["home:Admin:ppg:staging:18"],
             packages={
-                "home:Admin:ppg:staging:tools": {"percona-pgbouncer"},
+                "home:Admin:ppg:staging:common:tools": {"percona-pgbouncer"},
                 "home:Admin:ppg:staging:18": {"ignored-because-whole"},
             },
         ),
@@ -475,4 +475,4 @@ def test_build_freeze_scope_merges_extra_sources(tmp_path, monkeypatch):
         "home:Admin:ppg:staging:17:containers",
         "home:Admin:ppg:staging:18",
     ]
-    assert packages == {"home:Admin:ppg:staging:tools": {"percona-pgbouncer"}}
+    assert packages == {"home:Admin:ppg:staging:common:tools": {"percona-pgbouncer"}}

@@ -44,20 +44,24 @@ def test_aggregate_sources_are_package_scoped(tmp_path, monkeypatch):
     (src / "project.yaml").write_text("title: S\n")
     _pkg(
         src / "percona-pgbouncer",
-        {"_aggregate": _AGG.format(prj="ppg:staging:tools", pkg="percona-pgbouncer")},
+        {
+            "_aggregate": _AGG.format(
+                prj="ppg:staging:common:tools", pkg="percona-pgbouncer"
+            )
+        },
     )
     _pkg(src / "etcd", {"_aggregate": _AGG.format(prj="ppg:common:deps", pkg="etcd")})
     _pkg(src / "percona-postgresql", {"_service": "<services/>"})
     # the aggregate targets must exist in the tree
     for prj, pkg in (
-        ("ppg/staging/tools", "percona-pgbouncer"),
+        ("ppg/staging/common/tools", "percona-pgbouncer"),
         ("ppg/common/deps", "etcd"),
     ):
         _pkg(root / prj / pkg, {"_service": "<services/>"})
     scope = rs.collect_release_scope(src, "ppg:staging:17", "isv:percona", {})
     assert scope.whole_projects == []
     assert scope.packages == {
-        "isv:percona:ppg:staging:tools": {"percona-pgbouncer"},
+        "isv:percona:ppg:staging:common:tools": {"percona-pgbouncer"},
         "isv:percona:ppg:common:deps": {"etcd"},
     }
 
@@ -89,15 +93,23 @@ def test_symlinked_shared_package_is_followed(tmp_path, monkeypatch):
     shared = root / "ppg/staging/_shared/percona-pgbadger"
     _pkg(
         shared,
-        {"_aggregate": _AGG.format(prj="ppg:staging:tools", pkg="percona-pgbadger")},
+        {
+            "_aggregate": _AGG.format(
+                prj="ppg:staging:common:tools", pkg="percona-pgbadger"
+            )
+        },
     )
-    _pkg(root / "ppg/staging/tools/percona-pgbadger", {"_service": "<services/>"})
+    _pkg(
+        root / "ppg/staging/common/tools/percona-pgbadger", {"_service": "<services/>"}
+    )
     src = root / "ppg/staging/17"
     src.mkdir(parents=True)
     (src / "project.yaml").write_text("title: S\n")
     (src / "percona-pgbadger").symlink_to("../_shared/percona-pgbadger")
     scope = rs.collect_release_scope(src, "ppg:staging:17", "isv:percona", {})
-    assert scope.packages == {"isv:percona:ppg:staging:tools": {"percona-pgbadger"}}
+    assert scope.packages == {
+        "isv:percona:ppg:staging:common:tools": {"percona-pgbadger"}
+    }
 
 
 def test_subproject_aggregates_included_and_self_sources_skipped(tmp_path, monkeypatch):
@@ -135,7 +147,10 @@ def test_container_source_adds_path_prefix_projects(tmp_path, monkeypatch):
                         "paths": [
                             {"project": "RedHat:UBI:Registry", "repository": "images"},
                             {"subproject": "ppg:staging:18", "repository": "UBI_9"},
-                            {"subproject": "ppg:staging:tools", "repository": "UBI_9"},
+                            {
+                                "subproject": "ppg:staging:common:tools",
+                                "repository": "UBI_9",
+                            },
                             {"subproject": "ppg:common:deps", "repository": "UBI_9"},
                             {
                                 "subproject": "ppg:staging:containers",
@@ -157,12 +172,12 @@ def test_container_source_adds_path_prefix_projects(tmp_path, monkeypatch):
     )
     _pkg(src / "percona-pgbouncer", {"Dockerfile": "FROM x\n"})
     # path-prefix sources must exist in the tree (missing ones are skipped)
-    for sub in ("ppg/staging/18", "ppg/staging/tools", "ppg/common/deps"):
+    for sub in ("ppg/staging/18", "ppg/staging/common/tools", "ppg/common/deps"):
         (root / sub).mkdir(parents=True)
     scope = rs.collect_release_scope(src, "ppg:staging:containers", "isv:percona", {})
     assert scope.whole_projects == [
         "isv:percona:ppg:staging:18",
-        "isv:percona:ppg:staging:tools",
+        "isv:percona:ppg:staging:common:tools",
         "isv:percona:ppg:common:deps",
     ]
     assert scope.packages == {}

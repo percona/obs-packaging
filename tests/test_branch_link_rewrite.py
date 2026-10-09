@@ -258,8 +258,8 @@ def test_order_handles_link_chains(tmp_path):
     assert ordered == [c, b, a]
 
 
-TOOLS = f"{ROOTPRJ}:ppg:staging:tools"
-TOOLS_PROD = f"{BRANCH}:ppg:staging:tools"
+TOOLS = f"{ROOTPRJ}:ppg:staging:common:tools"
+TOOLS_PROD = f"{BRANCH}:ppg:staging:common:tools"
 
 
 def test_aggregate_from_tools_kept_when_tool_promoted():
