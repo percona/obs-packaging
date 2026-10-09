@@ -456,9 +456,9 @@ OBS will show the package as `aggregate` in its package list and serve the binar
 - A build dependency that is itself built in a `common:deps:build` subproject (OBS handles
   this automatically via the project's repository path configuration — `_aggregate` files
   are only needed for runtime binary reuse between sibling subprojects).
-- A PG-independent component built once in `ppg:staging:tools` and listed in every
+- A PG-independent component built once in `ppg:staging:common:tools` and listed in every
   `ppg:staging:<V>` (pgbouncer, pgbackrest, …): `staging/_shared/<pkg>/obs/_aggregate` →
-  `${OBS_ROOTPRJ}:ppg:staging:tools`.
+  `${OBS_ROOTPRJ}:ppg:staging:common:tools`.
 
 ---
 

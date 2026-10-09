@@ -939,10 +939,9 @@ error. `project release <source-project>` does the following:
    - Extracts `MAJOR.MINOR` (e.g. `17.9` from `17.9.0-1.1`).
    - Counts existing entries in `release.yaml` whose tag matches `/<MAJOR.MINOR>-*`
      and appends the next counter (e.g. `17.9-1`, or `17.9-2` if `17.9-1` already exists).
-   - If the source project itself holds container images (an `obs/Dockerfile` package
-     directly in the project, i.e. `ppg:staging:containers`), there is no
-     `percona-postgresql` package and a plain counter `<name>-N` is used instead
-     (tag `ppg/containers-<N>`). Any other project without a server package still fails
+   - If no `percona-postgresql` / `percona-postgresqlNN` package directory exists anywhere
+     under the source tree (read from git; e.g. `ppg/staging/common`), a plain counter
+     `<name>-N` is used instead (tag `ppg/common-<N>`). Any other project without a server package still fails
      with "package percona-postgresql ... not found; use --release-id".
 2. **Fetches** the source project's repository topology from OBS.
 3. **Regenerates the full mirror tree**, on every release, not just the first: the
@@ -1109,10 +1108,10 @@ Flags:
 
       - the release source project and its subprojects (whole);
       - every local aggregate source referenced by an `obs/_aggregate` under the
-        source tree — `ppg:staging:tools`, `ppg:common:deps` — restricted to the
+        source tree — `ppg:staging:common:tools`, `ppg:common:deps` — restricted to the
         aggregated packages (package `_meta` build disable);
-      - for a container project release, the `subproject:` entries of its repository
-        paths (whole), since an image may consume any package of them.
+      - for every image-holding project under the release source, the `subproject:` entries
+        of its repository paths (whole), since an image may consume any package of them.
 
       `--dry-run` prints the extra sources as `+ <project>  (whole)` or
       `+ <project>  (<pkg>, …)` and includes them in the green check.

@@ -110,12 +110,13 @@ one plus the number of releases already listed for the project's `PG_VERSION` in
 declare `PG_VERSION` as the upgrade target ahead of the rest of `staging/18`, so they
 simply track `staging/18`'s computed counter rather than having one of their own.
 
-Cross-version container projects whose images live directly in the project
-(`ppg/staging/containers`) have no `percona-postgresql` package; for them
-`project release` uses a plain counter instead:
-`./percona-obs -P <profile> project release ppg:staging:containers` writes
-`root/ppg/releases/containers/` and tags `ppg/containers-<N>`; `obs-release.yml`
-maps that tag shape to `ppg:releases:containers`. Any other project without a
+The cross-version projects under `ppg/staging/common` are released as one unit.
+When no `percona-postgresql` / `percona-postgresqlNN` package exists anywhere under
+the source tree (e.g. `ppg/staging/common`), `project release` uses a plain counter
+instead (read from git, not from OBS):
+`./percona-obs -P <profile> project release ppg:staging:common` writes
+`root/ppg/releases/common/` and tags `ppg/common-<N>`; `obs-release.yml`
+maps that tag shape to `ppg:releases:common`. Any other project without a
 server package still fails and needs `--release-id`.
 
 #### Cutting a release
@@ -193,9 +194,10 @@ through `staging/17/macros.yaml`. Porting the tarballs to another major is then 
 
 When the bare package name is already taken at `_shared/` top level, the shared copy sits in a
 subdirectory named after the subproject. The container images are the example: the
-`percona-pgbouncer` and `percona-pgbackrest` *images* will live in `staging/containers/<pkg>/`
-(cross-version, one copy for all majors; the RPM/deb packages of the same name are
-`staging/_shared/<pkg>/`) (after PR B). `containers/project.yaml` stays per major for the
+`percona-pgbouncer` and `percona-pgbackrest` *images* move to `staging/common/tools/containers/` in PR B (cross-version,
+one copy for all majors; the RPM/deb packages of the same name are
+`staging/_shared/<pkg>/`); until then they live in `staging/_shared/containers/<pkg>/`
+linked from every `staging/<V>/containers/`. `containers/project.yaml` stays per major for the
 remaining images. The extras tier follows the
 same pattern one level deeper: `staging/_shared/extras/<pkg>` holds the extras extension packages linked
 from `staging/<V>/extras/<pkg>` (`../../_shared/extras/<pkg>`), and
@@ -357,28 +359,47 @@ Operational note: if the `ssl1.1` SSL-ABI audit ever fires on
 distro has rebased krb5/libssh past the percona `-NN.percona` rebuilds in
 `ppg:common:deps` — bump those rebuilds.
 
-### `staging/tools/`
+### `staging/common/`
 
-`ppg:staging:tools` builds the components whose binaries do not depend on the
-PostgreSQL major — the PGDG "common" rule: anything whose binary package name
-carries no PG major. Today: `percona-pgbouncer`, `percona-pgbadger`,
-`percona-haproxy`, `percona-pgbackrest`, `percona-patroni`. Each per-major
-project lists the same package as an aggregate
-(`staging/_shared/<pkg>/obs/_aggregate` → `${OBS_ROOTPRJ}:ppg:staging:tools`),
+`ppg:staging:common` is the tier-level parent for the cross-version subprojects
+(everything that is built once and shared by all PG majors). It holds no packages
+and does not opt out of inherited repositories (an opt-out would reset the
+repository list before `common/subprojects.yaml`, which declares none, leaving
+`tools` with zero repositories), so it renders the root repositories with no
+packages, like `ppg:staging` itself. `common/subprojects.yaml` is a symlink to
+`../subprojects.yaml`, because a `subprojects.yaml` reaches direct children only.
+
+`ppg:staging:common:tools` (`staging/common/tools/`) builds the components whose
+binaries do not depend on the PostgreSQL major — the PGDG "common" rule: anything
+whose binary package name carries no PG major. Today: `percona-pgbouncer`,
+`percona-pgbadger`, `percona-haproxy`, `percona-pgbackrest`, `percona-patroni`.
+Each per-major project lists the same package as an aggregate
+(`staging/_shared/<pkg>/obs/_aggregate` → `${OBS_ROOTPRJ}:ppg:staging:common:tools`),
 so its published repository stays self-contained while OBS builds the component
 once.
 
-`tools/macros.yaml` pins `PG_MAJOR_VERSION` (pgBackRest links that major's libpq;
+`common/macros.yaml` pins `PG_MAJOR_VERSION: 18` (pgBackRest links that major's
+libpq; the tier prjconf references it at the `common` level, `tools` inherits it;
 `tools/project.yaml` puts `ppg:staging:<that major>` on the repository path).
-Bump it by hand in the PR that adds a new GA major to `staging/`.
+`tools/macros.yaml` holds only the bump-rule comment. Bump the pin by hand in the PR
+that adds a new GA major to `staging/`.
 
 OBS release counters (`<CI_CNT>.<B_CNT>`) are per project, so right after a
 component moves here the majors list an equal-version build with a lower counter
 than the one they built themselves. Nothing breaks (same bytes, same version); the
 next upstream bump supersedes it.
 
-`sync release` freezes the aggregated packages of `ppg:staging:tools` (and of
-`ppg:common:deps`) for the duration of the `osc release` copy; see
+PR B adds the image subprojects: `common/containers` (upgrade image, moved from
+`staging/containers`), `common/extras/containers` (moved from
+`staging/extras/containers`) and `common/tools/containers` (the pgbouncer/pgbackrest
+images, moved from `_shared/containers`). `devel/common` is created only when a devel
+package or image needs it.
+
+The release unit is `ppg:releases:common`, tagged `ppg/common-<N>` and cut with
+`project release ppg:staging:common`. `sync release` freezes the aggregated packages
+of `ppg:staging:common:tools` (and of `ppg:common:deps`) package-scoped for per-major
+releases; for a `common` release every image-holding subproject's path `subproject:`
+entries (the majors, `ppg:common:deps`) are frozen whole. See
 `docs/PERCONA_OBS_TOOL.md`.
 
 ### `devel/<major-version>/`

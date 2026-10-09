@@ -188,8 +188,8 @@ jobs:
 
       # Derive the release project from the tag name.
       # Tag ppg/17.9-1      → product=ppg, version=17.9-1, major=17 → ppg:releases:17
-      # Tag ppg/containers-3 → product=ppg, version=containers-3, name=containers
-      #                      → ppg:releases:containers (counter-tagged cross-version project)
+      # Tag ppg/common-3 → product=ppg, version=common-3, name=common
+      #                  → ppg:releases:common (counter-tagged cross-version project)
       - name: Derive release project
         id: release-info
         run: |
