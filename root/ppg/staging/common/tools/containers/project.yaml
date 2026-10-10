@@ -175,3 +175,397 @@ project-config: |
   Prefer: python3.12-psycopg2 python3.12-etcd
 
   %endif
+
+# QA: the pgBackRest and pgBouncer images built here, each run against every
+# major's server image. REPOSITORY is this project's prefix (component image),
+# SERVER_REPOSITORY the major's container project (server image).
+qa:
+  - name: ubi8-pgbackrest-pg14
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "14"
+      SERVER_VERSION: "14.%!{PG_14_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi8
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/14/containers/ubi8
+
+  - name: ubi8-pgbackrest-pg15
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "15"
+      SERVER_VERSION: "15.%!{PG_15_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi8
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/15/containers/ubi8
+
+  - name: ubi8-pgbackrest-pg16
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "16"
+      SERVER_VERSION: "16.%!{PG_16_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi8
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/16/containers/ubi8
+
+  - name: ubi8-pgbackrest-pg17
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "17"
+      SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi8
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/17/containers/ubi8
+
+  - name: ubi8-pgbackrest-pg18
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "18"
+      SERVER_VERSION: "18.%!{PG_18_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi8
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/18/containers/ubi8
+
+  - name: ubi8-pgbouncer-pg14
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "14"
+      SERVER_VERSION: "14.%!{PG_14_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi8
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/14/containers/ubi8
+
+  - name: ubi8-pgbouncer-pg15
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "15"
+      SERVER_VERSION: "15.%!{PG_15_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi8
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/15/containers/ubi8
+
+  - name: ubi8-pgbouncer-pg16
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "16"
+      SERVER_VERSION: "16.%!{PG_16_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi8
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/16/containers/ubi8
+
+  - name: ubi8-pgbouncer-pg17
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "17"
+      SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi8
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/17/containers/ubi8
+
+  - name: ubi8-pgbouncer-pg18
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "18"
+      SERVER_VERSION: "18.%!{PG_18_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi8
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/18/containers/ubi8
+
+  - name: ubi9-pgbackrest-pg14
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "14"
+      SERVER_VERSION: "14.%!{PG_14_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi9
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/14/containers/ubi9
+
+  - name: ubi9-pgbackrest-pg15
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "15"
+      SERVER_VERSION: "15.%!{PG_15_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi9
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/15/containers/ubi9
+
+  - name: ubi9-pgbackrest-pg16
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "16"
+      SERVER_VERSION: "16.%!{PG_16_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi9
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/16/containers/ubi9
+
+  - name: ubi9-pgbackrest-pg17
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "17"
+      SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi9
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/17/containers/ubi9
+
+  - name: ubi9-pgbackrest-pg18
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "18"
+      SERVER_VERSION: "18.%!{PG_18_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi9
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/18/containers/ubi9
+
+  - name: ubi9-pgbouncer-pg14
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "14"
+      SERVER_VERSION: "14.%!{PG_14_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi9
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/14/containers/ubi9
+
+  - name: ubi9-pgbouncer-pg15
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "15"
+      SERVER_VERSION: "15.%!{PG_15_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi9
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/15/containers/ubi9
+
+  - name: ubi9-pgbouncer-pg16
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "16"
+      SERVER_VERSION: "16.%!{PG_16_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi9
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/16/containers/ubi9
+
+  - name: ubi9-pgbouncer-pg17
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "17"
+      SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi9
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/17/containers/ubi9
+
+  - name: ubi9-pgbouncer-pg18
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "18"
+      SERVER_VERSION: "18.%!{PG_18_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi9
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/18/containers/ubi9
+
+  - name: ubi10-pgbackrest-pg14
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "14"
+      SERVER_VERSION: "14.%!{PG_14_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi10
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/14/containers/ubi10
+
+  - name: ubi10-pgbackrest-pg15
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "15"
+      SERVER_VERSION: "15.%!{PG_15_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi10
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/15/containers/ubi10
+
+  - name: ubi10-pgbackrest-pg16
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "16"
+      SERVER_VERSION: "16.%!{PG_16_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi10
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/16/containers/ubi10
+
+  - name: ubi10-pgbackrest-pg17
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "17"
+      SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi10
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/17/containers/ubi10
+
+  - name: ubi10-pgbackrest-pg18
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbackrest
+      DOCKER_COMPONENT_TAG: "%!{PGBACKREST_VERSION}"
+      COMPONENT_VERSION: "%!{PGBACKREST_VERSION}"
+      DOCKER_SERVER_TAG: "18"
+      SERVER_VERSION: "18.%!{PG_18_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi10
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/18/containers/ubi10
+
+  - name: ubi10-pgbouncer-pg14
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "14"
+      SERVER_VERSION: "14.%!{PG_14_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi10
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/14/containers/ubi10
+
+  - name: ubi10-pgbouncer-pg15
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "15"
+      SERVER_VERSION: "15.%!{PG_15_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi10
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/15/containers/ubi10
+
+  - name: ubi10-pgbouncer-pg16
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "16"
+      SERVER_VERSION: "16.%!{PG_16_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi10
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/16/containers/ubi10
+
+  - name: ubi10-pgbouncer-pg17
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "17"
+      SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi10
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/17/containers/ubi10
+
+  - name: ubi10-pgbouncer-pg18
+    pipeline: docker-component-parallel
+    parameters:
+      COMPONENT: pgbouncer
+      DOCKER_COMPONENT_TAG: "%!{PGBOUNCER_VERSION}"
+      COMPONENT_VERSION: "%!{PGBOUNCER_VERSION}"
+      DOCKER_SERVER_TAG: "18"
+      SERVER_VERSION: "18.%!{PG_18_MINOR_VERSION}"
+      WITH_TDE: false
+      TESTING_BRANCH: main
+      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/tools/containers/ubi10
+      SERVER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/18/containers/ubi10

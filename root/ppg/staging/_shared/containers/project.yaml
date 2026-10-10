@@ -141,14 +141,15 @@ project-config: |
 
   %endif
 
-
+# QA: the server image per UBI base, with and without PostGIS
+# (docker-server-parallel appends percona-distribution-postgresql[-with-postgis]).
 qa:
   - name: ubi8
-    pipeline: docker-server-parallel-generic
+    pipeline: docker-server-parallel
     parameters:
       DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
       SERVER_VERSION: "%!{PG_VERSION}"
-      TESTING_BRANCH: ricardo-work
+      TESTING_BRANCH: main
       REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi8
       WITH_POSTGIS:
         - true
@@ -157,11 +158,11 @@ qa:
       - WITH_POSTGIS
 
   - name: ubi9
-    pipeline: docker-server-parallel-generic
+    pipeline: docker-server-parallel
     parameters:
       DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
       SERVER_VERSION: "%!{PG_VERSION}"
-      TESTING_BRANCH: ricardo-work
+      TESTING_BRANCH: main
       REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi9
       WITH_POSTGIS:
         - true
@@ -170,11 +171,11 @@ qa:
       - WITH_POSTGIS
 
   - name: ubi10
-    pipeline: docker-server-parallel-generic
+    pipeline: docker-server-parallel
     parameters:
       DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
       SERVER_VERSION: "%!{PG_VERSION}"
-      TESTING_BRANCH: ricardo-work
+      TESTING_BRANCH: main
       REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/%!{PG_MAJOR_VERSION}/containers/ubi10
       WITH_POSTGIS:
         - true
