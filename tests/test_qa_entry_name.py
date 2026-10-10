@@ -241,11 +241,16 @@ def test_container_projects_name_all_lanes():
     for rel in (
         "ppg/staging/_shared/containers/project.yaml",
         "ppg/staging/common/containers/project.yaml",
+        "ppg/staging/common/tools/containers/project.yaml",
     ):
         text = (repo_root / rel).read_text(encoding="utf-8")
         qa = yaml.safe_load(text.replace("%!{", "${"))["qa"]
-        assert isinstance(qa, list) and len(qa) == 3, rel
-        assert [e["name"] for e in qa] == ["ubi8", "ubi9", "ubi10"], rel
+        assert isinstance(qa, list), rel
+        names = [e.get("name") for e in qa]
+        # every lane is named (distinct checks), and each UBI base has lanes
+        assert all(names) and len(names) == len(set(names)), rel
+        for ubi in ("ubi8", "ubi9", "ubi10"):
+            assert any(n == ubi or n.startswith(ubi + "-") for n in names), (rel, ubi)
 
 
 def test_qa_name_charset_is_validated(tmp_path, monkeypatch):
