@@ -47,6 +47,9 @@ RUN touch /etc/pgbouncer/userlist.txt
 RUN chown -R 1001 /var/log/pgbouncer /var/run/pgbouncer /etc/pgbouncer
 
 COPY --chown=1001 ["entrypoint.sh", "/"]
+# OBS does not keep file modes from git: make the entry point executable here,
+# as the percona-distribution-postgresql image does.
+RUN chmod 0755 /entrypoint.sh
 USER 1001
 
 ENTRYPOINT ["/entrypoint.sh"]
