@@ -63,7 +63,9 @@ qa:
       DOCKER_TAG: %!{PG_MAJOR_VERSION}
       SERVER_VERSION: %!{PG_VERSION}
       TESTING_BRANCH: ricardo-work
-      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/16/extras/containers/ubi9
+      REPOSITORY:
+        image: percona-distribution-postgresql-custom
+        repository: ubi9
       WITH_POSTGIS:
         - true
         - false
@@ -72,9 +74,14 @@ qa:
 
   - pipeline: ppg-obs-upgrade
     parameters:
-      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/16/extras/containers/ubi9
+      REPOSITORY:
+        image: percona-distribution-postgresql-custom
+        repository: ubi9
       OLD_SERVER_VERSION: "15.19"
       NEW_SERVER_VERSION: %!{PG_VERSION}
       UPGRADE_DOCKER_TAG: %!{PG_MAJOR_VERSION}-%!{PG_PREV_MAJOR_VERSION}
-      OLD_DOCKER_REPOSITORY: ${OBS_CONTAINER_REGISTRY}/isv/percona/ppg/staging/%!{PG_PREV_MAJOR_VERSION}/extras/containers/ubi9
+      OLD_DOCKER_REPOSITORY:
+        image: percona-distribution-postgresql-custom
+        project: ppg:staging:%!{PG_PREV_MAJOR_VERSION}:extras:containers
+        repository: ubi9
       TESTING_BRANCH: ricardo-work
