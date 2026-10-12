@@ -27,6 +27,7 @@ from .common import (
     _GREEN,
     _RED,
     _YELLOW,
+    DEFAULT_CONTAINER_REGISTRY,
     _col,
     _print_pending,
     auto_rootprj_env,
@@ -46,6 +47,14 @@ from .jenkins import (
     trigger,
     wait_for_finish,
     wait_for_start,
+)
+from .obs_api import _fetch_obs_package_names_or_fail
+from .qa_images import (
+    ImageDecision,
+    ImageResolver,
+    is_image_ref,
+    resolve_entry_images,
+    validate_image_ref,
 )
 from .qa_state import (
     Attempt,
@@ -75,6 +84,58 @@ def _qa_env_vars(args: argparse.Namespace) -> dict[str, str]:
     if args.env_overrides:
         env_vars.update(parse_env_overrides(args.env_overrides))
     return env_vars
+
+
+def _image_resolver(
+    args: argparse.Namespace, env_vars: dict[str, str]
+) -> ImageResolver:
+    """The per-invocation resolver for image references.
+
+    The fallback rootprj comes from the profile key ``image-fallback-rootprj``
+    (or ``--image-fallback-rootprj``); without it OBS is never queried.
+    """
+    fallback = getattr(args, "image_fallback_rootprj", None) or None
+    apiurl = getattr(args, "apiurl", None) or ""
+    if fallback and not apiurl:
+        raise SystemExit(
+            "error: image-fallback-rootprj needs an OBS apiurl (-A or a profile) "
+            "to list the packages of the current root project"
+        )
+    return ImageResolver(
+        registry=env_vars.get("OBS_CONTAINER_REGISTRY", DEFAULT_CONTAINER_REGISTRY),
+        rootprj=args.rootprj,
+        fallback_rootprj=fallback,
+        list_packages=lambda p: _fetch_obs_package_names_or_fail(apiurl, p),
+    )
+
+
+def _resolve_lane_images(
+    lanes: list[Lane], project: str, resolver: ImageResolver
+) -> list[ImageDecision]:
+    """Render every image reference of every lane in place; return the decisions."""
+    decisions: list[ImageDecision] = []
+    for lane in lanes:
+        for entry in lane.entries:
+            decisions.extend(resolve_entry_images(entry, project, resolver))
+    return decisions
+
+
+def _print_image_decisions(decisions: list[ImageDecision]) -> None:
+    """One stderr line per image reference: which rootprj it got, and why.
+
+    Goes to stderr so `qa show --json` stays machine-readable; CI forwards it.
+    """
+    for d in decisions:
+        if d.reason == "present":
+            why = f"present in {d.obs_project}"
+        elif d.reason == "fallback":
+            why = f"fallback: not in {d.obs_project}"
+        else:
+            why = "no fallback configured"
+        print(
+            f"  image {d.image} ({d.project}) → {d.param} = {d.value}  [{d.reason}: {why}]",
+            file=sys.stderr,
+        )
 
 
 # `name:` is interpolated into a shell command line in CI (``--name <name>``).
@@ -202,6 +263,21 @@ def _validate_qa(qa: Any, project: str) -> None:
     parameters = qa.get("parameters")
     if not isinstance(parameters, dict) or not parameters:
         raise SystemExit(f"error: {project}: qa.parameters must be a non-empty mapping")
+    for pname, pvalue in parameters.items():
+        if isinstance(pvalue, dict):
+            if not is_image_ref(pvalue):
+                raise SystemExit(
+                    f"error: {project}: qa.parameters.{pname}: a mapping value must "
+                    "be an image reference (image: <package>, repository: <repo>"
+                    "[, project: <project>])"
+                )
+            validate_image_ref(pvalue, project, pname)
+        elif isinstance(pvalue, list) and any(isinstance(x, dict) for x in pvalue):
+            raise SystemExit(
+                f"error: {project}: qa.parameters.{pname}: list values must be "
+                "scalars; image references are not supported inside lists "
+                "(matrix axes select images in Jenkins, not in the tool)"
+            )
     matrix = qa.get("matrix") or []
     if not isinstance(matrix, list) or not all(isinstance(a, str) for a in matrix):
         raise SystemExit(f"error: {project}: qa.matrix must be a list of strings")
@@ -506,9 +582,11 @@ def _lanes_with_expected_versions(lanes: list[Lane], project: str) -> list[Lane]
 
 def cmd_qa_show(args: argparse.Namespace) -> None:
     env_vars = _qa_env_vars(args)
-    lanes = _lanes_with_expected_versions(
-        _load_qa_lanes(args.project, env_vars), args.project
+    lanes = _load_qa_lanes(args.project, env_vars)
+    _print_image_decisions(
+        _resolve_lane_images(lanes, args.project, _image_resolver(args, env_vars))
     )
+    lanes = _lanes_with_expected_versions(lanes, args.project)
     json_mode: bool = bool(getattr(args, "json", False))
 
     if not lanes:
@@ -704,9 +782,11 @@ def _wait_and_record(
 
 def cmd_qa_run(args: argparse.Namespace) -> None:
     env_vars = _qa_env_vars(args)
-    lanes = _lanes_with_expected_versions(
-        _load_qa_lanes(args.project, env_vars), args.project
+    lanes = _load_qa_lanes(args.project, env_vars)
+    _print_image_decisions(
+        _resolve_lane_images(lanes, args.project, _image_resolver(args, env_vars))
     )
+    lanes = _lanes_with_expected_versions(lanes, args.project)
     if not lanes:
         raise SystemExit(
             f"error: {args.project} has no qa: block in its project.yaml "
