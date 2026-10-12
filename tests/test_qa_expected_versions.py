@@ -241,3 +241,45 @@ def test_project_with_own_versions_does_not_follow_paths(tmp_path, monkeypatch):
         "percona-pgaudit": "18.0",
         "percona-pgbackrest": "2.59.2",
     }
+
+
+def _tarball_tree(tmp_path, monkeypatch, with_recipe=True):
+    """ppg/staging/18 packages and 18:tarballs: own percona-psql + a tarball recipe."""
+    root = tmp_path / "root"
+    staging = root / "ppg" / "staging"
+    _package(staging / "18" / "percona-pgbackrest", service=_service("2.59.2"))
+    _package(staging / "18" / "percona-psql", service=_service("99.0"))
+    (staging / "18" / "project.yaml").write_text("title: P\n")
+    tarballs = staging / "18" / "tarballs"
+    _package(tarballs / "percona-psql", service=_service("18.6"))
+    _package(tarballs / "percona-postgresql-tarball", service="<services/>")
+    if with_recipe:
+        (tarballs / "percona-postgresql-tarball" / "obs" / "simpleimage").write_text(
+            "Name: x\n"
+        )
+    (tarballs / "project.yaml").write_text(
+        "title: T\nrepositories:\n  - name: ssl3\n    paths:\n"
+        "      - subproject: ppg:staging:18\n        repository: RockyLinux_9\n"
+        "    archs: [x86_64]\n"
+    )
+    monkeypatch.setattr(common, "REPO_ROOT", root)
+    monkeypatch.setattr(cmd_qa, "REPO_ROOT", root)
+
+
+def test_tarball_project_adds_the_bundled_components(tmp_path, monkeypatch):
+    _tarball_tree(tmp_path, monkeypatch)
+    assert cmd_qa._builds_artifacts("ppg:staging:18:tarballs")
+    assert cmd_qa._package_versions("ppg:staging:18:tarballs") == {
+        "percona-pgbackrest": "2.59.2",  # from ppg:staging:18, which it builds from
+        "percona-psql": "18.6",  # its own package wins over 18's
+    }
+
+
+def test_project_with_own_versions_and_no_recipe_does_not_follow_paths(
+    tmp_path, monkeypatch
+):
+    _tarball_tree(tmp_path, monkeypatch, with_recipe=False)
+    assert not cmd_qa._builds_artifacts("ppg:staging:18:tarballs")
+    assert cmd_qa._package_versions("ppg:staging:18:tarballs") == {
+        "percona-psql": "18.6"
+    }
