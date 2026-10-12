@@ -48,10 +48,24 @@ on:
         default: ''
         type: string
 
-# Same project on the same OBS root queues behind a running instance instead
-# of racing it on Jenkins; different projects / PRs run side by side.
+# Every input takes part in the run title: the dispatch dialog gives all runs
+# the same name otherwise, and an operator who fired several of them cannot
+# tell which one is waiting or got cancelled.
+run-name: >-
+  QA ${{ inputs.project }}${{ inputs.pr_number != '' && format(' pr-{0}', inputs.pr_number) || '' }}${{ inputs.name != '' && format(' / {0}', inputs.name) || '' }}${{ inputs.package != '' && format(' / {0}', inputs.package) || '' }}${{ inputs.filter != '' && format(' [{0}]', inputs.filter) || '' }}
+
+# Only an IDENTICAL selection (project, PR, entry, package, filter) queues
+# behind a running instance; everything else runs side by side, exactly as
+# the nightly's matrix does.  The group deliberately includes every input:
+# GitHub keeps at most ONE pending run per concurrency group and cancels the
+# run that was already waiting when another one is queued, so a group keyed
+# on the project alone made "dispatch pg_audit, pg_repack, pgpool, postgis
+# for ppg:staging:18 in a row" serialize the four and silently cancel some of
+# them (2026-10-04).  Re-dispatching the very same selection while one copy
+# runs and another waits still cancels the waiting copy; that is the
+# documented GitHub behaviour and is accepted for a true duplicate.
 concurrency:
-  group: obs-qa-run-${{ inputs.project }}-${{ inputs.pr_number }}
+  group: obs-qa-run-${{ inputs.project }}-${{ inputs.pr_number }}-${{ inputs.name }}-${{ inputs.package }}-${{ inputs.filter }}
   cancel-in-progress: false
 
 jobs:

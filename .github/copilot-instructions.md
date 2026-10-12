@@ -1136,7 +1136,7 @@ Permissions: `contents: write` (tag creation), `actions: write` (dispatch + cach
 
 **Why a separate file**: the nightly's change check looks up the last successful run of `obs-nightly-qa.yml`; a project-scoped run recorded there would suppress the next real nightly.
 
-**Concurrency**: group `obs-qa-run-<project>-<pr_number>` without cancel-in-progress, so a repeat dispatch of the same target queues instead of racing the first on Jenkins.
+**Concurrency**: group `obs-qa-run-<project>-<pr_number>-<name>-<package>-<filter>` without cancel-in-progress, so only a repeat dispatch of the *identical* selection queues behind the first; different packages / entries / filters of the same project run side by side, as the nightly's matrix does. GitHub keeps at most one pending run per group and cancels the previously waiting one when another is queued, which is why the group must include every input (a project-only group serialized and silently cancelled back-to-back per-package dispatches). `run-name` carries the inputs so the runs are distinguishable in the Actions list.
 
 **Required repository config**: `OBS_INSTANCES`, `OBS_USER`, `JENKINS_URL`, `JENKINS_USER` (vars); `OBS_PASSWORD_<NAME>` per instance and `JENKINS_API_TOKEN` (secrets).
 
