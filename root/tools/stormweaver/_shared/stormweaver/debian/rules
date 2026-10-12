@@ -15,7 +15,8 @@ ifneq ($(filter $(DEBIAN_RELEASE),debian12 ubuntu22.04),)
 ifneq ($(wildcard /usr/bin/clang++-21),)
 export CC = clang-21
 export CXX = clang++-21
-export CXXFLAGS += -stdlib=libc++
+# fmt 11.1 sets _LIBCPP_REMOVE_TRANSITIVE_INCLUDES, then needs malloc/free
+export CXXFLAGS += -stdlib=libc++ -include stdlib.h
 export LDFLAGS += -stdlib=libc++ -static-libstdc++
 endif
 endif

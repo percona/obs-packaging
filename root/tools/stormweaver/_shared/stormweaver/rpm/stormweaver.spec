@@ -8,6 +8,11 @@
 %global gts_version 14
 %endif
 
+# EL8 openssl 1.1.1 has no x509 -copy_extensions
+%if 0%{?rhel} == 8
+%global pytest_extra --deselect tests/unit/test_keyrings_kmip.py::test_gen_kmip_certs
+%endif
+
 # the extension lives in the interpreter's /opt tree: no provides from there,
 # no python(abi) or private libpython requires
 %global __provides_exclude_from ^%{py_prefix}/.*$
@@ -94,7 +99,7 @@ find %{buildroot}%{_datadir}/stormweaver -name __pycache__ -prune -exec rm -rf {
 
 %check
 build/core/tests/unit/test-stormweaver-unit
-PYTHONPATH=%{buildroot}%{py_sitelib} %{py_bin} -m pytest tests/unit -q -p no:cacheprovider
+PYTHONPATH=%{buildroot}%{py_sitelib} %{py_bin} -m pytest tests/unit -q -p no:cacheprovider %{?pytest_extra}
 
 %files
 %license LICENSE
