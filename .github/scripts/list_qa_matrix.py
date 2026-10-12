@@ -132,6 +132,9 @@ def main() -> None:
             text=True,
         )
         if result.returncode != 0:
+            if present_only:
+                # PR mode: a dropped project would silently shrink the matrix.
+                raise SystemExit(f"error: qa show {project}: {result.stderr.strip()}")
             print(
                 f"warning: qa show {project}: {result.stderr.strip()}",
                 file=sys.stderr,

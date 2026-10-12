@@ -636,7 +636,11 @@ def _validate_qa_image_refs(
 
     def repositories_of(pdir: Path) -> set[str]:
         if pdir not in configs:
-            cfg = _load_project_config_with_inheritance(pdir, env_vars)
+            # Unfiltered: a sliced profile must not hide repositories the
+            # tree defines (the check is about the tree, not one instance).
+            cfg = _load_project_config_with_inheritance(
+                pdir, env_vars, RepositoryFilter.EMPTY
+            )
             configs[pdir] = {r["name"] for r in cfg.get("repositories", []) or []}
         return configs[pdir]
 

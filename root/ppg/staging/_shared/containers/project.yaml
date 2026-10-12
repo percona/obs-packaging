@@ -150,7 +150,7 @@ qa:
       SERVER_VERSION: "%!{PG_VERSION}"
       TESTING_BRANCH: ricardo-work
       REPOSITORY:
-        image: percona-distribution-postgresql   # WITH_POSTGIS=true appends -with-postgis in Jenkins
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
         repository: ubi8
       WITH_POSTGIS:
         - true
@@ -165,7 +165,7 @@ qa:
       SERVER_VERSION: "%!{PG_VERSION}"
       TESTING_BRANCH: ricardo-work
       REPOSITORY:
-        image: percona-distribution-postgresql   # WITH_POSTGIS=true appends -with-postgis in Jenkins
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
         repository: ubi9
       WITH_POSTGIS:
         - true
@@ -180,7 +180,7 @@ qa:
       SERVER_VERSION: "%!{PG_VERSION}"
       TESTING_BRANCH: ricardo-work
       REPOSITORY:
-        image: percona-distribution-postgresql   # WITH_POSTGIS=true appends -with-postgis in Jenkins
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
         repository: ubi10
       WITH_POSTGIS:
         - true

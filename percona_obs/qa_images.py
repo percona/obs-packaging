@@ -56,8 +56,11 @@ def _as_path(obs_name: str) -> str:
 
 
 def registry_path(registry: str, rootprj: str, project: str, repository: str) -> str:
-    """The registry path Jenkins appends the image name to."""
-    return f"{registry}/{_as_path(rootprj)}/{_as_path(project)}/{repository}"
+    """The lower-cased registry path Jenkins appends the image name to.
+
+    The registry host is kept as given; rootprj, project and repository are lower-cased.
+    """
+    return f"{registry}/{_as_path(rootprj)}/{_as_path(project)}/{repository.lower()}"
 
 
 @dataclasses.dataclass(frozen=True)
