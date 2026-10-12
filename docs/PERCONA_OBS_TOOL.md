@@ -865,7 +865,11 @@ Packages whose `_service` declares no version are left out. A project with no ve
 packages of its own (a container project) gets the versions of the local
 projects its repositories build from (`subproject:` paths, in path order, the
 first project providing a package winning), i.e. what its images install:
-`ppg:staging:18:containers` gets `ppg:staging:18`'s versions. A project with no package versions of its own (a container project, whose
+`ppg:staging:18:containers` gets `ppg:staging:18`'s versions. A project that builds
+images or tarballs (an `obs/Dockerfile`, `obs/simpleimage` or `*.kiwi` recipe)
+adds the same build-from versions after its own, since its artifacts bundle
+them: `ppg:staging:18:tarballs` lists its own `percona-psql` and the bundled
+components. A project with no package versions of its own (a container project, whose
 images declare none) gets the versions of the local projects its repositories
 build from (`subproject:` paths), in path order, the first project providing a
 package winning: `ppg:staging:18:containers` gets `ppg:staging:18`'s versions. Test jobs check

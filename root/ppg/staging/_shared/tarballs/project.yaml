@@ -314,3 +314,33 @@ project-config: |
   Prefer: percona-gis-compat
   Prefer: glibc-minimal-langpack
   %endif
+
+# QA: the tarball of each SSL variant, tested on the platforms with that system
+# OpenSSL by the QA team's tarball jobs (ppg-testing ppg/pg-tarballs). With
+# TARBALL_URL empty, the test takes this host's tarball from OBS_PROJECT's
+# repository for the variant (ssl1.1, ssl3, ssl3.5).
+qa:
+  - name: ssl1.1
+    pipeline: tarball-parallel-ssl1
+    parameters:
+      VERSION: ppg-%!{PG_VERSION}
+      SSL_VERSION: "1"
+      TARBALL_URL: ""
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}:tarballs
+      TESTING_BRANCH: main
+  - name: ssl3
+    pipeline: tarball-parallel-ssl3
+    parameters:
+      VERSION: ppg-%!{PG_VERSION}
+      SSL_VERSION: "3"
+      TARBALL_URL: ""
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}:tarballs
+      TESTING_BRANCH: main
+  - name: ssl3.5
+    pipeline: tarball-parallel-ssl35
+    parameters:
+      VERSION: ppg-%!{PG_VERSION}
+      SSL_VERSION: "3.5"
+      TARBALL_URL: ""
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}:tarballs
+      TESTING_BRANCH: main

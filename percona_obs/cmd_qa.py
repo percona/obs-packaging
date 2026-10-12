@@ -514,6 +514,19 @@ def _own_package_versions(project: str) -> dict[str, str]:
     return versions
 
 
+def _builds_artifacts(project: str) -> bool:
+    """Whether a package of *project* builds a container image or a tarball
+    (an obs/Dockerfile, obs/simpleimage or obs/*.kiwi recipe)."""
+    project_path = resolve_project_path(project)
+    for _, pkg_path in find_packages(project_path, project, recursive=False):
+        obs = pkg_path / "obs"
+        if (obs / "Dockerfile").is_file() or (obs / "simpleimage").is_file():
+            return True
+        if any(obs.glob("*.kiwi")):
+            return True
+    return False
+
+
 def _package_versions(project: str) -> dict[str, str]:
     """Package versions for *project*'s EXPECTED_VERSIONS.
 
@@ -525,9 +538,14 @@ def _package_versions(project: str) -> dict[str, str]:
     resolution. ppg:staging:18:containers thus gets ppg:staging:18's versions;
     ppg:staging:18:extras:containers gets ppg:staging:18:extras's, then 18's,
     before the previous major's.
+
+    A project that builds images or tarballs (``_builds_artifacts``) tests what
+    they bundle too: its own package versions come first, then those of the
+    projects it builds from. ppg:staging:18:tarballs thus lists its own
+    percona-psql and the ppg:staging:18 components bundled in the tarball.
     """
     own = _own_package_versions(project)
-    if own:
+    if own and not _builds_artifacts(project):
         return own
     config = _load_project_config_with_inheritance(resolve_project_path(project))
     sources: list[str] = []
@@ -536,7 +554,7 @@ def _package_versions(project: str) -> dict[str, str]:
             sub = path_info.get("subproject") if isinstance(path_info, dict) else None
             if sub and sub != project and sub not in sources:
                 sources.append(sub)
-    versions: dict[str, str] = {}
+    versions: dict[str, str] = dict(own)
     for sub in sources:
         if not resolve_project_path(sub).is_dir():
             continue
