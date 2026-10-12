@@ -139,16 +139,6 @@ default < profile `registry:` < profile `env:` entry < explicit `-e OBS_CONTAINE
 Write the key with `profile create --registry HOST`; omitting the flag on
 `-P name profile create name` keeps the profile's current value (like the slice flags).
 
-### `image-fallback-rootprj`: where unpromoted images live
-
-`qa:` image references (see *Image references* under *Triggering Jenkins QA pipelines*)
-render against the profile's `rootprj`. When the profile also carries
-`image-fallback-rootprj: isv:percona`, an image that the current root project does not
-hold is rendered against that root instead. CI writes the key into PR profiles only
-(`obs-pr-check.yml`, `obs-qa-run.yml` with a PR number); `--image-fallback-rootprj ROOTPRJ`
-overrides it on the command line. Setting it makes `qa show` / `qa run` list the packages
-of each referenced project once.
-
 `--narrow-repos RockyLinux_9,ssl*` keeps only the named repositories the profile already accepts
 and exits 3 when nothing is left; the PR workflow uses it for repo labels. Entries are matched
 against the profile's rules as literal names: a glob such as `ssl*` is kept only if the profile
@@ -212,6 +202,16 @@ sliced push against a previously-unsliced instance is the one that deletes out-o
 projects and packages as orphans. The README build badge now reads
 `obs-build-badge-boo.json` from the `badges` branch (one file per instance); the first
 `sync-main` run under the new per-instance workflow creates it.
+
+### `image-fallback-rootprj`: where unpromoted images live
+
+`qa:` image references (see *Image references* under *Triggering Jenkins QA pipelines*)
+render against the profile's `rootprj`. When the profile also carries
+`image-fallback-rootprj: isv:percona`, an image that the current root project does not
+hold is rendered against that root instead. CI writes the key into PR profiles only
+(`obs-pr-check.yml`, `obs-qa-run.yml` with a PR number); `--image-fallback-rootprj ROOTPRJ`
+overrides it on the command line. Setting it makes `qa show` / `qa run` list the packages
+of each referenced project once.
 
 ---
 
@@ -736,6 +736,10 @@ qa:
     LIST_PARAM:                         # if NOT in `matrix:` → joined with \n
       - a                               #   (Jenkins multi-line text param)
       - b                               # if in `matrix:` → expanded combinatorially
+    IMAGE_PARAM:                        # image reference: rendered to a registry path
+      image: percona-pgbouncer          #   OBS package name of the image (required)
+      repository: ubi9                  #   OBS repository = last path segment (required)
+      project: ppg:staging:18:containers   # defaults to the lane's project
   matrix:                               # optional, list[str]
     - LIST_PARAM
 ```
@@ -767,6 +771,33 @@ share a name with one of its entry segments (both would render
 `OBS QA / <project> / <segment>`); the loader rejects it, so rename the project
 entry with `name:`. A single-entry project block renders no segment and is
 exempt.
+
+#### Image references
+
+A parameter whose value is a mapping with an `image:` key names a container image by
+its OBS package; the parameter name is irrelevant (`REPOSITORY`, `OLD_DOCKER_REPOSITORY`,
+…). `qa show` / `qa run` render it to
+`<OBS_CONTAINER_REGISTRY>/<rootprj>/<project>/<repository>` (colons → `/`, lower-cased)
+and choose the root project per image:
+
+| `image-fallback-rootprj` set? | image listed in `<rootprj>:<project>` on OBS? | root used |
+|---|---|---|
+| no | not queried | the current rootprj |
+| yes | yes (promoted into the PR project) | the current rootprj |
+| yes | no | the fallback rootprj |
+
+PR projects hold only promoted packages, and the registry publishes an image only under
+the project that built it, so a PR that promotes one image must still pull its siblings
+from the production root. CI writes `image-fallback-rootprj: <production root>` into the PR
+profiles; the nightly and production dispatches have no fallback and never query OBS.
+Each decision is printed on stderr (`image <pkg> (<project>) → <PARAM> = <path> [present|fallback|no-fallback: …]`).
+`project verify` checks that `image` is a package directory of `project` and that
+`repository` is one of its repositories (references to projects not in the tree are skipped).
+
+Image references are not allowed inside list values, so they cannot be matrix axes. A lane
+whose pipeline picks the image from an axis (`docker-server-parallel` appends
+`-with-postgis` when `WITH_POSTGIS=true`) names one image; when only the other one was
+promoted, that lane tests the fallback image.
 
 #### Status contexts
 
@@ -838,6 +869,7 @@ itself keeps its value; jobs that do not declare the parameter ignore it.
 `${VAR}` tokens in any value are substituted from the active profile's `env:`
 section, plus auto-injected `OBS_ROOTPRJ` and `OBS_CONTAINER_REGISTRY_ROOTPRJ` (the root
 project name with `:` replaced by `/`, useful for registry URLs).
+Image references (mappings with `image:`) are rendered after substitution; see *Image references*.
 
 ### Subcommands
 
