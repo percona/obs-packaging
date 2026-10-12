@@ -34,6 +34,7 @@ def _stub_validators(monkeypatch, calls):
         "_validate_subproject_refs",
         "_validate_repo_path_refs",
         "_validate_env_vars",
+        "_validate_qa_image_refs",
         "_validate_obs_scm_revisions",
         "_validate_project_path_refs",
     ):
