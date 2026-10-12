@@ -78,6 +78,15 @@ def build_parser() -> argparse.ArgumentParser:
         "Can be repeated. Supplements or overrides the active profile's env section.",
     )
     parser.add_argument(
+        "--image-fallback-rootprj",
+        metavar="ROOTPRJ",
+        default=None,
+        dest="image_fallback_rootprj",
+        help="Root project whose registry publishes an image that the current root "
+        "project does not hold (qa: image references). CI sets this to the "
+        "production root for PR runs; profile key 'image-fallback-rootprj'.",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         default=False,
@@ -831,6 +840,8 @@ def main() -> None:
             args.apiurl = profile.get("apiurl")
         if not args.rootprj:
             args.rootprj = profile.get("rootprj")
+        if not getattr(args, "image_fallback_rootprj", None):
+            args.image_fallback_rootprj = profile.get("image-fallback-rootprj")
         # Prepend profile env so CLI -e flags (appended later) override them.
         args.env_overrides = (
             _load_profile_env_strings(args.profile) + args.env_overrides
