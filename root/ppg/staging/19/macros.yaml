@@ -19,3 +19,8 @@
 # on the root WAL2JSON_* values until the next release train bumps them.
 - WAL2JSON_VERSION: 2.7
 - WAL2JSON_TAG: wal2json_2_7
+# pg_tde has no PG 19 tag yet: build upstream main under a pre-release
+# version that sorts below the next real release. Drop both lines once a
+# PG 19 tag exists so the root PG_TDE_VERSION applies.
+- PG_TDE_REVISION: main
+- PG_TDE_VERSION: 2.3.0~dev
