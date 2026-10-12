@@ -68,6 +68,10 @@
 - PG_STAT_MONITOR_VERSION: 2.4.1
 - PG_STAT_MONITOR_REF: release-2.4.1
 - PG_TDE_VERSION: 2.2.2
+# PG_TDE_REVISION is the git ref obs/_service checks out; a major whose PG
+# version has no pg_tde tag yet (staging:19) overrides it with a branch and
+# sets its own PG_TDE_VERSION.
+- PG_TDE_REVISION: %!{PG_TDE_VERSION}
 - PG_TELEMETRY_VERSION: 1.2.0
 - POSTGIS_VERSION: 3.5.7
 - POSTGRESQL_COMMON_VERSION: 293
