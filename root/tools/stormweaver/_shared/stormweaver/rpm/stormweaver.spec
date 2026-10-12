@@ -40,6 +40,7 @@ BuildRequires:  percona-python%{pyft_minor}t
 BuildRequires:  percona-python%{pyft_minor}t-pytest
 BuildRequires:  percona-postgresql%{pgmajor}-devel
 BuildRequires:  zlib-devel
+BuildRequires:  openssl
 %if 0%{?suse_version}
 BuildRequires:  ninja
 BuildRequires:  pkg-config
@@ -56,6 +57,7 @@ BuildRequires:  cryptopp-devel
 
 Requires:       percona-python%{pyft_minor}t
 Requires:       percona-postgresql%{pgmajor}-libs
+Requires:       openssl
 Recommends:     percona-python%{pyft_minor}t-pytest
 
 %description

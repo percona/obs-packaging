@@ -3,7 +3,7 @@ export DH_VERBOSE=1
 include /usr/share/dpkg/buildflags.mk
 PYFT := /opt/percona-python%!{PYFT_MINOR}t/bin/python%!{PYFT_MINOR}t
 SITE := /opt/percona-python%!{PYFT_MINOR}t/lib/python%!{PYFT_MINOR}t/site-packages
-PG_CONFIG := /usr/lib/postgresql/%!{STORMWEAVER_PG_MAJOR}/bin/pg_config
+PG_CONFIG := /usr/bin/pg_config
 OBS_SOURCES := /usr/src/packages/SOURCES
 TMP := $(CURDIR)/debian/tmp
 

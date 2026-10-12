@@ -12,6 +12,7 @@ Build-Depends:
  libmariadb-dev,
  libcrypto++-dev,
  libssl-dev,
+ openssl,
  zlib1g-dev,
  percona-python%!{PYFT_MINOR}t,
  percona-python%!{PYFT_MINOR}t-pytest,
@@ -26,6 +27,7 @@ Depends:
  ${misc:Depends},
  percona-python%!{PYFT_MINOR}t,
  libpq5 (>= %!{STORMWEAVER_PG_MAJOR}~),
+ openssl,
 Recommends: percona-python%!{PYFT_MINOR}t-pytest
 Description: Concurrent database testing tool
  StormWeaver is a concurrent database testing tool: a C++23 core (metadata,
