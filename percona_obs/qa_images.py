@@ -137,3 +137,40 @@ def resolve_entry_images(
             params[name] = decision.value
             decisions.append(decision)
     return decisions
+
+
+def image_ref_errors(
+    entry: dict[str, Any],
+    lane_project: str,
+    project_dir: Callable[[str], Any],
+    repositories_of: Callable[[Any], set[str]],
+) -> list[str]:
+    """Static checks for every image reference of one qa entry.
+
+    *project_dir(project)* returns the tree directory of a colon-notation
+    project (a ``pathlib.Path``); *repositories_of(dir)* its configured
+    repository names.  A reference whose project is not a directory in the
+    tree is skipped: it may exist only on OBS (e.g. a previous major whose
+    tree was removed), and ``_validate_repo_path_refs`` applies the same rule.
+    """
+    errors: list[str] = []
+    for name, value in (entry.get("parameters") or {}).items():
+        if not is_image_ref(value):
+            continue
+        project = value.get("project") or lane_project
+        pdir = project_dir(project)
+        if not (pdir / "project.yaml").is_file():
+            continue
+        image = value["image"]
+        if not (pdir / image).is_dir():
+            errors.append(
+                f"qa.parameters.{name}: image '{image}' is not a package of "
+                f"project '{project}'"
+            )
+        repository = value["repository"]
+        if repository not in repositories_of(pdir):
+            errors.append(
+                f"qa.parameters.{name}: repository '{repository}' is not defined "
+                f"by project '{project}'"
+            )
+    return errors

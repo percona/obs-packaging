@@ -616,6 +616,53 @@ def _find_env_var_usages(root: Path) -> dict[str, list[tuple[Path, int]]]:
     return usages
 
 
+def _validate_qa_image_refs(
+    root: Path, env_vars: "dict[str, str] | None"
+) -> list[tuple[Path, str]]:
+    """Check that qa: image references name packages/repositories in the tree.
+
+    Loads each project's QA lanes the way `qa show` does (project block plus
+    package blocks, `_shared/` reached through the per-major links) and runs
+    the static checks of ``qa_images.image_ref_errors``.  Release trees are
+    skipped like the other validators.  Loader errors (a malformed block)
+    are reported against the project.yaml; unresolved ``${VAR}`` tokens are
+    already reported by ``_validate_env_vars`` and are not repeated here.
+    """
+    from .cmd_qa import _load_qa_lanes  # cmd_qa imports this module
+    from .qa_images import image_ref_errors
+
+    errors: list[tuple[Path, str]] = []
+    configs: dict[Path, set[str]] = {}
+
+    def repositories_of(pdir: Path) -> set[str]:
+        if pdir not in configs:
+            cfg = _load_project_config_with_inheritance(pdir, env_vars)
+            configs[pdir] = {r["name"] for r in cfg.get("repositories", []) or []}
+        return configs[pdir]
+
+    for yaml_path in _project_yaml_files(root):
+        proj = yaml_path.parent
+        if _is_under_release_project(proj) or proj == common.REPO_ROOT:
+            continue
+        project = ":".join(proj.relative_to(common.REPO_ROOT).parts)
+        try:
+            lanes = _load_qa_lanes(project, env_vars or {})
+        except SystemExit as exc:
+            msg = str(exc)
+            if "${" in msg or "unresolv" in msg.lower():
+                continue  # reported by _validate_env_vars
+            errors.append((yaml_path, msg.removeprefix("error: ")))
+            continue
+        for lane in lanes:
+            for entry in lane.entries:
+                for msg in image_ref_errors(
+                    entry, project, resolve_project_path, repositories_of
+                ):
+                    where = f"{lane.package}: " if lane.package else ""
+                    errors.append((yaml_path, where + msg))
+    return errors
+
+
 def _validate_env_vars(
     root: Path,
     env_vars: dict[str, str] | None,
@@ -768,6 +815,7 @@ def cmd_project_verify(args) -> None:
     ref_errors = _validate_subproject_refs(scan_root)
     repo_path_errors = _validate_repo_path_refs(scan_root, env_vars)
     env_errors = _validate_env_vars(scan_root, env_vars)
+    qa_image_errors = _validate_qa_image_refs(scan_root, env_vars)
     # --offline skips the two network-bound checks (git ls-remote per obs_scm
     # revision, and project: path lookups on the live OBS) so the static
     # checks can run without credentials, e.g. in CI.  --no-scm-validate
@@ -813,7 +861,18 @@ def cmd_project_verify(args) -> None:
         rel = yaml_path.relative_to(REPO_ROOT.parent)
         print(f"error: {rel}: {msg}", file=sys.stderr)
 
-    if ref_errors or repo_path_errors or env_errors or scm_errors or path_ref_errors:
+    for yaml_path, msg in qa_image_errors:
+        rel = yaml_path.relative_to(REPO_ROOT.parent)
+        print(f"error: {rel}: {msg}", file=sys.stderr)
+
+    if (
+        ref_errors
+        or repo_path_errors
+        or env_errors
+        or scm_errors
+        or path_ref_errors
+        or qa_image_errors
+    ):
         sys.exit(1)
 
     repo_filter = get_default_repository_filter()
