@@ -181,3 +181,63 @@ def test_qa_run_dry_run_shows_it(tmp_path, monkeypatch, capsys):
     cmd_qa.cmd_qa_run(args)
     out = capsys.readouterr().out
     assert "EXPECTED_VERSIONS" in out and "percona-pgbackrest=2.59.2" in out
+
+
+def _container_tree(tmp_path, monkeypatch):
+    """ppg/staging/{17,18} package projects and 18:containers building from them."""
+    root = tmp_path / "root"
+    staging = root / "ppg" / "staging"
+    for major, pgbackrest, pgaudit in (
+        ("17", "2.59.2", "17.1"),
+        ("18", "2.59.2", "18.0"),
+    ):
+        d = staging / major
+        _package(d / "percona-pgbackrest", service=_service(pgbackrest))
+        _package(d / "percona-pgaudit", service=_service(pgaudit))
+        (d / "project.yaml").write_text("title: P\n")
+    _package(staging / "17" / "percona-only17", service=_service("1.0"))
+    containers = staging / "18" / "containers"
+    _package(containers / "percona-distribution-postgresql", service="<services/>")
+    (containers / "project.yaml").write_text(
+        "title: C\n"
+        "repositories:\n"
+        "  - name: ubi9\n"
+        "    paths:\n"
+        "      - project: RedHat:UBI:Registry\n"
+        "        repository: images\n"
+        "      - subproject: ppg:staging:18\n"
+        "        repository: UBI_9\n"
+        "      - subproject: ppg:staging:17\n"
+        "        repository: UBI_9\n"
+        "    archs: [x86_64]\n"
+        "qa:\n"
+        "  - name: ubi9\n"
+        "    pipeline: docker-server-parallel\n"
+        "    parameters:\n"
+        "      DOCKER_TAG: '18'\n"
+    )
+    monkeypatch.setattr(common, "REPO_ROOT", root)
+    monkeypatch.setattr(cmd_qa, "REPO_ROOT", root)
+
+
+def test_container_project_gets_the_versions_its_images_build_from(
+    tmp_path, monkeypatch, capsys
+):
+    _container_tree(tmp_path, monkeypatch)
+    lines = _show("ppg:staging:18:containers", capsys)["ubi9"][
+        "EXPECTED_VERSIONS"
+    ].split("\n")
+    # first path (18) wins over the second (17); packages only in 17 still appear
+    assert lines == [
+        "percona-only17=1.0",
+        "percona-pgaudit=18.0",
+        "percona-pgbackrest=2.59.2",
+    ]
+
+
+def test_project_with_own_versions_does_not_follow_paths(tmp_path, monkeypatch):
+    _container_tree(tmp_path, monkeypatch)
+    assert cmd_qa._package_versions("ppg:staging:18") == {
+        "percona-pgaudit": "18.0",
+        "percona-pgbackrest": "2.59.2",
+    }

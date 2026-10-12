@@ -167,15 +167,31 @@ project-config: |
 
   %endif
 
-
+# QA: major-version upgrades with the pg_upgrade mediator image built here;
+# the old and new server images are named in their per-major projects.
 qa:
-  - name: ubi8
-    pipeline: docker-server-parallel-generic
+  - name: ubi8-14-to-15
+    pipeline: docker-server-parallel-upgrade
     parameters:
-      DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
-      SERVER_VERSION: "%!{PG_VERSION}"
-      TESTING_BRANCH: ricardo-work
+      OLD_SERVER_VERSION: "14.%!{PG_14_MINOR_VERSION}"
+      NEW_SERVER_VERSION: "15.%!{PG_15_MINOR_VERSION}"
+      OLD_VERSION_DOCKER_TAG: "14"
+      NEW_VERSION_DOCKER_TAG: "15"
+      UPGRADE_DOCKER_TAG: "18-17-16-15-14"
+      TESTING_BRANCH: main
       REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi8
+        project: ppg:staging:15:containers
+      OLD_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi8
+        project: ppg:staging:14:containers
+      NEW_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi8
+        project: ppg:staging:15:containers
+      UPGRADE_REPOSITORY:
         image: percona-distribution-postgresql-upgrade
         repository: ubi8
       WITH_POSTGIS:
@@ -184,13 +200,118 @@ qa:
     matrix:
       - WITH_POSTGIS
 
-  - name: ubi9
-    pipeline: docker-server-parallel-generic
+  - name: ubi8-15-to-16
+    pipeline: docker-server-parallel-upgrade
     parameters:
-      DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
-      SERVER_VERSION: "%!{PG_VERSION}"
-      TESTING_BRANCH: ricardo-work
+      OLD_SERVER_VERSION: "15.%!{PG_15_MINOR_VERSION}"
+      NEW_SERVER_VERSION: "16.%!{PG_16_MINOR_VERSION}"
+      OLD_VERSION_DOCKER_TAG: "15"
+      NEW_VERSION_DOCKER_TAG: "16"
+      UPGRADE_DOCKER_TAG: "18-17-16-15-14"
+      TESTING_BRANCH: main
       REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi8
+        project: ppg:staging:16:containers
+      OLD_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi8
+        project: ppg:staging:15:containers
+      NEW_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi8
+        project: ppg:staging:16:containers
+      UPGRADE_REPOSITORY:
+        image: percona-distribution-postgresql-upgrade
+        repository: ubi8
+      WITH_POSTGIS:
+        - true
+        - false
+    matrix:
+      - WITH_POSTGIS
+
+  - name: ubi8-16-to-17
+    pipeline: docker-server-parallel-upgrade
+    parameters:
+      OLD_SERVER_VERSION: "16.%!{PG_16_MINOR_VERSION}"
+      NEW_SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
+      OLD_VERSION_DOCKER_TAG: "16"
+      NEW_VERSION_DOCKER_TAG: "17"
+      UPGRADE_DOCKER_TAG: "18-17-16-15-14"
+      TESTING_BRANCH: main
+      REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi8
+        project: ppg:staging:17:containers
+      OLD_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi8
+        project: ppg:staging:16:containers
+      NEW_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi8
+        project: ppg:staging:17:containers
+      UPGRADE_REPOSITORY:
+        image: percona-distribution-postgresql-upgrade
+        repository: ubi8
+      WITH_POSTGIS:
+        - true
+        - false
+    matrix:
+      - WITH_POSTGIS
+
+  - name: ubi8-17-to-18
+    pipeline: docker-server-parallel-upgrade
+    parameters:
+      OLD_SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
+      NEW_SERVER_VERSION: "18.%!{PG_18_MINOR_VERSION}"
+      OLD_VERSION_DOCKER_TAG: "17"
+      NEW_VERSION_DOCKER_TAG: "18"
+      UPGRADE_DOCKER_TAG: "18-17-16-15-14"
+      TESTING_BRANCH: main
+      REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi8
+        project: ppg:staging:18:containers
+      OLD_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi8
+        project: ppg:staging:17:containers
+      NEW_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi8
+        project: ppg:staging:18:containers
+      UPGRADE_REPOSITORY:
+        image: percona-distribution-postgresql-upgrade
+        repository: ubi8
+      WITH_POSTGIS:
+        - true
+        - false
+    matrix:
+      - WITH_POSTGIS
+
+  - name: ubi9-14-to-15
+    pipeline: docker-server-parallel-upgrade
+    parameters:
+      OLD_SERVER_VERSION: "14.%!{PG_14_MINOR_VERSION}"
+      NEW_SERVER_VERSION: "15.%!{PG_15_MINOR_VERSION}"
+      OLD_VERSION_DOCKER_TAG: "14"
+      NEW_VERSION_DOCKER_TAG: "15"
+      UPGRADE_DOCKER_TAG: "18-17-16-15-14"
+      TESTING_BRANCH: main
+      REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi9
+        project: ppg:staging:15:containers
+      OLD_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi9
+        project: ppg:staging:14:containers
+      NEW_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi9
+        project: ppg:staging:15:containers
+      UPGRADE_REPOSITORY:
         image: percona-distribution-postgresql-upgrade
         repository: ubi9
       WITH_POSTGIS:
@@ -199,13 +320,208 @@ qa:
     matrix:
       - WITH_POSTGIS
 
-  - name: ubi10
-    pipeline: docker-server-parallel-generic
+  - name: ubi9-15-to-16
+    pipeline: docker-server-parallel-upgrade
     parameters:
-      DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
-      SERVER_VERSION: "%!{PG_VERSION}"
-      TESTING_BRANCH: ricardo-work
+      OLD_SERVER_VERSION: "15.%!{PG_15_MINOR_VERSION}"
+      NEW_SERVER_VERSION: "16.%!{PG_16_MINOR_VERSION}"
+      OLD_VERSION_DOCKER_TAG: "15"
+      NEW_VERSION_DOCKER_TAG: "16"
+      UPGRADE_DOCKER_TAG: "18-17-16-15-14"
+      TESTING_BRANCH: main
       REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi9
+        project: ppg:staging:16:containers
+      OLD_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi9
+        project: ppg:staging:15:containers
+      NEW_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi9
+        project: ppg:staging:16:containers
+      UPGRADE_REPOSITORY:
+        image: percona-distribution-postgresql-upgrade
+        repository: ubi9
+      WITH_POSTGIS:
+        - true
+        - false
+    matrix:
+      - WITH_POSTGIS
+
+  - name: ubi9-16-to-17
+    pipeline: docker-server-parallel-upgrade
+    parameters:
+      OLD_SERVER_VERSION: "16.%!{PG_16_MINOR_VERSION}"
+      NEW_SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
+      OLD_VERSION_DOCKER_TAG: "16"
+      NEW_VERSION_DOCKER_TAG: "17"
+      UPGRADE_DOCKER_TAG: "18-17-16-15-14"
+      TESTING_BRANCH: main
+      REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi9
+        project: ppg:staging:17:containers
+      OLD_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi9
+        project: ppg:staging:16:containers
+      NEW_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi9
+        project: ppg:staging:17:containers
+      UPGRADE_REPOSITORY:
+        image: percona-distribution-postgresql-upgrade
+        repository: ubi9
+      WITH_POSTGIS:
+        - true
+        - false
+    matrix:
+      - WITH_POSTGIS
+
+  - name: ubi9-17-to-18
+    pipeline: docker-server-parallel-upgrade
+    parameters:
+      OLD_SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
+      NEW_SERVER_VERSION: "18.%!{PG_18_MINOR_VERSION}"
+      OLD_VERSION_DOCKER_TAG: "17"
+      NEW_VERSION_DOCKER_TAG: "18"
+      UPGRADE_DOCKER_TAG: "18-17-16-15-14"
+      TESTING_BRANCH: main
+      REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi9
+        project: ppg:staging:18:containers
+      OLD_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi9
+        project: ppg:staging:17:containers
+      NEW_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi9
+        project: ppg:staging:18:containers
+      UPGRADE_REPOSITORY:
+        image: percona-distribution-postgresql-upgrade
+        repository: ubi9
+      WITH_POSTGIS:
+        - true
+        - false
+    matrix:
+      - WITH_POSTGIS
+
+  - name: ubi10-14-to-15
+    pipeline: docker-server-parallel-upgrade
+    parameters:
+      OLD_SERVER_VERSION: "14.%!{PG_14_MINOR_VERSION}"
+      NEW_SERVER_VERSION: "15.%!{PG_15_MINOR_VERSION}"
+      OLD_VERSION_DOCKER_TAG: "14"
+      NEW_VERSION_DOCKER_TAG: "15"
+      UPGRADE_DOCKER_TAG: "18-17-16-15-14"
+      TESTING_BRANCH: main
+      REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi10
+        project: ppg:staging:15:containers
+      OLD_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi10
+        project: ppg:staging:14:containers
+      NEW_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi10
+        project: ppg:staging:15:containers
+      UPGRADE_REPOSITORY:
+        image: percona-distribution-postgresql-upgrade
+        repository: ubi10
+      WITH_POSTGIS:
+        - true
+        - false
+    matrix:
+      - WITH_POSTGIS
+
+  - name: ubi10-15-to-16
+    pipeline: docker-server-parallel-upgrade
+    parameters:
+      OLD_SERVER_VERSION: "15.%!{PG_15_MINOR_VERSION}"
+      NEW_SERVER_VERSION: "16.%!{PG_16_MINOR_VERSION}"
+      OLD_VERSION_DOCKER_TAG: "15"
+      NEW_VERSION_DOCKER_TAG: "16"
+      UPGRADE_DOCKER_TAG: "18-17-16-15-14"
+      TESTING_BRANCH: main
+      REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi10
+        project: ppg:staging:16:containers
+      OLD_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi10
+        project: ppg:staging:15:containers
+      NEW_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi10
+        project: ppg:staging:16:containers
+      UPGRADE_REPOSITORY:
+        image: percona-distribution-postgresql-upgrade
+        repository: ubi10
+      WITH_POSTGIS:
+        - true
+        - false
+    matrix:
+      - WITH_POSTGIS
+
+  - name: ubi10-16-to-17
+    pipeline: docker-server-parallel-upgrade
+    parameters:
+      OLD_SERVER_VERSION: "16.%!{PG_16_MINOR_VERSION}"
+      NEW_SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
+      OLD_VERSION_DOCKER_TAG: "16"
+      NEW_VERSION_DOCKER_TAG: "17"
+      UPGRADE_DOCKER_TAG: "18-17-16-15-14"
+      TESTING_BRANCH: main
+      REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi10
+        project: ppg:staging:17:containers
+      OLD_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi10
+        project: ppg:staging:16:containers
+      NEW_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi10
+        project: ppg:staging:17:containers
+      UPGRADE_REPOSITORY:
+        image: percona-distribution-postgresql-upgrade
+        repository: ubi10
+      WITH_POSTGIS:
+        - true
+        - false
+    matrix:
+      - WITH_POSTGIS
+
+  - name: ubi10-17-to-18
+    pipeline: docker-server-parallel-upgrade
+    parameters:
+      OLD_SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
+      NEW_SERVER_VERSION: "18.%!{PG_18_MINOR_VERSION}"
+      OLD_VERSION_DOCKER_TAG: "17"
+      NEW_VERSION_DOCKER_TAG: "18"
+      UPGRADE_DOCKER_TAG: "18-17-16-15-14"
+      TESTING_BRANCH: main
+      REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi10
+        project: ppg:staging:18:containers
+      OLD_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi10
+        project: ppg:staging:17:containers
+      NEW_REPOSITORY:
+        image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
+        repository: ubi10
+        project: ppg:staging:18:containers
+      UPGRADE_REPOSITORY:
         image: percona-distribution-postgresql-upgrade
         repository: ubi10
       WITH_POSTGIS:
