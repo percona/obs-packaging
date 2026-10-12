@@ -24,3 +24,6 @@
 # PG 19 tag exists so the root PG_TDE_VERSION applies.
 - PG_TDE_REVISION: main
 - PG_TDE_VERSION: 2.3.0~dev
+
+- TARBALL_PG_EXTRA_COMPONENTS: percona-pg_tde%!{PG_MAJOR_VERSION} percona-pg_oidc_validator%!{PG_MAJOR_VERSION}
+- CONTAINER_PG_EXTRA_COMPONENTS: percona-pg_tde%!{PG_MAJOR_VERSION} percona-pg_oidc_validator%!{PG_MAJOR_VERSION}
