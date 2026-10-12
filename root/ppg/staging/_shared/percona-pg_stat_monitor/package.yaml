@@ -1,5 +1,5 @@
 # QA: pg_stat_monitor's own regression suite against the installed package
-# (PGSM_PACKAGE_INSTALL), checked out at the tag obs/_service builds from.
+# (PGSM_PACKAGE_INSTALL), checked out at the ref obs/_service builds from.
 # Runs for every PPG major that ships the package.
 qa:
   - name: pg_stat_monitor
@@ -10,7 +10,7 @@ qa:
       VERSION: ppg-%!{PG_VERSION}
       PGSM_PACKAGE_INSTALL: true
       PGSM_REPO: https://github.com/percona/pg_stat_monitor.git
-      PGSM_BRANCH: "%!{PG_STAT_MONITOR_VERSION}"
+      PGSM_BRANCH: "%!{PG_STAT_MONITOR_REF}"
       PLATFORMS:
         - debian-12
         - debian-12-arm
