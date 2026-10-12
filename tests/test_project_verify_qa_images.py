@@ -79,3 +79,28 @@ def test_explicit_project_in_tree_is_checked(tmp_path, monkeypatch):
     errs = _errors(root)
     # image `img` is not a package of ppg:staging:d, and ubi9 is not its repo
     assert len(errs) == 2
+
+
+def _other(root, text):
+    other = root / "ppg" / "staging" / "d"
+    other.mkdir()
+    (other / "project.yaml").write_text(text)
+
+
+def test_malformed_referenced_project_is_reported_not_fatal(tmp_path, monkeypatch):
+    root = _tree(tmp_path, monkeypatch, project_line="project: ppg:staging:d")
+    _other(root, "title: D\nrepositories: nope\n")
+    res = cmd_project._validate_qa_image_refs(root, {})
+    assert len(res) >= 1
+    assert all(p.name == "project.yaml" for p, _m in res)
+
+
+def test_undefined_variable_in_referenced_project_is_skipped(tmp_path, monkeypatch):
+    root = _tree(tmp_path, monkeypatch, project_line="project: ppg:staging:d")
+    _other(
+        root,
+        "title: ${MISSING}\nrepositories:\n  - name: ubi9\n    archs: [x86_64]\n",
+    )
+    (root / "ppg" / "staging" / "d" / "img").mkdir()
+    res = cmd_project._validate_qa_image_refs(root, {"X": "1"})
+    assert res == []
