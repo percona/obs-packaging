@@ -8,6 +8,9 @@ TMP := $(CURDIR)/debian/tmp
 %:
 	dh $@
 
+# noble autoconf is too old for configure.ac, use the shipped configure
+override_dh_autoreconf:
+
 override_dh_auto_configure:
 	./configure --prefix=$(PREFIX) --disable-gil --enable-shared \
 	  --without-static-libpython --with-ensurepip=install \

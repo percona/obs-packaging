@@ -7,7 +7,7 @@
 # self-contained /opt tree: leak no provides, do not require our own libpython
 # or a python(abi), keep stdlib shebangs as they are
 %global __provides_exclude_from ^%{py_prefix}/.*$
-%global __requires_exclude ^(libpython3\\.[0-9]+t|python\\(abi\\)|/usr/bin/python|/usr/local/bin/python|/usr/bin/env)
+%global __requires_exclude ^(libpython3\\.[0-9]+t|python\\(abi\\)|/opt/percona-python.*|/usr/bin/python|/usr/local/bin/python|/usr/bin/env)
 %undefine __brp_mangle_shebangs
 # the rpath into our own lib/ is the design, EL10 check-rpaths must not abort on it
 %global __brp_check_rpaths %{nil}
