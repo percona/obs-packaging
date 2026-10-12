@@ -1,9 +1,20 @@
 name: Sync to OBS (main)
 
-# Runs whenever a push to main touches any file under root/.
+# Runs whenever a push to main touches any file under root/, and once a night
+# on a schedule.
 # Syncs the full package tree to OBS (releases/ directories are excluded from
 # sync push traversal). Release tags are created by obs-pr-cleanup.yml on
 # release-PR merge, which then dispatches obs-release.yml directly.
+#
+# The nightly run exists for packages whose _service tracks a moving upstream
+# ref (a branch or HEAD, e.g. the devel tier): a push to main only re-resolves
+# upstream at the moment it lands, so upstream-only commits made afterwards
+# would never reach OBS without it.  --skip-unchanged never skips such
+# packages, while pinned packages (tag or full SHA) are skipped from the
+# sync-state manifest with no API traffic, so a scheduled run costs little
+# more than the services + MD5-compared upload of the moving-ref packages.
+# A scheduled run has no before-SHA, so the release-only detector below
+# always lets it sync.
 #
 # Two-job debounce design: the `sync` job serializes on its own concurrency
 # group and is never cancelled mid-upload, so back-to-back pushes queue up
@@ -28,6 +39,8 @@ on:
     paths:
       - 'root/**'
       - '!root/README.md'
+  schedule:
+    - cron: '0 0 * * *'     # 00:00 UTC nightly (obs-stale-cleanup runs at 02:00)
   # Manual escape hatch.  The main use is repairing a package whose local
   # sync-state manifest entry no longer matches OBS (e.g. the package was
   # deleted from OBS and later restored with byte-identical content, so the

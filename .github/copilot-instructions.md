@@ -1049,9 +1049,9 @@ Reusable setup steps called by every workflow:
 2. Create `venv/` and `pip install -r requirements.txt`.
 3. Write `~/.config/osc/oscrc` from the `obs-apiurl`, `obs-user`, and `obs-password` inputs so `osc` (and therefore `percona-obs`) can authenticate against OBS.
 
-### Workflow 1 — `sync-main.yml` (sync on merge to main)
+### Workflow 1 — `sync-main.yml` (sync on merge to main, plus nightly)
 
-**Trigger**: push to `main` where at least one file under `root/**` changed.
+**Trigger**: push to `main` where at least one file under `root/**` changed, and a nightly `schedule` (00:00 UTC). The nightly run is what picks up upstream-only commits for packages whose `_service` tracks a moving ref (branch/HEAD, e.g. the devel tier): `--skip-unchanged` never skips those, while pinned packages are skipped from the sync-state manifest at no API cost. A scheduled run has no before-SHA, so the release-only detector never suppresses it. Disabling the workflow during a release (the `obs-release.yml` lock) suppresses scheduled runs too.
 
 **What it does** — two jobs. The `sync` job serializes on its own concurrency group and is never cancelled mid-upload; the `poll` job runs in a cancel-superseding group (newest poll wins — version lists and release tags are diffed from the last *successful* run's head SHA, so the surviving poll covers superseded runs' ranges).
 
