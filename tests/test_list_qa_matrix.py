@@ -3,6 +3,8 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 _SPEC = importlib.util.spec_from_file_location(
     "list_qa_matrix", Path(__file__).parent.parent / ".github/scripts/list_qa_matrix.py"
 )
@@ -209,3 +211,43 @@ def test_qa_show_stderr_is_forwarded(monkeypatch, capsys, tmp_path):
     captured = capsys.readouterr()
     assert "fallback" in captured.err
     assert "ppg:staging:18:containers" in captured.err
+
+
+def _run_failing_qa_show(monkeypatch, present_only):
+    import subprocess
+    from types import SimpleNamespace
+
+    m = _load()
+    monkeypatch.setenv("OBS_APIURL", "http://obs")
+    monkeypatch.setenv("OBS_PROJECT", "isv:percona:PR:pr-1")
+    monkeypatch.delenv("QA_TYPES", raising=False)
+    if present_only:
+        monkeypatch.setenv("QA_PACKAGES_PRESENT_ONLY", "true")
+    else:
+        monkeypatch.delenv("QA_PACKAGES_PRESENT_ONLY", raising=False)
+    monkeypatch.setattr("osc.conf.get_config", lambda **k: None)
+    monkeypatch.setattr(
+        "percona_obs.obs_api._fetch_obs_subproject_names",
+        lambda apiurl, root: {"isv:percona:PR:pr-1:ppg:staging:18:containers"},
+    )
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(returncode=1, stdout="", stderr="boom"),
+    )
+    return m
+
+
+def test_qa_show_failure_aborts_in_present_only_mode(monkeypatch):
+    m = _run_failing_qa_show(monkeypatch, True)
+    with pytest.raises(SystemExit) as exc:
+        m.main()
+    assert "ppg:staging:18:containers" in str(exc.value)
+
+
+def test_qa_show_failure_is_skipped_in_nightly_mode(monkeypatch, capsys):
+    m = _run_failing_qa_show(monkeypatch, False)
+    m.main()
+    captured = capsys.readouterr()
+    assert captured.out.strip() == "[]"
+    assert "warning: qa show" in captured.err

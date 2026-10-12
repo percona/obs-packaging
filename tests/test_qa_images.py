@@ -43,17 +43,29 @@ def test_validate_image_ref_accepts_minimal_and_full():
 
 
 def test_registry_path_lowercases_and_slashes():
-    assert qa_images.registry_path(
-        "reg.example", "isv:percona:PR:pr-124", "ppg:staging:18:containers", "ubi9"
-    ) == "reg.example/isv/percona/pr/pr-124/ppg/staging/18/containers/ubi9"
+    assert (
+        qa_images.registry_path(
+            "reg.example", "isv:percona:PR:pr-124", "ppg:staging:18:containers", "ubi9"
+        )
+        == "reg.example/isv/percona/pr/pr-124/ppg/staging/18/containers/ubi9"
+    )
+
+
+def test_registry_path_lowercases_repository():
+    assert qa_images.registry_path("reg.example", "isv:percona", "ppg:c", "UBI9") == (
+        "reg.example/isv/percona/ppg/c/ubi9"
+    )
 
 
 def test_registry_path_matches_the_string_form_on_production():
     # What `${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/18/containers/ubi9`
     # renders today with rootprj isv:percona and the default registry.
-    assert qa_images.registry_path(
-        "registry.opensuse.org", "isv:percona", "ppg:staging:18:containers", "ubi9"
-    ) == "registry.opensuse.org/isv/percona/ppg/staging/18/containers/ubi9"
+    assert (
+        qa_images.registry_path(
+            "registry.opensuse.org", "isv:percona", "ppg:staging:18:containers", "ubi9"
+        )
+        == "registry.opensuse.org/isv/percona/ppg/staging/18/containers/ubi9"
+    )
 
 
 # --- resolver -------------------------------------------------------------------
@@ -83,7 +95,9 @@ def _resolver(fallback, lister):
 def test_no_fallback_never_queries_obs():
     lister = _Lister({})
     d = _resolver(None, lister).decide(
-        "REPOSITORY", {"image": "img", "repository": "ubi9"}, "ppg:staging:18:containers"
+        "REPOSITORY",
+        {"image": "img", "repository": "ubi9"},
+        "ppg:staging:18:containers",
     )
     assert lister.calls == []
     assert (d.rootprj, d.reason) == ("isv:percona:PR:pr-5", "no-fallback")
@@ -93,7 +107,9 @@ def test_no_fallback_never_queries_obs():
 def test_present_image_uses_current_rootprj():
     lister = _Lister({"isv:percona:PR:pr-5:ppg:staging:18:containers": {"img"}})
     d = _resolver("isv:percona", lister).decide(
-        "REPOSITORY", {"image": "img", "repository": "ubi9"}, "ppg:staging:18:containers"
+        "REPOSITORY",
+        {"image": "img", "repository": "ubi9"},
+        "ppg:staging:18:containers",
     )
     assert (d.rootprj, d.reason) == ("isv:percona:PR:pr-5", "present")
     assert d.value.startswith("reg.example/isv/percona/pr/pr-5/")
@@ -102,7 +118,9 @@ def test_present_image_uses_current_rootprj():
 def test_absent_image_falls_back():
     lister = _Lister({"isv:percona:PR:pr-5:ppg:staging:18:containers": {"other"}})
     d = _resolver("isv:percona", lister).decide(
-        "REPOSITORY", {"image": "img", "repository": "ubi9"}, "ppg:staging:18:containers"
+        "REPOSITORY",
+        {"image": "img", "repository": "ubi9"},
+        "ppg:staging:18:containers",
     )
     assert (d.rootprj, d.reason) == ("isv:percona", "fallback")
     assert d.value == "reg.example/isv/percona/ppg/staging/18/containers/ubi9"
@@ -125,12 +143,19 @@ def test_explicit_project_overrides_lane_project():
     lister = _Lister({"isv:percona:PR:pr-5:ppg:staging:17:extras:containers": {"old"}})
     d = _resolver("isv:percona", lister).decide(
         "OLD_DOCKER_REPOSITORY",
-        {"image": "old", "repository": "ubi9", "project": "ppg:staging:17:extras:containers"},
+        {
+            "image": "old",
+            "repository": "ubi9",
+            "project": "ppg:staging:17:extras:containers",
+        },
         "ppg:staging:18:extras:containers",
     )
     assert d.project == "ppg:staging:17:extras:containers"
     assert d.reason == "present"
-    assert d.value == "reg.example/isv/percona/pr/pr-5/ppg/staging/17/extras/containers/ubi9"
+    assert (
+        d.value
+        == "reg.example/isv/percona/pr/pr-5/ppg/staging/17/extras/containers/ubi9"
+    )
 
 
 def test_resolve_entry_images_rewrites_in_place_and_in_order():
@@ -151,11 +176,22 @@ def test_resolve_entry_images_rewrites_in_place_and_in_order():
     assert [d.reason for d in decisions] == ["present", "fallback"]
     p = entry["parameters"]
     assert p["TAG"] == "18" and p["PLATFORMS"] == ["a", "b"]
-    assert p["REPOSITORY"] == "reg.example/isv/percona/pr/pr-5/ppg/staging/18/containers/ubi9"
-    assert p["OLD_DOCKER_REPOSITORY"] == "reg.example/isv/percona/ppg/staging/18/containers/ubi9"
+    assert (
+        p["REPOSITORY"]
+        == "reg.example/isv/percona/pr/pr-5/ppg/staging/18/containers/ubi9"
+    )
+    assert (
+        p["OLD_DOCKER_REPOSITORY"]
+        == "reg.example/isv/percona/ppg/staging/18/containers/ubi9"
+    )
 
 
 def test_resolve_entry_images_without_refs_is_a_noop():
     entry = {"pipeline": "p", "parameters": {"X": "1"}}
-    assert qa_images.resolve_entry_images(entry, "ppg:staging:18", _resolver(None, _Lister({}))) == []
+    assert (
+        qa_images.resolve_entry_images(
+            entry, "ppg:staging:18", _resolver(None, _Lister({}))
+        )
+        == []
+    )
     assert entry["parameters"] == {"X": "1"}

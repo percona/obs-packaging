@@ -46,6 +46,17 @@ def test_valid_reference_passes(tmp_path, monkeypatch):
     assert _errors(_tree(tmp_path, monkeypatch)) == []
 
 
+def test_sliced_default_filter_does_not_hide_repositories(tmp_path, monkeypatch):
+    from percona_obs.project_config import RepositoryFilter
+
+    root = _tree(tmp_path, monkeypatch)
+    common.set_default_repository_filter(RepositoryFilter(exclude_repos=("ubi*",)))
+    try:
+        assert _errors(root) == []
+    finally:
+        common.set_default_repository_filter(None)
+
+
 def test_unknown_image_is_reported(tmp_path, monkeypatch):
     errs = _errors(_tree(tmp_path, monkeypatch, image="nope"))
     assert len(errs) == 1

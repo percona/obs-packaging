@@ -126,12 +126,9 @@ Create the profiles with flags instead of editing YAML (flags are repeatable and
 
 Container images built by an instance are published by *its* registry, so the host cannot be
 baked into the tree. The profile key `registry:` is exposed to `${VAR}` substitution as
-`${OBS_CONTAINER_REGISTRY}`, which the container `project.yaml` files use together with
-`${OBS_CONTAINER_REGISTRY_ROOTPRJ}`:
-
-```yaml
-REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/…
-```
+`${OBS_CONTAINER_REGISTRY}`. The container `project.yaml` QA lanes use image references,
+which are rendered against that registry (see *Image references* under *Triggering Jenkins
+QA pipelines*).
 
 The default is `registry.opensuse.org`, so profiles and plain `-A`/`-R` invocations that do not
 declare the key keep rendering exactly as before. Precedence is
@@ -796,8 +793,11 @@ Each decision is printed on stderr (`image <pkg> (<project>) → <PARAM> = <path
 
 Image references are not allowed inside list values, so they cannot be matrix axes. A lane
 whose pipeline picks the image from an axis (`docker-server-parallel` appends
-`-with-postgis` when `WITH_POSTGIS=true`) names one image; when only the other one was
-promoted, that lane tests the fallback image.
+`-with-postgis` when `WITH_POSTGIS=true`) names the plain image only.
+When only `-with-postgis` was promoted, both combos test the fallback (production) images.
+When only the plain image was promoted, the lane resolves to the PR root and the
+`WITH_POSTGIS=true` combo pulls a `-with-postgis` image that does not exist there, so it
+fails.
 
 #### Status contexts
 
