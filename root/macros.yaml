@@ -62,7 +62,11 @@
 - PG_REPACK_VERSION: 1.5.3
 - PG_REPACK_TAG: ver_%!{PG_REPACK_VERSION}
 
-- PG_STAT_MONITOR_VERSION: 2.4.0
+# PG_STAT_MONITOR_REF is the git ref obs/_service and the QA suite check out.
+# 2.4.1 is not tagged yet, so it tracks the release branch; switch it back
+# to %!{PG_STAT_MONITOR_VERSION} once upstream publishes the tag.
+- PG_STAT_MONITOR_VERSION: 2.4.1
+- PG_STAT_MONITOR_REF: release-2.4.1
 - PG_TDE_VERSION: 2.2.2
 - PG_TELEMETRY_VERSION: 1.2.0
 - POSTGIS_VERSION: 3.5.7
