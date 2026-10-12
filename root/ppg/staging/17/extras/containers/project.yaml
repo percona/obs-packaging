@@ -57,31 +57,15 @@ project-config: |
   PublishFlags: withsbom
   %endif
 
+# QA: the custom (extras) image (docker-server-parallel-custom appends
+# percona-distribution-postgresql-custom).
 qa:
-  - pipeline: docker-server-parallel-generic
+  - name: custom
+    pipeline: docker-server-parallel-custom
     parameters:
-      DOCKER_TAG: %!{PG_MAJOR_VERSION}
-      SERVER_VERSION: %!{PG_VERSION}
-      TESTING_BRANCH: ricardo-work
+      DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
+      SERVER_VERSION: "%!{PG_VERSION}"
+      TESTING_BRANCH: main
       REPOSITORY:
         image: percona-distribution-postgresql-custom
         repository: ubi9
-      WITH_POSTGIS:
-        - true
-        - false
-    matrix:
-      - WITH_POSTGIS
-
-  - pipeline: ppg-obs-upgrade
-    parameters:
-      REPOSITORY:
-        image: percona-distribution-postgresql-custom
-        repository: ubi9
-      OLD_SERVER_VERSION: "16.15"
-      NEW_SERVER_VERSION: %!{PG_VERSION}
-      UPGRADE_DOCKER_TAG: %!{PG_MAJOR_VERSION}-%!{PG_PREV_MAJOR_VERSION}
-      OLD_DOCKER_REPOSITORY:
-        image: percona-distribution-postgresql-custom
-        project: ppg:staging:%!{PG_PREV_MAJOR_VERSION}:extras:containers
-        repository: ubi9
-      TESTING_BRANCH: ricardo-work

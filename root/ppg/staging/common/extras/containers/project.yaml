@@ -69,12 +69,54 @@ project-config: |
   PublishFlags: withsbom
   %endif
 
+# QA: custom-image upgrades with the mediator image built here.
 qa:
-  pipeline: docker-server-parallel-generic
-  parameters:
-    DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
-    SERVER_VERSION: "%!{PG_VERSION}"
-    TESTING_BRANCH: ricardo-work
-    REPOSITORY:
-      image: percona-distribution-postgresql-upgrade-custom
-      repository: ubi9
+  - name: ubi9-16-to-17
+    pipeline: docker-server-parallel-custom-upgrade
+    parameters:
+      OLD_SERVER_VERSION: "16.%!{PG_16_MINOR_VERSION}"
+      NEW_SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
+      OLD_VERSION_DOCKER_TAG: "16"
+      NEW_VERSION_DOCKER_TAG: "17"
+      UPGRADE_DOCKER_TAG: "18-17-16"
+      TESTING_BRANCH: main
+      REPOSITORY:
+        image: percona-distribution-postgresql-custom
+        repository: ubi9
+        project: ppg:staging:17:extras:containers
+      OLD_REPOSITORY:
+        image: percona-distribution-postgresql-custom
+        repository: ubi9
+        project: ppg:staging:16:extras:containers
+      NEW_REPOSITORY:
+        image: percona-distribution-postgresql-custom
+        repository: ubi9
+        project: ppg:staging:17:extras:containers
+      UPGRADE_REPOSITORY:
+        image: percona-distribution-postgresql-upgrade-custom
+        repository: ubi9
+
+  - name: ubi9-17-to-18
+    pipeline: docker-server-parallel-custom-upgrade
+    parameters:
+      OLD_SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
+      NEW_SERVER_VERSION: "18.%!{PG_18_MINOR_VERSION}"
+      OLD_VERSION_DOCKER_TAG: "17"
+      NEW_VERSION_DOCKER_TAG: "18"
+      UPGRADE_DOCKER_TAG: "18-17-16"
+      TESTING_BRANCH: main
+      REPOSITORY:
+        image: percona-distribution-postgresql-custom
+        repository: ubi9
+        project: ppg:staging:18:extras:containers
+      OLD_REPOSITORY:
+        image: percona-distribution-postgresql-custom
+        repository: ubi9
+        project: ppg:staging:17:extras:containers
+      NEW_REPOSITORY:
+        image: percona-distribution-postgresql-custom
+        repository: ubi9
+        project: ppg:staging:18:extras:containers
+      UPGRADE_REPOSITORY:
+        image: percona-distribution-postgresql-upgrade-custom
+        repository: ubi9
