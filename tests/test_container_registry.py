@@ -211,13 +211,18 @@ def test_qa_block_renders_registry(tmp_path, monkeypatch):
 
 
 def test_tree_has_no_hardcoded_registry_in_rootprj_urls():
-    """The non-release tree renders the host from ${OBS_CONTAINER_REGISTRY}."""
+    """The non-release tree names images with image references; no lane spells a registry path."""
     repo_root = Path(__file__).resolve().parent.parent / "root"
     offenders = [
         str(p.relative_to(repo_root))
         for p in repo_root.rglob("project.yaml")
         if "releases" not in p.parts
-        and "registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}"
-        in p.read_text(encoding="utf-8")
+        and any(
+            needle in p.read_text(encoding="utf-8")
+            for needle in (
+                "registry.opensuse.org/${OBS_CONTAINER_REGISTRY_ROOTPRJ}",
+                "${OBS_CONTAINER_REGISTRY}",
+            )
+        )
     ]
     assert offenders == []

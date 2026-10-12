@@ -75,4 +75,6 @@ qa:
     DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
     SERVER_VERSION: "%!{PG_VERSION}"
     TESTING_BRANCH: ricardo-work
-    REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/extras/containers/ubi9
+    REPOSITORY:
+      image: percona-distribution-postgresql-upgrade-custom
+      repository: ubi9

@@ -175,7 +175,9 @@ qa:
       DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
       SERVER_VERSION: "%!{PG_VERSION}"
       TESTING_BRANCH: ricardo-work
-      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/containers/ubi8
+      REPOSITORY:
+        image: percona-distribution-postgresql-upgrade
+        repository: ubi8
       WITH_POSTGIS:
         - true
         - false
@@ -188,7 +190,9 @@ qa:
       DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
       SERVER_VERSION: "%!{PG_VERSION}"
       TESTING_BRANCH: ricardo-work
-      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/containers/ubi9
+      REPOSITORY:
+        image: percona-distribution-postgresql-upgrade
+        repository: ubi9
       WITH_POSTGIS:
         - true
         - false
@@ -201,7 +205,9 @@ qa:
       DOCKER_TAG: "%!{PG_MAJOR_VERSION}"
       SERVER_VERSION: "%!{PG_VERSION}"
       TESTING_BRANCH: ricardo-work
-      REPOSITORY: ${OBS_CONTAINER_REGISTRY}/${OBS_CONTAINER_REGISTRY_ROOTPRJ}/ppg/staging/common/containers/ubi10
+      REPOSITORY:
+        image: percona-distribution-postgresql-upgrade
+        repository: ubi10
       WITH_POSTGIS:
         - true
         - false
