@@ -178,3 +178,34 @@ def test_fetch_present_packages_propagates_listing_errors(monkeypatch):
     monkeypatch.setattr(obs_api, "_fetch_obs_package_names_or_fail", boom)
     with pytest.raises(SystemExit):
         m.fetch_present_packages("https://x", "p")
+
+
+def test_qa_show_stderr_is_forwarded(monkeypatch, capsys, tmp_path):
+    """Image-reference decisions are printed by `qa show` on stderr; the detect
+    job must show them, so a successful run's stderr is forwarded."""
+    import subprocess
+    from types import SimpleNamespace
+
+    m = _load()
+    monkeypatch.setenv("OBS_APIURL", "http://obs")
+    monkeypatch.setenv("OBS_PROJECT", "isv:percona:PR:pr-1")
+    monkeypatch.delenv("QA_TYPES", raising=False)
+    monkeypatch.delenv("QA_PACKAGES_PRESENT_ONLY", raising=False)
+    monkeypatch.setattr("osc.conf.get_config", lambda **k: None)
+    monkeypatch.setattr(
+        "percona_obs.obs_api._fetch_obs_subproject_names",
+        lambda apiurl, root: {"isv:percona:PR:pr-1:ppg:staging:18:containers"},
+    )
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(
+            returncode=0,
+            stdout='[{"project":"ppg:staging:18:containers","package":"","name":"ubi9"}]',
+            stderr="  image x (ppg:staging:18:containers) → REPOSITORY = r  [fallback: not in p]\n",
+        ),
+    )
+    m.main()
+    captured = capsys.readouterr()
+    assert "fallback" in captured.err
+    assert "ppg:staging:18:containers" in captured.err

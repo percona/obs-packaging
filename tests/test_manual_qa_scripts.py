@@ -94,6 +94,36 @@ def test_resolve_ambiguous_fails():
     assert "ambiguous" in str(exc.value)
 
 
+def test_resolver_emits_instance_rootprj_for_pr_and_production(tmp_path, monkeypatch):
+    """`instance_rootprj` is the production root in both modes; `rootprj` keeps
+    its meaning (PR subproject when pr_number is set)."""
+    import json as _json
+
+    mod = _load("resolve_qa_instance")
+    instances = [
+        {
+            "name": "labs",
+            "apiurl": "https://obs.example",
+            "rootprj": "isv:percona",
+            "pr_rootprj": "isv:percona:PR",
+            "include_repos": "UBI_*,ubi*,images",
+            "qa_types": "containers",
+        }
+    ]
+    for pr, expected_root in (("", "isv:percona"), ("7", "isv:percona:PR:pr-7")):
+        out = tmp_path / f"out-{pr or 'prod'}"
+        out.write_text("")
+        monkeypatch.setenv("OBS_INSTANCES", _json.dumps(instances))
+        monkeypatch.setenv("QA_PROJECT", "ppg:staging:18:containers")
+        monkeypatch.setenv("QA_PR_NUMBER", pr)
+        monkeypatch.setenv("QA_PACKAGE", "")
+        monkeypatch.setenv("GITHUB_OUTPUT", str(out))
+        mod.main()
+        lines = dict(l.split("=", 1) for l in out.read_text().splitlines())
+        assert lines["instance_rootprj"] == "isv:percona"
+        assert lines["rootprj"] == expected_root
+
+
 @pytest.mark.parametrize(
     "project",
     ["ppg:staging:18", "ppg:staging:18:containers", "common:deps:build", "ppg:16:tde"],

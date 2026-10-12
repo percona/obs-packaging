@@ -632,6 +632,7 @@ jobs:
           OBS_APIURL: ${{ matrix.instance.apiurl }}
           OBS_PR_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}
           OBS_REGISTRY: ${{ matrix.instance.registry }}
+          OBS_MAIN_ROOTPRJ: ${{ matrix.instance.rootprj }}
           INSTANCE_ENV: ${{ toJSON(matrix.instance.env) }}
           PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
           JENKINS_URL: ${{ vars.JENKINS_URL }}
@@ -642,6 +643,7 @@ jobs:
           apiurl: ${OBS_APIURL}
           rootprj: ${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}
           ${OBS_REGISTRY:+registry: ${OBS_REGISTRY}}
+          image-fallback-rootprj: ${OBS_MAIN_ROOTPRJ}
           jenkins:
             url: ${JENKINS_URL}
             user: ${JENKINS_USER}
@@ -777,6 +779,7 @@ jobs:
                   instance_pr_rootprj: $i.pr_rootprj,
                   instance_user: ($i.user // ""),
                   instance_registry: ($i.registry // ""),
+                  instance_rootprj: ($i.rootprj // ""),
                   instance_env: (($i.env // {}) | tojson)
                 })' "$d/qa-matrix.json")
             MATRIX=$(jq -c -n --argjson a "$MATRIX" --argjson b "$share" '$a + $b')
@@ -840,13 +843,15 @@ jobs:
 
       # Same CI profile as the detect job so `qa run` re-resolves project.yaml
       # parameters identically (same OBS_ROOTPRJ → same ${OBS_ROOTPRJ_SLASHES},
-      # same registry → same ${OBS_CONTAINER_REGISTRY}).
+      # same registry → same ${OBS_CONTAINER_REGISTRY}, same fallback root →
+      # same image-reference decisions).
       - name: Write CI profile
         shell: bash
         env:
           OBS_APIURL: ${{ matrix.instance_apiurl }}
           OBS_PR_ROOTPRJ: ${{ matrix.instance_pr_rootprj }}
           OBS_REGISTRY: ${{ matrix.instance_registry }}
+          OBS_MAIN_ROOTPRJ: ${{ matrix.instance_rootprj }}
           INSTANCE_ENV: ${{ matrix.instance_env }}
           PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
           JENKINS_URL: ${{ vars.JENKINS_URL }}
@@ -857,6 +862,7 @@ jobs:
           apiurl: ${OBS_APIURL}
           rootprj: ${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}
           ${OBS_REGISTRY:+registry: ${OBS_REGISTRY}}
+          image-fallback-rootprj: ${OBS_MAIN_ROOTPRJ}
           jenkins:
             url: ${JENKINS_URL}
             user: ${JENKINS_USER}

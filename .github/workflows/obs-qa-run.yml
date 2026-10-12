@@ -87,6 +87,7 @@ jobs:
       instance_apiurl: ${{ steps.resolve.outputs.instance_apiurl }}
       instance_user: ${{ steps.resolve.outputs.instance_user }}
       instance_registry: ${{ steps.resolve.outputs.instance_registry }}
+      instance_rootprj: ${{ steps.resolve.outputs.instance_rootprj }}
       instance_env: ${{ steps.resolve.outputs.instance_env }}
       rootprj: ${{ steps.resolve.outputs.rootprj }}
 
@@ -143,15 +144,19 @@ jobs:
           OBS_APIURL: ${{ needs.resolve.outputs.instance_apiurl }}
           OBS_ROOTPRJ: ${{ needs.resolve.outputs.rootprj }}
           OBS_REGISTRY: ${{ needs.resolve.outputs.instance_registry }}
+          OBS_MAIN_ROOTPRJ: ${{ needs.resolve.outputs.instance_rootprj }}
+          QA_PR_NUMBER: ${{ inputs.pr_number }}
           INSTANCE_ENV: ${{ needs.resolve.outputs.instance_env }}
           JENKINS_URL: ${{ vars.JENKINS_URL }}
           JENKINS_USER: ${{ vars.JENKINS_USER }}
+        # PR dispatches test the PR subproject; images that were not promoted there live under the production root, so qa: image references fall back to it.
         run: |
           mkdir -p .profile
           cat > .profile/ci.yaml <<EOF
           apiurl: ${OBS_APIURL}
           rootprj: ${OBS_ROOTPRJ}
           ${OBS_REGISTRY:+registry: ${OBS_REGISTRY}}
+          ${QA_PR_NUMBER:+image-fallback-rootprj: ${OBS_MAIN_ROOTPRJ}}
           jenkins:
             url: ${JENKINS_URL}
             user: ${JENKINS_USER}
@@ -230,15 +235,19 @@ jobs:
           OBS_APIURL: ${{ needs.resolve.outputs.instance_apiurl }}
           OBS_ROOTPRJ: ${{ needs.resolve.outputs.rootprj }}
           OBS_REGISTRY: ${{ needs.resolve.outputs.instance_registry }}
+          OBS_MAIN_ROOTPRJ: ${{ needs.resolve.outputs.instance_rootprj }}
+          QA_PR_NUMBER: ${{ inputs.pr_number }}
           INSTANCE_ENV: ${{ needs.resolve.outputs.instance_env }}
           JENKINS_URL: ${{ vars.JENKINS_URL }}
           JENKINS_USER: ${{ vars.JENKINS_USER }}
+        # PR dispatches test the PR subproject; images that were not promoted there live under the production root, so qa: image references fall back to it.
         run: |
           mkdir -p .profile
           cat > .profile/ci.yaml <<EOF
           apiurl: ${OBS_APIURL}
           rootprj: ${OBS_ROOTPRJ}
           ${OBS_REGISTRY:+registry: ${OBS_REGISTRY}}
+          ${QA_PR_NUMBER:+image-fallback-rootprj: ${OBS_MAIN_ROOTPRJ}}
           jenkins:
             url: ${JENKINS_URL}
             user: ${JENKINS_USER}
