@@ -58,3 +58,82 @@ def _as_path(obs_name: str) -> str:
 def registry_path(registry: str, rootprj: str, project: str, repository: str) -> str:
     """The registry path Jenkins appends the image name to."""
     return f"{registry}/{_as_path(rootprj)}/{_as_path(project)}/{repository}"
+
+
+@dataclasses.dataclass(frozen=True)
+class ImageDecision:
+    """Which root project one image reference was rendered with, and why."""
+
+    param: str
+    image: str
+    project: str  # colon notation, without rootprj
+    obs_project: str  # the project that was (or would have been) listed
+    rootprj: str  # the root project used in ``value``
+    reason: str  # "no-fallback" | "present" | "fallback"
+    value: str  # rendered registry path
+
+
+class ImageResolver:
+    """Renders image references, choosing the rootprj per image.
+
+    *list_packages* returns the package names of an OBS project (empty on
+    404); it is called at most once per project and only when
+    *fallback_rootprj* is set.
+    """
+
+    def __init__(
+        self,
+        registry: str,
+        rootprj: str,
+        fallback_rootprj: str | None,
+        list_packages: Callable[[str], set[str]],
+    ) -> None:
+        self.registry = registry
+        self.rootprj = rootprj
+        self.fallback_rootprj = fallback_rootprj or None
+        self._list_packages = list_packages
+        self._present: dict[str, set[str]] = {}
+
+    def _packages(self, obs_project: str) -> set[str]:
+        if obs_project not in self._present:
+            self._present[obs_project] = set(self._list_packages(obs_project))
+        return self._present[obs_project]
+
+    def decide(
+        self, param: str, ref: dict[str, Any], lane_project: str
+    ) -> ImageDecision:
+        project = ref.get("project") or lane_project
+        image: str = ref["image"]
+        obs_project = f"{self.rootprj}:{project}"
+        if self.fallback_rootprj is None:
+            rootprj, reason = self.rootprj, "no-fallback"
+        elif image in self._packages(obs_project):
+            rootprj, reason = self.rootprj, "present"
+        else:
+            rootprj, reason = self.fallback_rootprj, "fallback"
+        return ImageDecision(
+            param=param,
+            image=image,
+            project=project,
+            obs_project=obs_project,
+            rootprj=rootprj,
+            reason=reason,
+            value=registry_path(self.registry, rootprj, project, ref["repository"]),
+        )
+
+
+def resolve_entry_images(
+    entry: dict[str, Any], lane_project: str, resolver: ImageResolver
+) -> list[ImageDecision]:
+    """Replace every image reference in ``entry["parameters"]`` with its path.
+
+    Mutates *entry* in place; returns the decisions in parameter order.
+    """
+    decisions: list[ImageDecision] = []
+    params: dict[str, Any] = entry.get("parameters") or {}
+    for name, value in list(params.items()):
+        if is_image_ref(value):
+            decision = resolver.decide(name, value, lane_project)
+            params[name] = decision.value
+            decisions.append(decision)
+    return decisions
