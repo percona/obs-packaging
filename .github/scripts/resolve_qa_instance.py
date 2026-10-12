@@ -15,7 +15,8 @@ into shell: ``QA_PROJECT`` (strict colon-notation name), ``QA_PR_NUMBER``
 Writes flat scalars to ``$GITHUB_OUTPUT``: instance_name, instance_apiurl,
 instance_user, instance_registry, instance_env (JSON object or ``null``) and
 ``rootprj`` -- the instance's production root, or ``<pr_rootprj>:pr-<N>`` when
-``QA_PR_NUMBER`` is given.
+``QA_PR_NUMBER`` is given.  ``instance_rootprj`` -- the instance's production
+root, in both modes (fallback for qa: image references).
 
 Required env vars:
   OBS_INSTANCES   JSON list of instance objects
@@ -147,6 +148,7 @@ def main() -> None:
         "instance_registry": str(inst.get("registry", "") or ""),
         "instance_env": json.dumps(inst.get("env")) if inst.get("env") else "null",
         "rootprj": rootprj,
+        "instance_rootprj": str(inst.get("rootprj", "") or ""),
     }
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
         for key, value in outputs.items():

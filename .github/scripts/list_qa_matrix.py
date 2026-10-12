@@ -137,6 +137,11 @@ def main() -> None:
                 file=sys.stderr,
             )
             continue
+        if result.stderr.strip():
+            # `qa show` reports image-reference decisions (which rootprj each
+            # image path got) on stderr; keep them in the detect log.
+            for line in result.stderr.rstrip().splitlines():
+                print(f"  {project}: {line.strip()}", file=sys.stderr)
         try:
             entries = json.loads(result.stdout or "[]")
         except json.JSONDecodeError as exc:
