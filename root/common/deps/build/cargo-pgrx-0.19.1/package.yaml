@@ -1,0 +1,23 @@
+title: cargo-pgrx 0.19.1 build tool
+description: |
+  cargo-pgrx 0.19.1 — the build orchestrator for pgrx-based PostgreSQL
+  extensions. Pinned to match extensions that depend on the pgrx 0.19.1
+  runtime (e.g. postgresql_anonymizer). RPM-only; consumed via
+  `BuildRequires: cargo-pgrx = 0.19.1`.
+
+build:
+  # RHEL 8's rust (pulled by BuildRequires: cargo) needs libLLVM.so.20.1,
+  # which the EL8 repo/module path doesn't provide. No RHEL 8 pgrx consumer
+  # exists, so disable it rather than bundle a self-contained toolchain.
+  RockyLinux_8: false
+  UBI_8: false
+  # Rocky 9.6's rust (1.84) lacks the edition2024 cargo feature that
+  # cargo-pgrx requires (stabilized in 1.85). All pgrx consumers are
+  # UBI_9-only (staging extras), so no RockyLinux_9.6 consumer exists.
+  RockyLinux_9.6: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Leap_16: false
+  openSUSE_Tumbleweed: false

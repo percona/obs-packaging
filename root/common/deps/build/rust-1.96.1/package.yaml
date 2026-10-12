@@ -1,0 +1,15 @@
+title: rust 1.96.1
+description: |
+  Rust 1.96.1 toolchain built to satisfy the compiler requirements
+  of cargo-pgrx 0.19.1, which requires rustc 1.96 or later.
+
+build:
+  RockyLinux_8: false
+  UBI_8: false
+  RockyLinux_9.6: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Leap_16: false
+  openSUSE_Tumbleweed: false
