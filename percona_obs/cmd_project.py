@@ -647,19 +647,18 @@ def _validate_qa_image_refs(
         project = ":".join(proj.relative_to(common.REPO_ROOT).parts)
         try:
             lanes = _load_qa_lanes(project, env_vars or {})
+            for lane in lanes:
+                for entry in lane.entries:
+                    for msg in image_ref_errors(
+                        entry, project, resolve_project_path, repositories_of
+                    ):
+                        where = f"{lane.package}: " if lane.package else ""
+                        errors.append((yaml_path, where + msg))
         except SystemExit as exc:
             msg = str(exc)
-            if "${" in msg or "unresolv" in msg.lower():
+            if "undefined variable ${" in msg:
                 continue  # reported by _validate_env_vars
             errors.append((yaml_path, msg.removeprefix("error: ")))
-            continue
-        for lane in lanes:
-            for entry in lane.entries:
-                for msg in image_ref_errors(
-                    entry, project, resolve_project_path, repositories_of
-                ):
-                    where = f"{lane.package}: " if lane.package else ""
-                    errors.append((yaml_path, where + msg))
     return errors
 
 
