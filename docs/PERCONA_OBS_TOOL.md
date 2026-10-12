@@ -139,6 +139,16 @@ default < profile `registry:` < profile `env:` entry < explicit `-e OBS_CONTAINE
 Write the key with `profile create --registry HOST`; omitting the flag on
 `-P name profile create name` keeps the profile's current value (like the slice flags).
 
+### `image-fallback-rootprj`: where unpromoted images live
+
+`qa:` image references (see *Image references* under *Triggering Jenkins QA pipelines*)
+render against the profile's `rootprj`. When the profile also carries
+`image-fallback-rootprj: isv:percona`, an image that the current root project does not
+hold is rendered against that root instead. CI writes the key into PR profiles only
+(`obs-pr-check.yml`, `obs-qa-run.yml` with a PR number); `--image-fallback-rootprj ROOTPRJ`
+overrides it on the command line. Setting it makes `qa show` / `qa run` list the packages
+of each referenced project once.
+
 `--narrow-repos RockyLinux_9,ssl*` keeps only the named repositories the profile already accepts
 and exits 3 when nothing is left; the PR workflow uses it for repo labels. Entries are matched
 against the profile's rules as literal names: a glob such as `ssl*` is kept only if the profile
@@ -737,7 +747,7 @@ discovered on disk from the project's direct package directories (symlinks into
 `_shared/` are followed and `%!{...}` macros resolve from the link's location,
 so one block under `_shared/<pkg>/package.yaml` renders per major), without
 descending into subprojects. The package's `obs/_link`, if any, is irrelevant.
-The tool never calls OBS for QA.
+The tool calls OBS from `qa show` / `qa run` only to resolve image references when `image-fallback-rootprj` is set (one package listing per project).
 
 ```yaml
 # root/ppg/staging/_shared/pg_tde/package.yaml
