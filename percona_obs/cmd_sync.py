@@ -30,6 +30,7 @@ from .common import (
     REPO_ROOT,
     _REPO_DIR,
     _load_project_config_with_inheritance,
+    _macros_chain_files,
     _print_action,
     _print_aggregate,
     _print_ok,
@@ -59,7 +60,8 @@ from .release_copy import (
     collect_release_subprojects,
     release_tree,
 )
-from .release_record import release_tags
+from .github_api import last_synced_head_sha, repo_slug_from_url
+from .release_record import current_release, release_tags
 from .project_config import (
     RepositoryFilter,
     package_in_slice,
@@ -105,6 +107,7 @@ from .obs_api import (
     _fetch_obs_subproject_names,
     _obs_project_exists,
     _upload_obs_files,
+    set_project_description_marker,
 )
 from .release_scope import collect_release_scope
 from .release_freeze import (
@@ -2492,6 +2495,42 @@ def _check_source_unchanged_since_tag(source_project_id: str, tag: str, args) ->
         )
 
 
+def _run_frozen(
+    apiurl, quiesce_scope, freeze_scope, freeze_packages_map, args, action
+) -> None:
+    """Drain, green-check and freeze the source scope, run ``action``, restore."""
+    snapshots: dict[str, str] = {}
+    pkg_snapshots: dict[tuple[str, str], str] = {}
+    if not args.no_freeze:
+        _print_pending(f"draining scheduler for {len(quiesce_scope)} project(s)")
+        wait_for_quiesce(
+            apiurl,
+            quiesce_scope,
+            timeout_s=args.freeze_timeout,
+            packages=freeze_packages_map,
+        )
+        problems = assert_all_green(apiurl, quiesce_scope, packages=freeze_packages_map)
+        if problems:
+            listing = "\n".join(f"  {p}" for p in problems[:50])
+            raise SystemExit(
+                f"error: source projects are not fully green:\n{listing}\n"
+                "Fix the failures (or use --no-freeze to bypass at your own risk)."
+            )
+        snapshots = freeze_builds(apiurl, freeze_scope)
+        try:
+            pkg_snapshots = freeze_packages(apiurl, freeze_packages_map)
+        except Exception:
+            restore_builds(apiurl, snapshots)
+            raise
+    try:
+        action()
+    finally:
+        if pkg_snapshots:
+            restore_packages(apiurl, pkg_snapshots)
+        if snapshots:
+            restore_builds(apiurl, snapshots)
+
+
 def cmd_sync_release(args) -> None:
     """Release packages from an OBS source project to a release target.
 
@@ -2599,40 +2638,6 @@ def cmd_sync_release(args) -> None:
             "Re-run 'percona-obs project release' to regenerate the release tree."
         )
 
-    def _freeze_and_run(release_all) -> None:
-        snapshots: dict[str, str] = {}
-        pkg_snapshots: dict[tuple[str, str], str] = {}
-        if not args.no_freeze:
-            _print_pending(f"draining scheduler for {len(quiesce_scope)} project(s)")
-            wait_for_quiesce(
-                apiurl,
-                quiesce_scope,
-                timeout_s=args.freeze_timeout,
-                packages=freeze_packages_map,
-            )
-            problems = assert_all_green(
-                apiurl, quiesce_scope, packages=freeze_packages_map
-            )
-            if problems:
-                listing = "\n".join(f"  {p}" for p in problems[:50])
-                raise SystemExit(
-                    f"error: source projects are not fully green:\n{listing}\n"
-                    "Fix the failures (or use --no-freeze to bypass at your own risk)."
-                )
-            snapshots = freeze_builds(apiurl, freeze_scope)
-            try:
-                pkg_snapshots = freeze_packages(apiurl, freeze_packages_map)
-            except Exception:
-                restore_builds(apiurl, snapshots)
-                raise
-        try:
-            release_all()
-        finally:
-            if pkg_snapshots:
-                restore_packages(apiurl, pkg_snapshots)
-            if snapshots:
-                restore_builds(apiurl, snapshots)
-
     _print_pending(f"checking release project {release_obs_project}")
     project_exists = _obs_project_exists(apiurl, release_obs_project)
 
@@ -2650,7 +2655,12 @@ def cmd_sync_release(args) -> None:
         _create_release_project(apiurl, source_obs_project, release_obs_project)
         _copy_project_conf(apiurl, source_obs_project, release_obs_project)
 
-    _freeze_and_run(
+    _run_frozen(
+        apiurl,
+        quiesce_scope,
+        freeze_scope,
+        freeze_packages_map,
+        args,
         lambda: release_tree(
             apiurl,
             source_obs_project,
@@ -2659,8 +2669,220 @@ def cmd_sync_release(args) -> None:
             args.rootprj,
             shared_env_vars,
             verify_timeout=args.verify_timeout,
-        )
+        ),
     )
 
     suffix = f" (update: {tag})" if project_exists and tag else ""
     _print_ok(f"release  {source_obs_project} → {release_obs_project}{suffix}")
+
+
+def _scope_local_paths(
+    source_path: Path,
+    freeze_scope: "list[str]",
+    freeze_packages_map: "dict[str, set[str]]",
+    rootprj: str,
+) -> "list[Path]":
+    """Local git paths whose content decides the released binaries: the
+    source tree, its macros chain, every whole-frozen project and every
+    aggregate-frozen package."""
+    paths: list[Path] = [source_path, *_macros_chain_files(source_path)]
+    for prj in freeze_scope:
+        p = resolve_project_path(prj[len(rootprj) + 1 :])
+        if p.is_dir() and p not in paths:
+            paths.append(p)
+    for prj, pkgs in freeze_packages_map.items():
+        base = resolve_project_path(prj[len(rootprj) + 1 :])
+        paths.extend(base / pkg for pkg in sorted(pkgs))
+    return paths
+
+
+def _changed_files_between(a: str, b: str, paths: "list[Path]") -> "list[str]":
+    """``git diff --name-only a b -- paths`` (both commits must exist locally)."""
+    for sha in (a, b):
+        r = subprocess.run(
+            ["git", "cat-file", "-e", f"{sha}^{{commit}}"],
+            cwd=_REPO_DIR,
+            capture_output=True,
+        )
+        if r.returncode != 0:
+            raise SystemExit(
+                f"error: commit {sha} is not available locally; "
+                "fetch the repository (full history) and retry"
+            )
+    rel = [str(p.relative_to(_REPO_DIR)) if p.is_absolute() else str(p) for p in paths]
+    r = subprocess.run(
+        ["git", "diff", "--name-only", a, b, "--", *rel],
+        cwd=_REPO_DIR,
+        capture_output=True,
+        text=True,
+    )
+    if r.returncode != 0:
+        raise SystemExit(f"error: git diff {a} {b} failed: {r.stderr.strip()}")
+    return [l.strip() for l in r.stdout.splitlines() if l.strip()]
+
+
+def cmd_sync_prerelease(args) -> None:
+    """Hop 1: copy a staging project tree into this PR's pre-release project.
+
+    Runs with the PR profile (``-P pr-N``); ``--branch-from`` names the
+    profile of the production instance that holds staging.  Steps (spec §2):
+    record check, pre-release meta from the mirrors with publish forced on,
+    drain/green/freeze staging, osc release, verify, restore, pin
+    ``source_commit`` in the pre-release description.
+    """
+    release_path = resolve_project_path(args.project)
+    release_file = release_path / "release.yaml"
+    if not release_file.is_file():
+        raise SystemExit(
+            f"error: release.yaml not found at {release_path.relative_to(_REPO_DIR)}"
+        )
+    env_vars = parse_env_overrides(args.env_overrides) if args.env_overrides else {}
+    release_data = load_yaml_with_env(release_file, env_vars)
+    source_project_id = release_data.get("project")
+    if not source_project_id:
+        raise SystemExit(f"error: release.yaml missing 'project' field: {release_file}")
+    entry = current_release(release_data)
+    if entry is None:
+        raise SystemExit("error: release.yaml has no releases: entries")
+    source_commit = args.source_commit or entry.source_commit
+    if not source_commit:
+        raise SystemExit(
+            f"error: release {entry.tag} has no source_commit in release.yaml; "
+            "re-run 'percona-obs project release' (or pass --source-commit)"
+        )
+
+    branch_profile = _load_profile(args.branch_from)
+    source_rootprj = branch_profile.get("rootprj", "")
+    if not source_rootprj:
+        raise SystemExit(f"error: profile {args.branch_from!r} has no rootprj")
+    apiurl: str = osc.conf.config["apiurl"]
+    source_obs_project = f"{source_rootprj}:{source_project_id}"
+    prerelease_obs_project = f"{args.rootprj}:{args.project}"
+    source_path = resolve_project_path(source_project_id)
+    # Mirror paths are rewritten to the PR root through ${OBS_ROOTPRJ}.
+    shared_env_vars = {**env_vars, **auto_rootprj_env(args.rootprj)}
+    # The freeze scope lives on the production root.
+    source_env_vars = {**env_vars, **auto_rootprj_env(source_rootprj)}
+
+    subproject_pairs, missing_mirrors = collect_release_subprojects(
+        source_project_id, release_path
+    )
+    source_sub_obs_projects = [
+        f"{source_obs_project}:{name}" for name, _ in subproject_pairs
+    ]
+    freeze_scope, freeze_packages_map = _build_freeze_scope(
+        source_obs_project,
+        source_sub_obs_projects,
+        source_path,
+        source_project_id,
+        source_rootprj,
+        source_env_vars,
+    )
+    quiesce_scope = freeze_scope + sorted(freeze_packages_map)
+
+    # --- record check (spec §2, step 2) ---
+    if not args.force:
+        synced = args.synced_commit or last_synced_head_sha(
+            repo_slug_from_url(
+                shared_env_vars.get("PERCONA_OBS_PACKAGING_REPO")
+                or _load_profile_env(args.branch_from).get(
+                    "PERCONA_OBS_PACKAGING_REPO", ""
+                )
+            )
+        )
+        changed = _changed_files_between(
+            source_commit,
+            synced,
+            _scope_local_paths(
+                source_path, freeze_scope, freeze_packages_map, source_rootprj
+            ),
+        )
+        if changed:
+            listing = "\n".join(f"  {f}" for f in changed[:50])
+            raise SystemExit(
+                f"error: staging changed since the cut ({source_commit[:12]} → "
+                f"{synced[:12]}):\n{listing}\n"
+                "Re-run 'percona-obs project release' on a rebased branch."
+            )
+        _print_same(
+            f"source record {source_commit[:12]} matches synced main {synced[:12]}"
+        )
+
+    if missing_mirrors:
+        listing = "\n".join(
+            f"  {source_project_id}:{n}" for n in sorted(missing_mirrors)
+        )
+        raise SystemExit(
+            f"error: staging subprojects have no release mirror:\n{listing}\n"
+            "Re-run 'percona-obs project release' to regenerate the release tree."
+        )
+
+    if args.dry_run:
+        failures: list[str] = []
+        release_id = entry.tag.split("/")[-1]
+        changelog_file = release_path / "CHANGELOG.md"
+        if not changelog_file.is_file():
+            failures.append("CHANGELOG.md is missing")
+        elif f"## [{release_id}]" not in changelog_file.read_text("utf-8"):
+            failures.append(f"CHANGELOG.md has no '## [{release_id}]' section")
+        r = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", f"refs/tags/{entry.tag}"],
+            capture_output=True,
+            cwd=_REPO_DIR,
+        )
+        if r.returncode == 0:
+            failures.append(f"tag {entry.tag} already exists")
+        if not _obs_project_exists(apiurl, source_obs_project):
+            failures.append(f"source project {source_obs_project} not found on OBS")
+        else:
+            failures.extend(
+                f"not green: {p}"
+                for p in assert_all_green(
+                    apiurl, quiesce_scope, packages=freeze_packages_map
+                )
+            )
+        if failures:
+            for f in failures:
+                print(f"  ✗ {f}", file=sys.stderr)
+            raise SystemExit("error: prerelease dry-run failed")
+        _print_ok(f"prerelease dry-run passed for {entry.tag}  (dry run)")
+        return
+
+    # Top-level pre-release meta from the mirror, publish forced on (spec §1).
+    apply_mirror_meta(
+        apiurl,
+        prerelease_obs_project,
+        release_path,
+        args.rootprj,
+        shared_env_vars,
+        publish_override=True,
+    )
+
+    _run_frozen(
+        apiurl,
+        quiesce_scope,
+        freeze_scope,
+        freeze_packages_map,
+        args,
+        lambda: release_tree(
+            apiurl,
+            source_obs_project,
+            prerelease_obs_project,
+            subproject_pairs,
+            args.rootprj,
+            shared_env_vars,
+            publish_override=True,
+            verify_timeout=args.verify_timeout,
+        ),
+    )
+
+    set_project_description_marker(
+        apiurl, prerelease_obs_project, "source_commit", source_commit
+    )
+    for name, _ in subproject_pairs:
+        set_project_description_marker(
+            apiurl, f"{prerelease_obs_project}:{name}", "source_commit", source_commit
+        )
+    _print_ok(
+        f"prerelease  {source_obs_project} → {prerelease_obs_project} ({entry.tag})"
+    )

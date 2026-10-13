@@ -33,6 +33,7 @@ from .cmd_sync import (
     cmd_sync_delete,
     cmd_sync_promote,
     cmd_sync_release,
+    cmd_sync_prerelease,
 )
 from .common import (
     _DIM,
@@ -353,6 +354,69 @@ def build_parser() -> argparse.ArgumentParser:
         help="Validate the release (mirrors, changelog, tag, green staging) without writing to OBS.",
     )
     sync_release_parser.set_defaults(func=cmd_sync_release)
+
+    sync_prerelease_parser = sync_subparsers.add_parser(
+        "prerelease",
+        help="Hop 1 of a release: copy a staging tree into this PR's pre-release project.",
+    )
+    sync_prerelease_parser.add_argument(
+        "project", help="Release project identifier (e.g. ppg:releases:18)."
+    )
+    sync_prerelease_parser.add_argument(
+        "--branch-from",
+        required=True,
+        metavar="PROFILE",
+        dest="branch_from",
+        help="Profile of the production instance holding the staging source.",
+    )
+    sync_prerelease_parser.add_argument(
+        "--synced-commit",
+        metavar="SHA",
+        default=None,
+        dest="synced_commit",
+        help="Head SHA of the last successful sync-main run (default: looked up with gh).",
+    )
+    sync_prerelease_parser.add_argument(
+        "--source-commit",
+        metavar="SHA",
+        default=None,
+        dest="source_commit",
+        help="Override the source_commit recorded in release.yaml.",
+    )
+    sync_prerelease_parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Skip the source_commit record check.",
+    )
+    sync_prerelease_parser.add_argument(
+        "--no-freeze",
+        action="store_true",
+        default=False,
+        help="Skip the drain/green-check/build-freeze sequence around osc release.",
+    )
+    sync_prerelease_parser.add_argument(
+        "--freeze-timeout",
+        type=int,
+        default=3600,
+        dest="freeze_timeout",
+        help="Seconds to wait for the source scheduler to drain (default: 3600).",
+    )
+    sync_prerelease_parser.add_argument(
+        "--verify-timeout",
+        type=int,
+        default=600,
+        dest="verify_timeout",
+        help="Seconds to wait for copied packages to land (default: 600; 0 disables).",
+    )
+    sync_prerelease_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        dest="dry_run",
+        help="Run the record check, mirror/changelog/tag checks and the green check only.",
+    )
+    sync_prerelease_parser.set_defaults(func=cmd_sync_prerelease)
 
     build_parser_ = subparsers.add_parser(
         "build",
