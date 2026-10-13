@@ -542,6 +542,17 @@ merge a non-release PR (one that does not create a version tag) once its OBS bui
 Options:
 - `--yes` / `-y` — skip the confirmation prompt.
 
+### Release hops (`sync prerelease`, `sync release --from`)
+
+A release ships in two hops (spec: `docs/superpowers/specs/2026-10-13-prerelease-project-release-flow-design.md`).
+`sync prerelease <releases-project> --branch-from <profile>` copies staging into a PR pre-release
+project after checking the `source_commit` recorded in `release.yaml` against the last synced `main`
+and stamps that SHA into the pre-release project descriptions. `sync release <project> --from <pre-release-project>`
+then copies the pre-release into the release project (no freeze, no git divergence check) after
+verifying the marker equals the tagged entry's `source_commit`. `release.yaml` entries are plain tag
+strings (historical) or `{tag, source_commit}` mappings; `obs-pr-cleanup.yml` and
+`.github/scripts/update_version_lists.py` read both. CI integration follows in rollout step 2.
+
 ### `sync promote [--dry-run] [--no-services] [--no-cache] [-m MSG] [project] [package]`
 
 Promotes branch packages (created by a prior `--branch-from` sync) back to full source syncs. For each targeted package whose latest OBS revision comment matches the `branch:` pattern, the `_aggregate` is replaced with the local `obs/` source files (running any `mode="manual"` services as needed). Packages that already hold real sources are skipped (`=` output).
@@ -1036,6 +1047,9 @@ When branching is involved, always confirm which OBS instance is being queried:
 | Root project config | `root/project.yaml` |
 | Repo-owned OBS service (npm lockfile generation) | `tools/obs-services/npm_lockfile` |
 | Version-independent tool with its own dependency project (pgAdmin) | `root/ppg/staging/common/tools/percona-pgadmin4/` + `root/ppg/common/deps/pgadmin/` |
+| Shared release hop mechanics (mirror meta apply, `osc release` copy, verify, orphans) | `percona_obs/release_copy.py` |
+| `release.yaml` `releases:` entries (tag strings and `{tag, source_commit}`) | `percona_obs/release_record.py` |
+| `gh api` lookups (last synced `main` commit) | `percona_obs/github_api.py` |
 | Management script | `percona-obs` (commands: `sync push`, `sync delete`, `sync promote`, `build trigger`, `build status`, `build dependency`, `profile create`, `profile list`, `project verify`) |
 
 ---
@@ -1099,7 +1113,7 @@ and dispatches the release before the shared cleanup step runs.
 
 **Release PR path** (merged, and every changed `root/**` file is under `root/*/releases/`):
 1. For each `release.yaml` changed by the PR, reads the last entry of its `releases:`
-   list from the **merge commit** blob (not the PR head) and creates that git tag
+   list (a plain tag string or a `{tag, source_commit}` mapping — both are understood) from the **merge commit** blob (not the PR head) and creates that git tag
    (e.g. `ppg/17.9-1`) pointing at `merge_commit_sha`, using `GITHUB_TOKEN`
    (`contents: write`). A tag-creation error other than "already exists" fails the job.
 2. Dispatches `obs-release.yml` for that tag via

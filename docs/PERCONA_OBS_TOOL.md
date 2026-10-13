@@ -987,6 +987,10 @@ devel/staging/releases tier layout). Release IDs include the PG minor version an
 counter (e.g. `17.9-1`, `17.9-2`, `17.10-1`). A single OBS release project
 (`ppg:releases:17`) covers all minor versions for a PG major.
 
+Until rollout step 2 (the workflows PR) lands, CI still runs the single-hop `sync release`
+on merge; the two hops (`sync prerelease`, `sync release --from`) are available for
+manual and rehearsal use.
+
 The process is PR-based:
 
 1. **`project release`** — auto-derives the release ID from OBS, regenerates the full
@@ -1045,7 +1049,16 @@ to override the arithmetic.
 
 # Override both
 ./percona-obs -P local project release ppg:staging:17 --release-name 17 --release-id 17.9-1
+
+# Name the source commit explicitly (skips the gh lookup)
+./percona-obs -P local project release ppg:staging:17 --source-commit <sha>
 ```
+
+Before cutting, run `git fetch --tags` (or `git fetch percona --tags`): the open-release
+detection below reads **local** git tags, so without a fresh fetch a shipped release could
+be mistaken for an open one (the command prints a note when it refreshes). The command
+also needs `gh` (logged in, with network access) on every run unless `--source-commit` is
+passed, because it resolves the last synced `main` commit through the GitHub API.
 
 `source-project` must be a `staging`-tier project — any other tier is rejected with an
 error. `project release <source-project>` does the following:
@@ -1058,23 +1071,32 @@ error. `project release <source-project>` does the following:
    - If no `percona-postgresql` / `percona-postgresqlNN` package directory exists anywhere
      under the source tree (read from git; e.g. `ppg/staging/common`), a plain counter
      `<name>-N` is used instead (tag `ppg/common-<N>`). A PG major whose OBS listing is transiently empty still fails with the old error (use `--release-id` to override), so an OBS blip can never produce a counter tag for a major.
-2. **Fetches** the source project's repository topology from OBS.
-3. **Regenerates the full mirror tree**, on every release, not just the first: the
+2. **Resolves the source commit** — the head SHA of the last `sync-main.yml` run on
+   `main` whose sync jobs succeeded (`gh api`), or `--source-commit <sha>`. It must be
+   an ancestor of HEAD. It is recorded in `release.yaml` so the release names the
+   staging tree its binaries were built from.
+3. **Open-release refresh** — if the last `releases:` entry has no git tag yet, the
+   release is still in flight: the same id is kept, the mirror tree is regenerated, the
+   `CHANGELOG.md` section for that id is replaced and `source_commit` is updated. Only
+   when the tag exists is the next id derived and appended (`--release-id` always wins).
+4. **Fetches** the source project's repository topology from OBS.
+5. **Regenerates the full mirror tree**, on every release, not just the first: the
    top-level `project.yaml` plus one nested mirror directory per staging subproject
    (`containers/`, `extras/`, `extras/containers/`, `tarballs/`). All mirrors get
    `build: false`, `publish:` flags are carried over, and subproject paths — including
    intra-project sibling paths — are rewritten to the release namespace. A mirror
    directory whose staging source no longer exists is **deleted**.
-4. **Builds `CHANGELOG.md`** — compares built package versions from the top-level staging
+6. **Builds `CHANGELOG.md`** — compares built package versions from the top-level staging
    project, `extras`, and `tarballs` against the release OBS project (for updates) and
    generates entries with upstream URLs. Container images are listed per flavor (`ubi8`
    and `ubi9` as distinct entries); the previous-release image diff is queried from
    whichever project actually holds the previous release's images, producing real
    `prev → new` diffs instead of full package dumps (a full dump remains only for a true
    first release).
-5. **Appends** the new tag to `release.yaml`'s `releases:` list and prepends the new
-   section to `CHANGELOG.md`.
-6. **Commits** the generated files locally with `git commit -s`. Pushing the branch and
+7. **Appends** a `{tag, source_commit}` entry to `release.yaml`'s `releases:` list (or
+   updates the open one) and prepends the new section to `CHANGELOG.md` (or replaces the
+   open one's).
+8. **Commits** the generated files locally with `git commit -s`. Pushing the branch and
    opening the PR remain manual steps — `project release` does not do either.
 
 The git tag (e.g. `ppg/17.9-1`) is created automatically by `obs-pr-cleanup.yml`, on the
@@ -1088,13 +1110,15 @@ anything by itself.
 repository: ${PERCONA_OBS_PACKAGING_REPO}
 project: ppg:staging:17
 releases:
-  - ppg/17.9-1          # first release
-  - ppg/17.9-2          # update release
-  - ppg/17.10-1         # minor version bump
+  - ppg/17.9-1                       # historical entries stay plain tags
+  - tag: ppg/17.10-1                 # written by project release
+    source_commit: 9e9d9738c0ffee…   # full SHA of main the binaries were built from
 ```
 
-`sync release` always uses the **last** entry as the current tag. Old entries are
-kept for history. The backward-compat `revision:` field (plain string) is still
+The last entry is the current release, in either form (plain tag string or
+`{tag, source_commit}` mapping). `sync release` always uses it as the current tag. Old
+entries are kept for history. `sync release --from` and `sync prerelease` require the
+last entry to carry a `source_commit`. The backward-compat `revision:` field (plain string) is still
 accepted and treated as a single-element list.
 
 ### CHANGELOG.md format
@@ -1177,6 +1201,50 @@ the pending `obs-release.yml` run is **cancelled** rather than requeued — the 
 a cancelled "OBS Release" run with no release having happened. Recovery is the same
 manual command above, re-run once the concurrency group is free.
 
+### `sync prerelease` — hop 1 (staging → PR pre-release)
+
+Run with the PR profile; `--branch-from` names the production profile holding staging:
+
+```sh
+./percona-obs -P pr-12 sync prerelease ppg:releases:18 --branch-from main
+```
+
+Steps: (1) require a `source_commit` on the last `release.yaml` entry; (2) **record
+check** — the freeze-scope paths (source tree, its `macros.yaml` chain, every
+whole-frozen project, every aggregate-frozen package) must be identical between
+`source_commit` and the last synced `main` (`--synced-commit`, else `gh api`), or it
+fails with "staging changed since the cut"; edits under `root/<product>/staging/_shared/...`
+count as staging changes because the check follows the `_shared/` symlink targets of
+packages; (3) pre-release meta from the mirrors, **publish forced on**; (4) drain, assert
+green, freeze, `osc release`, verify, restore; (5) `source_commit: <sha>` appended to each
+pre-release project description.
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--branch-from PROFILE` | required | Profile of the production instance holding the staging source. |
+| `--synced-commit SHA` | `gh` lookup | Head SHA of the last successful sync-main run. |
+| `--source-commit SHA` | last entry's | Override the `source_commit` from `release.yaml`. |
+| `--force` | off | Skips the record check (2). |
+| `--no-freeze` | off | Skips the drain/green-check/freeze sequence. |
+| `--freeze-timeout` | `3600` | Bound on the drain step, seconds. |
+| `--verify-timeout` | `600` | Bound on the post-release verify poll (`0` disables). |
+| `--dry-run` | off | Runs (1), (2), the mirror/changelog/tag checks and the green check only. |
+
+The workflow that calls this on release PRs lands in rollout step 2.
+
+### `sync release --from` — hop 2 (pre-release → release project)
+
+```sh
+./percona-obs -P main sync release ppg:releases:18 --from isv:percona:PR:pr-12:ppg:releases:18
+```
+
+No freeze, no git divergence check. The last `release.yaml` entry must have a
+`source_commit` and the pre-release description's marker must equal it; a missing or
+different marker, or an entry without `source_commit`, is refused (`--force` skips both
+checks). Then the release project meta is applied from the mirrors and binaries are copied
+with `osc release`. Known limitation: `--dry-run` together with `--from` still only runs
+the staging-side dry-run checks.
+
 ### Running `sync release` manually
 
 For local testing or recovery from a failed CI run:
@@ -1195,6 +1263,7 @@ Flags:
 | `--no-freeze` | off | Skips the drain/freeze/restore sequence (§ below) — for recovery scenarios where staging is already known idle. |
 | `--freeze-timeout` | `3600` (seconds) | Bound on the drain step; the release fails rather than waiting forever for a stuck package. |
 | `--verify-timeout` | `600` (seconds, `0` disables) | Bound on the post-release poll that confirms each released repo actually holds binaries. |
+| `--from OBS_PROJECT` | off | Hop 2: copy from this pre-release OBS project (full name) instead of staging; no freeze, no git divergence check. See above. |
 
 `sync release <release-project>` reads `release.yaml` and performs:
 

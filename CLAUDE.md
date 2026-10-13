@@ -47,6 +47,9 @@ Always use `git commit -s` (signed-off-by). Do not add `Co-Authored-By: Claude` 
 | `percona_obs/cmd_build.py` | `build trigger` / `build status` implementation |
 | `percona_obs/cmd_profile.py` | `profile` command implementation |
 | `percona_obs/obs_api.py` | OBS API wrappers |
+| `percona_obs/release_copy.py` | Shared release hop mechanics (mirror meta apply, `osc release` copy, verify, orphans) |
+| `percona_obs/release_record.py` | `release.yaml` `releases:` entries (tag strings and `{tag, source_commit}`) |
+| `percona_obs/github_api.py` | `gh api` lookups (last synced `main` commit) |
 | `percona_obs/common.py` | Shared constants, colour helpers, data utilities |
 | `percona_obs/targets.py` | Target resolution helpers |
 | `percona_obs/services.py` | Local OBS service execution + caching |
