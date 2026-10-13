@@ -708,3 +708,56 @@ def test_derive_release_id_without_server_package_errors_unless_counter_mode():
             release_name="17",
             versrel_lookup=lambda repo, arch, pkg: None,
         )
+
+
+def test_rewrite_qa_project_refs_recurses_and_keeps_env_tokens():
+    from percona_obs.cmd_project import _rewrite_qa_project_refs
+
+    qa = [
+        {
+            "pipeline": "p",
+            "parameters": {
+                "OBS_PROJECT": "${OBS_ROOTPRJ}:ppg:staging:17:containers",
+                "PLATFORMS": ["ppg:staging:17", "other"],
+            },
+        }
+    ]
+    out = _rewrite_qa_project_refs(qa, "ppg:staging:17", "ppg:releases:17")
+    assert (
+        out[0]["parameters"]["OBS_PROJECT"]
+        == "${OBS_ROOTPRJ}:ppg:releases:17:containers"
+    )
+    assert out[0]["parameters"]["PLATFORMS"] == ["ppg:releases:17", "other"]
+    assert qa[0]["parameters"]["PLATFORMS"][0] == "ppg:staging:17"  # input untouched
+
+
+def test_write_release_tree_carries_rendered_qa_blocks(tmp_path, monkeypatch):
+    import percona_obs.common as common
+
+    src = _staging_tree(tmp_path)
+    monkeypatch.setattr(cmd_project, "_REPO_DIR", tmp_path)
+    monkeypatch.setattr(common, "REPO_ROOT", tmp_path / "root")
+    (tmp_path / "root/macros.yaml").write_text("- PG_VERSION: 17.11\n")
+    (src / "containers" / "project.yaml").write_text(
+        (src / "containers" / "project.yaml").read_text()
+        + "qa:\n  - pipeline: p\n    parameters:\n"
+        "      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:17:containers\n"
+        "      VERSION: ppg-%!{PG_VERSION}\n"
+    )
+    rel = tmp_path / "root/ppg/releases/17"
+    _write_release_tree(
+        rel,
+        {"build": False, "repositories": []},
+        src,
+        "ppg:staging:17",
+        "ppg:releases:17",
+        "ppg",
+        "17",
+    )
+    containers = yaml.safe_load((rel / "containers" / "project.yaml").read_text())
+    assert containers["qa"][0]["parameters"] == {
+        "OBS_PROJECT": "${OBS_ROOTPRJ}:ppg:releases:17:containers",
+        "VERSION": "ppg-17.11",
+    }
+    tarballs = yaml.safe_load((rel / "tarballs" / "project.yaml").read_text())
+    assert "qa" not in tarballs

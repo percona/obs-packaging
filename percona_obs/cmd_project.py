@@ -1707,6 +1707,31 @@ def _is_relative_to(child: Path, parent: Path) -> bool:
         return False
 
 
+def _rewrite_qa_project_refs(value, source_project_id: str, release_project_id: str):
+    """Deep-copy a loaded ``qa:`` value replacing ``<source>``/``<source>:...``
+    project references inside strings with the release project.  Macros are
+    already rendered by the loader; ``${VAR}`` tokens are left as they are."""
+    if isinstance(value, str):
+        if value == source_project_id:
+            return release_project_id
+        return re.sub(
+            rf"(?<![A-Za-z0-9_]){re.escape(source_project_id)}(?=:|$|[^A-Za-z0-9_:])",
+            release_project_id,
+            value,
+        )
+    if isinstance(value, list):
+        return [
+            _rewrite_qa_project_refs(v, source_project_id, release_project_id)
+            for v in value
+        ]
+    if isinstance(value, dict):
+        return {
+            k: _rewrite_qa_project_refs(v, source_project_id, release_project_id)
+            for k, v in value.items()
+        }
+    return value
+
+
 def _write_release_tree(
     release_dir: Path,
     project_data: dict,
@@ -1765,6 +1790,10 @@ def _write_release_tree(
         for key in ("debuginfo", "publish", "project-config"):
             if key in source_sub_config:
                 sub_data[key] = source_sub_config[key]
+        if source_sub_config.get("qa") is not None:
+            sub_data["qa"] = _rewrite_qa_project_refs(
+                source_sub_config["qa"], source_project_id, release_project
+            )
         release_sub_dir = release_dir / Path(*subproject_name.split(":"))
         expected_dirs.add(release_sub_dir)
         release_sub_dir.mkdir(parents=True, exist_ok=True)
@@ -2450,6 +2479,13 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         project_data["debuginfo"] = source_debuginfo
     if source_prjconf:
         project_data["project-config"] = source_prjconf
+    top_cfg_no_env = _load_project_config_with_inheritance(
+        source_path, repo_filter=RepositoryFilter.EMPTY
+    )
+    if top_cfg_no_env.get("qa") is not None:
+        project_data["qa"] = _rewrite_qa_project_refs(
+            top_cfg_no_env["qa"], args.project, release_project
+        )
 
     if is_first_release:
         commit_msg = f"Release {release_project} ({release_id})"
