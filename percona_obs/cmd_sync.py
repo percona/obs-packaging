@@ -69,6 +69,7 @@ from .project_config import (
     prune_flag_map,
 )
 from .git_utils import (
+    _package_pathspecs,
     _generate_sync_message,
     _has_package_changes_since,
     _head_full_sha,
@@ -2686,13 +2687,29 @@ def _scope_local_paths(
     source tree, its macros chain, every whole-frozen project and every
     aggregate-frozen package."""
     paths: list[Path] = [source_path, *_macros_chain_files(source_path)]
+
+    def _add(path: Path) -> None:
+        if path not in paths:
+            paths.append(path)
+
+    project_dirs = [source_path]
     for prj in freeze_scope:
         p = resolve_project_path(prj[len(rootprj) + 1 :])
-        if p.is_dir() and p not in paths:
-            paths.append(p)
+        if p.is_dir():
+            _add(p)
+            project_dirs.append(p)
+    # Package dirs that are symlinks into _shared/: git sees only the link
+    # blob, so the link target must be a pathspec of its own.
+    for d in project_dirs:
+        for child in sorted(d.iterdir()):
+            if child.is_symlink():
+                for target in _package_pathspecs(child)[1:]:
+                    _add(target)
     for prj, pkgs in freeze_packages_map.items():
         base = resolve_project_path(prj[len(rootprj) + 1 :])
-        paths.extend(base / pkg for pkg in sorted(pkgs))
+        for pkg in sorted(pkgs):
+            for path in _package_pathspecs(base / pkg):
+                _add(path)
     return paths
 
 
