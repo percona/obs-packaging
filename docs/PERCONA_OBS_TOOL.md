@@ -1091,7 +1091,8 @@ error. `project release <source-project>` does the following:
    its staging project's `qa:` entries (macros rendered, project references rewritten to the
    release project), plus the `qa:` entries of its direct packages' `package.yaml` as
    project-level entries named `<package>.<segment>` (segment = the entry's `name` or its
-   `pipeline`), since mirrors have no package directories; a duplicate name fails the cut.
+   `pipeline`), since mirrors have no package directories (when a mirror has more than one entry, the entry
+   name becomes the check-name segment); a duplicate name fails the cut.
 6. **Builds `CHANGELOG.md`** — compares built package versions from the top-level staging
    project, `extras`, and `tarballs` against the release OBS project (for updates) and
    generates entries with upstream URLs. Container images are listed per flavor (`ubi8`

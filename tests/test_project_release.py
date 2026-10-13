@@ -842,6 +842,21 @@ def test_mirror_qa_entries_rejects_duplicate_names(tmp_path, monkeypatch):
         )
 
 
+def test_mirror_qa_entries_rejects_entry_without_name_or_pipeline(
+    tmp_path, monkeypatch
+):
+    import percona_obs.common as common
+    from percona_obs.cmd_project import _mirror_qa_entries
+
+    src = _staging_tree(tmp_path)
+    monkeypatch.setattr(common, "REPO_ROOT", tmp_path / "root")
+    _pkg_with_qa(src, "percona-pgaudit", "qa:\n  - parameters:\n      X: 1\n")
+    with pytest.raises(SystemExit):
+        _mirror_qa_entries(
+            {}, src, "ppg:staging:17", "ppg:staging:17", "ppg:releases:17"
+        )
+
+
 def test_mirror_qa_entries_follows_shared_symlinks(tmp_path, monkeypatch):
     import percona_obs.common as common
     from percona_obs.cmd_project import _mirror_qa_entries
