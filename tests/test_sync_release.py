@@ -473,5 +473,50 @@ def test_from_prerelease_marker_mismatch(tmp_path, monkeypatch):
         "apply_mirror_meta",
         lambda *a, **k: pytest.fail("no meta on mismatch"),
     )
+    monkeypatch.setattr(
+        cmd_sync, "release_tree", lambda *a, **k: pytest.fail("no copy on mismatch")
+    )
     with pytest.raises(SystemExit, match="source_commit mismatch"):
         cmd_sync.cmd_sync_release(_args_from(rel))
+
+
+def _bare_tag_setup(tmp_path, monkeypatch):
+    src, rel = _mk_tree(tmp_path, monkeypatch)
+    (rel / "tarballs").mkdir()
+    (rel / "tarballs" / "project.yaml").write_text(
+        "build: false\n" + _REPO_YAML.format(name="ssl3")
+    )
+    (rel / "release.yaml").write_text(
+        "project: ppg:staging:17\nreleases:\n  - ppg/17.11-1\n"
+    )
+    _wire_release_update_path(monkeypatch, src, rel)
+    monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda *a, **k: False)
+    monkeypatch.setattr(
+        cmd_sync, "read_project_description_marker", lambda a, p, k: None
+    )
+    return rel
+
+
+def test_from_prerelease_bare_tag_entry_refused(tmp_path, monkeypatch):
+    rel = _bare_tag_setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        cmd_sync, "apply_mirror_meta", lambda *a, **k: pytest.fail("no meta")
+    )
+    monkeypatch.setattr(
+        cmd_sync, "release_tree", lambda *a, **k: pytest.fail("no copy")
+    )
+    with pytest.raises(SystemExit, match="has no source_commit"):
+        cmd_sync.cmd_sync_release(_args_from(rel))
+
+
+def test_from_prerelease_force_skips_provenance_checks(tmp_path, monkeypatch):
+    rel = _bare_tag_setup(tmp_path, monkeypatch)
+    metas, copies = [], []
+    monkeypatch.setattr(
+        cmd_sync, "apply_mirror_meta", lambda a, prj, *r, **k: metas.append(prj)
+    )
+    monkeypatch.setattr(
+        cmd_sync, "release_tree", lambda a, s, t, *r, **k: copies.append((s, t))
+    )
+    cmd_sync.cmd_sync_release(_args_from(rel, force=True))
+    assert len(metas) == 1 and len(copies) == 1
