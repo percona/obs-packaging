@@ -54,6 +54,7 @@ from .common import (
     parse_env_overrides,
     resolve_project_path,
 )
+from .release_record import release_tags
 from .project_config import (
     RepositoryFilter,
     package_in_slice,
@@ -2636,10 +2637,7 @@ def cmd_sync_release(args) -> None:
     if not source_project_id:
         raise SystemExit(f"error: release.yaml missing 'project' field: {release_file}")
 
-    # Support both new plain-string list format and old revision field.
-    releases_list: list[str] = release_data.get("releases") or []
-    if not releases_list and release_data.get("revision"):
-        releases_list = [str(release_data["revision"])]
+    releases_list = release_tags(release_data)
     tag = releases_list[-1] if releases_list else ""
 
     apiurl: str = osc.conf.config["apiurl"]
