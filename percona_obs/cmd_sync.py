@@ -2650,6 +2650,11 @@ def cmd_sync_release(args) -> None:
         if entry is None:
             raise SystemExit("error: release.yaml has no releases: entries")
         if not args.force:
+            if not entry.source_commit:
+                raise SystemExit(
+                    f"error: release.yaml entry {entry.tag} has no source_commit; "
+                    "re-run 'percona-obs project release' (or pass --force)"
+                )
             marker = read_project_description_marker(
                 apiurl, from_project, "source_commit"
             )
