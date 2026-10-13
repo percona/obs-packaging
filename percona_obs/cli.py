@@ -353,6 +353,15 @@ def build_parser() -> argparse.ArgumentParser:
         dest="dry_run",
         help="Validate the release (mirrors, changelog, tag, green staging) without writing to OBS.",
     )
+    sync_release_parser.add_argument(
+        "--from",
+        metavar="OBS_PROJECT",
+        default=None,
+        dest="from_project",
+        help="Hop 2: copy from this pre-release OBS project (full name, e.g. "
+        "isv:percona:PR:pr-12:ppg:releases:18) instead of from staging; "
+        "no freeze, no git divergence check.",
+    )
     sync_release_parser.set_defaults(func=cmd_sync_release)
 
     sync_prerelease_parser = sync_subparsers.add_parser(
