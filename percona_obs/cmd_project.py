@@ -1422,6 +1422,28 @@ def cmd_project_install(args) -> None:
                 print()
 
 
+def _versrel_from_any_repo(
+    apiurl: str,
+    obs_project: str,
+    pkg: str,
+    repo_map: "dict[str, tuple[str, str]] | None",
+) -> str | None:
+    """Return *pkg*'s version-release from the first repository (in name order)
+    where it succeeded and whose binary list has a readable package file.
+
+    Only the first succeeded repository used to be tried, so a repository that
+    listed no parseable binary (only logs, or an error) gave None although
+    other repositories had one.
+    """
+    for repo, (arch, flavor) in sorted((repo_map or {}).items()):
+        name = f"{pkg}:{flavor}" if flavor else pkg
+        version = _fetch_pkg_versrel(apiurl, obs_project, repo, arch, name)
+        if version:
+            return version
+        logger.debug(f"no readable binary for {obs_project}/{repo}/{arch}/{name}")
+    return None
+
+
 def cmd_project_versions(args) -> None:
     """List all packages with their upstream version (YAML to stdout)."""
     package_name: str | None = getattr(args, "package", None)
@@ -1513,33 +1535,66 @@ def cmd_project_versions(args) -> None:
                     src_pkg = str(record["name"])
                 obs_project_records.setdefault(obs_proj, []).append((record, src_pkg))
 
+            succeeded_cache: dict[str, dict[str, dict[str, tuple[str, str]]]] = {}
+
+            def succeeded_in(obs_proj: str) -> dict[str, dict[str, tuple[str, str]]]:
+                if obs_proj not in succeeded_cache:
+                    succeeded_cache[obs_proj] = _fetch_build_results(apiurl, obs_proj)[
+                        1
+                    ]
+                return succeeded_cache[obs_proj]
+
             for obs_proj, pkg_record_pairs in obs_project_records.items():
-                _, succeeded_archs = _fetch_build_results(apiurl, obs_proj)
+                succeeded_archs = succeeded_in(obs_proj)
                 for record, pkg_name in pkg_record_pairs:
                     repo_map = succeeded_archs.get(pkg_name)
+                    if record["type"] == "package":
+                        searched = [obs_proj]
+                        version = _versrel_from_any_repo(
+                            apiurl, obs_proj, pkg_name, repo_map
+                        )
+                        if version is None and "_agg_src_project" in record:
+                            # An aggregate's binaries are also copied into the
+                            # project that aggregates them: look there when the
+                            # source project yields nothing (not built there,
+                            # not visible, or an API error).
+                            project_id = str(record["project"])
+                            target = (
+                                f"{args.rootprj}:{project_id}"
+                                if project_id
+                                else args.rootprj
+                            )
+                            name = str(record["name"])
+                            searched.append(target)
+                            version = _versrel_from_any_repo(
+                                apiurl, target, name, succeeded_in(target).get(name)
+                            )
+                        if version is None:
+                            logger.warning(
+                                f"{record['name']}: no version found: no "
+                                "succeeded build with a readable binary in "
+                                + " or ".join(searched)
+                            )
+                        record["version"] = version
+                        continue
                     if not repo_map:
                         record["version"] = None
                         continue
                     repo, (arch, _) = next(iter(sorted(repo_map.items())))
-                    if record["type"] == "package":
-                        record["version"] = _fetch_pkg_versrel(
+                    ci = _fetch_build_containerinfo(
+                        apiurl, obs_proj, repo, arch, pkg_name
+                    )
+                    if ci is not None:
+                        _apply_containerinfo(record, ci)
+                    else:
+                        record["version"] = _fetch_versrel_from_history(
                             apiurl, obs_proj, repo, arch, pkg_name
                         )
-                    else:  # image
-                        ci = _fetch_build_containerinfo(
-                            apiurl, obs_proj, repo, arch, pkg_name
-                        )
-                        if ci is not None:
-                            _apply_containerinfo(record, ci)
-                        else:
-                            record["version"] = _fetch_versrel_from_history(
-                                apiurl, obs_proj, repo, arch, pkg_name
-                            )
-                        pkgs = _fetch_build_container_packages(
-                            apiurl, obs_proj, repo, arch, pkg_name, args.rootprj
-                        )
-                        if pkgs is not None:
-                            record["packages"] = pkgs
+                    pkgs = _fetch_build_container_packages(
+                        apiurl, obs_proj, repo, arch, pkg_name, args.rootprj
+                    )
+                    if pkgs is not None:
+                        record["packages"] = pkgs
 
     for record in records:
         record.pop("_agg_src_project", None)
