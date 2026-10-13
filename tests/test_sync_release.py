@@ -71,6 +71,7 @@ class _Args:
         self.rootprj = rootprj
         self.env_overrides = None
         self.message = None
+        self.from_project = None
 
 
 def _wire_release_update_path(monkeypatch, src, rel):
@@ -411,3 +412,66 @@ def test_build_freeze_scope_merges_extra_sources(tmp_path, monkeypatch):
         "home:Admin:ppg:staging:18",
     ]
     assert packages == {"home:Admin:ppg:staging:common:tools": {"percona-pgbouncer"}}
+
+
+def _args_from(rel, **kw):
+    a = _Args(project="ppg:releases:17", rootprj="home:Admin")
+    a.from_project = "home:Admin:PR:pr-5:ppg:releases:17"
+    a.__dict__.update(kw)
+    return a
+
+
+def _mapping_release_yaml(rel, sha="b" * 40):
+    (rel / "release.yaml").write_text(
+        f"project: ppg:staging:17\nreleases:\n  - tag: ppg/17.11-1\n    source_commit: {sha}\n"
+    )
+
+
+def test_from_prerelease_skips_freeze_and_copies_from_it(tmp_path, monkeypatch):
+    src, rel = _mk_tree(tmp_path, monkeypatch)
+    (rel / "tarballs").mkdir()
+    (rel / "tarballs" / "project.yaml").write_text(
+        "build: false\n" + _REPO_YAML.format(name="ssl3")
+    )
+    _mapping_release_yaml(rel)
+    _wire_release_update_path(monkeypatch, src, rel)
+    monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda *a, **k: False)
+    monkeypatch.setattr(
+        cmd_sync, "read_project_description_marker", lambda a, p, k: "b" * 40
+    )
+    fail = lambda *a, **k: pytest.fail("freeze must be skipped with --from")
+    monkeypatch.setattr(cmd_sync, "wait_for_quiesce", fail)
+    monkeypatch.setattr(cmd_sync, "freeze_builds", fail)
+    monkeypatch.setattr(cmd_sync, "_create_release_project", fail)
+    metas, copies = [], []
+    monkeypatch.setattr(
+        cmd_sync, "apply_mirror_meta", lambda a, prj, *r, **k: metas.append(prj)
+    )
+    monkeypatch.setattr(
+        cmd_sync, "release_tree", lambda a, s, t, *r, **k: copies.append((s, t))
+    )
+    cmd_sync.cmd_sync_release(_args_from(rel))
+    assert metas == ["home:Admin:ppg:releases:17"]
+    assert copies == [
+        ("home:Admin:PR:pr-5:ppg:releases:17", "home:Admin:ppg:releases:17")
+    ]
+
+
+def test_from_prerelease_marker_mismatch(tmp_path, monkeypatch):
+    src, rel = _mk_tree(tmp_path, monkeypatch)
+    (rel / "tarballs").mkdir()
+    (rel / "tarballs" / "project.yaml").write_text(
+        "build: false\n" + _REPO_YAML.format(name="ssl3")
+    )
+    _mapping_release_yaml(rel)
+    _wire_release_update_path(monkeypatch, src, rel)
+    monkeypatch.setattr(
+        cmd_sync, "read_project_description_marker", lambda a, p, k: "c" * 40
+    )
+    monkeypatch.setattr(
+        cmd_sync,
+        "apply_mirror_meta",
+        lambda *a, **k: pytest.fail("no meta on mismatch"),
+    )
+    with pytest.raises(SystemExit, match="source_commit mismatch"):
+        cmd_sync.cmd_sync_release(_args_from(rel))

@@ -108,6 +108,7 @@ from .obs_api import (
     _fetch_obs_subproject_names,
     _obs_project_exists,
     _upload_obs_files,
+    read_project_description_marker,
     set_project_description_marker,
 )
 from .release_scope import collect_release_scope
@@ -2641,6 +2642,38 @@ def cmd_sync_release(args) -> None:
 
     _print_pending(f"checking release project {release_obs_project}")
     project_exists = _obs_project_exists(apiurl, release_obs_project)
+
+    from_project: "str | None" = getattr(args, "from_project", None)
+    if from_project:
+        # Hop 2 (spec §2): no staging involvement, no freeze, no git check.
+        entry = current_release(release_data)
+        if entry is None:
+            raise SystemExit("error: release.yaml has no releases: entries")
+        if not args.force:
+            marker = read_project_description_marker(
+                apiurl, from_project, "source_commit"
+            )
+            if marker != entry.source_commit:
+                raise SystemExit(
+                    f"error: source_commit mismatch: {from_project} was populated from "
+                    f"{marker or '<none>'} but release.yaml {entry.tag} records "
+                    f"{entry.source_commit or '<none>'}; repopulate the pre-release "
+                    "or cut a new release"
+                )
+        apply_mirror_meta(
+            apiurl, release_obs_project, release_path, args.rootprj, shared_env_vars
+        )
+        release_tree(
+            apiurl,
+            from_project,
+            release_obs_project,
+            subproject_pairs,
+            args.rootprj,
+            shared_env_vars,
+            verify_timeout=args.verify_timeout,
+        )
+        _print_ok(f"release  {from_project} → {release_obs_project} ({entry.tag})")
+        return
 
     if not args.force:
         _check_source_unchanged_since_tag(source_project_id, tag, args)
