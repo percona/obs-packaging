@@ -161,7 +161,13 @@ of `main` whose staging tree the pre-release was built from.
    `OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18`, `VERSION: ppg-18.6`);
    `ppg:staging:<major>` inside parameter values is rewritten to
    `ppg:releases:<major>` the same way subproject paths are. Only `${…}` env
-   tokens survive, resolved per profile at QA time.
+   tokens survive, resolved per profile at QA time. Package-level `qa:` entries
+   (from each direct package's `package.yaml`, `_shared/` links followed) are
+   appended to the mirror's list as project-level entries named
+   `<package>.<segment>` (segment = the entry's `name` or its `pipeline`),
+   because mirrors have no package directories; on the pre-release they run as
+   project lanes with check names `OBS QA / <project> / <package>.<segment>`.
+   A duplicate name fails the cut.
 
 ### `sync prerelease <releases-project>` (new command)
 
@@ -354,3 +360,6 @@ re-dispatch of hop 2.
   entries (removed in a `finally`), as hop 1 does; OBS requires release
   targets for a project-level release, so the pre-release meta carries them
   only during the copy.
+- Package-level `qa:` lanes reach the mirrors as `<package>.<segment>`
+  project-level entries (mirrors have no package directories); duplicates
+  fail the cut.
