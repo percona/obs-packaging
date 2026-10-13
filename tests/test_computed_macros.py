@@ -170,3 +170,21 @@ def test_load_macros_injects_prev_major(tmp_path, monkeypatch):
     root = _tree(tmp_path)
     monkeypatch.setattr(common, "REPO_ROOT", root)
     assert common.load_macros(root / "ppg/staging/18")["PG_PREV_MAJOR_VERSION"] == "17"
+
+
+MAPPING_RELEASE_YAML = """\
+project: ppg:staging:18
+releases:
+- ppg/18.3-1
+- tag: ppg/18.4-1
+  source_commit: 9e9d9738c0ffee
+"""
+
+
+def test_compute_counts_mapping_entries():
+    assert compute_ppg_release("ppg", "18.4", MAPPING_RELEASE_YAML) == "2"
+    assert compute_ppg_release("ppg", "18.3", MAPPING_RELEASE_YAML) == "2"
+
+
+def test_compute_tolerates_garbage_entries():
+    assert compute_ppg_release("ppg", "18.4", "releases: [{x: 1}]\n") == "1"

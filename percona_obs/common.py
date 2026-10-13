@@ -337,10 +337,12 @@ def compute_ppg_release(
         return "1"
     if not isinstance(data, dict):
         return "1"
-    raw = data.get("releases")
-    tags = [str(t) for t in raw] if isinstance(raw, list) else []
-    if not tags and data.get("revision"):
-        tags = [str(data["revision"])]
+    from .release_record import release_tags  # local: release_record is leaf
+
+    try:
+        tags = release_tags(data)
+    except SystemExit:
+        return "1"
     prefix = f"{product}/{pg_version}-"
     return str(sum(1 for t in tags if t.startswith(prefix)) + 1)
 

@@ -135,7 +135,7 @@ jobs:
 
           while IFS= read -r release_file; do
             TAG=$(git show "${MERGE_SHA}:${release_file}" | venv/bin/python3 -c \
-              "import sys,yaml; d=yaml.safe_load(sys.stdin); r=d.get('releases') or []; print(r[-1] if r else d.get('revision') or '')")
+              "import sys,yaml; d=yaml.safe_load(sys.stdin); r=d.get('releases') or []; last=r[-1] if r else d.get('revision') or ''; print(last.get('tag','') if isinstance(last, dict) else last)")
             [ -z "$TAG" ] && continue
             echo "Creating tag ${TAG} at ${MERGE_SHA}"
             if ! OUT=$(gh api "repos/${GITHUB_REPOSITORY}/git/refs" -X POST \

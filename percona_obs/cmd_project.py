@@ -79,6 +79,7 @@ from .cmd_build import (
 )
 from .cve_scan import ChangedPackage, scan_release_cves
 from .release_scope import has_container_images, tree_has_server_package
+from .release_record import ReleaseEntry, parse_release_entries
 from .services import _git_head_sha, _git_tag_for_sha
 
 _YAML_FILENAMES = {"project.yaml", "package.yaml"}
@@ -2290,14 +2291,12 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     is_first_release = not release_dir.is_dir()
 
     # Load existing release list if updating.
-    existing_releases: list[str] = []
+    existing_entries: list[ReleaseEntry] = []
     if not is_first_release:
-        existing_data = load_yaml(release_dir / "release.yaml")
-        raw = existing_data.get("releases")
-        if isinstance(raw, list):
-            existing_releases = [str(r) for r in raw]
-        elif existing_data.get("revision"):
-            existing_releases = [str(existing_data["revision"])]
+        existing_entries = parse_release_entries(
+            load_yaml(release_dir / "release.yaml")
+        )
+    existing_releases: list[str] = [e.tag for e in existing_entries]
 
     # Auto-derive release-id from OBS if not provided.
     release_id: str = args.release_id or ""
