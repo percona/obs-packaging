@@ -166,7 +166,8 @@ of `main` whose staging tree the pre-release was built from.
    appended to the mirror's list as project-level entries named
    `<package>.<segment>` (segment = the entry's `name` or its `pipeline`),
    because mirrors have no package directories; on the pre-release they run as
-   project lanes with check names `OBS QA / <project> / <package>.<segment>`.
+   project lanes; when the mirror has more than one entry, the entry name
+   becomes the check-name segment (`OBS QA / <project> / <package>.<segment>`).
    A duplicate name fails the cut.
 
 ### `sync prerelease <releases-project>` (new command)

@@ -10,6 +10,7 @@ import urllib.error
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
 import osc.conf
 import osc.core
@@ -1709,7 +1710,9 @@ def _is_relative_to(child: Path, parent: Path) -> bool:
         return False
 
 
-def _rewrite_qa_project_refs(value, source_project_id: str, release_project_id: str):
+def _rewrite_qa_project_refs(
+    value: Any, source_project_id: str, release_project_id: str
+) -> Any:
     """Deep-copy a loaded ``qa:`` value replacing ``<source>``/``<source>:...``
     project references inside strings with the release project.  Macros are
     already rendered by the loader; ``${VAR}`` tokens are left as they are."""
@@ -1770,22 +1773,18 @@ def _mirror_qa_entries(
                     f"error: {pkg_path.name}/package.yaml: qa entries must be mappings"
                 )
             segment = entry.get("name") or entry.get("pipeline") or ""
-            copied: dict = _rewrite_qa_project_refs(  # type: ignore[assignment]
+            copied: dict = _rewrite_qa_project_refs(
                 entry, source_project_id, release_project_id
             )
             copied.pop("name", None)
             # name first, for readable mirrors
             entries.append({"name": f"{pkg_path.name}.{segment}", **copied})
-    seen: set[str] = set()
-    for entry in entries:
-        name = entry.get("name") or entry.get("pipeline") or ""
-        if name in seen:
-            raise SystemExit(
-                f"error: {source_project_id}: two qa entries resolve to the same "
-                f"name {name!r} in the release mirror; rename one of them"
-            )
-        seen.add(name)
-    return entries or None
+    if not entries:
+        return None
+    # local import: cmd_qa imports cmd_project
+    from .cmd_qa import _normalise_qa_block
+
+    return _normalise_qa_block(entries, release_project_id)
 
 
 def _write_release_tree(
