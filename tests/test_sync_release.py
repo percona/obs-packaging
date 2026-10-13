@@ -520,3 +520,52 @@ def test_from_prerelease_force_skips_provenance_checks(tmp_path, monkeypatch):
     )
     cmd_sync.cmd_sync_release(_args_from(rel, force=True))
     assert len(metas) == 1 and len(copies) == 1
+
+
+def test_mirror_subproject_pairs(tmp_path, monkeypatch):
+    src, rel = _mk_tree(tmp_path, monkeypatch)
+    (rel / "tarballs").mkdir()
+    (rel / "tarballs" / "project.yaml").write_text("build: false\n")
+    (rel / "empty").mkdir()  # no project.yaml: ignored
+    monkeypatch.setattr(
+        cmd_sync, "project_in_slice", lambda p, *a, **k: p.name != "tarballs"
+    )
+    pairs = cmd_sync._mirror_subproject_pairs(rel, "ppg:releases:17")
+    assert [(n, p.name) for n, p in pairs] == [("containers", "containers")]
+
+
+def test_from_prerelease_proceeds_without_staging_mirror(tmp_path, monkeypatch):
+    # staging has a tarballs subproject, the release mirror does not
+    src, rel = _mk_tree(tmp_path, monkeypatch)
+    _mapping_release_yaml(rel)
+    _wire_release_update_path(monkeypatch, src, rel)
+    monkeypatch.setattr(
+        cmd_sync, "read_project_description_marker", lambda a, p, k: "b" * 40
+    )
+    monkeypatch.setattr(cmd_sync, "apply_mirror_meta", lambda *a, **k: None)
+    got = []
+    monkeypatch.setattr(
+        cmd_sync, "release_tree", lambda a, s, t, pairs, *r, **k: got.append(pairs)
+    )
+    cmd_sync.cmd_sync_release(_args_from(rel))
+    assert [n for n, _ in got[0]] == ["containers"]
+
+
+def test_from_prerelease_dry_run_writes_nothing(tmp_path, monkeypatch, capsys):
+    src, rel = _mk_tree(tmp_path, monkeypatch)
+    _mapping_release_yaml(rel)
+    _wire_release_update_path(monkeypatch, src, rel)
+    monkeypatch.setattr(
+        cmd_sync, "read_project_description_marker", lambda a, p, k: "b" * 40
+    )
+    monkeypatch.setattr(
+        cmd_sync, "apply_mirror_meta", lambda *a, **k: pytest.fail("no write")
+    )
+    monkeypatch.setattr(
+        cmd_sync, "release_tree", lambda *a, **k: pytest.fail("no write")
+    )
+    monkeypatch.setattr(
+        cmd_sync, "assert_all_green", lambda *a, **k: pytest.fail("no green check")
+    )
+    cmd_sync.cmd_sync_release(_args_from(rel, dry_run=True))
+    assert "containers" in capsys.readouterr().out

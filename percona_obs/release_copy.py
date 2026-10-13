@@ -7,7 +7,7 @@ Both apply mirror project.yaml meta to the target tree, copy binaries with
 ``sync release`` (no ``--from``) uses the same primitives.
 
 ``osc release`` requires ``<releasetarget trigger="manual">`` entries on the
-source, so a copy adds them, runs osc with ``--target-project`` and removes
+source, so a copy adds them, runs ``osc release`` and removes
 them again in a ``finally`` — the source meta is unchanged at rest.
 """
 
@@ -134,6 +134,8 @@ def copy_project_binaries(
     apiurl: str, source_obs_project: str, target_obs_project: str
 ) -> None:
     """``osc release`` every repo of *source* that exists in *target*."""
+    # Self-heal leftovers of a killed earlier run before reading the meta.
+    _remove_release_targets(apiurl, source_obs_project, target_obs_project)
     repo_elems, _ = _read_project_release_source(apiurl, source_obs_project)
     repo_names = filter_release_repo_names(
         apiurl,
@@ -151,8 +153,6 @@ def copy_project_binaries(
                 "release",
                 source_obs_project,
                 "--no-delay",
-                "--target-project",
-                target_obs_project,
             ],
             check=True,
         )

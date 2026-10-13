@@ -182,6 +182,8 @@ def test_scope_local_paths_maps_obs_names_back(tmp_path, monkeypatch):
     assert src in paths
     assert src.parents[2] / "ppg/common/deps/geos" in paths
     assert any(p.name == "macros.yaml" for p in paths)
+    assert src.parent / "project.yaml" in paths
+    assert src.parents[1] / "project.yaml" in paths
 
 
 def test_shared_symlink_target_edit_is_detected(tmp_path, monkeypatch):

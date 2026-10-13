@@ -192,9 +192,11 @@ With `--from` the command loses the freeze and the git divergence check:
    tagged `release.yaml` entry's.
 2. Apply the release project meta from the mirror (repo additions, publish
    flags, prjconf), builds disabled.
-3. `osc release --target-project <release-project> --no-delay` from the
-   pre-release for the top project and every in-slice subproject. No
-   temporary `releasetarget` entries are needed on the pre-release.
+3. `osc release --no-delay` from the pre-release for the top project and every
+   in-slice subproject, with the same temporary `<releasetarget>` entries
+   (added before, removed in a `finally`) that hop 1 and the legacy path use;
+   OBS requires release targets for a project-level release, so the
+   pre-release meta carries them only during the copy.
 4. Verify binaries landed (bounded by `--verify-timeout`).
 
 Without `--from` the command keeps its current staging-sourced behaviour as a
@@ -348,5 +350,7 @@ re-dispatch of hop 2.
 - `source_commit` is recorded by `project release` on the developer's
   machine, not committed back by CI: a workflow-token push would become an
   untested PR head and block required checks.
-- `osc release --target-project` is used for hop 2 so the pre-release meta
-  stays a pure mirror with no `releasetarget` entries.
+- Hop 2 uses `osc release --no-delay` with temporary `<releasetarget>`
+  entries (removed in a `finally`), as hop 1 does; OBS requires release
+  targets for a project-level release, so the pre-release meta carries them
+  only during the copy.

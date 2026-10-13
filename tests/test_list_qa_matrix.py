@@ -251,3 +251,11 @@ def test_qa_show_failure_is_skipped_in_nightly_mode(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert captured.out.strip() == "[]"
     assert "warning: qa show" in captured.err
+
+
+def test_is_release_tier():
+    m = _load()
+    assert m.is_release_tier("a:ppg:releases:18")
+    assert m.is_release_tier("a:ppg:releases:18:containers")
+    assert not m.is_release_tier("a:ppg:staging:18")
+    assert not m.is_release_tier("a:ppg:devel:18:containers")

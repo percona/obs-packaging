@@ -2295,6 +2295,28 @@ def _tag_exists_locally(tag: str) -> bool:
     return r.returncode == 0
 
 
+def _tag_exists_on_remote(repo_url: str, tag: str) -> bool:
+    """True when *repo_url* has refs/tags/<tag>; a failed lookup warns, returns False."""
+    try:
+        r = subprocess.run(
+            ["git", "ls-remote", "--tags", repo_url, f"refs/tags/{tag}"],
+            capture_output=True,
+            text=True,
+            cwd=_REPO_DIR,
+            timeout=60,
+        )
+    except (subprocess.TimeoutExpired, OSError) as e:
+        print(f"warning: git ls-remote {repo_url} failed: {e}", flush=True)
+        return False
+    if r.returncode != 0:
+        print(
+            f"warning: git ls-remote {repo_url} failed: {r.stderr.strip()}",
+            flush=True,
+        )
+        return False
+    return bool(r.stdout.strip())
+
+
 def _is_ancestor_of_head(sha: str) -> bool:
     r = subprocess.run(
         ["git", "merge-base", "--is-ancestor", sha, "HEAD"],
@@ -2334,6 +2356,7 @@ def _plan_release_entries(
     derive_id: "Callable[[], str]",
     product: str,
     source_commit: str,
+    tag_exists: "Callable[[str], bool]",
 ) -> "tuple[str, list[ReleaseEntry], str | None]":
     """Decide the release id and the new ``releases:`` list.
 
@@ -2342,9 +2365,7 @@ def _plan_release_entries(
     refreshed in place (same id, new source_commit) and prev_release_id is
     the entry before it.  Otherwise the next id is derived and appended.
     """
-    open_entry = (
-        existing[-1] if existing and not _tag_exists_locally(existing[-1].tag) else None
-    )
+    open_entry = existing[-1] if existing and not tag_exists(existing[-1].tag) else None
     if explicit_id:
         tag = f"{product}/{explicit_id}"
         if any(e.tag == tag for e in existing):
@@ -2356,8 +2377,8 @@ def _plan_release_entries(
     if open_entry is not None:
         rid = open_entry.tag.split("/")[-1]
         print(
-            f"note: {open_entry.tag} has no git tag locally — treating the release as "
-            "still open and refreshing it in place (fetch tags if it already shipped)",
+            f"note: {open_entry.tag} has no git tag (local or remote) — treating the release "
+            "as still open and refreshing it in place",
             flush=True,
         )
         prev = existing[-2].tag.split("/")[-1] if len(existing) > 1 else None
@@ -2449,8 +2470,15 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             major=major,
         )
 
+    repo_url = release_env.get("PERCONA_OBS_PACKAGING_REPO", "")
     release_id, new_entries, prev_release_id = _plan_release_entries(
-        existing_entries, args.release_id or None, _derive, product, source_commit
+        existing_entries,
+        args.release_id or None,
+        _derive,
+        product,
+        source_commit,
+        lambda t: _tag_exists_locally(t)
+        or (bool(repo_url) and _tag_exists_on_remote(repo_url, t)),
     )
     tag = f"{product}/{release_id}"
     is_refresh = bool(existing_entries) and existing_entries[-1].tag == tag

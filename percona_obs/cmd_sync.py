@@ -66,6 +66,7 @@ from .project_config import (
     RepositoryFilter,
     package_in_slice,
     project_in_slice,
+    _chain,
     prune_flag_map,
 )
 from .git_utils import (
@@ -2533,6 +2534,22 @@ def _run_frozen(
             restore_builds(apiurl, snapshots)
 
 
+def _mirror_subproject_pairs(
+    release_path: Path, release_project_id: str
+) -> "list[tuple[str, Path]]":
+    """(subproject_name, mirror_path) for every in-slice subproject of the
+    release mirror tree (hop 2 copies what the mirror declares, not staging)."""
+    pairs: list[tuple[str, Path]] = []
+    for sub_id, sub_path in find_projects(release_path, release_project_id):
+        if sub_id == release_project_id:
+            continue
+        if not (sub_path / "project.yaml").is_file():
+            continue
+        if project_in_slice(sub_path):
+            pairs.append((sub_id[len(release_project_id) + 1 :], sub_path))
+    return pairs
+
+
 def cmd_sync_release(args) -> None:
     """Release packages from an OBS source project to a release target.
 
@@ -2570,6 +2587,53 @@ def cmd_sync_release(args) -> None:
         **env_vars,
         **auto_rootprj_env(args.rootprj),
     }
+
+    from_project: "str | None" = getattr(args, "from_project", None)
+    if from_project:
+        # Hop 2 (spec §2): no staging involvement, no freeze, no git check.
+        # The subproject set comes from the release mirror tree itself.
+        entry = current_release(release_data)
+        if entry is None:
+            raise SystemExit("error: release.yaml has no releases: entries")
+        if not args.force:
+            if not entry.source_commit:
+                raise SystemExit(
+                    f"error: release.yaml entry {entry.tag} has no source_commit; "
+                    "re-run 'percona-obs project release' (or pass --force)"
+                )
+            marker = read_project_description_marker(
+                apiurl, from_project, "source_commit"
+            )
+            if marker != entry.source_commit:
+                raise SystemExit(
+                    f"error: source_commit mismatch: {from_project} was populated from "
+                    f"{marker or '<none>'} but release.yaml {entry.tag} records "
+                    f"{entry.source_commit or '<none>'}; repopulate the pre-release "
+                    "or cut a new release"
+                )
+        mirror_pairs = _mirror_subproject_pairs(release_path, args.project)
+        if getattr(args, "dry_run", False):
+            for name, _ in mirror_pairs:
+                _print_same(f"+ {release_obs_project}:{name}")
+            _print_ok(
+                f"release dry-run passed for {entry.tag}  "
+                f"({from_project} → {release_obs_project})  (dry run)"
+            )
+            return
+        apply_mirror_meta(
+            apiurl, release_obs_project, release_path, args.rootprj, shared_env_vars
+        )
+        release_tree(
+            apiurl,
+            from_project,
+            release_obs_project,
+            mirror_pairs,
+            args.rootprj,
+            shared_env_vars,
+            verify_timeout=args.verify_timeout,
+        )
+        _print_ok(f"release  {from_project} → {release_obs_project} ({entry.tag})")
+        return
 
     subproject_pairs, missing_mirrors = collect_release_subprojects(
         source_project_id, release_path
@@ -2643,43 +2707,6 @@ def cmd_sync_release(args) -> None:
     _print_pending(f"checking release project {release_obs_project}")
     project_exists = _obs_project_exists(apiurl, release_obs_project)
 
-    from_project: "str | None" = getattr(args, "from_project", None)
-    if from_project:
-        # Hop 2 (spec §2): no staging involvement, no freeze, no git check.
-        entry = current_release(release_data)
-        if entry is None:
-            raise SystemExit("error: release.yaml has no releases: entries")
-        if not args.force:
-            if not entry.source_commit:
-                raise SystemExit(
-                    f"error: release.yaml entry {entry.tag} has no source_commit; "
-                    "re-run 'percona-obs project release' (or pass --force)"
-                )
-            marker = read_project_description_marker(
-                apiurl, from_project, "source_commit"
-            )
-            if marker != entry.source_commit:
-                raise SystemExit(
-                    f"error: source_commit mismatch: {from_project} was populated from "
-                    f"{marker or '<none>'} but release.yaml {entry.tag} records "
-                    f"{entry.source_commit or '<none>'}; repopulate the pre-release "
-                    "or cut a new release"
-                )
-        apply_mirror_meta(
-            apiurl, release_obs_project, release_path, args.rootprj, shared_env_vars
-        )
-        release_tree(
-            apiurl,
-            from_project,
-            release_obs_project,
-            subproject_pairs,
-            args.rootprj,
-            shared_env_vars,
-            verify_timeout=args.verify_timeout,
-        )
-        _print_ok(f"release  {from_project} → {release_obs_project} ({entry.tag})")
-        return
-
     if not args.force:
         _check_source_unchanged_since_tag(source_project_id, tag, args)
 
@@ -2736,6 +2763,11 @@ def _scope_local_paths(
         if p.is_dir():
             _add(p)
             project_dirs.append(p)
+    # Inherited config layers (project.yaml / subprojects.yaml up the chain).
+    for pd in list(project_dirs):
+        for d in _chain(pd):
+            _add(d / "project.yaml")
+            _add(d / "subprojects.yaml")
     # Package dirs that are symlinks into _shared/: git sees only the link
     # blob, so the link target must be a pathspec of its own.
     for d in project_dirs:
