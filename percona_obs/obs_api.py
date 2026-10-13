@@ -1223,6 +1223,7 @@ def _apply_project_config(
     active_projects: "set[str] | None" = None,
     branch_rootprj: str | None = None,
     existing_branch_projects: "dict[str, set[str]] | None" = None,
+    publish_override: "dict[str, bool] | bool | None" = None,
 ) -> "tuple[bool, bool]":
     """Create or update OBS project metadata and build config from project.yaml.
 
@@ -1271,7 +1272,11 @@ def _apply_project_config(
         project_config.get("description", ""),
         repos,
         rootprj,
-        publish=project_config.get("publish"),
+        publish=(
+            publish_override
+            if publish_override is not None
+            else project_config.get("publish")
+        ),
         build=build,
         debuginfo=project_config.get("debuginfo"),
         active_projects=active_projects,

@@ -54,6 +54,11 @@ from .common import (
     parse_env_overrides,
     resolve_project_path,
 )
+from .release_copy import (
+    apply_mirror_meta,
+    collect_release_subprojects,
+    release_tree,
+)
 from .release_record import release_tags
 from .project_config import (
     RepositoryFilter,
@@ -79,12 +84,10 @@ from .sync_state import (
     save_manifest,
 )
 from .obs_api import (
-    _add_release_targets,
     _apply_package_config,
     _flag_entries,
     _apply_project_config,
     _disable_package_builds,
-    _disable_project_builds,
     _create_project_skeleton,
     _copy_project_conf,
     _create_release_project,
@@ -101,8 +104,6 @@ from .obs_api import (
     _fetch_obs_project_repository_names,
     _fetch_obs_subproject_names,
     _obs_project_exists,
-    _read_project_release_source,
-    _remove_release_targets,
     _upload_obs_files,
 )
 from .release_scope import collect_release_scope
@@ -112,7 +113,6 @@ from .release_freeze import (
     freeze_packages,
     restore_builds,
     restore_packages,
-    verify_release_landed,
     wait_for_quiesce,
 )
 from .services import (
@@ -138,10 +138,6 @@ _BRANCH_MSG_RE = re.compile(r"^branch: (\S+) \((.+)/[^/]+\)$")
 
 
 _OBS_SUBSTITUTABLE = {"_service", "_aggregate", "_link"}
-
-# Resolve osc relative to the running Python so it works inside a venv even
-# when the venv's bin/ directory is not on PATH (e.g. CI runners).
-_OSC_BIN = os.path.join(os.path.dirname(sys.executable), "osc")
 
 # Stem of the OBS sub-project that holds per-PR build environments.
 # This sub-project is managed exclusively by CI workflows and must never be
@@ -2438,156 +2434,6 @@ def cmd_sync_promote(args) -> None:
     _print_ok(f"promote successful{suffix}  ({promoted} promoted, {skipped} skipped)")
 
 
-def _collect_release_subprojects(
-    source_project_id: str,
-    release_path: Path,
-) -> "tuple[list[tuple[str, Path]], list[str]]":
-    """Map source subprojects to their release-mirror directories.
-
-    Returns (pairs, missing):
-      pairs   — [(subproject_name, release_sub_path)] for every source
-                subproject whose mirror project.yaml exists.
-      missing — subproject names with no mirror project.yaml.  Full-snapshot
-                releases require a mirror for every subproject; callers must
-                treat a non-empty list as a hard error.
-
-    Subprojects out of the active slice are skipped on both sides; `missing`
-    lists only in-slice source subprojects without a mirror.
-    """
-    source_path = resolve_project_path(source_project_id)
-    pairs: list[tuple[str, Path]] = []
-    missing: list[str] = []
-    for sub_obs_id, sub_path in find_projects(source_path, source_project_id):
-        if sub_obs_id == source_project_id:
-            continue
-        if not (sub_path / "project.yaml").is_file():
-            continue  # intermediate directory, not a real OBS project
-        subproject_name = sub_obs_id[len(source_project_id) + 1 :]
-        release_sub_path = release_path / Path(*subproject_name.split(":"))
-        if (release_sub_path / "project.yaml").is_file():
-            if project_in_slice(release_sub_path):
-                pairs.append((subproject_name, release_sub_path))
-            # else: this instance does not hold the subproject — nothing to release
-        elif project_in_slice(sub_path):
-            missing.append(subproject_name)
-        # else: source out of slice too; a missing mirror is irrelevant here
-    return pairs, missing
-
-
-def _filter_release_repo_names(
-    apiurl: str,
-    source_repo_names: "list[str]",
-    release_obs_project: str,
-) -> "list[str]":
-    """Keep only source repos that exist in the release project.
-
-    Adding a <releasetarget> for a repo the target lacks makes osc release
-    fail or drop binaries; a mismatch here means the mirror regeneration and
-    the live release project disagree, which is worth a loud warning but not
-    an abort (the mirror was just applied — a leftover mismatch is repo
-    removal pending on OBS's side).
-    """
-    target = _fetch_obs_project_repository_names(apiurl, release_obs_project)
-    kept = [r for r in source_repo_names if r in target]
-    for r in source_repo_names:
-        if r not in target:
-            print(
-                f"warning: source repo {r} has no counterpart in "
-                f"{release_obs_project}; skipped",
-                flush=True,
-            )
-    return kept
-
-
-def _sync_release_subprojects(
-    apiurl: str,
-    args,
-    source_project_id: str,
-    release_obs_project: str,
-    release_path: Path,
-    env_vars: dict[str, str],
-    pairs: "list[tuple[str, Path]] | None" = None,
-) -> None:
-    """Create and populate OBS subprojects for a release (e.g. containers).
-
-    Every source subproject MUST have a mirror project.yaml under the
-    release tree — a missing mirror aborts the release (a release is a full
-    snapshot; nothing is skipped silently).  Release-tier OBS projects with
-    no local mirror are reported as orphans (manual `sync delete`).
-
-    ``pairs`` may be passed pre-collected (e.g. by ``cmd_sync_release``,
-    which needs the list before this function runs in order to compute the
-    build-freeze scope) to avoid walking the tree twice; when omitted this
-    still performs its own collection and hard-error check for direct
-    callers.
-    """
-    if pairs is None:
-        pairs, missing = _collect_release_subprojects(source_project_id, release_path)
-        if missing:
-            listing = "\n".join(
-                f"  {source_project_id}:{name}" for name in sorted(missing)
-            )
-            raise SystemExit(
-                "error: staging subprojects have no release mirror "
-                f"(missing project.yaml under {release_path.relative_to(_REPO_DIR)}):\n"
-                f"{listing}\n"
-                "Re-run 'percona-obs project release' to regenerate the release tree."
-            )
-
-    for subproject_name, release_sub_path in pairs:
-        release_sub_obs = f"{release_obs_project}:{subproject_name}"
-        sub_obs_id = f"{source_project_id}:{subproject_name}"
-
-        paths_stripped, _ = _apply_project_config(
-            apiurl,
-            release_sub_obs,
-            release_sub_path,
-            args.rootprj,
-            env_vars=env_vars,
-        )
-        if paths_stripped:
-            _apply_project_config(
-                apiurl,
-                release_sub_obs,
-                release_sub_path,
-                args.rootprj,
-                env_vars=env_vars,
-            )
-        _disable_project_builds(apiurl, release_sub_obs)
-
-        source_sub_obs = f"{args.rootprj}:{sub_obs_id}"
-        source_sub_repo_elems, _ = _read_project_release_source(apiurl, source_sub_obs)
-        source_sub_repo_names = _filter_release_repo_names(
-            apiurl,
-            [r.get("name", "") for r in source_sub_repo_elems if r.get("name")],
-            release_sub_obs,
-        )
-        _add_release_targets(
-            apiurl, source_sub_obs, release_sub_obs, source_sub_repo_names
-        )
-        try:
-            _print_pending(f"releasing {source_sub_obs} → {release_sub_obs}")
-            subprocess.run(
-                [_OSC_BIN, "-A", apiurl, "release", source_sub_obs, "--no-delay"],
-                check=True,
-            )
-        finally:
-            _remove_release_targets(apiurl, source_sub_obs, release_sub_obs)
-        _print_ok(f"released  {source_sub_obs} → {release_sub_obs}")
-
-    # Orphan detection: release-tier OBS projects with no local mirror.
-    local_names = {name for name, _ in pairs}
-    for obs_sub in sorted(_fetch_obs_subproject_names(apiurl, release_obs_project)):
-        sub_name = obs_sub[len(release_obs_project) + 1 :]
-        if sub_name not in local_names:
-            print(
-                f"warning: orphaned release subproject on OBS: {obs_sub} "
-                "(no local mirror) — remove manually with "
-                f"'percona-obs sync delete {obs_sub[len(args.rootprj) + 1 :]}'",
-                flush=True,
-            )
-
-
 def _build_freeze_scope(
     source_obs_project: str,
     source_sub_obs_projects: "list[str]",
@@ -2609,6 +2455,41 @@ def _build_freeze_scope(
             whole.append(prj)
     packages = {prj: pkgs for prj, pkgs in extra.packages.items() if prj not in whole}
     return whole, packages
+
+
+def _check_source_unchanged_since_tag(source_project_id: str, tag: str, args) -> None:
+    """Abort when the source project's tree changed since *tag* (legacy
+    single-hop release only; ``--skip-tag-check`` skips, no tag = nothing)."""
+    if not tag:
+        return
+    if getattr(args, "skip_tag_check", False):
+        _print_same(f"skipping tag divergence check for {tag} (--skip-tag-check)")
+        return
+    source_path = resolve_project_path(source_project_id)
+    _print_pending(f"checking for changes in {source_project_id} since tag {tag}")
+    result = subprocess.run(
+        ["git", "diff", "--name-only", f"{tag}..HEAD", "--", str(source_path)],
+        capture_output=True,
+        text=True,
+        cwd=_REPO_DIR,
+    )
+    if result.returncode != 0:
+        print(result.stderr, end="", file=sys.stderr)
+        raise SystemExit(
+            f"error: git diff failed — is the tag '{tag}' present locally?"
+        )
+    changed = [l.strip() for l in result.stdout.splitlines() if l.strip()]
+    if changed:
+        print(
+            f"error: source project {source_project_id} has changed since tag {tag}:",
+            file=sys.stderr,
+        )
+        for f in changed:
+            print(f"  {f}", file=sys.stderr)
+        raise SystemExit(
+            "The source project has diverged from the release tag. "
+            "Use --force to skip this check."
+        )
 
 
 def cmd_sync_release(args) -> None:
@@ -2649,7 +2530,7 @@ def cmd_sync_release(args) -> None:
         **auto_rootprj_env(args.rootprj),
     }
 
-    subproject_pairs, missing_mirrors = _collect_release_subprojects(
+    subproject_pairs, missing_mirrors = collect_release_subprojects(
         source_project_id, release_path
     )
     source_sub_obs_projects = [
@@ -2755,219 +2636,31 @@ def cmd_sync_release(args) -> None:
     _print_pending(f"checking release project {release_obs_project}")
     project_exists = _obs_project_exists(apiurl, release_obs_project)
 
-    if project_exists:
-        # Update-in-place: re-run osc release to copy updated binaries.
-        # Also covers idempotent re-runs of a first-release that partially succeeded.
-        if not args.force:
-            source_path = resolve_project_path(source_project_id)
-            if tag and getattr(args, "skip_tag_check", False):
-                _print_same(
-                    f"skipping tag divergence check for {tag} (--skip-tag-check)"
-                )
-            elif tag:
-                _print_pending(
-                    f"checking for changes in {source_project_id} since tag {tag}"
-                )
-                result = subprocess.run(
-                    [
-                        "git",
-                        "diff",
-                        "--name-only",
-                        f"{tag}..HEAD",
-                        "--",
-                        str(source_path),
-                    ],
-                    capture_output=True,
-                    text=True,
-                    cwd=_REPO_DIR,
-                )
-                if result.returncode != 0:
-                    print(result.stderr, end="", file=sys.stderr)
-                    raise SystemExit(
-                        f"error: git diff failed — is the tag '{tag}' present locally?"
-                    )
-                changed_files = [
-                    line.strip() for line in result.stdout.splitlines() if line.strip()
-                ]
-                if changed_files:
-                    print(
-                        f"error: source project {source_project_id} has changed since "
-                        f"tag {tag}:",
-                        file=sys.stderr,
-                    )
-                    for f in changed_files:
-                        print(f"  {f}", file=sys.stderr)
-                    raise SystemExit(
-                        "The source project has diverged from the release tag. "
-                        "Use --force to skip this check."
-                    )
+    if not args.force:
+        _check_source_unchanged_since_tag(source_project_id, tag, args)
 
+    if project_exists:
         # Re-apply the local release project config so repo additions,
         # publish flags and prjconf changes reach OBS on update releases too.
-        paths_stripped, _ = _apply_project_config(
+        apply_mirror_meta(
+            apiurl, release_obs_project, release_path, args.rootprj, shared_env_vars
+        )
+    else:
+        # First release: snapshot the source topology, builds disabled.
+        _create_release_project(apiurl, source_obs_project, release_obs_project)
+        _copy_project_conf(apiurl, source_obs_project, release_obs_project)
+
+    _freeze_and_run(
+        lambda: release_tree(
             apiurl,
+            source_obs_project,
             release_obs_project,
-            release_path,
+            subproject_pairs,
             args.rootprj,
-            env_vars=shared_env_vars,
+            shared_env_vars,
+            verify_timeout=args.verify_timeout,
         )
-        if paths_stripped:
-            _apply_project_config(
-                apiurl,
-                release_obs_project,
-                release_path,
-                args.rootprj,
-                env_vars=shared_env_vars,
-            )
-        _disable_project_builds(apiurl, release_obs_project)
-
-        _remove_release_targets(apiurl, source_obs_project, release_obs_project)
-        source_repo_elems, _ = _read_project_release_source(apiurl, source_obs_project)
-        repo_names = _filter_release_repo_names(
-            apiurl,
-            [r.get("name", "") for r in source_repo_elems if r.get("name")],
-            release_obs_project,
-        )
-
-        def _release_all() -> None:
-            _add_release_targets(
-                apiurl, source_obs_project, release_obs_project, repo_names
-            )
-            try:
-                _print_pending(
-                    f"releasing {source_obs_project} → {release_obs_project}"
-                )
-                subprocess.run(
-                    [
-                        _OSC_BIN,
-                        "-A",
-                        apiurl,
-                        "release",
-                        source_obs_project,
-                        "--no-delay",
-                    ],
-                    check=True,
-                )
-            finally:
-                _remove_release_targets(apiurl, source_obs_project, release_obs_project)
-
-            _sync_release_subprojects(
-                apiurl,
-                args,
-                source_project_id,
-                release_obs_project,
-                release_path,
-                env_vars=shared_env_vars,
-                pairs=subproject_pairs,
-            )
-            if args.verify_timeout > 0:
-                verify_release_landed(
-                    apiurl,
-                    source_obs_project,
-                    release_obs_project,
-                    timeout_s=args.verify_timeout,
-                )
-                for name, _ in subproject_pairs:
-                    verify_release_landed(
-                        apiurl,
-                        f"{source_obs_project}:{name}",
-                        f"{release_obs_project}:{name}",
-                        timeout_s=args.verify_timeout,
-                    )
-
-        _freeze_and_run(_release_all)
-
-        update_suffix = f" (update: {tag})" if tag else ""
-        _print_ok(
-            f"~ release  {source_obs_project} → {release_obs_project}{update_suffix}"
-        )
-        return
-
-    # First release: check that staging hasn't changed since tag, then create.
-    if not args.force:
-        source_path = resolve_project_path(source_project_id)
-        if tag and getattr(args, "skip_tag_check", False):
-            _print_same(f"skipping tag divergence check for {tag} (--skip-tag-check)")
-        elif tag:
-            _print_pending(
-                f"checking for changes in {source_project_id} since tag {tag}"
-            )
-            result = subprocess.run(
-                ["git", "diff", "--name-only", f"{tag}..HEAD", "--", str(source_path)],
-                capture_output=True,
-                text=True,
-                cwd=_REPO_DIR,
-            )
-            if result.returncode != 0:
-                print(result.stderr, end="", file=sys.stderr)
-                raise SystemExit(
-                    f"error: git diff failed — is the tag '{tag}' present locally?"
-                )
-            changed_files = [
-                line.strip() for line in result.stdout.splitlines() if line.strip()
-            ]
-            if changed_files:
-                print(
-                    f"error: source project {source_project_id} has changed since "
-                    f"tag {tag}:",
-                    file=sys.stderr,
-                )
-                for f in changed_files:
-                    print(f"  {f}", file=sys.stderr)
-                raise SystemExit(
-                    "The source project has diverged from the release tag. "
-                    "Use --force to skip this check."
-                )
-
-    # Create the release target project on OBS (builds disabled, same repos as source).
-    source_repo_elems = _create_release_project(
-        apiurl, source_obs_project, release_obs_project
-    )
-    repo_names = _filter_release_repo_names(
-        apiurl,
-        [r.get("name", "") for r in source_repo_elems if r.get("name")],
-        release_obs_project,
     )
 
-    _copy_project_conf(apiurl, source_obs_project, release_obs_project)
-
-    def _release_all() -> None:
-        _add_release_targets(
-            apiurl, source_obs_project, release_obs_project, repo_names
-        )
-        try:
-            _print_pending(f"releasing {source_obs_project} → {release_obs_project}")
-            subprocess.run(
-                [_OSC_BIN, "-A", apiurl, "release", source_obs_project, "--no-delay"],
-                check=True,
-            )
-        finally:
-            _remove_release_targets(apiurl, source_obs_project, release_obs_project)
-
-        _sync_release_subprojects(
-            apiurl,
-            args,
-            source_project_id,
-            release_obs_project,
-            release_path,
-            env_vars=shared_env_vars,
-            pairs=subproject_pairs,
-        )
-        if args.verify_timeout > 0:
-            verify_release_landed(
-                apiurl,
-                source_obs_project,
-                release_obs_project,
-                timeout_s=args.verify_timeout,
-            )
-            for name, _ in subproject_pairs:
-                verify_release_landed(
-                    apiurl,
-                    f"{source_obs_project}:{name}",
-                    f"{release_obs_project}:{name}",
-                    timeout_s=args.verify_timeout,
-                )
-
-    _freeze_and_run(_release_all)
-
-    _print_ok(f"release  {source_obs_project} → {release_obs_project}")
+    suffix = f" (update: {tag})" if project_exists and tag else ""
+    _print_ok(f"release  {source_obs_project} → {release_obs_project}{suffix}")
