@@ -1,8 +1,8 @@
 """Unit tests for the sync release subproject handling (percona_obs.cmd_sync).
 
-_collect_release_subprojects maps source subprojects to release mirrors;
-_sync_release_subprojects must hard-error on missing mirrors and report
-OBS-side orphans.  OBS interaction is monkeypatched out.
+collect_release_subprojects maps source subprojects to release mirrors;
+cmd_sync_release must hard-error on missing mirrors.  OBS interaction is
+monkeypatched out.
 """
 
 from pathlib import Path
@@ -11,10 +11,8 @@ from types import SimpleNamespace
 import pytest
 
 import percona_obs.cmd_sync as cmd_sync
-from percona_obs.cmd_sync import (
-    _collect_release_subprojects,
-    _sync_release_subprojects,
-)
+import percona_obs.release_copy as rc
+from percona_obs.release_copy import collect_release_subprojects
 
 _REPO_YAML = "repositories:\n  - name: {name}\n    archs: [x86_64]\n    paths: []\n"
 
@@ -53,75 +51,10 @@ def _mk_tree(tmp_path: Path, monkeypatch=None):
 
 def test_collect_pairs_and_missing(tmp_path, monkeypatch):
     src, rel = _mk_tree(tmp_path, monkeypatch)
-    monkeypatch.setattr(cmd_sync, "resolve_project_path", lambda pid: src)
-    pairs, missing = _collect_release_subprojects("ppg:staging:17", rel)
+    monkeypatch.setattr(rc, "resolve_project_path", lambda pid: src)
+    pairs, missing = collect_release_subprojects("ppg:staging:17", rel)
     assert [name for name, _ in pairs] == ["containers"]
     assert missing == ["tarballs"]
-
-
-def test_missing_mirror_is_hard_error(tmp_path, monkeypatch):
-    src, rel = _mk_tree(tmp_path, monkeypatch)
-    monkeypatch.setattr(cmd_sync, "resolve_project_path", lambda pid: src)
-    monkeypatch.setattr(cmd_sync, "_REPO_DIR", tmp_path)
-
-    class Args:
-        rootprj = "home:Admin"
-
-    with pytest.raises(SystemExit, match="tarballs"):
-        _sync_release_subprojects(
-            "http://obs",
-            Args(),
-            "ppg:staging:17",
-            "home:Admin:ppg:releases:17",
-            rel,
-            env_vars={},
-        )
-
-
-def test_orphan_reporting(tmp_path, monkeypatch, capsys):
-    src, rel = _mk_tree(tmp_path, monkeypatch)
-    # complete the mirror so no hard error fires
-    (rel / "tarballs").mkdir()
-    (rel / "tarballs" / "project.yaml").write_text(
-        "build: false\n" + _REPO_YAML.format(name="ssl3")
-    )
-    monkeypatch.setattr(cmd_sync, "resolve_project_path", lambda pid: src)
-    monkeypatch.setattr(cmd_sync, "_REPO_DIR", tmp_path)
-    # neutralize the OBS side of the per-subproject body
-    monkeypatch.setattr(
-        cmd_sync, "_apply_project_config", lambda *a, **k: (False, None)
-    )
-    monkeypatch.setattr(cmd_sync, "_disable_project_builds", lambda *a, **k: None)
-    monkeypatch.setattr(
-        cmd_sync, "_read_project_release_source", lambda *a, **k: ([], None)
-    )
-    monkeypatch.setattr(cmd_sync, "_add_release_targets", lambda *a, **k: None)
-    monkeypatch.setattr(cmd_sync, "_remove_release_targets", lambda *a, **k: None)
-    monkeypatch.setattr(cmd_sync.subprocess, "run", lambda *a, **k: None)
-    monkeypatch.setattr(
-        cmd_sync,
-        "_fetch_obs_subproject_names",
-        lambda apiurl, prefix: {
-            "home:Admin:ppg:releases:17:containers",
-            "home:Admin:ppg:releases:17:containers:ubi9",  # old layout = orphan
-        },
-    )
-
-    class Args:
-        rootprj = "home:Admin"
-
-    _sync_release_subprojects(
-        "http://obs",
-        Args(),
-        "ppg:staging:17",
-        "home:Admin:ppg:releases:17",
-        rel,
-        env_vars={},
-    )
-    out = capsys.readouterr().out
-    assert "orphaned release subproject" in out
-    assert "containers:ubi9" in out
-    assert "sync delete" in out
 
 
 class _Args:
@@ -148,24 +81,29 @@ def _wire_release_update_path(monkeypatch, src, rel):
         "resolve_project_path",
         lambda pid: src if pid == "ppg:staging:17" else rel,
     )
+    monkeypatch.setattr(
+        rc, "resolve_project_path", lambda pid: src if pid == "ppg:staging:17" else rel
+    )
     monkeypatch.setattr(cmd_sync, "_REPO_DIR", rel.parents[2])
     monkeypatch.setattr(cmd_sync.osc.conf, "config", {"apiurl": "http://obs"})
     monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda *a, **k: True)
+    monkeypatch.setattr(rc, "_apply_project_config", lambda *a, **k: (False, None))
+    monkeypatch.setattr(rc, "_disable_project_builds", lambda *a, **k: None)
+    monkeypatch.setattr(rc, "_read_project_release_source", lambda *a, **k: ([], None))
     monkeypatch.setattr(
-        cmd_sync, "_apply_project_config", lambda *a, **k: (False, None)
+        rc, "filter_release_repo_names", lambda apiurl, names, target: names
     )
-    monkeypatch.setattr(cmd_sync, "_disable_project_builds", lambda *a, **k: None)
-    monkeypatch.setattr(
-        cmd_sync, "_read_project_release_source", lambda *a, **k: ([], None)
-    )
-    monkeypatch.setattr(
-        cmd_sync, "_filter_release_repo_names", lambda apiurl, names, target: names
-    )
-    monkeypatch.setattr(cmd_sync, "_add_release_targets", lambda *a, **k: None)
-    monkeypatch.setattr(cmd_sync, "_remove_release_targets", lambda *a, **k: None)
-    monkeypatch.setattr(
-        cmd_sync, "_fetch_obs_subproject_names", lambda apiurl, prefix: set()
-    )
+    monkeypatch.setattr(rc, "_add_release_targets", lambda *a, **k: None)
+    monkeypatch.setattr(rc, "_remove_release_targets", lambda *a, **k: None)
+    monkeypatch.setattr(rc, "_fetch_obs_subproject_names", lambda apiurl, prefix: set())
+
+
+def test_missing_mirror_is_hard_error(tmp_path, monkeypatch):
+    src, rel = _mk_tree(tmp_path, monkeypatch)
+    _wire_release_update_path(monkeypatch, src, rel)
+    args = _Args(project="ppg:releases:17", rootprj="home:Admin")
+    with pytest.raises(SystemExit, match="tarballs"):
+        cmd_sync.cmd_sync_release(args)
 
 
 def test_freeze_order_and_restore_on_failure(tmp_path, monkeypatch):
@@ -191,13 +129,13 @@ def test_freeze_order_and_restore_on_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(
         cmd_sync, "restore_builds", lambda *a, **k: calls.append("restore")
     )
-    monkeypatch.setattr(cmd_sync, "verify_release_landed", lambda *a, **k: None)
+    monkeypatch.setattr(rc, "verify_release_landed", lambda *a, **k: None)
 
     def boom(*a, **k):
         calls.append("release")
         raise RuntimeError("osc failed")
 
-    monkeypatch.setattr(cmd_sync.subprocess, "run", boom)
+    monkeypatch.setattr(rc.subprocess, "run", boom)
 
     args = _Args(project="ppg:releases:17", rootprj="home:Admin")
 
@@ -225,9 +163,9 @@ def test_red_staging_aborts_before_freeze(tmp_path, monkeypatch):
         cmd_sync, "freeze_builds", lambda *a, **k: freeze_called.append(1) or {}
     )
     monkeypatch.setattr(cmd_sync, "restore_builds", lambda *a, **k: None)
-    monkeypatch.setattr(cmd_sync, "verify_release_landed", lambda *a, **k: None)
+    monkeypatch.setattr(rc, "verify_release_landed", lambda *a, **k: None)
     monkeypatch.setattr(
-        cmd_sync.subprocess,
+        rc.subprocess,
         "run",
         lambda *a, **k: pytest.fail("osc release must not run"),
     )
@@ -255,11 +193,11 @@ def test_no_freeze_skips_gate_but_verifies(tmp_path, monkeypatch):
     monkeypatch.setattr(cmd_sync, "assert_all_green", fail_if_called)
     monkeypatch.setattr(cmd_sync, "freeze_builds", fail_if_called)
     monkeypatch.setattr(cmd_sync, "restore_builds", lambda *a, **k: None)
-    monkeypatch.setattr(cmd_sync.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(rc.subprocess, "run", lambda *a, **k: None)
 
     verified = []
     monkeypatch.setattr(
-        cmd_sync,
+        rc,
         "verify_release_landed",
         lambda apiurl, src_prj, rel_prj, timeout_s=600: verified.append(
             (src_prj, rel_prj)
@@ -294,26 +232,23 @@ def _wire_release_first_path(monkeypatch, src, rel):
         "resolve_project_path",
         lambda pid: src if pid == "ppg:staging:17" else rel,
     )
+    monkeypatch.setattr(
+        rc, "resolve_project_path", lambda pid: src if pid == "ppg:staging:17" else rel
+    )
     monkeypatch.setattr(cmd_sync, "_REPO_DIR", rel.parents[2])
     monkeypatch.setattr(cmd_sync.osc.conf, "config", {"apiurl": "http://obs"})
     monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda *a, **k: False)
     monkeypatch.setattr(cmd_sync, "_create_release_project", lambda *a, **k: [])
     monkeypatch.setattr(cmd_sync, "_copy_project_conf", lambda *a, **k: None)
+    monkeypatch.setattr(rc, "_apply_project_config", lambda *a, **k: (False, None))
+    monkeypatch.setattr(rc, "_disable_project_builds", lambda *a, **k: None)
+    monkeypatch.setattr(rc, "_read_project_release_source", lambda *a, **k: ([], None))
     monkeypatch.setattr(
-        cmd_sync, "_apply_project_config", lambda *a, **k: (False, None)
+        rc, "filter_release_repo_names", lambda apiurl, names, target: names
     )
-    monkeypatch.setattr(cmd_sync, "_disable_project_builds", lambda *a, **k: None)
-    monkeypatch.setattr(
-        cmd_sync, "_read_project_release_source", lambda *a, **k: ([], None)
-    )
-    monkeypatch.setattr(
-        cmd_sync, "_filter_release_repo_names", lambda apiurl, names, target: names
-    )
-    monkeypatch.setattr(cmd_sync, "_add_release_targets", lambda *a, **k: None)
-    monkeypatch.setattr(cmd_sync, "_remove_release_targets", lambda *a, **k: None)
-    monkeypatch.setattr(
-        cmd_sync, "_fetch_obs_subproject_names", lambda apiurl, prefix: set()
-    )
+    monkeypatch.setattr(rc, "_add_release_targets", lambda *a, **k: None)
+    monkeypatch.setattr(rc, "_remove_release_targets", lambda *a, **k: None)
+    monkeypatch.setattr(rc, "_fetch_obs_subproject_names", lambda apiurl, prefix: set())
 
 
 def test_first_release_does_not_shell_out_to_dry_run_sync(tmp_path, monkeypatch):
@@ -330,7 +265,7 @@ def test_first_release_does_not_shell_out_to_dry_run_sync(tmp_path, monkeypatch)
     monkeypatch.setattr(cmd_sync, "assert_all_green", lambda *a, **k: [])
     monkeypatch.setattr(cmd_sync, "freeze_builds", lambda *a, **k: {})
     monkeypatch.setattr(cmd_sync, "restore_builds", lambda *a, **k: None)
-    monkeypatch.setattr(cmd_sync, "verify_release_landed", lambda *a, **k: None)
+    monkeypatch.setattr(rc, "verify_release_landed", lambda *a, **k: None)
 
     run_calls = []
 
@@ -338,7 +273,7 @@ def test_first_release_does_not_shell_out_to_dry_run_sync(tmp_path, monkeypatch)
         run_calls.append(cmd)
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-    monkeypatch.setattr(cmd_sync.subprocess, "run", fake_run)
+    monkeypatch.setattr(rc.subprocess, "run", fake_run)
 
     args = _Args(project="ppg:releases:17", rootprj="home:Admin")
 
@@ -416,11 +351,11 @@ def test_dry_run_passes_when_clean(tmp_path, monkeypatch, capsys):
 
 def test_filter_release_repo_names_warns_and_drops(monkeypatch, capsys):
     monkeypatch.setattr(
-        cmd_sync,
+        rc,
         "_fetch_obs_project_repository_names",
         lambda apiurl, prj: {"RockyLinux_9", "Debian_13"},
     )
-    kept = cmd_sync._filter_release_repo_names(
+    kept = rc.filter_release_repo_names(
         "http://obs", ["RockyLinux_9", "UBI_9", "Debian_13"], "x:rel"
     )
     assert kept == ["RockyLinux_9", "Debian_13"]
@@ -432,16 +367,16 @@ def test_collect_release_subprojects_respects_slice(tmp_path, monkeypatch):
     from percona_obs.project_config import RepositoryFilter
 
     src, rel = _mk_tree(tmp_path, monkeypatch)
-    monkeypatch.setattr(cmd_sync, "resolve_project_path", lambda pid: src)
+    monkeypatch.setattr(rc, "resolve_project_path", lambda pid: src)
     try:
         # boo: containers is out of slice (mirror and source) → not a pair, not missing;
         # tarballs is in slice on boo and has no mirror → missing
         common.set_default_repository_filter(RepositoryFilter(exclude_repos=("ubi*",)))
-        pairs, missing = _collect_release_subprojects("ppg:staging:17", rel)
+        pairs, missing = collect_release_subprojects("ppg:staging:17", rel)
         assert pairs == [] and missing == ["tarballs"]
         # labs: containers released, tarballs is out of slice → not missing
         common.set_default_repository_filter(RepositoryFilter(include_repos=("ubi*",)))
-        pairs, missing = _collect_release_subprojects("ppg:staging:17", rel)
+        pairs, missing = collect_release_subprojects("ppg:staging:17", rel)
         assert [n for n, _ in pairs] == ["containers"] and missing == []
     finally:
         common.set_default_repository_filter(None)
