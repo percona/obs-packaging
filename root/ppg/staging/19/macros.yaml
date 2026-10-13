@@ -26,5 +26,8 @@
 - PG_TDE_REVISION: main
 - PG_TDE_VERSION: 2.3.0~dev
 
-- TARBALL_PG_EXTRA_COMPONENTS: percona-pg_tde%!{PG_MAJOR_VERSION} percona-pg_oidc_validator%!{PG_MAJOR_VERSION}
+# PostGIS 3.7 split address_standardizer and postgis_tiger_geocoder out of its
+# tree into their own packages; bundle them wherever PostGIS itself ships.
+- TARBALL_PG_EXTRA_COMPONENTS: percona-pg_tde%!{PG_MAJOR_VERSION} percona-pg_oidc_validator%!{PG_MAJOR_VERSION} percona-address-standardizer%!{PG_MAJOR_VERSION} percona-postgis-tiger-geocoder%!{PG_MAJOR_VERSION}
 - CONTAINER_PG_EXTRA_COMPONENTS: percona-pg_tde%!{PG_MAJOR_VERSION} percona-pg_oidc_validator%!{PG_MAJOR_VERSION}
+- CONTAINER_POSTGIS_EXTRA_COMPONENTS: percona-address-standardizer%!{PG_MAJOR_VERSION} percona-address-standardizer%!{PG_MAJOR_VERSION}-llvmjit percona-postgis-tiger-geocoder%!{PG_MAJOR_VERSION}

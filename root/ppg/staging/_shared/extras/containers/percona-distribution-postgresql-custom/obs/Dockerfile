@@ -88,6 +88,7 @@ RUN microdnf install -y \
         percona-postgis%!{POSTGIS_RPM_MAJOR}_${PPG_MAJOR_VERSION}-gui \
         percona-postgis%!{POSTGIS_RPM_MAJOR}_${PPG_MAJOR_VERSION}-llvmjit \
         percona-postgis%!{POSTGIS_RPM_MAJOR}_${PPG_MAJOR_VERSION}-utils \
+        %!{CONTAINER_POSTGIS_EXTRA_COMPONENTS} \
         percona-wal2json${PPG_MAJOR_VERSION} \
         percona-pg_cron_${PPG_MAJOR_VERSION} \
         percona-timescaledb_${PPG_MAJOR_VERSION} \
