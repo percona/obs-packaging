@@ -74,6 +74,10 @@
 - PG_TDE_REVISION: %!{PG_TDE_VERSION}
 - PG_TELEMETRY_VERSION: 1.2.0
 - POSTGIS_VERSION: 3.5.7
+# Dot-stripped PostGIS major used in the RPM package names
+# (percona-postgis<POSTGIS_RPM_MAJOR>_<PG major>, the spec's postgismajorversion
+# without the dot). Bump it together with POSTGIS_VERSION on a PostGIS major.
+- POSTGIS_RPM_MAJOR: 35
 # PostGIS 3.7 split these two extensions out of its tree; only PG 19 has them.
 - ADDRESS_STANDARDIZER_VERSION: 3.7.0
 - POSTGIS_TIGER_GEOCODER_VERSION: 2025.2

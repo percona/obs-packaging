@@ -193,7 +193,7 @@ project-config: |
   # root/ppg/staging/%!{PG_MAJOR_VERSION}/percona-postgis/rpm/percona-postgis.spec:
   # `Requires: gdal-libs >= 3.0.4`, `Requires: gdal-libs` and
   # `Requires: geos proj libgeotiff` on EL8; `gdal3.4-libs` on EL9 — all in
-  # the main percona-postgis35_%!{PG_MAJOR_VERSION} package, no subpackage).
+  # the main percona-postgis%!{POSTGIS_RPM_MAJOR}_%!{PG_MAJOR_VERSION} package, no subpackage).
   # A by-name Requires has exactly one provider, so there is no choice for
   # Prefer to resolve.
   #
@@ -260,7 +260,7 @@ project-config: |
   # root/ppg/staging/%!{PG_MAJOR_VERSION}/percona-postgis/rpm/percona-postgis.spec:
   # `Requires: gdal-libs >= 3.0.4`, `Requires: gdal-libs` and
   # `Requires: geos proj libgeotiff` on EL8; `gdal3.4-libs` on EL9 — all in
-  # the main percona-postgis35_%!{PG_MAJOR_VERSION} package, no subpackage).
+  # the main percona-postgis%!{POSTGIS_RPM_MAJOR}_%!{PG_MAJOR_VERSION} package, no subpackage).
   # A by-name Requires has exactly one provider, so there is no choice for
   # Prefer to resolve.
   #

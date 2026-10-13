@@ -218,7 +218,7 @@ subproject (`ppg:staging:<V>:tarballs`) with three packages —
 PostgreSQL source with `--with-libedit-preferred`, so it links BSD libedit and
 the tarball needs no readline on the host) and `percona-gis-compat` (a
 payload-free shim that `Provides:` the distro GDAL/PROJ package names
-`percona-postgis35_<V>` requires *by name*, so the project config's
+`percona-postgis<MM>_<V>` (`MM` = the `POSTGIS_RPM_MAJOR` macro, e.g. `35`) requires *by name*, so the project config's
 `Prefer: percona-gis-compat` can redirect those edges to the lean
 `/opt`-prefixed `percona-gdal`/`percona-proj` instead of EPEL's fully-optioned
 GDAL; needed because OBS does not apply prjconf `Ignore:` rules when expanding
