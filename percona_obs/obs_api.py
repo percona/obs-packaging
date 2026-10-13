@@ -1225,7 +1225,10 @@ def set_project_description_marker(
     root = ET.fromstring(raw)
     desc = root.find("description")
     if desc is None:
-        desc = ET.SubElement(root, "description")
+        desc = ET.Element("description")
+        title = root.find("title")
+        insert_at = 0 if title is None else list(root).index(title) + 1
+        root.insert(insert_at, desc)
     kept = [
         line
         for line in (desc.text or "").splitlines()
@@ -1233,9 +1236,14 @@ def set_project_description_marker(
     ]
     desc.text = "\n".join([*kept, f"{key}: {value}"]).strip()
     ET.indent(root, space="  ")
-    _edit_project_meta(
+    stripped = _edit_project_meta(
         apiurl, obs_project_name, ET.tostring(root, encoding="unicode"), force=False
     )
+    if stripped:
+        raise SystemExit(
+            f"error: writing {key} to {obs_project_name} stripped its repository paths "
+            "(repository_access_failure); the project meta must be re-applied before retrying"
+        )
     _print_update(f"project meta  {obs_project_name}  ({key}: {value})")
 
 
