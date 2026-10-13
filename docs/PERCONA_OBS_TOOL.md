@@ -1055,8 +1055,10 @@ to override the arithmetic.
 ```
 
 Before cutting, run `git fetch --tags` (or `git fetch percona --tags`): the open-release
-detection below reads **local** git tags, so without a fresh fetch a shipped release could
-be mistaken for an open one (the command prints a note when it refreshes). The command
+detection below reads local git tags and also consults the remote
+(`PERCONA_OBS_PACKAGING_REPO`, via `git ls-remote --tags`), so a stale local clone only
+matters when the remote is unreachable (the command then warns, and prints a note when it
+refreshes an open release). The command
 also needs `gh` (logged in, with network access) on every run unless `--source-commit` is
 passed, because it resolves the last synced `main` commit through the GitHub API.
 

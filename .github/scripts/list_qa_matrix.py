@@ -41,6 +41,11 @@ def qa_project_type(full_name: str) -> str:
     return "packages"
 
 
+def is_release_tier(full_name: str) -> bool:
+    """True for production release projects (``...:releases:<major>[:sub]``)."""
+    return ":releases:" in full_name
+
+
 def normalize_entry(entry: dict) -> dict:
     """Ensure a combo carries ready-to-use ``name_filter``/``package_filter`` strings.
 
@@ -113,6 +118,11 @@ def main() -> None:
     matrix: list = []
     for full_name in subs:
         project = full_name[len(prefix) :]
+        # Release mirrors now carry qa: blocks meant for the per-PR
+        # pre-release; the frozen production snapshots must not be re-tested
+        # by the nightly (production-root enumeration, i.e. not PR mode).
+        if not present_only and is_release_tier(full_name):
+            continue
         proj_type = qa_project_type(full_name)
         if qa_types and proj_type not in qa_types:
             continue

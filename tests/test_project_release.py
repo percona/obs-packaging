@@ -794,10 +794,9 @@ def test_open_release_is_refreshed_in_place(monkeypatch):
     from percona_obs import cmd_project as cp
     from percona_obs.release_record import ReleaseEntry
 
-    monkeypatch.setattr(cp, "_tag_exists_locally", lambda tag: False)
     entries = [ReleaseEntry("ppg/18.4-1"), ReleaseEntry("ppg/18.6-1", "old")]
     rid, new_entries, prev = cp._plan_release_entries(
-        entries, None, lambda: "18.6-2", "ppg", "newsha"
+        entries, None, lambda: "18.6-2", "ppg", "newsha", lambda t: False
     )
     assert rid == "18.6-1"
     assert new_entries == [
@@ -811,10 +810,9 @@ def test_shipped_release_appends_next_id(monkeypatch):
     from percona_obs import cmd_project as cp
     from percona_obs.release_record import ReleaseEntry
 
-    monkeypatch.setattr(cp, "_tag_exists_locally", lambda tag: True)
     entries = [ReleaseEntry("ppg/18.6-1", "old")]
     rid, new_entries, prev = cp._plan_release_entries(
-        entries, None, lambda: "18.6-2", "ppg", "newsha"
+        entries, None, lambda: "18.6-2", "ppg", "newsha", lambda t: True
     )
     assert rid == "18.6-2"
     assert new_entries == [
@@ -828,11 +826,37 @@ def test_explicit_release_id_wins_over_refresh(monkeypatch):
     from percona_obs import cmd_project as cp
     from percona_obs.release_record import ReleaseEntry
 
-    monkeypatch.setattr(cp, "_tag_exists_locally", lambda tag: False)
     entries = [ReleaseEntry("ppg/18.6-1")]
     with pytest.raises(SystemExit, match="already present"):
-        cp._plan_release_entries(entries, "18.6-1", lambda: "x", "ppg", "s")
+        cp._plan_release_entries(
+            entries, "18.6-1", lambda: "x", "ppg", "s", lambda t: False
+        )
     rid, new_entries, _ = cp._plan_release_entries(
-        entries, "18.6-9", lambda: "x", "ppg", "s"
+        entries, "18.6-9", lambda: "x", "ppg", "s", lambda t: False
     )
     assert rid == "18.6-9" and new_entries[-1] == ReleaseEntry("ppg/18.6-9", "s")
+
+
+def test_tag_exists_on_remote(monkeypatch):
+    from types import SimpleNamespace
+
+    from percona_obs import cmd_project as cp
+
+    monkeypatch.setattr(
+        cp.subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(returncode=0, stdout="abc\trefs/tags/t\n"),
+    )
+    assert cp._tag_exists_on_remote("u", "t") is True
+    monkeypatch.setattr(
+        cp.subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(returncode=0, stdout=""),
+    )
+    assert cp._tag_exists_on_remote("u", "t") is False
+    monkeypatch.setattr(
+        cp.subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(returncode=1, stdout="", stderr="boom"),
+    )
+    assert cp._tag_exists_on_remote("u", "t") is False

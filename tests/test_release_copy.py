@@ -31,7 +31,7 @@ def _stub_obs(monkeypatch, calls):
     monkeypatch.setattr(rc, "_fetch_obs_subproject_names", lambda apiurl, prefix: set())
 
 
-def test_copy_project_binaries_uses_target_project_and_restores(monkeypatch):
+def test_copy_project_binaries_restores_targets(monkeypatch):
     calls = []
     _stub_obs(monkeypatch, calls)
     seen = {}
@@ -39,9 +39,9 @@ def test_copy_project_binaries_uses_target_project_and_restores(monkeypatch):
         rc.subprocess, "run", lambda cmd, **k: seen.setdefault("cmd", cmd)
     )
     rc.copy_project_binaries("http://obs", "S", "T")
-    assert "--target-project" in seen["cmd"] and "T" in seen["cmd"]
+    assert "--target-project" not in seen["cmd"]
     assert seen["cmd"][seen["cmd"].index("release") + 1] == "S"
-    assert calls == [("add", "S", "T"), ("remove", "S", "T")]
+    assert calls == [("remove", "S", "T"), ("add", "S", "T"), ("remove", "S", "T")]
 
 
 def test_copy_project_binaries_restores_on_failure(monkeypatch):
