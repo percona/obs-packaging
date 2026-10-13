@@ -1212,6 +1212,44 @@ def _disable_project_builds(apiurl: str, obs_project_name: str) -> None:
         _print_update(f"project meta  {obs_project_name}  (builds disabled)")
 
 
+def set_project_description_marker(
+    apiurl: str, obs_project_name: str, key: str, value: str
+) -> None:
+    """Append (or replace) a ``<key>: <value>`` line in the project description.
+
+    Used to pin ``source_commit`` on a pre-release project so the final hop
+    can check it without git.  ``_apply_project_config`` rewrites the
+    description from the mirror, so callers set the marker last.
+    """
+    raw = _decode_obs_response(osc.core.show_project_meta(apiurl, obs_project_name))
+    root = ET.fromstring(raw)
+    desc = root.find("description")
+    if desc is None:
+        desc = ET.SubElement(root, "description")
+    kept = [
+        line
+        for line in (desc.text or "").splitlines()
+        if not line.startswith(f"{key}: ")
+    ]
+    desc.text = "\n".join([*kept, f"{key}: {value}"]).strip()
+    ET.indent(root, space="  ")
+    _edit_project_meta(
+        apiurl, obs_project_name, ET.tostring(root, encoding="unicode"), force=False
+    )
+    _print_update(f"project meta  {obs_project_name}  ({key}: {value})")
+
+
+def read_project_description_marker(
+    apiurl: str, obs_project_name: str, key: str
+) -> "str | None":
+    raw = _decode_obs_response(osc.core.show_project_meta(apiurl, obs_project_name))
+    desc = ET.fromstring(raw).findtext("description") or ""
+    for line in desc.splitlines():
+        if line.startswith(f"{key}: "):
+            return line[len(key) + 2 :].strip() or None
+    return None
+
+
 def _apply_project_config(
     apiurl: str,
     obs_project_name: str,
@@ -1256,6 +1294,9 @@ def _apply_project_config(
     branch-source projects that don't exist on OBS are filtered out before
     upload (avoids ``repository_access_failure`` when a PR adds a brand-new
     subproject that has no production counterpart yet).
+
+    ``publish_override`` replaces the mirror's ``publish:`` flags (the pre-release
+    forces publishing on so QA always has repositories).
     """
     project_config = _load_project_config_with_inheritance(project_path, env_vars)
     # In --branch-from (PR) context, always enable builds regardless of the
