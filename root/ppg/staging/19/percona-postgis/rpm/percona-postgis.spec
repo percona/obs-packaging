@@ -95,7 +95,7 @@
 %{!?raster:%global     raster 1}
 %endif
 
-%if 0%{?fedora} >= 43 || 0%{?rhel} >= 9 || 0%{?suse_version} >= 1500
+%if 0%{?fedora} >= 43 || 0%{?rhel} >= 8 || 0%{?suse_version} >= 1500
 %ifnarch ppc64 ppc64le
 # TODO
 %{!?sfcgal:%global     sfcgal 1}
@@ -130,7 +130,10 @@ BuildRequires:	libgeotiff%{libgeotiffmajorversion}-devel
 BuildRequires:	pgdg-srpm-macros >= 1.0.54
 %endif
 %endif
-%if 0%{?fedora} >= 43 || 0%{?rhel} >= 9
+# PERCONA: PGDG dropped EL8 from the 3.7 spec (rhel >= 9 on these gates);
+# we still build EL8/UBI8, so keep the 3.5 bounds (pcre2, SFCGAL, protobuf,
+# json-c/xerces-c) there.
+%if 0%{?fedora} >= 43 || 0%{?rhel} >= 8
 Requires:       pcre2
 %else
 Requires:       libpcre2-8-0
@@ -156,7 +159,7 @@ BuildRequires:	libxml2-devel
 BuildRequires:	gtk2-devel > 2.8.0
 %endif
 %if %{sfcgal}
-%if 0%{?fedora} >= 43 || 0%{?rhel} >= 9
+%if 0%{?fedora} >= 43 || 0%{?rhel} >= 8
 BuildRequires:	SFCGAL SFCGAL-devel >= 2.1.0
 %endif
 %if 0%{?suse_version} >= 1500 && 0%{?suse_version} < 1600
@@ -222,7 +225,7 @@ Requires:        libjson-c5
 Requires:        libxerces-c-3_3
 BuildRequires:        libxerces-c-devel
 %endif
-%if 0%{?fedora} >= 43 || 0%{?rhel} >= 9
+%if 0%{?fedora} >= 43 || 0%{?rhel} >= 8
 Requires:	json-c xerces-c
 BuildRequires:  xerces-c-devel
 %endif
@@ -357,7 +360,7 @@ autoconf
 %if %{shp2pgsqlgui}
 	--with-gui \
 %endif
-%if 0%{?fedora} >= 43 || 0%{?rhel} >= 9  || 0%{?suse_version} >= 1500
+%if 0%{?fedora} >= 43 || 0%{?rhel} >= 8  || 0%{?suse_version} >= 1500
 	--with-protobuf \
 %else
 	--without-protobuf \
