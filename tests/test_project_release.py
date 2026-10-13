@@ -763,6 +763,137 @@ def test_write_release_tree_carries_rendered_qa_blocks(tmp_path, monkeypatch):
     assert "qa" not in tarballs
 
 
+def _pkg_with_qa(project_dir, name, qa_yaml):
+    pkg = project_dir / name
+    (pkg / "obs").mkdir(parents=True)
+    (pkg / "obs" / "_service").write_text("<services/>\n")
+    (pkg / "package.yaml").write_text(qa_yaml)
+    return pkg
+
+
+_AUDIT_QA = "qa:\n  - pipeline: audit\n    parameters:\n      X: 1\n"
+
+
+def test_mirror_qa_entries_appends_package_lanes(tmp_path, monkeypatch):
+    import percona_obs.common as common
+    from percona_obs.cmd_project import _mirror_qa_entries
+
+    src = _staging_tree(tmp_path)
+    monkeypatch.setattr(cmd_project, "_REPO_DIR", tmp_path)
+    monkeypatch.setattr(common, "REPO_ROOT", tmp_path / "root")
+    (tmp_path / "root/macros.yaml").write_text("- PG_VERSION: 17.11\n")
+    _pkg_with_qa(
+        src,
+        "percona-pg_tde",
+        "qa:\n  - name: pg_tde\n    pipeline: tde-core-parallel\n    parameters:\n"
+        "      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:17\n      VERSION: ppg-%!{PG_VERSION}\n",
+    )
+    _pkg_with_qa(src, "percona-pgaudit", _AUDIT_QA)
+    _pkg_with_qa(src, "percona-haproxy", "build:\n  RockyLinux_9: true\n")
+    cfg = {
+        "qa": [
+            {"name": "server", "pipeline": "p", "parameters": {"A": "ppg:staging:17"}}
+        ]
+    }
+    out = _mirror_qa_entries(
+        cfg, src, "ppg:staging:17", "ppg:staging:17", "ppg:releases:17"
+    )
+    assert [e["name"] for e in out] == [
+        "server",
+        "percona-pg_tde.pg_tde",
+        "percona-pgaudit.audit",
+    ]
+    assert out[0]["parameters"]["A"] == "ppg:releases:17"
+    assert out[1]["parameters"] == {
+        "OBS_PROJECT": "${OBS_ROOTPRJ}:ppg:releases:17",
+        "VERSION": "ppg-17.11",
+    }
+    assert out[1]["pipeline"] == "tde-core-parallel"
+
+
+def test_mirror_qa_entries_none_when_nothing_and_package_only(tmp_path, monkeypatch):
+    import percona_obs.common as common
+    from percona_obs.cmd_project import _mirror_qa_entries
+
+    src = _staging_tree(tmp_path)
+    monkeypatch.setattr(common, "REPO_ROOT", tmp_path / "root")
+    ids = ("ppg:staging:17", "ppg:staging:17", "ppg:releases:17")
+    assert _mirror_qa_entries({}, src, *ids) is None
+    _pkg_with_qa(src, "percona-pgaudit", _AUDIT_QA)
+    out = _mirror_qa_entries({}, src, *ids)
+    assert [e["name"] for e in out] == ["percona-pgaudit.audit"]
+
+
+def test_mirror_qa_entries_rejects_duplicate_names(tmp_path, monkeypatch):
+    import percona_obs.common as common
+    from percona_obs.cmd_project import _mirror_qa_entries
+
+    src = _staging_tree(tmp_path)
+    monkeypatch.setattr(common, "REPO_ROOT", tmp_path / "root")
+    _pkg_with_qa(src, "percona-pgaudit", _AUDIT_QA)
+    cfg = {
+        "qa": [
+            {"name": "percona-pgaudit.audit", "pipeline": "p", "parameters": {"A": 1}}
+        ]
+    }
+    with pytest.raises(SystemExit, match="percona-pgaudit.audit"):
+        _mirror_qa_entries(
+            cfg, src, "ppg:staging:17", "ppg:staging:17", "ppg:releases:17"
+        )
+
+
+def test_mirror_qa_entries_follows_shared_symlinks(tmp_path, monkeypatch):
+    import percona_obs.common as common
+    from percona_obs.cmd_project import _mirror_qa_entries
+
+    src = _staging_tree(tmp_path)
+    monkeypatch.setattr(cmd_project, "_REPO_DIR", tmp_path)
+    monkeypatch.setattr(common, "REPO_ROOT", tmp_path / "root")
+    shared = tmp_path / "root/ppg/staging/_shared"
+    shared.mkdir(parents=True)
+    _pkg_with_qa(shared, "percona-pgaudit", _AUDIT_QA)
+    (src / "percona-pgaudit").symlink_to("../_shared/percona-pgaudit")
+    out = _mirror_qa_entries(
+        {}, src, "ppg:staging:17", "ppg:staging:17", "ppg:releases:17"
+    )
+    assert [e["name"] for e in out] == ["percona-pgaudit.audit"]
+
+
+def test_write_release_tree_carries_package_lanes_into_subproject_mirror(
+    tmp_path, monkeypatch
+):
+    import percona_obs.common as common
+
+    src = _staging_tree(tmp_path)
+    monkeypatch.setattr(cmd_project, "_REPO_DIR", tmp_path)
+    monkeypatch.setattr(common, "REPO_ROOT", tmp_path / "root")
+    (tmp_path / "root/macros.yaml").write_text("- PG_VERSION: 17.11\n")
+    _pkg_with_qa(
+        src / "containers",
+        "percona-postgresql-image",
+        "qa:\n  - name: img\n    pipeline: img-p\n    parameters:\n"
+        "      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:17:containers\n",
+    )
+    rel = tmp_path / "root/ppg/releases/17"
+    _write_release_tree(
+        rel,
+        {"build": False, "repositories": []},
+        src,
+        "ppg:staging:17",
+        "ppg:releases:17",
+        "ppg",
+        "17",
+    )
+    containers = yaml.safe_load((rel / "containers" / "project.yaml").read_text())
+    assert containers["qa"] == [
+        {
+            "name": "percona-postgresql-image.img",
+            "pipeline": "img-p",
+            "parameters": {"OBS_PROJECT": "${OBS_ROOTPRJ}:ppg:releases:17:containers"},
+        }
+    ]
+
+
 def test_replace_changelog_section():
     from percona_obs.cmd_project import _replace_changelog_section
 

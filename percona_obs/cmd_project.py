@@ -41,6 +41,7 @@ from .common import (
     is_project,
     is_shared_source_dir,
     load_macros,
+    load_package_yaml,
     load_project_yaml,
     load_yaml,
     logger,
@@ -1733,6 +1734,60 @@ def _rewrite_qa_project_refs(value, source_project_id: str, release_project_id: 
     return value
 
 
+def _mirror_qa_entries(
+    project_cfg: dict,
+    project_path: Path,
+    obs_id: str,
+    source_project_id: str,
+    release_project_id: str,
+) -> "list[dict] | None":
+    """The ``qa:`` list a release mirror gets for one staging project.
+
+    The project's own entries come first (rewritten to the release project),
+    then one entry per ``qa:`` entry of each direct package (``package.yaml``,
+    macros rendered from the package's own chain, ``${VAR}`` tokens kept),
+    named ``<package>.<segment>`` where segment is the entry's ``name`` or its
+    ``pipeline``.  Mirrors have no package directories, so package lanes can
+    only reach the pre-release as project lanes; the package prefix keeps the
+    check names unique and recognisable.  Returns None when there is nothing
+    to carry.  A duplicate name is a hard error at cut time.
+    """
+    entries: list[dict] = []
+    own = project_cfg.get("qa")
+    if own is not None:
+        own = _rewrite_qa_project_refs(own, source_project_id, release_project_id)
+        entries.extend(own if isinstance(own, list) else [own])
+    for _obs, pkg_path in find_packages(project_path, obs_id, recursive=False):
+        pkg_yaml = pkg_path / "package.yaml"
+        if not pkg_yaml.is_file():
+            continue
+        pkg_qa = load_package_yaml(pkg_yaml).get("qa")
+        if pkg_qa is None:
+            continue
+        for entry in pkg_qa if isinstance(pkg_qa, list) else [pkg_qa]:
+            if not isinstance(entry, dict):
+                raise SystemExit(
+                    f"error: {pkg_path.name}/package.yaml: qa entries must be mappings"
+                )
+            segment = entry.get("name") or entry.get("pipeline") or ""
+            copied: dict = _rewrite_qa_project_refs(  # type: ignore[assignment]
+                entry, source_project_id, release_project_id
+            )
+            copied.pop("name", None)
+            # name first, for readable mirrors
+            entries.append({"name": f"{pkg_path.name}.{segment}", **copied})
+    seen: set[str] = set()
+    for entry in entries:
+        name = entry.get("name") or entry.get("pipeline") or ""
+        if name in seen:
+            raise SystemExit(
+                f"error: {source_project_id}: two qa entries resolve to the same "
+                f"name {name!r} in the release mirror; rename one of them"
+            )
+        seen.add(name)
+    return entries or None
+
+
 def _write_release_tree(
     release_dir: Path,
     project_data: dict,
@@ -1791,10 +1846,15 @@ def _write_release_tree(
         for key in ("debuginfo", "publish", "project-config"):
             if key in source_sub_config:
                 sub_data[key] = source_sub_config[key]
-        if source_sub_config.get("qa") is not None:
-            sub_data["qa"] = _rewrite_qa_project_refs(
-                source_sub_config["qa"], source_project_id, release_project
-            )
+        mirror_qa = _mirror_qa_entries(
+            source_sub_config,
+            sub_path,
+            sub_obs_id,
+            source_project_id,
+            release_project,
+        )
+        if mirror_qa is not None:
+            sub_data["qa"] = mirror_qa
         release_sub_dir = release_dir / Path(*subproject_name.split(":"))
         expected_dirs.add(release_sub_dir)
         release_sub_dir.mkdir(parents=True, exist_ok=True)
@@ -2611,10 +2671,11 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     top_cfg_no_env = _load_project_config_with_inheritance(
         source_path, repo_filter=RepositoryFilter.EMPTY
     )
-    if top_cfg_no_env.get("qa") is not None:
-        project_data["qa"] = _rewrite_qa_project_refs(
-            top_cfg_no_env["qa"], args.project, release_project
-        )
+    top_qa = _mirror_qa_entries(
+        top_cfg_no_env, source_path, args.project, args.project, release_project
+    )
+    if top_qa is not None:
+        project_data["qa"] = top_qa
 
     if is_first_release:
         commit_msg = f"Release {release_project} ({release_id})"
