@@ -896,6 +896,14 @@ def build_parser() -> argparse.ArgumentParser:
         dest="no_cve_scan",
         help="Skip the best-effort CVE scan when generating the CHANGELOG Security section.",
     )
+    project_release_parser.add_argument(
+        "--source-commit",
+        metavar="SHA",
+        default=None,
+        dest="source_commit",
+        help="Commit of main whose staging tree is released (default: head of the "
+        "last sync-main run with successful sync jobs, via gh). Recorded in release.yaml.",
+    )
     project_release_parser.set_defaults(func=cmd_project_release)
 
     return parser

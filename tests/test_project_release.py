@@ -761,3 +761,78 @@ def test_write_release_tree_carries_rendered_qa_blocks(tmp_path, monkeypatch):
     }
     tarballs = yaml.safe_load((rel / "tarballs" / "project.yaml").read_text())
     assert "qa" not in tarballs
+
+
+def test_replace_changelog_section():
+    from percona_obs.cmd_project import _replace_changelog_section
+
+    text = "# Changelog\n\n## [18.6-1] - 2026-01-01\n\n### Added\n- a\n\n## [18.4-1] - 2025-12-01\n\n### Added\n- b\n"
+    out = _replace_changelog_section(
+        text, "18.6-1", "## [18.6-1] - 2026-02-02\n\n### Added\n- c\n"
+    )
+    assert "- a" not in out and "- c" in out and "- b" in out
+    assert out.index("[18.6-1]") < out.index("[18.4-1]")
+    # absent -> prepended above the first section
+    out2 = _replace_changelog_section(text, "18.7-1", "## [18.7-1] - x\n")
+    assert out2.index("[18.7-1]") < out2.index("[18.6-1]")
+
+
+def test_resolve_source_commit_override_and_ancestor(monkeypatch):
+    from percona_obs import cmd_project as cp
+
+    monkeypatch.setattr(cp, "_is_ancestor_of_head", lambda sha: sha == "good")
+    assert cp._resolve_source_commit("good", "https://github.com/o/r.git") == "good"
+    with pytest.raises(SystemExit, match="not an ancestor of HEAD"):
+        cp._resolve_source_commit("bad", "https://github.com/o/r.git")
+    monkeypatch.setattr(cp, "last_synced_head_sha", lambda slug: "good")
+    assert cp._resolve_source_commit(None, "https://github.com/o/r.git") == "good"
+    with pytest.raises(SystemExit, match="PERCONA_OBS_PACKAGING_REPO"):
+        cp._resolve_source_commit(None, "")
+
+
+def test_open_release_is_refreshed_in_place(monkeypatch):
+    from percona_obs import cmd_project as cp
+    from percona_obs.release_record import ReleaseEntry
+
+    monkeypatch.setattr(cp, "_tag_exists_locally", lambda tag: False)
+    entries = [ReleaseEntry("ppg/18.4-1"), ReleaseEntry("ppg/18.6-1", "old")]
+    rid, new_entries, prev = cp._plan_release_entries(
+        entries, None, lambda: "18.6-2", "ppg", "newsha"
+    )
+    assert rid == "18.6-1"
+    assert new_entries == [
+        ReleaseEntry("ppg/18.4-1"),
+        ReleaseEntry("ppg/18.6-1", "newsha"),
+    ]
+    assert prev == "18.4-1"
+
+
+def test_shipped_release_appends_next_id(monkeypatch):
+    from percona_obs import cmd_project as cp
+    from percona_obs.release_record import ReleaseEntry
+
+    monkeypatch.setattr(cp, "_tag_exists_locally", lambda tag: True)
+    entries = [ReleaseEntry("ppg/18.6-1", "old")]
+    rid, new_entries, prev = cp._plan_release_entries(
+        entries, None, lambda: "18.6-2", "ppg", "newsha"
+    )
+    assert rid == "18.6-2"
+    assert new_entries == [
+        ReleaseEntry("ppg/18.6-1", "old"),
+        ReleaseEntry("ppg/18.6-2", "newsha"),
+    ]
+    assert prev == "18.6-1"
+
+
+def test_explicit_release_id_wins_over_refresh(monkeypatch):
+    from percona_obs import cmd_project as cp
+    from percona_obs.release_record import ReleaseEntry
+
+    monkeypatch.setattr(cp, "_tag_exists_locally", lambda tag: False)
+    entries = [ReleaseEntry("ppg/18.6-1")]
+    with pytest.raises(SystemExit, match="already present"):
+        cp._plan_release_entries(entries, "18.6-1", lambda: "x", "ppg", "s")
+    rid, new_entries, _ = cp._plan_release_entries(
+        entries, "18.6-9", lambda: "x", "ppg", "s"
+    )
+    assert rid == "18.6-9" and new_entries[-1] == ReleaseEntry("ppg/18.6-9", "s")

@@ -79,7 +79,8 @@ from .cmd_build import (
 )
 from .cve_scan import ChangedPackage, scan_release_cves
 from .release_scope import has_container_images, tree_has_server_package
-from .release_record import ReleaseEntry, parse_release_entries
+from .release_record import ReleaseEntry, dump_release_entry, parse_release_entries
+from .github_api import last_synced_head_sha, repo_slug_from_url
 from .services import _git_head_sha, _git_tag_for_sha
 
 _YAML_FILENAMES = {"project.yaml", "package.yaml"}
@@ -2285,6 +2286,105 @@ def _derive_release_id(
     return f"{major_minor}-{matching_count + 1}"
 
 
+def _tag_exists_locally(tag: str) -> bool:
+    r = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}"],
+        capture_output=True,
+        cwd=_REPO_DIR,
+    )
+    return r.returncode == 0
+
+
+def _is_ancestor_of_head(sha: str) -> bool:
+    r = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", sha, "HEAD"],
+        capture_output=True,
+        cwd=_REPO_DIR,
+    )
+    return r.returncode == 0
+
+
+def _resolve_source_commit(override: "str | None", repo_url: str) -> str:
+    """The commit of main whose staging tree the release is cut from.
+
+    Default: head SHA of the last sync-main run with successful sync jobs
+    (``gh api``), so the record names what OBS actually holds.  Must be an
+    ancestor of HEAD so the release branch contains the tree it claims.
+    """
+    if override:
+        sha = override
+    else:
+        if not repo_url:
+            raise SystemExit(
+                "error: PERCONA_OBS_PACKAGING_REPO is not set in the profile; "
+                "set it or pass --source-commit"
+            )
+        sha = last_synced_head_sha(repo_slug_from_url(repo_url))
+    if not _is_ancestor_of_head(sha):
+        raise SystemExit(
+            f"error: source commit {sha} is not an ancestor of HEAD; "
+            "rebase the release branch on main (and fetch) first"
+        )
+    return sha
+
+
+def _plan_release_entries(
+    existing: "list[ReleaseEntry]",
+    explicit_id: "str | None",
+    derive_id: "Callable[[], str]",
+    product: str,
+    source_commit: str,
+) -> "tuple[str, list[ReleaseEntry], str | None]":
+    """Decide the release id and the new ``releases:`` list.
+
+    Returns (release_id, entries, prev_release_id).  The last entry whose
+    tag is not yet a git tag is *open*: without ``--release-id`` it is
+    refreshed in place (same id, new source_commit) and prev_release_id is
+    the entry before it.  Otherwise the next id is derived and appended.
+    """
+    open_entry = (
+        existing[-1] if existing and not _tag_exists_locally(existing[-1].tag) else None
+    )
+    if explicit_id:
+        tag = f"{product}/{explicit_id}"
+        if any(e.tag == tag for e in existing):
+            raise SystemExit(
+                f"error: release tag {tag} is already present in release.yaml"
+            )
+        prev = existing[-1].tag.split("/")[-1] if existing else None
+        return explicit_id, [*existing, ReleaseEntry(tag, source_commit)], prev
+    if open_entry is not None:
+        rid = open_entry.tag.split("/")[-1]
+        print(
+            f"note: {open_entry.tag} has no git tag locally — treating the release as "
+            "still open and refreshing it in place (fetch tags if it already shipped)",
+            flush=True,
+        )
+        prev = existing[-2].tag.split("/")[-1] if len(existing) > 1 else None
+        return rid, [*existing[:-1], ReleaseEntry(open_entry.tag, source_commit)], prev
+    rid = derive_id()
+    tag = f"{product}/{rid}"
+    if any(e.tag == tag for e in existing):
+        raise SystemExit(f"error: release tag {tag} is already present in release.yaml")
+    prev = existing[-1].tag.split("/")[-1] if existing else None
+    return rid, [*existing, ReleaseEntry(tag, source_commit)], prev
+
+
+def _replace_changelog_section(text: str, release_id: str, section: str) -> str:
+    """Replace the ``## [release_id]`` section (up to the next ``## [``) or,
+    when absent, prepend *section* above the first section."""
+    pattern = re.compile(
+        r"## \[" + re.escape(release_id) + r"\].*?(?=\n## \[|\Z)", re.DOTALL
+    )
+    if pattern.search(text):
+        return pattern.sub(lambda _m: section.rstrip("\n") + "\n", text, count=1)
+    m = re.search(r"\n(## \[)", text)
+    if m:
+        pos = m.start() + 1
+        return text[:pos] + section.rstrip("\n") + "\n\n" + text[pos:]
+    return text.rstrip() + "\n\n" + section.rstrip("\n") + "\n"
+
+
 def cmd_project_release(args: argparse.Namespace) -> None:
     """Create or update a release: release.yaml, CHANGELOG.md, project.yaml, commit, and open a PR."""
     product = args.project.split(":")[0]
@@ -2327,11 +2427,18 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         )
     existing_releases: list[str] = [e.tag for e in existing_entries]
 
-    # Auto-derive release-id from OBS if not provided.
-    release_id: str = args.release_id or ""
-    if not release_id:
+    release_env: dict[str, str] = {
+        **(parse_env_overrides(args.env_overrides) if args.env_overrides else {}),
+        **auto_rootprj_env(args.rootprj),
+    }
+    source_commit = _resolve_source_commit(
+        getattr(args, "source_commit", None),
+        release_env.get("PERCONA_OBS_PACKAGING_REPO", ""),
+    )
+
+    def _derive() -> str:
         pkg_archs = _fetch_all_pkg_archs(apiurl, source_obs_project)
-        release_id = _derive_release_id(
+        return _derive_release_id(
             pkg_archs,
             existing_releases,
             release_name,
@@ -2342,18 +2449,15 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             major=major,
         )
 
+    release_id, new_entries, prev_release_id = _plan_release_entries(
+        existing_entries, args.release_id or None, _derive, product, source_commit
+    )
     tag = f"{product}/{release_id}"
-
-    if tag in existing_releases:
-        raise SystemExit(f"error: release tag {tag} is already present in release.yaml")
+    is_refresh = bool(existing_entries) and existing_entries[-1].tag == tag
 
     # Source project topology comes from the tree, unfiltered: the release
     # snapshot is instance-agnostic and each instance's `sync release` slices
     # it (spec Section 4).  Env vars follow the same precedence as sync.
-    release_env: dict[str, str] = {
-        **(parse_env_overrides(args.env_overrides) if args.env_overrides else {}),
-        **auto_rootprj_env(args.rootprj),
-    }
     source_cfg = resolve_project_config(
         source_path, release_env, repo_filter=RepositoryFilter.EMPTY
     )
@@ -2403,7 +2507,6 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     _print_pending("fetching container image package lists for CHANGELOG")
     source_container_pkgs: dict[str, dict[str, str]] = {}
     release_container_pkgs: dict[str, dict[str, str]] = {}
-    prev_release_id: str | None = None
     for subproject_name in container_subs:
         sub_full = f"{args.rootprj}:{args.project}:{subproject_name}"
         _merge_container_pkgs(
@@ -2413,8 +2516,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             ),
             sub_full,
         )
-    if not is_first_release and existing_releases:
-        prev_release_id = existing_releases[-1].split("/")[-1]
+    if not is_first_release and prev_release_id:
         # Diff against whatever release subprojects actually exist on OBS —
         # this is what makes the ubi9 old-layout → new-layout migration diff
         # correctly instead of dumping every image as "add".
@@ -2430,7 +2532,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     security_lines: list[str] | None = None
     if not getattr(args, "no_cve_scan", False):
         _print_pending("scanning upstream release notes for CVE fixes")
-        prev_tag_for_scan = existing_releases[-1] if existing_releases else None
+        prev_tag_for_scan = f"{product}/{prev_release_id}" if prev_release_id else None
         try:
             changed_pkgs = _build_changed_packages(
                 source_versions, release_versions, source_path
@@ -2457,11 +2559,10 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     )
 
     # Build release.yaml content.
-    new_releases_list = existing_releases + [tag]
     release_data: dict = {
         "repository": "${PERCONA_OBS_PACKAGING_REPO}",
         "project": args.project,
-        "releases": new_releases_list,
+        "releases": [dump_release_entry(e) for e in new_entries],
     }
 
     # Build project.yaml for the release directory.
@@ -2489,11 +2590,14 @@ def cmd_project_release(args: argparse.Namespace) -> None:
 
     if is_first_release:
         commit_msg = f"Release {release_project} ({release_id})"
+    elif is_refresh:
+        commit_msg = f"Refresh release {release_project} ({release_id})"
     else:
         commit_msg = f"Update release {release_project} ({release_id})"
 
     # Preview and confirm.
-    print(f"{'First' if is_first_release else 'Update'} release: {release_project}")
+    kind = "First" if is_first_release else "Refresh" if is_refresh else "Update"
+    print(f"{kind} release: {release_project}")
     print(f"  Tag:         {tag}")
     print(f"  Directory:   {release_dir.relative_to(_REPO_DIR)}/")
     if not is_first_release:
@@ -2564,19 +2668,9 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         changelog_file = release_dir / "CHANGELOG.md"
         if changelog_file.is_file():
             existing_changelog = changelog_file.read_text("utf-8")
-            m = re.search(r"\n(## \[)", existing_changelog)
-            if m:
-                insert_pos = m.start() + 1
-                new_content = (
-                    existing_changelog[:insert_pos]
-                    + changelog_section
-                    + "\n"
-                    + existing_changelog[insert_pos:]
-                )
-            else:
-                new_content = (
-                    existing_changelog.rstrip() + "\n\n" + changelog_section + "\n"
-                )
+            new_content = _replace_changelog_section(
+                existing_changelog, release_id, changelog_section
+            )
         else:
             new_content = _CHANGELOG_HEADER + changelog_section + "\n"
         changelog_file.write_text(new_content, encoding="utf-8")
