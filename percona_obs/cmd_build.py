@@ -97,10 +97,12 @@ def _fetch_build_results(
     Returns ({}, {}) on any error.
     """
     url = osc.core.makeurl(apiurl, ["build", obs_project_name, "_result"])
+    logger.debug(f"GET {url}")
     try:
         response = osc.connection.http_GET(url)
         result_root = ET.fromstring(response.read())
-    except Exception:
+    except Exception as exc:
+        logger.warning(f"could not fetch build results of {obs_project_name}: {exc}")
         return {}, {}
 
     results: dict[str, dict[str, dict[str, str]]] = {}
@@ -159,6 +161,7 @@ def _fetch_pkg_versrel(
 ) -> str | None:
     """Return the version-release (e.g. '3.5.26-6.1') by inspecting the binary list."""
     url = osc.core.makeurl(apiurl, ["build", obs_project, repo, arch, pkg])
+    logger.debug(f"GET {url}")
     try:
         response = osc.connection.http_GET(url)
         root = ET.fromstring(response.read())
@@ -166,8 +169,10 @@ def _fetch_pkg_versrel(
             ver = _version_from_binary(binary.get("filename", ""))
             if ver:
                 return ver
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(
+            f"could not list binaries of {obs_project}/{repo}/{arch}/{pkg}: {exc}"
+        )
     return None
 
 
