@@ -182,3 +182,49 @@ def test_scope_local_paths_maps_obs_names_back(tmp_path, monkeypatch):
     assert src in paths
     assert src.parents[2] / "ppg/common/deps/geos" in paths
     assert any(p.name == "macros.yaml" for p in paths)
+
+
+def test_shared_symlink_target_edit_is_detected(tmp_path, monkeypatch):
+    import subprocess
+
+    import percona_obs.common as common
+
+    def git(*a):
+        return subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@x", *a],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    git("init", "-q")
+    shared = tmp_path / "root/ppg/staging/_shared/pkgx/rpm"
+    shared.mkdir(parents=True)
+    spec = shared / "x.spec"
+    spec.write_text("Version: 1\n")
+    src = tmp_path / "root/ppg/staging/17"
+    src.mkdir(parents=True)
+    (src / "project.yaml").write_text("title: S\n")
+    (src / "pkgx").symlink_to("../_shared/pkgx")
+    (tmp_path / "root/macros.yaml").write_text("- M: 1\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "a")
+    a = git("rev-parse", "HEAD")
+    spec.write_text("Version: 2\n")
+    git("commit", "-q", "-am", "b")
+    b = git("rev-parse", "HEAD")
+
+    monkeypatch.setattr(cmd_sync, "_REPO_DIR", tmp_path)
+    monkeypatch.setattr(common, "REPO_ROOT", tmp_path / "root")
+    monkeypatch.setattr(
+        cmd_sync,
+        "resolve_project_path",
+        lambda pid: tmp_path / "root" / pid.replace(":", "/"),
+    )
+    paths = cmd_sync._scope_local_paths(
+        src, ["home:Admin:ppg:staging:17"], {}, "home:Admin"
+    )
+    assert cmd_sync._changed_files_between(a, b, paths) == [
+        "root/ppg/staging/_shared/pkgx/rpm/x.spec"
+    ]
