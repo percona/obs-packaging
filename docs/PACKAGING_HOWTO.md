@@ -684,7 +684,9 @@ Rules:
 - A small per-major difference can often be turned into a macro instead of blocking sharing:
   the container images use `CONTAINER_PG_EXTRA_COMPONENTS` (empty by default in
   `staging/macros.yaml`, set in `staging/17` and `staging/18`) for the pg_tde / pg_oidc_validator
-  install lines. An empty macro value renders to an empty string.
+  install lines, and `CONTAINER_POSTGIS_EXTRA_COMPONENTS` (set in `staging/19`) for the
+  PostGIS-dependent address_standardizer / postgis_tiger_geocoder packages that only the
+  images shipping PostGIS may install. An empty macro value renders to an empty string.
 - Every `%!{VAR}` the shared files use must be defined at or above each linking major
   (`root/macros.yaml` for the shared component versions, `staging/macros.yaml`, or every
   `staging/<V>/macros.yaml`).
