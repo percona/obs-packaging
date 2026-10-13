@@ -22,6 +22,9 @@ BuildRequires:	percona-postgresql%{pgmajorversion}-devel pcre2-devel
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
 %endif
 Requires:	postgresql%{pgmajorversion}-server
+# Follows PGDG: the extension was split out of PostGIS 3.7 and is meant to be
+# used alongside it; the postgis3_%{pgmajor} virtual provide survives renames.
+Requires:	postgis3_%{pgmajorversion} >= 3.7
 
 %description
 The address_standardizer PostgreSQL extension parses a street address
