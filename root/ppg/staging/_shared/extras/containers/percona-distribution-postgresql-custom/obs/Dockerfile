@@ -83,11 +83,11 @@ RUN microdnf install -y \
         percona-pgbackrest \
         percona-pgvector_${PPG_MAJOR_VERSION} \
         percona-pgvector_${PPG_MAJOR_VERSION}-llvmjit \
-        percona-postgis35_${PPG_MAJOR_VERSION} \
-        percona-postgis35_${PPG_MAJOR_VERSION}-client \
-        percona-postgis35_${PPG_MAJOR_VERSION}-gui \
-        percona-postgis35_${PPG_MAJOR_VERSION}-llvmjit \
-        percona-postgis35_${PPG_MAJOR_VERSION}-utils \
+        percona-postgis%!{POSTGIS_RPM_MAJOR}_${PPG_MAJOR_VERSION} \
+        percona-postgis%!{POSTGIS_RPM_MAJOR}_${PPG_MAJOR_VERSION}-client \
+        percona-postgis%!{POSTGIS_RPM_MAJOR}_${PPG_MAJOR_VERSION}-gui \
+        percona-postgis%!{POSTGIS_RPM_MAJOR}_${PPG_MAJOR_VERSION}-llvmjit \
+        percona-postgis%!{POSTGIS_RPM_MAJOR}_${PPG_MAJOR_VERSION}-utils \
         percona-wal2json${PPG_MAJOR_VERSION} \
         percona-pg_cron_${PPG_MAJOR_VERSION} \
         percona-timescaledb_${PPG_MAJOR_VERSION} \

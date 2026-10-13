@@ -19,7 +19,7 @@ BuildRequires:  percona-pg_repack%!{PG_MAJOR_VERSION}
 BuildRequires:  percona-pg_cron_%!{PG_MAJOR_VERSION}
 BuildRequires:  percona-wal2json%!{PG_MAJOR_VERSION}
 BuildRequires:  percona-pgvector_%!{PG_MAJOR_VERSION}
-BuildRequires:  percona-postgis35_%!{PG_MAJOR_VERSION}
+BuildRequires:  percona-postgis%!{POSTGIS_RPM_MAJOR}_%!{PG_MAJOR_VERSION}
 BuildRequires:  percona-credcheck%!{PG_MAJOR_VERSION}
 # Per-major extension deltas, defined in each major's staging macros.yaml:
 # the majors do not ship an identical extension set (pg-telemetry exists on
