@@ -156,8 +156,9 @@ def get_latest_release_id(project_id: str) -> str:
     releases = data.get("releases") or []
     if not releases:
         return "—"
-    last = releases[-1]  # e.g. "ppg/17.9-1"
-    return last.split("/", 1)[1] if "/" in last else last
+    last = releases[-1]  # "ppg/17.9-1" or {tag: ppg/17.9-1, source_commit: ...}
+    tag = last.get("tag", "") if isinstance(last, dict) else str(last)
+    return tag.split("/", 1)[1] if "/" in tag else tag
 
 
 # ---------------------------------------------------------------------------
