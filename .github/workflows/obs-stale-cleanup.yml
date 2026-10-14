@@ -2,6 +2,8 @@ name: OBS Stale PR Cleanup
 
 # Runs daily.  For each open PR, looks at the last commit's date and:
 #   - skips PRs carrying the `keep-pr-build` label (never delete);
+#   - skips release-only PRs (every root/ change under root/*/releases/):
+#     their PR project tree is the pre-release, which obs-release.yml deletes;
 #   - posts a one-day deletion warning when the last commit is >= WARN_DAYS old
 #     (idempotent: a marker in the comment body avoids reposting);
 #   - deletes the PR's OBS project when the last commit is >= DELETE_DAYS old.
@@ -57,6 +59,15 @@ jobs:
 
               if [ "$has_keep" = "true" ]; then
                 echo "PR #${number}: keep-pr-build label present, skipping"
+                continue
+              fi
+
+              # Release-only PR: its PR project tree is the pre-release.
+              files=$(gh pr view "$number" --json files --jq '[.files[].path]')
+              all_root=$(jq '[.[] | select(startswith("root/"))] | length' <<<"$files")
+              rel_root=$(jq '[.[] | select(test("^root/[^/]+/releases/"))] | length' <<<"$files")
+              if [ "$all_root" -gt 0 ] && [ "$all_root" -eq "$rel_root" ]; then
+                echo "PR #${number}: release PR, pre-release kept (obs-release.yml deletes it after merge)"
                 continue
               fi
 
@@ -151,6 +162,15 @@ jobs:
 
               if [ "$has_keep" = "true" ]; then
                 echo "PR #${number}: keep-pr-build label present, skipping"
+                continue
+              fi
+
+              # Release-only PR: its PR project tree is the pre-release.
+              files=$(gh pr view "$number" --json files --jq '[.files[].path]')
+              all_root=$(jq '[.[] | select(startswith("root/"))] | length' <<<"$files")
+              rel_root=$(jq '[.[] | select(test("^root/[^/]+/releases/"))] | length' <<<"$files")
+              if [ "$all_root" -gt 0 ] && [ "$all_root" -eq "$rel_root" ]; then
+                echo "PR #${number}: release PR, pre-release kept (obs-release.yml deletes it after merge)"
                 continue
               fi
 

@@ -175,8 +175,10 @@ of `main` whose staging tree the pre-release was built from.
 Runs with the PR profile. Steps:
 
 1. Read `release.yaml`; require a mapping entry with `source_commit`.
-2. **Record check**: diff the freeze-scope paths between `source_commit` and
-   the head of the last successful sync-main run; any difference aborts with
+2. **Record check**: diff the freeze-scope paths (plus
+   `<product>/releases/<major>/release.yaml`, from which `PPG_RELEASE` is
+   computed) between `source_commit` and the head of the newest sync-main run
+   whose upload leg for the instance succeeded; any difference aborts with
    "staging changed since the cut, re-run `project release`". Runs before
    anything is frozen.
 3. Create or re-apply the pre-release project tree from the mirror
@@ -236,6 +238,9 @@ PRs after the builds) and by `obs-release-pr.yml` (job `Release`, with no trigge
 after every populate leg succeeded); check names are prefixed by the caller's job name.
 The matrix is discovered from the PR project's subprojects on each instance, so every
 lane of every released major is included.
+A queued populate shares sync-main's per-instance group, so a pending sync-main run
+can be displaced by it (and vice versa); the displaced side's recovery is its own
+re-dispatch.
 
 ### `obs-pr-cleanup.yml`
 
@@ -253,8 +258,11 @@ lane of every released major is included.
 - Per `OBS_INSTANCES` leg, checked out at the first tag (all tags share the
   commit): `sync release <releases-project> --from <pr-root>:pr-N:<releases-project>`
   for every tag in order. The `lock` job, the sync-main disable/enable and
-  the lock-state reporting are deleted. The per-instance concurrency group
-  stays (hop 2 writes release project meta).
+  the lock-state reporting are deleted. Each leg has its own per-instance
+  concurrency group `obs-release-<name>`: hop 2 writes only `:releases:`
+  projects, which `sync push` never touches, so it must not share
+  sync-main's group (sharing it let a queued hop-2 leg be displaced by the
+  next push).
 - `finalize` after all legs: one GitHub release per tag from its `CHANGELOG.md`
   section, then `sync delete --yes --recursive` of the PR project tree on
   every instance. Runs only when every leg succeeded.
@@ -289,7 +297,7 @@ and no orphan head commit.
 |---|---|---|
 | A leg fails | `finalize` skips GitHub releases and the delete; tag exists; pre-release intact; staging untouched | Re-dispatch with the same `pr_number` and `tags` (idempotent) |
 | Record mismatch (pre-release description ≠ tagged entry) | Leg refuses | The merged record is wrong: open a new release PR |
-| Pre-release already deleted | Leg fails on missing source project | Repopulate via `workflow_dispatch` of obs-release-pr.yml with the PR number (works while the PR head ref resolves), then re-dispatch obs-release |
+| Pre-release already deleted | Leg fails on missing source project | Cut a new release: re-run `project release` and open a new release PR. Repopulating the merged PR is refused by the record check, because main's `release.yaml` changed at the merge (`PPG_RELEASE` bumped) |
 | Dispatch failure in obs-pr-cleanup | Tags exist, nothing copied | Manual dispatch |
 
 ### What disappears

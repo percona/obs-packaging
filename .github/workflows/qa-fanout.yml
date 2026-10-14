@@ -18,6 +18,11 @@ on:
         description: "Comma-separated QA kinds to run: packages,containers (or one of them)"
         required: true
         type: string
+      ref:
+        description: "git ref to check out for project.yaml resolution; empty = the triggering ref"
+        required: false
+        type: string
+        default: ''
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
@@ -46,6 +51,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: ./.github/actions/obs-setup
         with:
@@ -252,6 +259,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: ./.github/actions/obs-setup
         with:
