@@ -1387,13 +1387,23 @@ def test_merge_release_obs_data_pairs_release_with_source_instance(tmp_path):
     assert "h3 (extras)" not in section
 
 
-def test_merge_release_obs_data_source_owner_without_release_entry():
-    # The owning instance has no release entry: the key is new there, the
-    # other instance's stale release copy is not borrowed.
+def test_merge_release_obs_data_source_owner_falls_back_to_other_instance():
+    # The owning instance has no release entry: the previous release lives on
+    # another instance, so its value is used.
     boo = _obs_data(source_versions={}, release_versions={"h3 (extras)": "4.4.0-1"})
     labs = _obs_data(source_versions={"h3 (extras)": "4.5.0-1"}, release_versions={})
     merged = cmd_project._merge_release_obs_data([boo, labs])
-    assert merged.release_versions == {}
+    assert merged.release_versions == {"h3 (extras)": "4.4.0-1"}
+
+
+def test_merge_release_obs_data_fallback_yields_update_line(tmp_path):
+    boo = _obs_data(source_versions={}, release_versions={"h3 (extras)": "4.4.0-1"})
+    labs = _obs_data(source_versions={"h3 (extras)": "4.5.0-1"}, release_versions=None)
+    merged = cmd_project._merge_release_obs_data([boo, labs])
+    section = cmd_project._build_changelog_section(
+        "17.11-2", merged.source_versions, merged.release_versions, tmp_path
+    )
+    assert "- h3 (extras): update upstream version 4.5.0" in section
 
 
 def test_merge_release_obs_data_removal_candidate_first_wins():

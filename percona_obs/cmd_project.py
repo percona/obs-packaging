@@ -2604,10 +2604,13 @@ def _merge_release_obs_data(parts: "list[_ReleaseObsData]") -> _ReleaseObsData:
     """Union per-instance CHANGELOG inputs.
 
     A key's source value comes from the first part that has it; its release
-    value comes from that SAME part, so an instance's source is never diffed
-    against another instance's (possibly stale) release copy.  Keys no part
-    has on the source side (removal candidates) take the first part's release
-    value that has them.  Instances hold disjoint slices of a release, so an
+    value comes from that same part when it has one (so a stale copy elsewhere
+    never shadows the owner's), otherwise from the first part that has it: the
+    previous release of a slice may live on another instance (labs holds
+    staging for the UBI slice while the previous release was cut from
+    build.opensuse.org).  Keys no part has on the source side (removal
+    candidates) take the first part's release value that has them.  Instances
+    hold disjoint slices of a release, so an
     image present on two instances is the same image and is not an error
     (unlike the within-instance ``_merge_container_pkgs`` check).
     ``release_versions`` stays ``None`` only when no instance has the release
@@ -2627,8 +2630,7 @@ def _merge_release_obs_data(parts: "list[_ReleaseObsData]") -> _ReleaseObsData:
         merged_rel: dict[str, Any] = {}
         for rel in releases:
             for k, v in (rel or {}).items():
-                if k not in owner:
-                    merged_rel.setdefault(k, v)
+                merged_rel.setdefault(k, v)
         for k, i in owner.items():
             owner_rel = releases[i]
             if owner_rel is not None and k in owner_rel:
