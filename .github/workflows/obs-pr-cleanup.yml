@@ -3,7 +3,7 @@ name: OBS PR Cleanup
 # When a PR is closed:
 #   - merged release PR (all changed root/** files under root/*/releases/):
 #     create the release tag on the merge commit and dispatch obs-release.yml
-#     with it (workflow_dispatch works with GITHUB_TOKEN; a tag push would
+#     with the tags it created in this run (workflow_dispatch works with GITHUB_TOKEN; a tag push would
 #     not trigger anything — GitHub suppresses workflow-to-workflow triggers
 #     for the default token, and this repo has no PAT).
 #   - every PR: delete the PR-specific OBS project created by
@@ -78,9 +78,11 @@ jobs:
           fi
 
       # Merged release PR: tag the merge commit (the exact reviewed snapshot)
-      # and dispatch the release workflow with it.  Tag-creation errors other
-      # than "already exists" fail the job loudly — a silently missing tag is
-      # how releases used to vanish.
+      # and dispatch the release workflow with the tags created HERE.  A tag
+      # that already exists was not created by this run (e.g. a revert PR that
+      # leaves the previous real entry last) and is not dispatched.
+      # Tag-creation errors other than "already exists" fail the job loudly —
+      # a silently missing tag is how releases used to vanish.
       - name: Tag release and dispatch obs-release
         if: github.event.pull_request.merged == true && steps.detect.outputs.is_release_pr == 'true'
         env:
@@ -103,7 +105,8 @@ jobs:
             if ! OUT=$(gh api "repos/${GITHUB_REPOSITORY}/git/refs" -X POST \
                 -f "ref=refs/tags/${TAG}" -f "sha=${MERGE_SHA}" 2>&1); then
               if echo "$OUT" | grep -q "Reference already exists"; then
-                echo "Tag ${TAG} already exists — dispatching anyway"
+                echo "Tag ${TAG} already exists — not created here, not dispatched"
+                continue
               else
                 echo "::error::Failed to create tag ${TAG}: ${OUT}"
                 exit 1
@@ -111,7 +114,7 @@ jobs:
             fi
             TAGS="${TAGS:+$TAGS }${TAG}"
           done <<< "$FILES"
-          [ -z "$TAGS" ] && { echo "No tag derived; nothing to dispatch."; exit 0; }
+          [ -z "$TAGS" ] && { echo "No new tag created; nothing to dispatch."; exit 0; }
           echo "Dispatching obs-release.yml with pr_number=${PR_NUMBER} tags=${TAGS}"
           if ! gh workflow run obs-release.yml --ref main -f "pr_number=${PR_NUMBER}" -f "tags=${TAGS}"; then
             echo "::error::Failed to dispatch obs-release.yml. Run manually: gh workflow run obs-release.yml -f pr_number=${PR_NUMBER} -f tags=\"${TAGS}\""
