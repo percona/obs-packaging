@@ -763,10 +763,19 @@ def test_write_release_tree_carries_rendered_qa_blocks(tmp_path, monkeypatch):
     assert "qa" not in tarballs
 
 
-def _pkg_with_qa(project_dir, name, qa_yaml):
+def _service_xml(version: str) -> str:
+    return (
+        '<services><service name="obs_scm"><param name="url">https://x</param>'
+        f'<param name="version">{version}</param></service></services>\n'
+    )
+
+
+def _pkg_with_qa(project_dir, name, qa_yaml, version=None):
     pkg = project_dir / name
     (pkg / "obs").mkdir(parents=True)
-    (pkg / "obs" / "_service").write_text("<services/>\n")
+    (pkg / "obs" / "_service").write_text(
+        _service_xml(version) if version else "<services/>\n"
+    )
     (pkg / "package.yaml").write_text(qa_yaml)
     return pkg
 
@@ -1006,3 +1015,71 @@ def test_tag_exists_on_remote(monkeypatch):
         lambda *a, **k: SimpleNamespace(returncode=1, stdout="", stderr="boom"),
     )
     assert cp._tag_exists_on_remote("u", "t") is False
+
+
+def test_mirror_qa_entries_bake_expected_versions(tmp_path, monkeypatch):
+    import percona_obs.common as common
+    from percona_obs.cmd_project import _mirror_qa_entries
+
+    src = _staging_tree(tmp_path)
+    monkeypatch.setattr(cmd_project, "_REPO_DIR", tmp_path)
+    monkeypatch.setattr(common, "REPO_ROOT", tmp_path / "root")
+    (tmp_path / "root/macros.yaml").write_text(
+        "- PG_VERSION: 17.11\n- TDE_VERSION: 2.2.2\n"
+    )
+    _pkg_with_qa(
+        src,
+        "percona-pg_tde",
+        "qa:\n  - name: pg_tde\n    pipeline: p\n    parameters:\n      A: 1\n",
+        version="%!{TDE_VERSION}",
+    )
+    _pkg_with_qa(
+        src, "percona-pgaudit", "build:\n  RockyLinux_9: true\n", version="1.7.1"
+    )
+    cfg = {"qa": [{"name": "server", "pipeline": "p", "parameters": {"A": "x"}}]}
+    out = _mirror_qa_entries(
+        cfg, src, "ppg:staging:17", "ppg:staging:17", "ppg:releases:17"
+    )
+    assert (
+        out[0]["parameters"]["EXPECTED_VERSIONS"]
+        == "percona-pg_tde=2.2.2\npercona-pgaudit=1.7.1"
+    )
+    assert out[1]["name"] == "percona-pg_tde.pg_tde"
+    assert out[1]["parameters"]["EXPECTED_VERSIONS"] == "percona-pg_tde=2.2.2"
+    assert all("_mirror_package" not in e for e in out)
+    assert all("%!{" not in e["parameters"]["EXPECTED_VERSIONS"] for e in out)
+
+
+def test_mirror_qa_entries_keep_explicit_expected_versions(tmp_path, monkeypatch):
+    import percona_obs.common as common
+    from percona_obs.cmd_project import _mirror_qa_entries
+
+    src = _staging_tree(tmp_path)
+    monkeypatch.setattr(common, "REPO_ROOT", tmp_path / "root")
+    _pkg_with_qa(src, "percona-pgaudit", "build: {}\n", version="1.7.1")
+    cfg = {
+        "qa": [
+            {
+                "name": "server",
+                "pipeline": "p",
+                "parameters": {"EXPECTED_VERSIONS": "mine=1"},
+            }
+        ]
+    }
+    out = _mirror_qa_entries(
+        cfg, src, "ppg:staging:17", "ppg:staging:17", "ppg:releases:17"
+    )
+    assert out[0]["parameters"]["EXPECTED_VERSIONS"] == "mine=1"
+
+
+def test_mirror_qa_entries_without_versions_add_nothing(tmp_path, monkeypatch):
+    import percona_obs.common as common
+    from percona_obs.cmd_project import _mirror_qa_entries
+
+    src = _staging_tree(tmp_path)
+    monkeypatch.setattr(common, "REPO_ROOT", tmp_path / "root")
+    cfg = {"qa": [{"name": "server", "pipeline": "p", "parameters": {"A": "x"}}]}
+    out = _mirror_qa_entries(
+        cfg, src, "ppg:staging:17", "ppg:staging:17", "ppg:releases:17"
+    )
+    assert "EXPECTED_VERSIONS" not in out[0]["parameters"]
