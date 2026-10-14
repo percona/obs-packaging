@@ -1,0 +1,220 @@
+name: OBS Release PR
+
+# Hop 1 of the two-hop release flow (docs/superpowers/specs/
+# 2026-10-13-prerelease-project-release-flow-design.md §1, §3): a release
+# PR (every root/ change under root/*/releases/) populates a per-PR
+# pre-release OBS project tree on every instance -- <pr_rootprj>:pr-<N>:
+# <product>:releases:<major> -- with `sync prerelease`, then runs every QA
+# lane the release mirrors declare against it (qa-fanout.yml).
+#
+# Own workflow, not obs-pr-check.yml: that one cancels superseded runs on
+# every push, and a cancelled populate would leave production staging
+# frozen.  Here the run-level group never cancels, and each populate leg
+# serializes on the instance's "sync-main-sync-<name>" group so it never
+# overlaps a staging upload.  A second push queues behind the first.
+#
+# Repopulate without a push: workflow_dispatch with the PR number.
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['root/*/releases/**']
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Release PR number to (re)populate"
+        required: true
+
+concurrency:
+  group: obs-release-pr-${{ inputs.pr_number || github.event.number }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve release PR
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      pr_number:        ${{ steps.ctx.outputs.pr_number }}
+      head_sha:         ${{ steps.ctx.outputs.head_sha }}
+      clone_url:        ${{ steps.ctx.outputs.clone_url }}
+      release_files:    ${{ steps.classify.outputs.release_files }}
+      release_projects: ${{ steps.classify.outputs.release_projects }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - name: Fetch PR context
+        id: ctx
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr_number || github.event.number }}
+        run: |
+          DATA=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}")
+          STATE=$(echo "$DATA" | jq -r '.state')
+          {
+            echo "pr_number=${PR}"
+            echo "head_sha=$(echo "$DATA" | jq -r '.head.sha')"
+            echo "clone_url=$(echo "$DATA" | jq -r '.head.repo.clone_url')"
+          } >> "$GITHUB_OUTPUT"
+          if [ "$STATE" != "open" ] && [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "::notice::PR #${PR} is ${STATE}; repopulating anyway (recovery of a merged release)"
+          fi
+      # Release-only + one-in-flight-per-major guard (spec §1).
+      - name: Classify the PR and check for in-flight conflicts
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/release_pr.py classify "${{ steps.ctx.outputs.pr_number }}"
+      - name: Require a release PR
+        if: steps.classify.outputs.kind != 'release'
+        run: |
+          echo "::error::not a release PR (kind=${{ steps.classify.outputs.kind }}); nothing to populate"
+          exit 1
+
+  populate:
+    name: Populate pre-release (${{ matrix.instance.name }})
+    needs: [resolve]
+    runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: ${{ fromJSON(vars.OBS_INSTANCES) }}
+    # Never overlap this instance's staging upload (sync-main's sync job
+    # uses the same group); never cancel a populate mid-freeze.
+    concurrency:
+      group: sync-main-sync-${{ matrix.instance.name }}
+      cancel-in-progress: false
+    permissions:
+      pull-requests: write
+      packages: read
+      contents: read
+    env:
+      PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
+      OBS_APIURL: ${{ matrix.instance.apiurl }}
+      OBS_WEB_URL: ${{ vars.OBS_WEB_URL }}
+      OBS_ROOTPRJ: ${{ matrix.instance.rootprj }}
+      OBS_PR_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}
+      OBS_INSTANCE: ${{ matrix.instance.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The PR head, not the merge ref: release.yaml and the mirrors are
+          # what the operator cut.  Full history: the record check diffs
+          # source_commit against the synced main commit.
+          ref: refs/pull/${{ needs.resolve.outputs.pr_number }}/head
+          fetch-depth: 0
+
+      - uses: ./.github/actions/obs-setup
+        with:
+          obs-apiurl: ${{ matrix.instance.apiurl }}
+          obs-user: ${{ matrix.instance.user || vars.OBS_USER }}
+          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance.name)] }}
+
+      # `main` = the production root (staging source); `pr-N` = this PR's
+      # root (pre-release target).  Same slice flags as obs-pr-check.
+      - name: Create percona-obs profiles (${{ matrix.instance.name }})
+        shell: bash
+        env:
+          INCLUDE_REPOS: ${{ matrix.instance.include_repos }}
+          EXCLUDE_REPOS: ${{ matrix.instance.exclude_repos }}
+          INCLUDE_PROJECTS: ${{ matrix.instance.include_projects }}
+          EXCLUDE_PROJECTS: ${{ matrix.instance.exclude_projects }}
+          CLONE_URL: ${{ needs.resolve.outputs.clone_url }}
+          MAIN_REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+          INSTANCE_ENV: ${{ toJSON(matrix.instance.env) }}
+        run: |
+          set -euo pipefail
+          env_args=()
+          if [ -n "${INSTANCE_ENV:-}" ] && [ "$INSTANCE_ENV" != "null" ]; then
+            while IFS= read -r kv; do
+              if [ -n "$kv" ]; then env_args+=(-e "$kv"); fi
+            done <<<"$(jq -r 'to_entries[] | "\(.key):\(.value)"' <<<"$INSTANCE_ENV")"
+          fi
+          inst=()
+          if [ -n "${INCLUDE_REPOS:-}" ]; then inst+=(--include-repos "$INCLUDE_REPOS"); fi
+          if [ -n "${EXCLUDE_REPOS:-}" ]; then inst+=(--exclude-repos "$EXCLUDE_REPOS"); fi
+          if [ -n "${INCLUDE_PROJECTS:-}" ]; then inst+=(--include-projects "$INCLUDE_PROJECTS"); fi
+          if [ -n "${EXCLUDE_PROJECTS:-}" ]; then inst+=(--exclude-projects "$EXCLUDE_PROJECTS"); fi
+          venv/bin/python -m percona_obs -A "$OBS_APIURL" -R "$OBS_ROOTPRJ" \
+            -e "REMOTE_OBS_ORG_INTERCONNECT:" -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
+            -e "PERCONA_OBS_PACKAGING_REPO:${MAIN_REPO_URL}" "${env_args[@]}" \
+            profile create main "${inst[@]}"
+          venv/bin/python -m percona_obs -A "$OBS_APIURL" -R "${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}" \
+            -e "REMOTE_OBS_ORG_INTERCONNECT:" -e "PERCONA_OBS_PACKAGING_BRANCH:refs/pull/${PR_NUMBER}/head" \
+            -e "PERCONA_OBS_PACKAGING_REPO:${CLONE_URL}" "${env_args[@]}" \
+            profile create "pr-${PR_NUMBER}" "${inst[@]}"
+
+      # The commit of main whose staging tree OBS holds: the newest completed
+      # sync-main run whose sync jobs all succeeded.  Passed explicitly so the
+      # tool never has to guess the repository from the PR's clone URL.
+      - name: Resolve the synced main commit
+        id: synced
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA=$(venv/bin/python -c "from percona_obs.github_api import last_synced_head_sha; print(last_synced_head_sha('${GITHUB_REPOSITORY}'))")
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "synced main commit: ${SHA}"
+
+      - name: Populate the pre-release projects
+        id: populate
+        shell: bash
+        env:
+          RELEASE_PROJECTS: ${{ needs.resolve.outputs.release_projects }}
+          SYNCED: ${{ steps.synced.outputs.sha }}
+        run: |
+          set -uo pipefail
+          rc=0
+          echo '[]' > /tmp/prerelease-report.json
+          for proj in $(jq -r '.[]' <<<"$RELEASE_PROJECTS"); do
+            echo "== sync prerelease ${proj} (${OBS_INSTANCE})"
+            if venv/bin/python -u -m percona_obs -P "pr-${PR_NUMBER}" sync prerelease "$proj" \
+                 --branch-from main --synced-commit "$SYNCED"; then
+              outcome=success
+            else
+              outcome=failure; rc=1
+            fi
+            SRC=$(venv/bin/python -c "import sys,yaml; from percona_obs.release_record import current_release; e=current_release(yaml.safe_load(open('root/'+'$proj'.replace(':','/')+'/release.yaml'))); print(e.source_commit if e else '')")
+            jq -c --arg p "$proj" --arg o "$outcome" --arg s "$SRC" --arg pre "${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}:${proj}" \
+              '. + [{project: $p, prerelease: $pre, outcome: $o, source_commit: $s}]' \
+              /tmp/prerelease-report.json > /tmp/prerelease-report.tmp && mv /tmp/prerelease-report.tmp /tmp/prerelease-report.json
+          done
+          cat /tmp/prerelease-report.json
+          exit $rc
+
+      - name: Upload populate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prerelease-report-${{ matrix.instance.name }}
+          path: /tmp/prerelease-report.json
+          retention-days: 7
+
+      # Per-instance comment (post_pr_comment.py keys on OBS_INSTANCE).
+      - name: Post pre-release comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IS_RELEASE_PR: 'true'
+          SYNC_OUTCOME: ''
+          RELEASE_OUTCOME: ${{ steps.populate.outcome }}
+          PRERELEASE_REPORT: /tmp/prerelease-report.json
+          POLL_OUTCOME: ''
+          WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python .github/scripts/post_pr_comment.py
+
+  # Every QA lane the release mirrors declare, against the pre-release.
+  qa:
+    name: Release
+    needs: [resolve, populate]
+    if: ${{ !cancelled() && needs.populate.result == 'success' }}
+    uses: ./.github/workflows/qa-fanout.yml
+    with:
+      pr_number: ${{ needs.resolve.outputs.pr_number }}
+      qa_types: packages,containers
+    secrets: inherit
