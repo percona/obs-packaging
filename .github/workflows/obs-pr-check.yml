@@ -11,11 +11,10 @@ name: OBS PR Check
 #
 # `resolve` fetches PR context from the GitHub API and gates the DAG on the
 # presence of a trigger label so that non-trigger events produce no check runs.
-# Release-only PRs (all root/ changes under root/*/releases/) reach `sync`
-# without a trigger label -- `resolve` also exposes `is_release_pr`, and the
-# `sync` job's `if:` opens on either condition, so an unlabeled release PR
-# still gets a real `sync release --dry-run` against production.  `build`
-# and `qa` stay gated as before (they already skip on is_release_pr).
+# Release-only PRs (all root/ changes under root/*/releases/) are NOT handled
+# here: obs-release-pr.yml populates their pre-release OBS projects and runs
+# release QA.  `resolve` still detects them so `sync` can gate them out even
+# when a trigger label is present.
 # `qa` calls the reusable qa-fanout.yml (detect-qa-matrix -> merge-qa-matrix
 # -> qa matrix) once `build` succeeded; its per-combo check runs appear in the
 # PR's check list when discovery finishes.
@@ -110,10 +109,9 @@ jobs:
             echo "qa_types=${QA_TYPES}"
           } >> "$GITHUB_OUTPUT"
 
-      # Release-only PRs (all root/ changes under root/*/releases/) reach the
-      # sync job's release dry-run even without a trigger label -- see the
-      # sync job's `if:` below.  Computed independently of has_trigger_label
-      # so a release PR with no label still gets the DAG gate opened.
+      # Release-only PRs (all root/ changes under root/*/releases/) are
+      # handled by obs-release-pr.yml; the sync job's `if:` below uses this
+      # output to gate them out.  Computed independently of has_trigger_label.
       - name: Detect release-only PR
         id: release
         env:
@@ -133,8 +131,7 @@ jobs:
           fi
 
   # ──────────────────────────────────────────────────────────────────────────
-  # sync: push the PR contents to OBS and (for release-only PRs) test the
-  # release flow.  Does NOT poll OBS builds — that is done in `build` so it
+  # sync: push the PR contents to OBS.  Does NOT poll OBS builds — that is done in `build` so it
   # can run in parallel with QA matrix detection.
   # ──────────────────────────────────────────────────────────────────────────
   sync:
@@ -149,18 +146,15 @@ jobs:
     # Backstop for stalled source services / OBS API hangs; a healthy sync
     # job finishes in well under 30 minutes.
     timeout-minutes: 120
-    if: needs.resolve.outputs.has_trigger_label == 'true' || needs.resolve.outputs.is_release_pr == 'true'
+    if: needs.resolve.outputs.has_trigger_label == 'true' && needs.resolve.outputs.is_release_pr != 'true'
     permissions:
       # Required to post/update the PR comment.
       pull-requests: write
       packages: read
 
-    # Matrix job outputs are last-writer-wins, so only a value identical
-    # across every leg may be exposed here: is_release_pr is derived from
-    # the PR diff alone.  Per-leg sync success is NOT an output -- downstream
-    # jobs use the aggregate needs.sync.result instead.
-    outputs:
-      is_release_pr: ${{ steps.detect.outputs.is_release_pr }}
+    # Per-leg sync success is NOT a job output (matrix job outputs are
+    # last-writer-wins) -- downstream jobs use the aggregate
+    # needs.sync.result instead.
 
     env:
       PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
@@ -340,75 +334,11 @@ jobs:
             exit "$rc"
           fi
 
-      # Detect whether this is a release-only PR (all changed files under
-      # root/ are under root/*/releases/).  Release-only PRs skip the package
-      # sync steps entirely — releases/ is excluded from sync push traversal
-      # so there is nothing to build.
-      - name: Detect release-only PR
-        id: detect
-        run: |
-          CHANGED=$(git diff --name-only origin/main...HEAD -- 'root/**')
-          NON_RELEASE=$(echo "$CHANGED" | grep -v '^root/[^/]*/releases/' || true)
-          if [ -z "$CHANGED" ] || [ -n "$NON_RELEASE" ]; then
-            echo "is_release_pr=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "is_release_pr=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Release PRs are validated against the PRODUCTION rootprj: the dry-run
-      # reads staging state and the release tree; it writes nothing.
-      - name: Create main profile (release dry-run)
-        if: steps.detect.outputs.is_release_pr == 'true'
-        shell: bash
-        env:
-          INCLUDE_REPOS: ${{ matrix.instance.include_repos }}
-          EXCLUDE_REPOS: ${{ matrix.instance.exclude_repos }}
-          INCLUDE_PROJECTS: ${{ matrix.instance.include_projects }}
-          EXCLUDE_PROJECTS: ${{ matrix.instance.exclude_projects }}
-          MAIN_REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
-          INSTANCE_ENV: ${{ toJSON(matrix.instance.env) }}
-        run: |
-          set -euo pipefail
-          inst=()
-          if [ -n "${INCLUDE_REPOS:-}" ]; then inst+=(--include-repos "$INCLUDE_REPOS"); fi
-          if [ -n "${EXCLUDE_REPOS:-}" ]; then inst+=(--exclude-repos "$EXCLUDE_REPOS"); fi
-          if [ -n "${INCLUDE_PROJECTS:-}" ]; then inst+=(--include-projects "$INCLUDE_PROJECTS"); fi
-          if [ -n "${EXCLUDE_PROJECTS:-}" ]; then inst+=(--exclude-projects "$EXCLUDE_PROJECTS"); fi
-          env_args=()
-          if [ -n "${INSTANCE_ENV:-}" ] && [ "$INSTANCE_ENV" != "null" ]; then
-            while IFS= read -r kv; do
-              # `if`, not `[ … ] &&`: with an empty env object the test fails on
-              # the last line and, as the loop body's final command, would make
-              # the loop exit non-zero and trip `set -e`.
-              if [ -n "$kv" ]; then env_args+=(-e "$kv"); fi
-            done <<<"$(jq -r 'to_entries[] | "\(.key):\(.value)"' <<<"$INSTANCE_ENV")"
-          fi
-          venv/bin/python -m percona_obs -A "$OBS_APIURL" -R "$OBS_ROOTPRJ" \
-            -e "REMOTE_OBS_ORG_INTERCONNECT:" -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
-            -e "PERCONA_OBS_PACKAGING_REPO:${MAIN_REPO_URL}" "${env_args[@]}" \
-            profile create main "${inst[@]}"
-
-      - name: Release dry-run
-        id: release-dryrun
-        if: steps.detect.outputs.is_release_pr == 'true'
-        # Container-job steps default to plain `sh`, which rejects
-        # `set -o pipefail`; this script is bash.
-        shell: bash
-        run: |
-          set -euo pipefail
-          CHANGED=$(git diff --name-only origin/main...HEAD -- 'root/*/releases/*/release.yaml')
-          [ -z "$CHANGED" ] && { echo "::error::release PR changes no release.yaml"; exit 1; }
-          for release_file in $CHANGED; do
-            proj=$(dirname "${release_file#root/}" | tr '/' ':')
-            echo "== sync release ${proj} --dry-run"
-            venv/bin/python -m percona_obs -P main sync release "$proj" --dry-run
-          done
-
       # Dry run: shows the sync plan (which packages will be promoted vs
       # aggregated) before the real sync starts, making progress visible early.
       # A failure here aborts the workflow before the real sync runs.
       - name: Plan sync (dry run)
-        if: steps.detect.outputs.is_release_pr != 'true' && steps.profiles.outputs.skip != 'true'
+        if: steps.profiles.outputs.skip != 'true'
         run: |
           venv/bin/python -u -m percona_obs \
             -P "pr-${PR_NUMBER}" sync push \
@@ -422,7 +352,7 @@ jobs:
       # Output is tee'd to a file so the comment step can parse package counts.
       - name: Sync PR to OBS
         id: sync
-        if: steps.detect.outputs.is_release_pr != 'true' && steps.profiles.outputs.skip != 'true'
+        if: steps.profiles.outputs.skip != 'true'
         run: |
           rm -f /tmp/sync-report.json
           venv/bin/python -u -m percona_obs --verbose \
@@ -444,19 +374,18 @@ jobs:
         run: venv/bin/python .github/scripts/prune_obs_cache.py
 
       # The full build-status comment is posted by the `build` job (which has
-      # the poll details).  This step only fires for the two terminal-in-sync
-      # cases: release-only PRs and sync failures.  For successful non-release
-      # PRs it is skipped — `build` will post the real comment.
+      # the poll details).  This step only fires for sync failures; on a
+      # successful sync it is skipped — `build` will post the real comment.
       # A leg whose slice the labels narrowed to nothing posts no comment at
       # all: it has nothing to report.  Each instance owns its own comment
       # (post_pr_comment.py keys on OBS_INSTANCE).
       - name: Post OBS project comment (sync-side)
-        if: always() && steps.profiles.outputs.skip != 'true' && (steps.detect.outputs.is_release_pr == 'true' || steps.sync.outcome != 'success')
+        if: always() && steps.profiles.outputs.skip != 'true' && steps.sync.outcome != 'success'
         env:
           GH_TOKEN: ${{ github.token }}
-          IS_RELEASE_PR: ${{ steps.detect.outputs.is_release_pr }}
+          IS_RELEASE_PR: 'false'
           SYNC_OUTCOME: ${{ steps.sync.outcome }}
-          RELEASE_OUTCOME: ${{ steps.release-dryrun.outcome }}
+          RELEASE_OUTCOME: ''
           POLL_OUTCOME: ''
           WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           OBS_INSTANCE: ${{ matrix.instance.name }}
@@ -498,7 +427,7 @@ jobs:
     # narrowed to nothing still counts as success, but one FAILED leg blocks
     # the build job for every instance.  Accepted trade-off -- a per-leg gate
     # would need per-instance job outputs, which a matrix job cannot express.
-    if: needs.sync.outputs.is_release_pr != 'true' && needs.sync.result == 'success'
+    if: needs.sync.result == 'success'
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     # Backstop only: the poll is meant to end when every monitored build is
@@ -596,8 +525,10 @@ jobs:
   # parallel with the build poll, so the per-combo check runs appear only
   # once the builds are green.
   # ──────────────────────────────────────────────────────────────────────────
+  # The job is named `PR` because GitHub prefixes called-workflow job names
+  # with the caller's name: the check runs read `PR / OBS QA / <project> / …`.
   qa:
-    name: OBS QA
+    name: PR
     needs: [resolve, build]
     if: ${{ !cancelled() && needs.build.result == 'success' && needs.resolve.outputs.qa_types != '' }}
     uses: ./.github/workflows/qa-fanout.yml
