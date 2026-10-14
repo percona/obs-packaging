@@ -8,12 +8,12 @@ Required env vars (set by the workflow):
   PR_NUMBER          PR number to comment on.
   GITHUB_REPOSITORY  owner/repo (set automatically by GitHub Actions).
   OBS_WEB_URL        Base URL of the OBS web UI.
-  OBS_ROOTPRJ        Production root OBS project (e.g. home:Admin:percona).
   OBS_PR_ROOTPRJ     Root OBS project for PRs (e.g. home:Admin:percona).
   WORKFLOW_RUN_URL   URL of the current workflow run.
   IS_RELEASE_PR      'true' if the PR is release-only.
   SYNC_OUTCOME       Outcome of the sync step ('success', 'failure', '').
-  RELEASE_OUTCOME    Outcome of the release step ('success', 'failure', '').
+  RELEASE_OUTCOME    Outcome of the pre-release populate step (informational;
+                     the comment is rendered from PRERELEASE_REPORT).
   POLL_OUTCOME       Outcome of the OBS-build poll step (or empty when
                      polling has not happened yet — e.g. on the sync side).
   OBS_INSTANCE       Name of the OBS instance this comment is about (empty
@@ -21,6 +21,10 @@ Required env vars (set by the workflow):
                      comment: the marker and the heading carry the name.
 
 Reads (when present):
+  /tmp/prerelease-report.json Release PR only (path overridable via
+                              PRERELEASE_REPORT): JSON list of
+                              {project, prerelease, outcome, source_commit}
+                              written by obs-release-pr.yml.
   /tmp/sync-output.txt        Raw `sync push` output (parsed for counts).
   /tmp/obs-build-details.json Per-repo build status counts written by
                               poll_obs_builds.py.
@@ -35,11 +39,59 @@ import re
 import subprocess
 
 
+def render_prerelease_comment(
+    marker: str,
+    suffix: str,
+    report: list[dict],
+    web_url: str,
+    run_url: str,
+    timestamp: str,
+    pr_number: str,
+    repo: str,
+) -> str:
+    """Markdown for a release PR: one row per pre-release project.
+
+    ``report`` is the list written by obs-release-pr.yml:
+    ``[{project, prerelease, outcome, source_commit}]``.
+    """
+    if not report:
+        heading = "## OBS Release PR — ⚠️ no pre-release populated" + suffix
+    elif all(r.get("outcome") == "success" for r in report):
+        heading = "## OBS Release PR — ✅ Pre-release populated" + suffix
+    else:
+        heading = "## OBS Release PR — ❌ Pre-release population failed" + suffix
+    lines = [
+        marker,
+        heading,
+        "",
+        "Release QA runs against the pre-release projects below; nothing is built in OBS.",
+        "",
+        "| Release | Pre-release project | Populate | Source commit |",
+        "|---|---|---|---|",
+    ]
+    for r in report:
+        pre = r.get("prerelease", "")
+        outcome = r.get("outcome", "")
+        icon = {"success": "✅", "failure": "❌"}.get(outcome, "⚠️")
+        commit = (r.get("source_commit") or "")[:12]
+        lines.append(
+            f"| `{r.get('project', '')}` | [{pre}]({web_url}/project/show/{pre}) "
+            f"| {icon} {outcome} | `{commit}` |"
+        )
+    lines += [
+        "",
+        f"Repopulate without a push: `gh workflow run obs-release-pr.yml -f pr_number={pr_number}`",
+        f"Details: [workflow run]({run_url}).",
+        "",
+        f"> _Updated: {timestamp}_",
+    ]
+    return "\n".join(lines)
+
+
 def main() -> None:
     pr_number = os.environ["PR_NUMBER"]
     repo = os.environ["GITHUB_REPOSITORY"]
     obs_web_url = os.environ["OBS_WEB_URL"].rstrip("/")
-    obs_rootprj = os.environ["OBS_ROOTPRJ"]
     obs_pr_rootprj = os.environ["OBS_PR_ROOTPRJ"]
     is_release_pr = os.environ.get("IS_RELEASE_PR") == "true"
     sync_ok = os.environ.get("SYNC_OUTCOME") == "success"
@@ -64,59 +116,23 @@ def main() -> None:
         pass
 
     if is_release_pr:
-        if release_outcome == "success":
-            heading = "## OBS Release Check — ✅ Release dry-run passed" + suffix
-        elif release_outcome == "failure":
-            heading = "## OBS Release Check — ❌ Release dry-run failed" + suffix
-        elif release_outcome == "skipped":
-            heading = "## OBS Release Check — ⏭️ Release test skipped" + suffix
-        else:
-            heading = "## OBS Release Check — ⚠️ dry-run not run" + suffix
-
-        # Derive the per-release OBS project links from the changed release.yaml
-        # files.  The dry-run validates against the PRODUCTION release project
-        # (it is read-only), so the link points at obs_rootprj, not pr_rootprj.
-        changed = (
-            subprocess.run(
-                [
-                    "git",
-                    "diff",
-                    "--name-only",
-                    "origin/main...HEAD",
-                    "--",
-                    "root/*/releases/*/release.yaml",
-                ],
-                capture_output=True,
-                text=True,
+        try:
+            report = json.load(
+                open(os.environ.get("PRERELEASE_REPORT", "/tmp/prerelease-report.json"))
             )
-            .stdout.strip()
-            .splitlines()
-        )
-        release_links = []
-        for rf in changed:
-            rel_dir = rf.removeprefix("root/").removesuffix("/release.yaml")
-            rel_project = rel_dir.replace("/", ":")
-            obs_proj = f"{obs_rootprj}:{rel_project}"
-            release_links.append(
-                f"**[{rel_project}]({obs_web_url}/project/show/{obs_proj})**"
-            )
-        projects_str = (
-            ", ".join(release_links) if release_links else "the release project"
-        )
-
-        outcome_note = {
-            "success": "The release dry-run validated",
-            "failure": "The release dry-run FAILED for",
-        }.get(release_outcome, "No release dry-run ran for")
-        lines = [
+        except (OSError, json.JSONDecodeError):
+            report = []
+        body = render_prerelease_comment(
             marker,
-            heading,
-            "",
-            "This PR adds a release record. No packages are built in OBS.",
-            f"{outcome_note} {projects_str}.",
-            "",
-            f"> _Updated: {timestamp}_",
-        ]
+            suffix,
+            report if isinstance(report, list) else [],
+            obs_web_url,
+            workflow_run_url,
+            timestamp,
+            pr_number,
+            repo,
+        )
+        lines = body.split("\n")
     elif sync_ok:
         try:
             output = open("/tmp/sync-output.txt").read()
