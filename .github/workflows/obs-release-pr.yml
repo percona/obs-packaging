@@ -9,7 +9,7 @@ name: OBS Release PR
 #
 # Own workflow, not obs-pr-check.yml: that one cancels superseded runs on
 # every push, and a cancelled populate would leave production staging
-# frozen.  Here the run-level group never cancels, and each populate leg
+# frozen.  Here the run-level group does not cancel (see the populate job), and each populate leg
 # serializes on the instance's "sync-main-sync-<name>" group so it never
 # overlaps a staging upload.  A second push queues behind the first.
 #
@@ -52,6 +52,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ inputs.pr_number || github.event.number }}
         run: |
+          case "$PR" in ''|*[!0-9]*) echo "::error::pr_number '$PR' is not a number"; exit 1;; esac
           DATA=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}")
           STATE=$(echo "$DATA" | jq -r '.state')
           {
@@ -85,7 +86,12 @@ jobs:
       matrix:
         instance: ${{ fromJSON(vars.OBS_INSTANCES) }}
     # Never overlap this instance's staging upload (sync-main's sync job
-    # uses the same group); never cancel a populate mid-freeze.
+    # uses the same group).
+    # cancel-in-progress is off: a running populate is never cancelled.
+    # GitHub still keeps only one PENDING run per group, so a populate
+    # queued behind a sync-main upload can be displaced by another queued
+    # entry before it starts (nothing frozen, nothing copied); recovery is
+    # the workflow_dispatch above.
     concurrency:
       group: sync-main-sync-${{ matrix.instance.name }}
       cancel-in-progress: false
@@ -93,6 +99,8 @@ jobs:
       pull-requests: write
       packages: read
       contents: read
+      # Required to query sibling workflow runs (gh api .../actions/...).
+      actions: read
     env:
       PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
       OBS_APIURL: ${{ matrix.instance.apiurl }}
@@ -104,9 +112,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           # The PR head, not the merge ref: release.yaml and the mirrors are
-          # what the operator cut.  Full history: the record check diffs
-          # source_commit against the synced main commit.
-          ref: refs/pull/${{ needs.resolve.outputs.pr_number }}/head
+          # what the operator cut.  Pinned to the resolved sha: a queued run
+          # populates exactly the head that triggered it.  Full history: the
+          # record check diffs source_commit against the synced main commit.
+          ref: ${{ needs.resolve.outputs.head_sha }}
           fetch-depth: 0
 
       - uses: ./.github/actions/obs-setup
@@ -179,7 +188,7 @@ jobs:
             else
               outcome=failure; rc=1
             fi
-            SRC=$(venv/bin/python -c "import sys,yaml; from percona_obs.release_record import current_release; e=current_release(yaml.safe_load(open('root/'+'$proj'.replace(':','/')+'/release.yaml'))); print(e.source_commit if e else '')")
+            SRC=$(venv/bin/python -c "import yaml; from percona_obs.release_record import current_release; e=current_release(yaml.safe_load(open('root/'+'$proj'.replace(':','/')+'/release.yaml'))); print((e and e.source_commit) or '')")
             jq -c --arg p "$proj" --arg o "$outcome" --arg s "$SRC" --arg pre "${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}:${proj}" \
               '. + [{project: $p, prerelease: $pre, outcome: $o, source_commit: $s}]' \
               /tmp/prerelease-report.json > /tmp/prerelease-report.tmp && mv /tmp/prerelease-report.tmp /tmp/prerelease-report.json

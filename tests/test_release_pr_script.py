@@ -45,3 +45,10 @@ def test_conflicting_prs_only_older_same_file():
 def test_prerelease_project():
     m = _load()
     assert m.prerelease_project("isv:percona:PR", 42, "ppg:releases:18") == "isv:percona:PR:pr-42:ppg:releases:18"
+
+
+def test_require_release_files():
+    m = _load()
+    assert m.require_release_files("release", []) == "release PR changes no release.yaml; nothing to populate"
+    assert m.require_release_files("release", ["root/ppg/releases/18/release.yaml"]) is None
+    assert m.require_release_files("none", []) is None

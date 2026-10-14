@@ -53,6 +53,12 @@ def conflicting_prs(
     return sorted(hits)
 
 
+def require_release_files(kind: str, release_files: list[str]) -> str | None:
+    if kind == "release" and not release_files:
+        return "release PR changes no release.yaml; nothing to populate"
+    return None
+
+
 def prerelease_project(pr_rootprj: str, pr_number: int | str, project: str) -> str:
     return f"{pr_rootprj}:pr-{pr_number}:{project}"
 
@@ -70,6 +76,10 @@ def _cli_classify(pr_number: int) -> None:
     kind, release_files = classify_files(files)
     if kind == "mixed":
         print("::error::release PRs must change only files under root/*/releases/; this PR also changes other root/ files")
+        sys.exit(1)
+    err = require_release_files(kind, release_files)
+    if err:
+        print(f"::error::{err}")
         sys.exit(1)
     open_prs = _gh_json(["pr", "list", "-R", repo, "--state", "open", "--limit", "200", "--json", "number,files"])
     open_prs = [{"number": p["number"], "files": [f["path"] for f in p.get("files") or []]} for p in open_prs]
