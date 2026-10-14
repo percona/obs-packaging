@@ -107,9 +107,18 @@ def apply_mirror_meta(
     env_vars: "dict[str, str]",
     *,
     publish_override: "dict[str, bool] | bool | None" = None,
+    branch_rootprj: "str | None" = None,
+    active_projects: "set[str] | None" = None,
 ) -> None:
     """Create or update *target_obs_project* from the mirror project.yaml and
-    make sure builds are disabled.  Two passes when OBS stripped paths."""
+    make sure builds are disabled.  Two passes when OBS stripped paths.
+
+    ``branch_rootprj``/``active_projects`` enable the same path redirection
+    ``sync push --branch-from`` uses: a ``subproject:`` path whose project is
+    not in ``active_projects`` is rewritten to ``<branch_rootprj>:<subproject>``
+    (hop 1: the pre-release tree is the active set, production is the branch
+    root).
+    """
     paths_stripped, _ = _apply_project_config(
         apiurl,
         target_obs_project,
@@ -117,6 +126,8 @@ def apply_mirror_meta(
         rootprj,
         env_vars=env_vars,
         publish_override=publish_override,
+        branch_rootprj=branch_rootprj,
+        active_projects=active_projects,
     )
     if paths_stripped:
         _apply_project_config(
@@ -126,6 +137,8 @@ def apply_mirror_meta(
             rootprj,
             env_vars=env_vars,
             publish_override=publish_override,
+            branch_rootprj=branch_rootprj,
+            active_projects=active_projects,
         )
     _disable_project_builds(apiurl, target_obs_project)
 
@@ -190,6 +203,8 @@ def release_tree(
     *,
     publish_override: "dict[str, bool] | bool | None" = None,
     verify_timeout: int = 600,
+    branch_rootprj: "str | None" = None,
+    active_projects: "set[str] | None" = None,
 ) -> None:
     """Copy the top project and every (subproject, mirror) pair, then verify.
 
@@ -207,6 +222,8 @@ def release_tree(
             rootprj,
             env_vars,
             publish_override=publish_override,
+            branch_rootprj=branch_rootprj,
+            active_projects=active_projects,
         )
         copy_project_binaries(
             apiurl, f"{source_obs_project}:{subproject_name}", target_sub
