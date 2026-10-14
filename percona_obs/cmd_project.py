@@ -1756,10 +1756,16 @@ def _mirror_qa_entries(
     to carry.  A duplicate name is a hard error at cut time.
     """
     entries: list[dict] = []
+    # parallel to entries: the package a copied lane belongs to (None for the
+    # project's own entries); kept out of the entry dicts so the qa schema
+    # never sees it
+    lane_packages: list[str | None] = []
     own = project_cfg.get("qa")
     if own is not None:
         own = _rewrite_qa_project_refs(own, source_project_id, release_project_id)
-        entries.extend(own if isinstance(own, list) else [own])
+        own_list = own if isinstance(own, list) else [own]
+        entries.extend(own_list)
+        lane_packages.extend([None] * len(own_list))
     for _obs, pkg_path in find_packages(project_path, obs_id, recursive=False):
         pkg_yaml = pkg_path / "package.yaml"
         if not pkg_yaml.is_file():
@@ -1779,10 +1785,32 @@ def _mirror_qa_entries(
             copied.pop("name", None)
             # name first, for readable mirrors
             entries.append({"name": f"{pkg_path.name}.{segment}", **copied})
+            lane_packages.append(pkg_path.name)
     if not entries:
         return None
     # local import: cmd_qa imports cmd_project
-    from .cmd_qa import _normalise_qa_block
+    from .cmd_qa import (
+        EXPECTED_VERSIONS_PARAM,
+        _expected_versions,
+        _normalise_qa_block,
+        _package_versions,
+    )
+
+    # Bake EXPECTED_VERSIONS at cut time: the mirror has no package
+    # directories, so `qa show` cannot compute it on the pre-release.  Computed
+    # from the STAGING project (obs_id) exactly as `qa show` does there; an
+    # entry that already sets it keeps its value.
+    versions = _package_versions(obs_id)
+    if versions:
+        baked: list[dict] = []
+        for entry, package in zip(entries, lane_packages):
+            value = _expected_versions(versions, package)
+            if value and isinstance(entry, dict):
+                params = dict(entry.get("parameters") or {})
+                params.setdefault(EXPECTED_VERSIONS_PARAM, value)
+                entry = {**entry, "parameters": params}
+            baked.append(entry)
+        entries = baked
 
     return _normalise_qa_block(entries, release_project_id)
 

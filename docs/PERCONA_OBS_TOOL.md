@@ -878,6 +878,14 @@ installed software against these values instead of keeping their own copy,
 without depending on macro names. An entry that sets `EXPECTED_VERSIONS`
 itself keeps its value; jobs that do not declare the parameter ignore it.
 
+Release mirrors (`root/<product>/releases/<major>/**/project.yaml`) carry the parameter
+baked in: `project release` computes it from the staging project at cut time (same rules)
+and writes it into every mirror `qa:` entry, because a mirror has no package directories
+for `qa show` to read. The pre-release and the released project therefore test the
+versions of the snapshot; a refresh of an open release recomputes them. A copied package
+lane whose package declares no `_service` version gets no baked value and, on the mirror,
+falls back to the project-level computation (today every package lane has a version).
+
 `${VAR}` tokens in any value are substituted from the active profile's `env:`
 section, plus auto-injected `OBS_ROOTPRJ` and `OBS_CONTAINER_REGISTRY_ROOTPRJ` (the root
 project name with `:` replaced by `/`, useful for registry URLs).
@@ -1101,7 +1109,8 @@ error. `project release <source-project>` does the following:
    release project), plus the `qa:` entries of its direct packages' `package.yaml` as
    project-level entries named `<package>.<segment>` (segment = the entry's `name` or its
    `pipeline`), since mirrors have no package directories (when a mirror has more than one entry, the entry
-   name becomes the check-name segment); a duplicate name fails the cut.
+   name becomes the check-name segment); a duplicate name fails the cut. Each entry also
+   gets `EXPECTED_VERSIONS` baked in from the staging project's package versions.
 6. **Builds `CHANGELOG.md`** — compares built package versions from the top-level staging
    project, `extras`, and `tarballs` against the release OBS project (for updates) and
    generates entries with upstream URLs. Container images are listed per flavor (`ubi8`

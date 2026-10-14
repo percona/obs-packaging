@@ -168,7 +168,11 @@ of `main` whose staging tree the pre-release was built from.
    because mirrors have no package directories; on the pre-release they run as
    project lanes; when the mirror has more than one entry, the entry name
    becomes the check-name segment (`OBS QA / <project> / <package>.<segment>`).
-   A duplicate name fails the cut.
+   A duplicate name fails the cut. Every carried entry also gets
+   `EXPECTED_VERSIONS` baked in at cut time, computed from the staging project
+   exactly as `qa show` does there (a package lane gets only its package's
+   line; an entry that sets it keeps its value), since the mirror has no
+   package directories to compute it from.
 
 ### `sync prerelease <releases-project>` (new command)
 
