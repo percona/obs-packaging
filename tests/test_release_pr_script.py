@@ -7,7 +7,9 @@ _SCRIPTS = Path(__file__).parent.parent / ".github/scripts"
 
 
 def _load():
-    spec = importlib.util.spec_from_file_location("release_pr", _SCRIPTS / "release_pr.py")
+    spec = importlib.util.spec_from_file_location(
+        "release_pr", _SCRIPTS / "release_pr.py"
+    )
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -17,16 +19,29 @@ def _load():
 def test_classify_files():
     m = _load()
     assert m.classify_files(
-        ["root/ppg/releases/18/release.yaml", "root/ppg/releases/18/CHANGELOG.md", "docs/x.md"]
+        [
+            "root/ppg/releases/18/release.yaml",
+            "root/ppg/releases/18/CHANGELOG.md",
+            "docs/x.md",
+        ]
     ) == ("release", ["root/ppg/releases/18/release.yaml"])
-    assert m.classify_files(["root/ppg/releases/18/release.yaml", "root/ppg/staging/18/x/rpm/x.spec"])[0] == "mixed"
+    assert (
+        m.classify_files(
+            ["root/ppg/releases/18/release.yaml", "root/ppg/staging/18/x/rpm/x.spec"]
+        )[0]
+        == "mixed"
+    )
     assert m.classify_files(["docs/x.md"]) == ("none", [])
 
 
 def test_release_projects():
     m = _load()
     assert m.release_projects(
-        ["root/ppg/releases/18/release.yaml", "root/ppg/releases/17/release.yaml", "root/ppg/releases/18/release.yaml"]
+        [
+            "root/ppg/releases/18/release.yaml",
+            "root/ppg/releases/17/release.yaml",
+            "root/ppg/releases/18/release.yaml",
+        ]
     ) == ["ppg:releases:17", "ppg:releases:18"]
 
 
@@ -35,20 +50,34 @@ def test_conflicting_prs_only_older_same_file():
     mine = ["root/ppg/releases/18/release.yaml"]
     others = [
         {"number": 10, "files": ["root/ppg/releases/18/release.yaml"]},
-        {"number": 12, "files": ["root/ppg/releases/18/release.yaml"]},  # newer: not a conflict for 11
+        {
+            "number": 12,
+            "files": ["root/ppg/releases/18/release.yaml"],
+        },  # newer: not a conflict for 11
         {"number": 9, "files": ["root/ppg/releases/17/release.yaml"]},
         {"number": 11, "files": mine},  # self
     ]
-    assert m.conflicting_prs(11, mine, others) == [(10, "root/ppg/releases/18/release.yaml")]
+    assert m.conflicting_prs(11, mine, others) == [
+        (10, "root/ppg/releases/18/release.yaml")
+    ]
 
 
 def test_prerelease_project():
     m = _load()
-    assert m.prerelease_project("isv:percona:PR", 42, "ppg:releases:18") == "isv:percona:PR:pr-42:ppg:releases:18"
+    assert (
+        m.prerelease_project("isv:percona:PR", 42, "ppg:releases:18")
+        == "isv:percona:PR:pr-42:ppg:releases:18"
+    )
 
 
-def test_require_release_files():
+def test_decide():
     m = _load()
-    assert m.require_release_files("release", []) == "release PR changes no release.yaml; nothing to populate"
-    assert m.require_release_files("release", ["root/ppg/releases/18/release.yaml"]) is None
-    assert m.require_release_files("none", []) is None
+    rel = ["root/ppg/releases/18/release.yaml"]
+    assert m.decide("none", [], True) == (
+        "none",
+        "this PR changes no release.yaml; nothing to populate",
+    )
+    assert m.decide("release", [], False) == ("none", None)
+    kind, err = m.decide("mixed", rel, False)
+    assert kind == "mixed" and err and "also changes other root/ files" in err
+    assert m.decide("release", rel, True) == ("release", None)

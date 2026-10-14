@@ -18,7 +18,9 @@ name: OBS Release PR
 on:
   pull_request:
     branches: [main]
-    paths: ['root/*/releases/**']
+    # A release PR always changes a release.yaml; mirror/README-only edits
+    # under releases/ are not releases.
+    paths: ['root/*/releases/*/release.yaml']
     types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
@@ -41,6 +43,7 @@ jobs:
       pr_number:        ${{ steps.ctx.outputs.pr_number }}
       head_sha:         ${{ steps.ctx.outputs.head_sha }}
       clone_url:        ${{ steps.ctx.outputs.clone_url }}
+      kind:             ${{ steps.classify.outputs.kind }}
       release_files:    ${{ steps.classify.outputs.release_files }}
       release_projects: ${{ steps.classify.outputs.release_projects }}
     steps:
@@ -74,16 +77,14 @@ jobs:
         id: classify
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 .github/scripts/release_pr.py classify "${{ steps.ctx.outputs.pr_number }}"
-      - name: Require a release PR
-        if: steps.classify.outputs.kind != 'release'
-        run: |
-          echo "::error::not a release PR (kind=${{ steps.classify.outputs.kind }}); nothing to populate"
-          exit 1
+          PR: ${{ steps.ctx.outputs.pr_number }}
+          STRICT: ${{ github.event_name == 'workflow_dispatch' && '--strict' || '' }}
+        run: python3 .github/scripts/release_pr.py classify "$PR" $STRICT
 
   populate:
     name: Populate pre-release (${{ matrix.instance.name }})
     needs: [resolve]
+    if: needs.resolve.outputs.kind == 'release'
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     timeout-minutes: 180
