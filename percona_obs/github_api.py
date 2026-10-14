@@ -37,19 +37,26 @@ def last_synced_head_sha(
     workflow_file: str = "sync-main.yml",
     branch: str = "main",
     job_prefix: str = SYNC_JOB_PREFIX,
+    instance: "str | None" = None,
     max_runs: int = 20,
 ) -> str:
-    """Head SHA of the newest completed *workflow_file* run on *branch* whose
-    sync jobs (name starting with *job_prefix*) all concluded ``success``.
+    """Head SHA of the newest *workflow_file* run on *branch* whose sync jobs
+    (name starting with *job_prefix*) all concluded ``success``.
 
-    The run's own conclusion is ignored on purpose: the build poll job fails
-    the run after the upload already happened, and that upload is what OBS
-    holds.
+    Neither the run's status nor its conclusion is consulted: the build poll
+    job keeps the run in progress for hours after the upload (and may fail it
+    afterwards), and that finished upload is what OBS holds.  A sync job that
+    is still running has no conclusion, so its run does not qualify.
+
+    *instance* restricts the check to that instance's upload leg (job
+    ``"<job_prefix> (<instance>)"``): a failed upload to another instance does
+    not disqualify the run, and a run without that leg never qualifies.
     """
     data = _gh_api_json(
         f"repos/{repo_slug}/actions/workflows/{workflow_file}/runs"
-        f"?branch={branch}&status=completed&per_page={max_runs}"
+        f"?branch={branch}&per_page={max_runs}"
     )
+    wanted = f"{job_prefix} ({instance})" if instance is not None else None
     for run in data.get("workflow_runs") or []:
         jobs = (
             _gh_api_json(
@@ -57,11 +64,17 @@ def last_synced_head_sha(
             ).get("jobs")
             or []
         )
-        sync_jobs = [j for j in jobs if str(j.get("name", "")).startswith(job_prefix)]
+        sync_jobs = [
+            j
+            for j in jobs
+            if str(j.get("name", "")).startswith(job_prefix)
+            and (wanted is None or j.get("name") == wanted)
+        ]
         if sync_jobs and all(j.get("conclusion") == "success" for j in sync_jobs):
             return str(run["head_sha"])
+    leg = f" for instance {instance}" if instance is not None else ""
     raise SystemExit(
-        f"error: no completed {workflow_file} run on {branch} of {repo_slug} "
-        f"with successful sync jobs in the last {max_runs} runs; "
+        f"error: no {workflow_file} run on {branch} of {repo_slug} "
+        f"with successful sync jobs{leg} in the last {max_runs} runs; "
         "pass --source-commit explicitly"
     )
