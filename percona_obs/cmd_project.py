@@ -2525,7 +2525,6 @@ def _collect_release_obs_data(
     apiurl: str,
     rootprj: str,
     source_project_id: str,
-    source_path: Path,
     release_project_id: str,
     noncontainer_subs: "list[str]",
     container_subs: "list[str]",
@@ -2537,8 +2536,6 @@ def _collect_release_obs_data(
 
     *noncontainer_subs* / *container_subs* are subproject names relative to
     *source_project_id*, classified from the tree (instance-independent).
-    *source_path* is accepted for symmetry with the caller; the classification
-    already happened there.
     """
     source_obs_project = f"{rootprj}:{source_project_id}"
     release_obs_project = f"{rootprj}:{release_project_id}"
@@ -2604,32 +2601,51 @@ def _collect_release_obs_data(
 
 
 def _merge_release_obs_data(parts: "list[_ReleaseObsData]") -> _ReleaseObsData:
-    """Union per-instance CHANGELOG inputs; the first part wins on a clash.
+    """Union per-instance CHANGELOG inputs.
 
-    Instances hold disjoint slices of a release, so an image present on two
-    instances is the same image and is not an error (unlike the within-instance
-    ``_merge_container_pkgs`` check).  ``release_versions`` stays ``None`` only
-    when no instance has the release project.
+    A key's source value comes from the first part that has it; its release
+    value comes from that SAME part, so an instance's source is never diffed
+    against another instance's (possibly stale) release copy.  Keys no part
+    has on the source side (removal candidates) take the first part's release
+    value that has them.  Instances hold disjoint slices of a release, so an
+    image present on two instances is the same image and is not an error
+    (unlike the within-instance ``_merge_container_pkgs`` check).
+    ``release_versions`` stays ``None`` only when no instance has the release
+    project.
     """
-    source_versions: dict[str, str] = {}
-    release_versions: dict[str, str] | None = None
-    source_container_pkgs: dict[str, dict[str, str]] = {}
-    release_container_pkgs: dict[str, dict[str, str]] = {}
-    for part in parts:
-        for k, v in part.source_versions.items():
-            source_versions.setdefault(k, v)
-        if part.release_versions is not None:
-            if release_versions is None:
-                release_versions = {}
-            for k, v in part.release_versions.items():
-                release_versions.setdefault(k, v)
-        for k, pkgs in part.source_container_pkgs.items():
-            source_container_pkgs.setdefault(k, pkgs)
-        for k, pkgs in part.release_container_pkgs.items():
-            release_container_pkgs.setdefault(k, pkgs)
+
+    def _paired(
+        sources: "list[dict[str, Any]]", releases: "list[dict[str, Any] | None]"
+    ) -> "tuple[dict[str, Any], dict[str, Any]]":
+        merged_src: dict[str, Any] = {}
+        owner: dict[str, int] = {}
+        for i, src in enumerate(sources):
+            for k, v in src.items():
+                if k not in merged_src:
+                    merged_src[k] = v
+                    owner[k] = i
+        merged_rel: dict[str, Any] = {}
+        for rel in releases:
+            for k, v in (rel or {}).items():
+                if k not in owner:
+                    merged_rel.setdefault(k, v)
+        for k, i in owner.items():
+            owner_rel = releases[i]
+            if owner_rel is not None and k in owner_rel:
+                merged_rel[k] = owner_rel[k]
+        return merged_src, merged_rel
+
+    source_versions, release_versions = _paired(
+        [p.source_versions for p in parts], [p.release_versions for p in parts]
+    )
+    source_container_pkgs, release_container_pkgs = _paired(
+        [p.source_container_pkgs for p in parts],
+        [p.release_container_pkgs for p in parts],
+    )
+    all_none = all(p.release_versions is None for p in parts)
     return _ReleaseObsData(
         source_versions=source_versions,
-        release_versions=release_versions,
+        release_versions=None if all_none else release_versions,
         source_container_pkgs=source_container_pkgs,
         release_container_pkgs=release_container_pkgs,
     )
@@ -2747,6 +2763,12 @@ def cmd_project_release(args: argparse.Namespace) -> None:
                 f"error: --also-profile {also_name}: profile must set both "
                 "apiurl and rootprj"
             )
+        if not _obs_project_exists(also_apiurl, f"{also_rootprj}:{args.project}"):
+            raise SystemExit(
+                f"error: --also-profile {also_name}: project "
+                f"{also_rootprj}:{args.project} not found on {also_apiurl} "
+                "(missing credentials in oscrc, or wrong profile)"
+            )
         _print_same(f"also: {also_name} ({also_apiurl})")
         instances.append((also_apiurl, also_rootprj))
 
@@ -2756,7 +2778,6 @@ def cmd_project_release(args: argparse.Namespace) -> None:
                 inst_apiurl,
                 inst_rootprj,
                 args.project,
-                source_path,
                 release_project,
                 noncontainer_subs,
                 container_subs,
