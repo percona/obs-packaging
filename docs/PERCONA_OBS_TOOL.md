@@ -1196,11 +1196,13 @@ scan produces nothing (e.g. `--no-cve-scan`, or no packages changed).
 ### Step 2 — CI ships the release
 
 Release-only PRs are handled by `obs-release-pr.yml` (triggered on open/synchronize/reopen
-of a PR whose changes are under `root/*/releases/**`, or by `workflow_dispatch` with a
+of a PR that changes a `root/*/releases/*/release.yaml` (PRs touching only mirrors or
+READMEs under `releases/` are skipped with a notice), or by `workflow_dispatch` with a
 `pr_number`); `obs-pr-check.yml` gates them out and needs no label for this. Its jobs:
 
 - `resolve` — classifies the PR with `.github/scripts/release_pr.py classify`: release-only
-  check, one-in-flight-per-major guard, and the empty-release guard.
+  check and the one-in-flight-per-major guard; a PR with no `release.yaml` change is skipped
+  (`kind=none`; `--strict` on `workflow_dispatch` fails instead).
 - `populate` — one leg per `OBS_INSTANCES` entry, serialized on the instance's
   `sync-main-sync-<name>` concurrency group (never cancelled; no overlap with a staging
   upload). `<sha>` is the head of the newest `sync-main` run whose upload leg for this

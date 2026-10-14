@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Pure helpers for obs-release-pr.yml, plus a CLI used by its `resolve` job.
 
-CLI:  release_pr.py classify <pr_number>
+CLI:  release_pr.py classify <pr_number> [--strict]
 Reads the PR's changed files and every open PR's files through `gh`, and
-appends to $GITHUB_OUTPUT: kind=release|mixed|none, release_files=<json>,
-release_projects=<json>.  Exits 1 (with ::error::) on a mixed PR or on a
-one-in-flight conflict.
+appends to $GITHUB_OUTPUT: kind=release|none, release_files=<json>,
+release_projects=<json>.  A PR that changes no release.yaml is not a release
+PR: kind=none with a notice and exit 0 (the workflow skips populate), or exit
+1 with --strict (workflow_dispatch, where the operator named the PR).  Exits
+1 (with ::error::) on a mixed PR (release.yaml plus other root/ files) or on
+a one-in-flight conflict.
 """
 
 from __future__ import annotations
@@ -53,10 +56,18 @@ def conflicting_prs(
     return sorted(hits)
 
 
-def require_release_files(kind: str, release_files: list[str]) -> str | None:
-    if kind == "release" and not release_files:
-        return "release PR changes no release.yaml; nothing to populate"
-    return None
+def decide(kind: str, release_files: list[str], strict: bool) -> tuple[str, str | None]:
+    """Return (kind_out, error) for a classified PR."""
+    if not release_files:
+        if strict:
+            return "none", "this PR changes no release.yaml; nothing to populate"
+        return "none", None
+    if kind == "mixed":
+        return (
+            "mixed",
+            "release PRs must change only files under root/*/releases/; this PR also changes other root/ files",
+        )
+    return "release", None
 
 
 def prerelease_project(pr_rootprj: str, pr_number: int | str, project: str) -> str:
@@ -70,17 +81,19 @@ def _gh_json(args: list[str]):
     return json.loads(r.stdout or "null")
 
 
-def _cli_classify(pr_number: int) -> None:
+def _cli_classify(pr_number: int, strict: bool) -> None:
     repo = os.environ["GITHUB_REPOSITORY"]
     files = [f["path"] for f in _gh_json(["pr", "view", str(pr_number), "-R", repo, "--json", "files", "--jq", ".files"])]
     kind, release_files = classify_files(files)
-    if kind == "mixed":
-        print("::error::release PRs must change only files under root/*/releases/; this PR also changes other root/ files")
-        sys.exit(1)
-    err = require_release_files(kind, release_files)
+    kind, err = decide(kind, release_files, strict)
     if err:
         print(f"::error::{err}")
         sys.exit(1)
+    if kind == "none":
+        print("::notice::not a release PR (no release.yaml changed); nothing to populate")
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+            fh.write("kind=none\nrelease_files=[]\nrelease_projects=[]\n")
+        return
     open_prs = _gh_json(["pr", "list", "-R", repo, "--state", "open", "--limit", "200", "--json", "number,files"])
     open_prs = [{"number": p["number"], "files": [f["path"] for f in p.get("files") or []]} for p in open_prs]
     conflicts = conflicting_prs(pr_number, release_files, open_prs)
@@ -95,8 +108,9 @@ def _cli_classify(pr_number: int) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 3 and sys.argv[1] == "classify":
-        _cli_classify(int(sys.argv[2]))
+    argv = [a for a in sys.argv[1:] if a != "--strict"]
+    if len(argv) == 2 and argv[0] == "classify":
+        _cli_classify(int(argv[1]), "--strict" in sys.argv[1:])
     else:
         print(__doc__)
         sys.exit(2)
