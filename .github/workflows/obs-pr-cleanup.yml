@@ -58,8 +58,8 @@ jobs:
 
       # Detect whether this is a release-only PR (all changed root/** files are
       # under root/*/releases/).  This output gates tag creation below.  A
-      # release-only PR never created a PR OBS project, so the `delete` job
-      # below runs as a no-op for it.
+      # merged release PR's project tree is the pre-release; see the delete
+      # job's gate.
       - name: Detect release-only PR
         id: detect
         env:
@@ -79,8 +79,11 @@ jobs:
 
       # Merged release PR: tag the merge commit (the exact reviewed snapshot)
       # and dispatch the release workflow with the tags created HERE.  A tag
-      # that already exists was not created by this run (e.g. a revert PR that
-      # leaves the previous real entry last) and is not dispatched.
+      # that already exists is dispatched only when it points at this merge
+      # commit (a re-run after a partial failure); one at another commit was
+      # not created for this PR (e.g. a revert PR that leaves the previous
+      # real entry last) and is not dispatched.  The tags created here are
+      # lightweight, so the ref's object sha is the commit.
       # Tag-creation errors other than "already exists" fail the job loudly —
       # a silently missing tag is how releases used to vanish.
       - name: Tag release and dispatch obs-release
@@ -105,8 +108,13 @@ jobs:
             if ! OUT=$(gh api "repos/${GITHUB_REPOSITORY}/git/refs" -X POST \
                 -f "ref=refs/tags/${TAG}" -f "sha=${MERGE_SHA}" 2>&1); then
               if echo "$OUT" | grep -q "Reference already exists"; then
-                echo "Tag ${TAG} already exists — not created here, not dispatched"
-                continue
+                EXISTING=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq '.object.sha')
+                if [ "$EXISTING" = "$MERGE_SHA" ]; then
+                  echo "Tag ${TAG} already points at this merge (re-run); dispatching"
+                else
+                  echo "Tag ${TAG} already exists at ${EXISTING}, not this PR's tag; not dispatched"
+                  continue
+                fi
               else
                 echo "::error::Failed to create tag ${TAG}: ${OUT}"
                 exit 1
@@ -145,11 +153,13 @@ jobs:
   #
   # A merged release PR's project tree is the pre-release obs-release.yml copies
   # from; obs-release.yml deletes it after a successful final copy. Closed-
-  # unmerged release PRs are cleaned here like any PR.
+  # unmerged release PRs are cleaned here like any PR.  An EMPTY
+  # is_release_pr (release-dispatch failed before detect) is treated as a
+  # release PR, so a merged pre-release is never deleted by accident.
   delete:
     name: Delete PR OBS project (${{ matrix.instance.name }})
     needs: [release-dispatch]
-    if: ${{ always() && !(github.event.pull_request.merged == true && needs.release-dispatch.outputs.is_release_pr == 'true') }}
+    if: ${{ always() && !(github.event.pull_request.merged == true && needs.release-dispatch.outputs.is_release_pr != 'false') }}
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     strategy:

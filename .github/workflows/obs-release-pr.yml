@@ -35,6 +35,7 @@ jobs:
     name: Resolve release PR
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: read
     outputs:
       pr_number:        ${{ steps.ctx.outputs.pr_number }}
@@ -55,13 +56,18 @@ jobs:
           case "$PR" in ''|*[!0-9]*) echo "::error::pr_number '$PR' is not a number"; exit 1;; esac
           DATA=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}")
           STATE=$(echo "$DATA" | jq -r '.state')
+          HEAD_REPO=$(echo "$DATA" | jq -r '.head.repo.full_name')
+          if [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::release PRs must come from a branch of ${GITHUB_REPOSITORY} (fork PRs are not populated: populate runs with production credentials)"
+            exit 1
+          fi
           {
             echo "pr_number=${PR}"
             echo "head_sha=$(echo "$DATA" | jq -r '.head.sha')"
             echo "clone_url=$(echo "$DATA" | jq -r '.head.repo.clone_url')"
           } >> "$GITHUB_OUTPUT"
           if [ "$STATE" != "open" ] && [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "::notice::PR #${PR} is ${STATE}; repopulating anyway (recovery of a merged release)"
+            echo "::notice::PR #${PR} is ${STATE}; populating anyway; a merged release PR is refused by the record check (main's release.yaml changed at the merge): cut a new release instead"
           fi
       # Release-only + one-in-flight-per-major guard (spec §1).
       - name: Classify the PR and check for in-flight conflicts
@@ -158,15 +164,16 @@ jobs:
             -e "PERCONA_OBS_PACKAGING_REPO:${CLONE_URL}" "${env_args[@]}" \
             profile create "pr-${PR_NUMBER}" "${inst[@]}"
 
-      # The commit of main whose staging tree OBS holds: the newest completed
-      # sync-main run whose sync jobs all succeeded.  Passed explicitly so the
-      # tool never has to guess the repository from the PR's clone URL.
+      # The commit of main whose staging tree this instance holds: the newest
+      # sync-main run whose upload leg for this instance succeeded (the run
+      # may still be polling builds).  Passed explicitly so the tool never
+      # has to guess the repository from the PR's clone URL.
       - name: Resolve the synced main commit
         id: synced
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          SHA=$(venv/bin/python -c "from percona_obs.github_api import last_synced_head_sha; print(last_synced_head_sha('${GITHUB_REPOSITORY}'))")
+          SHA=$(venv/bin/python -c "import sys; from percona_obs.github_api import last_synced_head_sha; print(last_synced_head_sha(sys.argv[1], instance=sys.argv[2]))" "$GITHUB_REPOSITORY" "$OBS_INSTANCE")
           echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
           echo "synced main commit: ${SHA}"
 
@@ -188,7 +195,7 @@ jobs:
             else
               outcome=failure; rc=1
             fi
-            SRC=$(venv/bin/python -c "import yaml; from percona_obs.release_record import current_release; e=current_release(yaml.safe_load(open('root/'+'$proj'.replace(':','/')+'/release.yaml'))); print((e and e.source_commit) or '')")
+            SRC=$(venv/bin/python -c "import sys, yaml; from percona_obs.release_record import current_release; e=current_release(yaml.safe_load(open('root/'+sys.argv[1].replace(':','/')+'/release.yaml'))); print((e and e.source_commit) or '')" "$proj")
             jq -c --arg p "$proj" --arg o "$outcome" --arg s "$SRC" --arg pre "${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}:${proj}" \
               '. + [{project: $p, prerelease: $pre, outcome: $o, source_commit: $s}]' \
               /tmp/prerelease-report.json > /tmp/prerelease-report.tmp && mv /tmp/prerelease-report.tmp /tmp/prerelease-report.json
@@ -225,5 +232,6 @@ jobs:
     uses: ./.github/workflows/qa-fanout.yml
     with:
       pr_number: ${{ needs.resolve.outputs.pr_number }}
+      ref: ${{ needs.resolve.outputs.head_sha }}
       qa_types: packages,containers
     secrets: inherit

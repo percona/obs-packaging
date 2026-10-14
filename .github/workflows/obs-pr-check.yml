@@ -131,8 +131,7 @@ jobs:
           fi
 
   # ──────────────────────────────────────────────────────────────────────────
-  # sync: push the PR contents to OBS.  Does NOT poll OBS builds — that is done in `build` so it
-  # can run in parallel with QA matrix detection.
+  # sync: push the PR contents to OBS.  Does NOT poll OBS builds — that is done in `build`.
   # ──────────────────────────────────────────────────────────────────────────
   sync:
     name: Sync packages to OBS (${{ matrix.instance.name }})

@@ -7,7 +7,8 @@ name: OBS Release
 # created (one dispatch per PR).  workflow_dispatch is the ONLY trigger.
 #
 # Staging is never touched here, so sync-main needs no pause: the
-# released binaries already sit in the pre-release.  A failed leg keeps the
+# released binaries already sit in the pre-release.  Each release leg
+# serializes on its own per-instance "obs-release-<name>" group.  A failed leg keeps the
 # pre-release in place; recovery is a re-dispatch with the same inputs:
 #   gh workflow run obs-release.yml -f pr_number=42 -f tags="ppg/17.12-1 ppg/18.7-1"
 
@@ -21,6 +22,9 @@ on:
         description: "Release tags created from that PR, space-separated (e.g. ppg/18.7-1)"
         required: true
 
+# Every job declares its own permissions.
+permissions: {}
+
 jobs:
   validate:
     name: Validate inputs
@@ -28,14 +32,20 @@ jobs:
     outputs:
       first_tag: ${{ steps.v.outputs.first_tag }}
     steps:
+      # Inputs reach every script through env (TAGS_IN / PR_IN), never by
+      # ${{ }} interpolation into the script body.
       - id: v
         shell: bash
+        env:
+          TAGS_IN: ${{ inputs.tags }}
+          PR_IN: ${{ inputs.pr_number }}
         run: |
           set -euo pipefail
-          PR="${{ inputs.pr_number }}"
+          PR="$PR_IN"
           echo "$PR" | grep -Eq '^[0-9]+$' || { echo "::error::pr_number '$PR' is not a number"; exit 1; }
           FIRST=""
-          for TAG in ${{ inputs.tags }}; do
+          read -r -a TAG_LIST <<<"$TAGS_IN"
+          for TAG in "${TAG_LIST[@]}"; do
             echo "$TAG" | grep -Eq '^[a-z0-9-]+/([0-9]+(\.[0-9]+)+|[a-z][a-z0-9]*)-[0-9]+$' \
               || { echo "::error::tag '$TAG' does not match <product>/<major.minor-N> or <product>/<name-N>"; exit 1; }
             FIRST="${FIRST:-$TAG}"
@@ -52,10 +62,11 @@ jobs:
       fail-fast: false
       matrix:
         instance: ${{ fromJSON(vars.OBS_INSTANCES) }}
-    # The final hop writes release-project meta; never overlap this
-    # instance's sync-main upload (same group as sync-main's sync job).
+    # Own per-instance group: hop 2 writes only :releases: projects, which
+    # `sync push` never touches, so it must not share sync-main's group --
+    # sharing it let a queued hop-2 leg be displaced by the next push.
     concurrency:
-      group: sync-main-sync-${{ matrix.instance.name }}
+      group: obs-release-${{ matrix.instance.name }}
       cancel-in-progress: false
     permissions:
       contents: read
@@ -111,9 +122,12 @@ jobs:
       # Tag ppg/17.9-1   → ppg:releases:17 ; tag ppg/common-3 → ppg:releases:common
       - name: Release every tag from the pre-release
         shell: bash
+        env:
+          TAGS_IN: ${{ inputs.tags }}
         run: |
           set -euo pipefail
-          for TAG in ${{ inputs.tags }}; do
+          read -r -a TAG_LIST <<<"$TAGS_IN"
+          for TAG in "${TAG_LIST[@]}"; do
             PRODUCT="${TAG%%/*}"; VERSION="${TAG#*/}"
             case "$VERSION" in
               [0-9]*) MAJOR="${VERSION%%.*}" ;;
@@ -142,18 +156,23 @@ jobs:
 
       - name: Report a failed copy
         if: needs.release.result != 'success'
+        env:
+          TAGS_IN: ${{ inputs.tags }}
+          PR_IN: ${{ inputs.pr_number }}
         run: |
-          echo "::error::sync release --from failed on at least one instance; the pre-release of PR #${{ inputs.pr_number }} was KEPT. Fix the cause and re-dispatch: gh workflow run obs-release.yml -f pr_number=${{ inputs.pr_number }} -f tags=\"${{ inputs.tags }}\""
+          echo "::error::sync release --from failed on at least one instance; the pre-release of PR #${PR_IN} was KEPT. Fix the cause and re-dispatch: gh workflow run obs-release.yml -f pr_number=${PR_IN} -f tags=\"${TAGS_IN}\""
           exit 1
 
       # Idempotent: an existing release (re-run) gets its notes updated.
       - name: Create GitHub releases
         env:
           GH_TOKEN: ${{ github.token }}
+          TAGS_IN: ${{ inputs.tags }}
         shell: bash
         run: |
           set -euo pipefail
-          for TAG in ${{ inputs.tags }}; do
+          read -r -a TAG_LIST <<<"$TAGS_IN"
+          for TAG in "${TAG_LIST[@]}"; do
             PRODUCT="${TAG%%/*}"; VERSION="${TAG#*/}"
             case "$VERSION" in
               [0-9]*) MAJOR="${VERSION%%.*}" ;;

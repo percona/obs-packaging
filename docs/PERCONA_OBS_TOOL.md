@@ -991,7 +991,7 @@ counter (e.g. `17.9-1`, `17.9-2`, `17.10-1`). A single OBS release project
 A release is two hops. Hop 1 copies staging into a per-PR **pre-release** project tree
 (`<pr_rootprj>:pr-<N>:<product>:releases:<major>`) when the release PR is opened, so QA runs
 against exactly the binaries that will ship. Hop 2, after merge, copies the pre-release into
-the release project. Staging is never touched by CI during a release.
+the release project. Hop 2 never touches staging; hop 1 freezes it only for the copy.
 
 The process is PR-based:
 
@@ -1194,7 +1194,10 @@ of a PR whose changes are under `root/*/releases/**`, or by `workflow_dispatch` 
   check, one-in-flight-per-major guard, and the empty-release guard.
 - `populate` — one leg per `OBS_INSTANCES` entry, serialized on the instance's
   `sync-main-sync-<name>` concurrency group (never cancelled; no overlap with a staging
-  upload). Runs `sync prerelease <project> --branch-from main --synced-commit <sha>` for
+  upload). `<sha>` is the head of the newest `sync-main` run whose upload leg for this
+  instance succeeded (the run may still be polling builds). Release PRs must come from a
+  branch of the repository itself; fork PRs are refused. Runs
+  `sync prerelease <project> --branch-from main --synced-commit <sha>` for
   each release project, uploads the `prerelease-report-<instance>` artifact and posts a
   per-instance PR comment.
 - `qa` — calls `qa-fanout.yml` once every populate leg succeeded.
@@ -1207,12 +1210,14 @@ On merge:
    `GITHUB_TOKEN` (e.g. `ppg/17.9-1`) and dispatches `obs-release.yml` once via
    `gh workflow run obs-release.yml --ref main -f pr_number=<N> -f tags="<tag> …"`. A
    tag-creation or dispatch API error fails the job; only a genuine "tag already exists"
-   response is tolerated. The PR's OBS project tree is kept (it is the copy source) and
+   response is tolerated, and such a tag is dispatched only when it already points at the
+   merge commit (a re-run after a partial failure). The PR's OBS project tree is kept (it is the copy source) and
    deleted by `obs-release.yml`.
 3. `obs-release.yml`'s **sole trigger** is `workflow_dispatch` (inputs `pr_number`,
    `tags`; pushing a tag by hand is inert). Per instance it derives each release project
    from its tag (`ppg/17.9-1` → `ppg:releases:17`) and runs `sync release --from` the
-   pre-release.
+   pre-release. Each leg serializes on its own `obs-release-<name>` concurrency group
+   (hop 2 writes only `:releases:` projects, so it does not share sync-main's group).
 4. `finalize` creates (or updates the notes of) one GitHub release per tag from its
    `CHANGELOG.md` section. If any copy failed it instead fails with an `::error::` and the
    pre-release is kept.
@@ -1239,7 +1244,7 @@ Hop 2 (after merge):
 |---|---|---|
 | A leg fails | `finalize` fails with `::error::`, no GitHub releases, no delete; tag exists; pre-release intact; staging untouched | Re-dispatch with the same inputs (idempotent): `gh workflow run obs-release.yml -f pr_number=N -f tags="ppg/17.12-1 ppg/18.7-1"` |
 | Record mismatch (pre-release description ≠ tagged entry) | Leg refuses | The merged record is wrong: open a new release PR |
-| Pre-release already deleted | Leg fails on missing source project | Repopulate with `gh workflow run obs-release-pr.yml -f pr_number=N` (works while the PR head ref resolves, also for a merged PR), then re-dispatch `obs-release.yml` |
+| Pre-release already deleted | Leg fails on missing source project | Cut a new release: re-run `project release` and open a new release PR. Repopulating the merged PR is refused by the record check, because main's `release.yaml` changed at the merge (`PPG_RELEASE` bumped) |
 | Dispatch failure in obs-pr-cleanup | Tags exist, nothing copied | Manual dispatch as above |
 
 ### `sync prerelease` — hop 1 (staging → PR pre-release)
@@ -1251,8 +1256,10 @@ Run with the PR profile; `--branch-from` names the production profile holding st
 ```
 
 Steps: (1) require a `source_commit` on the last `release.yaml` entry; (2) **record
-check** — the freeze-scope paths (source tree, its `macros.yaml` chain, every
-whole-frozen project, every aggregate-frozen package) must be identical between
+check** — the freeze-scope paths (source tree, its `macros.yaml` chain,
+`root/<product>/releases/<major>/release.yaml` — `PPG_RELEASE` is computed from it, so
+a merged release refuses a repopulate — every whole-frozen project, every
+aggregate-frozen package) must be identical between
 `source_commit` and the last synced `main` (`--synced-commit`, else `gh api`), or it
 fails with "staging changed since the cut"; edits under `root/<product>/staging/_shared/...`
 count as staging changes because the check follows the `_shared/` symlink targets of
@@ -1263,7 +1270,7 @@ pre-release project description.
 | Flag | Default | Effect |
 |---|---|---|
 | `--branch-from PROFILE` | required | Profile of the production instance holding the staging source. |
-| `--synced-commit SHA` | `gh` lookup | Head SHA of the last successful sync-main run. |
+| `--synced-commit SHA` | `gh` lookup | Head SHA of the newest sync-main run whose sync jobs succeeded (the run may still be polling builds; CI passes the per-instance value). |
 | `--source-commit SHA` | last entry's | Override the `source_commit` from `release.yaml`. |
 | `--force` | off | Skips the record check (2). |
 | `--no-freeze` | off | Skips the drain/green-check/freeze sequence. |

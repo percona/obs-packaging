@@ -188,8 +188,9 @@ jobs:
 
       # releases/ directories are excluded from sync push traversal (each
       # root/*/releases/<name>/ contains a release.yaml marker that prevents
-      # find_projects/find_packages from descending), so release commits are
-      # synced normally but produce no OBS changes.
+      # find_projects/find_packages from descending); release commits
+      # re-render the staging container tags (PPG_RELEASE) and are synced
+      # like any other push.
       # The report JSON scopes the poll job to the packages this run touched;
       # remove any stale report first (self-hosted runners reuse /tmp).
       #
