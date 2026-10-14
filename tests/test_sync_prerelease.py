@@ -66,7 +66,7 @@ def _wire(monkeypatch, src, rel, calls):
     monkeypatch.setattr(
         cmd_sync,
         "apply_mirror_meta",
-        lambda apiurl, prj, path, rootprj, env, publish_override=None: calls.append(
+        lambda apiurl, prj, path, rootprj, env, publish_override=None, **k: calls.append(
             ("meta", prj, publish_override)
         ),
     )
@@ -230,3 +230,31 @@ def test_shared_symlink_target_edit_is_detected(tmp_path, monkeypatch):
     assert cmd_sync._changed_files_between(a, b, paths) == [
         "root/ppg/staging/_shared/pkgx/rpm/x.spec"
     ]
+
+
+def test_prerelease_meta_redirects_external_paths_to_production_root(
+    tmp_path, monkeypatch
+):
+    src, rel = _tree_with_record(tmp_path, monkeypatch)
+    calls = []
+    _wire(monkeypatch, src, rel, calls)
+    seen = {}
+    monkeypatch.setattr(
+        cmd_sync,
+        "apply_mirror_meta",
+        lambda apiurl, prj, path, rootprj, env, **k: seen.setdefault(
+            "meta", (prj, k.get("branch_rootprj"), k.get("active_projects"))
+        ),
+    )
+    monkeypatch.setattr(
+        cmd_sync,
+        "release_tree",
+        lambda *a, **k: seen.setdefault(
+            "tree", (k.get("branch_rootprj"), k.get("active_projects"))
+        ),
+    )
+    cmd_sync.cmd_sync_prerelease(_Args())
+    top = "home:Admin:PR:pr-5:ppg:releases:17"
+    expected = {top, f"{top}:containers", f"{top}:tarballs"}
+    assert seen["meta"] == (top, "home:Admin", expected)
+    assert seen["tree"] == ("home:Admin", expected)

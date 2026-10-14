@@ -111,3 +111,49 @@ def test_warn_orphans(monkeypatch, capsys):
     rc.warn_orphans("http://obs", "T", [("containers", Path("/x"))], "home:Admin")
     out = capsys.readouterr().out
     assert "T:containers:ubi9" in out and "sync delete" in out
+
+
+def test_apply_mirror_meta_forwards_branch_redirection(monkeypatch, tmp_path):
+    seen = []
+    monkeypatch.setattr(
+        rc,
+        "_apply_project_config",
+        lambda *a, **k: seen.append((k.get("branch_rootprj"), k.get("active_projects")))
+        or (False, True),
+    )
+    monkeypatch.setattr(rc, "_disable_project_builds", lambda *a, **k: None)
+    rc.apply_mirror_meta(
+        "http://obs",
+        "PR:T",
+        tmp_path,
+        "PR",
+        {},
+        branch_rootprj="prod",
+        active_projects={"PR:T", "PR:T:containers"},
+    )
+    assert seen == [("prod", {"PR:T", "PR:T:containers"})]
+
+
+def test_release_tree_forwards_branch_redirection_to_subprojects(monkeypatch, tmp_path):
+    seen = []
+    monkeypatch.setattr(
+        rc,
+        "apply_mirror_meta",
+        lambda apiurl, prj, path, rootprj, env, **k: seen.append(
+            (prj, k.get("branch_rootprj"), k.get("active_projects"))
+        ),
+    )
+    monkeypatch.setattr(rc, "copy_project_binaries", lambda *a, **k: None)
+    monkeypatch.setattr(rc, "warn_orphans", lambda *a, **k: None)
+    rc.release_tree(
+        "http://obs",
+        "S",
+        "PR:T",
+        [("containers", tmp_path)],
+        "PR",
+        {},
+        verify_timeout=0,
+        branch_rootprj="prod",
+        active_projects={"PR:T", "PR:T:containers"},
+    )
+    assert seen == [("PR:T:containers", "prod", {"PR:T", "PR:T:containers"})]

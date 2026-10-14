@@ -2935,6 +2935,13 @@ def cmd_sync_prerelease(args) -> None:
         _print_ok(f"prerelease dry-run passed for {entry.tag}  (dry run)")
         return
 
+    # Repository paths to projects outside the pre-release tree (e.g.
+    # common:containers:ubi9) are redirected to the source root, as
+    # `sync push --branch-from` does; otherwise OBS strips them.
+    prerelease_tree = {prerelease_obs_project} | {
+        f"{prerelease_obs_project}:{name}" for name, _ in subproject_pairs
+    }
+
     # Top-level pre-release meta from the mirror, publish forced on (spec §1).
     apply_mirror_meta(
         apiurl,
@@ -2943,6 +2950,8 @@ def cmd_sync_prerelease(args) -> None:
         args.rootprj,
         shared_env_vars,
         publish_override=True,
+        branch_rootprj=source_rootprj,
+        active_projects=prerelease_tree,
     )
 
     _run_frozen(
@@ -2960,6 +2969,8 @@ def cmd_sync_prerelease(args) -> None:
             shared_env_vars,
             publish_override=True,
             verify_timeout=args.verify_timeout,
+            branch_rootprj=source_rootprj,
+            active_projects=prerelease_tree,
         ),
     )
 
