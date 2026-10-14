@@ -1,142 +1,76 @@
 name: OBS Release
 
-# Dispatched by obs-pr-cleanup.yml when a release PR merges (the tag is
-# created there, on the merge commit, then this workflow is dispatched with
-# it).  workflow_dispatch is the ONLY trigger: tags pushed to the repo are
-# deliberately inert (no PAT exists, and human-pushed tags must not start
-# releases by accident).  Manual recovery:
-#   gh workflow run obs-release.yml -f tag=ppg/17.11-1
+# Hop 2 of the two-hop release flow: copy a merged release PR's pre-release
+# OBS project tree (<pr_rootprj>:pr-<N>:<product>:releases:<major>) into the
+# release project, publish the GitHub releases and delete the pre-release.
+# Dispatched by obs-pr-cleanup.yml with the PR number and every tag the PR
+# created (one dispatch per PR).  workflow_dispatch is the ONLY trigger.
 #
-# Exclusive lock on staging: PPG_RELEASE is computed as one plus the release
-# count in root/<product>/releases/<major>/release.yaml, so the moment a
-# release PR merges, git already reports the NEXT counter while staging still
-# holds the artifacts this release is about to copy out, built under the
-# CURRENT one. If sync-main ran during that window it would re-render staging
-# container Dockerfiles with the next counter and get them rebuilt; a failed
-# release re-run would then copy next-counter images into this release. So a
-# release takes an exclusive lock on staging: sync-main is disabled (by
-# obs-pr-cleanup.yml before dispatch, and redundantly by the `lock` job below
-# for the manual re-dispatch path) for the whole duration of a release,
-# and only re-enabled by the `unlock` job once no other release run is
-# still queued or in progress.
-#
-# The one-pending-run-per-concurrency-group limit is a property of the
-# "sync-main-sync" group itself, not of sync-main being disabled: three
-# releases dispatched in quick succession will still displace (cancel) the
-# middle one, with sync-main never involved. Symptom: the dispatched
-# "OBS Release" run shows as cancelled with no release having happened.
-# Recovery: re-dispatch with the manual command above once the concurrency
-# group is free.
-#
-# Residual race: the lock only closes the window from PR-merge onward. If a
-# release is dispatched (manually, or via the recipe above) while a sync-main
-# sync job is already in-progress or pending in the group, that sync still
-# runs regardless of the lock.
-#
-# Job layout: `lock` takes the staging lock, then the `release` job runs
-# once per entry of the `OBS_INSTANCES` repository variable -- each leg with
-# its own apiurl, rootprj, credentials (`OBS_PASSWORD_<NAME>`), repo/project
-# slice and concurrency group -- and finally `unlock` publishes the GitHub
-# release and hands back (or reports on) the lock.  `unlock` runs with
-# if: always() so a failed or cancelled release still gets the lock state
-# reported.
-#
-# Where the mutual exclusion actually comes from: sync-main's sync jobs now
-# serialize on per-instance "sync-main-sync-<name>" groups, so the plain
-# "sync-main-sync" group held by `lock` no longer serializes against them --
-# it only serializes the lock steps of concurrently dispatched releases.
-# Exclusion against sync-main is provided by (a) the per-instance
-# "sync-main-sync-<name>" group on each `release` leg, which cannot run
-# alongside that instance's sync-main sync job, and (b) sync-main being
-# disabled for the whole duration of the release.
-#
-# Operationally important: a failed or cancelled release deliberately leaves
-# sync-main disabled until a person acts — this is intentional, not a bug, so
-# that a retry never re-syncs staging out from under it. A run cancelled
-# while still pending (never starts a single step) leaves sync-main disabled
-# with no annotation at all; see the `unlock` job's last step for why that
-# case can't be covered here.
+# Staging is never touched here, so sync-main needs no pause: the
+# released binaries already sit in the pre-release.  A failed leg keeps the
+# pre-release in place; recovery is a re-dispatch with the same inputs:
+#   gh workflow run obs-release.yml -f pr_number=42 -f tags="ppg/17.12-1 ppg/18.7-1"
 
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Release tag (e.g. ppg/17.11-1)"
+      pr_number:
+        description: "Merged release PR number (its pre-release tree is the copy source)"
+        required: true
+      tags:
+        description: "Release tags created from that PR, space-separated (e.g. ppg/18.7-1)"
         required: true
 
 jobs:
-  lock:
-    name: Take the release lock
+  validate:
+    name: Validate inputs
     runs-on: ubuntu-latest
-    # The plain group only serializes the lock steps of concurrently
-    # dispatched releases; sync-main's sync jobs live in per-instance
-    # "sync-main-sync-<name>" groups and are NOT held off by this one.
-    # Mutual exclusion with sync-main comes from those per-instance groups
-    # on the `release` legs below, plus sync-main being disabled for the
-    # release's duration.
-    concurrency:
-      group: sync-main-sync
-      cancel-in-progress: false
-    permissions:
-      # Required to disable/re-enable sync-main.yml for the staging lock.
-      actions: write
-
+    outputs:
+      first_tag: ${{ steps.v.outputs.first_tag }}
     steps:
-      - name: Validate tag input
-        run: |
-          TAG="${{ inputs.tag }}"
-          if ! echo "$TAG" | grep -Eq '^[a-z0-9-]+/([0-9]+(\.[0-9]+)+|[a-z][a-z0-9]*)-[0-9]+$'; then
-            echo "::error::tag '$TAG' does not match <product>/<major.minor-N> or <product>/<name-N>"
-            exit 1
-          fi
-
-      # Idempotent: obs-pr-cleanup.yml already disables sync-main before
-      # dispatching this workflow, but a manual re-dispatch (the recovery
-      # recipe above) does not go through that workflow, so take the lock
-      # here too. The disable call itself succeeds whether or not sync-main
-      # was already disabled, so we verify the resulting state instead of
-      # trusting the exit code — a permissions error or a renamed workflow
-      # file must not let the release proceed believing it holds a lock it
-      # does not.
-      - name: Take the release lock (disable sync-main)
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - id: v
         shell: bash
         run: |
           set -euo pipefail
-          gh workflow disable sync-main.yml
-          STATE=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/sync-main.yml" --jq .state)
-          if [ "$STATE" = "active" ]; then
-            echo "::error::Failed to take the release lock: sync-main is still active"
-            exit 1
-          fi
-          echo "Release lock taken: sync-main state is ${STATE}"
+          PR="${{ inputs.pr_number }}"
+          echo "$PR" | grep -Eq '^[0-9]+$' || { echo "::error::pr_number '$PR' is not a number"; exit 1; }
+          FIRST=""
+          for TAG in ${{ inputs.tags }}; do
+            echo "$TAG" | grep -Eq '^[a-z0-9-]+/([0-9]+(\.[0-9]+)+|[a-z][a-z0-9]*)-[0-9]+$' \
+              || { echo "::error::tag '$TAG' does not match <product>/<major.minor-N> or <product>/<name-N>"; exit 1; }
+            FIRST="${FIRST:-$TAG}"
+          done
+          [ -n "$FIRST" ] || { echo "::error::tags is empty"; exit 1; }
+          echo "first_tag=${FIRST}" >> "$GITHUB_OUTPUT"
 
   release:
-    name: Release packages in OBS (${{ matrix.instance.name }})
-    needs: lock
+    name: Release to OBS (${{ matrix.instance.name }})
+    needs: validate
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     strategy:
       fail-fast: false
       matrix:
         instance: ${{ fromJSON(vars.OBS_INSTANCES) }}
-    # Never run concurrently with this instance's sync-main source upload.
+    # The final hop writes release-project meta; never overlap this
+    # instance's sync-main upload (same group as sync-main's sync job).
     concurrency:
       group: sync-main-sync-${{ matrix.instance.name }}
       cancel-in-progress: false
     permissions:
       contents: read
       packages: read
-
     env:
       OBS_APIURL: ${{ matrix.instance.apiurl }}
       OBS_ROOTPRJ: ${{ matrix.instance.rootprj }}
-
+      OBS_PR_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}
+      PR_NUMBER: ${{ inputs.pr_number }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: refs/tags/${{ inputs.tag }}
+          # All tags of one PR point at the same commit; any of them is the
+          # reviewed release tree.
+          ref: refs/tags/${{ needs.validate.outputs.first_tag }}
           fetch-depth: 0
 
       - uses: ./.github/actions/obs-setup
@@ -145,13 +79,9 @@ jobs:
           obs-user: ${{ matrix.instance.user || vars.OBS_USER }}
           obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance.name)] }}
 
-      # The instance's repo/project filters slice the packaging tree down to
-      # what this OBS instance builds; an absent key is an empty string and
-      # contributes no flag.
       - name: Create percona-obs profile (${{ matrix.instance.name }})
         shell: bash
         env:
-          OBS_APIURL: ${{ matrix.instance.apiurl }}
           INCLUDE_REPOS: ${{ matrix.instance.include_repos }}
           EXCLUDE_REPOS: ${{ matrix.instance.exclude_repos }}
           INCLUDE_PROJECTS: ${{ matrix.instance.include_projects }}
@@ -164,173 +94,113 @@ jobs:
           if [ -n "${EXCLUDE_REPOS:-}" ]; then args+=(--exclude-repos "$EXCLUDE_REPOS"); fi
           if [ -n "${INCLUDE_PROJECTS:-}" ]; then args+=(--include-projects "$INCLUDE_PROJECTS"); fi
           if [ -n "${EXCLUDE_PROJECTS:-}" ]; then args+=(--exclude-projects "$EXCLUDE_PROJECTS"); fi
-          # Per-instance env from the OBS_INSTANCES entry, appended after the
-          # defaults above so an instance can override them (parse_env_overrides
-          # is last-wins, and splits KEY:VALUE on the first colon so a value
-          # such as "openSUSE.org:" survives intact).
           env_args=()
           if [ -n "${INSTANCE_ENV:-}" ] && [ "$INSTANCE_ENV" != "null" ]; then
             while IFS= read -r kv; do
-              # `if`, not `[ … ] &&`: with an empty env object the test fails on
-              # the last line and, as the loop body's final command, would make
-              # the loop exit non-zero and trip `set -e`.
               if [ -n "$kv" ]; then env_args+=(-e "$kv"); fi
             done <<<"$(jq -r 'to_entries[] | "\(.key):\(.value)"' <<<"$INSTANCE_ENV")"
           fi
           venv/bin/python -m percona_obs \
-            -A "$OBS_APIURL" \
-            -R "${{ matrix.instance.rootprj }}" \
+            -A "$OBS_APIURL" -R "$OBS_ROOTPRJ" \
             -e "REMOTE_OBS_ORG_INTERCONNECT:" \
             -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
             -e "PERCONA_OBS_PACKAGING_REPO:${{ github.server_url }}/${{ github.repository }}.git" \
             "${env_args[@]}" \
             profile create main "${args[@]}"
 
-      # Derive the release project from the tag name.
-      # Tag ppg/17.9-1      → product=ppg, version=17.9-1, major=17 → ppg:releases:17
-      # Tag ppg/common-3 → product=ppg, version=common-3, name=common
-      #                  → ppg:releases:common (counter-tagged cross-version project)
-      - name: Derive release project
-        id: release-info
+      # Tag ppg/17.9-1   → ppg:releases:17 ; tag ppg/common-3 → ppg:releases:common
+      - name: Release every tag from the pre-release
+        shell: bash
         run: |
-          TAG="${{ inputs.tag }}"
-          PRODUCT="${TAG%%/*}"
-          VERSION="${TAG#*/}"
-          case "$VERSION" in
-            [0-9]*) MAJOR_VERSION="${VERSION%%.*}" ;;
-            *)      MAJOR_VERSION="${VERSION%-*}" ;;
-          esac
-          RELEASE_PROJECT="${PRODUCT}:releases:${MAJOR_VERSION}"
-          RELEASE_ID="${VERSION}"
-          echo "release_project=$RELEASE_PROJECT" >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "product=$PRODUCT" >> "$GITHUB_OUTPUT"
-          echo "major_version=$MAJOR_VERSION" >> "$GITHUB_OUTPUT"
-          echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          for TAG in ${{ inputs.tags }}; do
+            PRODUCT="${TAG%%/*}"; VERSION="${TAG#*/}"
+            case "$VERSION" in
+              [0-9]*) MAJOR="${VERSION%%.*}" ;;
+              *)      MAJOR="${VERSION%-*}" ;;
+            esac
+            PROJECT="${PRODUCT}:releases:${MAJOR}"
+            FROM="${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}:${PROJECT}"
+            echo "== sync release ${PROJECT} --from ${FROM}  (${TAG})"
+            venv/bin/python -m percona_obs -P main sync release "$PROJECT" --from "$FROM"
+          done
 
-      - name: Release to OBS
-        run: |
-          venv/bin/python -m percona_obs -P main \
-            sync release "${{ steps.release-info.outputs.release_project }}"
-
-  unlock:
-    name: Release the lock and publish the GitHub release
-    needs: [lock, release]
-    # always(): the lock must be reported on (and the GitHub release skipped)
-    # even when a release leg failed or was cancelled.  Guarded on the lock
-    # having been taken -- nothing to hand back otherwise.
-    # needs.release.result is the aggregate over all instance legs, so one
-    # failed leg keeps the lock held for every instance.
-    if: always() && needs.lock.result == 'success'
+  finalize:
+    name: Publish GitHub releases and delete the pre-release
+    needs: [validate, release]
+    if: always() && needs.validate.result == 'success'
     runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     permissions:
       contents: write
-      # Required to re-enable sync-main.yml.
-      actions: write
-
+      packages: read
     steps:
-      # The CHANGELOG section for the GitHub release lives in the tagged tree.
       - uses: actions/checkout@v4
         with:
-          ref: refs/tags/${{ inputs.tag }}
+          ref: refs/tags/${{ needs.validate.outputs.first_tag }}
           fetch-depth: 0
 
-      # Same derivation as in the release job; only tag/product/major/
-      # release_id are used here.
-      - name: Derive release project
-        id: release-info
+      - name: Report a failed copy
+        if: needs.release.result != 'success'
         run: |
-          TAG="${{ inputs.tag }}"
-          PRODUCT="${TAG%%/*}"
-          VERSION="${TAG#*/}"
-          case "$VERSION" in
-            [0-9]*) MAJOR_VERSION="${VERSION%%.*}" ;;
-            *)      MAJOR_VERSION="${VERSION%-*}" ;;
-          esac
-          RELEASE_PROJECT="${PRODUCT}:releases:${MAJOR_VERSION}"
-          RELEASE_ID="${VERSION}"
-          echo "release_project=$RELEASE_PROJECT" >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "product=$PRODUCT" >> "$GITHUB_OUTPUT"
-          echo "major_version=$MAJOR_VERSION" >> "$GITHUB_OUTPUT"
-          echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
+          echo "::error::sync release --from failed on at least one instance; the pre-release of PR #${{ inputs.pr_number }} was KEPT. Fix the cause and re-dispatch: gh workflow run obs-release.yml -f pr_number=${{ inputs.pr_number }} -f tags=\"${{ inputs.tags }}\""
+          exit 1
 
-      # Create a GitHub release with the CHANGELOG section for this release-id.
-      # Idempotent: if the release already exists (re-run), update its notes.
-      - name: Create GitHub release
-        if: needs.release.result == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="${{ steps.release-info.outputs.tag }}"
-          RELEASE_ID="${{ steps.release-info.outputs.release_id }}"
-          CHANGELOG="root/${{ steps.release-info.outputs.product }}/releases/${{ steps.release-info.outputs.major_version }}/CHANGELOG.md"
-          BODY=$(python3 -c \
-            "import re,sys; content=open(sys.argv[2]).read(); m=re.search(r'(## \['+re.escape(sys.argv[1])+r'\].*?)(?=\n## \[|\Z)',content,re.DOTALL); print(m.group(1).strip() if m else '')" \
-            "$RELEASE_ID" "$CHANGELOG" 2>/dev/null || true)
-          gh release create "$TAG" \
-            --title "$TAG" \
-            --notes "${BODY:-No changelog available.}" \
-          || gh release edit "$TAG" \
-            --notes "${BODY:-No changelog available.}"
-
-      # Release the lock. Only if no other release run is still queued or
-      # in-progress: a manual re-dispatch, or a second release-PR merge while
-      # this run was still going, can leave another obs-release run waiting
-      # on the same "sync-main-sync" concurrency group, and re-enabling
-      # sync-main here would open the window this whole lock exists to close
-      # for that run's duration. Enable before dispatching: a disabled
-      # workflow cannot be run with `gh workflow run`.
-      - name: Release the lock (re-enable sync-main)
-        if: needs.release.result == 'success'
+      # Idempotent: an existing release (re-run) gets its notes updated.
+      - name: Create GitHub releases
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          # Any non-terminal status counts, not just "queued"/"in_progress":
-          # the runs API also reports "pending" (notably for a run held by
-          # the concurrency group — exactly where a second release sits),
-          # "waiting" and "requested". Missing one of those would re-enable
-          # sync-main and dispatch a catch-up sync ahead of a release that
-          # hasn't run yet.
-          OTHERS=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/obs-release.yml/runs?per_page=100" \
-            --jq "[.workflow_runs[]
-                   | select(.status != \"completed\")
-                   | select(.id != ${{ github.run_id }})] | length")
-          if [ "$OTHERS" -gt 0 ]; then
-            echo "::notice::${OTHERS} further release run(s) pending — handing the lock over, sync-main stays disabled"
-            exit 0
-          fi
-          gh workflow enable sync-main.yml
-          echo "::notice::sync-main re-enabled; dispatching a catch-up sync"
-          gh workflow run sync-main.yml --ref main
+          for TAG in ${{ inputs.tags }}; do
+            PRODUCT="${TAG%%/*}"; VERSION="${TAG#*/}"
+            case "$VERSION" in
+              [0-9]*) MAJOR="${VERSION%%.*}" ;;
+              *)      MAJOR="${VERSION%-*}" ;;
+            esac
+            CHANGELOG="root/${PRODUCT}/releases/${MAJOR}/CHANGELOG.md"
+            BODY=$(python3 -c \
+              "import re,sys; content=open(sys.argv[2]).read(); m=re.search(r'(## \['+re.escape(sys.argv[1])+r'\].*?)(?=\n## \[|\Z)',content,re.DOTALL); print(m.group(1).strip() if m else '')" \
+              "$VERSION" "$CHANGELOG" 2>/dev/null || true)
+            gh release create "$TAG" --title "$TAG" --notes "${BODY:-No changelog available.}" \
+              || gh release edit "$TAG" --notes "${BODY:-No changelog available.}"
+          done
 
-      # Make a held (or unexpectedly released) lock impossible to miss. The
-      # previous step can itself fail after already re-enabling sync-main
-      # (e.g. the catch-up dispatch fails), so this must read the actual
-      # state rather than assert it — otherwise the annotation can claim the
-      # lock is held when it has in fact been released.
-      #
-      # This covers a release cancelled mid-run; it cannot cover a run
-      # cancelled while still pending in the concurrency group, because no
-      # step of that run ever executes and this step never runs either.
-      # That case is called out in the header comment instead.
-      # `|| failure()`: the lock-release step above can itself fail after
-      # the release legs succeeded (e.g. the catch-up dispatch fails), and
-      # that case needs the annotation just as much.
-      - name: Report lock state on failure or cancellation
-        if: needs.release.result != 'success' || failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
+  # The pre-release has done its job on every instance: one leg per
+  # OBS_INSTANCES entry, each with its own credentials (same shape as
+  # obs-pr-cleanup.yml's delete job).  Only after every copy succeeded and
+  # the GitHub releases exist.
+  delete:
+    name: Delete the pre-release (${{ matrix.instance.name }})
+    needs: [validate, release, finalize]
+    if: needs.release.result == 'success' && needs.finalize.result == 'success'
+    runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: ${{ fromJSON(vars.OBS_INSTANCES) }}
+    permissions:
+      packages: read
+    env:
+      PR_NUMBER: ${{ inputs.pr_number }}
+      OBS_APIURL: ${{ matrix.instance.apiurl }}
+      OBS_PR_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/obs-setup
+        with:
+          obs-apiurl: ${{ matrix.instance.apiurl }}
+          obs-user: ${{ matrix.instance.user || vars.OBS_USER }}
+          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance.name)] }}
+      - name: Create percona-obs profile
         run: |
-          set -euo pipefail
-          STATE=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/sync-main.yml" --jq .state || echo "unknown")
-          if [ "$STATE" = "active" ]; then
-            echo "::error::Release failed or was cancelled, and sync-main is ACTIVE (the lock was already released before this happened, e.g. a failed catch-up dispatch). Check whether staging was re-synced with the wrong release counter."
-          elif [ -z "$STATE" ] || [ "$STATE" = "unknown" ]; then
-            echo "::error::Release failed or was cancelled and sync-main's state could not be determined. Check it manually: gh api repos/${GITHUB_REPOSITORY}/actions/workflows/sync-main.yml --jq .state"
-          else
-            echo "::error::Release failed or was cancelled and sync-main is still DISABLED (state: ${STATE}). Staging must not be re-synced until this release succeeds, or the release counter will retag staging images before they are released. Disabling only blocks NEW triggers — a sync-main run already in progress or already pending in the concurrency group will still run once this job ends, so you may also need to cancel that run. Re-run this workflow once the cause is fixed, or re-enable manually with: gh workflow enable sync-main.yml"
-          fi
+          venv/bin/python -m percona_obs -A "$OBS_APIURL" -R "${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}" \
+            -e "REMOTE_OBS_ORG_INTERCONNECT:" -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
+            -e "PERCONA_OBS_PACKAGING_REPO:${{ github.server_url }}/${{ github.repository }}.git" \
+            profile create "pr-${PR_NUMBER}"
+      - name: Delete the pre-release project tree
+        run: |
+          venv/bin/python -m percona_obs --verbose -P "pr-${PR_NUMBER}" \
+            sync delete --yes --recursive --from-obs
