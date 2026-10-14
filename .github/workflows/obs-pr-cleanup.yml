@@ -8,9 +8,14 @@ name: OBS PR Cleanup
 #     for the default token, and this repo has no PAT).
 #   - every PR: delete the PR-specific OBS project created by
 #     obs-pr-check.yml (no-op if it never existed) and the PR's Actions caches.
+#     A merged release PR's project tree is kept: it is the pre-release that
+#     obs-release.yml copies from, and obs-release.yml deletes it after a
+#     successful final copy.
 #
-# Two jobs: `release-dispatch` runs once per PR (release detection, tagging,
-# the obs-release dispatch with its sync-main lock, and cache deletion), while
+# Two jobs: `release-dispatch` runs once per PR (release detection, tagging
+# and ONE obs-release dispatch per PR with pr_number + all tags -- no lock: the
+# released binaries sit in the pre-release, not in staging -- and cache
+# deletion), while
 # `delete` runs once per entry of the `OBS_INSTANCES` repository variable —
 # every instance holds its own PR project under its own pr_rootprj and
 # authenticates with its own secret `OBS_PASSWORD_<NAME>`.
@@ -26,6 +31,8 @@ jobs:
     name: Tag release and dispatch obs-release
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    outputs:
+      is_release_pr: ${{ steps.detect.outputs.is_release_pr }}
     permissions:
       # Required to create release tags on the merge commit.
       contents: write
@@ -87,52 +94,7 @@ jobs:
           FILES=$(gh pr view "$PR_NUMBER" --json files \
             --jq '.files[].path | select(test("^root/[^/]+/releases/[^/]+/release\\.yaml$"))' | sort -u)
           [ -z "$FILES" ] && { echo "No release.yaml changed; nothing to tag."; exit 0; }
-
-          # PPG_RELEASE is one plus the release count in release.yaml, so the
-          # instant this PR's tag commit lands, git already reports the NEXT
-          # counter while staging still holds artifacts built under the
-          # current one. Take an exclusive lock on staging before dispatching
-          # any release: disable sync-main so it cannot re-render staging
-          # container Dockerfiles (and get them rebuilt with the next
-          # counter) while obs-release.yml is still copying the current
-          # artifacts out. This happens ONCE before the loop, not per
-          # iteration — a PR can touch more than one release.yaml, and a
-          # per-iteration disable/re-enable would let a later iteration's
-          # failure-handler re-enable sync-main while an earlier iteration's
-          # dispatched release is still running.
-          #
-          # Arm the trap first, before disabling the workflow: with the flag
-          # still false and sync-main still enabled, an early trap invocation
-          # (if the disable fails) is a safe no-op. If we disables first and
-          # the verification read fails, set -e exits without a trap installed,
-          # leaving the lock held with nothing running.
-          DISPATCHED_ANY=false
-          # The lock must never outlive this step unless a release actually took it
-          # over.  An EXIT trap covers every way out: tag creation failing, a pipeline
-          # aborting under pipefail, or simply finding no tag to dispatch.
-          release_lock_if_unused() {
-            if [ "$DISPATCHED_ANY" = "false" ]; then
-              echo "::warning::No release was dispatched — releasing the sync-main lock"
-              if ! gh workflow enable sync-main.yml; then
-                echo "::error::Failed to re-enable sync-main. Re-enable it manually: gh workflow enable sync-main.yml"
-              fi
-            fi
-          }
-          trap release_lock_if_unused EXIT
-
-          # The disable call itself succeeds whether or not sync-main was
-          # already disabled, so verify the resulting state instead of
-          # trusting the exit code — a permissions error or a renamed
-          # workflow file must not let releases be dispatched believing the
-          # lock is held when it is not.
-          gh workflow disable sync-main.yml
-          STATE=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/sync-main.yml" --jq .state)
-          if [ "$STATE" = "active" ]; then
-            echo "::error::Failed to take the release lock: sync-main is still active"
-            exit 1
-          fi
-          echo "Release lock taken: sync-main state is ${STATE}"
-
+          TAGS=""
           while IFS= read -r release_file; do
             TAG=$(git show "${MERGE_SHA}:${release_file}" | venv/bin/python3 -c \
               "import sys,yaml; d=yaml.safe_load(sys.stdin); r=d.get('releases') or []; last=r[-1] if r else d.get('revision') or ''; print(last.get('tag','') if isinstance(last, dict) else last)")
@@ -147,26 +109,14 @@ jobs:
                 exit 1
               fi
             fi
-            echo "Dispatching obs-release.yml with tag=${TAG}"
-            # Capture the dispatch exit status instead of letting `set -e`
-            # abort immediately: on failure we must decide whether to
-            # release the lock, which depends on whether an earlier
-            # iteration's dispatch already succeeded and is running.
-            if ! gh workflow run obs-release.yml --ref main -f "tag=${TAG}"; then
-              if [ "$DISPATCHED_ANY" = "true" ]; then
-                echo "::warning::Failed to dispatch obs-release.yml for tag ${TAG}, but an earlier release from this PR is running — a release is running and holds the lock, leaving sync-main disabled"
-              else
-                echo "::error::Failed to dispatch obs-release.yml for tag ${TAG}"
-              fi
-              exit 1
-            fi
-            # If the job is cancelled after gh workflow run succeeds but before
-            # this flag is set, the EXIT trap re-enables sync-main while the
-            # dispatched release is starting. The window spans only this HTTP
-            # call and only on cancellation, not worth code to fix, but worth
-            # documenting.
-            DISPATCHED_ANY=true
+            TAGS="${TAGS:+$TAGS }${TAG}"
           done <<< "$FILES"
+          [ -z "$TAGS" ] && { echo "No tag derived; nothing to dispatch."; exit 0; }
+          echo "Dispatching obs-release.yml with pr_number=${PR_NUMBER} tags=${TAGS}"
+          if ! gh workflow run obs-release.yml --ref main -f "pr_number=${PR_NUMBER}" -f "tags=${TAGS}"; then
+            echo "::error::Failed to dispatch obs-release.yml. Run manually: gh workflow run obs-release.yml -f pr_number=${PR_NUMBER} -f tags=\"${TAGS}\""
+            exit 1
+          fi
 
       # Delete this PR's Actions caches (created by obs-pr-check.yml on the
       # refs/pull/N/merge ref).  Caches on PR merge refs can never be
@@ -187,10 +137,16 @@ jobs:
           done
 
   # One leg per OBS instance: each holds its own PR project and credentials.
-  # Independent of release-dispatch — a failed tag or dispatch must not leave
-  # PR projects behind.
+  # Runs after release-dispatch (for is_release_pr) but with always(): a failed
+  # tag or dispatch must not leave PR projects behind.
+  #
+  # A merged release PR's project tree is the pre-release obs-release.yml copies
+  # from; obs-release.yml deletes it after a successful final copy. Closed-
+  # unmerged release PRs are cleaned here like any PR.
   delete:
     name: Delete PR OBS project (${{ matrix.instance.name }})
+    needs: [release-dispatch]
+    if: ${{ always() && !(github.event.pull_request.merged == true && needs.release-dispatch.outputs.is_release_pr == 'true') }}
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     strategy:
