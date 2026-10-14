@@ -24,9 +24,9 @@ jobs:
   # detect-qa-matrix: discover QA-enabled OBS subprojects, once per entry of
   # the `OBS_INSTANCES` repository variable.  Each leg scans only its own
   # instance's PR project and uploads its share of the matrix as an artifact;
-  # `merge-qa-matrix` concatenates them.  Once
-  # the merge finishes, the `qa` matrix job's check runs appear in the PR's
-  # check list as queued, signalling the upcoming QA work.
+  # `merge-qa-matrix` concatenates them.  Once the merge finishes, the `qa`
+  # matrix job's check runs appear in the PR's check list as queued,
+  # signalling the upcoming QA work.
   #
   # An instance may carry `qa_types` (a comma-separated subset of
   # packages,containers) to declare which QA kinds live on it; the requested
@@ -85,8 +85,8 @@ jobs:
               <<<"$INSTANCE_ENV" >> .profile/ci.yaml
           fi
 
-      # Build QA_TYPES from the qa-packages / qa-containers labels, then
-      # intersect with this instance's declared `qa_types` (when non-empty).
+      # Start from the requested QA kinds (the `qa_types` input), then
+      # intersect with the instance's own declared `qa_types` field (when non-empty).
       # An empty intersection means this instance hosts none of the requested
       # QA kinds, so its discovery is skipped entirely.
       - name: Resolve QA type filter
