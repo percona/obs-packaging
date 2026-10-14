@@ -1179,7 +1179,7 @@ def _obs_data(**kw):
     return cmd_project._ReleaseObsData(**base)
 
 
-def test_merge_release_obs_data_union_first_wins():
+def test_merge_release_obs_data_union_source_first_wins():
     boo = _obs_data(
         source_versions={"percona-postgresql": "18.6-1", "shared": "1.0-1"},
         release_versions={"percona-postgresql": "18.4-1", "h3 (extras)": "4.5.0-1"},
@@ -1204,9 +1204,10 @@ def test_merge_release_obs_data_union_first_wins():
         "shared": "1.0-1",
         "h3 (extras)": "4.6.0-1",
     }
+    # h3's source comes from labs, so its release version does too.
     assert merged.release_versions == {
         "percona-postgresql": "18.4-1",
-        "h3 (extras)": "4.5.0-1",
+        "h3 (extras)": "9.9.9-1",
         "labs-only": "2.0-1",
     }
     # Same image on both instances: no clash error, first wins.
@@ -1301,7 +1302,6 @@ def test_collect_release_obs_data_single_instance(tmp_path, monkeypatch):
         "http://obs",
         "R",
         "ppg:staging:17",
-        src,
         "ppg:releases:17",
         ["tarballs"],
         ["containers"],
@@ -1339,7 +1339,6 @@ def test_collect_release_obs_data_release_project_missing(tmp_path, monkeypatch)
         "http://obs",
         "R",
         "ppg:staging:17",
-        src,
         "ppg:releases:17",
         [],
         ["containers"],
@@ -1367,3 +1366,54 @@ def test_also_profile_cli_option():
     assert args.also_profiles == ["labsmain", "other"]
     args = build_parser().parse_args(["project", "release", "ppg:staging:18"])
     assert args.also_profiles == []
+
+
+def test_merge_release_obs_data_pairs_release_with_source_instance(tmp_path):
+    # Real h3 shape: boo's release project holds a stale copy, the source
+    # (and the current release) live on labs only.
+    boo = _obs_data(source_versions={}, release_versions={"h3 (extras)": "4.4.0-1"})
+    labs = _obs_data(
+        source_versions={"h3 (extras)": "4.5.0-1"},
+        release_versions={"h3 (extras)": "4.5.0-1"},
+    )
+    merged = cmd_project._merge_release_obs_data([boo, labs])
+    assert merged.source_versions == {"h3 (extras)": "4.5.0-1"}
+    assert merged.release_versions == {"h3 (extras)": "4.5.0-1"}
+    src = tmp_path / "staging18"
+    src.mkdir()
+    section = cmd_project._build_changelog_section(
+        "18.6-1", merged.source_versions, merged.release_versions, src
+    )
+    assert "h3 (extras)" not in section
+
+
+def test_merge_release_obs_data_source_owner_without_release_entry():
+    # The owning instance has no release entry: the key is new there, the
+    # other instance's stale release copy is not borrowed.
+    boo = _obs_data(source_versions={}, release_versions={"h3 (extras)": "4.4.0-1"})
+    labs = _obs_data(source_versions={"h3 (extras)": "4.5.0-1"}, release_versions={})
+    merged = cmd_project._merge_release_obs_data([boo, labs])
+    assert merged.release_versions == {}
+
+
+def test_merge_release_obs_data_removal_candidate_first_wins():
+    a = _obs_data(release_versions={"gone": "1.0-1"})
+    b = _obs_data(release_versions={"gone": "2.0-1"})
+    merged = cmd_project._merge_release_obs_data([a, b])
+    assert merged.source_versions == {}
+    assert merged.release_versions == {"gone": "1.0-1"}
+
+
+def test_merge_release_obs_data_pairs_container_lists():
+    boo = _obs_data(release_container_pkgs={"img (ubi9)": {"pg": "stale"}})
+    labs = _obs_data(
+        source_container_pkgs={"img (ubi9)": {"pg": "18.6-1"}},
+        release_container_pkgs={"img (ubi9)": {"pg": "18.4-1"}},
+    )
+    other = _obs_data(release_container_pkgs={"old (ubi8)": {"pg": "1"}})
+    merged = cmd_project._merge_release_obs_data([boo, labs, other])
+    assert merged.source_container_pkgs == {"img (ubi9)": {"pg": "18.6-1"}}
+    assert merged.release_container_pkgs == {
+        "img (ubi9)": {"pg": "18.4-1"},
+        "old (ubi8)": {"pg": "1"},
+    }
