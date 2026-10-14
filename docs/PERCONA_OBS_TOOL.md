@@ -1069,7 +1069,17 @@ to override the arithmetic.
 
 # Name the source commit explicitly (skips the gh lookup)
 ./percona-obs -P local project release ppg:staging:17 --source-commit <sha>
+
+# Release spans two OBS instances: also query the labs instance (repeatable)
+./percona-obs -P isv project release ppg:staging:18 --also-profile labsmain
 ```
+
+`--also-profile NAME` (repeatable) adds another profile's OBS instance to the CHANGELOG
+queries. Production instances hold disjoint slices of a release (build.opensuse.org has
+most packages, labs has the UBI repos and container images), so the CHANGELOG is built
+from the union of package versions and image lists across all instances (the `-P`
+profile wins on a clash), and a package whose directory is still in the source tree is
+never reported as removed.
 
 Before cutting, run `git fetch --tags` (or `git fetch percona --tags`): the open-release
 detection below reads local git tags and also consults the remote
@@ -1117,7 +1127,8 @@ error. `project release <source-project>` does the following:
    and `ubi9` as distinct entries); the previous-release image diff is queried from
    whichever project actually holds the previous release's images, producing real
    `prev → new` diffs instead of full package dumps (a full dump remains only for a true
-   first release).
+   first release). With `--also-profile`, every instance is queried and the results are
+   merged.
 7. **Appends** a `{tag, source_commit}` entry to `release.yaml`'s `releases:` list (or
    updates the open one) and prepends the new section to `CHANGELOG.md` (or replaces the
    open one's).

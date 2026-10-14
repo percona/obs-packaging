@@ -1163,3 +1163,207 @@ def test_extract_upstream_info_plain_service_unchanged(tmp_path):
         "https://github.com/o/r.git",
         "v1.0",
     )
+
+
+# --- multi-instance CHANGELOG inputs (--also-profile) -----------------------
+
+
+def _obs_data(**kw):
+    base = dict(
+        source_versions={},
+        release_versions=None,
+        source_container_pkgs={},
+        release_container_pkgs={},
+    )
+    base.update(kw)
+    return cmd_project._ReleaseObsData(**base)
+
+
+def test_merge_release_obs_data_union_first_wins():
+    boo = _obs_data(
+        source_versions={"percona-postgresql": "18.6-1", "shared": "1.0-1"},
+        release_versions={"percona-postgresql": "18.4-1", "h3 (extras)": "4.5.0-1"},
+        source_container_pkgs={"img (ubi9)": {"pg": "18.6-1"}},
+        release_container_pkgs={"img (ubi9)": {"pg": "18.4-1"}},
+    )
+    labs = _obs_data(
+        source_versions={"h3 (extras)": "4.6.0-1", "shared": "9.9-1"},
+        release_versions={"h3 (extras)": "9.9.9-1", "labs-only": "2.0-1"},
+        source_container_pkgs={
+            "img (ubi9)": {"pg": "other"},
+            "img (ubi8)": {"pg": "18.6-1"},
+        },
+        release_container_pkgs={
+            "img (ubi9)": {"pg": "other"},
+            "img (ubi8)": {"pg": "18.4-1"},
+        },
+    )
+    merged = cmd_project._merge_release_obs_data([boo, labs])
+    assert merged.source_versions == {
+        "percona-postgresql": "18.6-1",
+        "shared": "1.0-1",
+        "h3 (extras)": "4.6.0-1",
+    }
+    assert merged.release_versions == {
+        "percona-postgresql": "18.4-1",
+        "h3 (extras)": "4.5.0-1",
+        "labs-only": "2.0-1",
+    }
+    # Same image on both instances: no clash error, first wins.
+    assert merged.source_container_pkgs == {
+        "img (ubi9)": {"pg": "18.6-1"},
+        "img (ubi8)": {"pg": "18.6-1"},
+    }
+    assert merged.release_container_pkgs == {
+        "img (ubi9)": {"pg": "18.4-1"},
+        "img (ubi8)": {"pg": "18.4-1"},
+    }
+
+
+def test_merge_release_obs_data_release_versions_none_rules():
+    assert (
+        cmd_project._merge_release_obs_data([_obs_data(), _obs_data()]).release_versions
+        is None
+    )
+    merged = cmd_project._merge_release_obs_data(
+        [_obs_data(), _obs_data(release_versions={"a": "1-1"})]
+    )
+    assert merged.release_versions == {"a": "1-1"}
+    merged = cmd_project._merge_release_obs_data(
+        [_obs_data(release_versions={}), _obs_data()]
+    )
+    assert merged.release_versions == {}
+
+
+def test_changelog_skips_removed_when_pkg_still_in_tree(tmp_path, capsys):
+    src = tmp_path / "staging18"
+    _write_obs_service(
+        src / "extras" / "h3" / "obs" / "_service",
+        "https://github.com/uber/h3.git",
+    )
+    section = cmd_project._build_changelog_section(
+        "18.6-1",
+        {"percona-postgresql": "18.6-1"},
+        {"percona-postgresql": "18.4-1", "h3 (extras)": "4.5.0-1"},
+        src,
+    )
+    assert "### Removed" not in section
+    assert "h3 (extras)" not in section
+    err = capsys.readouterr().err
+    assert (
+        "warning: h3 (extras): not found on any queried OBS instance but still "
+        "in the tree; not reported as removed"
+    ) in err
+
+
+def test_changelog_reports_removed_when_pkg_gone_from_tree(tmp_path, capsys):
+    src = tmp_path / "staging18"
+    (src / "extras").mkdir(parents=True)
+    section = cmd_project._build_changelog_section(
+        "18.6-1",
+        {"percona-postgresql": "18.6-1"},
+        {"percona-postgresql": "18.4-1", "h3 (extras)": "4.5.0-1"},
+        src,
+    )
+    assert "### Removed" in section
+    assert "- h3 (extras): removed (was 4.5.0)" in section
+    assert "not reported as removed" not in capsys.readouterr().err
+
+
+def test_collect_release_obs_data_single_instance(tmp_path, monkeypatch):
+    src = _staging_tree(tmp_path)
+    versions = {
+        "R:ppg:staging:17": {"percona-postgresql17": "17.11-1"},
+        "R:ppg:staging:17:tarballs": {"tarball": "17.11-1"},
+        "R:ppg:releases:17": {"percona-postgresql17": "17.10-1"},
+        "R:ppg:releases:17:tarballs": {"tarball": "17.10-1"},
+    }
+    calls: list = []
+
+    def fake_versions(apiurl, prj):
+        calls.append((apiurl, prj))
+        return dict(versions.get(prj, {}))
+
+    monkeypatch.setattr(cmd_project, "_fetch_project_pkg_versions", fake_versions)
+    monkeypatch.setattr(cmd_project, "_obs_project_exists", lambda a, p: True)
+    monkeypatch.setattr(
+        cmd_project,
+        "_fetch_subproject_container_pkgs",
+        lambda a, sub, root, parent: {f"img ({sub.rsplit(':', 1)[-1]})": {"pg": sub}},
+    )
+    monkeypatch.setattr(
+        cmd_project,
+        "_fetch_obs_subproject_names",
+        lambda a, p: {f"{p}:containers"},
+    )
+
+    data = cmd_project._collect_release_obs_data(
+        "http://obs",
+        "R",
+        "ppg:staging:17",
+        src,
+        "ppg:releases:17",
+        ["tarballs"],
+        ["containers"],
+        is_first_release=False,
+        prev_release_id="17.10-1",
+    )
+    assert data.source_versions == {
+        "percona-postgresql17": "17.11-1",
+        "tarball (tarballs)": "17.11-1",
+    }
+    assert data.release_versions == {
+        "percona-postgresql17": "17.10-1",
+        "tarball (tarballs)": "17.10-1",
+    }
+    assert data.source_container_pkgs == {
+        "img (containers)": {"pg": "R:ppg:staging:17:containers"}
+    }
+    assert data.release_container_pkgs == {
+        "img (containers)": {"pg": "R:ppg:releases:17:containers"}
+    }
+    assert all(a == "http://obs" for a, _ in calls)
+
+
+def test_collect_release_obs_data_release_project_missing(tmp_path, monkeypatch):
+    src = _staging_tree(tmp_path)
+    monkeypatch.setattr(
+        cmd_project, "_fetch_project_pkg_versions", lambda a, p: {"x": "1-1"}
+    )
+    monkeypatch.setattr(cmd_project, "_obs_project_exists", lambda a, p: False)
+    monkeypatch.setattr(
+        cmd_project, "_fetch_subproject_container_pkgs", lambda a, s, r, p: {}
+    )
+    monkeypatch.setattr(cmd_project, "_fetch_obs_subproject_names", lambda a, p: set())
+    data = cmd_project._collect_release_obs_data(
+        "http://obs",
+        "R",
+        "ppg:staging:17",
+        src,
+        "ppg:releases:17",
+        [],
+        ["containers"],
+        is_first_release=False,
+        prev_release_id="17.10-1",
+    )
+    assert data.release_versions is None
+    assert data.source_versions == {"x": "1-1"}
+
+
+def test_also_profile_cli_option():
+    from percona_obs.cli import build_parser
+
+    args = build_parser().parse_args(
+        [
+            "project",
+            "release",
+            "ppg:staging:18",
+            "--also-profile",
+            "labsmain",
+            "--also-profile",
+            "other",
+        ]
+    )
+    assert args.also_profiles == ["labsmain", "other"]
+    args = build_parser().parse_args(["project", "release", "ppg:staging:18"])
+    assert args.also_profiles == []

@@ -904,6 +904,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Commit of main whose staging tree is released (default: head of the "
         "last sync-main run with successful sync jobs, via gh). Recorded in release.yaml.",
     )
+    project_release_parser.add_argument(
+        "--also-profile",
+        metavar="NAME",
+        action="append",
+        default=[],
+        dest="also_profiles",
+        help="Additional percona-obs profile whose OBS instance also holds part of "
+        "the release (repeatable); versions and image lists are merged across "
+        "instances, the first wins on a clash.",
+    )
     project_release_parser.set_defaults(func=cmd_project_release)
 
     return parser
