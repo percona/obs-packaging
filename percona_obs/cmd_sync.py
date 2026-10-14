@@ -26,6 +26,7 @@ from .cmd_project import (
     _validate_project_path_refs,
     _validate_subproject_refs,
 )
+from . import common
 from .common import (
     REPO_ROOT,
     _REPO_DIR,
@@ -2749,13 +2750,24 @@ def _scope_local_paths(
     rootprj: str,
 ) -> "list[Path]":
     """Local git paths whose content decides the released binaries: the
-    source tree, its macros chain, every whole-frozen project and every
-    aggregate-frozen package."""
+    source tree, its macros chain, the product's release record for this
+    major, every whole-frozen project and every aggregate-frozen package."""
     paths: list[Path] = [source_path, *_macros_chain_files(source_path)]
 
     def _add(path: Path) -> None:
         if path not in paths:
             paths.append(path)
+
+    # PPG_RELEASE is computed from <product>/releases/<major>/release.yaml
+    # (common.inject_computed_macros), so a change to it changes the staging
+    # container images.  After a release PR merges, main's copy differs from
+    # source_commit and a repopulate must fail.  The file may not exist: it is
+    # only a git pathspec.
+    if source_path.is_relative_to(common.REPO_ROOT):
+        product = source_path.relative_to(common.REPO_ROOT).parts[0]
+        _add(
+            common.REPO_ROOT / product / "releases" / source_path.name / "release.yaml"
+        )
 
     project_dirs = [source_path]
     for prj in freeze_scope:

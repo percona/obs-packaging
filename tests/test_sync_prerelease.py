@@ -137,6 +137,11 @@ def test_happy_path_order(tmp_path, monkeypatch):
 
 
 def test_marker_not_written_when_copy_fails(tmp_path, monkeypatch):
+    """The top-level mirror meta (which rewrites the description and drops any
+    previous source_commit marker) is applied before anything is frozen or
+    copied.  A failed repopulate therefore leaves no valid marker: the meta
+    apply already removed the old one and the new one is only written after a
+    successful copy."""
     src, rel = _tree_with_record(tmp_path, monkeypatch)
     calls = []
     _wire(monkeypatch, src, rel, calls)
@@ -150,6 +155,9 @@ def test_marker_not_written_when_copy_fails(tmp_path, monkeypatch):
     assert "restore" in calls and not any(
         c[0] == "marker" for c in calls if isinstance(c, tuple)
     )
+    top_meta = ("meta", "home:Admin:PR:pr-5:ppg:releases:17", True)
+    assert top_meta in calls and "drain" in calls
+    assert calls.index(top_meta) < calls.index("drain")
 
 
 def test_dry_run_checks_only(tmp_path, monkeypatch):
@@ -184,6 +192,15 @@ def test_scope_local_paths_maps_obs_names_back(tmp_path, monkeypatch):
     assert any(p.name == "macros.yaml" for p in paths)
     assert src.parent / "project.yaml" in paths
     assert src.parents[1] / "project.yaml" in paths
+
+
+def test_scope_local_paths_includes_release_record(tmp_path, monkeypatch):
+    """PPG_RELEASE is computed from <product>/releases/<major>/release.yaml,
+    so the record is part of what decides the staging container images."""
+    src, rel = _tree_with_record(tmp_path, monkeypatch)
+    assert src == tmp_path / "root/ppg/staging/17"
+    paths = cmd_sync._scope_local_paths(src, [], {}, "home:Admin")
+    assert tmp_path / "root/ppg/releases/17/release.yaml" in paths
 
 
 def test_shared_symlink_target_edit_is_detected(tmp_path, monkeypatch):
