@@ -7,9 +7,7 @@ name: OBS PR Check
 #
 # Job DAG:
 #
-#   resolve ──> sync ──┬──> build ───────────────────────────────────────┐
-#                      │                                                  │
-#                      └──> detect-qa-matrix ──> merge-qa-matrix ─────────┴──> qa  (matrix)
+#   resolve ──> sync ──> build ──> qa  (reusable workflow: qa-fanout.yml)
 #
 # `resolve` fetches PR context from the GitHub API and gates the DAG on the
 # presence of a trigger label so that non-trigger events produce no check runs.
@@ -18,9 +16,9 @@ name: OBS PR Check
 # `sync` job's `if:` opens on either condition, so an unlabeled release PR
 # still gets a real `sync release --dry-run` against production.  `build`
 # and `qa` stay gated as before (they already skip on is_release_pr).
-# `detect-qa-matrix` runs in parallel with `build`; the `qa` matrix combos
-# show up in the PR's check list as queued check runs as soon as detect
-# finishes, so the upcoming QA work is visible while OBS is still building.
+# `qa` calls the reusable qa-fanout.yml (detect-qa-matrix -> merge-qa-matrix
+# -> qa matrix) once `build` succeeded; its per-combo check runs appear in the
+# PR's check list when discovery finishes.
 #
 # For `labeled` events the `resolve` job runs only when the label that was just
 # added is a trigger label (obs-sync, qa-packages, qa-containers).  Control-only
@@ -37,7 +35,7 @@ name: OBS PR Check
 # own PR comment (see post_pr_comment.py's per-instance marker).  Repo
 # labels only ever narrow an instance's slice, never widen it; a leg left
 # with no repository at all skips its sync steps and posts no comment.
-# `detect-qa-matrix` is matrixed the same way: each leg discovers the QA
+# qa-fanout.yml's `detect-qa-matrix` is matrixed the same way: each leg discovers the QA
 # combos of its own instance's PR project (narrowed by that instance's
 # optional `qa_types` field), `merge-qa-matrix` concatenates the shares and
 # stamps each combo with the instance that found it, and `qa` fans out over
@@ -87,6 +85,7 @@ jobs:
       labels_json:      ${{ steps.ctx.outputs.labels_json }}
       has_trigger_label: ${{ steps.ctx.outputs.has_trigger_label }}
       is_release_pr:    ${{ steps.release.outputs.is_release_pr }}
+      qa_types:         ${{ steps.ctx.outputs.qa_types }}
     steps:
       - name: Fetch PR context
         id: ctx
@@ -99,12 +98,16 @@ jobs:
           CLONE_URL=$(echo "$DATA" | jq -r '.head.repo.clone_url')
           LABELS=$(echo "$DATA" | jq -c '[.labels[].name]')
           HAS_TRIGGER=$(echo "$LABELS" | jq '[.[] | select(. == "obs-sync" or . == "qa-packages" or . == "qa-containers")] | length > 0')
+          QA_TYPES=""
+          if echo "$LABELS" | jq -e '[.[] | select(. == "qa-packages")] | length > 0' > /dev/null; then QA_TYPES="packages"; fi
+          if echo "$LABELS" | jq -e '[.[] | select(. == "qa-containers")] | length > 0' > /dev/null; then QA_TYPES="${QA_TYPES:+$QA_TYPES,}containers"; fi
           {
             echo "pr_number=${PR}"
             echo "head_sha=${HEAD_SHA}"
             echo "clone_url=${CLONE_URL}"
             printf 'labels_json=%s\n' "${LABELS}"
             echo "has_trigger_label=${HAS_TRIGGER}"
+            echo "qa_types=${QA_TYPES}"
           } >> "$GITHUB_OUTPUT"
 
       # Release-only PRs (all root/ changes under root/*/releases/) reach the
@@ -486,7 +489,7 @@ jobs:
 
   # ──────────────────────────────────────────────────────────────────────────
   # build: poll OBS for build completion and post the build-status PR
-  # comment.  Runs in parallel with `detect-qa-matrix`.
+  # comment.
   # ──────────────────────────────────────────────────────────────────────────
   build:
     name: Wait for OBS builds (${{ matrix.instance.name }})
@@ -588,304 +591,17 @@ jobs:
         run: python .github/scripts/post_pr_comment.py
 
   # ──────────────────────────────────────────────────────────────────────────
-  # detect-qa-matrix: discover QA-enabled OBS subprojects, once per entry of
-  # the `OBS_INSTANCES` repository variable.  Each leg scans only its own
-  # instance's PR project and uploads its share of the matrix as an artifact;
-  # `merge-qa-matrix` concatenates them.  Runs in parallel with `build`; once
-  # the merge finishes, the `qa` matrix job's check runs appear in the PR's
-  # check list as queued, signalling the upcoming QA work.
-  #
-  # An instance may carry `qa_types` (a comma-separated subset of
-  # packages,containers) to declare which QA kinds live on it; the label-
-  # derived type list is intersected with it, and an empty intersection means
-  # this leg discovers nothing.
-  # ──────────────────────────────────────────────────────────────────────────
-  detect-qa-matrix:
-    name: Detect QA matrix (${{ matrix.instance.name }})
-    needs: [resolve, sync]
-    # needs.sync.result: the aggregate over all instance legs -- per-leg sync
-    # success cannot be a job output (matrix outputs are last-writer-wins).
-    if: |
-      needs.sync.outputs.is_release_pr != 'true' && needs.sync.result == 'success' &&
-      (contains(fromJSON(needs.resolve.outputs.labels_json), 'qa-packages') || contains(fromJSON(needs.resolve.outputs.labels_json), 'qa-containers'))
-    runs-on: ubuntu-latest
-    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
-    strategy:
-      fail-fast: false
-      matrix:
-        instance: ${{ fromJSON(vars.OBS_INSTANCES) }}
-    permissions:
-      packages: read
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: ./.github/actions/obs-setup
-        with:
-          obs-apiurl: ${{ matrix.instance.apiurl }}
-          obs-user: ${{ matrix.instance.user || vars.OBS_USER }}
-          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance.name)] }}
-
-      - name: Write CI profile
-        shell: bash
-        env:
-          OBS_APIURL: ${{ matrix.instance.apiurl }}
-          OBS_PR_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}
-          OBS_REGISTRY: ${{ matrix.instance.registry }}
-          OBS_MAIN_ROOTPRJ: ${{ matrix.instance.rootprj }}
-          INSTANCE_ENV: ${{ toJSON(matrix.instance.env) }}
-          PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
-          JENKINS_URL: ${{ vars.JENKINS_URL }}
-          JENKINS_USER: ${{ vars.JENKINS_USER }}
-        run: |
-          mkdir -p .profile
-          cat > .profile/ci.yaml <<EOF
-          apiurl: ${OBS_APIURL}
-          rootprj: ${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}
-          ${OBS_REGISTRY:+registry: ${OBS_REGISTRY}}
-          image-fallback-rootprj: ${OBS_MAIN_ROOTPRJ}
-          jenkins:
-            url: ${JENKINS_URL}
-            user: ${JENKINS_USER}
-          env:
-            - name: REMOTE_OBS_ORG_INTERCONNECT
-              value: ''
-          EOF
-          # Instance env last: profile entries are read in order and the last
-          # value for a key wins, so an instance overrides the default above.
-          if [ -n "${INSTANCE_ENV:-}" ] && [ "$INSTANCE_ENV" != "null" ]; then
-            jq -r 'to_entries[] | "  - name: \(.key)\n    value: '"'"'\(.value)'"'"'"' \
-              <<<"$INSTANCE_ENV" >> .profile/ci.yaml
-          fi
-
-      # Build QA_TYPES from the qa-packages / qa-containers labels, then
-      # intersect with this instance's declared `qa_types` (when non-empty).
-      # An empty intersection means this instance hosts none of the requested
-      # QA kinds, so its discovery is skipped entirely.
-      - name: Resolve QA type filter
-        id: qa-types
-        env:
-          LABELS_JSON: ${{ needs.resolve.outputs.labels_json }}
-          INSTANCE_NAME: ${{ matrix.instance.name }}
-          INSTANCE_QA_TYPES: ${{ matrix.instance.qa_types }}
-        run: |
-          set -eu
-          TYPES=""
-          if echo "$LABELS_JSON" | jq -e '[.[] | select(. == "qa-packages")] | length > 0' > /dev/null; then
-            TYPES="packages"
-          fi
-          if echo "$LABELS_JSON" | jq -e '[.[] | select(. == "qa-containers")] | length > 0' > /dev/null; then
-            TYPES="${TYPES:+$TYPES,}containers"
-          fi
-          if [ -n "${INSTANCE_QA_TYPES:-}" ]; then
-            KEPT=""
-            for t in $(echo "$TYPES" | tr ',' ' '); do
-              for a in $(echo "$INSTANCE_QA_TYPES" | tr ',' ' '); do
-                if [ "$t" = "$a" ]; then KEPT="${KEPT:+$KEPT,}$t"; fi
-              done
-            done
-            TYPES="$KEPT"
-            if [ -z "$TYPES" ]; then
-              echo "::notice::instance ${INSTANCE_NAME}: no requested QA type is hosted here; skipping discovery"
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-            fi
-          fi
-          echo "qa_types=${TYPES}" >> "$GITHUB_OUTPUT"
-
-      # Iterate every immediate subproject of this instance's PR OBS root
-      # project, call `percona-obs qa show <project> --json` for each, and
-      # concatenate the results into this leg's share of the matrix.
-      - name: Discover QA matrix from OBS PR subprojects
-        id: matrix
-        env:
-          OBS_APIURL: ${{ matrix.instance.apiurl }}
-          OBS_PROJECT: ${{ matrix.instance.pr_rootprj }}:pr-${{ needs.resolve.outputs.pr_number }}
-          PYTHONPATH: ${{ github.workspace }}
-          QA_TYPES: ${{ steps.qa-types.outputs.qa_types }}
-          # PR projects hold only promoted packages: a package.yaml qa: lane
-          # runs only when its package is present there.
-          QA_PACKAGES_PRESENT_ONLY: "true"
-          SKIP: ${{ steps.qa-types.outputs.skip }}
-        run: |
-          set -eu
-          if [ "${SKIP:-}" = "true" ]; then
-            echo '[]' > /tmp/qa-matrix.json
-          else
-            venv/bin/python .github/scripts/list_qa_matrix.py > /tmp/qa-matrix.json
-          fi
-
-      - name: Upload QA matrix share
-        uses: actions/upload-artifact@v4
-        with:
-          name: qa-matrix-${{ matrix.instance.name }}
-          path: /tmp/qa-matrix.json
-          retention-days: 1
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # merge-qa-matrix: concatenate the per-instance matrix shares into the one
-  # matrix the `qa` job fans out over, stamping every entry with flat scalar
-  # fields naming the instance it came from (instance_name, instance_apiurl,
-  # instance_pr_rootprj, instance_registry).  Flat scalars, not a nested
-  # object, so `matrix.include` access stays unambiguous.
-  # ──────────────────────────────────────────────────────────────────────────
-  merge-qa-matrix:
-    name: Merge QA matrix
-    needs: [resolve, sync, detect-qa-matrix]
-    if: |
-      needs.sync.outputs.is_release_pr != 'true' && needs.sync.result == 'success' &&
-      needs.detect-qa-matrix.result == 'success' &&
-      (contains(fromJSON(needs.resolve.outputs.labels_json), 'qa-packages') || contains(fromJSON(needs.resolve.outputs.labels_json), 'qa-containers'))
-    runs-on: ubuntu-latest
-
-    outputs:
-      has_matrix: ${{ steps.merge.outputs.has_matrix }}
-      matrix: ${{ steps.merge.outputs.matrix }}
-
-    steps:
-      - name: Download QA matrix shares
-        uses: actions/download-artifact@v4
-        with:
-          pattern: qa-matrix-*
-          path: /tmp/qa-shares
-
-      # Each share lands in /tmp/qa-shares/qa-matrix-<name>/qa-matrix.json, so
-      # the instance name comes from the directory name and is looked up in
-      # OBS_INSTANCES for the remaining fields.  Shares are merged in
-      # OBS_INSTANCES order, which is also the precedence order used to settle
-      # duplicates below.
-      - name: Merge shares
-        id: merge
-        env:
-          OBS_INSTANCES: ${{ vars.OBS_INSTANCES }}
-        run: |
-          set -euo pipefail
-          names=$(jq -r '.[].name' <<<"$OBS_INSTANCES")
-          if [ -z "$names" ]; then
-            echo "::error::OBS_INSTANCES is empty or malformed; QA shares cannot be attributed"
-            exit 1
-          fi
-          MATRIX='[]'
-          consumed=0
-          while IFS= read -r name; do
-            [ -n "$name" ] || continue
-            d="/tmp/qa-shares/qa-matrix-${name}"
-            [ -d "$d" ] || continue
-            consumed=$((consumed + 1))
-            inst=$(jq -c --arg n "$name" '.[] | select(.name == $n)' <<<"$OBS_INSTANCES")
-            share=$(jq -c --argjson i "$inst" '
-              map(. + {
-                  instance_name: $i.name,
-                  instance_apiurl: $i.apiurl,
-                  instance_pr_rootprj: $i.pr_rootprj,
-                  instance_user: ($i.user // ""),
-                  instance_registry: ($i.registry // ""),
-                  instance_rootprj: ($i.rootprj // ""),
-                  instance_env: (($i.env // {}) | tojson)
-                })' "$d/qa-matrix.json")
-            MATRIX=$(jq -c -n --argjson a "$MATRIX" --argjson b "$share" '$a + $b')
-          done <<<"$names"
-          # A share that matches no instance would vanish silently, taking that
-          # instance's whole QA lane with it (e.g. a rename between the detect
-          # and merge jobs), so account for every uploaded share.
-          uploaded=$(find /tmp/qa-shares -mindepth 1 -maxdepth 1 -type d -name 'qa-matrix-*' | wc -l)
-          if [ "$consumed" -ne "$uploaded" ]; then
-            echo "::error::${uploaded} QA share(s) uploaded but ${consumed} matched an OBS_INSTANCES entry"
-            exit 1
-          fi
-          # status_context becomes the check-run name, so two entries sharing
-          # one would fight over a single check run.  A project can legitimately
-          # be in slice on more than one instance, and qa_types cannot split
-          # those — both classify as the same QA kind.  Settle it by instance
-          # order instead of failing: the first instance in OBS_INSTANCES that
-          # discovered the context keeps it, and the drop is reported.
-          DUPES=$(jq -r '
-            group_by(.status_context) | map(select(length > 1)
-            | "\(.[0].status_context) (kept on \(.[0].instance_name), dropped on \([.[1:][].instance_name] | join(", ")))")
-            | join("; ")' <<<"$MATRIX")
-          if [ -n "$DUPES" ]; then
-            echo "::warning::QA context discovered on several instances: ${DUPES}"
-            MATRIX=$(jq -c 'group_by(.status_context) | map(.[0])' <<<"$MATRIX")
-          fi
-          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
-          if [ "$(echo "${MATRIX}" | jq 'length')" -gt 0 ]; then
-            echo "has_matrix=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_matrix=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # qa: trigger and poll Jenkins, once per matrix combo (in parallel).  Each
-  # combo carries the instance_* fields stamped in by `merge-qa-matrix`, so a
-  # combo talks to the OBS instance that discovered it.
+  # qa: the reusable fan-out (qa-fanout.yml), after the builds passed.
+  # Trade-off vs. the former inline jobs: discovery no longer runs in
+  # parallel with the build poll, so the per-combo check runs appear only
+  # once the builds are green.
   # ──────────────────────────────────────────────────────────────────────────
   qa:
-    name: ${{ matrix.status_context }}
-    needs: [resolve, build, merge-qa-matrix]
-    if: needs.merge-qa-matrix.outputs.has_matrix == 'true' && needs.build.result == 'success'
-    runs-on: ubuntu-latest
-    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
-    permissions:
-      packages: read
-
-    strategy:
-      matrix:
-        include: ${{ fromJSON(needs.merge-qa-matrix.outputs.matrix) }}
-      fail-fast: false
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: ./.github/actions/obs-setup
-        with:
-          obs-apiurl: ${{ matrix.instance_apiurl }}
-          obs-user: ${{ matrix.instance_user || vars.OBS_USER }}
-          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance_name)] }}
-
-      # Same CI profile as the detect job so `qa run` re-resolves project.yaml
-      # parameters identically (same OBS_ROOTPRJ → same ${OBS_ROOTPRJ_SLASHES},
-      # same registry → same ${OBS_CONTAINER_REGISTRY}, same fallback root →
-      # same image-reference decisions).
-      - name: Write CI profile
-        shell: bash
-        env:
-          OBS_APIURL: ${{ matrix.instance_apiurl }}
-          OBS_PR_ROOTPRJ: ${{ matrix.instance_pr_rootprj }}
-          OBS_REGISTRY: ${{ matrix.instance_registry }}
-          OBS_MAIN_ROOTPRJ: ${{ matrix.instance_rootprj }}
-          INSTANCE_ENV: ${{ matrix.instance_env }}
-          PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
-          JENKINS_URL: ${{ vars.JENKINS_URL }}
-          JENKINS_USER: ${{ vars.JENKINS_USER }}
-        run: |
-          mkdir -p .profile
-          cat > .profile/ci.yaml <<EOF
-          apiurl: ${OBS_APIURL}
-          rootprj: ${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}
-          ${OBS_REGISTRY:+registry: ${OBS_REGISTRY}}
-          image-fallback-rootprj: ${OBS_MAIN_ROOTPRJ}
-          jenkins:
-            url: ${JENKINS_URL}
-            user: ${JENKINS_USER}
-          env:
-            - name: REMOTE_OBS_ORG_INTERCONNECT
-              value: ''
-          EOF
-          # Instance env last: profile entries are read in order and the last
-          # value for a key wins, so an instance overrides the default above.
-          if [ -n "${INSTANCE_ENV:-}" ] && [ "$INSTANCE_ENV" != "null" ]; then
-            jq -r 'to_entries[] | "  - name: \(.key)\n    value: '"'"'\(.value)'"'"'"' \
-              <<<"$INSTANCE_ENV" >> .profile/ci.yaml
-          fi
-
-      - name: Run qa pipeline
-        env:
-          JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
-          PYTHONUNBUFFERED: "1"
-        run: |
-          venv/bin/python -m percona_obs -P ci qa run "${{ matrix.project }}" \
-            --pipeline "${{ matrix.pipeline }}" \
-            --wait \
-            --report-json /tmp/qa-report.json \
-            ${{ matrix.name_filter }} \
-            ${{ matrix.package_filter }} \
-            ${{ matrix.axis_filters }}
+    name: OBS QA
+    needs: [resolve, build]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.resolve.outputs.qa_types != '' }}
+    uses: ./.github/workflows/qa-fanout.yml
+    with:
+      pr_number: ${{ needs.resolve.outputs.pr_number }}
+      qa_types: ${{ needs.resolve.outputs.qa_types }}
+    secrets: inherit
