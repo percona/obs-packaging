@@ -9,6 +9,7 @@ import sys
 import urllib.error
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -2203,6 +2204,22 @@ def _build_changelog_section(
         rel_ver = release_versions.get(pkg) if release_versions else None
 
         if src_ver is None:
+            base_pkg, sub = _split_changelog_key(pkg)
+            pkg_dir = (
+                source_path / Path(*sub.split(":")) / base_pkg
+                if sub is not None
+                else source_path / base_pkg
+            )
+            if pkg_dir.is_dir():
+                # Another instance may hold this package; never report a
+                # package that is still in the tree as removed.
+                print(
+                    f"warning: {pkg}: not found on any queried OBS instance "
+                    "but still in the tree; not reported as removed",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                continue
             ver = rel_ver.split("-")[0] if rel_ver else "?"
             removed.append(f"- {pkg}: removed (was {ver})")
             continue
@@ -2493,6 +2510,131 @@ def _replace_changelog_section(text: str, release_id: str, section: str) -> str:
     return text.rstrip() + "\n\n" + section.rstrip("\n") + "\n"
 
 
+@dataclass
+class _ReleaseObsData:
+    """Package versions and container image lists fetched from one OBS instance."""
+
+    source_versions: dict[str, str]
+    # None when the release project does not exist on that instance.
+    release_versions: "dict[str, str] | None"
+    source_container_pkgs: dict[str, dict[str, str]]
+    release_container_pkgs: dict[str, dict[str, str]]
+
+
+def _collect_release_obs_data(
+    apiurl: str,
+    rootprj: str,
+    source_project_id: str,
+    source_path: Path,
+    release_project_id: str,
+    noncontainer_subs: "list[str]",
+    container_subs: "list[str]",
+    *,
+    is_first_release: bool,
+    prev_release_id: "str | None",
+) -> _ReleaseObsData:
+    """Fetch the CHANGELOG inputs of a release from one OBS instance.
+
+    *noncontainer_subs* / *container_subs* are subproject names relative to
+    *source_project_id*, classified from the tree (instance-independent).
+    *source_path* is accepted for symmetry with the caller; the classification
+    already happened there.
+    """
+    source_obs_project = f"{rootprj}:{source_project_id}"
+    release_obs_project = f"{rootprj}:{release_project_id}"
+
+    source_versions: dict[str, str] = _fetch_project_pkg_versions(
+        apiurl, source_obs_project
+    )
+    for subproject_name in noncontainer_subs:
+        source_versions.update(
+            _suffix_subproject_versions(
+                _fetch_project_pkg_versions(
+                    apiurl, f"{source_obs_project}:{subproject_name}"
+                ),
+                subproject_name,
+            )
+        )
+
+    release_versions: dict[str, str] | None = None
+    if not is_first_release and _obs_project_exists(apiurl, release_obs_project):
+        release_versions = _fetch_project_pkg_versions(apiurl, release_obs_project)
+        for subproject_name in noncontainer_subs:
+            rel_sub = f"{release_obs_project}:{subproject_name}"
+            if _obs_project_exists(apiurl, rel_sub):
+                release_versions.update(
+                    _suffix_subproject_versions(
+                        _fetch_project_pkg_versions(apiurl, rel_sub),
+                        subproject_name,
+                    )
+                )
+
+    # Fetch container image package lists for each container subproject.
+    _print_pending("fetching container image package lists for CHANGELOG")
+    source_container_pkgs: dict[str, dict[str, str]] = {}
+    release_container_pkgs: dict[str, dict[str, str]] = {}
+    for subproject_name in container_subs:
+        sub_full = f"{source_obs_project}:{subproject_name}"
+        _merge_container_pkgs(
+            source_container_pkgs,
+            _fetch_subproject_container_pkgs(
+                apiurl, sub_full, rootprj, source_obs_project
+            ),
+            sub_full,
+        )
+    if not is_first_release and prev_release_id:
+        # Diff against whatever release subprojects actually exist on OBS —
+        # this is what makes the ubi9 old-layout → new-layout migration diff
+        # correctly instead of dumping every image as "add".
+        for rel_sub in sorted(_fetch_obs_subproject_names(apiurl, release_obs_project)):
+            _merge_container_pkgs(
+                release_container_pkgs,
+                _fetch_subproject_container_pkgs(
+                    apiurl, rel_sub, rootprj, release_obs_project
+                ),
+                rel_sub,
+            )
+
+    return _ReleaseObsData(
+        source_versions=source_versions,
+        release_versions=release_versions,
+        source_container_pkgs=source_container_pkgs,
+        release_container_pkgs=release_container_pkgs,
+    )
+
+
+def _merge_release_obs_data(parts: "list[_ReleaseObsData]") -> _ReleaseObsData:
+    """Union per-instance CHANGELOG inputs; the first part wins on a clash.
+
+    Instances hold disjoint slices of a release, so an image present on two
+    instances is the same image and is not an error (unlike the within-instance
+    ``_merge_container_pkgs`` check).  ``release_versions`` stays ``None`` only
+    when no instance has the release project.
+    """
+    source_versions: dict[str, str] = {}
+    release_versions: dict[str, str] | None = None
+    source_container_pkgs: dict[str, dict[str, str]] = {}
+    release_container_pkgs: dict[str, dict[str, str]] = {}
+    for part in parts:
+        for k, v in part.source_versions.items():
+            source_versions.setdefault(k, v)
+        if part.release_versions is not None:
+            if release_versions is None:
+                release_versions = {}
+            for k, v in part.release_versions.items():
+                release_versions.setdefault(k, v)
+        for k, pkgs in part.source_container_pkgs.items():
+            source_container_pkgs.setdefault(k, pkgs)
+        for k, pkgs in part.release_container_pkgs.items():
+            release_container_pkgs.setdefault(k, pkgs)
+    return _ReleaseObsData(
+        source_versions=source_versions,
+        release_versions=release_versions,
+        source_container_pkgs=source_container_pkgs,
+        release_container_pkgs=release_container_pkgs,
+    )
+
+
 def cmd_project_release(args: argparse.Namespace) -> None:
     """Create or update a release: release.yaml, CHANGELOG.md, project.yaml, commit, and open a PR."""
     product = args.project.split(":")[0]
@@ -2523,7 +2665,6 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     release_dir = REPO_ROOT / product / "releases" / release_name
     release_project = f"{product}:releases:{release_name}"
     source_obs_project = f"{args.rootprj}:{args.project}"
-    release_obs_project = f"{args.rootprj}:{release_project}"
 
     is_first_release = not release_dir.is_dir()
 
@@ -2583,9 +2724,6 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     # Build CHANGELOG section by diffing source vs release OBS package versions.
     _print_pending("fetching package versions for CHANGELOG")
 
-    source_versions: dict[str, str] = _fetch_project_pkg_versions(
-        apiurl, source_obs_project
-    )
     noncontainer_subs: list[str] = []
     container_subs: list[str] = []
     for sub_obs_id, sub_path in find_projects(source_path, args.project):
@@ -2598,51 +2736,40 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             container_subs.append(subproject_name)
         else:
             noncontainer_subs.append(subproject_name)
-            source_versions.update(
-                _suffix_subproject_versions(
-                    _fetch_project_pkg_versions(apiurl, f"{args.rootprj}:{sub_obs_id}"),
-                    subproject_name,
-                )
-            )
 
-    release_versions: dict[str, str] | None = None
-    if not is_first_release and _obs_project_exists(apiurl, release_obs_project):
-        release_versions = _fetch_project_pkg_versions(apiurl, release_obs_project)
-        for subproject_name in noncontainer_subs:
-            rel_sub = f"{release_obs_project}:{subproject_name}"
-            if _obs_project_exists(apiurl, rel_sub):
-                release_versions.update(
-                    _suffix_subproject_versions(
-                        _fetch_project_pkg_versions(apiurl, rel_sub),
-                        subproject_name,
-                    )
-                )
-
-    # Fetch container image package lists for each container subproject.
-    _print_pending("fetching container image package lists for CHANGELOG")
-    source_container_pkgs: dict[str, dict[str, str]] = {}
-    release_container_pkgs: dict[str, dict[str, str]] = {}
-    for subproject_name in container_subs:
-        sub_full = f"{args.rootprj}:{args.project}:{subproject_name}"
-        _merge_container_pkgs(
-            source_container_pkgs,
-            _fetch_subproject_container_pkgs(
-                apiurl, sub_full, args.rootprj, source_obs_project
-            ),
-            sub_full,
-        )
-    if not is_first_release and prev_release_id:
-        # Diff against whatever release subprojects actually exist on OBS —
-        # this is what makes the ubi9 old-layout → new-layout migration diff
-        # correctly instead of dumping every image as "add".
-        for rel_sub in sorted(_fetch_obs_subproject_names(apiurl, release_obs_project)):
-            _merge_container_pkgs(
-                release_container_pkgs,
-                _fetch_subproject_container_pkgs(
-                    apiurl, rel_sub, args.rootprj, release_obs_project
-                ),
-                rel_sub,
+    instances: list[tuple[str, str]] = [(apiurl, args.rootprj)]
+    for also_name in getattr(args, "also_profiles", None) or []:
+        also_profile = _load_profile(also_name)
+        also_apiurl = also_profile.get("apiurl")
+        also_rootprj = also_profile.get("rootprj")
+        if not also_apiurl or not also_rootprj:
+            raise SystemExit(
+                f"error: --also-profile {also_name}: profile must set both "
+                "apiurl and rootprj"
             )
+        _print_same(f"also: {also_name} ({also_apiurl})")
+        instances.append((also_apiurl, also_rootprj))
+
+    obs_data = _merge_release_obs_data(
+        [
+            _collect_release_obs_data(
+                inst_apiurl,
+                inst_rootprj,
+                args.project,
+                source_path,
+                release_project,
+                noncontainer_subs,
+                container_subs,
+                is_first_release=is_first_release,
+                prev_release_id=prev_release_id,
+            )
+            for inst_apiurl, inst_rootprj in instances
+        ]
+    )
+    source_versions = obs_data.source_versions
+    release_versions = obs_data.release_versions
+    source_container_pkgs = obs_data.source_container_pkgs
+    release_container_pkgs = obs_data.release_container_pkgs
 
     security_lines: list[str] | None = None
     if not getattr(args, "no_cve_scan", False):
