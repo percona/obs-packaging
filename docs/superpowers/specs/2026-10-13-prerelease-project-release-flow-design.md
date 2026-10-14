@@ -221,21 +221,21 @@ orchestration.
 
 ### `obs-pr-check.yml`
 
-- `resolve` gains the one-in-flight guard for release PRs.
-- The release path replaces today's `sync release --dry-run` with a
-  `populate` job, one leg per `OBS_INSTANCES` entry, serialised on that
-  instance's `sync-main-sync-<name>` concurrency group (no
-  cancel-in-progress) so population never overlaps a staging upload. Each leg
-  runs `sync prerelease` with the PR profile for every `release.yaml` the PR
-  changes. The PR comment lists the pre-release projects, the source commit
-  and the per-leg outcome.
-- QA runs automatically after `populate` through the existing
-  `detect-qa-matrix` and `qa` jobs, with no trigger label. The matrix is
-  discovered from the PR project's subprojects on each instance, so every
-  lane of every released major is included and each lane's `status_context`
-  carries its project name.
-- `workflow_dispatch` with a `pr_number` input runs the same `populate` and
-  QA jobs on the PR head (repopulate without a push).
+As implemented, release PRs are **not** handled in `obs-pr-check.yml`: its `sync`
+job is gated out for them (`resolve` still detects release-only PRs). The `resolve`
+guard (release-only, one in flight per major, non-empty release), the `populate` job
+(one leg per `OBS_INSTANCES` entry, serialised on that instance's
+`sync-main-sync-<name>` concurrency group without cancel-in-progress, running
+`sync prerelease` per changed `release.yaml`), the per-instance PR comment, the
+`workflow_dispatch` repopulate (`pr_number` input) and the release QA live in the new
+`obs-release-pr.yml`, because `obs-pr-check.yml` cancels superseded runs and a
+cancelled populate would leave production staging frozen. The QA fan-out
+(`detect-qa-matrix`, `merge-qa-matrix`, `qa`) is the reusable `qa-fanout.yml`
+(inputs `pr_number`, `qa_types`), called by `obs-pr-check.yml` (job `PR`, labelled
+PRs after the builds) and by `obs-release-pr.yml` (job `Release`, with no trigger label
+after every populate leg succeeded); check names are prefixed by the caller's job name.
+The matrix is discovered from the PR project's subprojects on each instance, so every
+lane of every released major is included.
 
 ### `obs-pr-cleanup.yml`
 

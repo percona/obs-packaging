@@ -1056,7 +1056,7 @@ When branching is involved, always confirm which OBS instance is being queried:
 
 ## GitHub Actions CI/CD
 
-Four workflows automate the OBS sync lifecycle. All of them use a shared composite action for setup.
+Seven workflow files automate the OBS sync lifecycle (`qa-fanout.yml` is reusable, called by two others). All of them use a shared composite action for setup.
 
 ### Composite action — `.github/actions/obs-setup`
 
@@ -1067,7 +1067,7 @@ Reusable setup steps called by every workflow:
 
 ### Workflow 1 — `sync-main.yml` (sync on merge to main, plus nightly)
 
-**Trigger**: push to `main` where at least one file under `root/**` changed, and a nightly `schedule` (00:00 UTC). The nightly run is what picks up upstream-only commits for packages whose `_service` tracks a moving ref (branch/HEAD, e.g. the devel tier): `--skip-unchanged` never skips those, while pinned packages are skipped from the sync-state manifest at no API cost. A scheduled run has no before-SHA, so the release-only detector never suppresses it. Disabling the workflow during a release (the `obs-release.yml` lock) suppresses scheduled runs too.
+**Trigger**: push to `main` where at least one file under `root/**` changed, and a nightly `schedule` (00:00 UTC). The nightly run is what picks up upstream-only commits for packages whose `_service` tracks a moving ref (branch/HEAD, e.g. the devel tier): `--skip-unchanged` never skips those, while pinned packages are skipped from the sync-state manifest at no API cost. There is no release-only skip: a merged release PR raises `PPG_RELEASE`, and the resulting staging image retag is safe because the released images already sit in the PR's pre-release project. `obs-release.yml` neither pauses nor locks this workflow.
 
 **What it does** — two jobs. The `sync` job serializes on its own concurrency group and is never cancelled mid-upload; the `poll` job runs in a cancel-superseding group (newest poll wins — version lists and release tags are diffed from the last *successful* run's head SHA, so the surviving poll covers superseded runs' ranges).
 
@@ -1080,12 +1080,12 @@ Reusable setup steps called by every workflow:
 `poll` job:
 5. Runs `.github/scripts/poll_obs_builds.py` to poll `build status` until all packages reach a terminal state (`succeeded`/`failed`/`unresolvable`/`disabled`). `OBS_SYNC_REPORT` points at the sync report so monitoring is scoped to the projects the sync actually touched (failing open to full-tree polling on a missing/corrupt/stale report); the poll interval backs off ×1.5 while states are unchanged (`OBS_POLL_INTERVAL`, default 30 s, up to `OBS_POLL_MAX_INTERVAL`, default 300 s). The script exits non-zero when any build failed/broke/was unresolvable, which fails the job's GitHub Actions check run — that check run is the merge-gating signal, no separate commit status is posted.
 
-**Required repository config**: `OBS_APIURL`, `OBS_WEB_URL`, `OBS_ROOTPRJ`, `OBS_USER` (vars); `OBS_PASSWORD` (secret).
+**Required repository config**: `OBS_INSTANCES`, `OBS_WEB_URL`, `OBS_USER` (vars); `OBS_PASSWORD_<NAME>` per instance (secrets).
 Permissions: `contents: write` (for badge publishing).
 
 ### Workflow 2 — `obs-pr-check.yml` (PR build check)
 
-**Trigger**: `pull_request` against `main` (types: `opened`, `synchronize`, `reopened`, `labeled`) where at least one file under `root/**` changed. The sync/build (and QA) jobs only run when a trigger label — `obs-sync`, `qa-packages`, or `qa-containers` — is present on the PR. For `labeled` events, a job-level `if` on `resolve` skips the entire run unless the label just added is a trigger label; for the other event types `resolve` runs, checks the PR's labels, and if no trigger label is present the run gates out after `resolve` with the rest of the DAG skipped.
+**Trigger**: `pull_request` against `main` (types: `opened`, `synchronize`, `reopened`, `labeled`) where at least one file under `root/**` changed. The sync/build (and QA) jobs only run when a trigger label — `obs-sync`, `qa-packages`, or `qa-containers` — is present on the PR. For `labeled` events, a job-level `if` on `resolve` skips the entire run unless the label just added is a trigger label; for the other event types `resolve` runs, checks the PR's labels, and if no trigger label is present the run gates out after `resolve` with the rest of the DAG skipped. Release-only PRs (every changed `root/**` file under `root/*/releases/`) are not handled here: `resolve` still detects them (`is_release_pr`) and `sync` is gated out for them even with a trigger label — `obs-release-pr.yml` (Workflow 6) owns them.
 
 **What it does**:
 1. Full-history checkout (same reason as above).
@@ -1096,9 +1096,9 @@ Permissions: `contents: write` (for badge publishing).
 4. Runs `percona-obs -P pr-<N> sync push --branch-from main`:
    - For each package, compares `git log <main-last-sync-sha>..HEAD -- <package-path>`. If no commits → uploads an `_aggregate` file pointing at the corresponding main OBS package (binary reuse, no build needed). If changed → uploads full sources to the PR project.
 5. Posts (or updates) a PR comment with the OBS project URL and a table showing how many packages were built from source vs. aggregated from main. The comment is identified by an HTML marker `<!-- obs-pr-check -->` so it is updated in place on subsequent pushes to the PR. If the sync step failed, the comment is updated with an error notice instead.
-6. QA (`qa-packages` / `qa-containers` label): `detect-qa-matrix` calls `qa show --json` per OBS subproject with `QA_PACKAGES_PRESENT_ONLY=true` (via `.github/scripts/list_qa_matrix.py`), so package-level `qa:` lanes (from `package.yaml`) are kept only when the package is present in the PR project (project lanes are never dropped; a non-404 OBS error fails the job); `qa` fans out one job per combo passing the tool-generated `name_filter`, `package_filter` (`--package <pkg>` for package lanes, `--project-only` for project lanes so they never also trigger package lanes on the same pipeline) and `axis_filters` flags to `qa run`.
+6. QA (`qa-packages` / `qa-containers` label): `resolve` emits a `qa_types` output (`packages`, `containers` or both, from the labels). The `qa` job, named `PR`, calls the reusable `qa-fanout.yml` (Workflow 7) with `pr_number` and `qa_types` once `build` succeeded and `qa_types` is non-empty, with `secrets: inherit`. Its check runs read `PR / OBS QA / <project> / …`.
 
-**Required repository config**: `OBS_APIURL`, `OBS_WEB_URL`, `OBS_ROOTPRJ`, `OBS_PR_ROOTPRJ`, `OBS_USER` (vars); `OBS_PASSWORD` (secret).
+**Required repository config**: `OBS_INSTANCES` (JSON list: `name`, `apiurl`, `rootprj`, `pr_rootprj`, optional slice/`user`/`env`/`qa_types` fields), `OBS_WEB_URL`, `OBS_USER`, `JENKINS_URL`, `JENKINS_USER` (vars); `OBS_PASSWORD_<NAME>` per instance and `JENKINS_API_TOKEN` (secrets).
 Permissions: `contents: read`, `pull-requests: write`.
 
 `OBS_PR_ROOTPRJ` is the base prefix for PR-specific projects, e.g. `home:Admin:percona:pr`. The full PR project becomes `home:Admin:percona:pr:pr-42`. It is intentionally separate from `OBS_ROOTPRJ` so PR projects live in a distinct namespace and are never confused with the main project tree.
@@ -1107,33 +1107,26 @@ Permissions: `contents: read`, `pull-requests: write`.
 
 **Trigger**: `pull_request` against `main` (type: `closed`) where at least one file under `root/**` changed.
 
-**What it does**: Detects whether every changed `root/**` file in the PR sits under a
-`root/*/releases/` directory (a release-only PR) and, if so and the PR was merged, tags
-and dispatches the release before the shared cleanup step runs.
+**What it does**: two jobs. `release-dispatch` runs once per PR: it detects whether every changed `root/**` file sits under a `root/*/releases/` directory (a release-only PR) and, if so and the PR was merged, tags and dispatches the release; it then deletes the PR's Actions caches. `delete` runs once per `OBS_INSTANCES` entry.
 
 **Release PR path** (merged, and every changed `root/**` file is under `root/*/releases/`):
 1. For each `release.yaml` changed by the PR, reads the last entry of its `releases:`
    list (a plain tag string or a `{tag, source_commit}` mapping — both are understood) from the **merge commit** blob (not the PR head) and creates that git tag
    (e.g. `ppg/17.9-1`) pointing at `merge_commit_sha`, using `GITHUB_TOKEN`
    (`contents: write`). A tag-creation error other than "already exists" fails the job.
-2. Dispatches `obs-release.yml` for that tag via
-   `gh workflow run obs-release.yml --ref main -f tag=<tag>` (`actions: write`).
+2. Dispatches `obs-release.yml` **once** for the whole PR:
+   `gh workflow run obs-release.yml --ref main -f pr_number=<N> -f tags="<tag> <tag>…"`
+   (`actions: write`). There is no per-tag dispatch loop and no sync-main lock.
    `workflow_dispatch` calls made with `GITHUB_TOKEN` are exempt from GitHub's
    workflow-to-workflow trigger suppression, so this fires reliably without a PAT — and
    a pushed tag would not have triggered anything on its own.
 
-**Every PR** (release or not, merged or closed unmerged):
-- Runs `percona-obs -P pr-<N> sync delete --yes --recursive --from-obs` to delete the
-  PR's OBS project and all its sub-projects. `sync release-pr` is **not** run first —
-  no workflow promotes a non-release PR's binaries to production anymore; production
-  gets those binaries only through the normal `sync-main.yml` sync of `main` plus, for
-  releases, the release pipeline above.
-- Deletes the PR's Actions caches (created by `obs-pr-check.yml` on the PR merge ref).
+**`delete` job** (per instance): runs `percona-obs -P pr-<N> sync delete --yes --recursive --from-obs` to delete the PR's OBS project and all its sub-projects. It is **skipped for a merged release PR**, whose project tree is the pre-release that `obs-release.yml` copies from (and deletes afterwards); it still runs for a release PR closed unmerged and for every other PR. `sync release-pr` is **not** run — no workflow promotes a non-release PR's binaries to production; production gets those binaries through the normal `sync-main.yml` sync of `main` plus, for releases, the two-hop pipeline (Workflows 6 and `obs-release.yml`).
 
 OBS 404 responses are handled gracefully in `sync delete` so the cleanup is safe even if the PR
 check never ran. `--recursive` ensures projects are deleted even if a build was still in progress.
 
-**Required repository config**: `OBS_APIURL`, `OBS_PR_ROOTPRJ`, `OBS_USER` (vars); `OBS_PASSWORD` (secret).
+**Required repository config**: `OBS_INSTANCES` (vars: `apiurl`, `pr_rootprj`, `name`, optional `user`/`env` per entry), `OBS_USER` (vars, fallback); `OBS_PASSWORD_<NAME>` per instance (secrets).
 Permissions: `contents: write` (tag creation), `actions: write` (dispatch + cache deletion).
 
 ### Workflow 4 — `obs-stale-cleanup.yml` (daily cleanup of stale PR projects)
@@ -1148,13 +1141,40 @@ Permissions: `contents: write` (tag creation), `actions: write` (dispatch + cach
 
 **Trigger**: `workflow_dispatch` only. Inputs: `project` (required, colon notation such as `ppg:staging:18` or `ppg:staging:18:containers`), `pr_number` (optional: test `<pr_rootprj>:pr-<N>` instead of the production root), `name` (optional: one entry of a multi-entry `qa:` block, e.g. `ubi9`), `package` (optional: run only that package's `package.yaml` `qa:` block) and `filter` (optional: space-separated `AXIS=val[,val…]` over `matrix:` axes, e.g. `IO_METHOD=worker SCENARIO=pg-18`). The branch chosen in the dispatch dialog decides which `project.yaml` definitions are expanded, so a feature branch's `qa:` block can be exercised before merge.
 
-**What it does**: `resolve` validates the free-text inputs (they are later interpolated into shell) and runs `.github/scripts/resolve_qa_instance.py`, which keeps the `OBS_INSTANCES` entries whose `include_projects`/`exclude_projects` globs admit the project and whose `qa_types` (when set) cover its kind (`containers` for `:containers` subprojects, `packages` otherwise); exactly one must remain, otherwise the job fails naming the candidates. `detect` writes the same CI profile shape as `obs-pr-check`'s QA jobs (rootprj = instance root or PR root), runs `qa show <project> --json` and narrows the combos with `.github/scripts/filter_qa_matrix.py` (`QA_NAME`, `QA_PACKAGE`, `QA_FILTER`; `QA_PACKAGES_PRESENT_ONLY=true` is set only when `pr_number` is given, dropping package lanes whose package is absent from the PR project, and a requested `package` absent from it fails with "not present in <project>"); a `name`/`package`/`filter` that matches nothing fails the job listing the entry names or axis values that exist. `qa` fans out one job per selected combo (`fail-fast: false`, named by `status_context`) running `qa run --wait --report-json` with the combo's `--name`/`--package`/`--filter` flags (`name_filter`, `package_filter` = `--package <pkg>` or `--project-only`, `axis_filters`), and uploads each report as an artifact. No badge aggregation.
+**What it does**: `resolve` validates the free-text inputs (they are later interpolated into shell) and runs `.github/scripts/resolve_qa_instance.py`, which keeps the `OBS_INSTANCES` entries whose `include_projects`/`exclude_projects` globs admit the project and whose `qa_types` (when set) cover its kind (`containers` for `:containers` subprojects, `packages` otherwise); exactly one must remain, otherwise the job fails naming the candidates. `detect` writes the same CI profile shape as `qa-fanout.yml`'s QA jobs (rootprj = instance root or PR root), runs `qa show <project> --json` and narrows the combos with `.github/scripts/filter_qa_matrix.py` (`QA_NAME`, `QA_PACKAGE`, `QA_FILTER`; `QA_PACKAGES_PRESENT_ONLY=true` is set only when `pr_number` is given, dropping package lanes whose package is absent from the PR project, and a requested `package` absent from it fails with "not present in <project>"); a `name`/`package`/`filter` that matches nothing fails the job listing the entry names or axis values that exist. `qa` fans out one job per selected combo (`fail-fast: false`, named by `status_context`) running `qa run --wait --report-json` with the combo's `--name`/`--package`/`--filter` flags (`name_filter`, `package_filter` = `--package <pkg>` or `--project-only`, `axis_filters`), and uploads each report as an artifact. No badge aggregation.
 
 **Why a separate file**: the nightly's change check looks up the last successful run of `obs-nightly-qa.yml`; a project-scoped run recorded there would suppress the next real nightly.
 
 **Concurrency**: group `obs-qa-run-<project>-<pr_number>-<name>-<package>-<filter>` without cancel-in-progress, so only a repeat dispatch of the *identical* selection queues behind the first; different packages / entries / filters of the same project run side by side, as the nightly's matrix does. GitHub keeps at most one pending run per group and cancels the previously waiting one when another is queued, which is why the group must include every input (a project-only group serialized and silently cancelled back-to-back per-package dispatches). `run-name` carries the inputs so the runs are distinguishable in the Actions list.
 
 **Required repository config**: `OBS_INSTANCES`, `OBS_USER`, `JENKINS_URL`, `JENKINS_USER` (vars); `OBS_PASSWORD_<NAME>` per instance and `JENKINS_API_TOKEN` (secrets).
+
+### Workflow 6 — `obs-release-pr.yml` (hop 1: populate the pre-release, run release QA)
+
+**Trigger**: `pull_request` against `main` (types `opened`, `synchronize`, `reopened`) with paths `root/*/releases/**`, and `workflow_dispatch` with a required `pr_number` (repopulate without a push; also works for a merged PR, with a notice). Run-level concurrency group `obs-release-pr-<N>` without cancel-in-progress: a second push queues behind the first. This is deliberately not part of `obs-pr-check.yml`, which cancels superseded runs — a cancelled populate would leave production staging frozen.
+
+**Jobs**:
+1. `resolve` — fetches PR context (`head_sha`, `clone_url`) and runs `.github/scripts/release_pr.py classify <N>`. It fails the run when the PR is mixed (release and other `root/` changes), when an older open PR already changes the same `release.yaml` (one in-flight release PR per major), or when no `release.yaml` changed. Outputs `release_files` and `release_projects` (JSON list, e.g. `ppg:releases:18`).
+2. `populate` — one leg per `OBS_INSTANCES` entry, checked out at the resolved PR head SHA with full history, serialized on the instance's `sync-main-sync-<name>` concurrency group (no cancel-in-progress; so it never overlaps a staging upload). Creates the `main` (production root) and `pr-<N>` profiles with the instance's repo/project slice flags, resolves the last synced `main` commit (`percona_obs.github_api.last_synced_head_sha`), then runs `sync prerelease <project> --branch-from main --synced-commit <sha>` with the `pr-<N>` profile for every release project. Writes `prerelease-report-<instance>` (JSON list of `{project, prerelease, outcome, source_commit}`), uploads it as an artifact, and posts a per-instance PR comment through `post_pr_comment.py` in pre-release mode (`IS_RELEASE_PR=true`, `PRERELEASE_REPORT`). Needs `actions: read`, `pull-requests: write`.
+3. `qa` — job named `Release`; calls the reusable `qa-fanout.yml` with `qa_types: packages,containers` once every populate leg succeeded. Check runs read `Release / OBS QA / <project> / …`, covering every QA lane of every released major.
+
+**Required repository config**: `OBS_INSTANCES`, `OBS_USER`, `OBS_WEB_URL`, `JENKINS_URL`, `JENKINS_USER` (vars); `OBS_PASSWORD_<NAME>` per instance and `JENKINS_API_TOKEN` (secrets, inherited by `qa-fanout.yml`).
+
+### Workflow 7 — `qa-fanout.yml` (reusable QA fan-out)
+
+**Trigger**: `workflow_call` only. Inputs: `pr_number` (the PR OBS root is `<pr_rootprj>:pr-<N>`) and `qa_types` (comma-separated `packages`/`containers`, intersected with each instance's optional `qa_types`). Callers pass `secrets: inherit`. The caller decides when to call; this workflow never gates on builds.
+
+**Jobs**: `detect-qa-matrix` (one leg per `OBS_INSTANCES` entry) calls `qa show --json` per OBS subproject of the PR project with `QA_PACKAGES_PRESENT_ONLY=true` (via `.github/scripts/list_qa_matrix.py`), so package-level `qa:` lanes (from `package.yaml`) are kept only when the package is present in the PR project (project lanes are never dropped; a non-404 OBS error fails the job), and uploads its share as the `qa-matrix-<instance>` artifact; `merge-qa-matrix` concatenates the shares and stamps each combo with its instance; `qa` fans out one job per combo (named by `status_context`) passing the tool-generated `name_filter`, `package_filter` (`--package <pkg>` for package lanes, `--project-only` for project lanes so they never also trigger package lanes on the same pipeline) and `axis_filters` flags to `qa run`. Called-job check names are prefixed by the caller's job name: `PR / OBS QA / …` from `obs-pr-check.yml`, `Release / OBS QA / …` from `obs-release-pr.yml`.
+
+**Required repository config**: as Workflow 5's QA part (`OBS_INSTANCES`, `OBS_USER`, `JENKINS_URL`, `JENKINS_USER`; `OBS_PASSWORD_<NAME>`, `JENKINS_API_TOKEN`).
+
+### `obs-release.yml` (hop 2: copy the pre-release into the release project)
+
+**Trigger**: `workflow_dispatch` only (a pushed tag is inert). Inputs: `pr_number` (the merged release PR) and `tags` (space-separated release tags that PR created). Dispatched by `obs-pr-cleanup.yml`; manual recovery is `gh workflow run obs-release.yml -f pr_number=N -f tags="ppg/17.12-1 ppg/18.7-1"` and is idempotent.
+
+**Jobs**: `validate` (numeric `pr_number`, tag shape `<product>/<major.minor-N>` or `<product>/<name-N>`; outputs `first_tag`) → `release` (one leg per instance, checked out at the first tag — all tags of a PR share the commit — in the `sync-main-sync-<name>` group because it writes release-project meta; for each tag derives `<product>:releases:<major>` and runs `sync release <project> --from <pr_rootprj>:pr-<N>:<project>`) → `finalize` (if any copy failed: `::error::` with the re-dispatch command and the pre-release is kept; otherwise one GitHub release per tag with its `CHANGELOG.md` section as notes, `gh release edit` when it already exists; `contents: write`) → `delete` (per instance, `sync delete --yes --recursive --from-obs` of the PR project tree, only after every copy and `finalize` succeeded). Staging is never touched, so `sync-main.yml` is not paused.
+
+**Required repository config**: `OBS_INSTANCES`, `OBS_USER` (vars); `OBS_PASSWORD_<NAME>` per instance (secrets).
 
 ### Service file env vars
 
