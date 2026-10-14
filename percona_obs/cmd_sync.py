@@ -2952,6 +2952,7 @@ def cmd_sync_prerelease(args) -> None:
         publish_override=True,
         branch_rootprj=source_rootprj,
         active_projects=prerelease_tree,
+        self_branch_path=False,
     )
 
     _run_frozen(
@@ -2971,6 +2972,7 @@ def cmd_sync_prerelease(args) -> None:
             verify_timeout=args.verify_timeout,
             branch_rootprj=source_rootprj,
             active_projects=prerelease_tree,
+            self_branch_path=False,
         ),
     )
 
