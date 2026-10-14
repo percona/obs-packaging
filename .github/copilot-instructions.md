@@ -551,7 +551,7 @@ and stamps that SHA into the pre-release project descriptions. `sync release <pr
 then copies the pre-release into the release project (no freeze, no git divergence check) after
 verifying the marker equals the tagged entry's `source_commit`. `release.yaml` entries are plain tag
 strings (historical) or `{tag, source_commit}` mappings; `obs-pr-cleanup.yml` and
-`.github/scripts/update_version_lists.py` read both. CI integration follows in rollout step 2.
+`.github/scripts/update_version_lists.py` read both. CI integration: `obs-release-pr.yml` runs hop 1 and the release QA on every release PR, and `obs-release.yml` runs hop 2 after merge.
 
 ### `sync promote [--dry-run] [--no-services] [--no-cache] [-m MSG] [project] [package]`
 
@@ -1168,7 +1168,7 @@ Permissions: `contents: write` (tag creation), `actions: write` (dispatch + cach
 
 **Required repository config**: as Workflow 5's QA part (`OBS_INSTANCES`, `OBS_USER`, `JENKINS_URL`, `JENKINS_USER`; `OBS_PASSWORD_<NAME>`, `JENKINS_API_TOKEN`).
 
-### `obs-release.yml` (hop 2: copy the pre-release into the release project)
+### Workflow 8 — `obs-release.yml` (hop 2: copy the pre-release into the release project)
 
 **Trigger**: `workflow_dispatch` only (a pushed tag is inert). Inputs: `pr_number` (the merged release PR) and `tags` (space-separated release tags that PR created). Dispatched by `obs-pr-cleanup.yml`; manual recovery is `gh workflow run obs-release.yml -f pr_number=N -f tags="ppg/17.12-1 ppg/18.7-1"` and is idempotent.
 

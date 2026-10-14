@@ -56,7 +56,7 @@ ppg:staging:18 ──(hop 1, PR open)──▶ <pr-root>:pr-N:ppg:releases:18 �
 
 - `percona-obs project release` cuts the release locally and records the
   staging source commit.
-- Opening the release PR makes `obs-pr-check.yml` populate a **pre-release
+- Opening the release PR makes `obs-release-pr.yml` populate a **pre-release
   project** under the PR namespace (hop 1) and run every QA lane against it.
 - Fixes go into staging through normal PRs; the release PR is refreshed and
   repopulated until QA is green.
@@ -105,7 +105,7 @@ existing `resolve_qa_instance` by `qa_types`.
 
 ### Lifecycle
 
-- Created or re-applied on every push to the release PR by `obs-pr-check.yml`,
+- Created or re-applied on every push to the release PR by `obs-release-pr.yml`,
   and on demand through a `workflow_dispatch` entry of the populate job that
   takes a PR number.
 - Repopulated on every push and on every dispatch; repopulation is the
@@ -117,7 +117,7 @@ existing `resolve_qa_instance` by `qa_types`.
 
 ### One in-flight release PR per major
 
-`obs-pr-check.yml`'s `resolve` job fails for a release PR when another open PR
+`obs-release-pr.yml`'s `resolve` job fails for a release PR when another open PR
 (found through the GitHub search API) changes the same `release.yaml`. The
 first one opened wins. Two PRs releasing the same major would race on the
 release counter and on hop 2.
@@ -289,7 +289,7 @@ and no orphan head commit.
 |---|---|---|
 | A leg fails | `finalize` skips GitHub releases and the delete; tag exists; pre-release intact; staging untouched | Re-dispatch with the same `pr_number` and `tags` (idempotent) |
 | Record mismatch (pre-release description ≠ tagged entry) | Leg refuses | The merged record is wrong: open a new release PR |
-| Pre-release already deleted | Leg fails on missing source project | Repopulate via `workflow_dispatch` of obs-pr-check with the PR number (works while the PR head ref resolves), then re-dispatch obs-release |
+| Pre-release already deleted | Leg fails on missing source project | Repopulate via `workflow_dispatch` of obs-release-pr.yml with the PR number (works while the PR head ref resolves), then re-dispatch obs-release |
 | Dispatch failure in obs-pr-cleanup | Tags exist, nothing copied | Manual dispatch |
 
 ### What disappears
@@ -302,13 +302,13 @@ pending-cancellation race, the release-only push skip in sync-main, and the
 
 1. `project release ppg:staging:18` (and `ppg:staging:17`, `ppg:staging:common`
    on the same branch for a combined release). Push the branch, open the PR.
-2. `obs-pr-check.yml` populates the pre-release per instance and runs every
+2. `obs-release-pr.yml` populates the pre-release per instance and runs every
    staging QA lane against it.
 3. QA fails: fix the package in staging through a normal PR; once merged and
    synced, rebase the release branch, re-run `project release` (refreshes the
    open id, the changelog section and `source_commit`), push. When only
    staging changed and the changelog is unaffected,
-   `gh workflow run obs-pr-check.yml -f pr_number=N` repopulates instead.
+   `gh workflow run obs-release-pr.yml -f pr_number=N` repopulates instead.
 4. Everything green: merge. `obs-pr-cleanup.yml` tags and dispatches
    `obs-release.yml` once; it copies the pre-release into the release
    projects, creates the GitHub releases, deletes the pre-release.
