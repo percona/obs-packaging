@@ -136,10 +136,15 @@ The command fetches the source project's build topology from OBS, diffs package
 versions against the previous release to generate `CHANGELOG.md`, and commits
 everything. See `docs/PERCONA_OBS_TOOL.md` for the full workflow.
 
-Once the release PR is merged, `obs-pr-cleanup.yml` tags the **merge commit**
-(e.g. `ppg/17.9-1`) and dispatches `obs-release.yml` (its only trigger is
-`workflow_dispatch` — pushing a tag by hand does nothing). `obs-release.yml`
-then copies binaries to the OBS release project and creates a GitHub release.
+Releasing is two hops. When the release PR is opened, `obs-release-pr.yml` populates a
+per-PR **pre-release** OBS project tree (`<pr_rootprj>:pr-<N>:<product>:releases:<major>`)
+from staging with `sync prerelease` and runs every QA lane the release mirrors declare
+against it, so the releases tier is populated from the pre-release and never directly from
+staging. Once the release PR is merged, `obs-pr-cleanup.yml` tags the **merge commit**
+(e.g. `ppg/17.9-1`) and dispatches `obs-release.yml` once (its only trigger is
+`workflow_dispatch` — pushing a tag by hand does nothing). `obs-release.yml` copies the
+pre-release into the OBS release project, creates the GitHub release(s) and deletes the
+pre-release.
 
 ### `staging/<major-version>/`
 

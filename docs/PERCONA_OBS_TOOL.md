@@ -703,8 +703,9 @@ at the bottom as isolated packages. Scope can be narrowed to a subproject:
 triggers each via Jenkins' `buildWithParameters` REST endpoint, and (with
 `--wait`) polls every triggered build until it reaches a terminal state.
 
-The same machinery powers the QA jobs in `.github/workflows/obs-pr-check.yml`:
-the `detect-qa-matrix` job discovers the QA-enabled subprojects of the PR's
+The same machinery powers the QA jobs of the reusable `.github/workflows/qa-fanout.yml`
+(called by `obs-pr-check.yml` for labelled PRs and by `obs-release-pr.yml` for release
+PRs): its `detect-qa-matrix` job discovers the QA-enabled subprojects of the PR's
 OBS root project, calls `qa show <project> --json` for each, concatenates the
 matrices into the GitHub Actions matrix, and the `qa` job runs
 `qa run --wait --report-json ... --filter ...` once per combo with one commit
@@ -987,9 +988,10 @@ devel/staging/releases tier layout). Release IDs include the PG minor version an
 counter (e.g. `17.9-1`, `17.9-2`, `17.10-1`). A single OBS release project
 (`ppg:releases:17`) covers all minor versions for a PG major.
 
-Until rollout step 2 (the workflows PR) lands, CI still runs the single-hop `sync release`
-on merge; the two hops (`sync prerelease`, `sync release --from`) are available for
-manual and rehearsal use.
+A release is two hops. Hop 1 copies staging into a per-PR **pre-release** project tree
+(`<pr_rootprj>:pr-<N>:<product>:releases:<major>`) when the release PR is opened, so QA runs
+against exactly the binaries that will ship. Hop 2, after merge, copies the pre-release into
+the release project. Staging is never touched by CI during a release.
 
 The process is PR-based:
 
@@ -997,19 +999,27 @@ The process is PR-based:
    `releases/<name>/` mirror tree from staging's current config, updates `release.yaml`
    and `CHANGELOG.md`, and commits locally. Pushing the branch and opening the review
    PR remain manual steps.
-2. **PR review** — `obs-pr-check.yml` detects the release-only PR and runs
-   `sync release <releases-project> --dry-run`, posting the genuine outcome (mirrors
-   complete, changelog section present, tag not already used, source reachable, staging
-   green) as a PR comment. Check it and `CHANGELOG.md`, then merge.
-3. **`obs-pr-cleanup.yml`** — on close of a merged release PR, tags the merge commit
-   (e.g. `ppg/17.9-1`) with `GITHUB_TOKEN` and dispatches `obs-release.yml` via
-   `gh workflow run` with that tag as input.
-4. **`obs-release.yml`** — its sole trigger is `workflow_dispatch`; it runs `sync release`
-   in CI, then creates a GitHub release with the changelog contents.
+2. **PR populates the pre-release and runs QA** — `obs-release-pr.yml` (release-only PRs
+   only) runs `sync prerelease <project> --branch-from main` on every OBS instance, posts a
+   per-instance comment listing the pre-release projects, and then runs every QA lane the
+   release mirrors declare against them (the reusable `qa-fanout.yml`; check names are
+   prefixed `Release / OBS QA / …`).
+3. **Fix loop** — if QA fails, fix the package in staging through a normal PR; once merged and
+   synced, rebase the release branch, re-run `project release` (refreshes the open id, the
+   changelog section and `source_commit`) and push. When only staging changed and the
+   changelog is unaffected, repopulate without a push:
+   `gh workflow run obs-release-pr.yml -f pr_number=N`.
+4. **Merge** — `obs-pr-cleanup.yml` tags the merge commit (one tag per changed `release.yaml`,
+   e.g. `ppg/17.9-1`) with `GITHUB_TOKEN` and dispatches `obs-release.yml` **once** with
+   `pr_number` and all the tags.
+5. **`obs-release.yml`** — its sole trigger is `workflow_dispatch`; per instance it runs
+   `sync release <project> --from <pr_rootprj>:pr-<N>:<project>` for every tag, then creates
+   the GitHub releases (changelog section as notes) and finally deletes the pre-release.
 
-> **Constraint:** the tag+dispatch automation in step 3 only fires for a PR whose
-> `root/` changes are **entirely** under `root/*/releases/` (`obs-pr-cleanup.yml`'s
-> release-only detection). Do not mix unrelated `root/` edits into a release PR.
+> **Constraint:** a release PR must change **only** files under `root/*/releases/`.
+> `obs-release-pr.yml` fails a PR that mixes release and other `root/` changes, and fails
+> when an older open PR already changes the same `release.yaml` (one in-flight release PR per
+> major). A release PR that changes no `release.yaml` is rejected too.
 
 ### The `PPG_RELEASE` counter
 
@@ -1025,10 +1035,9 @@ Two consequences follow, and both are deliberate:
   `PG_VERSION` matches no existing tag. There is nothing to remember and nothing to
   edit.
 - Merging a release PR raises the counter for that PG version, so the staging
-  container images are due to be retagged. `sync-main.yml` deliberately skips a push
-  whose `root/` changes are all under `root/*/releases/`, so that retag does not race
-  `obs-release.yml` copying the images it just released. The retag happens on the
-  next packaging push.
+  container images are due to be retagged. `sync-main.yml` syncs that push like any
+  other; nothing races it, because the released images already sit in the pre-release
+  project that `obs-release.yml` copies from.
 
 A project that needs its own pinned counter can still declare `PPG_RELEASE` in its
 `macros.yaml`; an explicit declaration always wins over the computed value.
@@ -1177,36 +1186,61 @@ scan produces nothing (e.g. `--no-cve-scan`, or no packages changed).
 
 ### Step 2 — CI ships the release
 
-Release PRs are review-only — `obs-pr-check.yml` detects them and, instead of running an
-OBS build, runs a real `sync release <releases-project> --dry-run` and posts the genuine
-outcome as a PR comment (no label is required for this check). On merge:
+Release-only PRs are handled by `obs-release-pr.yml` (triggered on open/synchronize/reopen
+of a PR whose changes are under `root/*/releases/**`, or by `workflow_dispatch` with a
+`pr_number`); `obs-pr-check.yml` gates them out and needs no label for this. Its jobs:
+
+- `resolve` — classifies the PR with `.github/scripts/release_pr.py classify`: release-only
+  check, one-in-flight-per-major guard, and the empty-release guard.
+- `populate` — one leg per `OBS_INSTANCES` entry, serialized on the instance's
+  `sync-main-sync-<name>` concurrency group (never cancelled; no overlap with a staging
+  upload). Runs `sync prerelease <project> --branch-from main --synced-commit <sha>` for
+  each release project, uploads the `prerelease-report-<instance>` artifact and posts a
+  per-instance PR comment.
+- `qa` — calls `qa-fanout.yml` once every populate leg succeeded.
+
+On merge:
 
 1. `sync-main.yml` runs `sync push` normally (releases/ directories are excluded from
-   traversal). It no longer creates any tag.
+   traversal). It creates no tag and is not paused.
 2. `obs-pr-cleanup.yml`, on close of the merged release PR, tags `merge_commit_sha` with
-   `GITHUB_TOKEN` (e.g. `ppg/17.9-1`) and dispatches `obs-release.yml` via
-   `gh workflow run obs-release.yml --ref main -f tag=<tag>`. A tag-creation or dispatch
-   API error fails the job; only a genuine "tag already exists" response is tolerated.
-3. `obs-release.yml`'s **sole trigger** is `workflow_dispatch` (the `push: tags` trigger
-   has been removed, so pushing a tag by hand is inert). Given the dispatched `tag`
-   input, it derives the OBS release project name (e.g. `ppg/17.9-1` → `ppg:releases:17`)
-   and runs `sync release`.
-4. After `sync release` finishes, `obs-release.yml` updates version list docs and creates
-   a GitHub release with the `CHANGELOG.md` section for that release ID.
+   `GITHUB_TOKEN` (e.g. `ppg/17.9-1`) and dispatches `obs-release.yml` once via
+   `gh workflow run obs-release.yml --ref main -f pr_number=<N> -f tags="<tag> …"`. A
+   tag-creation or dispatch API error fails the job; only a genuine "tag already exists"
+   response is tolerated. The PR's OBS project tree is kept (it is the copy source) and
+   deleted by `obs-release.yml`.
+3. `obs-release.yml`'s **sole trigger** is `workflow_dispatch` (inputs `pr_number`,
+   `tags`; pushing a tag by hand is inert). Per instance it derives each release project
+   from its tag (`ppg/17.9-1` → `ppg:releases:17`) and runs `sync release --from` the
+   pre-release.
+4. `finalize` creates (or updates the notes of) one GitHub release per tag from its
+   `CHANGELOG.md` section. If any copy failed it instead fails with an `::error::` and the
+   pre-release is kept.
+5. `delete` removes the pre-release project tree on every instance, only after every copy
+   and the GitHub releases succeeded.
 
-Manual recovery (e.g. `obs-pr-cleanup.yml` tagged but the dispatch failed):
+### Failure and recovery
 
-```sh
-gh workflow run obs-release.yml -f tag=ppg/17.9-1
-```
+Hop 1 (PR open):
 
-**Pending-cancellation race:** `obs-release.yml` shares the `sync-main-sync` concurrency
-group (`cancel-in-progress: false`) with `sync-main.yml`'s sync job, and GitHub keeps at
-most one *pending* run per group. If a `root/**` push queues another sync-main sync job
-while the dispatched `obs-release.yml` run is still pending behind an in-progress one,
-the pending `obs-release.yml` run is **cancelled** rather than requeued — the symptom is
-a cancelled "OBS Release" run with no release having happened. Recovery is the same
-manual command above, re-run once the concurrency group is free.
+| Failure | Behaviour | Recovery |
+|---|---|---|
+| Staging not green / drain timeout | `sync prerelease` fails before copying; freeze restored; PR comment names the packages | Fix staging, repopulate |
+| Staging moved since the cut | Record check fails before any freeze, printing the staging-path diff | Re-run `project release`, push |
+| Partial copy (OBS error mid `osc release`) | Freeze restored; pre-release holds a mix; verify fails loudly | Repopulate (update-in-place, idempotent) |
+| Push during population | Second run queues behind the first in the per-instance group | None needed |
+| A queued populate displaced by a newer pending run in the same group | Nothing frozen, nothing copied | `gh workflow run obs-release-pr.yml -f pr_number=N` |
+
+Nothing writes to the PR branch, so there is no bot commit and no trigger loop.
+
+Hop 2 (after merge):
+
+| Failure | Behaviour | Recovery |
+|---|---|---|
+| A leg fails | `finalize` fails with `::error::`, no GitHub releases, no delete; tag exists; pre-release intact; staging untouched | Re-dispatch with the same inputs (idempotent): `gh workflow run obs-release.yml -f pr_number=N -f tags="ppg/17.12-1 ppg/18.7-1"` |
+| Record mismatch (pre-release description ≠ tagged entry) | Leg refuses | The merged record is wrong: open a new release PR |
+| Pre-release already deleted | Leg fails on missing source project | Repopulate with `gh workflow run obs-release-pr.yml -f pr_number=N` (works while the PR head ref resolves, also for a merged PR), then re-dispatch `obs-release.yml` |
+| Dispatch failure in obs-pr-cleanup | Tags exist, nothing copied | Manual dispatch as above |
 
 ### `sync prerelease` — hop 1 (staging → PR pre-release)
 
@@ -1237,7 +1271,7 @@ pre-release project description.
 | `--verify-timeout` | `600` | Bound on the post-release verify poll (`0` disables). |
 | `--dry-run` | off | Runs (1), (2), the mirror/changelog/tag checks and the green check only. |
 
-The workflow that calls this on release PRs lands in rollout step 2.
+`obs-release-pr.yml` calls this once per release project on every OBS instance.
 
 ### `sync release --from` — hop 2 (pre-release → release project)
 
