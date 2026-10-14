@@ -1270,7 +1270,7 @@ def _apply_project_config(
     branch_rootprj: str | None = None,
     existing_branch_projects: "dict[str, set[str]] | None" = None,
     publish_override: "dict[str, bool] | bool | None" = None,
-    self_branch_path: bool = True,
+    branch_fallbacks: bool = True,
 ) -> "tuple[bool, bool]":
     """Create or update OBS project metadata and build config from project.yaml.
 
@@ -1332,7 +1332,7 @@ def _apply_project_config(
         active_projects=active_projects,
         branch_rootprj=branch_rootprj,
         existing_branch_projects=existing_branch_projects,
-        self_branch_path=self_branch_path,
+        branch_fallbacks=branch_fallbacks,
     )
 
     # --- project meta ---

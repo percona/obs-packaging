@@ -537,7 +537,7 @@ def build_project_meta(
     active_projects: "set[str] | None" = None,
     branch_rootprj: str | None = None,
     existing_branch_projects: "dict[str, set[str]] | None" = None,
-    self_branch_path: bool = True,
+    branch_fallbacks: bool = True,
 ) -> str:
     """Build OBS project metadata XML from project.yaml fields.
 
@@ -554,9 +554,11 @@ def build_project_meta(
     the branch counterpart of ``obs_project_name`` itself.  This ensures that
     non-promoted packages (absent from the target project) remain visible as
     build dependencies when building promoted packages in the same project.
-    ``self_branch_path=False`` suppresses the leading path to the branch
-    counterpart of the project itself (hop 1 of a release: a binary-only
-    pre-release must not depend on a prior release project existing).
+    ``branch_fallbacks=False`` emits no path to the branch counterpart of this
+    project and no production fallback for active subprojects (hop 1 of a
+    release: a binary-only pre-release must not depend on a prior release
+    project existing); only PR-internal paths and redirected external paths
+    remain.
 
     When ``existing_branch_projects`` is provided, every emitted ``<path>``
     entry that would point at a branch-source project (``branch_rootprj:...``)
@@ -577,7 +579,7 @@ def build_project_meta(
     # project so that non-promoted packages (absent from the target) remain
     # visible as build dependencies via a leading <path> entry.
     self_branch_proj: str | None = None
-    if branch_rootprj is not None and self_branch_path:
+    if branch_rootprj is not None and branch_fallbacks:
         if obs_project_name == rootprj:
             self_branch_proj = branch_rootprj
         elif obs_project_name.startswith(rootprj + ":"):
@@ -644,7 +646,8 @@ def build_project_meta(
                         # counterpart project does not exist on OBS yet (e.g. a
                         # subproject newly added by this PR has no production peer).
                         if (
-                            (
+                            branch_fallbacks
+                            and (
                                 existing_branch_projects is None
                                 or repo_name
                                 in existing_branch_projects.get(branch_proj, set())

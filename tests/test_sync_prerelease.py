@@ -248,7 +248,7 @@ def test_prerelease_meta_redirects_external_paths_to_production_root(
                 prj,
                 k.get("branch_rootprj"),
                 k.get("active_projects"),
-                k.get("self_branch_path"),
+                k.get("branch_fallbacks"),
             ),
         ),
     )
@@ -260,7 +260,7 @@ def test_prerelease_meta_redirects_external_paths_to_production_root(
             (
                 k.get("branch_rootprj"),
                 k.get("active_projects"),
-                k.get("self_branch_path"),
+                k.get("branch_fallbacks"),
             ),
         ),
     )
@@ -269,3 +269,4 @@ def test_prerelease_meta_redirects_external_paths_to_production_root(
     expected = {top, f"{top}:containers", f"{top}:tarballs"}
     assert seen["meta"] == (top, "home:Admin", expected, False)
     assert seen["tree"] == ("home:Admin", expected, False)
+    assert seen["meta"][3] is False and seen["tree"][2] is False
