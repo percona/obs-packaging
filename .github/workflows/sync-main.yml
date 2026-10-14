@@ -13,8 +13,9 @@ name: Sync to OBS (main)
 # packages, while pinned packages (tag or full SHA) are skipped from the
 # sync-state manifest with no API traffic, so a scheduled run costs little
 # more than the services + MD5-compared upload of the moving-ref packages.
-# A scheduled run has no before-SHA, so the release-only detector below
-# always lets it sync.
+# Merging a release PR raises PPG_RELEASE; the next sync retags the staging
+# images, which is safe because the released images already sit in that PR's
+# pre-release project.
 #
 # Two-job debounce design: the `sync` job serializes on its own concurrency
 # group and is never cancelled mid-upload, so back-to-back pushes queue up
@@ -78,10 +79,6 @@ jobs:
     permissions:
       contents: read
       packages: read
-    # Matrix job outputs are last-writer-wins; release_only is computed from
-    # the pushed commit range alone, so every leg writes the same value.
-    outputs:
-      release_only: ${{ steps.detect.outputs.release_only }}
 
     steps:
       - uses: actions/checkout@v4
@@ -89,38 +86,6 @@ jobs:
           # Full history is required: sync push reads git log to detect
           # per-package changes since the last OBS sync commit SHA.
           fetch-depth: 0
-
-      # A push whose root/ changes are entirely under root/*/releases/ carries no
-      # packaging change, and must NOT be synced.  PPG_RELEASE is computed from
-      # release.yaml, so merging a release PR changes the rendered container tags;
-      # syncing here would rebuild those images with the NEXT release counter at
-      # the same moment obs-release.yml is copying the current ones out of
-      # staging, and the release workflow waits for staging to go quiet before it
-      # copies.  The retag lands on the next packaging push instead.
-      - name: Detect release-only push
-        id: detect
-        shell: bash
-        run: |
-          set -euo pipefail
-          BEFORE="${{ github.event.before }}"
-          SHA="${{ github.sha }}"
-          # Unknown range (workflow_dispatch, first push, force push, shallow
-          # clone): never skip.
-          if [ -z "$BEFORE" ] \
-             || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
-             || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
-            echo "release_only=false" >> "$GITHUB_OUTPUT"
-            echo "unknown before-SHA; syncing"
-            exit 0
-          fi
-          CHANGED=$(git diff --name-only "$BEFORE" "$SHA" -- 'root/**')
-          NON_RELEASE=$(echo "$CHANGED" | grep -v '^root/[^/]*/releases/' || true)
-          if [ -n "$CHANGED" ] && [ -z "$NON_RELEASE" ]; then
-            echo "release_only=true" >> "$GITHUB_OUTPUT"
-            echo "release-only push; skipping sync"
-          else
-            echo "release_only=false" >> "$GITHUB_OUTPUT"
-          fi
 
       # Packages synced before the migration to percona/obs-packaging carry
       # OBS sync comments whose SHAs come from the legacy repo's history and
@@ -233,12 +198,11 @@ jobs:
       # so the package is re-uploaded (MD5 comparison still suppresses
       # unchanged files at upload time).
       - name: Sync to OBS
-        if: steps.detect.outputs.release_only != 'true'
         env:
           SYNC_PROJECT: ${{ inputs.project }}
           SYNC_PACKAGE: ${{ inputs.package }}
           SYNC_FORCE: ${{ inputs.force }}
-        # Explicit, like the detect step above: this job's default shell in the
+        # Explicit: this job's default shell in the
         # obs-tools container is `sh -e {0}` (dash), where the array below is a
         # syntax error.
         shell: bash
@@ -264,7 +228,7 @@ jobs:
       # Entry mtimes are bumped on every cache hit, so age == unused-for.
       # Runs even when the sync fails: pruning only removes stale entries.
       - name: Prune stale cache entries
-        if: always() && steps.detect.outputs.release_only != 'true'
+        if: always()
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/prune_obs_cache.py
@@ -273,7 +237,6 @@ jobs:
       # only runs after a successful sync, so an always() upload is not
       # needed.
       - name: Upload sync report
-        if: steps.detect.outputs.release_only != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: sync-report-${{ matrix.instance.name }}
@@ -283,7 +246,6 @@ jobs:
   poll:
     name: Wait for OBS builds (${{ matrix.instance.name }})
     needs: sync
-    if: needs.sync.outputs.release_only != 'true'
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     timeout-minutes: 360
