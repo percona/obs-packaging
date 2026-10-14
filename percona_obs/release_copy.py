@@ -109,6 +109,7 @@ def apply_mirror_meta(
     publish_override: "dict[str, bool] | bool | None" = None,
     branch_rootprj: "str | None" = None,
     active_projects: "set[str] | None" = None,
+    self_branch_path: bool = True,
 ) -> None:
     """Create or update *target_obs_project* from the mirror project.yaml and
     make sure builds are disabled.  Two passes when OBS stripped paths.
@@ -128,6 +129,7 @@ def apply_mirror_meta(
         publish_override=publish_override,
         branch_rootprj=branch_rootprj,
         active_projects=active_projects,
+        self_branch_path=self_branch_path,
     )
     if paths_stripped:
         _apply_project_config(
@@ -139,6 +141,7 @@ def apply_mirror_meta(
             publish_override=publish_override,
             branch_rootprj=branch_rootprj,
             active_projects=active_projects,
+            self_branch_path=self_branch_path,
         )
     _disable_project_builds(apiurl, target_obs_project)
 
@@ -205,6 +208,7 @@ def release_tree(
     verify_timeout: int = 600,
     branch_rootprj: "str | None" = None,
     active_projects: "set[str] | None" = None,
+    self_branch_path: bool = True,
 ) -> None:
     """Copy the top project and every (subproject, mirror) pair, then verify.
 
@@ -224,6 +228,7 @@ def release_tree(
             publish_override=publish_override,
             branch_rootprj=branch_rootprj,
             active_projects=active_projects,
+            self_branch_path=self_branch_path,
         )
         copy_project_binaries(
             apiurl, f"{source_obs_project}:{subproject_name}", target_sub

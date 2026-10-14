@@ -118,7 +118,13 @@ def test_apply_mirror_meta_forwards_branch_redirection(monkeypatch, tmp_path):
     monkeypatch.setattr(
         rc,
         "_apply_project_config",
-        lambda *a, **k: seen.append((k.get("branch_rootprj"), k.get("active_projects")))
+        lambda *a, **k: seen.append(
+            (
+                k.get("branch_rootprj"),
+                k.get("active_projects"),
+                k.get("self_branch_path"),
+            )
+        )
         or (False, True),
     )
     monkeypatch.setattr(rc, "_disable_project_builds", lambda *a, **k: None)
@@ -130,8 +136,9 @@ def test_apply_mirror_meta_forwards_branch_redirection(monkeypatch, tmp_path):
         {},
         branch_rootprj="prod",
         active_projects={"PR:T", "PR:T:containers"},
+        self_branch_path=False,
     )
-    assert seen == [("prod", {"PR:T", "PR:T:containers"})]
+    assert seen == [("prod", {"PR:T", "PR:T:containers"}, False)]
 
 
 def test_release_tree_forwards_branch_redirection_to_subprojects(monkeypatch, tmp_path):
@@ -140,7 +147,12 @@ def test_release_tree_forwards_branch_redirection_to_subprojects(monkeypatch, tm
         rc,
         "apply_mirror_meta",
         lambda apiurl, prj, path, rootprj, env, **k: seen.append(
-            (prj, k.get("branch_rootprj"), k.get("active_projects"))
+            (
+                prj,
+                k.get("branch_rootprj"),
+                k.get("active_projects"),
+                k.get("self_branch_path"),
+            )
         ),
     )
     monkeypatch.setattr(rc, "copy_project_binaries", lambda *a, **k: None)
@@ -155,5 +167,6 @@ def test_release_tree_forwards_branch_redirection_to_subprojects(monkeypatch, tm
         verify_timeout=0,
         branch_rootprj="prod",
         active_projects={"PR:T", "PR:T:containers"},
+        self_branch_path=False,
     )
-    assert seen == [("PR:T:containers", "prod", {"PR:T", "PR:T:containers"})]
+    assert seen == [("PR:T:containers", "prod", {"PR:T", "PR:T:containers"}, False)]

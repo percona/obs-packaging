@@ -243,18 +243,29 @@ def test_prerelease_meta_redirects_external_paths_to_production_root(
         cmd_sync,
         "apply_mirror_meta",
         lambda apiurl, prj, path, rootprj, env, **k: seen.setdefault(
-            "meta", (prj, k.get("branch_rootprj"), k.get("active_projects"))
+            "meta",
+            (
+                prj,
+                k.get("branch_rootprj"),
+                k.get("active_projects"),
+                k.get("self_branch_path"),
+            ),
         ),
     )
     monkeypatch.setattr(
         cmd_sync,
         "release_tree",
         lambda *a, **k: seen.setdefault(
-            "tree", (k.get("branch_rootprj"), k.get("active_projects"))
+            "tree",
+            (
+                k.get("branch_rootprj"),
+                k.get("active_projects"),
+                k.get("self_branch_path"),
+            ),
         ),
     )
     cmd_sync.cmd_sync_prerelease(_Args())
     top = "home:Admin:PR:pr-5:ppg:releases:17"
     expected = {top, f"{top}:containers", f"{top}:tarballs"}
-    assert seen["meta"] == (top, "home:Admin", expected)
-    assert seen["tree"] == ("home:Admin", expected)
+    assert seen["meta"] == (top, "home:Admin", expected, False)
+    assert seen["tree"] == ("home:Admin", expected, False)
