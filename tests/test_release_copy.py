@@ -122,7 +122,7 @@ def test_apply_mirror_meta_forwards_branch_redirection(monkeypatch, tmp_path):
             (
                 k.get("branch_rootprj"),
                 k.get("active_projects"),
-                k.get("self_branch_path"),
+                k.get("branch_fallbacks"),
             )
         )
         or (False, True),
@@ -136,9 +136,10 @@ def test_apply_mirror_meta_forwards_branch_redirection(monkeypatch, tmp_path):
         {},
         branch_rootprj="prod",
         active_projects={"PR:T", "PR:T:containers"},
-        self_branch_path=False,
+        branch_fallbacks=False,
     )
     assert seen == [("prod", {"PR:T", "PR:T:containers"}, False)]
+    assert seen[0][2] is False
 
 
 def test_release_tree_forwards_branch_redirection_to_subprojects(monkeypatch, tmp_path):
@@ -151,7 +152,7 @@ def test_release_tree_forwards_branch_redirection_to_subprojects(monkeypatch, tm
                 prj,
                 k.get("branch_rootprj"),
                 k.get("active_projects"),
-                k.get("self_branch_path"),
+                k.get("branch_fallbacks"),
             )
         ),
     )
@@ -167,6 +168,7 @@ def test_release_tree_forwards_branch_redirection_to_subprojects(monkeypatch, tm
         verify_timeout=0,
         branch_rootprj="prod",
         active_projects={"PR:T", "PR:T:containers"},
-        self_branch_path=False,
+        branch_fallbacks=False,
     )
     assert seen == [("PR:T:containers", "prod", {"PR:T", "PR:T:containers"}, False)]
+    assert seen[0][3] is False
