@@ -1083,3 +1083,83 @@ def test_mirror_qa_entries_without_versions_add_nothing(tmp_path, monkeypatch):
         cfg, src, "ppg:staging:17", "ppg:staging:17", "ppg:releases:17"
     )
     assert "EXPECTED_VERSIONS" not in out[0]["parameters"]
+
+
+# ---------------------------------------------------------------------------
+# _extract_upstream_info_from_service: macro-ised url/revision
+# ---------------------------------------------------------------------------
+
+_MACRO_SERVICE = """<services>
+  <service name="obs_scm">
+    <param name="scm">git</param>
+    <param name="url">%!{PG_SOURCE_GIT_URL}</param>
+    <param name="revision">%!{PG_SOURCE_GIT_REVISION}</param>
+  </service>
+</services>
+"""
+
+_PG_MACROS = """- PG_SOURCE_GIT_URL: https://github.com/percona/postgres.git
+- PG_VERSION: 18.6
+- PERCONA_PG_PATCH_VERSION: 1
+- PG_SOURCE_GIT_REVISION: PSP-%!{PG_VERSION}.%!{PERCONA_PG_PATCH_VERSION}
+"""
+
+
+def _macro_service(tmp_path: Path, monkeypatch, with_macros: bool = True) -> Path:
+    from percona_obs import common
+
+    root = tmp_path / "root"
+    major = root / "ppg" / "staging" / "18"
+    obs = major / "percona-postgresql" / "obs"
+    obs.mkdir(parents=True)
+    service = obs / "_service"
+    service.write_text(_MACRO_SERVICE, "utf-8")
+    if with_macros:
+        (major / "macros.yaml").write_text(_PG_MACROS, "utf-8")
+    monkeypatch.setattr(common, "REPO_ROOT", root)
+    return service
+
+
+def test_extract_upstream_info_resolves_url_and_revision_macros(tmp_path, monkeypatch):
+    service = _macro_service(tmp_path, monkeypatch)
+    info = cmd_project._extract_upstream_info_from_service(service)
+    assert info == ("https://github.com/percona/postgres.git", "PSP-18.6.1")
+    assert info is not None
+    assert (
+        cmd_project._build_upstream_release_url(*info, "18.6.1")
+        == "https://github.com/percona/postgres/releases/tag/PSP-18.6.1"
+    )
+
+
+def test_extract_upstream_info_unresolvable_url_macro_is_empty(tmp_path, monkeypatch):
+    service = _macro_service(tmp_path, monkeypatch, with_macros=False)
+    info = cmd_project._extract_upstream_info_from_service(service)
+    assert info is not None
+    assert info[0] == ""
+    assert cmd_project._build_upstream_release_url(*info, "18.6.1") is None
+
+
+def test_extract_upstream_info_explicit_macros_win(tmp_path, monkeypatch):
+    service = _macro_service(tmp_path, monkeypatch)
+    info = cmd_project._extract_upstream_info_from_service(
+        service,
+        {
+            "PG_SOURCE_GIT_URL": "https://example.com/x.git",
+            "PG_SOURCE_GIT_REVISION": "r1",
+        },
+    )
+    assert info == ("https://example.com/x.git", "r1")
+
+
+def test_extract_upstream_info_plain_service_unchanged(tmp_path):
+    service = tmp_path / "_service"
+    service.write_text(
+        '<services><service name="obs_scm">'
+        '<param name="url">https://github.com/o/r.git</param>'
+        '<param name="revision">v1.0</param></service></services>',
+        "utf-8",
+    )
+    assert cmd_project._extract_upstream_info_from_service(service) == (
+        "https://github.com/o/r.git",
+        "v1.0",
+    )

@@ -31,7 +31,6 @@ from .common import (
     _print_pending,
     _print_remove,
     apply_env_substitution,
-    _MACRO_RE,
     apply_macro_substitution,
     auto_rootprj_env,
     build_project_meta,
@@ -2002,8 +2001,16 @@ def _merge_container_pkgs(
 
 def _extract_upstream_info_from_service(
     service_file: Path,
+    macros: "dict[str, str] | None" = None,
 ) -> "tuple[str, str] | None":
-    """Return (url, revision) from the upstream obs_scm in an _service file, or None."""
+    """Return (url, revision) from the upstream obs_scm in an _service file, or None.
+
+    ``%!{VAR}`` tokens in url and revision are resolved with *macros*, or, when
+    omitted, with the macro chain of the package directory (the parent of
+    ``obs/``; for a symlinked package that is the link's location).  A url
+    that still contains an unresolved token is returned as ``""`` so no bogus
+    link is built from it.  ``None`` means there is no obs_scm url at all.
+    """
     try:
         text = service_file.read_text("utf-8")
         root_el = ET.fromstring(text)
@@ -2020,6 +2027,15 @@ def _extract_upstream_info_from_service(
         url = params.get("url", "")
         revision = params.get("revision", "")
         if url:
+            chain = (
+                macros
+                if macros is not None
+                else load_macros(service_file.parent.parent)
+            )
+            url = apply_macro_substitution(url, chain, strict=False)
+            revision = apply_macro_substitution(revision, chain, strict=False)
+            if "%!{" in url:
+                url = ""
             return url, revision
     return None
 
@@ -2119,8 +2135,6 @@ def _build_changed_packages(
     if not release_versions:
         return changed
 
-    macros = load_macros(source_path)
-
     for pkg in sorted(source_versions):
         src_ver = source_versions.get(pkg)
         rel_ver = release_versions.get(pkg)
@@ -2149,11 +2163,6 @@ def _build_changed_packages(
             info = _extract_upstream_info_from_service(service_file)
             if info:
                 upstream_url, revision = info
-                if macros and _MACRO_RE.search(revision):
-                    try:
-                        revision = apply_macro_substitution(revision, macros)
-                    except SystemExit:
-                        revision = ""
 
         changed.append(
             ChangedPackage(
@@ -2185,9 +2194,6 @@ def _build_changelog_section(
     changed: list[str] = []
     removed: list[str] = []
 
-    # Load macros once so %!{VAR} tokens in _service revision fields can be resolved.
-    macros = load_macros(source_path)
-
     all_pkgs = set(source_versions.keys())
     if release_versions:
         all_pkgs |= set(release_versions.keys())
@@ -2218,12 +2224,6 @@ def _build_changelog_section(
             info = _extract_upstream_info_from_service(service_file)
             if info:
                 upstream_url, revision = info
-                # Resolve any %!{VAR} macro tokens in the revision.
-                if macros and _MACRO_RE.search(revision):
-                    try:
-                        revision = apply_macro_substitution(revision, macros)
-                    except SystemExit:
-                        revision = ""
                 release_url = _build_upstream_release_url(
                     upstream_url, revision, pkg_version
                 )
