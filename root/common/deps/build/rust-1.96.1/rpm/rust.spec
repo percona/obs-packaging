@@ -100,15 +100,51 @@ find %{buildroot}%{_libdir} -maxdepth 1 -type f -name '*.so' \
 find %{buildroot}%{rustlibdir} -type f -name '*.so' \
     -exec chmod -v +x '{}' '+'
 
+# Remove optional developer tools not required by cargo-pgrx
+rm -f %{buildroot}%{_bindir}/cargo-clippy
+rm -f %{buildroot}%{_bindir}/cargo-fmt
+rm -f %{buildroot}%{_bindir}/clippy-driver
+rm -f %{buildroot}%{_bindir}/rust-analyzer
+rm -f %{buildroot}%{_bindir}/rustfmt
+rm -f %{buildroot}%{_libexecdir}/rust-analyzer-proc-macro-srv
+
+# Remove debugger wrappers
+rm -f %{buildroot}%{_bindir}/rust-gdb
+rm -f %{buildroot}%{_bindir}/rust-gdbgui
+rm -f %{buildroot}%{_bindir}/rust-lldb
+
+# Remove shell completions
+rm -f %{buildroot}%{_sysconfdir}/bash_completion.d/cargo
+rm -f %{buildroot}%{_datadir}/zsh/site-functions/_cargo
+
+# Remove optional target specification schema
+rm -f %{buildroot}%{_sysconfdir}/target-spec-json-schema.json
+
+# Remove optional tool documentation
+rm -rf %{buildroot}%{_docdir}/clippy
+rm -rf %{buildroot}%{_docdir}/rust-analyzer
+rm -rf %{buildroot}%{_docdir}/rustfmt
+rm -rf %{buildroot}%{_docdir}/cargo
+rm -rf %{buildroot}%{_docdir}/rustc
+
+# Remove optional man pages
+rm -f %{buildroot}%{_mandir}/man1/cargo*.1*
+rm -f %{buildroot}%{_mandir}/man1/rustc.1*
+rm -f %{buildroot}%{_mandir}/man1/rustdoc.1*
+
 %files
+%license COPYRIGHT LICENSE-APACHE LICENSE-MIT
 %{_bindir}/rustc
 %{_bindir}/rustdoc
 %{_libdir}/librustc_driver-*.so
-%{_prefix}/lib/rustlib/
+%{rustlibdir}/
+%exclude %{_sysconfdir}/target-spec-json-schema.json
 
 %files -n cargo
+%license src/tools/cargo/LICENSE-APACHE
+%license src/tools/cargo/LICENSE-MIT
+%license src/tools/cargo/LICENSE-THIRD-PARTY
 %{_bindir}/cargo
-%{_mandir}/man1/cargo*.1*
 
 %changelog
 * Tue Oct 13 2026 Percona Development Team <info@percona.com> - 1.96.1-1
