@@ -1,0 +1,18 @@
+# Nightly QA: which PostgreSQL major runs on which night.
+#
+# The scheduled run (obs-nightly-qa.yml, 23:00 UTC) looks up the current UTC
+# weekday here and runs that major's QA only: its own projects
+# (ppg:staging:<major>, :containers, :extras:containers, :tarballs, ...) plus
+# the shared-image builds that involve it (component images named -pg<major>,
+# image upgrades into it, named -to-<major>). A weekday that is not listed runs
+# nothing; Saturday and Sunday are kept free for re-runs and maintenance.
+#
+# Every QA build must belong to exactly one listed major (tests check this),
+# except majors deliberately left out below.
+mon: 14
+tue: 15
+wed: 16
+thu: 17
+fri: 18
+# PG 19 (in development) is not scheduled yet; run it on demand with the
+# workflow's "major" input, or add e.g. "sun: 19" once it should run weekly.

@@ -1,79 +1,67 @@
 name: OBS Nightly QA
 
-# Runs nightly (and on demand via workflow_dispatch) against `main`.
-# Discovers QA-enabled OBS subprojects beneath ${{ vars.OBS_ROOTPRJ }},
-# triggers Jenkins via `percona-obs qa run` for each matrix combo (each is
-# its own GitHub Actions check run on the main HEAD), and finally aggregates
-# the results into one shields.io endpoint badge per distribution project
-# (qa-badge-ppg-staging-18.json, ...) on the `badges` branch.
+# One PostgreSQL major per night (see .github/nightly-qa-schedule.yml):
+# at 23:00 UTC Monday to Friday, runs the QA of the major listed for that
+# weekday against `main`: its own projects plus the shared-image builds that
+# involve it. `percona-obs qa run` triggers Jenkins for each matrix combo
+# (each its own GitHub Actions check run on the main HEAD).
+#
+# A scheduled run is skipped when nothing under root/ changed since the last
+# successful run of the same major (a package refresh job runs 4 hours
+# earlier, so component changes outside this repo reach OBS before then).
+#
+# Run it by hand (Actions > OBS Nightly QA > Run workflow) with "major":
+# "today" follows the schedule, a number runs that major, "all" runs
+# everything (e.g. release testing).
 
 on:
-  #schedule:
-    #- cron: '0 23 * * *'     # 23:00 UTC nightly
-  workflow_dispatch: {}
+  schedule:
+    - cron: '0 2 * * 1-5'    # 02:00 UTC, Monday to Friday
+  workflow_dispatch:
+    inputs:
+      major:
+        description: 'PostgreSQL major to test: today (as scheduled), 14-19, or all'
+        type: choice
+        default: today
+        options: [today, '14', '15', '16', '17', '18', '19', all]
+
+# Never cancel a running nightly: a second run waits for the first.
+concurrency:
+  group: obs-nightly-qa
+  cancel-in-progress: false
 
 jobs:
-  # ──────────────────────────────────────────────────────────────────────────
-  # changes: skip the rest of the workflow when nothing under root/ has
-  # changed since the last successful nightly QA run. workflow_dispatch
-  # always bypasses this check so manual runs are never suppressed.
-  # ──────────────────────────────────────────────────────────────────────────
-  changes:
-    name: Check root/ changes since last QA run
+  # plan: tonight's major, and whether anything changed for it since its last
+  # successful run (.github/scripts/nightly_plan.py).
+  plan:
+    name: Plan tonight's QA
     runs-on: ubuntu-latest
     permissions:
       actions: read
       contents: read
     outputs:
-      has_root_changes: ${{ steps.check.outputs.has_root_changes }}
-
+      run: ${{ steps.plan.outputs.run }}
+      major: ${{ steps.plan.outputs.major }}
+      marker: ${{ steps.plan.outputs.marker }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
-
-      - name: Check for root/ changes since last successful QA run
-        id: check
+      - name: Plan
+        id: plan
         env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_MAJOR: ${{ github.event.inputs.major }}
           GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Triggered manually — skipping change check."
-            echo "has_root_changes=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          LAST_SHA=$(gh run list \
-            --workflow obs-nightly-qa.yml \
-            --status success \
-            --limit 1 \
-            --json headSha \
-            --jq '.[0].headSha // empty' 2>/dev/null || true)
-          if [ -z "$LAST_SHA" ]; then
-            echo "No previous successful run found — running QA."
-            echo "has_root_changes=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "Last successful QA run: $LAST_SHA"
-          CHANGES=$(git log --oneline "$LAST_SHA"..HEAD -- root/)
-          if [ -n "$CHANGES" ]; then
-            echo "Changes found in root/ since $LAST_SHA — running QA."
-            echo "has_root_changes=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No changes in root/ since last QA run ($LAST_SHA) — skipping."
-            echo "has_root_changes=false" >> "$GITHUB_OUTPUT"
-          fi
+        run: python3 .github/scripts/nightly_plan.py
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # detect: discover QA-enabled subprojects under OBS_ROOTPRJ and emit the
-  # GitHub Actions matrix.
-  # ──────────────────────────────────────────────────────────────────────────
   detect:
     name: Detect QA matrix
-    needs: changes
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
-    if: needs.changes.outputs.has_root_changes == 'true'
     permissions:
       packages: read
 
@@ -116,6 +104,7 @@ jobs:
         env:
           OBS_APIURL: ${{ vars.OBS_APIURL }}
           OBS_PROJECT: ${{ vars.OBS_ROOTPRJ }}
+          QA_MAJOR: ${{ needs.plan.outputs.major }}
           PYTHONPATH: ${{ github.workspace }}
         run: |
           venv/bin/python .github/scripts/list_qa_matrix.py > /tmp/qa-matrix.json
@@ -124,11 +113,21 @@ jobs:
             cat /tmp/qa-matrix.json
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
+          echo "$(jq 'length' /tmp/qa-matrix.json) Jenkins build(s)" >> "$GITHUB_STEP_SUMMARY"
           if [ "$(jq 'length' /tmp/qa-matrix.json)" -gt 0 ]; then
             echo "has_matrix=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_matrix=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # Marks which major this run tested; the plan job of later nights looks
+      # for it on successful runs to decide whether anything changed since.
+      - name: Record the tested major
+        run: echo "${{ needs.plan.outputs.major }}" > /tmp/nightly-major.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.plan.outputs.marker }}
+          path: /tmp/nightly-major.txt
 
   # ──────────────────────────────────────────────────────────────────────────
   # qa: trigger Jenkins for each matrix combo (in parallel) and upload the
@@ -143,10 +142,15 @@ jobs:
     permissions:
       packages: read
 
+    # A per-major run takes about 1h20m; 5 hours leaves room for Jenkins queueing
+    # while staying under GitHub's 6-hour job limit.
+    timeout-minutes: 300
     strategy:
       matrix:
         include: ${{ fromJSON(needs.detect.outputs.matrix) }}
       fail-fast: false
+      # At most 20 jobs at once, so the nightly never takes every runner slot.
+      max-parallel: 20
 
     steps:
       - uses: actions/checkout@v4

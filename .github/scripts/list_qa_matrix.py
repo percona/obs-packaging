@@ -20,6 +20,9 @@ Optional:
                             ``package``) whose package is not in the OBS
                             subproject.  Set by PR runs, where the PR project
                             holds only promoted packages; unset for the nightly.
+  QA_MAJOR                  a PostgreSQL major (e.g. "17"): keep only that
+                            major's combos (see ``belongs_to_major``). Set by the
+                            nightly's one-major-per-day schedule; unset = all.
 """
 
 from __future__ import annotations
@@ -93,6 +96,23 @@ def drop_absent_packages(
     return kept, sorted(dropped)
 
 
+def belongs_to_major(project: str, name: str | None, major: str) -> bool:
+    """Whether a QA combo is part of PostgreSQL *major*'s nightly.
+
+    A major's own projects carry it as a project component
+    (``ppg:staging:17``, ``ppg:staging:17:containers``, ...). Version-independent
+    projects (``ppg:staging:common:...``) hold entries for several majors, told
+    apart by name: component images against a major's server end in
+    ``-pg<major>``; image upgrades belong to the major they upgrade *into*
+    (``...-16-to-17`` is PG 17's), so each upgrade runs exactly once a week.
+    """
+    if major in project.split(":"):
+        return True
+    name = name or ""
+    return name.endswith(f"-pg{major}") or name.endswith(f"-to-{major}")
+
+
+
 def main() -> None:
     import osc.conf
 
@@ -104,6 +124,7 @@ def main() -> None:
     qa_types_raw = os.environ.get("QA_TYPES", "")
     qa_types = {t.strip() for t in qa_types_raw.split(",") if t.strip()}
     present_only = os.environ.get("QA_PACKAGES_PRESENT_ONLY", "") == "true"
+    major = os.environ.get("QA_MAJOR", "").strip()
 
     osc.conf.get_config(override_apiurl=apiurl)
 
@@ -169,10 +190,14 @@ def main() -> None:
                     + ", ".join(dropped),
                     file=sys.stderr,
                 )
+        if entries and major:
+            entries = [e for e in entries if belongs_to_major(project, e.get("name"), major)]
         if entries:
             print(f"  {project}: {len(entries)} combo(s)", file=sys.stderr)
             matrix.extend(normalize_entry(e) for e in entries)
 
+    if major:
+        print(f"PG {major}: {len(matrix)} combo(s) in total", file=sys.stderr)
     print(json.dumps(matrix))
 
 

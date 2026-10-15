@@ -240,20 +240,3 @@ project-config: |
   %if "%_repository" == "Ubuntu_26.04"
   Release: <CI_CNT>.<B_CNT>.resolute
   %endif
-
-qa:
-  pipeline: ppg-obs
-  parameters:
-    REPO: ${OBS_ROOTPRJ}:ppg:17
-    VERSION: ppg-%!{PG_VERSION}
-    PLATFORMS:
-      - rocky-9
-      - debian-13
-      - ubuntu-noble
-    TESTING_BRANCH: ricardo-work
-    SCENARIO:
-      - pg-%!{PG_MAJOR_VERSION}
-      - pg-%!{PG_MAJOR_VERSION}-meta-server
-      - pg-%!{PG_MAJOR_VERSION}-meta-ha
-  matrix:
-    - SCENARIO
