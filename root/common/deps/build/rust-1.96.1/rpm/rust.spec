@@ -108,6 +108,8 @@ rm -f %{buildroot}%{_bindir}/rust-analyzer
 rm -f %{buildroot}%{_libexecdir}/rust-analyzer-proc-macro-srv
 rm -f %{buildroot}%{_bindir}/cargo-clippy
 rm -f %{buildroot}%{_bindir}/clippy-driver
+rm -f %{buildroot}%{_bindir}/rustfmt
+rm -f %{buildroot}%{_bindir}/cargo-fmt
 
 # Remove debugger wrappers
 rm -f %{buildroot}%{_bindir}/rust-gdb
@@ -137,8 +139,6 @@ rm -f %{buildroot}%{_mandir}/man1/rustdoc.1*
 %license COPYRIGHT LICENSE-APACHE LICENSE-MIT
 %{_bindir}/rustc
 %{_bindir}/rustdoc
-%{_bindir}/rustfmt
-%{_bindir}/cargo-fmt
 %{_libdir}/librustc_driver-*.so
 %{rustlibdir}/
 %exclude %{_sysconfdir}/target-spec-json-schema.json
