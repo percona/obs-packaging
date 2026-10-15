@@ -407,13 +407,40 @@ def _head_is_pushed() -> bool:
     return bool(result.stdout.strip())
 
 
+def _git_tracked_path(path: Path) -> Path:
+    """Return *path* with symlinked directory components replaced by their targets.
+
+    git only tracks a symlink as a blob, so a pathspec that passes *through*
+    a symlinked package directory (``staging/19/pkg -> ../_shared/pkg``)
+    matches nothing.  Walk the components under the repo and substitute each
+    symlink with its lexical target (``os.readlink`` + ``normpath``, as in
+    ``_package_pathspecs``) so the result stays inside the worktree's own
+    path namespace even when the checkout itself sits under a symlink.
+    """
+    try:
+        rel = path.relative_to(_REPO_DIR)
+    except ValueError:
+        if path.is_absolute():
+            return path
+        rel = path
+    cur = _REPO_DIR
+    for part in rel.parts:
+        cur = cur / part
+        if cur.is_symlink():
+            cur = Path(os.path.normpath(cur.parent / os.readlink(cur)))
+    return cur
+
+
 def get_file_commit_time(path: Path) -> float | None:
     """Return the Unix timestamp of the last git commit that touched *path*.
 
     Returns None if the file has no commits (untracked or new/uncommitted).
+    Symlinked package directories are followed to their ``_shared/`` target
+    (see ``_git_tracked_path``); otherwise git would report no history for
+    any file reached through the link.
     """
     result = subprocess.run(
-        ["git", "log", "-1", "--format=%at", "--", str(path)],
+        ["git", "log", "-1", "--format=%at", "--", str(_git_tracked_path(path))],
         capture_output=True,
         text=True,
         cwd=_REPO_DIR,
