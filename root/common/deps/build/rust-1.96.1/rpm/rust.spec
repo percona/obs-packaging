@@ -1,6 +1,9 @@
 %global debug_package %{nil}
 
-Name:     rust-1.96.1
+%global common_libdir %{_prefix}/lib
+%global rustlibdir %{common_libdir}/rustlib
+
+Name:     rust
 Version:  1.96.1
 Release:  1%{?dist}
 Summary:  Rust compiler and Cargo toolchain
@@ -62,11 +65,14 @@ cp %{SOURCE6} build/cache/2026-04-16/
 export CARGO_NET_OFFLINE=true
 ./configure \
     --prefix=%{_prefix} \
+    --libdir=%{common_libdir} \
     --sysconfdir=%{_sysconfdir} \
     --disable-docs \
+    --disable-rpath
     --enable-vendor \
     --llvm-root=/usr \
     --enable-llvm-link-shared \
+    --python=%{__python3}
     --set build.build-stage=2 \
     --set build.install-stage=2 \
     --set build.jobs=%{_smp_build_ncpus}
@@ -74,13 +80,25 @@ python3 ./x.py build
 
 %install
 DESTDIR=%{buildroot} python3 ./x.py install
-# Fix ambiguous Python shebang in the installed Rust source component
-sed -i '1s|^#!/usr/bin/env python$|#!/usr/bin/env python3|' \
-    %{buildroot}%{_prefix}/lib/rustlib/src/rust/library/core/src/unicode/printable.py
-# Remove Rust installer metadata that contains temporary buildroot paths.
-rm -f %{buildroot}%{_prefix}/lib/rustlib/manifest-*
-rm -f %{buildroot}%{_prefix}/lib/rustlib/install.log
-rm -f %{buildroot}%{_prefix}/lib/rustlib/uninstall.sh
+
+# Move compiler shared libraries into the RPM library directory
+%if "%{_libdir}" != "%{common_libdir}"
+mkdir -p %{buildroot}%{_libdir}
+find %{buildroot}%{common_libdir} -maxdepth 1 -type f -name '*.so' \
+    -exec mv -v -t %{buildroot}%{_libdir} '{}' '+'
+%endif
+
+# Remove Python scripts from the Rust source component
+find %{buildroot}%{rustlibdir}/src -type f -name '*.py' -exec rm -v '{}' '+'
+
+# Remove installer artifacts (manifests, uninstall scripts, etc.)
+find %{buildroot}%{rustlibdir} -maxdepth 1 -type f -exec rm -v '{}' '+'
+
+# The shared libraries should be executable for debuginfo extraction.
+find %{buildroot}%{_libdir} -maxdepth 1 -type f -name '*.so' \
+    -exec chmod -v +x '{}' '+'
+find %{buildroot}%{rustlibdir} -type f -name '*.so' \
+    -exec chmod -v +x '{}' '+'
 
 %files
 %{_bindir}/rustc
