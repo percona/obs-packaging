@@ -1,0 +1,16 @@
+Source: percona-python3.14t
+Section: python
+Priority: optional
+Maintainer: Percona Development Team <info@percona.com>
+Build-Depends: debhelper (>= 10), libssl-dev, libffi-dev, zlib1g-dev, libbz2-dev, liblzma-dev, libsqlite3-dev, libreadline-dev, libncurses-dev, libexpat1-dev, uuid-dev, libgdbm-dev, libgdbm-compat-dev
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://www.python.org/
+
+Package: percona-python3.14t
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Free-threaded CPython %!{PYFT_MINOR} under /opt/percona-python%!{PYFT_MINOR}t
+ CPython %!{PYFT_VERSION} built with --disable-gil into its own prefix,
+ with pip and venv. Runtime for stormweaver. Installs nothing outside
+ /opt/percona-python%!{PYFT_MINOR}t.

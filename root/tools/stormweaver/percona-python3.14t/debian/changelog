@@ -1,0 +1,5 @@
+percona-python3.14t (%!{PYFT_VERSION}-1) unstable; urgency=low
+
+  * Free-threaded CPython %!{PYFT_VERSION} under /opt/percona-python%!{PYFT_MINOR}t
+
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}

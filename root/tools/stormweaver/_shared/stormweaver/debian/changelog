@@ -1,0 +1,5 @@
+stormweaver (%!{STORMWEAVER_VERSION}-1) unstable; urgency=low
+
+  * stormweaver %!{STORMWEAVER_VERSION} packaged for the tools:stormweaver project
+
+ -- Percona Development Team <info@percona.com>  %!{FILE_MODIFY_DATE_RFC5322}
