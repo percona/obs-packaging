@@ -127,7 +127,6 @@ rm -f %{buildroot}%{_mandir}/man1/rustdoc.1*
 %files
 %license COPYRIGHT LICENSE-APACHE LICENSE-MIT
 %{_bindir}/rustc
-%{_bindir}/rustdoc
 %{_bindir}/cargo-clippy
 %{_bindir}/clippy-driver
 %{_bindir}/rustfmt
