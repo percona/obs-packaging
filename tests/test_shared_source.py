@@ -302,3 +302,31 @@ def test_shared_subdir_may_mirror_a_two_level_subproject(tree):
     assert macros.get("PG_MAJOR_VERSION") == "17"
     assert macros.get("IMG_EXTRA") == ""  # extras override wins over the major
     assert repo / nested in [Path(p) for p in _package_pathspecs(link)]
+
+
+# --- file commit time through a symlinked package dir -----------------------
+
+
+def test_get_file_commit_time_follows_symlinked_package_dir(tree):
+    """git does not track paths beneath a symlinked directory, so a lookup via
+    staging/17/pkg/debian/pgversions must be redirected to the _shared/ target
+    instead of silently returning None (which made the FILE_MODIFY_DATE macros
+    fall back to the checkout mtime and churn the changelog on every sync)."""
+    repo, _ = tree
+    through_link = repo / "root/ppg/staging/17/pkg/debian/pgversions"
+    direct = repo / f"{SHARED_PKG}/debian/pgversions"
+    expected = git_utils.get_file_commit_time(direct)
+    assert expected is not None
+    assert git_utils.get_file_commit_time(through_link) == expected
+
+
+def test_file_modify_date_macro_is_stable_through_symlink(tree):
+    """Rendering through the link must use the commit date, not the mtime."""
+    repo, _ = tree
+    through_link = repo / "root/ppg/staging/17/pkg/debian/pgversions"
+    # Make the checkout mtime obviously different from the commit time.
+    os.utime(through_link, (0, 0))
+    rendered = common.apply_macro_substitution(
+        "%!{FILE_MODIFY_DATE_RFC5322}", {}, source=through_link
+    )
+    assert "1970" not in rendered
