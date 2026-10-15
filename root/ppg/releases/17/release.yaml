@@ -4,4 +4,6 @@ releases:
 - ppg/17.9-2
 - ppg/17.10-1
 - ppg/17.11-1
+- source_commit: a87fbbd33259a0a9e0952f98f78f7ab9cb5c187f
+  tag: ppg/17.11-2
 repository: ${PERCONA_OBS_PACKAGING_REPO}
