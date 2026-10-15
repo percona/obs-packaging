@@ -1,4 +1,5 @@
 %global debug_package %{nil}
+%define _build_id_links none
 
 %global common_libdir %{_prefix}/lib
 %global rustlibdir %{common_libdir}/rustlib
@@ -127,19 +128,6 @@ rm -rf %{buildroot}%{_docdir}/rustc
 rm -f %{buildroot}%{_mandir}/man1/cargo*.1*
 rm -f %{buildroot}%{_mandir}/man1/rustc.1*
 rm -f %{buildroot}%{_mandir}/man1/rustdoc.1*
-
-echo "===== Checking for conflicting ELF build ID ====="
-find %{buildroot} -type f -exec sh -c '
-    for f do
-        id=$(readelf -n "$f" 2>/dev/null |
-             sed -n "s/.*Build ID: //p" |
-             head -n 1)
-        if [ "$id" = "ea34e3e454440ccc3de9d54b004c8cd50ab05118" ]; then
-            echo "MATCH: $f"
-        fi
-    done
-' sh {} +
-echo "===== Finished build-ID check ====="
 
 %files
 %license COPYRIGHT LICENSE-APACHE LICENSE-MIT
