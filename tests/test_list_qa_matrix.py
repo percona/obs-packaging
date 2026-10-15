@@ -259,3 +259,150 @@ def test_is_release_tier():
     assert m.is_release_tier("a:ppg:releases:18:containers")
     assert not m.is_release_tier("a:ppg:staging:18")
     assert not m.is_release_tier("a:ppg:devel:18:containers")
+
+
+# --- one major per night ------------------------------------------------------
+
+import io
+import json
+from contextlib import redirect_stdout
+from types import SimpleNamespace
+
+import yaml
+
+REPO = Path(__file__).parent.parent
+SCHEDULE = REPO / ".github" / "nightly-qa-schedule.yml"
+MAJORS = ("14", "15", "16", "17", "18", "19")
+UNSCHEDULED = {"19"}  # in development: on demand only, see the schedule file
+
+
+@pytest.mark.parametrize(
+    "project, name, major, expected",
+    [
+        ("ppg:staging:17", "server", "17", True),
+        ("ppg:staging:17:containers", "ubi9", "17", True),
+        ("ppg:staging:17:tarballs", "ssl3", "17", True),
+        ("ppg:staging:17", "server", "18", False),
+        ("ppg:staging:common:tools:containers", "ubi9-pgbouncer-pg17", "17", True),
+        ("ppg:staging:common:tools:containers", "ubi9-pgbouncer-pg17", "18", False),
+        ("ppg:staging:common:containers", "ubi9-16-to-17", "17", True),   # into 17
+        ("ppg:staging:common:containers", "ubi9-16-to-17", "16", False),  # not from 16
+        ("ppg:staging:common:extras:containers", "ubi9-17-to-18", "18", True),
+        ("ppg:staging:common:containers", None, "17", False),
+    ],
+)
+def test_belongs_to_major(project, name, major, expected):
+    assert _load().belongs_to_major(project, name, major) is expected
+
+
+
+def test_schedule_file_is_valid():
+    schedule = yaml.safe_load(SCHEDULE.read_text())
+    assert set(schedule) <= {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+    # the workflow reads the file with nightly_plan.parse_schedule (no yaml on the runner)
+    assert _plan().parse_schedule(SCHEDULE.read_text()) == {k: str(v) for k, v in schedule.items()}
+    majors = [str(v) for v in schedule.values()]
+    assert len(majors) == len(set(majors)), "a major is scheduled twice"
+    assert set(majors) <= set(MAJORS)
+
+
+def _qa_projects():
+    for y in sorted((REPO / "root" / "ppg" / "staging").rglob("project.yaml")):
+        rel = y.parent.relative_to(REPO / "root")
+        if "_shared" in rel.parts:
+            continue
+        text = y.read_text()
+        pkgs = [p / "package.yaml" for p in y.parent.iterdir() if (p / "package.yaml").exists()]
+        if "\nqa:" in text or any("\nqa:" in p.read_text() for p in pkgs):
+            yield ":".join(rel.parts)
+
+
+def test_every_qa_build_runs_on_exactly_one_scheduled_night():
+    from percona_obs import cmd_qa
+
+    m = _load()
+    scheduled = set(_plan().parse_schedule(SCHEDULE.read_text()).values())
+    problems, total = [], 0
+    for project in _qa_projects():
+        args = SimpleNamespace(project=project, rootprj="isv:percona", json=True, apiurl=None,
+                               env_overrides=["REMOTE_OBS_ORG_INTERCONNECT:"], profile=None,
+                               image_fallback_rootprj=None, package=None, project_only=False)
+        out = io.StringIO()
+        with redirect_stdout(out):
+            cmd_qa.cmd_qa_show(args)
+        for combo in json.loads(out.getvalue() or "[]"):
+            total += 1
+            owners = [mj for mj in MAJORS if m.belongs_to_major(project, combo.get("name"), mj)]
+            label = f"{project} / {combo.get('name') or combo.get('package') or combo['pipeline']}"
+            if len(owners) != 1:
+                problems.append(f"{label}: belongs to {owners or 'no major'}")
+            elif owners[0] not in scheduled | UNSCHEDULED:
+                problems.append(f"{label}: PG {owners[0]} has no night in the schedule")
+    assert total > 100, f"only {total} QA builds found; is the tree complete?"
+    assert not problems, "\n".join(problems)
+
+
+# --- nightly_plan.py: tonight's major, and skip when nothing changed ----------
+
+def _plan():
+    spec = importlib.util.spec_from_file_location("nightly_plan", REPO / ".github/scripts/nightly_plan.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_parse_schedule_ignores_comments():
+    text = "# plan\nmon: 14\ntue: '15'  # quoted\n# sun: 19\nfoo: 3\n"
+    assert _plan().parse_schedule(text) == {"mon": "14", "tue": "15"}
+
+
+@pytest.mark.parametrize("inp, day, expected", [
+    ("", "Mon", (True, "14")),          # scheduled run
+    ("today", "Tue", (True, "15")),
+    ("today", "Sat", (False, "")),      # nothing scheduled
+    ("17", "Sat", (True, "17")),        # manual, any day
+    ("all", "Wed", (True, "")),         # manual, every major
+])
+def test_resolve_major(inp, day, expected):
+    run, major, _ = _plan().resolve_major(inp, day, {"mon": "14", "tue": "15"})
+    assert (run, major) == expected
+
+
+def test_last_tested_sha_uses_the_same_major():
+    p = _plan()
+    runs = [{"databaseId": 3, "headSha": "ccc"},   # newest: Monday, PG 14
+            {"databaseId": 2, "headSha": "bbb"},   # last week's full run
+            {"databaseId": 1, "headSha": "aaa"}]   # last week's PG 15
+    arts = {3: ["nightly-major-14"], 2: ["nightly-major-all"], 1: ["nightly-major-15"]}
+    # Tuesday (PG 15) must not compare with Monday's PG 14 run
+    assert p.last_tested_sha(runs, lambda r: arts[r], "15") == "bbb"
+    assert p.last_tested_sha(runs, lambda r: arts[r], "14") == "ccc"
+    assert p.last_tested_sha(runs[:1], lambda r: arts[r], "16") == ""  # never tested: run
+
+
+def _main(tmp_path, monkeypatch, event, changed, sha="bbb", input_major=""):
+    p = _plan()
+    out = tmp_path / "out"
+    monkeypatch.chdir(REPO)
+    monkeypatch.setenv("EVENT_NAME", event)
+    monkeypatch.setenv("INPUT_MAJOR", input_major)
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out))
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    monkeypatch.setattr(p, "resolve_major", lambda i, d, s: (True, "15", "scheduled"))
+    monkeypatch.setattr(p, "_gh", lambda *a: json.dumps([{"databaseId": 1, "headSha": sha}]) if a[0] == "run" else "nightly-major-15")
+    monkeypatch.setattr(p, "_changed_since", lambda s: changed)
+    p.main()
+    return dict(line.split("=", 1) for line in out.read_text().splitlines())
+
+
+def test_scheduled_run_skips_without_changes(tmp_path, monkeypatch):
+    assert _main(tmp_path, monkeypatch, "schedule", changed=False)["run"] == "false"
+
+
+def test_scheduled_run_runs_after_changes(tmp_path, monkeypatch):
+    out = _main(tmp_path, monkeypatch, "schedule", changed=True)
+    assert (out["run"], out["major"], out["marker"]) == ("true", "15", "nightly-major-15")
+
+
+def test_manual_run_never_skips(tmp_path, monkeypatch):
+    assert _main(tmp_path, monkeypatch, "workflow_dispatch", changed=False)["run"] == "true"
