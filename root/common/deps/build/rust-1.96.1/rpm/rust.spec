@@ -71,6 +71,7 @@ export CARGO_NET_OFFLINE=true
     --enable-llvm-link-shared \
     --set rust.llvm-tools=false \
     --python=%{__python3} \
+    --tools=cargo,clippy,rustfmt,src \
     --set build.build-stage=2 \
     --set build.install-stage=2 \
     --set build.jobs=%{_smp_build_ncpus}
@@ -78,6 +79,7 @@ python3 ./x.py build
 
 %install
 DESTDIR=%{buildroot} python3 ./x.py install
+rm -rf build vendor
 
 # Move compiler shared libraries into the RPM library directory
 %if "%{_libdir}" != "%{common_libdir}"
@@ -97,10 +99,6 @@ find %{buildroot}%{_libdir} -maxdepth 1 -type f -name '*.so' \
     -exec chmod -v +x '{}' '+'
 find %{buildroot}%{rustlibdir} -type f -name '*.so' \
     -exec chmod -v +x '{}' '+'
-
-# Remove optional developer tools not required by cargo-pgrx
-rm -f %{buildroot}%{_bindir}/rust-analyzer
-rm -f %{buildroot}%{_libexecdir}/rust-analyzer-proc-macro-srv
 
 # Remove debugger wrappers
 rm -f %{buildroot}%{_bindir}/rust-gdb
@@ -136,7 +134,6 @@ rm -f %{buildroot}%{_mandir}/man1/rustdoc.1*
 %{_bindir}/cargo-fmt
 %{_libdir}/librustc_driver-*.so
 %{rustlibdir}/
-%exclude %{_sysconfdir}/target-spec-json-schema.json
 
 %files -n cargo
 %license src/tools/cargo/LICENSE-APACHE
