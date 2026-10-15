@@ -106,6 +106,8 @@ find %{buildroot}%{rustlibdir} -type f -name '*.so' \
 # Remove optional developer tools not required by cargo-pgrx
 rm -f %{buildroot}%{_bindir}/rust-analyzer
 rm -f %{buildroot}%{_libexecdir}/rust-analyzer-proc-macro-srv
+rm -f %{buildroot}%{_bindir}/cargo-clippy
+rm -f %{buildroot}%{_bindir}/clippy-driver
 
 # Remove debugger wrappers
 rm -f %{buildroot}%{_bindir}/rust-gdb
@@ -137,8 +139,6 @@ rm -f %{buildroot}%{_mandir}/man1/rustdoc.1*
 %{_bindir}/rustdoc
 %{_bindir}/rustfmt
 %{_bindir}/cargo-fmt
-%{_bindir}/cargo-clippy
-%{_bindir}/clippy-driver
 %{_libdir}/librustc_driver-*.so
 %{rustlibdir}/
 %exclude %{_sysconfdir}/target-spec-json-schema.json
