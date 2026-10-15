@@ -28,10 +28,6 @@ ExclusiveArch: x86_64 aarch64
 BuildRequires:  gcc gcc-c++ make cmake ninja-build python3 curl-devel libxml2-devel
 BuildRequires:  openssl-devel zlib-devel xz-devel ncurses-devel pkgconfig llvm-devel
 
-# Bootstrap toolchain available in the OBS repository
-BuildRequires:  rust >= 1.92
-BuildRequires:  cargo >= 1.92
-
 # Extensions select the matching tool with `BuildRequires: rust = 1.96.1`.
 Provides:       rust = %{version}
 
@@ -73,6 +69,7 @@ export CARGO_NET_OFFLINE=true
     --enable-vendor \
     --llvm-root=/usr \
     --enable-llvm-link-shared \
+    --set rust.llvm-tools=false \
     --python=%{__python3} \
     --set build.build-stage=2 \
     --set build.install-stage=2 \
@@ -133,10 +130,10 @@ rm -f %{buildroot}%{_mandir}/man1/rustdoc.1*
 %license COPYRIGHT LICENSE-APACHE LICENSE-MIT
 %{_bindir}/rustc
 %{_bindir}/rustdoc
-{_bindir}/cargo-clippy
-{_bindir}/clippy-driver
-{_bindir}/rustfmt
-{_bindir}/cargo-fmt
+%{_bindir}/cargo-clippy
+%{_bindir}/clippy-driver
+%{_bindir}/rustfmt
+%{_bindir}/cargo-fmt
 %{_libdir}/librustc_driver-*.so
 %{rustlibdir}/
 %exclude %{_sysconfdir}/target-spec-json-schema.json
