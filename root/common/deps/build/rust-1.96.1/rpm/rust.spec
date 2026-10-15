@@ -128,6 +128,9 @@ rm -f %{buildroot}%{_mandir}/man1/cargo*.1*
 rm -f %{buildroot}%{_mandir}/man1/rustc.1*
 rm -f %{buildroot}%{_mandir}/man1/rustdoc.1*
 
+# We don't want Rust copies of LLVM tools (rust-lld, rust-llvm-dwp)
+rm -f %{buildroot}%{rustlibdir}/%{rust_triple}/bin/rust-ll*
+
 %files
 %license COPYRIGHT LICENSE-APACHE LICENSE-MIT
 %{_bindir}/rustc
