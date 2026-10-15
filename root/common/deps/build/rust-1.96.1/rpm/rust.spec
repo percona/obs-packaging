@@ -69,9 +69,12 @@ export CARGO_NET_OFFLINE=true
     --sysconfdir=%{_sysconfdir} \
     --disable-docs \
     --disable-rpath \
+    --disable-lld \
     --enable-vendor \
     --llvm-root=/usr \
     --enable-llvm-link-shared \
+    --disable-llvm-bitcode-linker \
+    --set rust.llvm-tools=false \
     --python=%{__python3} \
     --set build.build-stage=2 \
     --set build.install-stage=2 \
@@ -127,9 +130,6 @@ rm -rf %{buildroot}%{_docdir}/rustc
 rm -f %{buildroot}%{_mandir}/man1/cargo*.1*
 rm -f %{buildroot}%{_mandir}/man1/rustc.1*
 rm -f %{buildroot}%{_mandir}/man1/rustdoc.1*
-
-# We don't want Rust copies of LLVM tools (rust-lld, rust-llvm-dwp)
-rm -f %{buildroot}%{rustlibdir}/%{rust_triple}/bin/rust-ll*
 
 %files
 %license COPYRIGHT LICENSE-APACHE LICENSE-MIT
