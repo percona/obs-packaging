@@ -68,11 +68,11 @@ export CARGO_NET_OFFLINE=true
     --libdir=%{common_libdir} \
     --sysconfdir=%{_sysconfdir} \
     --disable-docs \
-    --disable-rpath
+    --disable-rpath \
     --enable-vendor \
     --llvm-root=/usr \
     --enable-llvm-link-shared \
-    --python=%{__python3}
+    --python=%{__python3} \
     --set build.build-stage=2 \
     --set build.install-stage=2 \
     --set build.jobs=%{_smp_build_ncpus}
