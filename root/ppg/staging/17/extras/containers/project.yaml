@@ -32,9 +32,11 @@ project-config: |
   %if "%_repository" == "ubi9"
   Type: docker
   BuildEngine: podman
-  # The retired kiwi base project set these for every image; the image
-  # projects carry them themselves now that the base comes from the registry.
-  BuildFlags: container-compression-format:zstd
+  # OCI index + OCI manifests (ppg-testing requires OCI-only media types) with
+  # gzip layers, so Docker < 23 can still pull the images.  Stock obs-build
+  # only writes an OCI archive for non-gzip compression; the labs workers carry
+  # a patch that also selects it for container-build-format:oci.
+  BuildFlags: container-compression-format:gzip
   BuildFlags: container-build-format:oci
   BuildFlags: dockerarg:PPG_REPO=staging
   BuildFlags: dockerarg:RHEL_VER=el9
