@@ -129,6 +129,10 @@ done
 %postun -p /sbin/ldconfig
 
 %files
+%dir %{libgeotiffinstdir}/bin
+%dir %{libgeotiffinstdir}/lib
+%dir %{libgeotiffinstdir}/man
+%dir %{libgeotiffinstdir}/man/man1
 %doc ChangeLog LICENSE AUTHORS COPYING INSTALL README*
 %dir %{libgeotiffinstdir}/
 %{libgeotiffinstdir}/bin/applygeo
@@ -141,6 +145,9 @@ done
 %{libgeotiffinstdir}/man/man1/applygeo.1
 
 %files devel
+%dir %{libgeotiffinstdir}
+%dir %{libgeotiffinstdir}/lib
+%dir %{libgeotiffinstdir}/lib/pkgconfig
 %dir %{libgeotiffinstdir}/include
 %attr(0644,root,root) %{libgeotiffinstdir}/include/*.h
 %attr(0644,root,root) %{libgeotiffinstdir}/include/*.inc
