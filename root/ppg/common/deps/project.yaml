@@ -23,3 +23,17 @@ project-config: |
   # pr-2 ppg:common:deps/krb5). Same pick as the EL8 block above.
   Prefer: libverto-libev
   %endif
+
+  %if "%_repository" == "RockyLinux_9" || "%_repository" == "RockyLinux_9.6" || "%_repository" == "UBI_9"
+  # gdal313 (ant + java-17-openjdk-devel, PGDG's EL9 JDK): ant needs an
+  # ant-jdk-binding (ant-openjdk8/11/17/21/unbound) and copy-jdk-configs
+  # needs lua (lua or compat-lua); OBS reports "have choice" for both.
+  Prefer: ant-openjdk17
+  Prefer: lua
+  %endif
+
+  %if "%_repository" == "RockyLinux_10" || "%_repository" == "UBI_10"
+  # gdal313 (ant + java-21-openjdk-devel): ant-jdk-binding "have choice"
+  # between ant-openjdk21 and ant-unbound.
+  Prefer: ant-openjdk21
+  %endif

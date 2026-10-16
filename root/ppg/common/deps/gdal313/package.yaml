@@ -1,0 +1,14 @@
+title: GDAL 3.13 (PGDG layout)
+description: |
+  GDAL 3.13 under /usr/gdal313 with PGDG's full driver and subpackage set
+  (python3/java bindings where PGDG builds them), on geos315 + proj98 +
+  libgeotiff17 + libspatialite50. EL8/UBI8 use gdal38 instead. Ported from
+  pgdg-rpms e38918e8 without the ld.so.conf.d drop-in.
+build:
+  RockyLinux_8: false
+  UBI_8: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
