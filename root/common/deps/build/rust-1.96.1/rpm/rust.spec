@@ -50,6 +50,18 @@ Requires: rust%{?_isa} = %{version}-%{release}
 %description -n rustfmt
 Rust formatting tools built alongside Rust %{version}.
 
+%if 0%{?rhel}
+%package toolset
+Summary:        Rust Toolset
+BuildArch:      noarch
+Requires:       rust = %{version}-%{release}
+Requires:       cargo = %{version}-%{release}
+
+%description toolset
+This is the metapackage for Rust Toolset, bringing in the Rust compiler,
+the Cargo package manager, and a few convenience macros for rpm builds.
+%endif
+
 %prep
 %autosetup -n rustc-%{version}-src
 # Prepopulate the bootstrap cache
