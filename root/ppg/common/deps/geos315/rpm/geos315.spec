@@ -64,6 +64,7 @@ export CXX=/usr/bin/g++-13
 %cmake .. \
 	-DCMAKE_INSTALL_PREFIX:PATH=%{geosinstdir} -DCMAKE_BUILD_TYPE=Release \
 	-DCMAKE_SKIP_INSTALL_RPATH:BOOL=OFF \
+	-DCMAKE_SKIP_RPATH:BOOL=OFF \
 	-DCMAKE_INSTALL_RPATH:STRING=%{geosinstdir}/%{_geoslibdir} \
 	-D LIB_INSTALL_DIR=%{_lib} .
 
