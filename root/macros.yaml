@@ -78,6 +78,24 @@
 # (percona-postgis<POSTGIS_RPM_MAJOR>_<PG major>, the spec's postgismajorversion
 # without the dot). Bump it together with POSTGIS_VERSION on a PostGIS major.
 - POSTGIS_RPM_MAJOR: 35
+# GIS library stack for PostGIS (mirrors PGDG, pgdg-rpms e38918e8). Package
+# names carry the minor line (geos315, proj98, gdal313...), so a *_MAJOR bump
+# means a new package directory under root/ppg/common/deps. EL8 follows
+# PGDG's EL-8 choice (gdal38 + proj96).
+- GIS_GEOS_VERSION: 3.15.0
+- GIS_GEOS_MAJOR: 315
+- GIS_PROJ_VERSION: 9.8.1
+- GIS_PROJ_MAJOR: 98
+- GIS_PROJ_EL8_VERSION: 9.6.2
+- GIS_PROJ_EL8_MAJOR: 96
+- GIS_GDAL_VERSION: 3.13.3
+- GIS_GDAL_MAJOR: 313
+- GIS_GDAL_EL8_VERSION: 3.8.5
+- GIS_GDAL_EL8_MAJOR: 38
+- GIS_LIBGEOTIFF_VERSION: 1.7.4
+- GIS_LIBSPATIALITE_VERSION: 5.1.0
+- GIS_LIBRTTOPO_VERSION: 1.1.0
+- GIS_SFCGAL_VERSION: 2.3.0
 # PostGIS 3.7 split these two extensions out of its tree; only PG 19 has them.
 - ADDRESS_STANDARDIZER_VERSION: 3.7.0
 - POSTGIS_TIGER_GEOCODER_VERSION: 2025.2
