@@ -1,0 +1,11 @@
+title: libgeotiff 1.7 (PGDG layout)
+description: |
+  libgeotiff 1.7 under /usr/libgeotiff17, linked against our proj96 (EL8)
+  or proj98, so GDAL and PostGIS never load a distro PROJ next to ours.
+  Ported from pgdg-rpms e38918e8 without the ld.so.conf.d drop-in.
+build:
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
