@@ -4,7 +4,8 @@
     <param name="scm">git</param>
     <param name="revision">pg_similarity_%!{PG_SIMILARITY_VERSION}</param>
     <param name="versionformat">@PARENT_TAG@</param>
-    <param name="versionrewrite-pattern">v(.*)</param>
+    <param name="versionrewrite-pattern">pg_similarity_(\d+)_(\d+)</param>
+    <param name="versionrewrite-replacement">\1.\2</param>
     <param name="filename">percona-pg_similarity_%!{PG_MAJOR_VERSION}</param>
   </service>
   <service mode="buildtime" name="tar" />
