@@ -2,7 +2,7 @@
   <service name="obs_scm">
     <param name="url">https://github.com/eulerto/pg_similarity.git/</param>
     <param name="scm">git</param>
-    <param name="revision">pg_similarity_%!{PG_SIMILARITY_VERSION}</param>
+    <param name="revision">%!{PG_SIMILARITY_TAG}</param>
     <param name="versionformat">@PARENT_TAG@</param>
     <param name="versionrewrite-pattern">pg_similarity_(\d+)_(\d+)</param>
     <param name="versionrewrite-replacement">\1.\2</param>
