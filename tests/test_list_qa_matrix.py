@@ -285,7 +285,7 @@ UNSCHEDULED = {"19"}  # in development: on demand only, see the schedule file
         ("ppg:staging:17", "server", "18", False),
         ("ppg:staging:common:tools:containers", "ubi9-pgbouncer-pg17", "17", True),
         ("ppg:staging:common:tools:containers", "ubi9-pgbouncer-pg17", "18", False),
-        ("ppg:staging:common:containers", "ubi9-16-to-17", "17", True),   # into 17
+        ("ppg:staging:common:containers", "ubi9-16-to-17", "17", True),  # into 17
         ("ppg:staging:common:containers", "ubi9-16-to-17", "16", False),  # not from 16
         ("ppg:staging:common:extras:containers", "ubi9-17-to-18", "18", True),
         ("ppg:staging:common:containers", None, "17", False),
@@ -298,12 +298,13 @@ def test_belongs_to_major(project, name, major, expected):
     assert _load().belongs_to_major(project, name, major) is expected
 
 
-
 def test_schedule_file_is_valid():
     schedule = yaml.safe_load(SCHEDULE.read_text())
     assert set(schedule) <= {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
     # the workflow reads the file with nightly_plan.parse_schedule (no yaml on the runner)
-    assert _plan().parse_schedule(SCHEDULE.read_text()) == {k: str(v) for k, v in schedule.items()}
+    assert _plan().parse_schedule(SCHEDULE.read_text()) == {
+        k: str(v) for k, v in schedule.items()
+    }
     majors = [str(v) for v in schedule.values()]
     assert len(majors) == len(set(majors)), "a major is scheduled twice"
     assert set(majors) <= set(MAJORS)
@@ -315,7 +316,11 @@ def _qa_projects():
         if "_shared" in rel.parts:
             continue
         text = y.read_text()
-        pkgs = [p / "package.yaml" for p in y.parent.iterdir() if (p / "package.yaml").exists()]
+        pkgs = [
+            p / "package.yaml"
+            for p in y.parent.iterdir()
+            if (p / "package.yaml").exists()
+        ]
         if "\nqa:" in text or any("\nqa:" in p.read_text() for p in pkgs):
             yield ":".join(rel.parts)
 
@@ -327,15 +332,27 @@ def test_every_qa_build_runs_on_exactly_one_scheduled_night():
     scheduled = set(_plan().parse_schedule(SCHEDULE.read_text()).values())
     problems, total = [], 0
     for project in _qa_projects():
-        args = SimpleNamespace(project=project, rootprj="isv:percona", json=True, apiurl=None,
-                               env_overrides=["REMOTE_OBS_ORG_INTERCONNECT:"], profile=None,
-                               image_fallback_rootprj=None, package=None, project_only=False)
+        args = SimpleNamespace(
+            project=project,
+            rootprj="isv:percona",
+            json=True,
+            apiurl=None,
+            env_overrides=["REMOTE_OBS_ORG_INTERCONNECT:"],
+            profile=None,
+            image_fallback_rootprj=None,
+            package=None,
+            project_only=False,
+        )
         out = io.StringIO()
         with redirect_stdout(out):
             cmd_qa.cmd_qa_show(args)
         for combo in json.loads(out.getvalue() or "[]"):
             total += 1
-            owners = [mj for mj in MAJORS if m.belongs_to_major(project, combo.get("name"), mj)]
+            owners = [
+                mj
+                for mj in MAJORS
+                if m.belongs_to_major(project, combo.get("name"), mj)
+            ]
             label = f"{project} / {combo.get('name') or combo.get('package') or combo['pipeline']}"
             if len(owners) != 1:
                 problems.append(f"{label}: belongs to {owners or 'no major'}")
@@ -347,8 +364,11 @@ def test_every_qa_build_runs_on_exactly_one_scheduled_night():
 
 # --- nightly_plan.py: tonight's major, and skip when nothing changed ----------
 
+
 def _plan():
-    spec = importlib.util.spec_from_file_location("nightly_plan", REPO / ".github/scripts/nightly_plan.py")
+    spec = importlib.util.spec_from_file_location(
+        "nightly_plan", REPO / ".github/scripts/nightly_plan.py"
+    )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -359,13 +379,16 @@ def test_parse_schedule_ignores_comments():
     assert _plan().parse_schedule(text) == {"mon": "14", "tue": "15"}
 
 
-@pytest.mark.parametrize("inp, day, expected", [
-    ("", "Mon", (True, "14")),          # scheduled run
-    ("today", "Tue", (True, "15")),
-    ("today", "Sat", (False, "")),      # nothing scheduled
-    ("17", "Sat", (True, "17")),        # manual, any day
-    ("all", "Wed", (True, "")),         # manual, every major
-])
+@pytest.mark.parametrize(
+    "inp, day, expected",
+    [
+        ("", "Mon", (True, "14")),  # scheduled run
+        ("today", "Tue", (True, "15")),
+        ("today", "Sat", (False, "")),  # nothing scheduled
+        ("17", "Sat", (True, "17")),  # manual, any day
+        ("all", "Wed", (True, "")),  # manual, every major
+    ],
+)
 def test_resolve_major(inp, day, expected):
     run, major, _ = _plan().resolve_major(inp, day, {"mon": "14", "tue": "15"})
     assert (run, major) == expected
@@ -373,14 +396,18 @@ def test_resolve_major(inp, day, expected):
 
 def test_last_tested_sha_uses_the_same_major():
     p = _plan()
-    runs = [{"databaseId": 3, "headSha": "ccc"},   # newest: Monday, PG 14
-            {"databaseId": 2, "headSha": "bbb"},   # last week's full run
-            {"databaseId": 1, "headSha": "aaa"}]   # last week's PG 15
+    runs = [
+        {"databaseId": 3, "headSha": "ccc"},  # newest: Monday, PG 14
+        {"databaseId": 2, "headSha": "bbb"},  # last week's full run
+        {"databaseId": 1, "headSha": "aaa"},
+    ]  # last week's PG 15
     arts = {3: ["nightly-major-14"], 2: ["nightly-major-all"], 1: ["nightly-major-15"]}
     # Tuesday (PG 15) must not compare with Monday's PG 14 run
     assert p.last_tested_sha(runs, lambda r: arts[r], "15") == "bbb"
     assert p.last_tested_sha(runs, lambda r: arts[r], "14") == "ccc"
-    assert p.last_tested_sha(runs[:1], lambda r: arts[r], "16") == ""  # never tested: run
+    assert (
+        p.last_tested_sha(runs[:1], lambda r: arts[r], "16") == ""
+    )  # never tested: run
 
 
 def _main(tmp_path, monkeypatch, event, changed, sha="bbb", input_major=""):
@@ -392,7 +419,15 @@ def _main(tmp_path, monkeypatch, event, changed, sha="bbb", input_major=""):
     monkeypatch.setenv("GITHUB_OUTPUT", str(out))
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
     monkeypatch.setattr(p, "resolve_major", lambda i, d, s: (True, "15", "scheduled"))
-    monkeypatch.setattr(p, "_gh", lambda *a: json.dumps([{"databaseId": 1, "headSha": sha}]) if a[0] == "run" else "nightly-major-15")
+    monkeypatch.setattr(
+        p,
+        "_gh",
+        lambda *a: (
+            json.dumps([{"databaseId": 1, "headSha": sha}])
+            if a[0] == "run"
+            else "nightly-major-15"
+        ),
+    )
     monkeypatch.setattr(p, "_changed_since", lambda s: changed)
     p.main()
     return dict(line.split("=", 1) for line in out.read_text().splitlines())
@@ -404,45 +439,85 @@ def test_scheduled_run_skips_without_changes(tmp_path, monkeypatch):
 
 def test_scheduled_run_runs_after_changes(tmp_path, monkeypatch):
     out = _main(tmp_path, monkeypatch, "schedule", changed=True)
-    assert (out["run"], out["major"], out["marker"]) == ("true", "15", "nightly-major-15")
+    assert (out["run"], out["major"], out["marker"]) == (
+        "true",
+        "15",
+        "nightly-major-15",
+    )
 
 
 def test_manual_run_never_skips(tmp_path, monkeypatch):
-    assert _main(tmp_path, monkeypatch, "workflow_dispatch", changed=False)["run"] == "true"
+    assert (
+        _main(tmp_path, monkeypatch, "workflow_dispatch", changed=False)["run"]
+        == "true"
+    )
 
 
 # --- nightly: each project on the OBS instance that hosts it ------------------
 
 INSTANCES = [
-    {"name": "boo", "apiurl": "https://api.example", "rootprj": "isv:percona", "qa_types": "packages"},
-    {"name": "labs", "apiurl": "https://labs.example", "rootprj": "isv:percona",
-     "registry": "registry.labs.example", "qa_types": "containers", "env": {"X": "1"}},
+    {
+        "name": "boo",
+        "apiurl": "https://api.example",
+        "rootprj": "isv:percona",
+        "qa_types": "packages",
+    },
+    {
+        "name": "labs",
+        "apiurl": "https://labs.example",
+        "rootprj": "isv:percona",
+        "registry": "registry.labs.example",
+        "qa_types": "containers",
+        "env": {"X": "1"},
+    },
 ]
 
 
 def _fake_tree(m, monkeypatch, projects):
     monkeypatch.setattr(m, "local_qa_projects", lambda root: projects)
-    monkeypatch.setattr(m, "_qa_show", lambda project, profile: [{"pipeline": "job", "name": n, "project": project}
-                                                               for n in ("server", "ubi9-16-to-17")])
+    monkeypatch.setattr(
+        m,
+        "_qa_show",
+        lambda project, profile: [
+            {"pipeline": "job", "name": n, "project": project}
+            for n in ("server", "ubi9-16-to-17")
+        ],
+    )
 
 
 def test_each_project_runs_on_its_instance(monkeypatch):
     m = _load()
-    _fake_tree(m, monkeypatch, ["ppg:staging:17", "ppg:staging:17:containers", "ppg:staging:17:tarballs"])
+    _fake_tree(
+        m,
+        monkeypatch,
+        ["ppg:staging:17", "ppg:staging:17:containers", "ppg:staging:17:tarballs"],
+    )
     matrix = m.matrix_per_instance(json.dumps(INSTANCES), Path("root"), "ci", "")
     where = {(c["project"], c["instance_name"]) for c in matrix}
-    assert where == {("ppg:staging:17", "boo"), ("ppg:staging:17:tarballs", "boo"),
-                     ("ppg:staging:17:containers", "labs")}
+    assert where == {
+        ("ppg:staging:17", "boo"),
+        ("ppg:staging:17:tarballs", "boo"),
+        ("ppg:staging:17:containers", "labs"),
+    }
     labs = next(c for c in matrix if c["instance_name"] == "labs")
-    assert (labs["instance_apiurl"], labs["instance_registry"], json.loads(labs["instance_env"])) == \
-        ("https://labs.example", "registry.labs.example", {"X": "1"})
-    assert all(c.get("name_filter") is not None for c in matrix)  # normalised like before
+    assert (
+        labs["instance_apiurl"],
+        labs["instance_registry"],
+        json.loads(labs["instance_env"]),
+    ) == ("https://labs.example", "registry.labs.example", {"X": "1"})
+    assert all(
+        c.get("name_filter") is not None for c in matrix
+    )  # normalised like before
 
 
 def test_release_snapshots_and_unhosted_projects_are_skipped(monkeypatch, capsys):
     m = _load()
     only_packages = [INSTANCES[0]]
-    _fake_tree(m, monkeypatch, ["ppg:releases:17", "ppg:staging:17:containers", "ppg:staging:17"])
+    _fake_tree(
+        m,
+        monkeypatch,
+        ["ppg:releases:17", "ppg:staging:17:containers", "ppg:staging:17"],
+    )
     matrix = m.matrix_per_instance(json.dumps(only_packages), Path("root"), "ci", "")
     assert {c["project"] for c in matrix} == {"ppg:staging:17"}
     assert "no OBS instance hosts ppg:staging:17:containers" in capsys.readouterr().err
@@ -453,12 +528,19 @@ def test_major_filter_applies_per_instance(monkeypatch):
     _fake_tree(m, monkeypatch, ["ppg:staging:common:containers", "ppg:staging:18"])
     matrix = m.matrix_per_instance(json.dumps(INSTANCES), Path("root"), "ci", "17")
     # only the upgrade into 17 from the shared project; nothing from PG 18
-    assert [(c["project"], c["name"]) for c in matrix] == [("ppg:staging:common:containers", "ubi9-16-to-17")]
+    assert [(c["project"], c["name"]) for c in matrix] == [
+        ("ppg:staging:common:containers", "ubi9-16-to-17")
+    ]
 
 
 def test_local_qa_projects_finds_the_real_tree():
     found = _load().local_qa_projects(REPO / "root")
-    for p in ("ppg:staging:18", "ppg:staging:18:containers", "ppg:staging:18:tarballs",
-              "ppg:staging:common:tools:containers", "ppg:staging:common:containers"):
+    for p in (
+        "ppg:staging:18",
+        "ppg:staging:18:containers",
+        "ppg:staging:18:tarballs",
+        "ppg:staging:common:tools:containers",
+        "ppg:staging:common:containers",
+    ):
         assert p in found, p
     assert not any("_shared" in p for p in found)
