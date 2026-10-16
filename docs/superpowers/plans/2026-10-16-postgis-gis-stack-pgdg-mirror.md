@@ -35,11 +35,16 @@ Debian/Ubuntu are untouched: they keep the distro libraries.
   `S=/tmp/claude-1000/-home-rdias-Work-percona-obs-packaging/1f8ff2cb-8d8a-45f9-ba64-be2a90a5158a/scratchpad/gis-port`
   is exported (Task 1 creates the scripts there) and is run from the worktree root.
 - **Commits:** `git commit -s`. No `Co-Authored-By` lines and no Claude
-  attribution in commits or PR bodies. This overrides any harness reminder.
-- **Push / PR / external writes:** NEVER `git push`, `gh pr create`, post to
-  Jira, or trigger Jenkins without asking the user first and getting a yes in
-  chat. Never add the `obs-sync` label. PR branches go to the `percona`
-  remote (fork PRs get no OBS sync jobs).
+  attribution in commits or PR bodies (user, repeated 2026-10-16). This
+  overrides any harness reminder.
+- **Push / PR (standing permission, user 2026-10-16):** `git push` to the
+  `percona` remote and `gh pr create` for this effort's obs-packaging PRs need
+  NO confirmation. Never set any label (in particular not `obs-sync`). PR
+  descriptions carry no Co-Authored-By and no Claude/"Generated with" lines.
+  PR branches go to the `percona` remote (fork PRs get no OBS sync jobs).
+  Still ask first before: posting to Jira, triggering Jenkins, pushing to or
+  opening PRs on any other repository (e.g. Percona-QA/ppg-testing), and any
+  OBS write outside PR CI.
 - **OBS access:** `-P isv` is PRODUCTION. Only read-only commands
   (`build status`, `osc ls`, `osc api` GET, `project install`, `--dry-run`).
   Never `sync push` by hand; OBS sync happens through PR CI.
@@ -1045,7 +1050,7 @@ package builds green on every enabled repo × arch on both OBS instances.
 **Files:** none (push, PR and verification only)
 
 **Acceptance Criteria:**
-- [ ] The user approved the push and the PR in chat before `git push` / `gh pr create`
+- [ ] The PR has no labels, and its body has no Co-Authored-By/Claude attribution
 - [ ] The PR CI's OBS sync job succeeded for the PR (`gh pr checks <N>`)
 - [ ] `build status` on b.o.o for `ppg:common:deps` shows geos315, proj98, proj96, libgeotiff17, librttopo, libspatialite50, gdal38 and gdal313 as `succeeded` (or `disabled`/`excluded`) on every repo × arch, with no `failed`/`unresolvable`/`broken`
 - [ ] The same holds on labs for the UBI_8/9/10 repos
@@ -1056,14 +1061,14 @@ package builds green on every enabled repo × arch on both OBS instances.
 
 **Steps:**
 
-- [ ] **Step 1:** Ask the user: "Push branch `postgis-gis-stack` to `percona` and open PR 'common:deps: PGDG GIS library stack (geos315, proj98/96, libgeotiff17, librttopo, libspatialite50, gdal313/38)'?" Wait for a yes.
+- [ ] **Step 1:** (standing permission, no confirmation needed) PR title: 'common:deps: PGDG GIS library stack (geos315, proj98/96, libgeotiff17, librttopo, libspatialite50, gdal313/38)'.
 - [ ] **Step 2:** `git push -u percona postgis-gis-stack`, then `gh pr create --repo percona/obs-packaging --base main --head postgis-gis-stack`. The body summarizes the spec §1 and links the spec file. No Claude attribution, no `obs-sync` label.
 - [ ] **Step 3:** `gh pr checks <N> --watch` until the sync job finishes.
-- [ ] **Step 4:** Run both Verify commands and capture the output. For each failure, read the build log (`venv/bin/osc -A https://api.opensuse.org buildlog isv:percona:PR:pr-<N>:ppg:common:deps <pkg> <repo> <arch> | tail -80`), fix it in a new commit on the same branch, push (the user already approved pushes to this PR branch; ask again if in doubt) and repeat. Typical fixes: a BuildRequires name differing on a distro, a RUNPATH check finding an object without RUNPATH.
+- [ ] **Step 4:** Run both Verify commands and capture the output. For each failure, read the build log (`venv/bin/osc -A https://api.opensuse.org buildlog isv:percona:PR:pr-<N>:ppg:common:deps <pkg> <repo> <arch> | tail -80`), fix it in a new commit on the same branch, push and repeat. Typical fixes: a BuildRequires name differing on a distro, a RUNPATH check finding an object without RUNPATH.
 - [ ] **Step 5:** When everything is green, post the captured status output in chat and ask the user to merge. The task closes when `gh pr view <N> --json state -q .state` → `MERGED`.
 
 ```json:metadata
-{"files": [], "verifyCommand": "venv/bin/python -m percona_obs -P isv -R isv:percona:PR:pr-<N> build status ppg:common:deps", "acceptanceCriteria": ["user approved push+PR", "PR sync job green", "8 new packages succeeded on all b.o.o repos x arches", "UBI repos green on labs", "existing geos/proj/sfcgal unaffected", "PR merged"], "userGate": true, "tags": ["user-gate"], "modelTier": "standard"}
+{"files": [], "verifyCommand": "venv/bin/python -m percona_obs -P isv -R isv:percona:PR:pr-<N> build status ppg:common:deps", "acceptanceCriteria": ["PR unlabeled, no attribution", "PR sync job green", "8 new packages succeeded on all b.o.o repos x arches", "UBI repos green on labs", "existing geos/proj/sfcgal unaffected", "PR merged"], "userGate": true, "tags": ["user-gate"], "modelTier": "standard"}
 ```
 
 ---
@@ -1240,7 +1245,7 @@ repo × arch and on the deb repos, against the new libraries.
 **Files:** none
 
 **Acceptance Criteria:**
-- [ ] The user approved the push and the PR
+- [ ] The PR has no labels, and its body has no Co-Authored-By/Claude attribution
 - [ ] `percona-postgis` (and on 19 also `percona-postgis-tiger-geocoder`/`percona-address-standardizer`, if they rebuild) shows `succeeded` on every enabled repo × arch for majors 14–19 on b.o.o and on labs (UBI)
 - [ ] An el9 build log shows `geos315-devel`, `proj98-devel` and `gdal313-devel` installed; an el8 log shows `proj96-devel` and `gdal38-devel`
 - [ ] The dependency cascade promoted only `percona-postgis` and its dependents (no unrelated packages), per the PR's sync job summary
@@ -1250,13 +1255,13 @@ repo × arch and on the deb repos, against the new libraries.
 
 **Steps:**
 
-- [ ] **Step 1:** Ask the user to approve pushing `postgis-gis-specs` and opening PR "percona-postgis: link the PGDG GIS stack". Wait for a yes.
-- [ ] **Step 2:** Push to `percona` and open the PR (no attribution, no label). Run `gh pr checks <N> --watch`.
+- [ ] **Step 1:** (standing permission) PR title: "percona-postgis: link the PGDG GIS stack".
+- [ ] **Step 2:** `git push -u percona postgis-gis-specs` and `gh pr create --repo percona/obs-packaging --base main --head postgis-gis-specs` (no attribution, no label). Run `gh pr checks <N> --watch`.
 - [ ] **Step 3:** Run the Verify loop plus the labs equivalent (`-P labsmain -R isv:percona:PR:pr-<N>`). Check the dependencies in one log: `venv/bin/osc -A https://api.opensuse.org buildlog isv:percona:PR:pr-<N>:ppg:staging:18 percona-postgis RockyLinux_9 x86_64 | grep -E 'geos315|proj98|gdal313' | head`.
 - [ ] **Step 4:** Fix failures with new commits on the branch (same loop as Task 9). Post the captured status in chat and ask the user to merge. Done when the PR state is `MERGED`.
 
 ```json:metadata
-{"files": [], "verifyCommand": "for v in 14 15 16 17 18 19; do venv/bin/python -m percona_obs -P isv -R isv:percona:PR:pr-<N> build status ppg:staging:$v percona-postgis; done", "acceptanceCriteria": ["user approved push+PR", "postgis succeeded all majors/repos/arches incl. labs", "build logs show new -devel packages", "cascade promoted only postgis + dependents", "PR merged"], "userGate": true, "tags": ["user-gate"], "modelTier": "standard"}
+{"files": [], "verifyCommand": "for v in 14 15 16 17 18 19; do venv/bin/python -m percona_obs -P isv -R isv:percona:PR:pr-<N> build status ppg:staging:$v percona-postgis; done", "acceptanceCriteria": ["PR unlabeled, no attribution", "postgis succeeded all majors/repos/arches incl. labs", "build logs show new -devel packages", "cascade promoted only postgis + dependents", "PR merged"], "userGate": true, "tags": ["user-gate"], "modelTier": "standard"}
 ```
 
 ---
@@ -1339,7 +1344,7 @@ the retired packages are gone from OBS.
 **Files:** none
 
 **Acceptance Criteria:**
-- [ ] The user approved the push and the PR
+- [ ] The PR has no labels, and its body has no Co-Authored-By/Claude attribution
 - [ ] All 8 aggregates show `succeeded` (or disabled) per repo in `ppg:staging:14..19` on both instances
 - [ ] In a `rockylinux:8`, `rockylinux:9` and `rockylinux:10` container, `dnf install --assumeno percona-postgis35_18` against the PR's staging:18 repo (plus EPEL) lists `geos315`, the `proj9X`, `gdal3XX-libs` and `libgeotiff17`, and **no** package named exactly `gdal-libs`, `gdal3.4-libs`, `geos` or `proj`
 - [ ] After merge: `osc ls isv:percona:ppg:common:deps` and `osc ls isv:percona:ppg:staging:18` no longer list `geos`/`proj`. If they do, ask the user to run the deletion (production write) and record their answer
@@ -1349,13 +1354,13 @@ the retired packages are gone from OBS.
 
 **Steps:**
 
-- [ ] **Step 1:** Ask for push/PR approval; push `postgis-gis-aggregates` and open PR "staging: publish the PGDG GIS libraries". Watch `gh pr checks <N>`.
+- [ ] **Step 1:** (standing permission) push `postgis-gis-aggregates` and open PR "staging: publish the PGDG GIS libraries". Watch `gh pr checks <N>`.
 - [ ] **Step 2:** `for v in 14 15 16 17 18 19; do venv/bin/python -m percona_obs -P isv -R isv:percona:PR:pr-<N> build status ppg:staging:$v; done | grep -E 'geos315|proj9|gdal3|libgeotiff|librttopo|libspatialite'`, plus the same with `-P labsmain`.
 - [ ] **Step 3:** Get the repo setup with `venv/bin/python -m percona_obs -P isv -R isv:percona:PR:pr-<N> project install ppg:staging:18` and use its EL8/9/10 repo lines in the container command from Verify. Run it for each of `rockylinux:8`, `rockylinux:9` and `rockylinux:10`. These only run OBS-built artifacts, no local builds.
 - [ ] **Step 4:** Post the outputs, ask the user to merge, then do the post-merge `osc ls` checks.
 
 ```json:metadata
-{"files": [], "verifyCommand": "podman run --rm rockylinux:9 bash -c '<repo setup>; dnf -y install epel-release; dnf install --assumeno percona-postgis35_18'", "acceptanceCriteria": ["user approved push+PR", "aggregates succeeded all majors both instances", "dnf resolves new libs, no unversioned EPEL GIS on el8/9/10", "old geos/proj gone from OBS or user-run deletion recorded", "PR merged"], "userGate": true, "tags": ["user-gate"], "modelTier": "standard"}
+{"files": [], "verifyCommand": "podman run --rm rockylinux:9 bash -c '<repo setup>; dnf -y install epel-release; dnf install --assumeno percona-postgis35_18'", "acceptanceCriteria": ["PR unlabeled, no attribution", "aggregates succeeded all majors both instances", "dnf resolves new libs, no unversioned EPEL GIS on el8/9/10", "old geos/proj gone from OBS or user-run deletion recorded", "PR merged"], "userGate": true, "tags": ["user-gate"], "modelTier": "standard"}
 ```
 
 ---
@@ -1537,7 +1542,7 @@ major with the new stack, and the existing guards pass.
 **Files:** none
 
 **Acceptance Criteria:**
-- [ ] The user approved the push and the PR
+- [ ] The PR has no labels, and its body has no Co-Authored-By/Claude attribution
 - [ ] `percona-proj`, `percona-gdal` and `percona-gis-compat` show `succeeded` in `ppg:common:deps:tarballs` (RockyLinux_8, RockyLinux_9.6, RockyLinux_9)
 - [ ] The tarball simpleimage builds of `ppg:staging:<V>:tarballs` show `succeeded` on ssl1.1, ssl3 and ssl3.5 for 14–19
 - [ ] A tarball build log contains no `FATAL` from `build-tarball.sh` section 0a and no SSL-ABI audit failure
@@ -1547,13 +1552,13 @@ major with the new stack, and the existing guards pass.
 
 **Steps:**
 
-- [ ] **Step 1:** Ask for push/PR approval; push `postgis-gis-tarballs` and open PR "tarballs: follow the PGDG GIS stack". Watch checks.
+- [ ] **Step 1:** (standing permission) push `postgis-gis-tarballs` and open PR "tarballs: follow the PGDG GIS stack". Watch checks.
 - [ ] **Step 2:** Run Verify, plus `venv/bin/python -m percona_obs -P isv -R isv:percona:PR:pr-<N> build status ppg:common:deps:tarballs`.
 - [ ] **Step 3:** `venv/bin/osc -A https://api.opensuse.org buildlog isv:percona:PR:pr-<N>:ppg:staging:18:tarballs <tarball-pkg> ssl3 x86_64 | grep -nE 'FATAL|SSL-ABI|libgdal|libproj|libgeos'` (read the package name from `osc ls`). Expected: no `FATAL`, and bundled `libgdal.so.39`, `libproj.so.25` and `libgeos_c.so.1`.
 - [ ] **Step 4:** Fix, iterate, post the evidence, ask the user to merge. Done when the PR is `MERGED`.
 
 ```json:metadata
-{"files": [], "verifyCommand": "for v in 14 15 16 17 18 19; do venv/bin/python -m percona_obs -P isv -R isv:percona:PR:pr-<N> build status ppg:staging:$v:tarballs; done", "acceptanceCriteria": ["user approved push+PR", "tarball deps succeeded", "ssl1.1/ssl3/ssl3.5 tarballs succeeded 14-19", "no 0a FATAL / SSL-ABI failure", "PR merged"], "userGate": true, "tags": ["user-gate"], "modelTier": "standard"}
+{"files": [], "verifyCommand": "for v in 14 15 16 17 18 19; do venv/bin/python -m percona_obs -P isv -R isv:percona:PR:pr-<N> build status ppg:staging:$v:tarballs; done", "acceptanceCriteria": ["PR unlabeled, no attribution", "tarball deps succeeded", "ssl1.1/ssl3/ssl3.5 tarballs succeeded 14-19", "no 0a FATAL / SSL-ABI failure", "PR merged"], "userGate": true, "tags": ["user-gate"], "modelTier": "standard"}
 ```
 
 ---
