@@ -1,0 +1,5 @@
+# PGDG layout: librttopo installs in standard /usr dirs but links against /usr/geos315 via RUNPATH (no ld.so.conf.d); filters mirror percona-postgis-rpmlintrc
+addFilter("binary-or-shlib-defines-rpath")
+addFilter("library-without-ldconfig-postin")
+addFilter("library-without-ldconfig-postun")
+addFilter("devel-file-in-non-devel-package")

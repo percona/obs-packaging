@@ -1,0 +1,9 @@
+# PGDG layout: private /usr/proj98 prefix with RUNPATH instead of ld.so.conf.d; filters mirror percona-postgis-rpmlintrc
+addFilter("binary-or-shlib-defines-rpath")
+addFilter("filelist-forbidden-fhs23")
+addFilter("suse-filelist-forbidden-fhs23")
+addFilter("devel-file-in-non-devel-package")
+addFilter("library-without-ldconfig-postin")
+addFilter("library-without-ldconfig-postun")
+addFilter("no-dir-owner")
+addFilter("suse-no-dir-owner")
