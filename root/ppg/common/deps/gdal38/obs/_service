@@ -1,0 +1,8 @@
+<services>
+  <service name="download_url">
+    <param name="host">download.postgresql.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/pub/repos/yum/sources/gdal/3.8/gdal-%!{GIS_GDAL_EL8_VERSION}-fedora.tar.xz</param>
+    <param name="filename">gdal-%!{GIS_GDAL_EL8_VERSION}-fedora.tar.xz</param>
+  </service>
+</services>
