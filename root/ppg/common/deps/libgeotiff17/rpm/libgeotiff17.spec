@@ -117,8 +117,8 @@ EOF
 %{__mkdir} -p %{buildroot}%{libgeotiffinstdir}/man/man1
 
 # PERCONA: upstream ships an empty AUTHORS that SUSE rpmlint rejects as zero-length; cmake installs it,
-# so delete it rather than leave it unpackaged (and it is not listed in %doc below).
-rm -f %{buildroot}%{_datadir}/doc/%{name}/AUTHORS
+# so delete it rather than leave it unpackaged (and it is not listed in %%doc below).
+rm -f %{buildroot}%{_docdir}/%{name}/AUTHORS
 
 # PERCONA: no /etc/ld.so.conf.d drop-in; RUNPATH must reach our lib + PROJ.
 for f in $(find %{buildroot}%{libgeotiffinstdir} -type f); do
@@ -137,7 +137,7 @@ done
 %dir %{libgeotiffinstdir}/lib
 %dir %{libgeotiffinstdir}/man
 %dir %{libgeotiffinstdir}/man/man1
-# PERCONA: AUTHORS omitted: empty upstream, removed in %install (SUSE rpmlint zero-length)
+# PERCONA: AUTHORS omitted: empty upstream, removed in %%install (SUSE rpmlint zero-length)
 %doc ChangeLog LICENSE COPYING INSTALL README*
 %dir %{libgeotiffinstdir}/
 %{libgeotiffinstdir}/bin/applygeo
