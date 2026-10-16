@@ -105,6 +105,9 @@ jobs:
           OBS_APIURL: ${{ vars.OBS_APIURL }}
           OBS_PROJECT: ${{ vars.OBS_ROOTPRJ }}
           QA_MAJOR: ${{ needs.plan.outputs.major }}
+          # Each project runs on the instance that hosts it (as obs-qa-run.yml):
+          # one server does not host every project.
+          OBS_INSTANCES: ${{ vars.OBS_INSTANCES }}
           PYTHONPATH: ${{ github.workspace }}
         run: |
           venv/bin/python .github/scripts/list_qa_matrix.py > /tmp/qa-matrix.json
@@ -157,18 +160,23 @@ jobs:
         with:
           ref: main
 
+      # Connect to the instance hosting this combo's project (resolved by the
+      # detect job from OBS_INSTANCES), with that instance's credentials.
       - uses: ./.github/actions/obs-setup
         with:
-          obs-apiurl: ${{ vars.OBS_APIURL }}
-          obs-user: ${{ vars.OBS_USER }}
-          obs-password: ${{ secrets.OBS_PASSWORD }}
+          obs-apiurl: ${{ matrix.instance_apiurl }}
+          obs-user: ${{ matrix.instance_user || vars.OBS_USER }}
+          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance_name)] }}
 
-      # Same CI profile as the detect job so `qa run` re-resolves project.yaml
-      # parameters identically (same OBS_ROOTPRJ → same ${OBS_CONTAINER_REGISTRY_ROOTPRJ}).
+      # The instance's CI profile, as obs-qa-run.yml writes it, so `qa run`
+      # resolves project.yaml parameters (registry, root, env) for that instance.
       - name: Write CI profile
+        shell: bash
         env:
-          OBS_APIURL: ${{ vars.OBS_APIURL }}
-          OBS_ROOTPRJ: ${{ vars.OBS_ROOTPRJ }}
+          OBS_APIURL: ${{ matrix.instance_apiurl }}
+          OBS_ROOTPRJ: ${{ matrix.instance_rootprj }}
+          OBS_REGISTRY: ${{ matrix.instance_registry }}
+          INSTANCE_ENV: ${{ matrix.instance_env }}
           JENKINS_URL: ${{ vars.JENKINS_URL }}
           JENKINS_USER: ${{ vars.JENKINS_USER }}
         run: |
@@ -176,13 +184,18 @@ jobs:
           cat > .profile/ci.yaml <<EOF
           apiurl: ${OBS_APIURL}
           rootprj: ${OBS_ROOTPRJ}
+          ${OBS_REGISTRY:+registry: ${OBS_REGISTRY}}
           jenkins:
             url: ${JENKINS_URL}
             user: ${JENKINS_USER}
           env:
             - name: REMOTE_OBS_ORG_INTERCONNECT
-              value: 'openSUSE.org:'
+              value: ''
           EOF
+          if [ -n "${INSTANCE_ENV:-}" ] && [ "$INSTANCE_ENV" != "null" ]; then
+            jq -r 'to_entries[] | "  - name: \(.key)\n    value: '"'"'\(.value)'"'"'"' \
+              <<<"$INSTANCE_ENV" >> .profile/ci.yaml
+          fi
 
       # `name_filter` / `package_filter` / `axis_filters` are tool-generated
       # flag strings from `qa show --json` (normalised by list_qa_matrix.py),
