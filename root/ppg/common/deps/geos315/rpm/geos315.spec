@@ -94,6 +94,9 @@ done
 
 %files
 %defattr(-,root,root,-)
+%dir %{geosinstdir}
+%dir %{geosinstdir}/bin
+%dir %{geosinstdir}/%{_geoslibdir}
 %doc AUTHORS COPYING README.md
 %{geosinstdir}/bin/geosop
 %{geosinstdir}/%{_geoslibdir}/libgeos.so.%{version}
@@ -105,6 +108,11 @@ done
 
 %files devel
 %defattr(-,root,root,-)
+%dir %{geosinstdir}
+%dir %{geosinstdir}/bin
+%dir %{geosinstdir}/include
+%dir %{geosinstdir}/%{_geoslibdir}
+%dir %{geosinstdir}/%{_geoslibdir}/pkgconfig
 %{geosinstdir}/bin/geos-config
 %{geosinstdir}/include/*
 %{geosinstdir}/%{_geoslibdir}/pkgconfig/%{sname}.pc

@@ -513,6 +513,13 @@ for f in $(find %{buildroot}%{gdalinstdir} %{buildroot}%{python3_sitearch}/osgeo
 done
 
 %files -f gdal_python_manpages_excludes.txt
+%dir %{gdalinstdir}
+%dir %{gdalinstdir}/bin
+%dir %{gdalinstdir}/share
+%dir %{gdalinstdir}/share/bash-completion
+%dir %{gdalinstdir}/share/bash-completion/completions
+%dir %{gdalinstdir}/share/man
+%dir %{gdalinstdir}/share/man/man1
 %{gdalinstdir}/bin/gdal
 %{gdalinstdir}/bin/gdal_contour
 %{gdalinstdir}/bin/gdal_create
@@ -552,6 +559,9 @@ done
 # Python manpages excluded in -f gdal_python_manpages_excludes.txt
 
 %files libs
+%dir %{gdalinstdir}
+%dir %{gdalinstdir}/lib
+%dir %{gdalinstdir}/share
 %license LICENSE.TXT
 %doc NEWS.md PROVENANCE.TXT COMMITTERS PROVENANCE.TXT-fedora
 %{gdalinstdir}/lib/libgdal.so.%{gdalsomajorversion}
@@ -560,6 +570,12 @@ done
 %{gdalinstdir}/lib/gdalplugins/
 
 %files devel
+%dir %{gdalinstdir}
+%dir %{gdalinstdir}/bin
+%dir %{gdalinstdir}/lib
+%dir %{gdalinstdir}/lib/cmake
+%dir %{gdalinstdir}/lib/cmake/%{sname}
+%dir %{gdalinstdir}/lib/pkgconfig
 %{gdalinstdir}/bin/%{sname}-config
 %dir %{gdalinstdir}/include/
 %{gdalinstdir}/include/*.h
@@ -576,6 +592,13 @@ done
 %{python3_sitearch}/osgeo_utils/
 
 %files python-tools -f gdal_python_manpages.txt
+%dir %{gdalinstdir}
+%dir %{gdalinstdir}/bin
+%dir %{gdalinstdir}/share
+%dir %{gdalinstdir}/share/bash-completion
+%dir %{gdalinstdir}/share/bash-completion/completions
+%dir %{gdalinstdir}/share/man
+%dir %{gdalinstdir}/share/man/man1
 %{gdalinstdir}/bin/gdal_calc*
 %{gdalinstdir}/bin/gdal_edit*
 %{gdalinstdir}/bin/gdal_fillnodata*
@@ -598,6 +621,10 @@ done
 
 %if %gdaljava
 %files java
+%dir %{gdalinstdir}
+%dir %{gdalinstdir}/lib
+%dir %{gdalinstdir}/lib/jni
+%dir %{_jnidir}/%{name}
 %{_jnidir}/%{name}/gdal-%{version}-javadoc.jar
 %{_jnidir}/%{name}/gdal-%{version}-sources.jar
 %{_jnidir}/%{name}/gdal-%{version}.jar
@@ -605,6 +632,7 @@ done
 %{gdalinstdir}/lib/jni/libgdalalljni.so
 
 %files javadoc
+%dir %{_jnidir}/%{name}
 %{_jnidir}/%{name}/gdal-%{version}-javadoc.jar
 %endif
 

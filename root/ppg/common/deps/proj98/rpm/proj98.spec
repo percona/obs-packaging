@@ -111,6 +111,16 @@ done
 
 %files
 %defattr(-,root,root,-)
+%dir %{projinstdir}
+%dir %{projinstdir}/bin
+%dir %{projinstdir}/lib64
+%dir %{projinstdir}/share
+%dir %{projinstdir}/share/bash-completion
+%dir %{projinstdir}/share/bash-completion/completions
+%dir %{projinstdir}/share/doc
+%dir %{projinstdir}/share/man
+%dir %{projinstdir}/share/man/man1
+%dir %{projinstdir}/share/proj
 %doc %{projinstdir}/share/doc/*
 %{projinstdir}/share/bash-completion/completions/projinfo
 %{projinstdir}/bin/*
@@ -120,6 +130,17 @@ done
 
 %files devel
 %defattr(-,root,root,-)
+%dir %{projinstdir}
+%dir %{projinstdir}/include
+%dir %{projinstdir}/include/proj
+%dir %{projinstdir}/lib64
+%dir %{projinstdir}/lib64/cmake
+%dir %{projinstdir}/lib64/cmake/%{sname}
+%dir %{projinstdir}/lib64/cmake/%{sname}4
+%dir %{projinstdir}/lib64/pkgconfig
+%dir %{projinstdir}/share
+%dir %{projinstdir}/share/man
+%dir %{projinstdir}/share/man/man1
 %{projinstdir}/share/man/man1/*.1
 %{projinstdir}/include/*.h
 %{projinstdir}/include/proj/*

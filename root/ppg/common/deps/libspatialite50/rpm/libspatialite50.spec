@@ -117,6 +117,8 @@ done
 %postun devel -p /sbin/ldconfig
 
 %files
+%dir %{libspatialiteinstdir}
+%dir %{libspatialiteinstdir}/lib
 %doc COPYING AUTHORS
 %{libspatialiteinstdir}/lib/%{sname}.so.8*
 %{libspatialiteinstdir}/lib/mod_spatialite.so.8*
@@ -125,6 +127,10 @@ done
 %{libspatialiteinstdir}/lib/mod_spatialite.so
 
 %files devel
+%dir %{libspatialiteinstdir}
+%dir %{libspatialiteinstdir}/include
+%dir %{libspatialiteinstdir}/lib
+%dir %{libspatialiteinstdir}/lib/pkgconfig
 %doc examples/*.c
 %{libspatialiteinstdir}/include/spatialite.h
 %{libspatialiteinstdir}/include/spatialite
