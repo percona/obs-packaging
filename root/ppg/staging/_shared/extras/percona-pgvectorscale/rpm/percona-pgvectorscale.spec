@@ -16,10 +16,12 @@ Source1:    vendor.tar.gz
 Packager:       Percona Development Team <https://jira.percona.com>
 Vendor:         Percona, LLC
 
-BuildRequires:  cargo
+BuildRequires:  rust = 1.92
+BuildRequires:  cargo = 1.92
 BuildRequires:  cargo-pgrx = 0.16.1
-BuildRequires:  rustfmt
-BuildRequires:  rust-toolset jq clang llvm-devel
+BuildRequires:  rustfmt = 1.92
+BuildRequires:  rust-toolset = 1.92
+BuildRequires:  jq clang llvm-devel
 BuildRequires:  percona-postgresql%{pgmajorversion}-devel
 
 Requires:       percona-postgresql%{pgmajorversion}-server
