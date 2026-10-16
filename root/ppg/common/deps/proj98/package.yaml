@@ -1,0 +1,13 @@
+title: PROJ 9.8 (PGDG layout)
+description: |
+  PROJ 9.8 under /usr/proj98, ported from PGDG (pgdg-rpms e38918e8), no
+  ld.so.conf.d drop-in (RUNPATH). EL8/UBI8 use proj96 instead (PGDG's EL-8
+  choice).
+build:
+  RockyLinux_8: false
+  UBI_8: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false

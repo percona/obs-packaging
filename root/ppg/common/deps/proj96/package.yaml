@@ -1,0 +1,18 @@
+title: PROJ 9.6 (PGDG layout, EL8)
+description: |
+  PROJ 9.6 under /usr/proj96 for EL8/UBI8 only, following PGDG's EL-8
+  choice for postgis35/gdal38. Ported from pgdg-rpms e38918e8 without the
+  ld.so.conf.d drop-in (RUNPATH).
+build:
+  RockyLinux_9: false
+  RockyLinux_9.6: false
+  RockyLinux_10: false
+  UBI_9: false
+  UBI_10: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Tumbleweed: false
+  openSUSE_Leap_16: false
