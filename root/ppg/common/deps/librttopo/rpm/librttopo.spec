@@ -17,6 +17,11 @@ BuildRequires:	autoconf automake gcc libtool make
 BuildRequires:	binutils
 BuildRequires:	geos%{geosmajorversion}-devel >= %{geosfullversion}
 Requires:	geos%{geosmajorversion} >= %{geosfullversion}
+%if 0%{?suse_version}
+# PERCONA: openSUSE ships the same library as librttopo1 (/usr/lib64/librttopo.so.1, linked to the distro GEOS). Replace it so geos315's build wins and the two never conflict on file paths.
+Provides:	librttopo1 = %{version}-%{release}
+Obsoletes:	librttopo1 < %{version}-%{release}
+%endif
 
 %description
 The RT Topology Library exposes an API to create and manage standard

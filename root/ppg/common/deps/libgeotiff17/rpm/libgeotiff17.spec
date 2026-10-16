@@ -133,7 +133,8 @@ done
 %dir %{libgeotiffinstdir}/lib
 %dir %{libgeotiffinstdir}/man
 %dir %{libgeotiffinstdir}/man/man1
-%doc ChangeLog LICENSE AUTHORS COPYING INSTALL README*
+# PERCONA: AUTHORS is shipped empty upstream (openSUSE rpmlint: zero-length)
+%doc ChangeLog LICENSE COPYING INSTALL README*
 %dir %{libgeotiffinstdir}/
 %{libgeotiffinstdir}/bin/applygeo
 %{libgeotiffinstdir}/bin/geotifcp
