@@ -4,7 +4,9 @@ description: 'Containers subproject for ppg:releases:17.
   Builds are disabled; binaries are copied via osc release.
 
   '
-project-config: 'Type: docker
+project-config: '# --- from root/ppg/staging/17/containers/project.yaml ---
+
+  Type: docker
 
   BuildEngine: podman
 
@@ -13,6 +15,18 @@ project-config: 'Type: docker
   BuildFlags: sbom:cyclonedx
 
   PublishFlags: withsbom
+
+  # OCI index + OCI manifests (ppg-testing requires OCI-only media types) with
+
+  # gzip layers, so Docker < 23 can still pull the images.  Stock obs-build
+
+  # only writes an OCI archive for non-gzip compression; the labs workers carry
+
+  # a patch that also selects it for container-build-format:oci.
+
+  BuildFlags: container-compression-format:gzip
+
+  BuildFlags: container-build-format:oci
 
 
   Preinstall: skopeo
@@ -44,8 +58,34 @@ project-config: 'Type: docker
 
   ExpandFlags: module:container-tools-rhel8
 
+  # Only the perl:5.26 stream is enabled: its artifacts are plain RPMs. Any
+
+  # other stream would expose .module+ packages that microdnf rejects inside
+
+  # the real ubi8/ubi-minimal image. UBI 8 AppStream carries BOTH copies of
+
+  # perl-IO-Socket-SSL, perl-Net-SSLeay and perl-Mozilla-CA and the expander
+
+  # takes the modular one (its release string sorts higher), so
+
+  # common:containers:ubi8 (earlier in the path) shadows them with non-modular
+
+  # rebuilds, and adds perl-DBD-Pg and llvm which UBI 8 only has as streams.
+
+  ExpandFlags: module:perl-5.26
+
+  # redhat-rpm-config (pulled by perl -> perl-devel on EL8) requires these files;
+
+  # OBS needs the mapping to put findutils into the image''s package repository.
+
+  FileProvides: /usr/bin/find findutils
+
+  FileProvides: /usr/bin/xargs findutils
+
 
   BuildFlags: dockerarg:RHEL_VER=el8
+
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi8/ubi-minimal:latest
 
 
   %endif
@@ -56,29 +96,422 @@ project-config: 'Type: docker
 
   BuildFlags: dockerarg:RHEL_VER=el9
 
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+
+  %endif
+
+
+  %if "%_repository" == "ubi10"
+
+
+  BuildFlags: dockerarg:RHEL_VER=el10
+
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi10/ubi-minimal:latest
+
+
+  # EL10''s atk pulls in at-spi2-core, which requires /usr/bin/xprop; the
+
+  # expander needs the hint to pull xprop (UBI 10 AppStream) into the build root.
+
+  FileProvides: /usr/bin/xprop xprop
+
+
+  # containers-common-extra: UBI 10 ships crun, not runc.
+
+  Prefer: crun
+
+  # EL10''s system Python is 3.12, so the distro python3-* packages also
+
+  # provide python3.12-*: take the distro package where UBI 10 ships it …
+
+  Prefer: python3-attrs python3-dateutil python3-dns python3-six python3-wcwidth
+
+  Prefer: python3-jmespath python3-prettytable python3-psutil
+
+  # … and ours where only EPEL has it (the Percona repo must work without EPEL)
+
+  # or where ours is built against Percona libpq (psycopg2).
+
+  Prefer: python3.12-click python3.12-boto3 python3.12-botocore python3.12-lz4 python3.12-s3transfer
+
+  Prefer: python3.12-psycopg2 python3.12-etcd
+
 
   %endif
 
   '
+qa:
+- matrix:
+  - WITH_POSTGIS
+  name: ubi8
+  parameters:
+    DOCKER_TAG: '17'
+    EXPECTED_VERSIONS: 'blis=0.7.0
+
+      c-ares=1.19.1
+
+      etcd=3.5.33
+
+      flexiblas=3.0.4
+
+      geos=3.13.1
+
+      gosu=1.19
+
+      lapack=3.9.0
+
+      lapack-3.12=3.12.0
+
+      percona-credcheck=5.0
+
+      percona-haproxy=2.8.27
+
+      percona-patroni=4.1.5
+
+      percona-pg-telemetry=1.2.0
+
+      percona-pg_cron=1.6.8
+
+      percona-pg_gather=33
+
+      percona-pg_repack=1.5.3
+
+      percona-pg_stat_monitor=2.4.1
+
+      percona-pg_tde=2.2.2
+
+      percona-pgaudit=17.1
+
+      percona-pgaudit_set_user=4.2.0
+
+      percona-pgbackrest=2.59.2
+
+      percona-pgbadger=13.2
+
+      percona-pgbouncer=1.26.0
+
+      percona-pgpool-II=4.7.2
+
+      percona-pgvector=0.8.6
+
+      percona-postgis=3.5.7
+
+      percona-postgresql=17.11.1
+
+      percona-postgresql-common=293
+
+      percona-wal2json=2.6
+
+      proj=9.6.0
+
+      python3-attrs=22.1.0
+
+      python3-blessed=1.22.0
+
+      python3-boto3=1.38.19
+
+      python3-botocore=1.38.19
+
+      python3-click=8.1.7
+
+      python3-dateutil=2.9.0.post0
+
+      python3-dns=2.8.0
+
+      python3-etcd=0.4.5
+
+      python3-jmespath=1.0.1
+
+      python3-kazoo=2.8.0
+
+      python3-lz4=4.3.3
+
+      python3-prettytable=3.4.0
+
+      python3-psutil=6.1.1
+
+      python3-psycopg2=2.9.13
+
+      python3-py-consul=1.6.0
+
+      python3-pysyncobj=0.3.10
+
+      python3-s3transfer=0.12.0
+
+      python3-six=1.17.0
+
+      python3-systemd=235
+
+      python3-wcwidth=0.2.13
+
+      python3-zstandard=0.23.0
+
+      sfcgal=2.3.0
+
+      ydiff=1.4.2'
+    REPOSITORY:
+      image: percona-distribution-postgresql
+      repository: ubi8
+    SERVER_VERSION: '17.11'
+    TESTING_BRANCH: main
+    WITH_POSTGIS:
+    - true
+    - false
+  pipeline: docker-server-parallel
+- matrix:
+  - WITH_POSTGIS
+  name: ubi9
+  parameters:
+    DOCKER_TAG: '17'
+    EXPECTED_VERSIONS: 'blis=0.7.0
+
+      c-ares=1.19.1
+
+      etcd=3.5.33
+
+      flexiblas=3.0.4
+
+      geos=3.13.1
+
+      gosu=1.19
+
+      lapack=3.9.0
+
+      lapack-3.12=3.12.0
+
+      percona-credcheck=5.0
+
+      percona-haproxy=2.8.27
+
+      percona-patroni=4.1.5
+
+      percona-pg-telemetry=1.2.0
+
+      percona-pg_cron=1.6.8
+
+      percona-pg_gather=33
+
+      percona-pg_repack=1.5.3
+
+      percona-pg_stat_monitor=2.4.1
+
+      percona-pg_tde=2.2.2
+
+      percona-pgaudit=17.1
+
+      percona-pgaudit_set_user=4.2.0
+
+      percona-pgbackrest=2.59.2
+
+      percona-pgbadger=13.2
+
+      percona-pgbouncer=1.26.0
+
+      percona-pgpool-II=4.7.2
+
+      percona-pgvector=0.8.6
+
+      percona-postgis=3.5.7
+
+      percona-postgresql=17.11.1
+
+      percona-postgresql-common=293
+
+      percona-wal2json=2.6
+
+      proj=9.6.0
+
+      python3-attrs=22.1.0
+
+      python3-blessed=1.22.0
+
+      python3-boto3=1.38.19
+
+      python3-botocore=1.38.19
+
+      python3-click=8.1.7
+
+      python3-dateutil=2.9.0.post0
+
+      python3-dns=2.8.0
+
+      python3-etcd=0.4.5
+
+      python3-jmespath=1.0.1
+
+      python3-kazoo=2.8.0
+
+      python3-lz4=4.3.3
+
+      python3-prettytable=3.4.0
+
+      python3-psutil=6.1.1
+
+      python3-psycopg2=2.9.13
+
+      python3-py-consul=1.6.0
+
+      python3-pysyncobj=0.3.10
+
+      python3-s3transfer=0.12.0
+
+      python3-six=1.17.0
+
+      python3-systemd=235
+
+      python3-wcwidth=0.2.13
+
+      python3-zstandard=0.23.0
+
+      sfcgal=2.3.0
+
+      ydiff=1.4.2'
+    REPOSITORY:
+      image: percona-distribution-postgresql
+      repository: ubi9
+    SERVER_VERSION: '17.11'
+    TESTING_BRANCH: main
+    WITH_POSTGIS:
+    - true
+    - false
+  pipeline: docker-server-parallel
+- matrix:
+  - WITH_POSTGIS
+  name: ubi10
+  parameters:
+    DOCKER_TAG: '17'
+    EXPECTED_VERSIONS: 'blis=0.7.0
+
+      c-ares=1.19.1
+
+      etcd=3.5.33
+
+      flexiblas=3.0.4
+
+      geos=3.13.1
+
+      gosu=1.19
+
+      lapack=3.9.0
+
+      lapack-3.12=3.12.0
+
+      percona-credcheck=5.0
+
+      percona-haproxy=2.8.27
+
+      percona-patroni=4.1.5
+
+      percona-pg-telemetry=1.2.0
+
+      percona-pg_cron=1.6.8
+
+      percona-pg_gather=33
+
+      percona-pg_repack=1.5.3
+
+      percona-pg_stat_monitor=2.4.1
+
+      percona-pg_tde=2.2.2
+
+      percona-pgaudit=17.1
+
+      percona-pgaudit_set_user=4.2.0
+
+      percona-pgbackrest=2.59.2
+
+      percona-pgbadger=13.2
+
+      percona-pgbouncer=1.26.0
+
+      percona-pgpool-II=4.7.2
+
+      percona-pgvector=0.8.6
+
+      percona-postgis=3.5.7
+
+      percona-postgresql=17.11.1
+
+      percona-postgresql-common=293
+
+      percona-wal2json=2.6
+
+      proj=9.6.0
+
+      python3-attrs=22.1.0
+
+      python3-blessed=1.22.0
+
+      python3-boto3=1.38.19
+
+      python3-botocore=1.38.19
+
+      python3-click=8.1.7
+
+      python3-dateutil=2.9.0.post0
+
+      python3-dns=2.8.0
+
+      python3-etcd=0.4.5
+
+      python3-jmespath=1.0.1
+
+      python3-kazoo=2.8.0
+
+      python3-lz4=4.3.3
+
+      python3-prettytable=3.4.0
+
+      python3-psutil=6.1.1
+
+      python3-psycopg2=2.9.13
+
+      python3-py-consul=1.6.0
+
+      python3-pysyncobj=0.3.10
+
+      python3-s3transfer=0.12.0
+
+      python3-six=1.17.0
+
+      python3-systemd=235
+
+      python3-wcwidth=0.2.13
+
+      python3-zstandard=0.23.0
+
+      sfcgal=2.3.0
+
+      ydiff=1.4.2'
+    REPOSITORY:
+      image: percona-distribution-postgresql
+      repository: ubi10
+    SERVER_VERSION: '17.11'
+    TESTING_BRANCH: main
+    WITH_POSTGIS:
+    - true
+    - false
+  pipeline: docker-server-parallel
 repositories:
 - archs:
   - x86_64
   - aarch64
   name: ubi8
   paths:
+  - project: RedHat:UBI:Registry
+    repository: images
   - repository: UBI_8
     subproject: ppg:releases:17
   - repository: UBI_8
     subproject: ppg:common:deps
-  - repository: images
-    subproject: common:containers:ubi8
   - repository: UBI_8
     subproject: common:containers:ubi8
   - project: Fedora:EPEL:8
     repository: standard
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
+  - project: RedHat:UBI-8
     repository: appstream
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-8
+  - project: RedHat:UBI-8
     repository: baseos
   - project: RockyLinux:8
     repository: appstream
@@ -91,16 +524,33 @@ repositories:
   - aarch64
   name: ubi9
   paths:
+  - project: RedHat:UBI:Registry
+    repository: images
   - repository: UBI_9
     subproject: ppg:releases:17
   - repository: UBI_9
     subproject: ppg:common:deps
-  - repository: images
-    subproject: common:containers:ubi9
   - repository: UBI_9
     subproject: common:containers:ubi9
   - project: Fedora:EPEL:9
     repository: standard
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+  - project: RedHat:UBI-9
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: ubi10
+  paths:
+  - project: RedHat:UBI:Registry
+    repository: images
+  - repository: UBI_10
+    subproject: ppg:releases:17
+  - repository: UBI_10
+    subproject: ppg:common:deps
+  - repository: UBI_10
+    subproject: common:containers:ubi10
+  - project: Fedora:EPEL:10
+    repository: standard
+  - project: RedHat:UBI-10
     repository: standard
 title: ppg releases 17 — containers
