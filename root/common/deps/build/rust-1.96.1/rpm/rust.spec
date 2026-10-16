@@ -152,6 +152,13 @@ rm -f %{buildroot}%{_mandir}/man1/rustdoc.1*
 %doc src/tools/rustfmt/{README,CHANGELOG,Configurations}.md
 %license src/tools/rustfmt/LICENSE-{APACHE,MIT}
 
+%if 0%{?rhel}
+%files toolset
+%{rpmmacrodir}/macros.rust-toolset
+%{_fileattrsdir}/cargo_vendor.attr
+%{_rpmconfigdir}/cargo_vendor.prov
+%endif
+
 %changelog
 * Tue Oct 13 2026 Percona Development Team <info@percona.com> - 1.96.1-1
 - Package rust 1.96.1 for building cargo-pgrx 0.19.1 based PostgreSQL extensions
