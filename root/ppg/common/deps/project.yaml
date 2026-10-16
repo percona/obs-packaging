@@ -11,6 +11,10 @@ project-config: |
   %if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_8"
   Prefer: libverto-libev
   Prefer: Lmod
+  # swig is modular on EL8 (streams 3.0/4.0/4.1, none visible without a
+  # flag); gdal38 needs it for its Python 3.12 and Java bindings. 4.1 is the
+  # stream that knows Python 3.12.
+  ExpandFlags: module:swig-4.1
   %endif
 
   %if "%_repository" == "RockyLinux_9" || "%_repository" == "RockyLinux_9.6"

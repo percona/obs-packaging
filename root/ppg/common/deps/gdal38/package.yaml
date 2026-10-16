@@ -1,0 +1,19 @@
+title: GDAL 3.8 (PGDG layout, EL8)
+description: |
+  GDAL 3.8 under /usr/gdal38 for EL8/UBI8 only, PGDG's EL-8 choice for
+  postgis35, built on geos315 + proj96 + libgeotiff17 + libspatialite50.
+  Ported from pgdg-rpms e38918e8 (EL-8 variant) without the ld.so.conf.d
+  drop-in.
+build:
+  RockyLinux_9: false
+  RockyLinux_9.6: false
+  RockyLinux_10: false
+  UBI_9: false
+  UBI_10: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Tumbleweed: false
+  openSUSE_Leap_16: false
