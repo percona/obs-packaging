@@ -151,7 +151,6 @@ rm -f %{buildroot}%{_mandir}/man1/rustdoc.1*
 %{_bindir}/cargo-fmt
 %doc src/tools/rustfmt/{README,CHANGELOG,Configurations}.md
 %license src/tools/rustfmt/LICENSE-{APACHE,MIT}
-%license build/manifests/rustfmt/cargo-vendor.txt
 
 %changelog
 * Tue Oct 13 2026 Percona Development Team <info@percona.com> - 1.96.1-1
