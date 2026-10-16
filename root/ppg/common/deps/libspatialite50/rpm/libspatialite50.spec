@@ -27,7 +27,8 @@ License:	MPLv1.1 or GPLv2+ or LGPLv2+
 URL:		https://www.gaia-gis.it/fossil/libspatialite
 Source0:	%{sname}-%{version}.tar.gz
 
-BuildRequires:	gcc librttopo-devel >= %!{GIS_LIBRTTOPO_VERSION}
+# PERCONA: floor -45 so only our geos315-linked librttopo (Release 45) satisfies it, not the distro one
+BuildRequires:	gcc librttopo-devel >= %!{GIS_LIBRTTOPO_VERSION}-45
 BuildRequires:	binutils
 %if 0%{?rhel} && 0%{?rhel} <= 9
 BuildRequires:	minizip-devel
@@ -48,7 +49,7 @@ BuildRequires:	sqlite-devel zlib-devel libxml2-devel
 
 Requires:	geos%{geosmajorversion} >= %{geosfullversion}
 Requires:	proj%{projmajorversion} >= %{projfullversion}
-Requires:	librttopo >= %!{GIS_LIBRTTOPO_VERSION}
+Requires:	librttopo >= %!{GIS_LIBRTTOPO_VERSION}-45
 
 %description
 SpatiaLite is a a library extending the basic SQLite core in order to
