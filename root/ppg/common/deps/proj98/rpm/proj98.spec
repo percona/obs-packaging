@@ -3,6 +3,11 @@
 
 %global projinstdir /usr/%{sname}98
 
+# RHEL 10 ships gcc 14 natively; gcc-toolset only exists (and is needed for C23) on EL8/EL9.
+%if 0%{?rhel} && 0%{?rhel} < 10
+%global gts_version 14
+%endif
+
 Name:		%{sname}98
 Version:	%!{GIS_PROJ_VERSION}
 Release:	1%{?dist}
@@ -16,6 +21,9 @@ Source0:	%{sname}-%{version}.tar.gz
 
 BuildRequires:	sqlite-devel >= 3.7 libcurl-devel cmake >= 3.16 sqlite
 BuildRequires:	binutils
+%if 0%{?gts_version}
+BuildRequires:	gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
+%endif
 BuildRequires:	libtiff-devel
 
 # Default GCC version on SLES 15 is not sufficient to build PROJ 9.8,
@@ -51,6 +59,9 @@ This package contains libproj and the appropriate header files and man pages.
 %setup -q -n %{sname}-%{version}
 
 %build
+%if 0%{?gts_version}
+source /opt/rh/gcc-toolset-%{gts_version}/enable
+%endif
 
 %{__install} -d build
 pushd build
@@ -73,6 +84,9 @@ cmake ..\
 popd
 
 %install
+%if 0%{?gts_version}
+source /opt/rh/gcc-toolset-%{gts_version}/enable
+%endif
 pushd build
 %{__make} -C "%{_vpath_builddir}" %{?_smp_mflags} install/fast \
 	DESTDIR=%{buildroot}
