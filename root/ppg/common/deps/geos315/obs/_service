@@ -1,0 +1,8 @@
+<services>
+  <service name="download_url">
+    <param name="host">github.com</param>
+    <param name="protocol">https</param>
+    <param name="path">/libgeos/geos/releases/download/%!{GIS_GEOS_VERSION}/geos-%!{GIS_GEOS_VERSION}.tar.bz2</param>
+    <param name="filename">geos-%!{GIS_GEOS_VERSION}.tar.bz2</param>
+  </service>
+</services>
