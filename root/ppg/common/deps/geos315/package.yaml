@@ -1,0 +1,12 @@
+title: GEOS 3.15 (PGDG layout)
+description: |
+  GEOS 3.15 installed under /usr/geos315, ported from PGDG (pgdg-rpms
+  e38918e8) without its /etc/ld.so.conf.d drop-in: consumers and the GEOS
+  binaries find the library through RUNPATH. Linked by percona-postgis
+  (3.5 and 3.7), libspatialite50 and gdal313/gdal38.
+build:
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
