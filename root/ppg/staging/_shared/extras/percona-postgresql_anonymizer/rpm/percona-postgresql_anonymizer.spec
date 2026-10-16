@@ -17,7 +17,7 @@ Vendor:		Percona, LLC
 URL:		https://gitlab.com/dalibo/postgresql_anonymizer
 
 BuildRequires:  cargo
-BuildRequires:  cargo-pgrx = 0.18.0
+BuildRequires:  cargo-pgrx = 0.19.1
 BuildRequires:  rustfmt
 BuildRequires:	percona-postgresql%{pgmajorversion}-devel
 BuildRequires:	gcc clang-devel openssl-devel pkg-config

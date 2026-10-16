@@ -2,7 +2,7 @@
   <service name="obs_scm">
     <param name="url">https://github.com/bakwc/PySyncObj.git</param>
     <param name="scm">git</param>
-    <param name="revision">%!{PYSYNCOBJ_VERSION}</param>
+    <param name="revision">v%!{PYSYNCOBJ_VERSION}</param>
     <param name="version">%!{PYSYNCOBJ_VERSION}</param>
     <param name="filename">python3-pysyncobj</param>
   </service>
