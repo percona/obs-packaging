@@ -125,7 +125,6 @@ done
 
 %files devel
 %defattr(-,root,root,-)
-%{projinstdir}/share/man/man1/*.1
 %{projinstdir}/include/*.h
 %{projinstdir}/include/proj/*
 %{projinstdir}/lib64/*.so

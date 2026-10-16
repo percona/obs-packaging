@@ -138,10 +138,6 @@ done
 %dir %{projinstdir}/lib64/cmake/%{sname}
 %dir %{projinstdir}/lib64/cmake/%{sname}4
 %dir %{projinstdir}/lib64/pkgconfig
-%dir %{projinstdir}/share
-%dir %{projinstdir}/share/man
-%dir %{projinstdir}/share/man/man1
-%{projinstdir}/share/man/man1/*.1
 %{projinstdir}/include/*.h
 %{projinstdir}/include/proj/*
 %{projinstdir}/lib64/*.so

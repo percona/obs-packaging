@@ -140,6 +140,7 @@ done
 %{libgeotiffinstdir}/bin/listgeo
 %{libgeotiffinstdir}/bin/makegeo
 %{libgeotiffinstdir}/lib/*
+%exclude %{libgeotiffinstdir}/lib/pkgconfig
 %{libgeotiffinstdir}/man/man1/listgeo.1
 %{libgeotiffinstdir}/man/man1/geotifcp.1
 %{libgeotiffinstdir}/man/man1/applygeo.1
