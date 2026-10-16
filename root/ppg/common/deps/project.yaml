@@ -36,4 +36,12 @@ project-config: |
   # gdal313 (ant + java-21-openjdk-devel): ant-jdk-binding "have choice"
   # between ant-openjdk21 and ant-unbound.
   Prefer: ant-openjdk21
+
+  # Our packages carry deliberate RUNPATHs to /usr/<pkg> prefixes (PGDG
+  # layout without ld.so.conf.d) and each spec's %install verifies them;
+  # EL10's brp-check-rpaths rejects them. Same rule as
+  # root/ppg/staging/subprojects.yaml.
+  Macros:
+  %__brp_check_rpaths %{nil}
+  :Macros
   %endif
