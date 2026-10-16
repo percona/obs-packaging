@@ -1,0 +1,12 @@
+title: librttopo (PGDG layout, on geos315)
+description: |
+  RT Topology library required by libspatialite50, built on every RPM repo
+  and linked against geos315. PGDG ships its own librttopo everywhere, linked
+  to geos315; EPEL/openSUSE builds link the distro GEOS and would load a
+  second libgeos_c.so.1 next to geos315. Ported from pgdg-rpms e38918e8.
+build:
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
