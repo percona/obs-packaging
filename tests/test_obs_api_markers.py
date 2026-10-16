@@ -87,3 +87,46 @@ def test_marker_inserts_missing_description_after_title(monkeypatch):
     tags = [child.tag for child in root]
     assert tags == ["title", "description", "repository"]
     assert root.findtext("description") == "source_commit: abc"
+
+
+def test_markers_written_in_order_in_one_meta_write(monkeypatch):
+    meta = (
+        '<project name="P"><title>t</title><description>Mirror of X\n'
+        "release_id: 18.7-1\nsource_commit: old</description>"
+        '<repository name="r"/></project>'
+    )
+    pushed = []
+    monkeypatch.setattr(obs_api.osc.core, "show_project_meta", lambda a, p: meta)
+    monkeypatch.setattr(
+        obs_api,
+        "_edit_project_meta",
+        lambda a, p, m, force: pushed.append(m) and False,
+    )
+    obs_api.set_project_description_markers(
+        "http://obs", "P", [("source_commit", "new"), ("release_id", "18.7-2")]
+    )
+    import xml.etree.ElementTree as ET
+
+    assert len(pushed) == 1
+    desc = ET.fromstring(pushed[0]).findtext("description")
+    assert desc.splitlines() == [
+        "Mirror of X",
+        "source_commit: new",
+        "release_id: 18.7-2",
+    ]
+
+
+def test_single_marker_is_appended_last(monkeypatch):
+    pushed = {}
+    monkeypatch.setattr(obs_api.osc.core, "show_project_meta", lambda a, p: _META)
+    monkeypatch.setattr(
+        obs_api,
+        "_edit_project_meta",
+        lambda a, p, meta, force: pushed.setdefault("meta", meta) and False,
+    )
+    obs_api.set_project_description_marker("http://obs", "P", "release_id", "17.11-2")
+    import xml.etree.ElementTree as ET
+
+    desc = ET.fromstring(pushed["meta"]).findtext("description")
+    assert desc.splitlines()[-1] == "release_id: 17.11-2"
+    assert "source_commit: old" in desc

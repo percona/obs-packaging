@@ -89,12 +89,14 @@ def _wire(monkeypatch, src, rel, calls):
     monkeypatch.setattr(
         cmd_sync,
         "release_tree",
-        lambda *a, **k: calls.append(("copy", a[1], a[2], k.get("publish_override"))),
+        lambda *a, **k: calls.append(
+            ("copy", a[1], a[2], k.get("publish_override"), k.get("release_id"))
+        ),
     )
     monkeypatch.setattr(
         cmd_sync,
-        "set_project_description_marker",
-        lambda apiurl, prj, key, value: calls.append(("marker", prj, value)),
+        "set_project_description_markers",
+        lambda apiurl, prj, markers: calls.append(("marker", prj, markers)),
     )
 
 
@@ -131,9 +133,13 @@ def test_happy_path_order(tmp_path, monkeypatch):
         "home:Admin:ppg:staging:17",
         "home:Admin:PR:pr-5:ppg:releases:17",
         True,
+        "17.11-1",
     )
     assert calls[5] == "restore"
-    assert calls[6] == ("marker", "home:Admin:PR:pr-5:ppg:releases:17", SHA)
+    # source_commit marks the completed populate; release_id stays the last line.
+    final = [("source_commit", SHA), ("release_id", "17.11-1")]
+    assert calls[6] == ("marker", "home:Admin:PR:pr-5:ppg:releases:17", final)
+    assert ("marker", "home:Admin:PR:pr-5:ppg:releases:17:tarballs", final) in calls
 
 
 def test_marker_not_written_when_copy_fails(tmp_path, monkeypatch):

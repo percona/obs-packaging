@@ -31,6 +31,7 @@ from .obs_api import (
     _fetch_obs_subproject_names,
     _read_project_release_source,
     _remove_release_targets,
+    set_project_description_marker,
 )
 from .project_config import project_in_slice
 from .release_freeze import verify_release_landed
@@ -209,13 +210,23 @@ def release_tree(
     branch_rootprj: "str | None" = None,
     active_projects: "set[str] | None" = None,
     branch_fallbacks: bool = True,
+    release_id: "str | None" = None,
 ) -> None:
     """Copy the top project and every (subproject, mirror) pair, then verify.
 
     The caller has already applied the top project's meta (that happens
     before any freeze); subproject meta is applied here, right before each
     subproject's copy, exactly as the single-hop release always did.
+
+    With *release_id*, every target project gets ``release_id: <id>`` as the
+    last description line after its meta is applied and before its
+    ``osc release``, so the description already names the release when the
+    binaries land.
     """
+    if release_id:
+        set_project_description_marker(
+            apiurl, target_obs_project, "release_id", release_id
+        )
     copy_project_binaries(apiurl, source_obs_project, target_obs_project)
     for subproject_name, mirror_path in pairs:
         target_sub = f"{target_obs_project}:{subproject_name}"
@@ -230,6 +241,8 @@ def release_tree(
             active_projects=active_projects,
             branch_fallbacks=branch_fallbacks,
         )
+        if release_id:
+            set_project_description_marker(apiurl, target_sub, "release_id", release_id)
         copy_project_binaries(
             apiurl, f"{source_obs_project}:{subproject_name}", target_sub
         )

@@ -1286,8 +1286,21 @@ aggregate-frozen package) must be identical between
 fails with "staging changed since the cut"; edits under `root/<product>/staging/_shared/...`
 count as staging changes because the check follows the `_shared/` symlink targets of
 packages; (3) pre-release meta from the mirrors, **publish forced on**; (4) drain, assert
-green, freeze, `osc release`, verify, restore; (5) `source_commit: <sha>` appended to each
-pre-release project description.
+green, freeze, `osc release`, verify, restore; (5) `source_commit: <sha>` and
+`release_id: <id>` appended, in that order, to each pre-release project description.
+
+**`release_id` marker.** Every release hop (this one, `sync release --from` and the
+legacy single-hop `sync release`) writes `release_id: <id>` as the **last line** of each
+target project's description, so tools reading a release project can tell which release
+its binaries belong to. The id is the last `release.yaml` tag without its product
+prefix: `ppg/18.7-1` → `18.7-1`, `ppg/common-1` → `common-1`. It is written after the
+project's mirror meta is applied (which rewrites the description) and **before** that
+project's `osc release`, so the description already names the release when the binaries
+land. On pre-release projects `source_commit` is written after the copy, because its
+presence marks a complete populate; `release_id` is re-appended with it so it stays the
+last line. On release projects the hop-2 meta apply drops the pre-release
+`source_commit`, so they end with `release_id` alone. `sync push` never touches
+`:releases:` projects, so the marker stays until the next release.
 
 | Flag | Default | Effect |
 |---|---|---|
@@ -1311,8 +1324,8 @@ pre-release project description.
 No freeze, no git divergence check. The last `release.yaml` entry must have a
 `source_commit` and the pre-release description's marker must equal it; a missing or
 different marker, or an entry without `source_commit`, is refused (`--force` skips both
-checks). Then the release project meta is applied from the mirrors and binaries are copied
-with `osc release`. Known limitation: `--dry-run` together with `--from` still only runs
+checks). Then the release project meta is applied from the mirrors, `release_id: <id>` is
+appended to each project description and binaries are copied with `osc release`. Known limitation: `--dry-run` together with `--from` still only runs
 the staging-side dry-run checks.
 
 ### Running `sync release` manually

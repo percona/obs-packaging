@@ -62,7 +62,7 @@ from .release_copy import (
     release_tree,
 )
 from .github_api import last_synced_head_sha, repo_slug_from_url
-from .release_record import current_release, release_tags
+from .release_record import current_release, release_id_from_tag, release_tags
 from .project_config import (
     RepositoryFilter,
     package_in_slice,
@@ -111,7 +111,7 @@ from .obs_api import (
     _obs_project_exists,
     _upload_obs_files,
     read_project_description_marker,
-    set_project_description_marker,
+    set_project_description_markers,
 )
 from .release_scope import collect_release_scope
 from .release_freeze import (
@@ -2579,6 +2579,8 @@ def cmd_sync_release(args) -> None:
 
     releases_list = release_tags(release_data)
     tag = releases_list[-1] if releases_list else ""
+    # Written into every target project description before its osc release.
+    release_id = release_id_from_tag(tag) if tag else None
 
     apiurl: str = osc.conf.config["apiurl"]
     source_obs_project = f"{args.rootprj}:{source_project_id}"
@@ -2618,7 +2620,8 @@ def cmd_sync_release(args) -> None:
                 _print_same(f"+ {release_obs_project}:{name}")
             _print_ok(
                 f"release dry-run passed for {entry.tag}  "
-                f"({from_project} → {release_obs_project})  (dry run)"
+                f"({from_project} → {release_obs_project}, "
+                f"release_id: {release_id})  (dry run)"
             )
             return
         apply_mirror_meta(
@@ -2632,6 +2635,7 @@ def cmd_sync_release(args) -> None:
             args.rootprj,
             shared_env_vars,
             verify_timeout=args.verify_timeout,
+            release_id=release_id,
         )
         _print_ok(f"release  {from_project} → {release_obs_project} ({entry.tag})")
         return
@@ -2663,7 +2667,6 @@ def cmd_sync_release(args) -> None:
                 failures.append(
                     f"missing release mirror for {source_project_id}:{name}"
                 )
-        release_id = tag.split("/")[-1] if tag else ""
         changelog_file = release_path / "CHANGELOG.md"
         if not tag:
             failures.append("release.yaml has no releases: entries")
@@ -2692,7 +2695,9 @@ def cmd_sync_release(args) -> None:
             for f in failures:
                 print(f"  ✗ {f}", file=sys.stderr)
             raise SystemExit("error: release dry-run failed")
-        _print_ok(f"release dry-run passed for {tag}  (dry run)")
+        _print_ok(
+            f"release dry-run passed for {tag}  (release_id: {release_id})  (dry run)"
+        )
         return
 
     if missing_mirrors:
@@ -2736,6 +2741,7 @@ def cmd_sync_release(args) -> None:
             args.rootprj,
             shared_env_vars,
             verify_timeout=args.verify_timeout,
+            release_id=release_id,
         ),
     )
 
@@ -2843,6 +2849,7 @@ def cmd_sync_prerelease(args) -> None:
     entry = current_release(release_data)
     if entry is None:
         raise SystemExit("error: release.yaml has no releases: entries")
+    release_id = release_id_from_tag(entry.tag)
     source_commit = args.source_commit or entry.source_commit
     if not source_commit:
         raise SystemExit(
@@ -2944,7 +2951,10 @@ def cmd_sync_prerelease(args) -> None:
             for f in failures:
                 print(f"  ✗ {f}", file=sys.stderr)
             raise SystemExit("error: prerelease dry-run failed")
-        _print_ok(f"prerelease dry-run passed for {entry.tag}  (dry run)")
+        _print_ok(
+            f"prerelease dry-run passed for {entry.tag}  "
+            f"(release_id: {release_id})  (dry run)"
+        )
         return
 
     # Repository paths to projects outside the pre-release tree (e.g.
@@ -2985,15 +2995,17 @@ def cmd_sync_prerelease(args) -> None:
             branch_rootprj=source_rootprj,
             active_projects=prerelease_tree,
             branch_fallbacks=False,
+            release_id=release_id,
         ),
     )
 
-    set_project_description_marker(
-        apiurl, prerelease_obs_project, "source_commit", source_commit
-    )
+    # source_commit is written only after a complete copy (hop 2 checks it);
+    # release_id is re-appended with it so it stays the last description line.
+    final_markers = [("source_commit", source_commit), ("release_id", release_id)]
+    set_project_description_markers(apiurl, prerelease_obs_project, final_markers)
     for name, _ in subproject_pairs:
-        set_project_description_marker(
-            apiurl, f"{prerelease_obs_project}:{name}", "source_commit", source_commit
+        set_project_description_markers(
+            apiurl, f"{prerelease_obs_project}:{name}", final_markers
         )
     _print_ok(
         f"prerelease  {source_obs_project} → {prerelease_obs_project} ({entry.tag})"

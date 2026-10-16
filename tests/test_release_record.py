@@ -7,6 +7,7 @@ from percona_obs.release_record import (
     current_release,
     dump_release_entry,
     parse_release_entries,
+    release_id_from_tag,
     release_tags,
 )
 
@@ -48,3 +49,14 @@ def test_dump_round_trip():
         "tag": "ppg/18.7-1",
         "source_commit": "abc",
     }
+
+
+def test_release_id_from_tag():
+    assert release_id_from_tag("ppg/18.7-1") == "18.7-1"
+    assert release_id_from_tag("ppg/common-3") == "common-3"
+
+
+@pytest.mark.parametrize("tag", ["18.7-1", "ppg/", "", "/18.7-1"])
+def test_release_id_from_tag_rejects_malformed(tag):
+    with pytest.raises(SystemExit, match="release id"):
+        release_id_from_tag(tag)
