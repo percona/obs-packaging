@@ -41,3 +41,43 @@ qa:
         - rhel-10
         - rhel-10-arm
       TESTING_BRANCH: main
+
+  # pg_tde's auxiliary tools (pg_tde_* utilities, key management) from the
+  # OBS packages; only the percona-qa test scripts come from git.
+  - name: pg_tde-auxiliary
+    pipeline: tde-auxiliary-parallel
+    parameters:
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      INSTALL_FROM_PACKAGES: true
+      PLATFORMS:
+        - debian-12
+        - debian-12-arm
+        - debian-13
+        - debian-13-arm
+        - ubuntu-jammy
+        - ubuntu-jammy-arm
+        - ubuntu-noble
+        - ubuntu-noble-arm
+        - ubuntu-resolute
+        - ubuntu-resolute-arm
+        - rocky-8
+        - rocky-8-arm
+        - rocky-9
+        - rocky-9-arm
+        - rocky-10
+        - rocky-10-arm
+        - ol-8
+        - ol-8-arm
+        - ol-9
+        - ol-9-arm
+        - ol-10
+        - ol-10-arm
+        - rhel-8
+        - rhel-8-arm
+        - rhel-9
+        - rhel-9-arm
+        - rhel-10
+        - rhel-10-arm
+      TESTING_BRANCH: main
