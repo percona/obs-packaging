@@ -29,6 +29,11 @@ def _stub_obs(monkeypatch, calls):
     )
     monkeypatch.setattr(rc, "_disable_project_builds", lambda *a, **k: None)
     monkeypatch.setattr(rc, "_fetch_obs_subproject_names", lambda apiurl, prefix: set())
+    monkeypatch.setattr(
+        rc,
+        "set_project_description_marker",
+        lambda apiurl, prj, key, value: calls.append(("marker", prj, key, value)),
+    )
 
 
 def test_copy_project_binaries_restores_targets(monkeypatch):
@@ -172,3 +177,39 @@ def test_release_tree_forwards_branch_redirection_to_subprojects(monkeypatch, tm
     )
     assert seen == [("PR:T:containers", "prod", {"PR:T", "PR:T:containers"}, False)]
     assert seen[0][3] is False
+
+
+def test_release_tree_writes_release_id_before_each_copy(monkeypatch, tmp_path):
+    calls = []
+    _stub_obs(monkeypatch, calls)
+    monkeypatch.setattr(
+        rc.subprocess, "run", lambda cmd, **k: calls.append(("osc", cmd[4]))
+    )
+    pairs = [("containers", tmp_path / "containers")]
+    rc.release_tree(
+        "http://obs",
+        "S",
+        "T",
+        pairs,
+        "home:Admin",
+        {},
+        verify_timeout=0,
+        release_id="18.7-1",
+    )
+    assert [c for c in calls if c[0] in ("osc", "meta", "marker")] == [
+        ("marker", "T", "release_id", "18.7-1"),
+        ("osc", "S"),
+        ("meta", "T:containers"),
+        ("marker", "T:containers", "release_id", "18.7-1"),
+        ("osc", "S:containers"),
+    ]
+
+
+def test_release_tree_without_release_id_writes_no_marker(monkeypatch, tmp_path):
+    calls = []
+    _stub_obs(monkeypatch, calls)
+    monkeypatch.setattr(rc.subprocess, "run", lambda *a, **k: None)
+    rc.release_tree(
+        "http://obs", "S", "T", [("x", tmp_path)], "home:Admin", {}, verify_timeout=0
+    )
+    assert not [c for c in calls if c[0] == "marker"]

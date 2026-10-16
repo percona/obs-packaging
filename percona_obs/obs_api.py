@@ -1218,9 +1218,23 @@ def set_project_description_marker(
     """Append (or replace) a ``<key>: <value>`` line in the project description.
 
     Used to pin ``source_commit`` on a pre-release project so the final hop
-    can check it without git.  ``_apply_project_config`` rewrites the
-    description from the mirror, so callers set the marker last.
+    can check it without git, and ``release_id`` on every release-tier
+    project.  ``_apply_project_config`` rewrites the description from the
+    mirror, so callers set markers after applying the meta.
     """
+    set_project_description_markers(apiurl, obs_project_name, [(key, value)])
+
+
+def set_project_description_markers(
+    apiurl: str, obs_project_name: str, markers: "list[tuple[str, str]]"
+) -> None:
+    """Append (or replace) several ``<key>: <value>`` lines in one meta write.
+
+    Existing lines for every given key are dropped and the markers are
+    appended in the given order, so the last pair ends up as the
+    description's last line.
+    """
+    keys = [key for key, _ in markers]
     raw = _decode_obs_response(osc.core.show_project_meta(apiurl, obs_project_name))
     root = ET.fromstring(raw)
     desc = root.find("description")
@@ -1232,19 +1246,21 @@ def set_project_description_marker(
     kept = [
         line
         for line in (desc.text or "").splitlines()
-        if not line.startswith(f"{key}: ")
+        if not any(line.startswith(f"{key}: ") for key in keys)
     ]
-    desc.text = "\n".join([*kept, f"{key}: {value}"]).strip()
+    added = [f"{key}: {value}" for key, value in markers]
+    desc.text = "\n".join([*kept, *added]).strip()
     ET.indent(root, space="  ")
     stripped = _edit_project_meta(
         apiurl, obs_project_name, ET.tostring(root, encoding="unicode"), force=False
     )
     if stripped:
         raise SystemExit(
-            f"error: writing {key} to {obs_project_name} stripped its repository paths "
-            "(repository_access_failure); the project meta must be re-applied before retrying"
+            f"error: writing {', '.join(keys)} to {obs_project_name} stripped its "
+            "repository paths (repository_access_failure); the project meta must be "
+            "re-applied before retrying"
         )
-    _print_update(f"project meta  {obs_project_name}  ({key}: {value})")
+    _print_update(f"project meta  {obs_project_name}  ({', '.join(added)})")
 
 
 def read_project_description_marker(

@@ -549,7 +549,9 @@ A release ships in two hops (spec: `docs/superpowers/specs/2026-10-13-prerelease
 project after checking the `source_commit` recorded in `release.yaml` against the last synced `main`
 and stamps that SHA into the pre-release project descriptions. `sync release <project> --from <pre-release-project>`
 then copies the pre-release into the release project (no freeze, no git divergence check) after
-verifying the marker equals the tagged entry's `source_commit`. `release.yaml` entries are plain tag
+verifying the marker equals the tagged entry's `source_commit`. Every hop also writes
+`release_id: <id>` (the tag without its product prefix, e.g. `18.7-1`, `common-1`) as the last line of
+each target project description, before that project's `osc release`. `release.yaml` entries are plain tag
 strings (historical) or `{tag, source_commit}` mappings; `obs-pr-cleanup.yml` and
 `.github/scripts/update_version_lists.py` read both. CI integration: `obs-release-pr.yml` runs hop 1 and the release QA on every release PR, and `obs-release.yml` runs hop 2 after merge.
 

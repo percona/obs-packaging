@@ -88,6 +88,12 @@ rewrites them. The `qa:` blocks carried into the mirrors (section 2) resolve
 `publish:` flags, so Jenkins always has repositories to consume. The mirror's
 own flags apply only on hop 2.
 
+**`release_id` marker** (added 2026-10-16). Both hops write `release_id: <id>`
+(the tag without its product prefix: `18.7-1`, `common-1`) as the last line of
+every target project description, after the mirror meta and before that
+project's `osc release`. On the pre-release `source_commit` is still written
+only after the copy; `release_id` is re-appended with it and stays last.
+
 ### Instance slicing
 
 Both hops run once per `OBS_INSTANCES` entry with that instance's profile.

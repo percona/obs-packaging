@@ -56,6 +56,22 @@ def current_release(data: Any) -> "ReleaseEntry | None":
     return entries[-1] if entries else None
 
 
+def release_id_from_tag(tag: str) -> str:
+    """The release id a tag names: ``ppg/18.7-1`` → ``18.7-1``,
+    ``ppg/common-1`` → ``common-1``.
+
+    Written as ``release_id: <id>`` into every release project description,
+    so it must be well formed: a product prefix, a slash and a non-empty id.
+    """
+    product, sep, release_id = tag.partition("/")
+    if not sep or not product or not release_id or "/" in release_id:
+        raise SystemExit(
+            f"error: cannot derive a release id from tag {tag!r} "
+            "(expected <product>/<id>, e.g. ppg/18.7-1)"
+        )
+    return release_id
+
+
 def dump_release_entry(entry: ReleaseEntry) -> "str | dict[str, str]":
     """YAML-ready value: a bare tag when there is nothing else to record."""
     if entry.source_commit is None:
