@@ -20,6 +20,15 @@ Optional:
                             ``package``) whose package is not in the OBS
                             subproject.  Set by PR runs, where the PR project
                             holds only promoted packages; unset for the nightly.
+  OBS_INSTANCES             JSON list of OBS instances (the repository variable).
+                            When set (the nightly), projects come from this
+                            checkout's qa: blocks instead of one OBS server's
+                            subproject list, each resolved to the instance that
+                            hosts it (as obs-qa-run.yml does), and every combo
+                            carries that instance (instance_name, _apiurl,
+                            _user, _registry, _rootprj, _env). One server
+                            does not host every project: e.g. container
+                            projects live on another instance than tarballs.
   QA_MAJOR                  a PostgreSQL major (e.g. "17"): keep only that
                             major's combos (see ``belongs_to_major``). Set by the
                             nightly's one-major-per-day schedule; unset = all.
@@ -28,6 +37,7 @@ Optional:
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import os
 import subprocess
 import sys
@@ -106,14 +116,91 @@ def belongs_to_major(project: str, name: str | None, major: str) -> bool:
     ``-pg<major>``; image upgrades belong to the major they upgrade *into*
     (``...-16-to-17`` is PG 17's), so each upgrade runs exactly once a week.
     """
-    if major in project.split(":"):
-        return True
+    project_majors = [part for part in project.split(":") if part.isdigit()]
+    if project_majors:  # a major's own project: that major only, whatever the name
+        return major in project_majors
     name = name or ""
     return name.endswith(f"-pg{major}") or name.endswith(f"-to-{major}")
 
 
 
+def local_qa_projects(root: Path) -> list[str]:
+    """Projects of this checkout (``root/``) with a qa: block, own or a package's."""
+    found = []
+    for y in sorted(root.rglob("project.yaml")):
+        rel = y.parent.relative_to(root)
+        if "_shared" in rel.parts:
+            continue
+        text = y.read_text(encoding="utf-8")
+        pkgs = [d / "package.yaml" for d in y.parent.iterdir() if (d / "package.yaml").is_file()]
+        if "\nqa:" in text or text.startswith("qa:") or any("\nqa:" in q.read_text(encoding="utf-8") for q in pkgs):
+            found.append(":".join(rel.parts))
+    return found
+
+
+def _qa_show(project: str, profile: str) -> list:
+    result = subprocess.run(
+        ["venv/bin/python", "-m", "percona_obs", "-P", profile, "qa", "show", project, "--json"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(f"warning: qa show {project}: {result.stderr.strip()}", file=sys.stderr)
+        return []
+    for line in result.stderr.rstrip().splitlines():
+        print(f"  {project}: {line.strip()}", file=sys.stderr)
+    try:
+        return json.loads(result.stdout or "[]")
+    except json.JSONDecodeError as exc:
+        print(f"warning: qa show {project}: invalid JSON ({exc})", file=sys.stderr)
+        return []
+
+
+def matrix_per_instance(instances_json: str, root: Path, profile: str, major: str) -> list:
+    """Nightly matrix: every qa: project of the checkout, on the instance hosting it."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from resolve_qa_instance import _load_instances, resolve_instance
+
+    instances = _load_instances(instances_json)
+    matrix: list = []
+    for project in local_qa_projects(root):
+        if is_release_tier("root:" + project):
+            continue
+        try:
+            inst = resolve_instance(instances, project)
+        except SystemExit as exc:  # no instance (or several): cannot run, say so
+            print(f"warning: {project}: {exc}", file=sys.stderr)
+            continue
+        entries = _qa_show(project, profile)
+        if major:
+            entries = [e for e in entries if belongs_to_major(project, e.get("name"), major)]
+        if not entries:
+            continue
+        print(f"  {project}: {len(entries)} combo(s) on instance {inst.get('name')}", file=sys.stderr)
+        fields = {
+            "instance_name": str(inst.get("name", "")),
+            "instance_apiurl": str(inst.get("apiurl", "")),
+            "instance_user": str(inst.get("user", "") or ""),
+            "instance_registry": str(inst.get("registry", "") or ""),
+            "instance_rootprj": str(inst.get("rootprj", "") or ""),
+            "instance_env": json.dumps(inst.get("env")) if inst.get("env") else "null",
+        }
+        for e in entries:
+            e.setdefault("project", project)
+            matrix.append({**normalize_entry(e), **fields})
+    return matrix
+
+
 def main() -> None:
+    instances_json = os.environ.get("OBS_INSTANCES", "").strip()
+    if instances_json:
+        major = os.environ.get("QA_MAJOR", "").strip()
+        matrix = matrix_per_instance(instances_json, Path("root"),
+                                     os.environ.get("PERCONA_OBS_PROFILE", "ci"), major)
+        print(f"{('PG ' + major) if major else 'all majors'}: {len(matrix)} combo(s) in total", file=sys.stderr)
+        print(json.dumps(matrix))
+        return
+
     import osc.conf
 
     from percona_obs.obs_api import _fetch_obs_subproject_names

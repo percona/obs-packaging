@@ -289,6 +289,9 @@ UNSCHEDULED = {"19"}  # in development: on demand only, see the schedule file
         ("ppg:staging:common:containers", "ubi9-16-to-17", "16", False),  # not from 16
         ("ppg:staging:common:extras:containers", "ubi9-17-to-18", "18", True),
         ("ppg:staging:common:containers", None, "17", False),
+        # a major's own project belongs to that major only, whatever the name
+        ("ppg:staging:18", "ubi9-16-to-17", "17", False),
+        ("ppg:staging:18", "ubi9-16-to-17", "18", True),
     ],
 )
 def test_belongs_to_major(project, name, major, expected):
@@ -406,3 +409,56 @@ def test_scheduled_run_runs_after_changes(tmp_path, monkeypatch):
 
 def test_manual_run_never_skips(tmp_path, monkeypatch):
     assert _main(tmp_path, monkeypatch, "workflow_dispatch", changed=False)["run"] == "true"
+
+
+# --- nightly: each project on the OBS instance that hosts it ------------------
+
+INSTANCES = [
+    {"name": "boo", "apiurl": "https://api.example", "rootprj": "isv:percona", "qa_types": "packages"},
+    {"name": "labs", "apiurl": "https://labs.example", "rootprj": "isv:percona",
+     "registry": "registry.labs.example", "qa_types": "containers", "env": {"X": "1"}},
+]
+
+
+def _fake_tree(m, monkeypatch, projects):
+    monkeypatch.setattr(m, "local_qa_projects", lambda root: projects)
+    monkeypatch.setattr(m, "_qa_show", lambda project, profile: [{"pipeline": "job", "name": n, "project": project}
+                                                               for n in ("server", "ubi9-16-to-17")])
+
+
+def test_each_project_runs_on_its_instance(monkeypatch):
+    m = _load()
+    _fake_tree(m, monkeypatch, ["ppg:staging:17", "ppg:staging:17:containers", "ppg:staging:17:tarballs"])
+    matrix = m.matrix_per_instance(json.dumps(INSTANCES), Path("root"), "ci", "")
+    where = {(c["project"], c["instance_name"]) for c in matrix}
+    assert where == {("ppg:staging:17", "boo"), ("ppg:staging:17:tarballs", "boo"),
+                     ("ppg:staging:17:containers", "labs")}
+    labs = next(c for c in matrix if c["instance_name"] == "labs")
+    assert (labs["instance_apiurl"], labs["instance_registry"], json.loads(labs["instance_env"])) == \
+        ("https://labs.example", "registry.labs.example", {"X": "1"})
+    assert all(c.get("name_filter") is not None for c in matrix)  # normalised like before
+
+
+def test_release_snapshots_and_unhosted_projects_are_skipped(monkeypatch, capsys):
+    m = _load()
+    only_packages = [INSTANCES[0]]
+    _fake_tree(m, monkeypatch, ["ppg:releases:17", "ppg:staging:17:containers", "ppg:staging:17"])
+    matrix = m.matrix_per_instance(json.dumps(only_packages), Path("root"), "ci", "")
+    assert {c["project"] for c in matrix} == {"ppg:staging:17"}
+    assert "no OBS instance hosts ppg:staging:17:containers" in capsys.readouterr().err
+
+
+def test_major_filter_applies_per_instance(monkeypatch):
+    m = _load()
+    _fake_tree(m, monkeypatch, ["ppg:staging:common:containers", "ppg:staging:18"])
+    matrix = m.matrix_per_instance(json.dumps(INSTANCES), Path("root"), "ci", "17")
+    # only the upgrade into 17 from the shared project; nothing from PG 18
+    assert [(c["project"], c["name"]) for c in matrix] == [("ppg:staging:common:containers", "ubi9-16-to-17")]
+
+
+def test_local_qa_projects_finds_the_real_tree():
+    found = _load().local_qa_projects(REPO / "root")
+    for p in ("ppg:staging:18", "ppg:staging:18:containers", "ppg:staging:18:tarballs",
+              "ppg:staging:common:tools:containers", "ppg:staging:common:containers"):
+        assert p in found, p
+    assert not any("_shared" in p for p in found)
