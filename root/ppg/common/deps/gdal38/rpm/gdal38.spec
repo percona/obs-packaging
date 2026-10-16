@@ -493,7 +493,6 @@ done
 
 %if %gdaljava
 %files java
-%{_jnidir}/%{name}/gdal-%{version}-javadoc.jar
 %{_jnidir}/%{name}/gdal-%{version}-sources.jar
 %{_jnidir}/%{name}/gdal-%{version}.jar
 %{_jnidir}/%{name}/gdal-%{version}.pom

@@ -625,7 +625,6 @@ done
 %dir %{gdalinstdir}/lib
 %dir %{gdalinstdir}/lib/jni
 %dir %{_jnidir}/%{name}
-%{_jnidir}/%{name}/gdal-%{version}-javadoc.jar
 %{_jnidir}/%{name}/gdal-%{version}-sources.jar
 %{_jnidir}/%{name}/gdal-%{version}.jar
 %{_jnidir}/%{name}/gdal-%{version}.pom
