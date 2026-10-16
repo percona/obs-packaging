@@ -15,6 +15,8 @@ project-config: |
   # flag); gdal38 needs it for its Python 3.12 and Java bindings. 4.1 is the
   # stream that knows Python 3.12.
   ExpandFlags: module:swig-4.1
+  # gdal38's Java build pulls copy-jdk-configs, which needs lua (have choice: compat-lua lua)
+  Prefer: lua
   %endif
 
   %if "%_repository" == "RockyLinux_9" || "%_repository" == "RockyLinux_9.6"
