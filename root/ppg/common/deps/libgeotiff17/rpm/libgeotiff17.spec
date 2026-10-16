@@ -66,7 +66,10 @@ set -x
 
 %{__install} -d build
 pushd build
+# PERCONA: PGDG installs bin/makegeo from the build tree, so build-tree binaries
+# must already carry the install RPATH (BUILD_WITH_INSTALL_RPATH).
 cmake .. -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+	-DCMAKE_BUILD_WITH_INSTALL_RPATH:BOOL=ON \
 	-DCMAKE_SKIP_RPATH:BOOL=OFF \
 	-DCMAKE_SKIP_INSTALL_RPATH:BOOL=OFF \
 	-DCMAKE_INSTALL_RPATH:STRING="%{libgeotiffinstdir}/lib;%{projinstdir}/lib64" \
