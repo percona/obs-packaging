@@ -13,69 +13,31 @@
 
 %define pginstdir /usr/pgsql-%{pgmajorversion}/
 
-#%pgdg_set_gis_variables
-
-# Override some variables. PostGIS 3.3 is best served with GeOS 3.11,
-# GDAL 3.4 and PROJ 9.0:
-%if 0%{?rhel} && 0%{?rhel} == 10
-%global geosfullversion 3.13.1
-%global geosmajorversion 313
+# PERCONA: GIS library selection mirrors PGDG's postgis35/postgis37
+# headers (pgdg-rpms e38918e8). Versions come from root/macros.yaml
+# (GIS_*); the libraries are built in ppg:common:deps. EL8 follows PGDG's
+# EL-8 choice (gdal38 + proj96); PGDG dropped EL8 from postgis37, we keep it.
+%global geosmajorversion %!{GIS_GEOS_MAJOR}
+%global geosfullversion %!{GIS_GEOS_VERSION}
 %global geosinstdir /usr/geos%{geosmajorversion}
-%global gdalfullversion 3.11.3
-%global gdalmajorversion 311
-%global gdalinstdir /usr/gdal%{gdalmajorversion}
-%global projmajorversion 96
-%global projfullversion 9.6.2
-%global projinstdir /usr/proj%{projmajorversion}
-%endif
-
-%if 0%{?rhel} && 0%{?rhel} >= 8
-# Using EPEL/CRB packages (non-PGDG build environment)
-%global geosfullversion 3.13.1
-%global geosinstdir /usr
-%global gdalfullversion 3.0.4
-%global gdalinstdir /usr
-%global gdalmajorversion %{nil}
-%global projfullversion 9.6.0
-%global projinstdir /usr
-%global libgeotiffmajorversion %{nil}
-%global libgeotiffinstdir /usr
-%endif
-
-
-%if 0%{?suse_version} >= 1600
-# openSUSE Leap 16 / Tumbleweed: use standard unversioned package names (no PGDG versioned suffixes)
-%global geosfullversion 3.11.0
-%global geosinstdir /usr
-%global geosmajorversion %{nil}
-%global projfullversion 9.0.0
-%global projinstdir /usr
-%global projmajorversion %{nil}
-%global libgeotiffinstdir /usr
-%global libgeotiffmajorversion %{nil}
-%global gdalfullversion 3.0.0
-%global gdalinstdir /usr
-%global gdalmajorversion %{nil}
-%global libspatialiteinstdir /usr
-%endif
-
-# Override PROJ major version on RHEL 7.
-# libspatialite 4.3 does not build against 8.0.0 as of March 2021.
-# Also use GDAL 3.4
-%if 0%{?rhel} && 0%{?rhel} == 7
-%global gdalfullversion 3.3.3
-%global gdalmajorversion 33
-%global gdalinstdir /usr/gdal%{gdalmajorversion}
-%global projmajorversion 72
-%global projfullversion 7.2.1
-%global projinstdir /usr/proj%{projmajorversion}
-%endif
-
-%if 0%{?rhel} == 7 || 0%{?suse_version} >= 1315
-%global libspatialitemajorversion	43
+%if 0%{?rhel} == 8
+%global projmajorversion %!{GIS_PROJ_EL8_MAJOR}
+%global projfullversion %!{GIS_PROJ_EL8_VERSION}
+%global gdalmajorversion %!{GIS_GDAL_EL8_MAJOR}
+%global gdalfullversion %!{GIS_GDAL_EL8_VERSION}
 %else
-%global libspatialitemajorversion	50
+%global projmajorversion %!{GIS_PROJ_MAJOR}
+%global projfullversion %!{GIS_PROJ_VERSION}
+%global gdalmajorversion %!{GIS_GDAL_MAJOR}
+%global gdalfullversion %!{GIS_GDAL_VERSION}
 %endif
+%global projinstdir /usr/proj%{projmajorversion}
+%global gdalinstdir /usr/gdal%{gdalmajorversion}
+%global libgeotiffmajorversion 17
+%global libgeotiffinstdir /usr/libgeotiff%{libgeotiffmajorversion}
+%global libspatialitemajorversion 50
+%global libspatialiteinstdir /usr/libspatialite%{libspatialitemajorversion}
+%global sfcgalfullversion %!{GIS_SFCGAL_VERSION}
 
 %ifarch ppc64 ppc64le s390 s390x armv7hl
  %if 0%{?rhel} && 0%{?rhel} == 7
@@ -121,15 +83,8 @@ BuildRequires:	percona-postgresql%{pgmajorversion}-devel libxml2 libxslt autocon
 %if 0%{?gts_version}
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
 %endif
-%if 0%{?rhel} && 0%{?rhel} >= 8
-BuildRequires:	geos-devel libgeotiff-devel
-%else
 BuildRequires:	geos%{geosmajorversion}-devel >= %{geosfullversion}
 BuildRequires:	libgeotiff%{libgeotiffmajorversion}-devel
-%if !0%{?suse_version}
-BuildRequires:	pgdg-srpm-macros >= 1.0.54
-%endif
-%endif
 # PERCONA: PGDG dropped EL8 from the 3.7 spec (rhel >= 9 on these gates);
 # we still build EL8/UBI8, so keep the 3.5 bounds (pcre2, SFCGAL, protobuf,
 # json-c/xerces-c) there.
@@ -143,16 +98,11 @@ Requires:	libgmp10
 %else
 Requires:	gmp
 %endif
+BuildRequires:	proj%{projmajorversion}-devel >= %{projfullversion} flex
 %if 0%{?suse_version}
-%if 0%{?suse_version} >= 1500
-BuildRequires:	libjson-c-devel proj%{projmajorversion}-devel >= %{projfullversion}
-%endif
+BuildRequires:	libjson-c-devel
 %else
-%if 0%{?rhel} && 0%{?rhel} >= 8
-BuildRequires:	proj-devel flex json-c-devel
-%else
-BuildRequires:	proj%{projmajorversion}-devel >= %{projfullversion} flex json-c-devel
-%endif
+BuildRequires:	json-c-devel
 %endif
 BuildRequires:	libxml2-devel
 %if %{shp2pgsqlgui}
@@ -160,29 +110,19 @@ BuildRequires:	gtk2-devel > 2.8.0
 %endif
 %if %{sfcgal}
 %if 0%{?fedora} >= 43 || 0%{?rhel} >= 8
-BuildRequires:	SFCGAL SFCGAL-devel >= 2.1.0
+BuildRequires:	SFCGAL-devel >= %{sfcgalfullversion}, SFCGAL-devel < 2.4
 %endif
 %if 0%{?suse_version} >= 1500 && 0%{?suse_version} < 1600
 BuildRequires:        SFCGAL SFCGAL-devel
 %endif
 %if 0%{?suse_version} >= 1600
-BuildRequires:        sfcgal sfcgal-devel
+BuildRequires:        sfcgal-devel >= %{sfcgalfullversion}, sfcgal-devel < 2.4
 %endif
 %endif
 
 %if %{raster}
-%if 0%{?rhel} && 0%{?rhel} >= 9
-BuildRequires:	gdal3.4-devel >= %{gdalfullversion}
-Requires:	gdal3.4-libs >= %{gdalfullversion}
-%else
-%if 0%{?rhel} && 0%{?rhel} >= 8
-BuildRequires:	gdal-devel >= %{gdalfullversion}
-Requires:	gdal-libs >= %{gdalfullversion}
-%else
 BuildRequires:	gdal%{gdalmajorversion}-devel >= %{gdalfullversion}
 Requires:	gdal%{gdalmajorversion}-libs >= %{gdalfullversion}
-%endif
-%endif
 %endif
 
 %if 0%{?suse_version} >= 1500
@@ -196,24 +136,9 @@ BuildRequires:	protobuf-c-devel >= 1.1.0
 
 Requires:	percona-postgresql%{pgmajorversion}
 Requires:	percona-postgresql%{pgmajorversion}-contrib
-Requires:	hdf5
-%if 0%{?rhel} && 0%{?rhel} >= 9
-Requires:	gdal3.4-libs
-%endif
-%if 0%{?rhel} && 0%{?rhel} >= 8 && 0%{?rhel} < 9
-Requires:	gdal-libs
-%endif
-
-%if 0%{?rhel} && 0%{?rhel} >= 8
-Requires:	geos proj libgeotiff
-%else
 Requires:	geos%{geosmajorversion} >= %{geosfullversion}
 Requires:	proj%{projmajorversion} >= %{projfullversion}
 Requires:	libgeotiff%{libgeotiffmajorversion}
-%if %{raster}
-Requires:	gdal%{gdalmajorversion}-libs >= %{gdalfullversion}
-%endif
-%endif
 
 %if 0%{?suse_version} == 1500
 Requires:	libjson-c5
@@ -321,6 +246,9 @@ This packages provides JIT support for postgis37
 LDFLAGS="-Wl,-rpath,%{geosinstdir}/lib64 ${LDFLAGS}" ; export LDFLAGS
 LDFLAGS="-Wl,-rpath,%{projinstdir}/lib64 ${LDFLAGS}" ; export LDFLAGS
 LDFLAGS="-Wl,-rpath,%{libspatialiteinstdir}/lib ${LDFLAGS}" ; export LDFLAGS
+# PERCONA: no /etc/ld.so.conf.d for the GIS libs; postgis_raster must find
+# libgdal (and the tools libgeotiff) through RUNPATH.
+LDFLAGS="-Wl,-rpath,%{gdalinstdir}/lib -Wl,-rpath,%{libgeotiffinstdir}/lib ${LDFLAGS}" ; export LDFLAGS
 SHLIB_LINK="$SHLIB_LINK -Wl,-rpath,%{geosinstdir}/lib64" ; export SHLIB_LINK
 SFCGAL_LDFLAGS="$SFCGAL_LDFLAGS -L/usr/lib64"; export SFCGAL_LDFLAGS
 LDFLAGS="$LDFLAGS -L%{geosinstdir}/lib64 -lgeos_c -L%{projinstdir}/lib64 -L%{gdalinstdir}/lib -L%{libgeotiffinstdir}/lib -ltiff -L/usr/lib64"; export LDFLAGS
@@ -392,6 +320,13 @@ SHLIB_LINK="$SHLIB_LINK" %{__make} %{?_smp_mflags} install DESTDIR=%{buildroot}
 %if !%raster
 # make install ships the raster2pgsql man page even with --without-raster
 %{__rm} -f %{buildroot}%{_mandir}/%{name}/man1/raster2pgsql.1*
+%endif
+
+%if %{raster}
+# PERCONA: assert the raster module resolves GDAL without ld.so.conf.d.
+readelf -d %{buildroot}%{pginstdir}/lib/postgis_raster-%{postgissomajorversion}.so \
+  | grep -qE '\((RUNPATH|RPATH)\).*%{gdalinstdir}/lib' \
+  || { echo "PERCONA: postgis_raster lacks RUNPATH to %{gdalinstdir}/lib"; exit 1; }
 %endif
 
 # Create alternatives entries for common binaries
