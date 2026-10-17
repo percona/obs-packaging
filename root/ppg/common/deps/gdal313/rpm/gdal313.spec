@@ -350,7 +350,11 @@ The GDAL Java modules provide support to handle multiple GIS file formats.
 %package javadoc
 Summary:	Javadocs for %{name}
 Requires:	jpackage-utils
+# PERCONA: on SUSE %%{_jnidir} is under /usr/lib64, so the javadoc jar is
+# not arch-independent there (rpmlint noarch-with-lib64).
+%if !0%{?suse_version}
 BuildArch:	noarch
+%endif
 
 %description javadoc
 This package contains the API documentation for %{name}.
@@ -490,6 +494,18 @@ done
 %{__mv} %{buildroot}/%{gdalinstdir}/lib64/python%{pyver}/site-packages/GDAL-%{version}-py*.egg-info/ %{buildroot}/%{python3_sitearch}/GDAL-%{version}-py*.egg-info/
 %{__mv} %{buildroot}/%{gdalinstdir}/lib64/python%{pyver}/site-packages/osgeo %{buildroot}/%{python3_sitearch}/osgeo/
 %{__mv} %{buildroot}/%{gdalinstdir}/lib64/python%{pyver}/site-packages/osgeo_utils %{buildroot}/%{python3_sitearch}/osgeo_utils
+%endif
+
+# PERCONA: SUSE rpmlint rejects the bare "python" interpreter that GDAL
+# writes into the installed scripts (wrong-script-interpreter). Pin them
+# to the interpreter the bindings were built for. EL builds are green and
+# are left untouched.
+%if 0%{?suse_version}
+for f in %{buildroot}%{gdalinstdir}/bin/*; do
+  [ -f "$f" ] && [ ! -L "$f" ] || continue
+  head -n1 "$f" | grep -qE '^#!.*python' || continue
+  sed -i '1s|^#!.*|#!%{__ospython}|' "$f"
+done
 %endif
 
 # PERCONA: no /etc/ld.so.conf.d drop-in; every ELF under the prefix
