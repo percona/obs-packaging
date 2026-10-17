@@ -1,9 +1,13 @@
 # PGDG layout: private /usr/gdal313 prefix with RUNPATH instead of ld.so.conf.d; filters mirror percona-postgis-rpmlintrc
 addFilter("binary-or-shlib-defines-rpath")
 addFilter("filelist-forbidden-fhs23")
-addFilter("suse-filelist-forbidden-fhs23")
-addFilter("devel-file-in-non-devel-package")
 addFilter("library-without-ldconfig-postin")
 addFilter("library-without-ldconfig-postun")
-addFilter("no-dir-owner")
-addFilter("suse-no-dir-owner")
+# upstream sample/utility scripts in site-packages are installed 0644 with a shebang
+addFilter("non-executable-script")
+# bytecode mtimes differ from sources after OBS timestamp normalisation
+addFilter("python-bytecode-inconsistent-mtime")
+# GIS libraries live in private prefixes, so the libs are pulled in explicitly on purpose
+addFilter("explicit-lib-dependency")
+# devel and python-tools carry headers/scripts only, no binaries
+addFilter("no-binary")
