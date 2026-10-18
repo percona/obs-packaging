@@ -1,0 +1,10 @@
+# Build scoping mirrors root/ppg/common/deps/postgis/proj98/package.yaml:
+# aggregate only where the source package builds.  Keep the two in sync.
+build:
+  RockyLinux_8: false
+  UBI_8: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false

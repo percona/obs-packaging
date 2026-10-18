@@ -1,0 +1,5 @@
+<aggregatelist>
+  <aggregate project="${OBS_ROOTPRJ}:ppg:common:deps:postgis">
+    <package>gdal38</package>
+  </aggregate>
+</aggregatelist>

@@ -1,5 +1,5 @@
 <aggregatelist>
-  <aggregate project="${OBS_ROOTPRJ}:ppg:common:deps">
+  <aggregate project="${OBS_ROOTPRJ}:ppg:common:deps:postgis">
     <package>sfcgal</package>
   </aggregate>
 </aggregatelist>
