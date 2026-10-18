@@ -179,40 +179,46 @@ project-config: |
   Prefer: python3-devel
   Prefer: selinux-policy-targeted
   # PostGIS's libgdal.so.NN()(64bit)/libproj.so.NN()(64bit) Requires are a
-  # "have choice" between EPEL's gdal-libs/proj and our /opt-prefixed
+  # "have choice" between the PGDG-mirrored gdal38-libs/proj96 (EL8) or
+  # gdal313-libs/proj98 (EL9) — ppg:common:deps:postgis, aggregated into
+  # ppg:staging:%!{PG_MAJOR_VERSION} — and our /opt-prefixed
   # percona-gdal/percona-proj (ppg:common:deps:tarballs deliberately keeps those
-  # auto-Provides). Ours must win: EPEL's fully-optioned libgdal drags ~70
+  # auto-Provides). Ours must win: the fully-optioned libgdal drags dozens of
   # surplus shared objects into the tarball — including the armadillo/BLAS
   # chain whose FlexiBLAS ELF constructor abort()s on Rocky hosts — and has
-  # its data directory compiled to /usr/share/{gdal,proj}, a path no tarball
-  # host has. build-tarball.sh asserts EPEL's are absent from the chroot.
+  # its data directory compiled to /usr/<name>/share, a path no tarball
+  # host has. build-tarball.sh asserts they are absent from the chroot.
   Prefer: percona-gdal
   Prefer: percona-proj
   # ...but `Prefer:` only breaks TIES between providers of the SAME symbol.
-  # PostGIS also requires the distro GDAL/PROJ *by name* (rpmspec -P on
+  # PostGIS also requires the PGDG-mirrored GDAL/PROJ *by name* (rpmspec -q
+  # --requires on
   # root/ppg/staging/%!{PG_MAJOR_VERSION}/percona-postgis/rpm/percona-postgis.spec:
-  # `Requires: gdal-libs >= 3.0.4`, `Requires: gdal-libs` and
-  # `Requires: geos proj libgeotiff` on EL8; `gdal3.4-libs` on EL9 — all in
-  # the main percona-postgis%!{POSTGIS_RPM_MAJOR}_%!{PG_MAJOR_VERSION} package, no subpackage).
+  # `gdal38-libs >= 3.8.5`, `proj96 >= 9.6.2`, `geos315 >= 3.15.0` and
+  # `libgeotiff17` on EL8; `gdal313-libs >= 3.13.3`, `proj98 >= 9.8.1`,
+  # `geos315 >= 3.15.0` and `libgeotiff17` on EL9 — all in the main
+  # percona-postgis%!{POSTGIS_RPM_MAJOR}_%!{PG_MAJOR_VERSION} package, no subpackage).
   # A by-name Requires has exactly one provider, so there is no choice for
   # Prefer to resolve.
   #
   # PROVEN 2026-08-26 (first OBS build of these repos): a package-scoped
   # `Ignore:` rule dropping those edges does NOT help — OBS does not apply
   # `Ignore:` rules when expanding image-type recipes. The effective prjconf
-  # carried the lines, yet EPEL's gdal-libs/gdal3.4-libs and Rocky's proj
+  # carried the lines, yet the EPEL GDAL of that time and Rocky's proj
   # were still installed and build-tarball.sh section 0a FATALed as
   # designed. `Prefer:` IS honoured for image-type expansion (`Prefer:
   # hdf-libs`, and percona-gdal/percona-proj/percona-psql all landing in the
   # chroot). Those inert Ignore: lines are therefore gone.
   #
   # Instead, the payload-free percona-gis-compat shim (from the unpublished
-  # ppg:common:deps:tarballs subproject) Provides those distro NAMES
-  # itself, which turns each by-name Requires into a real have-choice that
-  # the Prefer: below resolves; the shim Requires percona-gdal/percona-proj
-  # so the runtimes PostGIS needs still come in. The simpleimage recipe also
-  # BuildRequires it explicitly, so its presence does not hinge on the
-  # choice alone.
+  # ppg:common:deps:tarballs subproject) Provides the gdal/proj/libgeotiff17
+  # NAMES itself, which turns each by-name Requires into a real have-choice
+  # that the Prefer: below resolves; the shim Requires percona-gdal/
+  # percona-proj so the runtimes PostGIS needs still come in, and the real
+  # geos315 (not provided by the shim: the tarball bundles its libgeos_c, and
+  # ppg:staging:%!{PG_MAJOR_VERSION} on the path above aggregates it). The
+  # simpleimage recipe also BuildRequires it explicitly, so its presence does
+  # not hinge on the choice alone.
   #
   # PostGIS's `Requires: hdf5` (also by name) is left alone: hdf5 is small,
   # nothing in the tarball bundles it, and the surplus gate is
@@ -251,35 +257,39 @@ project-config: |
   Prefer: lapack
   Prefer: blas
   # See the ssl1.1 block: our lean /opt GDAL+PROJ must win the
-  # libgdal.so.NN()(64bit)/libproj.so.NN()(64bit) choice over EPEL's
-  # gdal-libs/proj.
+  # libgdal.so.NN()(64bit)/libproj.so.NN()(64bit) choice over
+  # gdal313-libs/proj98.
   Prefer: percona-gdal
   Prefer: percona-proj
   # ...but `Prefer:` only breaks TIES between providers of the SAME symbol.
-  # PostGIS also requires the distro GDAL/PROJ *by name* (rpmspec -P on
+  # PostGIS also requires the PGDG-mirrored GDAL/PROJ *by name* (rpmspec -q
+  # --requires on
   # root/ppg/staging/%!{PG_MAJOR_VERSION}/percona-postgis/rpm/percona-postgis.spec:
-  # `Requires: gdal-libs >= 3.0.4`, `Requires: gdal-libs` and
-  # `Requires: geos proj libgeotiff` on EL8; `gdal3.4-libs` on EL9 — all in
-  # the main percona-postgis%!{POSTGIS_RPM_MAJOR}_%!{PG_MAJOR_VERSION} package, no subpackage).
+  # `gdal38-libs >= 3.8.5`, `proj96 >= 9.6.2`, `geos315 >= 3.15.0` and
+  # `libgeotiff17` on EL8; `gdal313-libs >= 3.13.3`, `proj98 >= 9.8.1`,
+  # `geos315 >= 3.15.0` and `libgeotiff17` on EL9 — all in the main
+  # percona-postgis%!{POSTGIS_RPM_MAJOR}_%!{PG_MAJOR_VERSION} package, no subpackage).
   # A by-name Requires has exactly one provider, so there is no choice for
   # Prefer to resolve.
   #
   # PROVEN 2026-08-26 (first OBS build of these repos): a package-scoped
   # `Ignore:` rule dropping those edges does NOT help — OBS does not apply
   # `Ignore:` rules when expanding image-type recipes. The effective prjconf
-  # carried the lines, yet EPEL's gdal-libs/gdal3.4-libs and Rocky's proj
+  # carried the lines, yet the EPEL GDAL of that time and Rocky's proj
   # were still installed and build-tarball.sh section 0a FATALed as
   # designed. `Prefer:` IS honoured for image-type expansion (`Prefer:
   # hdf-libs`, and percona-gdal/percona-proj/percona-psql all landing in the
   # chroot). Those inert Ignore: lines are therefore gone.
   #
   # Instead, the payload-free percona-gis-compat shim (from the unpublished
-  # ppg:common:deps:tarballs subproject) Provides those distro NAMES
-  # itself, which turns each by-name Requires into a real have-choice that
-  # the Prefer: below resolves; the shim Requires percona-gdal/percona-proj
-  # so the runtimes PostGIS needs still come in. The simpleimage recipe also
-  # BuildRequires it explicitly, so its presence does not hinge on the
-  # choice alone.
+  # ppg:common:deps:tarballs subproject) Provides the gdal/proj/libgeotiff17
+  # NAMES itself, which turns each by-name Requires into a real have-choice
+  # that the Prefer: below resolves; the shim Requires percona-gdal/
+  # percona-proj so the runtimes PostGIS needs still come in, and the real
+  # geos315 (not provided by the shim: the tarball bundles its libgeos_c, and
+  # ppg:staging:%!{PG_MAJOR_VERSION} on the path above aggregates it). The
+  # simpleimage recipe also BuildRequires it explicitly, so its presence does
+  # not hinge on the choice alone.
   #
   # PostGIS's `Requires: hdf5` (also by name) is left alone: hdf5 is small,
   # nothing in the tarball bundles it, and the surplus gate is
@@ -298,8 +308,9 @@ project-config: |
   # EL9 choice-resolution, same as the ssl3 block above (see it for the
   # full rationale on every line): hdf-libs vs hdf for libdf.so.0; the
   # lean /opt percona-gdal/percona-proj must win the SONAME choices over
-  # EPEL's gdal-libs/proj; the payload-free percona-gis-compat shim turns
-  # PostGIS's by-name distro GDAL/PROJ Requires into resolvable choices
+  # gdal313-libs/proj98; the payload-free percona-gis-compat shim turns
+  # PostGIS's by-name gdal313-libs/proj98/libgeotiff17 Requires into
+  # resolvable choices
   # (prjconf Ignore: is NOT applied to image-type expansion — proven
   # 2026-08-26); and the EL9 base config's glibc-langpack Ignore is
   # likewise skipped, so pick the minimal langpack.
