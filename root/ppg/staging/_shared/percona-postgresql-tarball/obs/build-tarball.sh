@@ -76,13 +76,20 @@ done
 ###############################################################
 # 0a. GDAL/PROJ runtimes + psql client from the helper RPMs
 ###############################################################
-# percona-gdal/percona-proj (ppg:common:deps:tarballs) replace EPEL's gdal-libs/proj
-# for the PostGIS libraries the tarball bundles. EPEL's cost us ~70 surplus
-# shared objects (armadillo/BLAS -> a FlexiBLAS ELF constructor that
-# abort()s on Rocky hosts, hdf/netcdf/OPeNDAP/poppler/xerces/ODBC/mariadb,
-# and libtirpc/libexpat/libpcre2-posix) and compiled their resource paths
-# to /usr/share/{gdal,proj}, which does not exist on a tarball host.
-# Ours are lean and have those paths compiled to /opt/percona-*/share.
+# percona-gdal/percona-proj (ppg:common:deps:tarballs) replace the
+# fully-optioned GDAL/PROJ for the PostGIS libraries the tarball bundles:
+# first EPEL's gdal-libs/proj, now the PGDG-mirrored gdal38-libs/proj96
+# (EL8) and gdal313-libs/proj98 (EL9) that PostGIS links on user systems.
+# The fat GDAL cost us ~70 surplus shared objects (armadillo/BLAS -> a
+# FlexiBLAS ELF constructor that abort()s on Rocky hosts,
+# hdf/netcdf/OPeNDAP/poppler/xerces/ODBC/mariadb, and
+# libtirpc/libexpat/libpcre2-posix) and both compile their resource paths
+# to /usr/share/{gdal,proj} or /usr/<name>/share, which do not exist on a
+# tarball host. Ours are lean and have those paths compiled to
+# /opt/percona-*/share. GEOS is the one GIS library taken as-is: geos315
+# installs under /usr/geos315/lib64, and section 13's copy_deps bundles
+# libgeos_c/libgeos from there (ldd resolves them through the RUNPATH that
+# postgis-3.so and libgdal carry).
 GDAL_LIB=$(ls "$GDAL_PREFIX"/lib/libgdal.so.[0-9]* 2>/dev/null | head -1)
 PROJ_LIB=$(ls "$PROJ_PREFIX"/lib/libproj.so.[0-9]* 2>/dev/null | head -1)
 [ -n "$GDAL_LIB" ] || { echo "FATAL: no $GDAL_PREFIX/lib/libgdal.so.* — percona-gdal not installed?" >&2; exit 1; }
@@ -90,13 +97,16 @@ PROJ_LIB=$(ls "$PROJ_PREFIX"/lib/libproj.so.[0-9]* 2>/dev/null | head -1)
 for f in "$GDAL_PREFIX/share/gdal/gdalicon.png" "$PROJ_PREFIX/share/proj/proj.db"; do
     [ -f "$f" ] || { echo "FATAL: resource file $f missing — percona-gdal/percona-proj data dir not at the compiled path" >&2; exit 1; }
 done
-# No distro GDAL/PROJ runtime may be in the chroot: ours live under
+# No other GDAL/PROJ runtime may be in the chroot: ours live under
 # /opt/percona-{gdal,proj}/lib, so any libgdal/libproj in the system library
-# directory is a foreign one, and copy_deps would be free to bundle the fat
-# flavour. This is deliberately a PROPERTY check on the files rather than a
-# list of package names — the package name differs per base (gdal-libs on
-# EL8, gdal3.4-libs on EL9) and a name list silently stops protecting us the
-# moment EPEL renames or a new provider appears.
+# directory or under a PGDG-style /usr/<name>/lib{,64} prefix
+# (/usr/gdal313/lib, /usr/proj98/lib64, ...) is a foreign one, and
+# copy_deps could bundle the fat flavour. This is deliberately a PROPERTY
+# check on the files rather than a list of package names — the package
+# name differs per base and per GDAL/PROJ line (gdal38-libs/proj96 on EL8,
+# gdal313-libs/proj98 on EL9, EPEL's gdal-libs/proj before that) and a
+# name list silently stops protecting us the moment a version bump renames
+# the package or a new provider appears.
 #
 # Two mechanisms keep it clean:
 #   * `Prefer: percona-gdal` / `Prefer: percona-proj` (root/ppg/staging/NN/
@@ -105,10 +115,10 @@ done
 #     soname Requires;
 #   * percona-gis-compat (ppg:common:deps:tarballs; a
 #     BuildRequires of the simpleimage recipe) is a payload-free shim that
-#     Provides the distro NAMES PostGIS requires by name — gdal-libs/proj on
-#     EL8, gdal3.4-libs/proj on EL9 — turning each single-provider by-name
-#     Requires into a real have-choice that `Prefer: percona-gis-compat`
-#     resolves. A prjconf `Ignore:` rule CANNOT do this job: proven
+#     Provides the names PostGIS requires by name — gdal38-libs/proj96 on
+#     EL8, gdal313-libs/proj98 on EL9, libgeotiff17 on both — turning each
+#     single-provider by-name Requires into a real have-choice that
+#     `Prefer: percona-gis-compat` resolves. A prjconf `Ignore:` rule CANNOT do this job: proven
 #     2026-08-26 that OBS does not apply Ignore rules when expanding
 #     image-type recipes (the effective prjconf carried them and the distro
 #     packages were installed anyway).
@@ -120,15 +130,17 @@ done
 # and ls exits 2, which under set -e would abort the assignment itself —
 # i.e. every CLEAN build would die here, silently. Same trap as PY_BIN
 # above. The `if` below is the only gate.)
-stray_gis=$(ls /usr/lib64/libgdal.so.* /usr/lib64/libproj.so.* 2>/dev/null || true)
+stray_gis=$(ls /usr/lib64/libgdal.so.* /usr/lib64/libproj.so.* \
+                /usr/gdal*/lib*/libgdal.so.* /usr/proj*/lib*/libproj.so.* \
+                2>/dev/null || true)
 if [ -n "$stray_gis" ]; then
-    echo "FATAL: a distro GDAL/PROJ runtime is installed in the chroot — it must be replaced by percona-gdal/percona-proj (prjconf Prefer: + the percona-gis-compat shim, see the comment above this check)" >&2
+    echo "FATAL: a distro/PGDG GDAL/PROJ runtime is installed in the chroot — it must be replaced by percona-gdal/percona-proj (prjconf Prefer: + the percona-gis-compat shim, see the comment above this check)" >&2
     # Diagnostics only — every substitution keeps a `|| true`/fallback so a
     # failing rpm query cannot abort the script before `exit 1` below (same
     # set -e trap as PY_BIN at the top of this file).
     #
     # `rpm -q --whatrequires` needs a CAPABILITY, not a NEVRA: passing the
-    # full `proj-6.3.2-4.el8.x86_64` that `rpm -qf` prints made it answer
+    # full `proj-6.3.2-4.el8.x86_64` that `rpm -qf` printed made it answer
     # "no package requires ..." and hid the real requirer. Query the bare
     # package NAME and the soname capability instead.
     for f in $stray_gis; do
@@ -139,7 +151,7 @@ if [ -n "$stray_gis" ]; then
             echo "  $f  <-  $o  (${nevra:-not installed})" >&2
             rpm -q --whatrequires "$o" 2>/dev/null | sed "s|^|      required by name: |" >&2 || true
         done
-        # The soname capability, e.g. libgdal.so.26()(64bit): this is what
+        # The soname capability, e.g. libgdal.so.39()(64bit): this is what
         # PostGIS's automatic dependency actually asks for.
         soname="$(basename "$f")()(64bit)"
         echo "      capability: $soname" >&2

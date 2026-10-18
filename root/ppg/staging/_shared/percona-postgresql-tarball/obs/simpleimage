@@ -45,19 +45,23 @@ BuildRequires:  percona-pg_gather
 #
 # percona-gdal / percona-proj (ppg:common:deps:tarballs): lean, /opt-prefixed GDAL and
 # PROJ runtimes for the bundled PostGIS libraries. They satisfy PostGIS's
-# libgdal.so.NN()(64bit) / libproj.so.NN()(64bit) Requires instead of EPEL's
-# gdal-libs/proj — that is a "have choice" for the expander, resolved by the
+# libgdal.so.NN()(64bit) / libproj.so.NN()(64bit) Requires instead of the
+# PGDG-mirrored gdal38-libs/proj96 (EL8) or gdal313-libs/proj98 (EL9) —
+# that is a "have choice" for the expander, resolved by the
 # `Prefer: percona-gdal` / `Prefer: percona-proj` lines in this project's
-# project-config. EPEL's chain dragged ~70 surplus shared objects into the
+# project-config. The fully-optioned GDAL chain (EPEL's, before the PGDG
+# mirror) dragged ~70 surplus shared objects into the
 # artifact (armadillo/BLAS, whose FlexiBLAS ELF constructor abort()s on
 # Rocky hosts, plus hdf/netcdf/OPeNDAP/poppler/xerces/ODBC/mariadb and
 # libtirpc/libexpat/libpcre2-posix) and compiled its resource paths to
 # /usr/share/{gdal,proj}, which no tarball host has. build-tarball.sh
-# section 0a fails the build if either EPEL package is in the chroot anyway.
+# section 0a fails the build if any other libgdal/libproj is in the chroot
+# anyway.
 #
 # percona-gis-compat (ppg:common:deps:tarballs): a
-# payload-free shim that Provides the distro GDAL/PROJ *names* PostGIS
-# requires by name (gdal-libs/proj on EL8, gdal3.4-libs/proj on EL9), so the
+# payload-free shim that Provides the GDAL/PROJ/libgeotiff *names* PostGIS
+# requires by name (gdal38-libs/proj96 on EL8, gdal313-libs/proj98 on EL9,
+# libgeotiff17 on both; it Requires the real geos315, bundled as-is), so the
 # expander sees a have-choice that `Prefer: percona-gis-compat` resolves in
 # our favour, and Requires percona-gdal/percona-proj. Needed because OBS does
 # NOT apply prjconf `Ignore:` rules when expanding image-type recipes (proven
