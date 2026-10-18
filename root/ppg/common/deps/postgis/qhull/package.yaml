@@ -1,0 +1,19 @@
+title: qhull (RHEL 9 version, UBI_9 only)
+description: |
+  RHEL 9's qhull 7.2.1-11 rebuilt for UBI_9 and published there only:
+  libqhull_r is CRB-only on RHEL 9, UBI 9 lacks CRB, and gdal313-libs needs
+  libqhull_r.so.7. Rocky/RHEL users get it from CRB.
+build:
+  RockyLinux_8: false
+  RockyLinux_9: false
+  RockyLinux_9.6: false
+  RockyLinux_10: false
+  UBI_8: false
+  UBI_10: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Tumbleweed: false
+  openSUSE_Leap_16: false
