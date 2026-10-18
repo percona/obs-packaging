@@ -32,12 +32,18 @@ description: |
 
 # This project's repository set and build configuration are unrelated to its
 # parent's: declare them in full here instead of patching the inherited ones.
+# ppg:common:deps:postgis sits right after ppg:common:deps in every repo:
+# percona-gdal BuildRequires geos315-devel, which lives there (the PGDG GIS
+# stack moved out of ppg:common:deps). Its packages are listed explicitly,
+# so OBS does not need to expand that project's own paths.
 repositories-inherit: false
 
 repositories:
   - name: RockyLinux_8
     paths:
       - subproject: ppg:common:deps
+        repository: RockyLinux_8
+      - subproject: ppg:common:deps:postgis
         repository: RockyLinux_8
       - subproject: common:deps:build
         repository: RockyLinux_8
@@ -54,6 +60,8 @@ repositories:
     paths:
       - subproject: ppg:common:deps
         repository: RockyLinux_9
+      - subproject: ppg:common:deps:postgis
+        repository: RockyLinux_9
       - subproject: common:deps:build
         repository: RockyLinux_9
       - project: Fedora:EPEL:9
@@ -64,6 +72,8 @@ repositories:
   - name: RockyLinux_9.6
     paths:
       - subproject: ppg:common:deps
+        repository: RockyLinux_9.6
+      - subproject: ppg:common:deps:postgis
         repository: RockyLinux_9.6
       - subproject: common:deps:build
         repository: RockyLinux_9.6
