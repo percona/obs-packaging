@@ -5,6 +5,9 @@
     <param name="revision">main</param>
     <param name="versionformat">@PARENT_TAG@+@TAG_OFFSET@</param>
     <param name="filename">percona-pgbackrest</param>
+    <!-- The doc build (doc.py, release notes) reads the git history and
+         release/* tags since upstream a8c1a58; keep .git in the source. -->
+    <param name="package-meta">yes</param>
     <param name="versionrewrite-pattern">release/(.*)</param>
     <param name="versionrewrite-replacement">\1</param>
   </service>
