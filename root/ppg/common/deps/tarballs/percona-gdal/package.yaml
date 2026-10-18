@@ -9,17 +9,19 @@ description: |
   OPeNDAP, xerces, libkml, unixODBC, mariadb, cfitsio, ogdi, ...). The
   GDAL data directory is compiled to /opt/percona-gdal/share/gdal and
   PROJ comes from percona-proj, so both resolve their resource files
-  with zero environment variables.
+  with zero environment variables. Built with CMake: GDAL's bundled
+  libgeotiff, no libspatialite, GEOS from geos315
+  (ppg:common:deps:postgis).
 
-  Version is chosen per base so the SONAME matches the GDAL that the
-  shipped PostGIS RPMs linked against: RHEL 8 -> GDAL 3.0.4
-  (libgdal.so.26), RHEL 9 -> GDAL 3.4.3 (libgdal.so.30). That makes it a
-  drop-in replacement for EPEL's libgdal inside the binary tarball only —
-  the shipped PostGIS RPMs keep resolving to EPEL's package on user
-  systems.
+  Version follows the PGDG-mirrored GDAL that the shipped PostGIS RPMs
+  link (ppg:common:deps:postgis): RHEL 8 -> GDAL 3.8.5 like gdal38
+  (libgdal.so.34), RHEL 9 -> GDAL 3.13.3 like gdal313 (libgdal.so.39).
+  That makes it a drop-in replacement for gdal38-libs/gdal313-libs'
+  libgdal inside the binary tarball only — the shipped PostGIS RPMs keep
+  resolving to gdal38-libs/gdal313-libs on user systems.
 
-  RockyLinux_8 and RockyLinux_9 only: these are the tarball build bases
-  (ssl1.1 / ssl3).
+  RockyLinux_8, RockyLinux_9.6 and RockyLinux_9 only: these are the
+  tarball build bases (ssl1.1 / ssl3 / ssl3.5).
 
 # Builds on every repo of ppg:common:deps:tarballs (one per tarball EL
 # base: RockyLinux_8=ssl1.1, RockyLinux_9.6=ssl3, RockyLinux_9=ssl3.5).

@@ -1,4 +1,4 @@
-# PERCONA PACKAGE for ppg:common:deps (RockyLinux_8 and RockyLinux_9 only).
+# PERCONA PACKAGE for ppg:common:deps:tarballs (RockyLinux_8, RockyLinux_9.6, RockyLinux_9).
 #
 # /opt-prefixed GDAL runtime consumed by the Percona PostgreSQL binary
 # tarball (2026-07 tarball QA round, task 22).
@@ -19,27 +19,30 @@
 #      a path that does not exist on the tarball's target hosts.
 #
 # This package builds GDAL from source with the prefix /opt/percona-gdal
-# and exactly the driver set the OFFICIAL Percona tarball's libgdal links
-# (derived from `readelf -d` on the official artifact's libgdal.so.36),
-# with an explicit --without- for everything else. The data directory is
-# compiled to /opt/percona-gdal/share/gdal, so GDAL finds its resource
-# files with ZERO environment variables, and PROJ comes from
-# percona-proj, whose proj.db likewise resolves from a compiled-in path.
+# and exactly the external libraries the OFFICIAL Percona tarball's libgdal
+# links (derived from `readelf -d` on the official artifact's
+# libgdal.so.36), every other external library off
+# (GDAL_USE_EXTERNAL_LIBS=OFF), and only the drivers that use them (see
+# %%build). Two deliberate departures from that list: libgeotiff is GDAL's
+# bundled copy (no libgeotiff17 in the tarball) and libspatialite is not
+# used at all. The data directory is compiled to
+# /opt/percona-gdal/share/gdal, so GDAL finds its resource files with ZERO
+# environment variables, and PROJ comes from percona-proj, whose proj.db
+# likewise resolves from a compiled-in path. GEOS is the PGDG-mirrored
+# geos315 (/usr/geos315) that PostGIS links too; the tarball bundles it.
 #
-# Version is per base, chosen so the SONAME matches the libgdal that the
-# shipped PostGIS RPMs were linked against on that base — the tarball
-# just substitutes the bundled file, so ours must be a drop-in:
+# Version is per base and follows the PGDG-mirrored GDAL that the shipped
+# PostGIS RPMs link on that base (ppg:common:deps:postgis gdal38/gdal313,
+# root/macros.yaml GIS_GDAL_*) — the tarball just substitutes the bundled
+# file, so ours must be a drop-in:
 #
-#     RHEL 8 (ssl1.1 tarball): GDAL 3.0.4 -> libgdal.so.26
-#     RHEL 9 (ssl3   tarball): GDAL 3.4.3 -> libgdal.so.30
-#
-# (both verified against the libgdal.so.* real filenames in the built
-# tarball artifacts: libgdal.so.26.0.4 and libgdal.so.30.0.3).
+#     RHEL 8 (ssl1.1 tarball):       GDAL 3.8.5  (gdal38)  -> libgdal.so.34
+#     RHEL 9 (ssl3/ssl3.5 tarballs): GDAL 3.13.3 (gdal313) -> libgdal.so.39
 #
 # We deliberately do NOT filter the auto-generated
 # libgdal.so.NN()(64bit) Provides: the ssl chroots that assemble the
 # tarball use a project-config `Prefer:` to let this package satisfy
-# PostGIS's SONAME Requires instead of EPEL's gdal-libs. Everything
+# PostGIS's SONAME Requires instead of gdal38-libs/gdal313-libs. Everything
 # installs under /opt/percona-gdal, so nothing shadows a system package
 # on a normal install, and ppg:common:deps is publish=false project-wide.
 
@@ -50,28 +53,27 @@
 # and libgdal is big enough that the final link degenerates into
 # "lto-wrapper: using serial compilation of 128 LTRANS jobs" — minutes of
 # single-threaded work that risks an OBS build timeout for no benefit.
-# Upstream's own --enable-lto is off by default and the autotools build is
-# not LTO-tested. (RHEL 8's optflags do not enable LTO, so this is a no-op
-# there.)
+# Upstream does not enable LTO by default either. (RHEL 8's optflags do
+# not enable LTO, so this is a no-op there.)
 %global _lto_cflags %{nil}
 
 # PERCONA: base-specific upstream version + which Source to unpack.
 %if 0%{?rhel} == 8
-%global gdal_version 3.0.4
+%global gdal_version %!{GIS_GDAL_EL8_VERSION}
 %global gdal_srcidx 0
-%global gdal_soname 26
-# GDAL 3.0.4 uses --datadir verbatim as the GDAL data dir.
-%global gdal_datadir %{gdal_prefix}/share/gdal
+%global gdal_soname 34
 %else
-%global gdal_version 3.4.3
+%global gdal_version %!{GIS_GDAL_VERSION}
 %global gdal_srcidx 1
-%global gdal_soname 30
-# GDAL 3.4.3 APPENDS "/gdal" to --datadir (3.0.4 does not), so passing
-# <prefix>/share/gdal here would install to — and compile INST_DATA as —
-# <prefix>/share/gdal/gdal. Self-consistent, but a path nobody expects;
-# pass the parent so both bases land on <prefix>/share/gdal.
-%global gdal_datadir %{gdal_prefix}/share
+%global gdal_soname 39
 %endif
+# GDAL's CMake build installs the resource files to, and compiles INST_DATA
+# as, <prefix>/<CMAKE_INSTALL_DATADIR>/gdal (gdal.cmake sets
+# GDAL_RESOURCE_PATH itself, so it cannot be overridden from the command
+# line). CMAKE_INSTALL_DATADIR=share below makes that this path.
+%global gdal_datadir %{gdal_prefix}/share/gdal
+# geos315 from ppg:common:deps:postgis, the GEOS PostGIS links.
+%global geos_prefix /usr/geos315
 
 Name:           percona-gdal
 Version:        %{gdal_version}
@@ -81,14 +83,14 @@ License:        MIT
 URL:            https://gdal.org/
 # PERCONA: both tarballs are always fetched by the _service; %%prep
 # unpacks only the one that matches the base being built.
-Source0:        gdal-3.0.4.tar.xz
-Source1:        gdal-3.4.3.tar.xz
+Source0:        gdal-%!{GIS_GDAL_EL8_VERSION}.tar.xz
+Source1:        gdal-%!{GIS_GDAL_VERSION}.tar.xz
 
 # PERCONA: an EXPLICIT dependency on our own PROJ, not just the automatic
 # libproj.so.NN()(64bit) ELF requires. That auto-requires is ambiguous:
-# EPEL's proj-libs provides the very same symbol on both bases (6.3.2 ->
-# libproj.so.15, 9.6.0 -> libproj.so.25), so a plain `dnf install
-# percona-gdal` could satisfy it with proj-libs, leaving
+# proj96/proj98 (and EPEL's proj-libs on EL9) provide the very same
+# libproj.so.25 symbol, so a plain `dnf install percona-gdal` could
+# satisfy it with one of those, leaving
 # /opt/percona-proj/lib absent, libgdal's rpath dead and the whole
 # compiled-in-data-path mechanism broken. The point of this package is
 # *our* libproj, not any libproj with a matching SONAME.
@@ -97,11 +99,14 @@ Requires:       percona-proj
 BuildRequires:  gcc
 BuildRequires:  gcc-c++
 BuildRequires:  make
+BuildRequires:  cmake >= 3.16
 # PERCONA: our own /opt PROJ — same SONAME as the libproj PostGIS linked,
 # with the data path compiled to /opt/percona-proj/share/proj.
 BuildRequires:  percona-proj
 # The driver set, one BuildRequires per NEEDED entry of the official
-# tarball's libgdal (see the header comment).
+# tarball's libgdal (see the header comment). libgeotiff is GDAL's bundled
+# copy (GDAL_USE_GEOTIFF_INTERNAL) and libspatialite is not used, so
+# no libgeotiff or libspatialite development package is needed here.
 BuildRequires:  zlib-devel
 BuildRequires:  libcurl-devel
 BuildRequires:  libxml2-devel
@@ -110,18 +115,19 @@ BuildRequires:  libzstd-devel
 BuildRequires:  xz-devel
 BuildRequires:  libjpeg-turbo-devel
 BuildRequires:  libtiff-devel
-BuildRequires:  libgeotiff-devel
 BuildRequires:  libpng-devel
 BuildRequires:  sqlite-devel
-BuildRequires:  libspatialite-devel
 BuildRequires:  freexl-devel
 BuildRequires:  expat-devel
-BuildRequires:  geos-devel
+# PERCONA: the PGDG-mirrored GEOS PostGIS links (ppg:common:deps:postgis),
+# under /usr/geos315. Its package ships geos-config and geos_c.h but no
+# CMake config, so GDAL's FindGEOS finds it through CMAKE_PREFIX_PATH.
+BuildRequires:  geos315-devel
 BuildRequires:  json-c-devel
 %if 0%{?rhel} == 8
-# GDAL 3.0.4 has no --with-pcre2 (and no --with-lz4): PCRE1 is the only
-# regexp backend it can use. libpcre.so.1 is already bundled in the
-# tarball via libspatialite, so this costs nothing.
+# PCRE1, not PCRE2, on EL8: the GDAL 3.0.4 this replaces had no PCRE2
+# support, so its libgdal linked libpcre.so.1 (and no liblz4); keep the
+# same library set.
 BuildRequires:  pcre-devel
 %else
 BuildRequires:  pcre2-devel
@@ -137,156 +143,134 @@ drags in. The GDAL data directory is compiled to
 /opt/percona-gdal/share/gdal and PROJ comes from percona-proj, so both
 resolve their resource files without any environment variables. The
 upstream version is picked per base so the SONAME matches the libgdal
-that the shipped PostGIS RPMs linked against (RHEL 8: 3.0.4 /
-libgdal.so.26, RHEL 9: 3.4.3 / libgdal.so.30), making this a drop-in
-replacement inside the tarball. Consumed by the tarball build; not
-intended for standalone installation.
+that the shipped PostGIS RPMs linked against (RHEL 8: 3.8.5 /
+libgdal.so.34 like gdal38, RHEL 9: 3.13.3 / libgdal.so.39 like gdal313),
+making this a drop-in replacement inside the tarball. Consumed by the
+tarball build; not intended for standalone installation.
 
 %prep
 # PERCONA: -T -b %%{gdal_srcidx} — unpack only the base-matching tarball.
 %setup -q -T -b %{gdal_srcidx} -n gdal-%{version}
 
 %build
-# PERCONA: TWO rpath entries so libgdal can find our libproj either way.
-#   %%{proj_prefix}/lib — the RPM install layout, and the tarball layout if
-#     task 23 materialises /opt/percona-proj like it does /opt/percona-perl.
-#   $ORIGIN — libgdal's own directory, for a tarball that instead flattens
-#     libproj into the same lib/ dir as libgdal.
-# The second one is not redundant: postgis_raster-3.so's own RUNPATH
-# $ORIGIN does NOT help here, because DT_RUNPATH is not inherited down the
-# load chain — it applies only to that object's own NEEDED entries, so
-# libgdal's NEEDED libproj.so.NN is resolved against libgdal's rpath, not
-# postgis_raster's. \$ORIGIN is escaped so the literal $ORIGIN (not an
-# empty shell expansion) reaches the linker.
-export LDFLAGS="%{?__global_ldflags} -Wl,-rpath,%{proj_prefix}/lib -Wl,-rpath,\$ORIGIN"
-
-# --datadir: the whole point of the /opt prefix — GDAL bakes an
-#   -DINST_DATA=\"...\" into libgdal (see %%{gdal_datadir} above: 3.0.4
-#   takes --datadir verbatim, 3.4.3 appends "/gdal"), so the resource files
-#   (gdal_datum.csv, pcs.csv, gt_datum.csv, ...) are found with no
-#   GDAL_DATA in the environment.
-# --with-proj: our /opt PROJ, not the distro's.
-# --with-hide-internal-symbols: upstream's recommended default; keeps
-#   libgdal from re-exporting the internal libtiff/geotiff symbols.
-# --with-libjson-c/libtiff/geotiff/png/jpeg/libz=/usr: force the SYSTEM
-#   copies (GDAL defaults several of these to its bundled sources); the
-#   official tarball's libgdal links all of them externally, and the
-#   tarball already carries them for other components.
-# --with-gif=internal and --with-qhull=internal: the official libgdal has
-#   no libgif at all and we keep qhull internal too — same driver
-#   functionality, two fewer shared objects in the tarball.
-# CFLAGS/CXXFLAGS carry %%{optflags} (without them the redhat-hardened-ld
-#   spec produces PIE links from non-PIC objects and configure's very
-#   first "can I run a program" test fails) plus
-#   -I%%{_includedir}/libgeotiff: libgeotiff-devel puts geo_normalize.h in
-#   its own subdirectory, which GDAL's --with-geotiff=<path> does not add.
-# Everything under "explicitly OFF" below is a driver whose external
-# library the official libgdal does NOT link. armadillo is the important
-# one: it is what drags the FlexiBLAS/BLAS/LAPACK chain whose ELF
-# constructor abort()s on Rocky hosts.
-./configure \
-    --prefix=%{gdal_prefix} \
-    --libdir=%{gdal_prefix}/lib \
-    --datadir=%{gdal_datadir} \
-    --disable-static \
-    --enable-shared \
-    --disable-rpath \
-    --with-hide-internal-symbols \
-    --with-threads \
-    --with-libz=/usr \
-    --with-libtiff=/usr \
-    --with-geotiff=/usr \
-    --with-png=/usr \
-    --with-jpeg=/usr \
-    --with-libjson-c=/usr \
-    --with-gif=internal \
-    --with-qhull=internal \
-    --with-sqlite3 \
-    --with-spatialite \
-    --with-freexl \
-    --with-expat \
-    --with-geos \
-    --with-proj=%{proj_prefix} \
-    --with-curl \
-    --with-xml2 \
-    --with-crypto \
-    --with-zstd \
-    --with-liblzma \
+# PERCONA: plain cmake, not %%cmake — the distro macro forces /usr + lib64
+# (and on EL8 CMAKE_SKIP_RPATH=ON), and we need a self-contained /opt tree
+# with our own RUNPATH.
+#
+# RUNPATH (CMAKE_INSTALL_RPATH, a CMake ;-list; bindings are off, so no
+#   Python build consumes it):
+#   %%{proj_prefix}/lib — our libproj, in the RPM install layout.
+#   $ORIGIN — libgdal's own directory, for the tarball, which flattens
+#     libproj/libgeos_c into the same lib/ dir as libgdal. Not redundant:
+#     postgis_raster-3.so's own RUNPATH does NOT help here, because
+#     DT_RUNPATH is not inherited down the load chain — it applies only to
+#     that object's own NEEDED entries.
+#   %%{geos_prefix}/lib64 — geos315's libgeos_c, in the RPM install layout.
+#   The tarball's build-tarball.sh rewrites all of this to $ORIGIN/../lib
+#   once it has bundled the libraries.
+# CMAKE_INSTALL_DATADIR=share: GDAL compiles INST_DATA as
+#   <prefix>/share/gdal (see %%{gdal_datadir} above), so the resource files
+#   (gdalicon.png, the .csv/.json tables, ...) are found with no GDAL_DATA
+#   in the environment.
+# CMAKE_PREFIX_PATH: our /opt PROJ (its CMake config, never a distro PROJ)
+#   and geos315's geos-config/headers/library.
+# GDAL_USE_EXTERNAL_LIBS=OFF: every external library is off unless named
+#   below — the CMake form of the autotools build's long --without- list
+#   (armadillo, the one that drags the FlexiBLAS/BLAS/LAPACK chain whose
+#   ELF constructor abort()s on Rocky hosts, hdf4/5, netcdf, poppler,
+#   xerces, libkml, ODBC, mysql, openjpeg, webp, PostgreSQL, ...).
+#   GDAL_USE_<X>=ON then makes a missing library fatal instead of silently
+#   dropping it. GDAL_USE_POSTGRESQL=OFF is spelled out anyway: the tarball
+#   build never had the PostgreSQL driver (--without-pg).
+# Internal copies: libgeotiff (GDAL_USE_GEOTIFF_INTERNAL, so libgeotiff17
+#   does not enter the tarball), qhull and gif (as --with-qhull/gif=internal
+#   did; gif ends up unused, its driver is off). zlib/tiff/png/jpeg/json-c
+#   are the system libraries (GDAL_USE_*_INTERNAL default to OFF when the
+#   external one is ON), as the old --with-<lib>=/usr forced.
+# Drivers: GDAL_BUILD_OPTIONAL_DRIVERS/OGR_BUILD_OPTIONAL_DRIVERS=OFF, then
+#   the drivers PostGIS raster needs (GTiff for ST_AsTIFF, PNG, JPEG, MEM,
+#   VRT, raw) plus the ones that use the external libraries kept above
+#   (SQLite/GPKG for sqlite3 + PCRE, XLS for freexl, GML/KML for expat,
+#   GeoJSON/Shape/VRT as the classic OGR core). Core drivers that GDAL
+#   always builds stay in.
+# GDAL_USE_ICONV=ON: glibc's iconv, which the autotools build picked up by
+#   default (CPLRecode); no extra library.
+# GDAL_HIDE_INTERNAL_SYMBOLS=ON: upstream's default, as
+#   --with-hide-internal-symbols; keeps libgdal from re-exporting the
+#   bundled geotiff/qhull symbols.
+# BUILD_APPS=OFF: the CLI tools never reach the tarball (build-tarball.sh
+#   deletes bin/).
+mkdir -p build
+cd build
+cmake .. \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=%{gdal_prefix} \
+    -DCMAKE_INSTALL_LIBDIR=lib \
+    -DCMAKE_INSTALL_DATADIR=share \
+    -DCMAKE_C_FLAGS="%{optflags}" \
+    -DCMAKE_CXX_FLAGS="%{optflags}" \
+    -DCMAKE_SHARED_LINKER_FLAGS="%{?__global_ldflags}" \
+    -DCMAKE_INSTALL_RPATH='%{gdal_prefix}/lib;%{proj_prefix}/lib;$ORIGIN;%{geos_prefix}/lib64' \
+    -DCMAKE_PREFIX_PATH="%{proj_prefix};%{geos_prefix}" \
+    -DPROJ_ROOT=%{proj_prefix} \
+    -DBUILD_SHARED_LIBS=ON \
+    -DBUILD_APPS=OFF \
+    -DBUILD_TESTING=OFF \
+    -DBUILD_PYTHON_BINDINGS=OFF \
+    -DBUILD_JAVA_BINDINGS=OFF \
+    -DBUILD_CSHARP_BINDINGS=OFF \
+    -DGDAL_HIDE_INTERNAL_SYMBOLS=ON \
+    -DGDAL_USE_EXTERNAL_LIBS=OFF \
+    -DGDAL_BUILD_OPTIONAL_DRIVERS=OFF \
+    -DOGR_BUILD_OPTIONAL_DRIVERS=OFF \
+    -DGDAL_USE_GEOTIFF_INTERNAL=ON \
+    -DGDAL_USE_TIFF_INTERNAL=OFF \
+    -DGDAL_USE_QHULL_INTERNAL=ON \
+    -DGDAL_USE_GIF_INTERNAL=ON \
+    -DGDAL_USE_ZLIB=ON \
+    -DGDAL_USE_CURL=ON \
+    -DGDAL_USE_LIBXML2=ON \
+    -DGDAL_USE_OPENSSL=ON \
+    -DGDAL_USE_ZSTD=ON \
+    -DGDAL_USE_LIBLZMA=ON \
+    -DGDAL_USE_JPEG=ON \
+    -DGDAL_USE_TIFF=ON \
+    -DGDAL_USE_PNG=ON \
+    -DGDAL_USE_SQLITE3=ON \
+    -DGDAL_USE_FREEXL=ON \
+    -DGDAL_USE_EXPAT=ON \
+    -DGDAL_USE_JSONC=ON \
+    -DGDAL_USE_GEOS=ON \
+    -DGDAL_USE_ICONV=ON \
 %if 0%{?rhel} == 8
-    --with-pcre \
-    --without-epsilon \
-    --without-sde \
+    -DGDAL_USE_PCRE2=OFF \
+    -DGDAL_USE_PCRE=ON \
+    -DGDAL_USE_LZ4=OFF \
 %else
-    --with-pcre2 \
-    --without-pcre \
-    --with-lz4 \
-    --without-blosc \
-    --without-brunsli \
-    --without-exr \
-    --without-heif \
-    --without-jxl \
-    --without-libdeflate \
-    --without-rdb \
+    -DGDAL_USE_PCRE2=ON \
+    -DGDAL_USE_LZ4=ON \
 %endif
-    --without-armadillo \
-    --without-cfitsio \
-    --without-charls \
-    --without-cryptopp \
-    --without-dds \
-    --without-dods-root \
-    --without-ecw \
-    --without-fgdb \
-    --without-fme \
-    --without-grass \
-    --without-libgrass \
-    --without-gta \
-    --without-hdf4 \
-    --without-hdf5 \
-    --without-hdfs \
-    --without-idb \
-    --without-ingres \
-    --without-jasper \
-    --without-java \
-    --without-jp2mrsid \
-    --without-kakadu \
-    --without-kea \
-    --without-libkml \
-    --without-mdb \
-    --without-mongocxx \
-    --without-mongocxxv3 \
-    --without-mrsid \
-    --without-mrsid_lidar \
-    --without-msg \
-    --without-mysql \
-    --without-netcdf \
-    --without-oci \
-    --without-odbc \
-    --without-ogdi \
-    --without-opencl \
-    --without-openjpeg \
-    --without-pdfium \
-    --without-perl \
-    --without-pg \
-    --without-podofo \
-    --without-poppler \
-    --without-python \
-    --without-rasdaman \
-    --without-rasterlite2 \
-    --without-sfcgal \
-    --without-sosi \
-    --without-teigha \
-    --without-tiledb \
-    --without-webp \
-    --without-xerces \
-    CFLAGS="%{optflags} -I%{_includedir}/libgeotiff" \
-    CXXFLAGS="%{optflags} -I%{_includedir}/libgeotiff"
+    -DGDAL_USE_SPATIALITE=OFF \
+    -DGDAL_USE_POSTGRESQL=OFF \
+    -DGDAL_ENABLE_DRIVER_GTIFF=ON \
+    -DGDAL_ENABLE_DRIVER_PNG=ON \
+    -DGDAL_ENABLE_DRIVER_JPEG=ON \
+    -DGDAL_ENABLE_DRIVER_MEM=ON \
+    -DGDAL_ENABLE_DRIVER_VRT=ON \
+    -DGDAL_ENABLE_DRIVER_RAW=ON \
+    -DOGR_ENABLE_DRIVER_SQLITE=ON \
+    -DOGR_ENABLE_DRIVER_GPKG=ON \
+    -DOGR_ENABLE_DRIVER_XLS=ON \
+    -DOGR_ENABLE_DRIVER_GML=ON \
+    -DOGR_ENABLE_DRIVER_KML=ON \
+    -DOGR_ENABLE_DRIVER_GEOJSON=ON \
+    -DOGR_ENABLE_DRIVER_SHAPE=ON \
+    -DOGR_ENABLE_DRIVER_VRT=ON
 
 make %{?_smp_mflags}
 
 %install
-make install DESTDIR=%{buildroot}
-# PERCONA: libtool .la files hardcode buildroot paths.
-find %{buildroot}%{gdal_prefix} -name '*.la' -delete
+make -C build install DESTDIR=%{buildroot}
 
 # PERCONA: hard gates on the three properties this package exists for.
 #
@@ -300,28 +284,49 @@ test -e %{buildroot}%{gdal_prefix}/lib/libgdal.so.%{gdal_soname}
 # 2. The compiled-in data path. The resource files must actually BE in the
 #    directory libgdal was told about: GDAL also carries an independent
 #    <prefix>/share/gdal fallback string, so grepping the library alone
-#    would pass even with a wrong --datadir. The third test catches the
-#    <prefix>/share/gdal/gdal doubling that GDAL 3.4.3's extra "/gdal"
-#    produces if --datadir is set the way 3.0.4 needs it.
-grep -q '%{gdal_prefix}/share/gdal' %{buildroot}%{gdal_prefix}/lib/libgdal.so.%{gdal_soname}
-test -s %{buildroot}%{gdal_prefix}/share/gdal/gdalicon.png
-test ! -d %{buildroot}%{gdal_prefix}/share/gdal/gdal
+#    would pass even with a wrong data dir. The third test catches a
+#    <prefix>/share/gdal/gdal doubling (what GDAL 3.4.3's autotools build
+#    produced with --datadir=<prefix>/share/gdal).
+grep -q '%{gdal_datadir}' %{buildroot}%{gdal_prefix}/lib/libgdal.so.%{gdal_soname}
+test -s %{buildroot}%{gdal_datadir}/gdalicon.png
+test ! -d %{buildroot}%{gdal_datadir}/gdal
 # 3. A driver surface with none of the libraries the official tarball's
-#    libgdal does without.
+#    libgdal does without. libgeotiff and libspatialite joined the list
+#    with the CMake build: geotiff is GDAL's bundled copy and spatialite
+#    is off, so a NEEDED entry for either means the configuration slipped
+#    (and would drag libgeotiff17/libspatialite50 into the tarball).
 for bad in libarmadillo libflexiblas libpoppler libhdf5 libmfhdf libnetcdf \
            libdap libxerces libkmlbase libodbc libmariadb libcfitsio libogdi \
-           libjasper libopenjp2 libtirpc libwebp libgta libpq; do
+           libjasper libopenjp2 libtirpc libwebp libgta libpq \
+           libgeotiff libspatialite; do
     if readelf -d %{buildroot}%{gdal_prefix}/lib/libgdal.so.%{gdal_soname} | grep -q "$bad"; then
         echo "ERROR: libgdal links $bad — driver set is not lean" >&2
         exit 1
     fi
 done
+# 4. The two GIS libraries libgdal must take from the right place: our
+#    /opt PROJ (libproj.so.25) and geos315's libgeos_c, each reachable
+#    through libgdal's own RUNPATH.
+readelf -d %{buildroot}%{gdal_prefix}/lib/libgdal.so.%{gdal_soname} | grep -q 'NEEDED.*\[libproj\.so\.25\]'
+readelf -d %{buildroot}%{gdal_prefix}/lib/libgdal.so.%{gdal_soname} | grep -q 'NEEDED.*\[libgeos_c\.so\.1\]'
+readelf -d %{buildroot}%{gdal_prefix}/lib/libgdal.so.%{gdal_soname} | grep -E '\((RUNPATH|RPATH)\)' | grep -q '%{proj_prefix}/lib'
+readelf -d %{buildroot}%{gdal_prefix}/lib/libgdal.so.%{gdal_soname} | grep -E '\((RUNPATH|RPATH)\)' | grep -q '%{geos_prefix}/lib64'
 
 %files
 %license LICENSE.TXT
 %{gdal_prefix}
 
 %changelog
+* Sun Oct 18 2026 Percona Development <info@percona.com> - %{version}-%{release}
+- Follow the PGDG-mirrored GDAL that PostGIS now links: 3.8.5 on RHEL 8
+  (gdal38, libgdal.so.34) and 3.13.3 on RHEL 9 (gdal313,
+  libgdal.so.39), versions from root/macros.yaml.
+- Build with CMake (GDAL dropped autotools in 3.6): same external
+  library set, every other one off, optional drivers off except the
+  ones PostGIS raster and those libraries need.
+- GDAL's bundled libgeotiff instead of the system one, no
+  libspatialite, GEOS from geos315 (/usr/geos315).
+
 * Wed Sep 02 2026 Percona Build/Release Team <eng-build@percona.com> - %{version}-%{release}
 - Drop ExcludeArch aarch64: the binary tarball (ppg:staging:NN:tarballs)
   now builds for aarch64 too, so this runtime is no longer dead weight
