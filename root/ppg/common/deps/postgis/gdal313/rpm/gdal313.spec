@@ -57,6 +57,10 @@
 %global libspatialitemajorversion 50
 %global libspatialiteinstdir /usr/libspatialite%{libspatialitemajorversion}
 %global gdalinstdir /usr/%{name}
+# PERCONA: the PG major whose libpq GDAL links against (macros.yaml of
+# ppg:common:deps:postgis, whose repositories path to ppg:staging:<major>).
+%global pgmajorversion %!{PG_MAJOR_VERSION}
+%global pginstdir /usr/pgsql-%{pgmajorversion}
 
 # PERCONA: pyver is set statically above for the interpreters we pin, so the
 # spec also parses where that interpreter is not installed (OBS's server-side
@@ -184,13 +188,12 @@ Requires:	libmuparser2_3_4
 %endif
 %endif
 
-# PERCONA: libpq from the distro (EL: libpq-devel; SUSE: postgresql-devel,
-# resolved on openSUSE:Factory and SUSE:SLFO:1.2), not PGDG's libpq5.
-%if 0%{?suse_version}
-BuildRequires:	postgresql-devel
-%else
-BuildRequires:	libpq-devel
-%endif
+# PERCONA: libpq from Percona's own server packages on every distro
+# (percona-postgresql<major>-devel: /usr/pgsql-<major>/include/libpq-fe.h
+# and /usr/pgsql-<major>/lib/libpq.so), never the distro one: Red Hat's
+# libpq-devel exports RHPG_9.6-versioned symbols, and a libgdal bound to
+# them cannot link or load next to percona-postgresql libs.
+BuildRequires:	percona-postgresql%{pgmajorversion}-devel
 BuildRequires:	pcre2-devel
 BuildRequires:	perl(ExtUtils::MakeMaker)
 # PERCONA: OBS cannot resolve the %%{_bindir}/pkg-config path form.
@@ -432,6 +435,10 @@ LDFLAGS="$LDFLAGS -L%{projinstdir}/lib64 -L%{libgeotiffinstdir}/lib -L%{geosinst
 # (swig/python/CMakeLists.txt), where a ';' list would be split into separate
 # arguments. PROJ and SpatiaLite are added to CMAKE_PREFIX_PATH so that
 # find_package(PROJ CONFIG) finds proj98, never a distro PROJ.
+# PostgreSQL_INCLUDE_DIR / PostgreSQL_LIBRARY (FindPostgreSQL; GDAL does not
+# use pg_config) pin Percona's libpq, and GDAL_USE_POSTGRESQL=ON makes a miss
+# fatal. %%{pginstdir}/lib is deliberately NOT in the RUNPATH: libgdal binds
+# whichever libpq.so.5 the system provides at runtime.
 %if 0%{?suse_version}
 %if 0%{?suse_version} >= 1500
  %{__install} -d build
@@ -452,6 +459,9 @@ LDFLAGS="$LDFLAGS -L%{projinstdir}/lib64 -L%{libgeotiffinstdir}/lib -L%{geosinst
  -DSPATIALITE_LIBRARY=%{libspatialiteinstdir}/lib/libspatialite.so \
  -DCMAKE_PREFIX_PATH="%{geosinstdir};%{libgeotiffinstdir};%{projinstdir};%{libspatialiteinstdir}" \
  -DGDAL_USE_JPEG12_INTERNAL=OFF \
+ -DGDAL_USE_POSTGRESQL:BOOL=ON \
+ -DPostgreSQL_INCLUDE_DIR=%{pginstdir}/include \
+ -DPostgreSQL_LIBRARY=%{pginstdir}/lib/libpq.so \
 %if %gdal_python_enabled
   -DBUILD_PYTHON_BINDINGS:BOOL=ON \
   -DPython_ROOT=/usr \
@@ -507,6 +517,12 @@ for f in %{buildroot}%{gdalinstdir}/bin/*; do
   sed -i '1s|^#!.*|#!%{__ospython}|' "$f"
 done
 %endif
+
+# PERCONA: GDAL must link against Percona's (unversioned) libpq, never Red Hat's
+# RHPG-versioned one, or it cannot load next to percona-postgresql libs.
+if objdump -T %{buildroot}%{gdalinstdir}/lib/libgdal.so.* 2>/dev/null | grep -q 'RHPG_'; then
+  echo "PERCONA: libgdal references RHPG-versioned libpq symbols"; exit 1
+fi
 
 # PERCONA: no /etc/ld.so.conf.d drop-in; every ELF under the prefix
 # (including the JNI library in %%{gdalinstdir}/lib/jni), the Python
