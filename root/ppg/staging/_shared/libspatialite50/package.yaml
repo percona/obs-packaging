@@ -1,0 +1,8 @@
+# Build scoping mirrors root/ppg/common/deps/postgis/libspatialite50/package.yaml:
+# aggregate only where the source package builds.  Keep the two in sync.
+build:
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false

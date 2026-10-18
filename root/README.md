@@ -405,6 +405,16 @@ libpq; the tier prjconf references it at the `common` level, `tools` inherits it
 `tools/macros.yaml` holds only the bump-rule comment. Bump the pin by hand in the PR
 that adds a new GA major to `staging/`.
 
+The PostGIS dependency stack (`geos315`, `proj98`, `proj96`, `libgeotiff17`,
+`librttopo`, `libspatialite50`, `gdal38`, `gdal313`, `sfcgal`) follows the same
+pattern in `ppg:common:deps:postgis` (`ppg/common/deps/postgis/`): GDAL links the
+libpq of the major pinned in its own `macros.yaml` (`PG_MAJOR_VERSION: 18`), so its
+`path-prefix` puts `ppg:staging:<that major>` and then `ppg:common:deps` ahead of the
+inherited paths (`ppg:common:deps` itself cannot path to a major: every major paths
+to it). It is never published; each major aggregates the packages through
+`staging/_shared/<pkg>/obs/_aggregate`, whose `package.yaml` mirrors the source
+package's `build:` scoping. Bump its pin together with `common/macros.yaml`.
+
 OBS release counters (`<CI_CNT>.<B_CNT>`) are per project, so right after a
 component moves here the majors list an equal-version build with a lower counter
 than the one they built themselves. Nothing breaks (same bytes, same version); the

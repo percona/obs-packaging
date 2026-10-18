@@ -40,8 +40,9 @@ project-config: |
   %if "%_repository" == "RockyLinux_10" || "%_repository" == "UBI_10"
   Prefer: selinux-policy-targeted
   Prefer: hdf-libs
-  # EPEL's gdal3.4-libs needs libspatialite.so.8, which ppg:common:deps'
-  # libspatialite50 (PGDG layout, /usr/libspatialite50) now provides too.
+  # EPEL's gdal3.4-libs needs libspatialite.so.8, which libspatialite50
+  # (ppg:common:deps:postgis, aggregated here; PGDG layout,
+  # /usr/libspatialite50) now provides too.
   # Keep EPEL's libspatialite for EPEL's GDAL. Consumers of gdal313 require
   # libspatialite50 by name, so this does not affect them.
   Prefer: libspatialite
