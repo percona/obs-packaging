@@ -1,10 +1,12 @@
 description: |
   GDAL/PROJ name-compatibility shim for the binary tarball build chroots.
-  Provides the distro package names the percona-postgis35_NN packages
-  require by name (gdal-libs/proj on EL8, gdal3.4-libs/proj on EL9) so the
-  OBS expander has a choice that `Prefer: percona-gis-compat` can resolve
-  towards the lean /opt-prefixed percona-gdal/percona-proj runtimes. Payload
-  free; never published outside this project.
+  Provides the PGDG-mirrored package names the percona-postgis<MAJOR>_NN
+  packages require by name (gdal38-libs/proj96 on EL8,
+  gdal313-libs/proj98 on EL9, libgeotiff17 on both) so the OBS expander
+  has a choice that `Prefer: percona-gis-compat` can resolve towards the
+  lean /opt-prefixed percona-gdal/percona-proj runtimes, and Requires the
+  real geos315 the tarball bundles. Payload free; never published outside
+  this project.
 
 # Builds on every repo of this project (one per tarball EL base). Living in
 # ppg:common:deps:tarballs — pathed only by the ssl* tarball repos — is what
