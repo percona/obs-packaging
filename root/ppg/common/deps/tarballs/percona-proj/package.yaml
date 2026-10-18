@@ -3,15 +3,15 @@ description: |
   PROJ built from upstream source with the install prefix
   /opt/percona-proj, so libproj's compiled-in PROJ_DATA default is
   /opt/percona-proj/share/proj and proj.db is found with zero
-  environment variables. Version is chosen per base so the SONAME
-  matches the PROJ that the shipped PostGIS RPMs linked against:
-  RHEL 8 -> PROJ 6.3.2 (libproj.so.15), RHEL 9 -> PROJ 9.6.0
-  (libproj.so.25). That makes it a drop-in replacement for EPEL's
-  libproj inside the binary tarball only — the shipped PostGIS RPMs
-  keep resolving to EPEL's package on user systems.
+  environment variables. Version follows the PGDG-mirrored PROJ that
+  the shipped PostGIS RPMs link (ppg:common:deps:postgis):
+  RHEL 8 -> PROJ 9.6.2 like proj96, RHEL 9 -> PROJ 9.8.1 like proj98,
+  both libproj.so.25. That makes it a drop-in replacement for
+  proj96/proj98's libproj inside the binary tarball only — the shipped
+  PostGIS RPMs keep resolving to proj96/proj98 on user systems.
 
-  RockyLinux_8 and RockyLinux_9 only: these are the tarball build bases
-  (ssl1.1 / ssl3).
+  RockyLinux_8, RockyLinux_9.6 and RockyLinux_9 only: these are the
+  tarball build bases (ssl1.1 / ssl3 / ssl3.5).
 
 # Builds on every repo of ppg:common:deps:tarballs (one per tarball EL
 # base: RockyLinux_8=ssl1.1, RockyLinux_9.6=ssl3, RockyLinux_9=ssl3.5).
