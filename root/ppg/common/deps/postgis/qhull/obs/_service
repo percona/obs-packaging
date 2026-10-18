@@ -1,0 +1,8 @@
+<services>
+  <service name="download_url">
+    <param name="host">github.com</param>
+    <param name="protocol">https</param>
+    <param name="path">/qhull/qhull/archive/v7.2.1.tar.gz</param>
+    <param name="filename">qhull-7.2.1.tar.gz</param>
+  </service>
+</services>
