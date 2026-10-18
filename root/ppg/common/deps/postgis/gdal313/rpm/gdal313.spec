@@ -520,7 +520,10 @@ done
 
 # PERCONA: GDAL must link against Percona's (unversioned) libpq, never Red Hat's
 # RHPG-versioned one, or it cannot load next to percona-postgresql libs.
-if objdump -T %{buildroot}%{gdalinstdir}/lib/libgdal.so.* 2>/dev/null | grep -q 'RHPG_'; then
+# Assert libgdal exists first so the check cannot pass vacuously.
+set -- %{buildroot}%{gdalinstdir}/lib/libgdal.so.*
+[ -e "$1" ] || { echo "PERCONA: libgdal not found for the RHPG check"; exit 1; }
+if objdump -T "$@" | grep -q 'RHPG_'; then
   echo "PERCONA: libgdal references RHPG-versioned libpq symbols"; exit 1
 fi
 
@@ -668,6 +671,10 @@ done
 %endif
 
 %changelog
+* Sun Oct 18 2026 Percona Development <info@percona.com> - 3.13.3-1
+- Build against Percona's libpq (percona-postgresql18-devel) instead of Red Hat's
+  RHPG-versioned libpq; moved to ppg:common:deps:postgis
+
 * Fri Oct 16 2026 Percona Development <info@percona.com> - 3.13.3-1
 - Ported from PGDG pgdg-rpms e38918e8; no ld.so.conf.d drop-in, RUNPATH instead
 
