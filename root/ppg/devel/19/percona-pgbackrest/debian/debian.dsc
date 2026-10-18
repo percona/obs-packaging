@@ -7,6 +7,7 @@ Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  mawk,
  debhelper-compat (= 13),
+ git,
  libbz2-dev,
  libcurl4-openssl-dev,
  liblz4-dev,
