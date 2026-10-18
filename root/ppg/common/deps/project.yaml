@@ -11,12 +11,6 @@ project-config: |
   %if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_8"
   Prefer: libverto-libev
   Prefer: Lmod
-  # swig is modular on EL8 (streams 3.0/4.0/4.1, none visible without a
-  # flag); gdal38 needs it for its Python 3.12 and Java bindings. 4.1 is the
-  # stream that knows Python 3.12.
-  ExpandFlags: module:swig-4.1
-  # gdal38's Java build pulls copy-jdk-configs, which needs lua (have choice: compat-lua lua)
-  Prefer: lua
   %endif
 
   %if "%_repository" == "RockyLinux_9" || "%_repository" == "RockyLinux_9.6"
@@ -26,19 +20,7 @@ project-config: |
   Prefer: libverto-libev
   %endif
 
-  %if "%_repository" == "RockyLinux_9" || "%_repository" == "RockyLinux_9.6" || "%_repository" == "UBI_9"
-  # gdal313 (ant + java-17-openjdk-devel, PGDG's EL9 JDK): ant needs an
-  # ant-jdk-binding (ant-openjdk8/11/17/21/unbound) and copy-jdk-configs
-  # needs lua (lua or compat-lua); OBS reports "have choice" for both.
-  Prefer: ant-openjdk17
-  Prefer: lua
-  %endif
-
   %if "%_repository" == "RockyLinux_10" || "%_repository" == "UBI_10"
-  # gdal313 (ant + java-21-openjdk-devel): ant-jdk-binding "have choice"
-  # between ant-openjdk21 and ant-unbound.
-  Prefer: ant-openjdk21
-
   # Our packages carry deliberate RUNPATHs to /usr/<pkg> prefixes (PGDG
   # layout without ld.so.conf.d) and each spec's %install verifies them;
   # EL10's brp-check-rpaths rejects them. Same rule as
