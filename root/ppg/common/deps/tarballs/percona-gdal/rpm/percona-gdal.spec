@@ -21,9 +21,10 @@
 # This package builds GDAL from source with the prefix /opt/percona-gdal
 # and exactly the external libraries the OFFICIAL Percona tarball's libgdal
 # links (derived from `readelf -d` on the official artifact's
-# libgdal.so.36), every other external library off
-# (GDAL_USE_EXTERNAL_LIBS=OFF), and only the drivers that use them (see
-# %%build). Two deliberate departures from that list: libgeotiff is GDAL's
+# libgdal.so.36) and every other external library off
+# (GDAL_USE_EXTERNAL_LIBS=OFF). All built-in drivers are compiled, as the
+# autotools build did; the ones that need a library outside that set are
+# left out by GDAL's CMake (see %%build). Two deliberate departures from that list: libgeotiff is GDAL's
 # bundled copy (no libgeotiff17 in the tarball) and libspatialite is not
 # used at all. The data directory is compiled to
 # /opt/percona-gdal/share/gdal, so GDAL finds its resource files with ZERO
@@ -136,7 +137,7 @@ BuildRequires:  lz4-devel
 
 %description
 GDAL %{version} built from the upstream source with the prefix
-/opt/percona-gdal and only the drivers the official Percona PostgreSQL
+/opt/percona-gdal and only the external libraries the official Percona PostgreSQL
 tarball's libgdal links, so the binary tarball carries a handful of
 shared objects instead of the ~70 that EPEL's fully-optioned gdal-libs
 drags in. The GDAL data directory is compiled to
@@ -184,15 +185,19 @@ tarball build; not intended for standalone installation.
 #   build never had the PostgreSQL driver (--without-pg).
 # Internal copies: libgeotiff (GDAL_USE_GEOTIFF_INTERNAL, so libgeotiff17
 #   does not enter the tarball), qhull and gif (as --with-qhull/gif=internal
-#   did; gif ends up unused, its driver is off). zlib/tiff/png/jpeg/json-c
+#   did). zlib/tiff/png/jpeg/json-c
 #   are the system libraries (GDAL_USE_*_INTERNAL default to OFF when the
 #   external one is ON), as the old --with-<lib>=/usr forced.
-# Drivers: GDAL_BUILD_OPTIONAL_DRIVERS/OGR_BUILD_OPTIONAL_DRIVERS=OFF, then
-#   the drivers PostGIS raster needs (GTiff for ST_AsTIFF, PNG, JPEG, MEM,
-#   VRT, raw) plus the ones that use the external libraries kept above
-#   (SQLite/GPKG for sqlite3 + PCRE, XLS for freexl, GML/KML for expat,
-#   GeoJSON/Shape/VRT as the classic OGR core). Core drivers that GDAL
-#   always builds stay in.
+# Drivers: GDAL_BUILD_OPTIONAL_DRIVERS/OGR_BUILD_OPTIONAL_DRIVERS=ON keep
+#   the driver set of the autotools build, which compiled every built-in
+#   driver. That does not widen the library set: a driver that needs an
+#   external library is declared with gdal_dependent_format /
+#   ogr_dependent_driver (cmake/helpers/GdalDriverHelper.cmake), whose
+#   cmake_dependent_option forces GDAL_ENABLE_DRIVER_<X> / OGR_ENABLE_DRIVER_<X>
+#   OFF unless its GDAL_USE_<LIB> condition holds, and every GDAL_USE_<LIB>
+#   outside the list below is OFF through GDAL_USE_EXTERNAL_LIBS=OFF. No
+#   driver is named here, so check_depend_condition never has a user-set
+#   driver to fail on.
 # GDAL_USE_ICONV=ON: glibc's iconv, which the autotools build picked up by
 #   default (CPLRecode); no extra library.
 # GDAL_HIDE_INTERNAL_SYMBOLS=ON: upstream's default, as
@@ -221,8 +226,8 @@ cmake .. \
     -DBUILD_CSHARP_BINDINGS=OFF \
     -DGDAL_HIDE_INTERNAL_SYMBOLS=ON \
     -DGDAL_USE_EXTERNAL_LIBS=OFF \
-    -DGDAL_BUILD_OPTIONAL_DRIVERS=OFF \
-    -DOGR_BUILD_OPTIONAL_DRIVERS=OFF \
+    -DGDAL_BUILD_OPTIONAL_DRIVERS=ON \
+    -DOGR_BUILD_OPTIONAL_DRIVERS=ON \
     -DGDAL_USE_GEOTIFF_INTERNAL=ON \
     -DGDAL_USE_TIFF_INTERNAL=OFF \
     -DGDAL_USE_QHULL_INTERNAL=ON \
@@ -251,21 +256,7 @@ cmake .. \
     -DGDAL_USE_LZ4=ON \
 %endif
     -DGDAL_USE_SPATIALITE=OFF \
-    -DGDAL_USE_POSTGRESQL=OFF \
-    -DGDAL_ENABLE_DRIVER_GTIFF=ON \
-    -DGDAL_ENABLE_DRIVER_PNG=ON \
-    -DGDAL_ENABLE_DRIVER_JPEG=ON \
-    -DGDAL_ENABLE_DRIVER_MEM=ON \
-    -DGDAL_ENABLE_DRIVER_VRT=ON \
-    -DGDAL_ENABLE_DRIVER_RAW=ON \
-    -DOGR_ENABLE_DRIVER_SQLITE=ON \
-    -DOGR_ENABLE_DRIVER_GPKG=ON \
-    -DOGR_ENABLE_DRIVER_XLS=ON \
-    -DOGR_ENABLE_DRIVER_GML=ON \
-    -DOGR_ENABLE_DRIVER_KML=ON \
-    -DOGR_ENABLE_DRIVER_GEOJSON=ON \
-    -DOGR_ENABLE_DRIVER_SHAPE=ON \
-    -DOGR_ENABLE_DRIVER_VRT=ON
+    -DGDAL_USE_POSTGRESQL=OFF
 
 make %{?_smp_mflags}
 
@@ -322,8 +313,7 @@ readelf -d %{buildroot}%{gdal_prefix}/lib/libgdal.so.%{gdal_soname} | grep -E '\
   (gdal38, libgdal.so.34) and 3.13.3 on RHEL 9 (gdal313,
   libgdal.so.39), versions from root/macros.yaml.
 - Build with CMake (GDAL dropped autotools in 3.6): same external
-  library set, every other one off, optional drivers off except the
-  ones PostGIS raster and those libraries need.
+  library set, every other one off; all built-in drivers, as before.
 - GDAL's bundled libgeotiff instead of the system one, no
   libspatialite, GEOS from geos315 (/usr/geos315).
 
