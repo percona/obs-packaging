@@ -21,7 +21,13 @@ LABEL release="1"
 
 RUN microdnf -y update
 
+# ubi-minimal ships glibc-minimal-langpack (strict `glibc = ver`). OBS only
+# uploads what this list expands to, and on UBI 10 glibc-langpack-en already
+# satisfies glibc's langpack requirement, so without naming it here the minimal
+# langpack never reaches the build and glibc cannot upgrade once the UBI
+# repository moves ahead of the registry base image.
 RUN microdnf -y install \
+        glibc-minimal-langpack \
         file \
         perl \
         tar \
