@@ -1,0 +1,8 @@
+<services>
+  <service name="download_url">
+    <param name="host">github.com</param>
+    <param name="protocol">https</param>
+    <param name="path">/libproxy/libproxy/archive/0.4.15.tar.gz</param>
+    <param name="filename">0.4.15.tar.gz</param>
+  </service>
+</services>
