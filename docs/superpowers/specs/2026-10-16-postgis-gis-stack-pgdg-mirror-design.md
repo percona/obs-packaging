@@ -32,9 +32,9 @@ keep the distro libraries, as PPG ships today and as apt.postgresql.org does.
 |---|---|
 | GEOS | One line, `geos315`, for both PostGIS 3.5 and 3.7. This matches PGDG, which builds postgis35 3.5.7 against GEOS 3.15 with a backport patch. |
 | PROJ | `proj98`; `proj96` on EL8 (PGDG's EL-8 choice). |
-| GDAL | `gdal313`; `gdal38` on EL8. Full PGDG feature parity, including the Python 3.12 and Java bindings on EL9+. |
+| GDAL | `gdal313`; `gdal38` on EL8. Full PGDG feature parity, including the Python 3.12 and Java bindings on EL9+ (gdal38 also keeps PGDG EL-8's bindings; see As built). |
 | SFCGAL | 2.3.x; the two failing tests are patched in ppg-testing until PostGIS 3.5.8. |
-| Supporting libraries | `libgeotiff17`, `libspatialite50`, and `librttopo` (EL8 only: EPEL 8 lacks it). |
+| Supporting libraries | `libgeotiff17`, `libspatialite50`, and `librttopo` (built on every RPM repo, not EL8 only; see As built). |
 | Naming / layout | PGDG package names, prefixes `/usr/<name>`, RPATH. No `/etc/ld.so.conf.d` drop-ins. |
 | Pins | Minor line pinned: `>= X.Y.0` together with `< X.(Y+1)` on BuildRequires, and matching runtime Requires. A minor bump is a deliberate edit. |
 | Skip-if-distro-matches | No. We always build our own on RPM distros, so there is one code path and every pin is under our control. |
@@ -51,6 +51,33 @@ keep the distro libraries, as PPG ships today and as apt.postgresql.org does.
 - **Shipping our own stack on Debian/Ubuntu** under a versioned-prefix deb
   layout. This was the largest and riskiest piece, with no precedent at
   apt.postgresql.org. PPG debs have always used the distro libraries.
+
+## As built (status 2026-10-19)
+
+Where reality differs from the design above:
+
+- **ppg:common:deps:postgis subproject.** All PostGIS dependencies live here. Its path is `ppg:staging:%!{PG_MAJOR_VERSION}` (pinned to 18 in its macros.yaml), then `ppg:common:deps`. Staging gets the libraries through `_aggregate` packages. Why: gdal38/gdal313 must link Percona's unversioned libpq. Red Hat's RHPG_9.6-versioned libpq broke the PostGIS configure link check and would break loading next to Percona libpq. common:deps cannot path to staging without a cycle. (#163)
+- **GDAL links Percona libpq.** It builds against `percona-postgresql<PG_MAJOR_VERSION>-devel`. An `%install` check bans RHPG_ symbol references. (#163)
+- **librttopo on every RPM repo, not EL8 only.** Release is 45 so it outranks EPEL's, which links the distro GEOS. libspatialite50 requires `>= 1.1.0-45` on EL and the plain version on SUSE, where OBS rewrites the Release. (#158)
+- **gdal38 bindings.** It keeps PGDG EL-8's Python and Java bindings. (#158) gdal38-libs requires the runtime libgeotiff17/libspatialite50, not their -devel packages. (#173)
+- **OBS and distro policy fixes.** (#158)
+  - EL10: `%__brp_check_rpaths %{nil}`.
+  - SUSE: `%dir` ownership.
+  - SUSE: rpmlintrc files that filter only errors firing on both Leap and Tumbleweed.
+  - Packaged-twice fixes.
+  - `CMAKE_SKIP_RPATH=OFF` and `CMAKE_BUILD_WITH_INSTALL_RPATH=ON`, with colon-joined RPATHs, for GDAL's Python bindings.
+  - `Prefer:` lines for ant, lua and swig modules.
+- **EL10 staging `Prefer: libspatialite`.** It was needed while postgis still used EPEL gdal3.4. It is now inert. (#162)
+- **devel:19 percona-postgis** got the same GIS changes as staging:19. (#164)
+- **Tarballs.** (#166)
+  - percona-gdal moved to CMake. It keeps every built-in driver (optional drivers ON, external libs OFF) plus the old external library list.
+  - percona-proj builds with gcc-toolset-14 on EL8/9.
+  - The percona-gis-compat shim provides proj9x/gdal3xx-libs/libgeotiff17 and requires geos315.
+- **UBI 9 container images.** They need RHEL 9 libraries that UBI 9 lacks. These are republished on UBI_9 only, at RHEL's EVR, in ppg:common:deps:postgis: qhull (#167); qt5-qtbase, icu, libproxy, libusbx and snappy (#169).
+  - qt5-qtbase uses Qt's bundled PCRE2. pcre2-utf16 pins pcre2-syntax to an exact EVR, and republishing it would replace UBI's base pcre2.
+  - Aggregates publish complete binary sets, not `<binary>` subsets. A libicu-only subset broke libicu-devel's exact pin in every UBI_9 build. (#172)
+- **Patches and tests.** The geos 3.15 backport patch is in percona-postgis 3.5 (RPM and debian/patches). The SFCGAL test fixes are in ppg-testing (separate PR in Percona-QA/ppg-testing).
+- **geos/proj retired.** The unversioned geos/proj in ppg:common:deps are retired, and sync-main deletes them from OBS. (#173, open)
 
 ## No-regression check (2026-10-16)
 
@@ -86,7 +113,7 @@ the `EL-8` and `SLES-16` variants) and adapted to this tree's conventions:
 | `proj96` | 9.6.2 | — | — |
 | `proj98` | — | 9.8.x | 9.8.x |
 | `libgeotiff17` | on proj96 | on proj98 | on proj98 |
-| `librttopo` | ✓ | — on EL9/9.6/UBI9 (EPEL); EL10/UBI10 to confirm in step 1 | to confirm in step 1 |
+| `librttopo` | ✓ | built on every RPM repo (see As built); EPEL's links the distro GEOS | built on every RPM repo |
 | `libspatialite50` | ✓ | ✓ | ✓ |
 | `gdal38` | 3.8.5 | — | — |
 | `gdal313` | — | 3.13.x, full parity | 3.13.x (PGDG's SLES-16 variant) |
@@ -147,7 +174,7 @@ Files: `root/ppg/staging/_shared/percona-postgis/rpm/percona-postgis.spec`
 - The existing `geos` and `proj` aggregates are removed.
 - Repository scoping is done with `package.yaml` `build:` flags:
   - every aggregate is off on Debian/Ubuntu;
-  - `gdal38`, `proj96` and `librttopo` are enabled on RockyLinux_8 and UBI_8 only;
+  - `gdal38` and `proj96` are enabled on RockyLinux_8 and UBI_8 only (`librttopo` is on every RPM repo);
   - `gdal313` and `proj98` are enabled on every other RPM repository.
 - All binaries are aggregated (`-devel`, `-python3`, `-java`, tools).
 - Build-time resolution does not depend on the aggregates, because every
@@ -168,9 +195,10 @@ follow the new SONAMEs:
 | `percona-proj` | 6.3.2 → 9.6.2 (`libproj.so.25`) | 9.6.0 → 9.8.x (`libproj.so.25`) |
 | GEOS | `geos315` bundled as-is | same |
 
-- `percona-gdal` keeps the minimal driver set derived from the official
-  tarball. It is deliberately not full parity, so that poppler, arrow, the JDK
-  and hdf stay out of a relocatable tarball.
+- `percona-gdal` keeps every built-in driver (optional drivers ON, external
+  libraries OFF) plus the previous external library list. It is deliberately
+  not full parity, so that poppler, arrow, the JDK and hdf stay out of a
+  relocatable tarball. (As built, #166.)
 - `percona-gdal` switches to GDAL's bundled libgeotiff, so the tarball carries
   a single PROJ.
 - The `percona-gis-compat` `Provides:` move to the new by-name Requires:
@@ -216,7 +244,7 @@ Each step is a PR from a worktree off `percona/main` and is verified on OBS
 before the next one starts:
 
 1. **common:deps libraries**, in dependency order: geos315 → proj98/proj96 →
-   libgeotiff17 → librttopo (EL8) → libspatialite50 → gdal38/gdal313; then
+   libgeotiff17 → librttopo → libspatialite50 → gdal38/gdal313; then
    check that SFCGAL 2.3 builds on EL8. The old `geos`/`proj` packages stay
    until step 3. Everything must be green on all RPM repos × 2 arches.
 2. **`macros.yaml` and the PostGIS specs** (3.5 shared and 3.7), with the
