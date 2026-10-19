@@ -40,6 +40,11 @@ override_dh_auto_install:
 	with_llvm=no \
 	$(PG_OID_VALIDATOR_MAKE_FLAGS)
 
+# Fail the build if make install leaves a file that no .install line ships,
+# instead of producing a package with only the docs in it.
+override_dh_missing:
+	dh_missing --fail-missing
+
 override_dh_auto_test:
 
 override_dh_installdocs:
