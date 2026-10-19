@@ -1,0 +1,453 @@
+diff -ru icu.orig/source/common/serv.cpp icu/source/common/serv.cpp
+--- icu.orig/source/common/serv.cpp	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/common/serv.cpp	2021-08-18 13:04:50.838841089 +0200
+@@ -532,12 +532,14 @@
+             }
+             UnicodeString* idToCache = new UnicodeString(currentDescriptor);
+             if (idToCache == NULL || idToCache->isBogus()) {
++                delete idToCache;
+                 status = U_MEMORY_ALLOCATION_ERROR;
+                 return NULL;
+             }
+ 
+             cacheDescriptorList._obj->addElement(idToCache, status);
+             if (U_FAILURE(status)) {
++                // delete idToCache;
+                 return NULL;
+             }
+         } while (key.fallback());
+diff -ru icu.orig/source/common/uloc_keytype.cpp icu/source/common/uloc_keytype.cpp
+--- icu.orig/source/common/uloc_keytype.cpp	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/common/uloc_keytype.cpp	2021-08-18 14:03:41.707324553 +0200
+@@ -331,6 +331,10 @@
+         LocExtKeyData* keyData = gLocExtKeyDataEntries->create();
+         if (keyData == NULL) {
+             sts = U_MEMORY_ALLOCATION_ERROR;
++            if (typeDataMap != NULL) {
++                uhash_close(typeDataMap);
++                typeDataMap = NULL;
++            }
+             break;
+         }
+         keyData->bcpId = bcpKeyId;
+diff -ru icu.orig/source/common/umutablecptrie.cpp icu/source/common/umutablecptrie.cpp
+--- icu.orig/source/common/umutablecptrie.cpp	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/common/umutablecptrie.cpp	2021-08-18 13:59:02.507170287 +0200
+@@ -1543,7 +1543,7 @@
+     MixedBlocks mixedBlocks;
+     int32_t newDataLength = compactData(fastILimit, newData, newDataCapacity,
+                                         dataNullIndex, mixedBlocks, errorCode);
+-    if (U_FAILURE(errorCode)) { return 0; }
++    if (U_FAILURE(errorCode)) { uprv_free(newData); return 0; }
+     U_ASSERT(newDataLength <= newDataCapacity);
+     uprv_free(data);
+     data = newData;
+diff -ru icu.orig/source/i18n/rbt_pars.cpp icu/source/i18n/rbt_pars.cpp
+--- icu.orig/source/i18n/rbt_pars.cpp	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/i18n/rbt_pars.cpp	2021-08-18 16:03:45.537119292 +0200
+@@ -557,6 +557,7 @@
+                 // The next character MUST be a segment open
+                 if (single == NULL ||
+                     !ICU_Utility::parseChar(rule, iref, SEGMENT_OPEN)) {
++                    delete single;
+                     return syntaxError(U_INVALID_FUNCTION, rule, start, status);
+                 }
+                 
+diff -ru icu.orig/source/i18n/tridpars.cpp icu/source/i18n/tridpars.cpp
+--- icu.orig/source/i18n/tridpars.cpp	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/i18n/tridpars.cpp	2021-08-18 16:08:57.727071891 +0200
+@@ -136,6 +136,9 @@
+                 specsB = parseFilterID(id, pos, TRUE);
+                 // Must close with a ')'
+                 if (specsB == NULL || !ICU_Utility::parseChar(id, pos, CLOSE_REV)) {
++                    if (specsB != NULL) {
++                        delete specsB;
++                    }
+                     delete specsA;
+                     pos = start;
+                     return NULL;
+diff -ru icu.orig/source/i18n/usearch.cpp icu/source/i18n/usearch.cpp
+--- icu.orig/source/i18n/usearch.cpp	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/i18n/usearch.cpp	2021-08-18 16:19:31.533900708 +0200
+@@ -222,6 +222,9 @@
+         int32_t *temp = (int32_t *)allocateMemory(
+                                          sizeof(int32_t) * newlength, status);
+         if (U_FAILURE(*status)) {
++            if (temp != NULL) {
++                uprv_free(temp);
++            }
+             return NULL;
+         }
+         uprv_memcpy(temp, destination, sizeof(int32_t) * (size_t)offset);
+diff -ru icu.orig/source/i18n/usearch.cpp icu/source/i18n/usearch.cpp
+--- icu.orig/source/i18n/usearch.cpp	2021-08-18 16:23:27.961337248 +0200
++++ icu/source/i18n/usearch.cpp	2021-08-18 16:27:47.140623351 +0200
+@@ -266,6 +266,9 @@
+                                          sizeof(int64_t) * newlength, status);
+ 
+         if (U_FAILURE(*status)) {
++            if (temp != NULL) {
++                uprv_free(temp);
++            }
+             return NULL;
+         }
+ 
+diff -ru icu.orig/source/i18n/uspoof_impl.cpp icu/source/i18n/uspoof_impl.cpp
+--- icu.orig/source/i18n/uspoof_impl.cpp	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/i18n/uspoof_impl.cpp	2021-08-18 16:30:43.061460025 +0200
+@@ -196,6 +196,9 @@
+     tmpSet = allowedChars.clone();
+     const char *tmpLocalesList = uprv_strdup(localesList);
+     if (tmpSet == NULL || tmpLocalesList == NULL) {
++        if (tmpLocalesList != NULL) {
++            uprv_free((void *)tmpLocalesList);
++        }
+         status = U_MEMORY_ALLOCATION_ERROR;
+         return;
+     }
+diff -ru icu.orig/source/common/loclikely.cpp icu/source/common/loclikely.cpp
+--- icu.orig/source/common/loclikely.cpp	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/common/loclikely.cpp	2021-08-18 16:59:05.786257032 +0200
+@@ -1351,7 +1351,9 @@
+         }
+     }
+ 
+-    rgBuf[rgLen] = 0;
++    if (rgLen >= 0) {
++        rgBuf[rgLen] = 0;
++    }
+     uprv_strncpy(region, rgBuf, regionCapacity);
+     return u_terminateChars(region, regionCapacity, rgLen, status);
+ }
+diff -ru icu.orig/source/common/lsr.cpp icu/source/common/lsr.cpp
+--- icu.orig/source/common/lsr.cpp	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/common/lsr.cpp	2021-08-18 17:39:36.706794880 +0200
+@@ -89,13 +89,15 @@
+         int32_t b = region[1] - '0';
+         if (b < 0 || 9 < b) { return 0; }
+         c = region[2] - '0';
+-        if (c < 0 || 9 < c || region[3] != 0) { return 0; }
++        if (uprv_strlen(region) > 3) { return 0; }
++        if (c < 0 || 9 < c) { return 0; }
+         return (10 * a + b) * 10 + c + 1;
+     } else {  // letters: "DE"
+         a = uprv_upperOrdinal(c);
+         if (a < 0 || 25 < a) { return 0; }
+         int32_t b = uprv_upperOrdinal(region[1]);
+-        if (b < 0 || 25 < b || region[2] != 0) { return 0; }
++        if (uprv_strlen(region) > 2) { return 0; }
++        if (b < 0 || 25 < b) { return 0; }
+         return 26 * a + b + 1001;
+     }
+     return 0;
+diff -ru icu.orig/source/tools/toolutil/filetools.cpp icu/source/tools/toolutil/filetools.cpp
+--- icu.orig/source/tools/toolutil/filetools.cpp	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/tools/toolutil/filetools.cpp	2021-08-19 09:56:56.393333089 +0200
+@@ -64,6 +64,7 @@
+                     newpath.append(dirEntry->d_name, -1, status);
+                     if (U_FAILURE(status)) {
+                         fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, u_errorName(status));
++                        closedir(pDir);
+                         return FALSE;
+                     }
+ 
+
+diff -ru icu.orig/source/tools/pkgdata/pkgtypes.c icu/source/tools/pkgdata/pkgtypes.c
+--- icu.orig/source/tools/pkgdata/pkgtypes.c	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/tools/pkgdata/pkgtypes.c	2021-08-19 10:37:07.400622046 +0200
+@@ -30,6 +30,7 @@
+ {
+     int32_t ln = 0;
+     char buffer[1024];
++    char *bufferp = buffer;
+     while(l != NULL)
+     {
+         if(l->str)
+@@ -42,7 +43,7 @@
+                     buffer[uprv_strlen(buffer)-1] = '\0';
+                 }
+                 if(buffer[0] == '"') {
+-                    uprv_strcpy(buffer, buffer+1);
++                    bufferp = buffer+1;
+                 }
+             } else if(quote > 0) { /* add quotes */
+                 if(l->str[0] != '"') {
+@@ -53,7 +54,7 @@
+                     uprv_strcat(buffer, "\"");
+                 }
+             }
+-            T_FileStream_write(s, buffer, (int32_t)uprv_strlen(buffer));
++            T_FileStream_write(s, bufferp, (int32_t)uprv_strlen(bufferp));
+ 
+             ln += (int32_t)uprv_strlen(l->str);
+         }
+@@ -74,7 +75,8 @@
+ 
+ const char *pkg_writeCharList(FileStream *s, CharList *l, const char *delim, int32_t quote)
+ {
+-    char buffer[1024];
++    char buffer[1026]; /* 1026 instead of 1024 because quotes may be added */
++    char *bufferp = buffer;
+     while(l != NULL)
+     {
+         if(l->str)
+@@ -92,7 +94,7 @@
+                     buffer[uprv_strlen(buffer)-1] = '\0';
+                 }
+                 if(buffer[0] == '"') {
+-                    uprv_strcpy(buffer, buffer+1);
++                    bufferp = buffer+1;
+                 }
+             } else if(quote > 0) { /* add quotes */
+                 if(l->str[0] != '"') {
+@@ -103,7 +105,7 @@
+                     uprv_strcat(buffer, "\"");
+                 }
+             }
+-            T_FileStream_write(s, buffer, (int32_t)uprv_strlen(buffer));
++            T_FileStream_write(s, bufferp, (int32_t)uprv_strlen(bufferp));
+         }
+ 
+         if(l->next && delim)
+diff -ru icu.orig/source/tools/pkgdata/pkgdata.cpp icu/source/tools/pkgdata/pkgdata.cpp
+--- icu.orig/source/tools/pkgdata/pkgdata.cpp	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/tools/pkgdata/pkgdata.cpp	2021-08-19 11:11:35.563339463 +0200
+@@ -980,12 +980,12 @@
+                     version_major);
+ #else
+         if (noVersion && !reverseExt) {
+-            sprintf(libFileNames[LIB_FILE_VERSION_TMP], "%s%s%s",
++            snprintf(libFileNames[LIB_FILE_VERSION_TMP], sizeof(libFileNames[LIB_FILE_VERSION_TMP]), "%s%s%s",
+                     libFileNames[LIB_FILE],
+                     FILE_SUFFIX,
+                     pkgDataFlags[SOBJ_EXT]);
+         } else {
+-            sprintf(libFileNames[LIB_FILE_VERSION_TMP], "%s%s%s%s%s",
++            snprintf(libFileNames[LIB_FILE_VERSION_TMP], sizeof(libFileNames[LIB_FILE_VERSION_TMP]), "%s%s%s%s%s",
+                     libFileNames[LIB_FILE],
+                     FILE_SUFFIX,
+                     reverseExt ? version : pkgDataFlags[SOBJ_EXT],
+@@ -994,24 +994,24 @@
+         }
+ #endif
+         if (noVersion && !reverseExt) {
+-            sprintf(libFileNames[LIB_FILE_VERSION_MAJOR], "%s%s%s",
++            snprintf(libFileNames[LIB_FILE_VERSION_MAJOR], sizeof(libFileNames[LIB_FILE_VERSION_MAJOR]), "%s%s%s",
+                     libFileNames[LIB_FILE],
+                     FILE_SUFFIX,
+                     pkgDataFlags[SO_EXT]);
+ 
+-            sprintf(libFileNames[LIB_FILE_VERSION], "%s%s%s",
++            snprintf(libFileNames[LIB_FILE_VERSION], sizeof(libFileNames[LIB_FILE_VERSION]), "%s%s%s",
+                     libFileNames[LIB_FILE],
+                     FILE_SUFFIX,
+                     pkgDataFlags[SO_EXT]);
+         } else {
+-            sprintf(libFileNames[LIB_FILE_VERSION_MAJOR], "%s%s%s%s%s",
++            snprintf(libFileNames[LIB_FILE_VERSION_MAJOR], sizeof(libFileNames[LIB_FILE_VERSION_MAJOR]), "%s%s%s%s%s",
+                     libFileNames[LIB_FILE],
+                     FILE_SUFFIX,
+                     reverseExt ? version_major : pkgDataFlags[SO_EXT],
+                     FILE_EXTENSION_SEP,
+                     reverseExt ? pkgDataFlags[SO_EXT] : version_major);
+ 
+-            sprintf(libFileNames[LIB_FILE_VERSION], "%s%s%s%s%s",
++            snprintf(libFileNames[LIB_FILE_VERSION], sizeof(libFileNames[LIB_FILE_VERSION]), "%s%s%s%s%s",
+                     libFileNames[LIB_FILE],
+                     FILE_SUFFIX,
+                     reverseExt ? version : pkgDataFlags[SO_EXT],
+@@ -1029,7 +1029,7 @@
+ #endif
+ 
+         if(IN_STATIC_MODE(mode)) {
+-            sprintf(libFileNames[LIB_FILE_VERSION], "%s.%s", libFileNames[LIB_FILE], pkgDataFlags[A_EXT]);
++            snprintf(libFileNames[LIB_FILE_VERSION], sizeof(libFileNames[LIB_FILE_VERSION]), "%s.%s", libFileNames[LIB_FILE], pkgDataFlags[A_EXT]);
+             libFileNames[LIB_FILE_VERSION_MAJOR][0]=0;
+             if(o->verbose) {
+               fprintf(stdout, "# libFileName[LIB_FILE_VERSION] = %s  (static)\n", libFileNames[LIB_FILE_VERSION]);
+@@ -1308,7 +1308,7 @@
+      * archive file suffix is the same, then the final library needs to be archived.
+      */
+     if (uprv_strcmp(pkgDataFlags[SOBJ_EXT], pkgDataFlags[SO_EXT]) != 0 && uprv_strcmp(pkgDataFlags[A_EXT], pkgDataFlags[SO_EXT]) == 0) {
+-        sprintf(libFileNames[LIB_FILE_VERSION], "%s%s%s.%s",
++        snprintf(libFileNames[LIB_FILE_VERSION], sizeof(libFileNames[LIB_FILE_VERSION]), "%s%s%s.%s",
+                 libFileNames[LIB_FILE],
+                 pkgDataFlags[LIB_EXT_ORDER][0] == '.' ? "." : "",
+                 reverseExt ? version : pkgDataFlags[SO_EXT],
+diff -ru icu.orig/source/tools/ctestfw/ctest.c icu/source/tools/ctestfw/ctest.c
+--- icu.orig/source/tools/ctestfw/ctest.c	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/tools/ctestfw/ctest.c	2021-08-19 13:19:21.016799737 +0200
+@@ -686,7 +686,6 @@
+     }
+     vfprintf(stdout, pattern, ap);
+     fflush(stdout);
+-    va_end(ap);
+     if((*pattern==0) || (pattern[strlen(pattern)-1]!='\n')) {
+     	HANGING_OUTPUT=1;
+     } else {
+@@ -728,7 +727,6 @@
+     }
+     vfprintf(stdout, pattern, ap);
+     fflush(stdout);
+-    va_end(ap);
+     if((*pattern==0) || (pattern[strlen(pattern)-1]!='\n')) {
+     	HANGING_OUTPUT=1;
+     } else {
+@@ -777,7 +775,6 @@
+     }
+     vfprintf(stdout, pattern, ap);
+     fflush(stdout);
+-    va_end(ap);
+     GLOBAL_PRINT_COUNT++;
+     if((*pattern==0) || (pattern[strlen(pattern)-1]!='\n')) {
+     	HANGING_OUTPUT=1;
+@@ -803,6 +800,7 @@
+     }
+     va_start(ap, pattern);
+     vlog_err(NULL, pattern, ap);
++    va_end(ap);
+ }
+ 
+ UBool T_CTEST_EXPORT2
+@@ -806,8 +806,11 @@
+ UBool T_CTEST_EXPORT2
+ log_knownIssue(const char *ticket, const char *pattern, ...) {
+   va_list ap;
++  UBool result;
+   va_start(ap, pattern);
+-  return vlog_knownIssue(ticket, pattern, ap);
++  result =  vlog_knownIssue(ticket, pattern, ap);
++  va_end(ap);
++  return result;
+ }
+ 
+ void T_CTEST_EXPORT2
+@@ -843,6 +842,7 @@
+         }
+         vlog_err(NULL, pattern, ap); /* no need for prefix in default case */
+     }
++    va_end(ap);
+ }
+ 
+ void T_CTEST_EXPORT2
+@@ -852,6 +852,7 @@
+ 
+     va_start(ap, pattern);
+     vlog_info(NULL, pattern, ap);
++    va_end(ap);
+ }
+ 
+ void T_CTEST_EXPORT2
+@@ -861,6 +862,7 @@
+ 
+     va_start(ap, pattern);
+     vlog_verbose(NULL, pattern, ap);
++    va_end(ap);
+ }
+ 
+ 
+@@ -882,6 +884,7 @@
+     } else {
+         vlog_info("[DATA] ", pattern, ap); 
+     }
++    va_end(ap);
+ }
+ 
+ 
+diff -ru icu/source/tools/gensprep/store.c icu.new/source/tools/gensprep/store.c
+--- icu/source/tools/gensprep/store.c	2020-04-22 22:04:20.000000000 +0200
++++ icu.new/source/tools/gensprep/store.c	2021-08-19 16:16:17.213687755 +0200
+@@ -636,7 +636,6 @@
+ cleanUpData(void) {
+     uprv_free(mappingData);
+     utrie_close(sprepTrie);
+-    uprv_free(sprepTrie);
+ }
+ 
+ #endif /* #if !UCONFIG_NO_IDNA */
+diff -ru icu.orig/source/common/uloc_tag.cpp icu/source/common/uloc_tag.cpp
+--- icu.orig/source/common/uloc_tag.cpp	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/common/uloc_tag.cpp	2021-08-19 16:32:26.948185554 +0200
+@@ -2254,6 +2254,7 @@
+                 var = (VariantListEntry*)uprv_malloc(sizeof(VariantListEntry));
+                 if (var == NULL) {
+                     *status = U_MEMORY_ALLOCATION_ERROR;
++                    uprv_free(pExtension);
+                     return NULL;
+                 }
+                 *pSep = 0;
+diff -ru icu.orig/source/common/uloc_keytype.cpp icu/source/common/uloc_keytype.cpp
+--- icu.orig/source/common/uloc_keytype.cpp	2021-08-19 16:34:07.037514442 +0200
++++ icu/source/common/uloc_keytype.cpp	2021-08-19 16:37:38.276098078 +0200
+@@ -325,6 +325,10 @@
+             }
+         }
+         if (U_FAILURE(sts)) {
++            if (typeDataMap != NULL) {
++                uhash_close(typeDataMap);
++                typeDataMap = NULL;
++            }
+             break;
+         }
+ 
+diff -ru icu.orig/source/common/serv.cpp icu/source/common/serv.cpp
+--- icu.orig/source/common/serv.cpp	2021-08-19 20:45:49.923742619 +0200
++++ icu/source/common/serv.cpp	2021-08-20 13:16:04.401298668 +0200
+@@ -793,6 +793,7 @@
+      */
+     int32_t pos = UHASH_FIRST; 
+     const UHashElement *entry = NULL;
++    /* coverity[deref_after_free] */
+     while ((entry = dnCache->cache.nextElement(pos)) != NULL) {
+         const UnicodeString* id = (const UnicodeString*)entry->value.pointer;
+         if (matchKey != NULL && !matchKey->isFallbackOf(*id)) {
+diff -ru icu.orig/source/i18n/decNumber.h icu/source/i18n/decNumber.h
+--- icu.orig/source/i18n/decNumber.h	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/i18n/decNumber.h	2021-08-20 13:17:27.208783404 +0200
+@@ -86,7 +86,7 @@
+                          /* range: -1999999997 through 999999999      */
+     uint8_t bits;        /* Indicator bits (see above)                */
+                          /* Coefficient, from least significant unit  */
+-    decNumberUnit lsu[DECNUMUNITS];
++    decNumberUnit lsu[DECNUMUNITS+2];
+     } decNumber;
+ 
+   /* Notes:                                                           */
+diff -ru icu.orig/source/tools/makeconv/genmbcs.cpp icu/source/tools/makeconv/genmbcs.cpp
+--- icu.orig/source/tools/makeconv/genmbcs.cpp	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/tools/makeconv/genmbcs.cpp	2021-08-23 08:07:02.972087418 +0200
+@@ -172,7 +172,7 @@
+     }
+ 
+     MBCSInit(mbcsData, ucm);
+-    return &mbcsData->newConverter;
++    return (NewConverter *)mbcsData;
+ }
+ 
+ static void
+diff -ru icu.orig/source/common/brkiter.cpp icu/source/common/brkiter.cpp
+--- icu.orig/source/common/brkiter.cpp	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/common/brkiter.cpp	2021-08-23 13:56:11.644603960 +0200
+@@ -105,7 +105,9 @@
+         }
+     }
+ 
++    /* coverity[incorrect_free] */
+     ures_close(brkRules);
++    /* coverity[incorrect_free] */
+     ures_close(brkName);
+ 
+     UDataMemory* file = udata_open(U_ICUDATA_BRKITR, ext, fnbuff, &status);
+diff -ru icu.orig/source/common/uresbund.cpp icu/source/common/uresbund.cpp
+--- icu.orig/source/common/uresbund.cpp	2020-04-22 22:04:20.000000000 +0200
++++ icu/source/common/uresbund.cpp	2021-08-23 13:56:53.329339657 +0200
+@@ -2493,7 +2493,9 @@
+ static void U_CALLCONV
+ ures_loc_closeLocales(UEnumeration *enumerator) {
+     ULocalesContext *ctx = (ULocalesContext *)enumerator->context;
++    /* coverity[address_free] */
+     ures_close(&ctx->curr);
++    /* coverity[address_free] */
+     ures_close(&ctx->installed);
+     uprv_free(ctx);
+     uprv_free(enumerator);
