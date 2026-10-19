@@ -1,0 +1,20 @@
+title: snappy (RHEL 9 version, UBI_9 only)
+description: |
+  RHEL 9's snappy 1.1.8-8 rebuilt for UBI_9 and published there only: UBI 9
+  lacks snappy and libarrow (EPEL 9, pulled by gdal313-libs) needs
+  libsnappy.so.1. Rocky/RHEL users get it from the distribution. Separate from
+  ppg:common:deps snappy, which is RHEL 10's 1.1.10 for UBI_10 only.
+build:
+  RockyLinux_8: false
+  RockyLinux_9: false
+  RockyLinux_9.6: false
+  RockyLinux_10: false
+  UBI_8: false
+  UBI_10: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Tumbleweed: false
+  openSUSE_Leap_16: false
