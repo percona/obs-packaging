@@ -261,8 +261,10 @@ Provides:	bundled(g2lib) = 1.6.0
 Provides:	bundled(degrib) = 2.14
 Requires:	geos%{geosmajorversion} >= %{geosfullversion} ogdi%{ogdimajorversion}
 Requires:	netcdf gpsbabel
-Requires:	libgeotiff%{libgeotiffmajorversion}-devel
-Requires:	libspatialite%{libspatialitemajorversion}-devel >= %!{GIS_LIBSPATIALITE_VERSION}
+# PERCONA: PGDG's EL-8 gdal38 requires the -devel packages here; the runtime
+# library needs only the libraries (as gdal313 already requires them).
+Requires:	libgeotiff%{libgeotiffmajorversion}
+Requires:	libspatialite%{libspatialitemajorversion} >= %!{GIS_LIBSPATIALITE_VERSION}
 
 %if 0%{?suse_version}
 %if 0%{?suse_version} <= 1499
@@ -528,6 +530,10 @@ done
 %endif
 
 %changelog
+* Mon Oct 19 2026 Percona Development <info@percona.com> - 3.8.5-1
+- gdal38-libs requires the libgeotiff17/libspatialite50 runtime packages,
+  not their -devel packages
+
 * Sun Oct 18 2026 Percona Development <info@percona.com> - 3.8.5-1
 - Build against Percona's libpq (percona-postgresql18-devel) instead of Red Hat's
   RHPG-versioned libpq; moved to ppg:common:deps:postgis
