@@ -1,6 +1,5 @@
 <aggregatelist>
   <aggregate project="${OBS_ROOTPRJ}:ppg:common:deps:postgis">
     <package>libproxy</package>
-    <binary>libproxy</binary>
   </aggregate>
 </aggregatelist>
