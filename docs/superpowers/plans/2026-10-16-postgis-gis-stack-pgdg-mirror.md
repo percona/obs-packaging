@@ -104,6 +104,29 @@ Debian/Ubuntu are untouched: they keep the distro libraries.
 - The SFCGAL test fixes go into ppg-testing, not the package.
 - The steps are separate PRs, each verified on OBS before the next one starts.
 
+## Execution status (2026-10-19)
+
+| Tasks | PR / result | Status |
+|---|---|---|
+| T1-T9 | #158 | merged |
+| T10, T11 | #161 | merged |
+| T12 | aggregates in #163; geos/proj retirement in #173 | #163 merged, #173 open |
+| T13 | install check passed on Rocky 8/9/10 | done |
+| T14-T16 | #166 | merged |
+| T17 | ppg-testing PR (Percona-QA/ppg-testing) | in progress |
+| T18 | | pending |
+
+Extra work the plan did not foresee:
+
+- #162: staging `Prefer: libspatialite` on EL10.
+- #163: the `ppg:common:deps:postgis` subproject, with GDAL built against Percona libpq.
+- #164: devel:19 postgis got the same GIS changes.
+- #167: UBI_9 qhull.
+- #169: UBI_9 Qt5 and snappy closure.
+- #172: full binary sets in the aggregates.
+
+The task bodies below are the original plan. See the spec's "As built" section for the differences.
+
 ---
 
 ## File Structure
