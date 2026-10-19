@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 
-MANTEMPLATE="${CURDIR}/doc/output/man/pgbackrest.1.txt"
+MANTEMPLATE="${CURDIR}/doc/man/pgbackrest.1.txt"
 
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 DPKG_EXPORT_BUILDFLAGS = 1
@@ -31,21 +31,14 @@ override_dh_auto_configure:
 	dh_auto_configure -- --prefix=/usr --bindir=/usr/bin
 
 override_dh_auto_build:
-	# Replace user name in doc cache with the current user
-	[ $$(whoami) = root ] || sed -i "s/vagrant/$$(whoami)/g" $(CURDIR)/doc/resource/exe.cache
-
-	perl $(CURDIR)/doc/doc.pl --out=man --out=html --cache-only \
-	  --var=project-url-root=index.html --exclude=backlog \
-	  --var=release-date-static=y
+	# The upstream dist tarball ships the rendered docs (doc/html/*,
+	# doc/man/pgbackrest.1.txt); only the man page needs formatting.
 	txt2man \
 	  -v "pgBackRest Command Reference" \
 	  -t pgbackrest \
 	  -s 1 \
-	  ${MANTEMPLATE} > ${CURDIR}/doc/output/man/pgbackrest.1
+	  ${MANTEMPLATE} > ${CURDIR}/doc/man/pgbackrest.1
 	dh_auto_build
-
-override_dh_auto_test:
-        # nothing to do here, see debian/tests/* instead
 
 override_dh_auto_clean:
 	! [ -f src/Makefile ] || $(MAKE) -C src clean-all

@@ -63,7 +63,7 @@ protocol allows for more flexibility and limits the types of connections that
 are required to perform a backup which increases security.
 
 %prep
-%setup -q -n %{name}-%{version}
+%setup -q -n %{sname}-%{version}
 
 %build
 export PG_CONFIG=/usr/pgsql-%{pgmajorversion}/bin/pg_config

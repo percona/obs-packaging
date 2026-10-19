@@ -1,17 +1,13 @@
 <services>
-  <service name="obs_scm">
-    <param name="url">https://github.com/pgbackrest/pgbackrest.git</param>
-    <param name="scm">git</param>
-    <param name="revision">release/%!{PGBACKREST_VERSION}</param>
-    <param name="version">%!{PGBACKREST_VERSION}</param>
-    <param name="filename">percona-pgbackrest</param>
-    <param name="versionrewrite-pattern">release/(.*)</param>
-    <param name="versionrewrite-replacement">\1</param>
-  </service>
-  <service mode="buildtime" name="tar" />
-  <service mode="buildtime" name="recompress">
-    <param name="file">*.tar</param>
-    <param name="compression">gz</param>
+  <!-- Upstream's release asset is a meson dist tarball: it ships the
+       generated sources and the rendered docs (doc/html/*,
+       doc/man/pgbackrest.1.txt). Since 2.60.0 (upstream a8c1a58) the doc
+       build reads the git history, so building from a tag checkout would
+       need .git in the source; the dist tarball needs neither doc.py nor
+       the code generator. -->
+  <service name="download_url">
+    <param name="url">https://github.com/pgbackrest/pgbackrest/releases/download/release/%!{PGBACKREST_VERSION}/pgbackrest-%!{PGBACKREST_VERSION}.tar.gz</param>
+    <param name="filename">percona-pgbackrest-%!{PGBACKREST_VERSION}.tar.gz</param>
   </service>
   <service mode="buildtime" name="set_version">
     <param name="basename">percona-pgbackrest</param>
