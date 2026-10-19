@@ -1,0 +1,14 @@
+<services>
+  <service name="download_url">
+    <param name="host">download.qt.io</param>
+    <param name="protocol">https</param>
+    <param name="path">/archive/qt/5.15/5.15.9/submodules/qtbase-everywhere-opensource-src-5.15.9.tar.xz</param>
+    <param name="filename">qtbase-everywhere-opensource-src-5.15.9.tar.xz</param>
+  </service>
+  <service name="download_url">
+    <param name="host">src.fedoraproject.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/repo/pkgs/qt5-qtbase/kde-5.15-rollup-20230411.patch.gz/sha512/4bf88acb6d0005ae691f9b3c677610d1dc055040486c0f3654abcd6df04638c909cc18401ea4ca4da7b14065458172ad0df931e909ad9a22223439eb2fefbfd9/kde-5.15-rollup-20230411.patch.gz</param>
+    <param name="filename">kde-5.15-rollup-20230411.patch.gz</param>
+  </service>
+</services>
