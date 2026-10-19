@@ -114,3 +114,22 @@ qa:
     matrix:
       - IO_METHOD
       - SCENARIO
+  # Package upgrades into this major: minor (latest released N.x -> this
+  # build) and major (latest released previous major -> this build). The
+  # "from" versions are each scenario's default_from_version in ppg-testing
+  # ppg/versions.yml, which ppg-upgrade-parallel uses when FROM_VERSION is
+  # empty. PG 19's minor upgrade needs a released 19.x to start from.
+  - name: upgrade
+    pipeline: ppg-upgrade-parallel
+    parameters:
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      FROM_VERSION: ''
+      FROM_REPO: release
+      TESTING_BRANCH: main
+      SCENARIO:
+        - pg-%!{PG_MAJOR_VERSION}-minor-upgrade
+        - pg-%!{PG_MAJOR_VERSION}-major-upgrade
+    matrix:
+      - SCENARIO
