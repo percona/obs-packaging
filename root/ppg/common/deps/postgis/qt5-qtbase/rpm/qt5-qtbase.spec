@@ -219,9 +219,14 @@ BuildRequires: pkgconfig(sqlite3) >= 3.7
 BuildRequires: pkgconfig(harfbuzz) >= 0.9.42
 %endif
 BuildRequires: pkgconfig(icu-i18n)
-BuildRequires: pkgconfig(libpcre2-posix) >= 10.20
+# PERCONA: RHEL builds with "-system-pcre" and BuildRequires
+# pkgconfig(libpcre2-posix) >= 10.20, so libQt5Core needs libpcre2-16
+# (pcre2-utf16).  UBI 9 lacks pcre2-utf16, and RHEL's pcre2-utf16 pins
+# pcre2-syntax to an exact EVR that our OBS rebuild cannot match (it would
+# replace UBI's base pcre2/pcre2-syntax), so Qt uses its bundled PCRE2
+# (src/3rdparty/pcre2) instead.
 BuildRequires: pkgconfig(libpcre) >= 8.0
-%global pcre -system-pcre
+%global pcre -qt-pcre
 BuildRequires: pkgconfig(xcb-xkb)
 %else
 BuildRequires: libicu-devel
@@ -1153,6 +1158,7 @@ fi
 %changelog
 * Mon Oct 19 2026 Percona Development <info@percona.com> - 5.15.9-11.1
 - Rebuild of RHEL 9's qt5-qtbase for UBI_9 (UBI lacks it; needed by gdal313's EPEL dependencies)
+- Build with Qt's bundled PCRE2 (-qt-pcre): UBI 9 lacks pcre2-utf16
 
 * Tue Aug 25 2026 RHEL Packaging Agent <redhat-ymir-agent@redhat.com> - 5.15.9-11.1
 - Fix CVE-2026-9499: out-of-bounds read in QTextCodec::codecForName()
