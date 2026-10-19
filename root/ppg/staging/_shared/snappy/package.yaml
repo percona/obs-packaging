@@ -1,0 +1,16 @@
+# Build scoping mirrors root/ppg/common/deps/postgis/snappy/package.yaml:
+# aggregate only where the source package builds.  Keep the two in sync.
+build:
+  RockyLinux_8: false
+  RockyLinux_9: false
+  RockyLinux_9.6: false
+  RockyLinux_10: false
+  UBI_8: false
+  UBI_10: false
+  Debian_12: false
+  Debian_13: false
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false
+  openSUSE_Tumbleweed: false
+  openSUSE_Leap_16: false
