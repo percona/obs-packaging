@@ -1,6 +1,5 @@
 <aggregatelist>
   <aggregate project="${OBS_ROOTPRJ}:ppg:common:deps:postgis">
     <package>libusbx</package>
-    <binary>libusbx</binary>
   </aggregate>
 </aggregatelist>

@@ -1,7 +1,5 @@
 <aggregatelist>
   <aggregate project="${OBS_ROOTPRJ}:ppg:common:deps:postgis">
     <package>qt5-qtbase</package>
-    <binary>qt5-qtbase</binary>
-    <binary>qt5-qtbase-common</binary>
   </aggregate>
 </aggregatelist>
