@@ -1,0 +1,10 @@
+<services>
+  <!-- PERCONA: Perl 5.26.3, the distro perl of the RHEL 8 tarball base;
+       the other base is built by percona-perl532. -->
+  <service name="download_url">
+    <param name="host">www.cpan.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/src/5.0/perl-5.26.3.tar.gz</param>
+    <param name="filename">perl-5.26.3.tar.gz</param>
+  </service>
+</services>

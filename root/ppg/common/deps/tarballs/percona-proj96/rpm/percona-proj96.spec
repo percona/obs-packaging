@@ -37,16 +37,9 @@
 
 %global proj_prefix /opt/percona-proj
 
-# PERCONA: base-specific upstream version + which Source to unpack. Both
-# are CMake-only (PROJ dropped autotools in 9.0), so every base takes the
-# same %%build/%%install path below.
-%if 0%{?rhel} == 8
+# PERCONA: one package per tarball base (percona-proj96: RHEL 8,
+# percona-proj98: RHEL 9), each with a single upstream version.
 %global proj_version %!{GIS_PROJ_EL8_VERSION}
-%global proj_srcidx 0
-%else
-%global proj_version %!{GIS_PROJ_VERSION}
-%global proj_srcidx 1
-%endif
 %global proj_soname 25
 
 # PERCONA: same compiler as proj96/proj98 (PGDG): PROJ 9.6+/9.8 needs
@@ -56,16 +49,13 @@
 %global gts_version 14
 %endif
 
-Name:           percona-proj
+Name:           percona-proj%!{GIS_PROJ_EL8_MAJOR}
 Version:        %{proj_version}
 Release:        1%{?dist}
 Summary:        PROJ runtime under /opt/percona-proj for the Percona PostgreSQL binary tarball
 License:        MIT
 URL:            https://proj.org/
-# PERCONA: both tarballs are always fetched by the _service; the %%prep
-# section unpacks only the one that matches the base being built.
 Source0:        proj-%!{GIS_PROJ_EL8_VERSION}.tar.gz
-Source1:        proj-%!{GIS_PROJ_VERSION}.tar.gz
 
 BuildRequires:  gcc
 BuildRequires:  gcc-c++
@@ -90,16 +80,14 @@ BuildRequires:  libcurl-devel
 PROJ %{version} built from the upstream source with the install prefix
 /opt/percona-proj, so libproj's compiled-in PROJ_DATA default is
 /opt/percona-proj/share/proj and proj.db resolves without any
-environment variables. The upstream version is picked per base so the
-SONAME matches the libproj that the shipped PostGIS RPMs linked
-against (RHEL 8: 9.6.2 like proj96, RHEL 9: 9.8.1 like proj98, both
-libproj.so.25), making this a drop-in replacement inside the Percona
-PostgreSQL binary tarball. Consumed by the tarball build; not intended
+environment variables. This is the RHEL 8
+build: its libproj.so.25 matches the libproj of proj96 that the
+shipped PostGIS RPMs link, making it a drop-in replacement inside
+the Percona PostgreSQL binary tarball. Consumed by the tarball build; not intended
 for standalone installation.
 
 %prep
-# PERCONA: -T -b %%{proj_srcidx} — unpack only the base-matching tarball.
-%setup -q -T -b %{proj_srcidx} -n proj-%{version}
+%setup -q -n proj-%{version}
 
 %build
 %if 0%{?gts_version}
@@ -141,8 +129,8 @@ make -C build install DESTDIR=%{buildroot}
 # 1. SONAME parity. The package is only useful as a drop-in for the libproj
 #    the shipped PostGIS RPMs linked against, so assert the SONAME we
 #    promised for this base actually came out. Without this, a source-URL
-#    bump — or this spec being built on an unexpected %%{?rhel} where the
-#    %%if picks the wrong branch — would silently produce a library that is
+#    bump — or this package being built on the wrong base — would silently
+#    produce a library that is
 #    no longer ABI-compatible with PostGIS.
 test -e %{buildroot}%{proj_prefix}/lib/libproj.so.%{proj_soname}
 # 2. The compiled-in data path, and a proj.db sitting at it.
@@ -154,6 +142,11 @@ grep -q '%{proj_prefix}/share/proj' %{buildroot}%{proj_prefix}/lib/libproj.so.%{
 %{proj_prefix}
 
 %changelog
+* Tue Oct 20 2026 Percona Development <info@percona.com> - %{version}-%{release}
+- Split percona-proj into one package per tarball base so each OBS
+  package builds a single version: percona-proj96 (RHEL 8, PROJ 9.6.2)
+  and percona-proj98 (RHEL 9, PROJ 9.8.1). Install prefix unchanged.
+
 * Sun Oct 18 2026 Percona Development <info@percona.com> - %{version}-%{release}
 - Follow the PGDG-mirrored PROJ that PostGIS now links: 9.6.2 on RHEL 8
   (proj96) and 9.8.1 on RHEL 9 (proj98), both libproj.so.25, versions

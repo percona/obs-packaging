@@ -310,7 +310,8 @@ environment variables:
   exactly like the official binaries. No `PGHOST`, no `/run/postgresql`.
 - **Zero-env PL languages.** `plperl.so`/`pltcl.so`/`plpython3.so` carry
   RUNPATHs pointing at from-source `/opt`-prefixed runtimes built in
-  `ppg:common:deps:tarballs` (`root/ppg/common/deps/tarballs/`): `percona-perl`,
+  `ppg:common:deps:tarballs` (`root/ppg/common/deps/tarballs/`): `percona-perl526`
+  (EL8) / `percona-perl532` (EL9),
   `percona-tcl` (8.6.10) and `percona-python3` (3.12.13).
   Every path (`@INC`, `TCL_LIBRARY`, `sys.prefix`) is compiled into those
   runtimes, so all three PLs work even under a bare `postgres -D` start from
@@ -326,7 +327,8 @@ environment variables:
   not NEED `libreadline`; `bin/psql` must be the non-ELF wrapper with
   byte-clean stdout (no bare `cd -`).
 - **Lean GDAL/PROJ.** PostGIS's `libgdal`/`libproj` come from the
-  `percona-gdal` / `percona-proj` packages in `ppg:common:deps` — from-source,
+  `percona-gdal38`/`percona-gdal313` and `percona-proj96`/`percona-proj98`
+  packages (one per EL base) in `ppg:common:deps:tarballs` — from-source,
   `/opt`-prefixed, built with the option set PostGIS actually needs. EPEL's
   fully-optioned `gdal-libs` dragged ~70 surplus shared objects into the
   artifact, among them `libflexiblas`, whose ELF constructor `abort()`s when

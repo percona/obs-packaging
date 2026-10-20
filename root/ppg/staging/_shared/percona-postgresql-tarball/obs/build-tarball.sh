@@ -92,8 +92,8 @@ done
 # postgis-3.so and libgdal carry).
 GDAL_LIB=$(ls "$GDAL_PREFIX"/lib/libgdal.so.[0-9]* 2>/dev/null | head -1)
 PROJ_LIB=$(ls "$PROJ_PREFIX"/lib/libproj.so.[0-9]* 2>/dev/null | head -1)
-[ -n "$GDAL_LIB" ] || { echo "FATAL: no $GDAL_PREFIX/lib/libgdal.so.* — percona-gdal not installed?" >&2; exit 1; }
-[ -n "$PROJ_LIB" ] || { echo "FATAL: no $PROJ_PREFIX/lib/libproj.so.* — percona-proj not installed?" >&2; exit 1; }
+[ -n "$GDAL_LIB" ] || { echo "FATAL: no $GDAL_PREFIX/lib/libgdal.so.* — percona-gdal38/percona-gdal313 not installed?" >&2; exit 1; }
+[ -n "$PROJ_LIB" ] || { echo "FATAL: no $PROJ_PREFIX/lib/libproj.so.* — percona-proj96/percona-proj98 not installed?" >&2; exit 1; }
 for f in "$GDAL_PREFIX/share/gdal/gdalicon.png" "$PROJ_PREFIX/share/proj/proj.db"; do
     [ -f "$f" ] || { echo "FATAL: resource file $f missing — percona-gdal/percona-proj data dir not at the compiled path" >&2; exit 1; }
 done
@@ -109,8 +109,8 @@ done
 # the package or a new provider appears.
 #
 # Two mechanisms keep it clean:
-#   * `Prefer: percona-gdal` / `Prefer: percona-proj` (root/ppg/staging/NN/
-#     tarballs/project.yaml, both ssl blocks) win the "have choice" for
+#   * `Prefer: percona-gdal<NN>` / `Prefer: percona-proj<NN>` (root/ppg/staging/NN/
+#     tarballs/project.yaml, every ssl block, per EL base) win the "have choice" for
 #     PostGIS's automatic libgdal.so.NN()(64bit)/libproj.so.NN()(64bit)
 #     soname Requires;
 #   * percona-gis-compat (ppg:common:deps:tarballs; a
@@ -134,7 +134,7 @@ stray_gis=$(ls /usr/lib64/libgdal.so.* /usr/lib64/libproj.so.* \
                 /usr/gdal*/lib*/libgdal.so.* /usr/proj*/lib*/libproj.so.* \
                 2>/dev/null || true)
 if [ -n "$stray_gis" ]; then
-    echo "FATAL: a distro/PGDG GDAL/PROJ runtime is installed in the chroot — it must be replaced by percona-gdal/percona-proj (prjconf Prefer: + the percona-gis-compat shim, see the comment above this check)" >&2
+    echo "FATAL: a distro/PGDG GDAL/PROJ runtime is installed in the chroot — it must be replaced by percona-gdal<NN>/percona-proj<NN> (prjconf Prefer: + the percona-gis-compat shim, see the comment above this check)" >&2
     # Diagnostics only — every substitution keeps a `|| true`/fallback so a
     # failing rpm query cannot abort the script before `exit 1` below (same
     # set -e trap as PY_BIN at the top of this file).

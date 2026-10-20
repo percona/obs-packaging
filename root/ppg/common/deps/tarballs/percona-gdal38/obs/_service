@@ -1,0 +1,11 @@
+<services>
+  <!-- PERCONA: GDAL %!{GIS_GDAL_EL8_VERSION} for the RHEL 8 tarball base (libgdal.so.34, like
+       gdal38); the other base is built by percona-gdal313. Version from
+       root/macros.yaml. download.osgeo.org is upstream's own release archive. -->
+  <service name="download_url">
+    <param name="host">download.osgeo.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/gdal/%!{GIS_GDAL_EL8_VERSION}/gdal-%!{GIS_GDAL_EL8_VERSION}.tar.xz</param>
+    <param name="filename">gdal-%!{GIS_GDAL_EL8_VERSION}.tar.xz</param>
+  </service>
+</services>

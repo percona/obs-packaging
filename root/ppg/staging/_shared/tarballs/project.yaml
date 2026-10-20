@@ -188,8 +188,8 @@ project-config: |
   # chain whose FlexiBLAS ELF constructor abort()s on Rocky hosts — and has
   # its data directory compiled to /usr/<name>/share, a path no tarball
   # host has. build-tarball.sh asserts they are absent from the chroot.
-  Prefer: percona-gdal
-  Prefer: percona-proj
+  Prefer: percona-gdal%!{GIS_GDAL_EL8_MAJOR}
+  Prefer: percona-proj%!{GIS_PROJ_EL8_MAJOR}
   # ...but `Prefer:` only breaks TIES between providers of the SAME symbol.
   # PostGIS also requires the PGDG-mirrored GDAL/PROJ *by name* (rpmspec -q
   # --requires on
@@ -259,8 +259,8 @@ project-config: |
   # See the ssl1.1 block: our lean /opt GDAL+PROJ must win the
   # libgdal.so.NN()(64bit)/libproj.so.NN()(64bit) choice over
   # gdal313-libs/proj98.
-  Prefer: percona-gdal
-  Prefer: percona-proj
+  Prefer: percona-gdal%!{GIS_GDAL_MAJOR}
+  Prefer: percona-proj%!{GIS_PROJ_MAJOR}
   # ...but `Prefer:` only breaks TIES between providers of the SAME symbol.
   # PostGIS also requires the PGDG-mirrored GDAL/PROJ *by name* (rpmspec -q
   # --requires on
@@ -320,8 +320,8 @@ project-config: |
   # built the pre-9.6 ssl3 without them. Add back with evidence if the
   # first build reports a have-choice.
   Prefer: hdf-libs
-  Prefer: percona-gdal
-  Prefer: percona-proj
+  Prefer: percona-gdal%!{GIS_GDAL_MAJOR}
+  Prefer: percona-proj%!{GIS_PROJ_MAJOR}
   Prefer: percona-gis-compat
   Prefer: glibc-minimal-langpack
   %endif

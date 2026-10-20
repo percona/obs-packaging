@@ -1,0 +1,13 @@
+<services>
+  <!-- PERCONA: PROJ %!{GIS_PROJ_EL8_VERSION} for the RHEL 8 tarball base (libproj.so.25, like
+       proj96); the other base is built by percona-proj98. Version from
+       root/macros.yaml. download.osgeo.org is upstream's own release
+       archive; the GitHub release assets redirect to a signed CDN URL
+       that OBS cannot pin. -->
+  <service name="download_url">
+    <param name="host">download.osgeo.org</param>
+    <param name="protocol">https</param>
+    <param name="path">/proj/proj-%!{GIS_PROJ_EL8_VERSION}.tar.gz</param>
+    <param name="filename">proj-%!{GIS_PROJ_EL8_VERSION}.tar.gz</param>
+  </service>
+</services>

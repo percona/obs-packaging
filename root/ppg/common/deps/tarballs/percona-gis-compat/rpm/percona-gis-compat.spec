@@ -97,8 +97,13 @@ Provides:       libgeotiff17 = %!{GIS_LIBGEOTIFF_VERSION}
 
 # The real runtimes this shim stands in for, plus the real geos315 that the
 # tarball bundles as-is.
-Requires:       percona-gdal
-Requires:       percona-proj
+%if 0%{?rhel} == 8
+Requires:       percona-gdal%!{GIS_GDAL_EL8_MAJOR}
+Requires:       percona-proj%!{GIS_PROJ_EL8_MAJOR}
+%else
+Requires:       percona-gdal%!{GIS_GDAL_MAJOR}
+Requires:       percona-proj%!{GIS_PROJ_MAJOR}
+%endif
 Requires:       geos%!{GIS_GEOS_MAJOR}
 
 %description

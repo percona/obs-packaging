@@ -10,8 +10,8 @@ description: |
   proj96/proj98's libproj inside the binary tarball only — the shipped
   PostGIS RPMs keep resolving to proj96/proj98 on user systems.
 
-  RockyLinux_8, RockyLinux_9.6 and RockyLinux_9 only: these are the
-  tarball build bases (ssl1.1 / ssl3 / ssl3.5).
+  This package is the RHEL 9 build (RockyLinux_9.6 / RockyLinux_9,
+  tarballs ssl3 / ssl3.5); percona-proj96 is the RHEL 8 one.
 
-# Builds on every repo of ppg:common:deps:tarballs (one per tarball EL
-# base: RockyLinux_8=ssl1.1, RockyLinux_9.6=ssl3, RockyLinux_9=ssl3.5).
+build:
+  RockyLinux_8: false
