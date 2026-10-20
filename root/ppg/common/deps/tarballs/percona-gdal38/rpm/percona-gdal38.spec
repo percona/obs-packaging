@@ -58,16 +58,10 @@
 # not enable LTO, so this is a no-op there.)
 %global _lto_cflags %{nil}
 
-# PERCONA: base-specific upstream version + which Source to unpack.
-%if 0%{?rhel} == 8
+# PERCONA: one package per tarball base (percona-gdal38: RHEL 8,
+# percona-gdal313: RHEL 9), each with a single upstream version.
 %global gdal_version %!{GIS_GDAL_EL8_VERSION}
-%global gdal_srcidx 0
 %global gdal_soname 34
-%else
-%global gdal_version %!{GIS_GDAL_VERSION}
-%global gdal_srcidx 1
-%global gdal_soname 39
-%endif
 # GDAL's CMake build installs the resource files to, and compiles INST_DATA
 # as, <prefix>/<CMAKE_INSTALL_DATADIR>/gdal (gdal.cmake sets
 # GDAL_RESOURCE_PATH itself, so it cannot be overridden from the command
@@ -76,16 +70,13 @@
 # geos315 from ppg:common:deps:postgis, the GEOS PostGIS links.
 %global geos_prefix /usr/geos315
 
-Name:           percona-gdal
+Name:           percona-gdal%!{GIS_GDAL_EL8_MAJOR}
 Version:        %{gdal_version}
 Release:        1%{?dist}
 Summary:        GDAL runtime under /opt/percona-gdal for the Percona PostgreSQL binary tarball
 License:        MIT
 URL:            https://gdal.org/
-# PERCONA: both tarballs are always fetched by the _service; %%prep
-# unpacks only the one that matches the base being built.
 Source0:        gdal-%!{GIS_GDAL_EL8_VERSION}.tar.xz
-Source1:        gdal-%!{GIS_GDAL_VERSION}.tar.xz
 
 # PERCONA: an EXPLICIT dependency on our own PROJ, not just the automatic
 # libproj.so.NN()(64bit) ELF requires. That auto-requires is ambiguous:
@@ -95,7 +86,7 @@ Source1:        gdal-%!{GIS_GDAL_VERSION}.tar.xz
 # /opt/percona-proj/lib absent, libgdal's rpath dead and the whole
 # compiled-in-data-path mechanism broken. The point of this package is
 # *our* libproj, not any libproj with a matching SONAME.
-Requires:       percona-proj
+Requires:       percona-proj%!{GIS_PROJ_EL8_MAJOR}
 
 BuildRequires:  gcc
 BuildRequires:  gcc-c++
@@ -103,7 +94,7 @@ BuildRequires:  make
 BuildRequires:  cmake >= 3.16
 # PERCONA: our own /opt PROJ — same SONAME as the libproj PostGIS linked,
 # with the data path compiled to /opt/percona-proj/share/proj.
-BuildRequires:  percona-proj
+BuildRequires:  percona-proj%!{GIS_PROJ_EL8_MAJOR}
 # The driver set, one BuildRequires per NEEDED entry of the official
 # tarball's libgdal (see the header comment). libgeotiff is GDAL's bundled
 # copy (GDAL_USE_GEOTIFF_INTERNAL) and libspatialite is not used, so
@@ -125,15 +116,10 @@ BuildRequires:  expat-devel
 # CMake config, so GDAL's FindGEOS finds it through CMAKE_PREFIX_PATH.
 BuildRequires:  geos315-devel
 BuildRequires:  json-c-devel
-%if 0%{?rhel} == 8
 # PCRE1, not PCRE2, on EL8: the GDAL 3.0.4 this replaces had no PCRE2
 # support, so its libgdal linked libpcre.so.1 (and no liblz4); keep the
 # same library set.
 BuildRequires:  pcre-devel
-%else
-BuildRequires:  pcre2-devel
-BuildRequires:  lz4-devel
-%endif
 
 %description
 GDAL %{version} built from the upstream source with the prefix
@@ -142,16 +128,14 @@ tarball's libgdal links, so the binary tarball carries a handful of
 shared objects instead of the ~70 that EPEL's fully-optioned gdal-libs
 drags in. The GDAL data directory is compiled to
 /opt/percona-gdal/share/gdal and PROJ comes from percona-proj, so both
-resolve their resource files without any environment variables. The
-upstream version is picked per base so the SONAME matches the libgdal
-that the shipped PostGIS RPMs linked against (RHEL 8: 3.8.5 /
-libgdal.so.34 like gdal38, RHEL 9: 3.13.3 / libgdal.so.39 like gdal313),
-making this a drop-in replacement inside the tarball. Consumed by the
+resolve their resource files without any environment variables. This is the
+RHEL 8 build: its SONAME (libgdal.so.34) matches the libgdal
+of gdal38 that the shipped PostGIS RPMs link, making it a drop-in
+replacement inside the tarball. Consumed by the
 tarball build; not intended for standalone installation.
 
 %prep
-# PERCONA: -T -b %%{gdal_srcidx} — unpack only the base-matching tarball.
-%setup -q -T -b %{gdal_srcidx} -n gdal-%{version}
+%setup -q -n gdal-%{version}
 
 %build
 # PERCONA: plain cmake, not %%cmake — the distro macro forces /usr + lib64
@@ -247,14 +231,9 @@ cmake .. \
     -DGDAL_USE_JSONC=ON \
     -DGDAL_USE_GEOS=ON \
     -DGDAL_USE_ICONV=ON \
-%if 0%{?rhel} == 8
     -DGDAL_USE_PCRE2=OFF \
     -DGDAL_USE_PCRE=ON \
     -DGDAL_USE_LZ4=OFF \
-%else
-    -DGDAL_USE_PCRE2=ON \
-    -DGDAL_USE_LZ4=ON \
-%endif
     -DGDAL_USE_SPATIALITE=OFF \
     -DGDAL_USE_POSTGRESQL=OFF
 
@@ -268,8 +247,8 @@ make -C build install DESTDIR=%{buildroot}
 # 1. SONAME parity. The package is only useful as a drop-in for the libgdal
 #    the shipped PostGIS RPMs linked against, so assert the SONAME we
 #    promised for this base actually came out. Without this, a source-URL
-#    bump — or this spec being built on an unexpected %%{?rhel} where the
-#    %%if picks the wrong branch — would silently produce a library that is
+#    bump — or this package being built on the wrong base — would silently
+#    produce a library that is
 #    no longer ABI-compatible with postgis_raster.
 test -e %{buildroot}%{gdal_prefix}/lib/libgdal.so.%{gdal_soname}
 # 2. The compiled-in data path. The resource files must actually BE in the
@@ -308,6 +287,11 @@ readelf -d %{buildroot}%{gdal_prefix}/lib/libgdal.so.%{gdal_soname} | grep -E '\
 %{gdal_prefix}
 
 %changelog
+* Tue Oct 20 2026 Percona Development <info@percona.com> - %{version}-%{release}
+- Split percona-gdal into one package per tarball base so each OBS
+  package builds a single version: percona-gdal38 (RHEL 8, GDAL 3.8.5)
+  and percona-gdal313 (RHEL 9, GDAL 3.13.3). Install prefix unchanged.
+
 * Sun Oct 18 2026 Percona Development <info@percona.com> - %{version}-%{release}
 - Follow the PGDG-mirrored GDAL that PostGIS now links: 3.8.5 on RHEL 8
   (gdal38, libgdal.so.34) and 3.13.3 on RHEL 9 (gdal313,

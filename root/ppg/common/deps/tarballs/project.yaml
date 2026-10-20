@@ -5,8 +5,10 @@ description: |
   PG-version-agnostic, so every PG major's tarball project consumes this
   one subproject:
 
-  - /opt-prefixed runtimes bundled into the artifact (percona-perl,
-    percona-tcl, percona-python3, percona-gdal, percona-proj): every
+  - /opt-prefixed runtimes bundled into the artifact (percona-perl526 /
+    percona-perl532, percona-tcl, percona-python3, percona-gdal38 /
+    percona-gdal313, percona-proj96 / percona-proj98 — one package per
+    EL base where the version differs): every
     path compiled to /opt so the RPM-built PLs/PostGIS resolve them with
     zero environment variables.
   - EL8-only portability rebuilds whose libraries the ssl1.1 tarball

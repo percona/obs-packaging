@@ -1,10 +1,6 @@
 <services>
-  <service name="download_url">
-    <param name="host">www.cpan.org</param>
-    <param name="protocol">https</param>
-    <param name="path">/src/5.0/perl-5.26.3.tar.gz</param>
-    <param name="filename">perl-5.26.3.tar.gz</param>
-  </service>
+  <!-- PERCONA: Perl 5.32.1, the distro perl of the RHEL 9 tarball base;
+       the other base is built by percona-perl526. -->
   <service name="download_url">
     <param name="host">www.cpan.org</param>
     <param name="protocol">https</param>

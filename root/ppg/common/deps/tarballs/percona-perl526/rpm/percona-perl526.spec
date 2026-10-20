@@ -53,15 +53,11 @@
 
 %global perl_prefix /opt/percona-perl
 
-# PERCONA: version MUST track the distro perl of each build base (see the
+# PERCONA: version MUST track the distro perl of its build base (see the
 # ABI constraint above). The SONAME must equal plperl.so's DT_NEEDED.
-%if 0%{?rhel} == 8
+# One package per base: percona-perl526 (RHEL 8), percona-perl532 (RHEL 9).
 %global perl_version 5.26.3
 %global perl_soname libperl.so.5.26
-%else
-%global perl_version 5.32.1
-%global perl_soname libperl.so.5.32
-%endif
 
 # PERCONA: this is a self-contained /opt runtime. Do not leak perl(...)
 # provides (they would satisfy other packages' perl-module deps in the
@@ -73,15 +69,13 @@
 # PERCONA: keep our /opt/percona-perl/bin/perl shebangs untouched.
 %undefine __brp_mangle_shebangs
 
-Name:           percona-perl
+Name:           percona-perl526
 Version:        %{perl_version}
 Release:        1%{?dist}
 Summary:        Perl runtime under /opt/percona-perl for the Percona PostgreSQL binary tarball
 License:        GPL-1.0-or-later OR Artistic-1.0-Perl
 URL:            https://www.perl.org/
-# PERCONA: both distro-matched versions ship as sources; %%{?rhel} picks.
 Source0:        perl-5.26.3.tar.gz
-Source1:        perl-5.32.1.tar.gz
 # PERCONA: 5.26-only — build against libxcrypt's crypt.h (no
 # current_saltbits member); upstream dropped the code in 5.28.
 Patch0:         perl-5.26.3-crypt-libxcrypt.patch
@@ -104,12 +98,8 @@ environment variables. Consumed by the Percona PostgreSQL binary tarball
 build; not intended for standalone installation.
 
 %prep
-%if 0%{?rhel} == 8
 %setup -q -n perl-%{perl_version}
 %patch0 -p1
-%else
-%setup -q -T -b 1 -n perl-%{perl_version}
-%endif
 
 %build
 ./Configure -des \
@@ -179,6 +169,12 @@ ln -sf %{perl_soname} %{buildroot}%{perl_prefix}/lib/%{perl_version}/CORE/libper
 %{perl_prefix}
 
 %changelog
+* Tue Oct 20 2026 Percona Development <info@percona.com> - %{version}-%{release}
+- Split percona-perl into one package per tarball base so each OBS
+  package builds a single version: percona-perl526 (RHEL 8, Perl
+  5.26.3) and percona-perl532 (RHEL 9, Perl 5.32.1). Install prefix
+  unchanged.
+
 * Tue Jul 28 2026 Percona Build/Release Team <eng-build@percona.com> - 5.26.3-1
 - Initial /opt/percona-perl runtime for the Percona PostgreSQL binary
   tarball: distro-matched Perl (5.26.3 on EL8, 5.32.1 on EL9) built from
