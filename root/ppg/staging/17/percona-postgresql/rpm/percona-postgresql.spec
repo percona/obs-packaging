@@ -427,9 +427,11 @@ Requires:       libicu-devel
 
 # PERCONA: PGXS builds extension bitcode with $(CLANG) when the server was
 # built --with-llvm, so -devel must bring clang/llvm, as the PG 14-16 specs
-# do; 19 matches the llvmjit subpackage's `Requires: llvm >= 19`.
+# do. `>= 19` (not 19.0) matches the llvmjit subpackage's
+# `Requires: llvm >= 19`: openSUSE Leap 16 ships llvm-devel/clang-devel
+# as version "19", which RPM orders below "19.0".
 %if %llvm
-Requires:       llvm-devel >= 19.0 clang-devel >= 19.0
+Requires:       llvm-devel >= 19 clang-devel >= 19
 %endif
 
 %if %enabletaptests
