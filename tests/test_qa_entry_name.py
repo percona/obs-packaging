@@ -28,6 +28,12 @@ def _write_project(tmp_path, monkeypatch, qa_yaml: str, project: str = "ppg:p"):
     return project
 
 
+@pytest.fixture(autouse=True)
+def _no_obs(monkeypatch):
+    """`qa run` reads EXPECTED_VERSIONS from OBS; these tests are not about it."""
+    monkeypatch.setattr(cmd_qa, "project_binary_versions", lambda *a, **k: None)
+
+
 def _show_json(project: str, capsys) -> list[dict]:
     args = SimpleNamespace(
         project=project, rootprj="isv:percona", env_overrides=[], json=True
@@ -189,6 +195,7 @@ def _run_args(project: str, **kw):
         project=project,
         rootprj="isv:percona",
         env_overrides=[],
+        apiurl="http://obs",
         name=None,
         pipeline=None,
         filter=[],

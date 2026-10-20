@@ -587,6 +587,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit the matrix as a JSON array (one entry per combo) — used by "
         "the obs-pr-check workflow to drive its GitHub Actions QA matrix.",
     )
+    qa_show_parser.add_argument(
+        "--expected-versions",
+        dest="expected_versions",
+        action="store_true",
+        default=False,
+        help="Also compute EXPECTED_VERSIONS from the binaries OBS built "
+        "(needs an OBS connection). qa run always computes them.",
+    )
     qa_show_parser.set_defaults(func=cmd_qa_show)
 
     qa_status_parser = qa_subparsers.add_parser(
