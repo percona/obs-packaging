@@ -876,12 +876,24 @@ it. When they do not, `qa run` fails before any Jenkins trigger:
 error: <pkg>: OBS builds disagree on the version: ...
 ```
 
+A conflict aborts the run only when a selected lane would send the conflicting
+package (after `--project-only`, `--package`, `--name` and `--pipeline`
+selection): a project entry sends every candidate package, a package lane or a
+`package:` entry only its own, and an entry that sets `EXPECTED_VERSIONS` itself
+sends nothing computed. Conflicts in packages no selected lane sends are printed
+as `warning: <conflict>` lines and the run continues; `qa show
+--expected-versions` follows the same rule for the lanes it prints. When the OBS
+project under test does not exist, the command fails with `error: <obs project>
+does not exist on OBS; cannot compute EXPECTED_VERSIONS`.
+
 Which packages are listed is decided by the local tree. A project entry gets its
 own packages; image and tarball recipe packages are not candidates. A project
 without own candidates, or one that builds artifacts (an `obs/Dockerfile`,
 `obs/simpleimage` or `*.kiwi` recipe), adds the packages of its `subproject:`
 path projects, in path order, the first provider winning. A name taken by a
-higher-priority project stays taken even when it has no binaries. An entry of a
+higher-priority project stays taken even when it has no binaries. Aggregates
+appear only where the aggregating project has binaries for them; a package
+listed without binaries is named in the warning below. An entry of a
 package-level `qa:` block (`package.yaml`) gets only that package. A qa entry
 can also set `package: <name>` (a non-empty string) to restrict its
 `EXPECTED_VERSIONS` to that package.

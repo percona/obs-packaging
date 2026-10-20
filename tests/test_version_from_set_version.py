@@ -7,15 +7,10 @@ package silently dropped out of EXPECTED_VERSIONS and the QA tests fell back
 to stale tables.
 """
 
-import io
-import json
-from contextlib import redirect_stdout
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
-from percona_obs import cmd_qa
 from percona_obs.cmd_project import _extract_version_from_service
 
 REPO = Path(__file__).resolve().parent.parent
