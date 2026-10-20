@@ -133,3 +133,55 @@ def test_api_errors_are_reported_not_hidden(monkeypatch, caplog):
     assert (
         "could not list binaries of " + DEPS + "/Debian_12/x86_64/etcd" in caplog.text
     )
+
+
+def test_release_project_package_rows_use_the_batch_image_rows_do_not(
+    obs, monkeypatch, tmp_path
+):
+    rel = "isv:percona:ppg:releases:18"
+    obs.data[rel] = {
+        "etcd": {
+            ("RockyLinux_9", "x86_64"): "3.5.33-1.1",
+            ("Debian_12", "x86_64"): "3.5.32-1",
+        },
+        "percona-postgresql-container": {("images", "x86_64"): "BATCH-NOT-USED"},
+    }
+    monkeypatch.setattr(
+        cmd_project,
+        "_fetch_obs_package_names",
+        lambda apiurl, prj: ["etcd", "percona-postgresql-container"],
+    )
+    monkeypatch.setattr(
+        cmd_project,
+        "_fetch_all_pkg_archs",
+        lambda apiurl, prj: {"percona-postgresql-container": ("images", "x86_64")},
+    )
+    monkeypatch.setattr(
+        cmd_project,
+        "_detect_obs_container_info",
+        lambda apiurl, prj, pkg: (
+            ("percona-postgresql", "18") if pkg.endswith("container") else None
+        ),
+    )
+    monkeypatch.setattr(
+        cmd_project, "_load_project_config_with_inheritance", lambda path: {}
+    )
+    monkeypatch.setattr(
+        cmd_project, "_fetch_pkg_versrel", lambda *a: "18.6-2.1"  # image path
+    )
+    monkeypatch.setattr(cmd_project, "_fetch_build_containerinfo", lambda *a: None)
+    monkeypatch.setattr(cmd_project, "_fetch_build_container_packages", lambda *a: None)
+    args = SimpleNamespace(
+        project="ppg:releases:18",
+        recursive=False,
+        rootprj="isv:percona",
+    )
+    records: list = []
+    cmd_project._fill_release_online_records(
+        args, "https://obs.example", tmp_path, records
+    )
+    by_name = {r["name"]: r for r in records}
+    assert by_name["etcd"]["type"] == "package"
+    assert by_name["etcd"]["version"] == "3.5.32-1"  # Debian_12 sorts first
+    assert by_name["percona-postgresql-container"]["type"] == "image"
+    assert by_name["percona-postgresql-container"]["version"] == "18.6-2.1"
