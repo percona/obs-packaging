@@ -144,9 +144,21 @@ def test_env_substitution_applies_to_package_block(tree):
 # --- qa show ---------------------------------------------------------------------
 
 
-def _show_json(project: str, capsys) -> list[dict]:
+@pytest.fixture(autouse=True)
+def _no_obs(monkeypatch):
+    """`qa run` reads EXPECTED_VERSIONS from OBS; these tests are not about it."""
+    monkeypatch.setattr(cmd_qa, "project_binary_versions", lambda *a, **k: None)
+
+
+def _show_json(project: str, capsys, expected_versions: bool = False) -> list[dict]:
     args = SimpleNamespace(
-        project=project, rootprj="isv:percona", env_overrides=[], json=True
+        project=project,
+        rootprj="isv:percona",
+        env_overrides=[],
+        json=True,
+        apiurl="http://obs",
+        expected_versions=expected_versions,
+        image_fallback_rootprj=None,
     )
     cmd_qa.cmd_qa_show(args)
     return json.loads(capsys.readouterr().out)
@@ -238,6 +250,7 @@ def _run_args(project: str, **kw):
         wait=False,
         report_json=None,
         profile=None,
+        apiurl="http://obs",
     )
     base.update(kw)
     return SimpleNamespace(**base)
@@ -445,9 +458,11 @@ def test_expected_versions_project_lane_all_packages_package_lane_own(
     tree, monkeypatch, capsys
 ):
     monkeypatch.setattr(
-        cmd_qa, "_package_versions", lambda project: {"pkg": "1.0", "other": "2.0"}
+        cmd_qa,
+        "_package_versions",
+        lambda project, lookup: {"pkg": "1.0", "other": "2.0"},
     )
-    out = _show_json("ppg:17", capsys)
+    out = _show_json("ppg:17", capsys, expected_versions=True)
     project = next(e for e in out if e["package"] == "")
     package = next(e for e in out if e["package"] == "pkg")
     assert project["params"]["EXPECTED_VERSIONS"] == "other=2.0\npkg=1.0"
@@ -457,10 +472,10 @@ def test_expected_versions_project_lane_all_packages_package_lane_own(
 def test_expected_versions_computed_once_per_show(tree, monkeypatch, capsys):
     calls: list[str] = []
 
-    def fake(project: str) -> dict[str, str]:
+    def fake(project: str, lookup: object) -> dict[str, str]:
         calls.append(project)
         return {"pkg": "1.0"}
 
     monkeypatch.setattr(cmd_qa, "_package_versions", fake)
-    _show_json("ppg:17", capsys)
+    _show_json("ppg:17", capsys, expected_versions=True)
     assert calls == ["ppg:17"]

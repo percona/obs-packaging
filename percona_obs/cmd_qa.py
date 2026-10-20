@@ -33,15 +33,15 @@ from .common import (
     auto_rootprj_env,
     REPO_ROOT,
     _load_project_config_with_inheritance,
-    apply_macro_substitution,
     find_packages,
+    get_default_repository_filter,
     load_macros,
     load_project_yaml,
     load_yaml_with_env,
     parse_env_overrides,
     resolve_project_path,
 )
-from .cmd_project import _extract_version_from_service, _resolve_aggregate_source
+from .obs_versions import VersionConflict, agreed_version, project_binary_versions
 from .jenkins import (
     JenkinsConfig,
     load_jenkins_config,
@@ -258,6 +258,10 @@ def _validate_qa(qa: Any, project: str) -> None:
                 f"error: {project}: qa.name {name!r} must match "
                 "[A-Za-z0-9][A-Za-z0-9_.+-]*"
             )
+    if "package" in qa:
+        package = qa.get("package")
+        if not isinstance(package, str) or not package:
+            raise SystemExit(f"error: {project}: qa.package must be a non-empty string")
     pipeline = qa.get("pipeline")
     if not isinstance(pipeline, str) or not pipeline:
         raise SystemExit(f"error: {project}: qa.pipeline must be a non-empty string")
@@ -482,34 +486,95 @@ def _status_context(
 EXPECTED_VERSIONS_PARAM = "EXPECTED_VERSIONS"
 
 
-def _own_package_versions(project: str) -> dict[str, str]:
-    """Version of each package in *project*, keyed by OBS package name.
+_ARTIFACT_RECIPES = ("Dockerfile", "simpleimage")
 
-    The version is the one OBS builds: the ``version`` of the package's
-    obs/_service (for an aggregate, of its source package), with ``%!{VAR}``
-    macros resolved from that package's macros.yaml chain in the current
-    checkout, so a PR run gets the PR's values.  Only the project's own
-    packages are listed (not subprojects); packages whose _service declares no
-    version, or whose version cannot be resolved, are left out.
-    """
-    project_path = resolve_project_path(project)
+
+def _is_artifact_package(pkg_path: Path) -> bool:
+    obs = pkg_path / "obs"
+    return any((obs / n).is_file() for n in _ARTIFACT_RECIPES) or any(
+        obs.glob("*.kiwi")
+    )
+
+
+def _mirror_source(project: str) -> "tuple[str, str] | None":
+    """(release_top, staging_top) when *project* lies in a release mirror tree.
+
+    The nearest directory holding release.yaml is the mirror's top; its
+    ``project:`` names the staging project it mirrors."""
+    path = resolve_project_path(project)
+    while path != REPO_ROOT and REPO_ROOT in path.parents:
+        record = path / "release.yaml"
+        if record.is_file():
+            staging = (load_yaml_with_env(record, {}) or {}).get("project")
+            if isinstance(staging, str) and staging:
+                return ":".join(path.relative_to(REPO_ROOT).parts), staging
+            return None
+        path = path.parent
+    return None
+
+
+@dataclasses.dataclass
+class _VersionLookup:
+    """Where qa reads package versions: the OBS root under test, the PR
+    fallback root, and the mirror translation (staging id -> release id)."""
+
+    apiurl: str
+    rootprj: str
+    fallback_rootprj: "str | None"
+    mirror: "tuple[str, str] | None" = None  # (release_top, staging_top)
+    missing: set[str] = dataclasses.field(default_factory=set)
+
+    def target(self, structure_id: str) -> str:
+        if self.mirror is None:
+            return structure_id
+        release_top, staging_top = self.mirror
+        if structure_id == staging_top or structure_id.startswith(staging_top + ":"):
+            return release_top + structure_id[len(staging_top) :]
+        return structure_id
+
+    def _fetch(self, root: str, project_id: str):
+        return project_binary_versions(
+            self.apiurl, f"{root}:{project_id}", get_default_repository_filter()
+        )
+
+    def version(self, structure_id: str, package: str) -> "str | None":
+        target = self.target(structure_id)
+        data = self._fetch(self.rootprj, target)
+        per_repo = None if data is None else data.get(package)
+        if per_repo is None and self.fallback_rootprj and target == structure_id:
+            fallback = self._fetch(self.fallback_rootprj, target)
+            per_repo = None if fallback is None else fallback.get(package)
+        if not per_repo:
+            self.missing.add(package)
+            return None
+        return agreed_version(package, per_repo)
+
+
+def _version_lookup(args: argparse.Namespace, project: str) -> _VersionLookup:
+    apiurl = getattr(args, "apiurl", None) or ""
+    if not apiurl:
+        raise SystemExit(
+            "error: EXPECTED_VERSIONS needs an OBS connection (-P profile or -A apiurl)"
+        )
+    return _VersionLookup(
+        apiurl=apiurl,
+        rootprj=args.rootprj,
+        fallback_rootprj=getattr(args, "image_fallback_rootprj", None) or None,
+        mirror=_mirror_source(project),
+    )
+
+
+def _own_package_versions(structure_id: str, lookup: _VersionLookup) -> dict[str, str]:
+    """OBS-built upstream version of each direct package of *structure_id*
+    (a local project; image and tarball recipes are not candidates)."""
     versions: dict[str, str] = {}
-    for _, pkg_path in find_packages(project_path, project, recursive=False):
-        service = pkg_path / "obs" / "_service"
-        aggregate = pkg_path / "obs" / "_aggregate"
-        raw, macros_dir = None, pkg_path
-        if service.is_file():
-            raw = _extract_version_from_service(service)
-        elif aggregate.is_file():
-            source = _resolve_aggregate_source(aggregate)
-            if source is not None:
-                local_project, src_pkg = source
-                macros_dir = REPO_ROOT.joinpath(*local_project.split(":")) / src_pkg
-                raw = _extract_version_from_service(macros_dir / "obs" / "_service")
-        if not raw:
+    for _, pkg_path in find_packages(
+        resolve_project_path(structure_id), structure_id, recursive=False
+    ):
+        if _is_artifact_package(pkg_path):
             continue
-        version = apply_macro_substitution(raw, load_macros(macros_dir), strict=False)
-        if "%!{" not in version:
+        version = lookup.version(structure_id, pkg_path.name)
+        if version:
             versions[pkg_path.name] = version
     return versions
 
@@ -527,38 +592,35 @@ def _builds_artifacts(project: str) -> bool:
     return False
 
 
-def _package_versions(project: str) -> dict[str, str]:
-    """Package versions for *project*'s EXPECTED_VERSIONS.
+def _package_versions(project: str, lookup: _VersionLookup) -> dict[str, str]:
+    """Package versions for *project*'s EXPECTED_VERSIONS, as OBS built them.
 
-    The project's own package versions (see ``_own_package_versions``). A
-    project with none of its own (a container project, whose images declare no
-    package version) tests what its images install: the packages of the local
-    projects its repositories build from (``subproject:`` paths), in path
-    order, the first project providing a package winning as in OBS's own
-    resolution. ppg:staging:18:containers thus gets ppg:staging:18's versions;
-    ppg:staging:18:extras:containers gets ppg:staging:18:extras's, then 18's,
-    before the previous major's.
-
-    A project that builds images or tarballs (``_builds_artifacts``) tests what
-    they bundle too: its own package versions come first, then those of the
-    projects it builds from. ppg:staging:18:tarballs thus lists its own
-    percona-psql and the ppg:staging:18 components bundled in the tarball.
+    The project's own packages; a project without own versions, or one that
+    builds images or tarballs, adds the packages of the projects its
+    repositories build from (``subproject:`` paths), in path order, the first
+    provider winning.  A release mirror has no package directories: its
+    structure is the staging project it mirrors, its versions are read from
+    the mirror's OBS projects.
     """
-    own = _own_package_versions(project)
-    if own and not _builds_artifacts(project):
+    structure = project
+    if lookup.mirror is not None:
+        release_top, staging_top = lookup.mirror
+        structure = staging_top + project[len(release_top) :]
+    own = _own_package_versions(structure, lookup)
+    if own and not _builds_artifacts(structure):
         return own
-    config = _load_project_config_with_inheritance(resolve_project_path(project))
+    config = _load_project_config_with_inheritance(resolve_project_path(structure))
     sources: list[str] = []
     for repo in config.get("repositories", []) or []:
         for path_info in repo.get("paths", []) or []:
             sub = path_info.get("subproject") if isinstance(path_info, dict) else None
-            if sub and sub != project and sub not in sources:
+            if sub and sub != structure and sub not in sources:
                 sources.append(sub)
     versions: dict[str, str] = dict(own)
     for sub in sources:
         if not resolve_project_path(sub).is_dir():
             continue
-        for name, version in _own_package_versions(sub).items():
+        for name, version in _own_package_versions(sub, lookup).items():
             versions.setdefault(name, version)
     return versions
 
@@ -577,8 +639,8 @@ def _expected_versions(versions: dict[str, str], package: str | None = None) -> 
 def _with_expected_versions(
     entries: list[dict[str, Any]] | None,
     project: str,
-    package: str | None = None,
-    versions: dict[str, str] | None = None,
+    package: str | None,
+    versions: dict[str, str],
 ) -> list[dict[str, Any]] | None:
     """Add ``EXPECTED_VERSIONS`` to the parameters of every entry, unless the
     entry sets it itself.
@@ -586,23 +648,21 @@ def _with_expected_versions(
     The value lists the versions OBS builds for the packages under test, as
     ``package=version`` lines keyed by OBS package name (so test scripts do
     not depend on macro names): every package of *project* for a project
-    entry, only its own package for an entry marked with ``_package``
+    entry, only its own package for an entry marked with ``package:``
     or when *package* names the lane's package (package-level qa: blocks).
-    *versions* lets callers that process several lanes compute
-    :func:`_package_versions` once.  Added here rather than in each qa: entry so
+    *versions* come from OBS (:func:`_package_versions`), computed once by
+    the caller.  Added here rather than in each qa: entry so
     the versions are not repeated in every job declaration; jobs that do not
     declare the parameter ignore it.
     """
     if not entries:
         return entries
-    if versions is None:
-        versions = _package_versions(project)
     if not versions:
         return entries
     out = []
     for entry in entries:
         value = _expected_versions(
-            versions, package if package is not None else entry.get("_package")
+            versions, package if package is not None else entry.get("package")
         )
         params = dict(entry.get("parameters") or {})
         if value:
@@ -611,15 +671,25 @@ def _with_expected_versions(
     return out
 
 
-def _lanes_with_expected_versions(lanes: list[Lane], project: str) -> list[Lane]:
-    """Apply :func:`_with_expected_versions` to every lane.
-
-    The project lane lists every package of *project*; a package lane lists
-    only its own package.
-    """
+def _lanes_with_expected_versions(
+    lanes: list[Lane], project: str, lookup: _VersionLookup
+) -> list[Lane]:
+    """Apply :func:`_with_expected_versions` to every lane (versions read from
+    OBS once).  A version conflict aborts; packages left without a version are
+    named in one warning."""
     if not lanes:
         return lanes
-    versions = _package_versions(project)
+    try:
+        versions = _package_versions(project, lookup)
+    except VersionConflict as exc:
+        raise SystemExit(f"error: {exc}")
+    if lookup.missing:
+        print(
+            "warning: no OBS binaries for: "
+            + ", ".join(sorted(lookup.missing))
+            + " — left out of EXPECTED_VERSIONS",
+            file=sys.stderr,
+        )
     return [
         Lane(
             lane.package,
@@ -636,7 +706,10 @@ def cmd_qa_show(args: argparse.Namespace) -> None:
     _print_image_decisions(
         _resolve_lane_images(lanes, args.project, _image_resolver(args, env_vars))
     )
-    lanes = _lanes_with_expected_versions(lanes, args.project)
+    if getattr(args, "expected_versions", False):
+        lanes = _lanes_with_expected_versions(
+            lanes, args.project, _version_lookup(args, args.project)
+        )
     json_mode: bool = bool(getattr(args, "json", False))
 
     if not lanes:
@@ -836,7 +909,9 @@ def cmd_qa_run(args: argparse.Namespace) -> None:
     _print_image_decisions(
         _resolve_lane_images(lanes, args.project, _image_resolver(args, env_vars))
     )
-    lanes = _lanes_with_expected_versions(lanes, args.project)
+    lanes = _lanes_with_expected_versions(
+        lanes, args.project, _version_lookup(args, args.project)
+    )
     if not lanes:
         raise SystemExit(
             f"error: {args.project} has no qa: block in its project.yaml "
