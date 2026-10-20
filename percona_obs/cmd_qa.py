@@ -122,8 +122,21 @@ def _resolve_lane_images(
     decisions: list[ImageDecision] = []
     for lane in lanes:
         for entry in lane.entries:
+            # Resolution replaces each reference with a registry path; keep
+            # the projects the images come from for EXPECTED_VERSIONS.
+            entry["_image_projects"] = _image_projects(entry)
             decisions.extend(resolve_entry_images(entry, project, resolver))
     return decisions
+
+
+def _image_projects(entry: dict[str, Any]) -> dict[str, str]:
+    """``{parameter: project}`` of the entry's image references that name a
+    ``project:`` (references without one are the lane project's own)."""
+    return {
+        name: value["project"]
+        for name, value in (entry.get("parameters") or {}).items()
+        if isinstance(value, dict) and isinstance(value.get("project"), str) and value["project"]
+    }
 
 
 def _print_image_decisions(decisions: list[ImageDecision]) -> None:
@@ -489,6 +502,7 @@ def _status_context(
 
 
 EXPECTED_VERSIONS_PARAM = "EXPECTED_VERSIONS"
+OLD_EXPECTED_VERSIONS_PARAM = "OLD_EXPECTED_VERSIONS"
 
 
 _ARTIFACT_RECIPES = ("Dockerfile", "simpleimage")
@@ -707,6 +721,9 @@ def _lanes_with_expected_versions(
             f"cannot compute {EXPECTED_VERSIONS_PARAM}"
         )
     versions = _package_versions(project, lookup)
+    # Before the conflict check: an upgrade entry sends its images' projects'
+    # packages, so their conflicts block it like the lane project's own.
+    upgrade = _upgrade_expected_versions(lanes, lookup)
     blocked: set[str] = set()
     for lane in lanes:
         for entry in lane.entries:
@@ -728,14 +745,64 @@ def _lanes_with_expected_versions(
             + " — left out of EXPECTED_VERSIONS",
             file=sys.stderr,
         )
-    return [
-        Lane(
-            lane.package,
-            _with_expected_versions(lane.entries, project, lane.package, versions)
-            or lane.entries,
+    out = []
+    for lane in lanes:
+        entries = [
+            {**e, "parameters": {**upgrade[id(e)], **(e.get("parameters") or {})}}
+            if id(e) in upgrade
+            else e
+            for e in lane.entries
+        ]
+        out.append(
+            Lane(
+                lane.package,
+                _with_expected_versions(entries, project, lane.package, versions) or entries,
+            )
         )
-        for lane in lanes
-    ]
+    return out
+
+
+def _upgrade_expected_versions(lanes: list[Lane], lookup: _VersionLookup) -> dict[int, dict[str, str]]:
+    """Per-phase versions for upgrade entries (those with an OLD_REPOSITORY image).
+
+    An upgrade tests two images from two projects (the old and the new major),
+    so one list cannot be right for both: EXPECTED_VERSIONS lists the new
+    image's project (NEW_REPOSITORY, else REPOSITORY) and OLD_EXPECTED_VERSIONS
+    the old image's, each as for a server entry of that project. Returns
+    ``{id(entry): parameters}``; values the entry sets itself are kept by the
+    caller.
+    """
+    cache: dict[str, dict[str, str]] = {}
+
+    def versions_of(prj: str) -> dict[str, str]:
+        if prj not in cache:
+            structure = prj
+            if lookup.mirror is not None and prj.startswith(lookup.mirror[0]):
+                structure = lookup.mirror[1] + prj[len(lookup.mirror[0]) :]
+            cache[prj] = (
+                _package_versions(prj, lookup) if resolve_project_path(structure).is_dir() else {}
+            )
+        return cache[prj]
+
+    out: dict[int, dict[str, str]] = {}
+    for lane in lanes:
+        for entry in lane.entries:
+            projects = entry.get("_image_projects") or {}
+            old_project = projects.get("OLD_REPOSITORY")
+            if not old_project:
+                continue
+            params: dict[str, str] = {}
+            new_project = projects.get("NEW_REPOSITORY") or projects.get("REPOSITORY")
+            if new_project:
+                value = _expected_versions(versions_of(new_project))
+                if value:
+                    params[EXPECTED_VERSIONS_PARAM] = value
+            value = _expected_versions(versions_of(old_project))
+            if value:
+                params[OLD_EXPECTED_VERSIONS_PARAM] = value
+            if params:
+                out[id(entry)] = params
+    return out
 
 
 def cmd_qa_show(args: argparse.Namespace) -> None:
