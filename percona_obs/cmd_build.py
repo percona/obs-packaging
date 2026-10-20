@@ -136,12 +136,17 @@ def _fetch_build_results(
 
 
 def _version_from_binary(filename: str) -> str | None:
-    """Extract version-release from a binary package filename.
+    """Extract version-release from a package file name.
 
-    Supports RPM (name-version-release.arch.rpm) and
-    DEB (name_version_arch.deb) naming conventions.
+    Supports RPM binaries and sources (name-version-release[.arch].rpm,
+    name-version-release.src.rpm), DEB binaries (name_version_arch.deb) and
+    DEB sources (name_version.dsc).  DEB names carry no epoch.
     """
-    if filename.endswith(".rpm") and not filename.endswith(".src.rpm"):
+    if filename.endswith(".src.rpm"):
+        chunks = filename[: -len(".src.rpm")].rsplit("-", 2)
+        if len(chunks) == 3:
+            return f"{chunks[1]}-{chunks[2]}"
+    elif filename.endswith(".rpm"):
         # name-version-release.arch.rpm → strip arch.rpm, split off last two -
         base = filename.rsplit(".", 2)  # ['name-ver-rel', 'arch', 'rpm']
         if len(base) == 3:
@@ -152,6 +157,10 @@ def _version_from_binary(filename: str) -> str | None:
         # name_version_arch.deb
         parts = filename[:-4].split("_", 2)
         if len(parts) >= 2:
+            return parts[1]
+    elif filename.endswith(".dsc"):
+        parts = filename[:-4].split("_", 1)
+        if len(parts) == 2 and parts[1]:
             return parts[1]
     return None
 
