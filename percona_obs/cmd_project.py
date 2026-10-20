@@ -98,6 +98,40 @@ def _render_resolved_yaml(obs_project_name: str, config: dict) -> str:
     )
 
 
+_ARCHIVE_SUFFIX_RE = re.compile(r"\.(tar\.(gz|bz2|xz|zst)|tgz|tbz2|txz|zip)$")
+
+
+def _version_from_set_version(root_el: "ET.Element") -> "str | None":
+    """Version that a set_version service gives the package, or None.
+
+    Mirrors OBS's set_version: an explicit ``version`` param wins; otherwise
+    the version is read from a downloaded file named ``<basename>-<version>``
+    plus an archive suffix, here the ``filename`` (or URL basename) of a
+    download_url service. Macros (``%!{VAR}``) are returned unresolved, like
+    the obs_scm version, for the caller to substitute.
+    """
+    for svc in root_el.findall("service"):
+        if svc.get("name") != "set_version":
+            continue
+        params = {p.get("name"): (p.text or "").strip() for p in svc.findall("param")}
+        if params.get("version"):
+            return params["version"]
+        basename = params.get("basename", "")
+        if not basename:
+            return None
+        for dl in root_el.findall("service"):
+            if dl.get("name") != "download_url":
+                continue
+            dl_params = {p.get("name"): (p.text or "").strip() for p in dl.findall("param")}
+            filename = dl_params.get("filename") or dl_params.get("url", "").rsplit("/", 1)[-1]
+            if filename.startswith(basename + "-"):
+                version = _ARCHIVE_SUFFIX_RE.sub("", filename[len(basename) + 1:])
+                if version:
+                    return version
+        return None
+    return None
+
+
 def _extract_version_from_service(service_file: Path) -> "str | None":
     """Return the upstream version from an obs/_service file, or None."""
     try:
@@ -151,7 +185,8 @@ def _extract_version_from_service(service_file: Path) -> "str | None":
             return revision
         return None
 
-    return None
+    # No obs_scm version: a set_version service names it, as OBS applies it.
+    return _version_from_set_version(root_el)
 
 
 # Matches local aggregate project names: "${OBS_ROOTPRJ}:colon:notation"
