@@ -1477,6 +1477,8 @@ def _online_versrel(apiurl: str, obs_project: str, package: str) -> "str | None"
     """versrel of *package* in *obs_project* from the batch binary list:
     the first sorted repository's, with a warning when repositories
     disagree on the upstream version."""
+    # Multibuild flavors (``pkg:flavor`` keys) are not looked up: no package
+    # in the tree uses _multibuild.
     data = project_binary_versions(apiurl, obs_project, get_default_repository_filter())
     per_repo = (data or {}).get(package) or {}
     if not per_repo:
