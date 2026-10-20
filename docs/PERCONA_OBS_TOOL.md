@@ -659,6 +659,14 @@ Scope can be narrowed the same way as other commands:
 
 Set `NO_COLOR=1` to disable color output.
 
+### Show built versions
+
+`project versions` lists the versions of a project. With `--online`, package rows
+are read from OBS binary lists, one request per project; the row shows the full
+version-release of the first repository in sorted (repository, architecture)
+order. When repositories disagree it prints a warning and does not fail. Image
+rows are unchanged.
+
 ### Show build dependency tree
 
 ```sh
@@ -853,38 +861,51 @@ rejects the block: one check run cannot carry two lanes, and
 
 #### `EXPECTED_VERSIONS` (added automatically)
 
-`qa run` and `qa show` add one parameter to every entry: `EXPECTED_VERSIONS`,
-the versions OBS builds for the packages under test, one `package=version` per
-line, sorted, keyed by OBS package name (`percona-pgbackrest=2.59.2`,
-`etcd=3.5.33`, ...). Each version is the package's `obs/_service` `version`
-(an aggregate's is its source package's), with macros resolved from the
-package's `macros.yaml` chain in the current checkout, so in a PR the values
-are the PR's. A project entry gets every package of the project (not its
-subprojects); an entry of a package-level `qa:` block (`package.yaml`) gets only
-that package.
-Packages whose `_service` declares no version are left out. A project with no versioned
-packages of its own (a container project) gets the versions of the local
-projects its repositories build from (`subproject:` paths, in path order, the
-first project providing a package winning), i.e. what its images install:
-`ppg:staging:18:containers` gets `ppg:staging:18`'s versions. A project that builds
-images or tarballs (an `obs/Dockerfile`, `obs/simpleimage` or `*.kiwi` recipe)
-adds the same build-from versions after its own, since its artifacts bundle
-them: `ppg:staging:18:tarballs` lists its own `percona-psql` and the bundled
-components. A project with no package versions of its own (a container project, whose
-images declare none) gets the versions of the local projects its repositories
-build from (`subproject:` paths), in path order, the first project providing a
-package winning: `ppg:staging:18:containers` gets `ppg:staging:18`'s versions. Test jobs check
-installed software against these values instead of keeping their own copy,
-without depending on macro names. An entry that sets `EXPECTED_VERSIONS`
-itself keeps its value; jobs that do not declare the parameter ignore it.
+`qa run` adds one parameter to every entry: `EXPECTED_VERSIONS`, the versions of
+the packages under test, one `package=version` per line, sorted, keyed by OBS
+package name (`percona-pgbackrest=2.59.2`, `etcd=3.5.33`, ...). The values come
+from the binaries OBS built in the project under test, read with one binary-list
+request per OBS project (cached for the run). `qa run` therefore needs an OBS
+connection and fails without one.
 
-Release mirrors (`root/<product>/releases/<major>/**/project.yaml`) carry the parameter
-baked in: `project release` computes it from the staging project at cut time (same rules)
-and writes it into every mirror `qa:` entry, because a mirror has no package directories
-for `qa show` to read. The pre-release and the released project therefore test the
-versions of the snapshot; a refresh of an open release recomputes them. A copied package
-lane whose package declares no `_service` version gets no baked value and, on the mirror,
-falls back to the project-level computation (today every package lane has a version).
+Each value is the upstream version: the built version-release without the
+release part (`2.60.0`). Every repository in the profile's slice must agree on
+it. When they do not, `qa run` fails before any Jenkins trigger:
+
+```
+error: <pkg>: OBS builds disagree on the version: ...
+```
+
+Which packages are listed is decided by the local tree. A project entry gets its
+own packages; image and tarball recipe packages are not candidates. A project
+without own candidates, or one that builds artifacts (an `obs/Dockerfile`,
+`obs/simpleimage` or `*.kiwi` recipe), adds the packages of its `subproject:`
+path projects, in path order, the first provider winning. A name taken by a
+higher-priority project stays taken even when it has no binaries. An entry of a
+package-level `qa:` block (`package.yaml`) gets only that package. A qa entry
+can also set `package: <name>` (a non-empty string) to restrict its
+`EXPECTED_VERSIONS` to that package.
+
+Packages without binaries are left out of the value and named in one stderr
+warning:
+
+```
+warning: no OBS binaries for: ... — left out of EXPECTED_VERSIONS
+```
+
+In a PR project, a package that is absent from the PR project is read from the
+fallback root (`image-fallback-rootprj` / `--image-fallback-rootprj`). A package
+that is present but has no binaries never falls back.
+
+Release mirrors (`root/<product>/releases/<major>/**/project.yaml`) take their
+structure from the staging project named by the nearest `release.yaml`, and the
+versions from the mirror's own OBS projects, i.e. the pre-release. `project
+release` does not store `EXPECTED_VERSIONS` in the mirror. Copied package lanes
+carry `name: <pkg>.<segment>` and `package: <pkg>`.
+
+`qa show` computes `EXPECTED_VERSIONS` only with `--expected-versions`, so the CI
+matrix step makes no OBS request. An entry that sets `EXPECTED_VERSIONS` itself
+keeps its value; jobs that do not declare the parameter ignore it.
 
 `${VAR}` tokens in any value are substituted from the active profile's `env:`
 section, plus auto-injected `OBS_ROOTPRJ` and `OBS_CONTAINER_REGISTRY_ROOTPRJ` (the root
@@ -895,7 +916,7 @@ Image references (mappings with `image:`) are rendered after substitution; see *
 
 | Command | Purpose |
 |---|---|
-| `qa show <project>` | Print the resolved matrix (humans). `--json` emits one entry per combo with `project`, `package` (empty for project lanes), `pipeline`, `name`, `label`, `axis_filters`, `name_filter`, `package_filter` (`--package <pkg>` for package lanes, `--project-only` for project lanes), `status_context`, `params` — used by CI to drive a GitHub matrix. Empty `[]` when the project has no lane. |
+| `qa show <project>` | Print the resolved matrix (humans). `--expected-versions` also computes `EXPECTED_VERSIONS` from OBS (off by default). `--json` emits one entry per combo with `project`, `package` (empty for project lanes), `pipeline`, `name`, `label`, `axis_filters`, `name_filter`, `package_filter` (`--package <pkg>` for package lanes, `--project-only` for project lanes), `status_context`, `params` — used by CI to drive a GitHub matrix. Empty `[]` when the project has no lane. |
 | `qa run <project>` | Trigger Jenkins for every matrix combo. Fire-and-forget by default; pass `--wait` to block until terminal results arrive. `--filter AXIS=val[,val…]` narrows the matrix; `--name NAME` selects one entry of a multi-entry `qa:` block (combinable with `--pipeline`); `--package PKG` runs only that package's `package.yaml` block (combinable with `--name`/`--pipeline`; unknown packages are rejected, listing those that declare `qa:`); `--project-only` runs only the project's own `project.yaml` block, ignoring package blocks (mutually exclusive with `--package`); with neither, every lane runs; `--param NAME=VAL` overrides a parameter at runtime; `--dry-run` prints the POST bodies without calling Jenkins; `--report-json PATH` writes the per-combo result table for CI. |
 | `qa status --run-id <id>` | Re-poll non-terminal combos of a previous run and print the current state. |
 | `qa retry --run-id <id>` | Re-trigger only the combos whose latest attempt is non-`SUCCESS`. Re-uses the recorded `params` so retries are reproducible. By default skips `ABORTED` combos; pass `--include-aborted` to retry them too. |
@@ -1119,8 +1140,9 @@ error. `project release <source-project>` does the following:
    release project), plus the `qa:` entries of its direct packages' `package.yaml` as
    project-level entries named `<package>.<segment>` (segment = the entry's `name` or its
    `pipeline`), since mirrors have no package directories (when a mirror has more than one entry, the entry
-   name becomes the check-name segment); a duplicate name fails the cut. Each entry also
-   gets `EXPECTED_VERSIONS` baked in from the staging project's package versions.
+   name becomes the check-name segment); a duplicate name fails the cut. Copied package lanes
+   get `name: <pkg>.<segment>` and `package: <pkg>`; versions are computed at `qa run`
+   from the pre-release.
 6. **Builds `CHANGELOG.md`** — compares built package versions from the top-level staging
    project, `extras`, and `tarballs` against the release OBS project (for updates) and
    generates entries with upstream URLs. Container images are listed per flavor (`ubi8`

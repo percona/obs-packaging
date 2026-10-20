@@ -255,6 +255,8 @@ registry: registry.opensuse.org      # optional: container registry host, expose
 **Container registry.** `registry:` names the registry that publishes the images this instance builds; it is substituted as `${OBS_CONTAINER_REGISTRY}` (default `registry.opensuse.org`, so profiles without the key are unaffected). Precedence: default < `registry:` < the profile's `env:` section < explicit `-e`. Write it with `profile create --registry HOST`.
 `qa:` parameters may name an image (`image:`/`repository:`/`project:` mapping) instead of spelling the path; `percona_obs/qa_images.py` renders it against `rootprj`, or against the profile's `image-fallback-rootprj` when the current root does not hold the package.
 
+`qa run` always sets `EXPECTED_VERSIONS` from the binaries OBS built in the project under test (one binary-list request per OBS project, cached per run; upstream version without release; slice repositories must agree or `qa run` fails before any trigger; candidates come from the local tree, packages without binaries are left out with one stderr warning; in PR lanes a package absent from the PR project is read from the fallback root). `package: <name>` on a qa entry restricts it to that package, an entry's own `EXPECTED_VERSIONS` wins, `qa show` computes it only with `--expected-versions`, and release mirrors read the pre-release (`project release` stores no versions in them); `project versions --online` uses the same batch request. See `docs/PERCONA_OBS_TOOL.md` § `EXPECTED_VERSIONS`.
+
 **Example** — create a `dev` profile and use it:
 ```sh
 ./percona-obs -A http://192.168.1.103:3000 -R home:Admin:percona \
