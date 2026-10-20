@@ -128,6 +128,7 @@ def test_image_ref_inside_a_list_is_rejected(tmp_path, monkeypatch):
 def test_run_dry_run_resolves_images(tmp_path, monkeypatch, capsys):
     _tree(tmp_path, monkeypatch)
     monkeypatch.setattr(cmd_qa, "_fetch_obs_package_names_or_fail", lambda a, p: set())
+    monkeypatch.setattr(cmd_qa, "project_binary_versions", lambda *a, **k: {})
     monkeypatch.setattr(cmd_qa, "load_jenkins_config", lambda *a, **k: None)
     args = _args(
         image_fallback_rootprj="isv:percona",

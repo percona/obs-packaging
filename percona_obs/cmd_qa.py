@@ -41,7 +41,12 @@ from .common import (
     parse_env_overrides,
     resolve_project_path,
 )
-from .obs_versions import VersionConflict, agreed_version, project_binary_versions
+from .obs_versions import (
+    ProjectVersions,
+    VersionConflict,
+    agreed_version,
+    project_binary_versions,
+)
 from .jenkins import (
     JenkinsConfig,
     load_jenkins_config,
@@ -523,6 +528,7 @@ class _VersionLookup:
     fallback_rootprj: "str | None"
     mirror: "tuple[str, str] | None" = None  # (release_top, staging_top)
     missing: set[str] = dataclasses.field(default_factory=set)
+    conflicts: dict[str, VersionConflict] = dataclasses.field(default_factory=dict)
 
     def target(self, structure_id: str) -> str:
         if self.mirror is None:
@@ -532,7 +538,7 @@ class _VersionLookup:
             return release_top + structure_id[len(staging_top) :]
         return structure_id
 
-    def _fetch(self, root: str, project_id: str):
+    def _fetch(self, root: str, project_id: str) -> "ProjectVersions | None":
         return project_binary_versions(
             self.apiurl, f"{root}:{project_id}", get_default_repository_filter()
         )
@@ -547,7 +553,11 @@ class _VersionLookup:
         if not per_repo:
             self.missing.add(package)
             return None
-        return agreed_version(package, per_repo)
+        try:
+            return agreed_version(package, per_repo)
+        except VersionConflict as exc:
+            self.conflicts[package] = exc
+            return None
 
 
 def _version_lookup(args: argparse.Namespace, project: str) -> _VersionLookup:
@@ -679,14 +689,38 @@ def _lanes_with_expected_versions(
     lanes: list[Lane], project: str, lookup: _VersionLookup
 ) -> list[Lane]:
     """Apply :func:`_with_expected_versions` to every lane (versions read from
-    OBS once).  A version conflict aborts; packages left without a version are
-    named in one warning."""
+    OBS once).
+
+    A version conflict aborts only when a lane in *lanes* would send the
+    conflicting package (a project entry sends every candidate, a package
+    lane or ``package:`` entry only its package; an entry that sets
+    EXPECTED_VERSIONS itself sends nothing computed); other conflicts, and
+    packages left without a version, are named in warnings.  The OBS project
+    under test must exist.
+    """
     if not lanes:
         return lanes
-    try:
-        versions = _package_versions(project, lookup)
-    except VersionConflict as exc:
-        raise SystemExit(f"error: {exc}")
+    project_obs = f"{lookup.rootprj}:{project}"
+    if lookup._fetch(lookup.rootprj, project) is None:
+        raise SystemExit(
+            f"error: {project_obs} does not exist on OBS; "
+            f"cannot compute {EXPECTED_VERSIONS_PARAM}"
+        )
+    versions = _package_versions(project, lookup)
+    blocked: set[str] = set()
+    for lane in lanes:
+        for entry in lane.entries:
+            if EXPECTED_VERSIONS_PARAM in (entry.get("parameters") or {}):
+                continue
+            pkg = lane.package if lane.package is not None else entry.get("package")
+            blocked |= set(lookup.conflicts) if pkg is None else {pkg}
+    blocked &= set(lookup.conflicts)
+    if blocked:
+        raise SystemExit(
+            "\n".join(f"error: {lookup.conflicts[n]}" for n in sorted(blocked))
+        )
+    for name in sorted(set(lookup.conflicts) - blocked):
+        print(f"warning: {lookup.conflicts[name]}", file=sys.stderr)
     if lookup.missing:
         print(
             "warning: no OBS binaries for: "
@@ -913,9 +947,6 @@ def cmd_qa_run(args: argparse.Namespace) -> None:
     _print_image_decisions(
         _resolve_lane_images(lanes, args.project, _image_resolver(args, env_vars))
     )
-    lanes = _lanes_with_expected_versions(
-        lanes, args.project, _version_lookup(args, args.project)
-    )
     if not lanes:
         raise SystemExit(
             f"error: {args.project} has no qa: block in its project.yaml "
@@ -979,6 +1010,12 @@ def cmd_qa_run(args: argparse.Namespace) -> None:
                 f"error: {args.project}: no qa entry with pipeline "
                 f"{args.pipeline!r}{suffix}"
             )
+
+    # EXPECTED_VERSIONS only for the lanes that survived selection: a conflict
+    # aborts the run only when a selected lane sends the conflicting package.
+    lanes = _lanes_with_expected_versions(
+        lanes, args.project, _version_lookup(args, args.project)
+    )
 
     filters = _parse_filter(args.filter or [])
     overrides = _parse_param_overrides(args.param or [])

@@ -31,7 +31,7 @@ def _write_project(tmp_path, monkeypatch, qa_yaml: str, project: str = "ppg:p"):
 @pytest.fixture(autouse=True)
 def _no_obs(monkeypatch):
     """`qa run` reads EXPECTED_VERSIONS from OBS; these tests are not about it."""
-    monkeypatch.setattr(cmd_qa, "project_binary_versions", lambda *a, **k: None)
+    monkeypatch.setattr(cmd_qa, "project_binary_versions", lambda *a, **k: {})
 
 
 def _show_json(project: str, capsys) -> list[dict]:

@@ -326,22 +326,29 @@ def _fill_release_online_records(
         pkg_names = sorted(_fetch_obs_package_names(apiurl, obs_proj))
         if not pkg_names:
             return
-        pkg_archs = _fetch_all_pkg_archs(apiurl, obs_proj)
-        fallback_pairs = _repo_arch_pairs_from_yaml(project_path)
+        # Image rows need a (repo, arch); package rows do not, so the lookup
+        # is made on first use.
+        archs: dict[str, "tuple[str, str]"] | None = None
+        fallback_pairs: "list[tuple[str, str]] | None" = None
         for pkg_name in pkg_names:
-            repo_arch = pkg_archs.get(pkg_name)
+            repo_arch: "tuple[str, str] | None" = None
             version: str | None = None
             container_info = _detect_obs_container_info(apiurl, obs_proj, pkg_name)
             if container_info is None:
                 version = _online_versrel(apiurl, obs_proj, pkg_name)
-            elif repo_arch:
-                repo, arch = repo_arch
-                version = _versrel(obs_proj, repo, arch, pkg_name)
-            elif fallback_pairs:
-                for repo, arch in fallback_pairs:
+            else:
+                if archs is None:
+                    archs = _fetch_all_pkg_archs(apiurl, obs_proj)
+                    fallback_pairs = _repo_arch_pairs_from_yaml(project_path)
+                repo_arch = archs.get(pkg_name)
+                if repo_arch:
+                    repo, arch = repo_arch
                     version = _versrel(obs_proj, repo, arch, pkg_name)
-                    if version is not None:
-                        break
+                else:
+                    for repo, arch in fallback_pairs or []:
+                        version = _versrel(obs_proj, repo, arch, pkg_name)
+                        if version is not None:
+                            break
             base: dict[str, object] = {"name": pkg_name, "project": proj_id}
             if container_info is not None:
                 image, tag = container_info

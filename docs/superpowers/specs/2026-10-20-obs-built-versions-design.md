@@ -128,6 +128,11 @@ Examples:
   error: percona-foo: OBS builds disagree on the version: 1.2.3 (RockyLinux_9/x86_64, Debian_12/x86_64), 1.2.4 (Ubuntu_24.04/x86_64)
   ```
 
+  The conflict scope is the selected lanes: the abort applies only when a
+  lane left after `--project-only`/`--package`/`--name`/`--pipeline` would
+  send the conflicting package; other conflicts are `warning:` lines. A
+  missing OBS project under test is an error.
+
   Packages with no binaries anywhere are left out and named in **one warning**
   (no silent drop).
 - **`qa show`** no longer computes `EXPECTED_VERSIONS` by default, so

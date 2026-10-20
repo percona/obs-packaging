@@ -147,7 +147,7 @@ def test_env_substitution_applies_to_package_block(tree):
 @pytest.fixture(autouse=True)
 def _no_obs(monkeypatch):
     """`qa run` reads EXPECTED_VERSIONS from OBS; these tests are not about it."""
-    monkeypatch.setattr(cmd_qa, "project_binary_versions", lambda *a, **k: None)
+    monkeypatch.setattr(cmd_qa, "project_binary_versions", lambda *a, **k: {})
 
 
 def _show_json(project: str, capsys, expected_versions: bool = False) -> list[dict]:

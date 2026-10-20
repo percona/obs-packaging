@@ -242,7 +242,12 @@ def test_mirror_uses_staging_structure_and_prerelease_versions(
         "isv:percona:ppg:releases:18": {"percona-pgbackrest": {R9: "9.9.9-1"}},
     }
     calls = _obs(monkeypatch, data)
-    params, _ = _show("ppg:releases:18", capsys, rootprj="isv:percona:PR:pr-148")
+    params, _ = _show(
+        "ppg:releases:18",
+        capsys,
+        rootprj="isv:percona:PR:pr-148",
+        fallback="isv:percona",
+    )
     assert "percona-pgbackrest=2.60.0" in params["server"]["EXPECTED_VERSIONS"]
     assert "isv:percona:ppg:releases:18" not in calls
 
@@ -377,6 +382,7 @@ def test_container_project_gets_the_versions_its_images_build_from(
                 "percona-pgbackrest": {R9: "2.60.0-1.1"},
                 "percona-pgaudit": {R9: "18.0-1.1"},
             },
+            "isv:percona:ppg:staging:18:containers": {},
             "isv:percona:ppg:staging:17": {
                 "percona-pgbackrest": {R9: "2.59.0-1.1"},
                 "percona-pgaudit": {R9: "17.1-1.1"},
@@ -446,6 +452,7 @@ def test_no_fallback_to_a_lower_provider_without_binaries(
                 "percona-pgbackrest": {R9: "2.60.0-1.1"},
                 "percona-pgaudit": {},  # present, build failed
             },
+            "isv:percona:ppg:staging:18:containers": {},
             "isv:percona:ppg:staging:17": {
                 "percona-pgbackrest": {R9: "2.59.0-1.1"},
                 "percona-pgaudit": {R9: "17.1-1.1"},
@@ -515,3 +522,101 @@ def test_project_with_own_versions_and_no_recipe_does_not_follow_paths(
     assert cmd_qa._package_versions("ppg:staging:18:tarballs", _lookup()) == {
         "percona-psql": "18.6"
     }
+
+
+_CONFLICT = {
+    "isv:percona:ppg:staging:18": {
+        **OBS["isv:percona:ppg:staging:18"],
+        "percona-pgbackrest": {R9: "2.60.0-1.1", D12: "2.59.2-1"},
+    }
+}
+
+
+def _run_args(**kw):
+    base = dict(
+        project="ppg:staging:18",
+        rootprj="isv:percona",
+        env_overrides=[],
+        profile=None,
+        apiurl="http://obs",
+        name=None,
+        package=None,
+        project_only=False,
+        pipeline=None,
+        filter=[],
+        param=[],
+        dry_run=False,
+        wait=False,
+        report_json=None,
+        image_fallback_rootprj=None,
+    )
+    base.update(kw)
+    return SimpleNamespace(**base)
+
+
+def _run(monkeypatch, args):
+    triggers = []
+
+    def fake_trigger(cfg, pipeline, params):
+        triggers.append((pipeline, dict(params)))
+        return "http://q/1"
+
+    monkeypatch.setattr(cmd_qa, "load_jenkins_config", lambda profile: None)
+    monkeypatch.setattr(cmd_qa, "trigger", fake_trigger)
+    monkeypatch.setattr(cmd_qa, "save_state", lambda state: None)
+    cmd_qa.cmd_qa_run(args)
+    return triggers
+
+
+def _pgaudit_lane(tmp_path):
+    (tmp_path / "root/ppg/staging/_shared/percona-pgaudit/package.yaml").write_text(
+        "qa:\n  - name: audit\n    pipeline: audit-job\n    parameters:\n      A: x\n"
+    )
+
+
+def test_run_aborts_when_a_selected_lane_emits_the_conflict(
+    tmp_path, monkeypatch, capsys
+):
+    _tree(tmp_path, monkeypatch)
+    _pgaudit_lane(tmp_path)
+    _obs(monkeypatch, _CONFLICT)
+    with pytest.raises(SystemExit, match="percona-pgbackrest: OBS builds disagree"):
+        _run(monkeypatch, _run_args(project_only=True, name="server"))
+
+
+def test_run_proceeds_when_the_conflict_is_not_emitted(tmp_path, monkeypatch, capsys):
+    _tree(tmp_path, monkeypatch)
+    _pgaudit_lane(tmp_path)
+    _obs(monkeypatch, _CONFLICT)
+    triggers = _run(monkeypatch, _run_args(package="percona-pgaudit"))
+    assert len(triggers) == 1
+    assert triggers[0][1]["EXPECTED_VERSIONS"] == "percona-pgaudit=18.0"
+    err = capsys.readouterr().err
+    assert "warning: percona-pgbackrest: OBS builds disagree" in err
+
+
+def test_run_conflict_does_not_block_a_pinned_entry(tmp_path, monkeypatch, capsys):
+    _tree(tmp_path, monkeypatch)
+    _obs(monkeypatch, _CONFLICT)
+    triggers = _run(monkeypatch, _run_args(name="pinned"))
+    assert triggers[0][1]["EXPECTED_VERSIONS"] == "percona-pgbackrest=1.0"
+    assert "warning: percona-pgbackrest" in capsys.readouterr().err
+
+
+def test_run_no_matching_lane_reports_that_before_obs(tmp_path, monkeypatch):
+    _tree(tmp_path, monkeypatch)
+    calls = _obs(monkeypatch)
+    with pytest.raises(SystemExit, match="no qa entry with name 'nope'"):
+        _run(monkeypatch, _run_args(name="nope", apiurl=None))
+    assert calls == []
+
+
+def test_missing_project_under_test_errors(tmp_path, monkeypatch, capsys):
+    _tree(tmp_path, monkeypatch)
+    _obs(monkeypatch, {})
+    with pytest.raises(
+        SystemExit,
+        match="isv:percona:ppg:staging:18 does not exist on OBS; "
+        "cannot compute EXPECTED_VERSIONS",
+    ):
+        _show("ppg:staging:18", capsys)
