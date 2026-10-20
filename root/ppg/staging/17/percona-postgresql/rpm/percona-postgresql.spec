@@ -425,6 +425,13 @@ Requires:       %{name}-libs >= %{version}-%{release}
 Requires:       libicu-devel
 %endif
 
+# PERCONA: PGXS builds extension bitcode with $(CLANG) when the server was
+# built --with-llvm, so -devel must bring clang/llvm, as the PG 14-16 specs
+# do; 19 matches the llvmjit subpackage's `Requires: llvm >= 19`.
+%if %llvm
+Requires:       llvm-devel >= 19.0 clang-devel >= 19.0
+%endif
+
 %if %enabletaptests
 %if 0%{?suse_version} && 0%{?suse_version} >= 1315
 Requires:       perl-IPC-Run
