@@ -16,6 +16,7 @@ import pytest
 import yaml
 
 import percona_obs.cmd_project as cmd_project
+import percona_obs.obs_versions as obs_versions
 
 DEPS = "isv:percona:ppg:common:deps"
 STAGING = "isv:percona:ppg:staging:18"
@@ -23,30 +24,27 @@ STAGING = "isv:percona:ppg:staging:18"
 
 @pytest.fixture
 def obs(monkeypatch):
-    """Fake OBS: build results and binary lists per project, plus a call log."""
-    state = SimpleNamespace(succeeded={}, binaries={}, calls=[])
+    """Fake OBS: batch binary versions per project, plus a call log."""
+    obs_versions.clear_cache()
+    state = SimpleNamespace(data={}, calls=[])
 
-    def fetch_build_results(apiurl, project):
-        state.calls.append(("_result", project))
-        return {}, state.succeeded.get(project, {})
+    def project_binary_versions(apiurl, project, repo_filter=None):
+        state.calls.append(project)
+        return state.data.get(project)
 
-    def fetch_pkg_versrel(apiurl, project, repo, arch, pkg):
-        state.calls.append(("binaries", project, repo, pkg))
-        return state.binaries.get((project, repo, pkg))
-
-    monkeypatch.setattr(cmd_project, "_fetch_build_results", fetch_build_results)
-    monkeypatch.setattr(cmd_project, "_fetch_pkg_versrel", fetch_pkg_versrel)
+    monkeypatch.setattr(cmd_project, "project_binary_versions", project_binary_versions)
     monkeypatch.setattr(osc.conf, "get_config", lambda **kw: None)
     monkeypatch.setattr(
         osc.conf, "config", {"apiurl": "https://obs.example"}, raising=False
     )
-    return state
+    yield state
+    obs_versions.clear_cache()
 
 
-def _etcd_version(capsys):
+def _versions(capsys, package="etcd"):
     args = SimpleNamespace(
         project="ppg:staging:18",
-        package="etcd",
+        package=package,
         online=True,
         recursive=False,
         markdown=False,
@@ -55,30 +53,30 @@ def _etcd_version(capsys):
     )
     cmd_project.cmd_project_versions(args)
     (record,) = yaml.safe_load(capsys.readouterr().out)
-    assert record["name"] == "etcd"
+    assert record["name"] == package
     return record["version"]
 
 
-_BOTH = {"etcd": {"Debian_12": ("x86_64", ""), "RockyLinux_9": ("x86_64", "")}}
+def _etcd_version(capsys):
+    return _versions(capsys)
 
 
 def test_version_from_the_aggregate_source(obs, capsys):
-    obs.succeeded[DEPS] = _BOTH
-    obs.binaries[(DEPS, "Debian_12", "etcd")] = "3.5.33-1.1"
+    obs.data[DEPS] = {"etcd": {("Debian_12", "x86_64"): "3.5.33-1.1"}}
     assert _etcd_version(capsys) == "3.5.33-1.1"
 
 
-def test_next_repository_is_tried_when_the_first_has_no_readable_binary(obs, capsys):
-    obs.succeeded[DEPS] = _BOTH
-    obs.binaries[(DEPS, "RockyLinux_9", "etcd")] = "3.5.33-1.1"  # Debian_12: none
+def test_first_repository_with_a_binary_is_used(obs, capsys):
+    # Debian_12 sorts first but has no readable binary, so no entry.
+    obs.data[DEPS] = {"etcd": {("RockyLinux_9", "x86_64"): "3.5.33-1.1"}}
     assert _etcd_version(capsys) == "3.5.33-1.1"
 
 
 def test_aggregating_project_is_used_when_the_source_yields_nothing(obs, capsys):
-    obs.succeeded[STAGING] = _BOTH  # source project: no succeeded build visible
-    obs.binaries[(STAGING, "Debian_12", "etcd")] = "3.5.33-1.1"
+    obs.data[DEPS] = {"etcd": {}}  # listed without a readable binary
+    obs.data[STAGING] = {"etcd": {("Debian_12", "x86_64"): "3.5.33-1.1"}}
     assert _etcd_version(capsys) == "3.5.33-1.1"
-    assert ("_result", DEPS) in obs.calls and ("_result", STAGING) in obs.calls
+    assert DEPS in obs.calls and STAGING in obs.calls
 
 
 def test_nothing_found_is_explained(obs, capsys, caplog):
@@ -86,6 +84,33 @@ def test_nothing_found_is_explained(obs, capsys, caplog):
         assert _etcd_version(capsys) is None
     assert f"etcd: no version found" in caplog.text
     assert DEPS in caplog.text and STAGING in caplog.text
+
+
+def test_first_sorted_versrel_and_conflict_warning(obs, capsys, caplog):
+    obs.data["isv:percona:ppg:staging:18"] = {
+        "percona-pgbackrest": {
+            ("RockyLinux_9", "x86_64"): "2.60.0-1.1",
+            ("Debian_12", "x86_64"): "2.59.2-1",
+        }
+    }
+    with caplog.at_level(logging.WARNING, logger="percona-obs"):
+        version = _versions(capsys, "percona-pgbackrest")
+    assert version == "2.59.2-1"
+    assert "OBS builds disagree" in caplog.text
+    assert obs.calls.count("isv:percona:ppg:staging:18") == 1
+
+
+def test_batch_api_error_is_reported_with_the_project(monkeypatch):
+    obs_versions.clear_cache()
+
+    def boom(url):
+        raise OSError("HTTP Error 403: Forbidden")
+
+    monkeypatch.setattr(obs_versions.osc.connection, "http_GET", boom)
+    with pytest.raises(SystemExit) as exc:
+        obs_versions.project_binary_versions("https://obs.example", DEPS)
+    assert DEPS in str(exc.value)
+    obs_versions.clear_cache()
 
 
 def test_api_errors_are_reported_not_hidden(monkeypatch, caplog):

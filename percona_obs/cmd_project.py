@@ -80,6 +80,12 @@ from .cmd_build import (
     _fetch_versrel_from_history,
 )
 from .cve_scan import ChangedPackage, scan_release_cves
+from .obs_versions import (
+    VersionConflict,
+    agreed_version,
+    first_versrel,
+    project_binary_versions,
+)
 from .release_scope import has_container_images, tree_has_server_package
 from .release_record import ReleaseEntry, dump_release_entry, parse_release_entries
 from .github_api import last_synced_head_sha, repo_slug_from_url
@@ -325,7 +331,10 @@ def _fill_release_online_records(
         for pkg_name in pkg_names:
             repo_arch = pkg_archs.get(pkg_name)
             version: str | None = None
-            if repo_arch:
+            container_info = _detect_obs_container_info(apiurl, obs_proj, pkg_name)
+            if container_info is None:
+                version = _online_versrel(apiurl, obs_proj, pkg_name)
+            elif repo_arch:
                 repo, arch = repo_arch
                 version = _versrel(obs_proj, repo, arch, pkg_name)
             elif fallback_pairs:
@@ -334,7 +343,6 @@ def _fill_release_online_records(
                     if version is not None:
                         break
             base: dict[str, object] = {"name": pkg_name, "project": proj_id}
-            container_info = _detect_obs_container_info(apiurl, obs_proj, pkg_name)
             if container_info is not None:
                 image, tag = container_info
                 rec: dict[str, object] = {
@@ -1465,26 +1473,19 @@ def cmd_project_install(args) -> None:
                 print()
 
 
-def _versrel_from_any_repo(
-    apiurl: str,
-    obs_project: str,
-    pkg: str,
-    repo_map: "dict[str, tuple[str, str]] | None",
-) -> str | None:
-    """Return *pkg*'s version-release from the first repository (in name order)
-    where it succeeded and whose binary list has a readable package file.
-
-    Only the first succeeded repository used to be tried, so a repository that
-    listed no parseable binary (only logs, or an error) gave None although
-    other repositories had one.
-    """
-    for repo, (arch, flavor) in sorted((repo_map or {}).items()):
-        name = f"{pkg}:{flavor}" if flavor else pkg
-        version = _fetch_pkg_versrel(apiurl, obs_project, repo, arch, name)
-        if version:
-            return version
-        logger.debug(f"no readable binary for {obs_project}/{repo}/{arch}/{name}")
-    return None
+def _online_versrel(apiurl: str, obs_project: str, package: str) -> "str | None":
+    """versrel of *package* in *obs_project* from the batch binary list:
+    the first sorted repository's, with a warning when repositories
+    disagree on the upstream version."""
+    data = project_binary_versions(apiurl, obs_project, get_default_repository_filter())
+    per_repo = (data or {}).get(package) or {}
+    if not per_repo:
+        return None
+    try:
+        agreed_version(package, per_repo)
+    except VersionConflict as exc:
+        logger.warning(str(exc))
+    return first_versrel(per_repo)
 
 
 def cmd_project_versions(args) -> None:
@@ -1588,14 +1589,10 @@ def cmd_project_versions(args) -> None:
                 return succeeded_cache[obs_proj]
 
             for obs_proj, pkg_record_pairs in obs_project_records.items():
-                succeeded_archs = succeeded_in(obs_proj)
                 for record, pkg_name in pkg_record_pairs:
-                    repo_map = succeeded_archs.get(pkg_name)
                     if record["type"] == "package":
                         searched = [obs_proj]
-                        version = _versrel_from_any_repo(
-                            apiurl, obs_proj, pkg_name, repo_map
-                        )
+                        version = _online_versrel(apiurl, obs_proj, pkg_name)
                         if version is None and "_agg_src_project" in record:
                             # An aggregate's binaries are also copied into the
                             # project that aggregates them: look there when the
@@ -1609,9 +1606,7 @@ def cmd_project_versions(args) -> None:
                             )
                             name = str(record["name"])
                             searched.append(target)
-                            version = _versrel_from_any_repo(
-                                apiurl, target, name, succeeded_in(target).get(name)
-                            )
+                            version = _online_versrel(apiurl, target, name)
                         if version is None:
                             logger.warning(
                                 f"{record['name']}: no version found: no "
@@ -1620,6 +1615,7 @@ def cmd_project_versions(args) -> None:
                             )
                         record["version"] = version
                         continue
+                    repo_map = succeeded_in(obs_proj).get(pkg_name)
                     if not repo_map:
                         record["version"] = None
                         continue
