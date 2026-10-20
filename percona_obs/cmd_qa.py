@@ -564,18 +564,20 @@ def _version_lookup(args: argparse.Namespace, project: str) -> _VersionLookup:
     )
 
 
-def _own_package_versions(structure_id: str, lookup: _VersionLookup) -> dict[str, str]:
-    """OBS-built upstream version of each direct package of *structure_id*
-    (a local project; image and tarball recipes are not candidates)."""
-    versions: dict[str, str] = {}
+def _own_package_versions(
+    structure_id: str, lookup: _VersionLookup, taken: "set[str] | None" = None
+) -> dict[str, "str | None"]:
+    """Candidate packages of *structure_id* (a local project; image and tarball
+    recipes are not candidates) with their OBS-built upstream version, or None
+    when OBS has no readable binary.  Names in *taken* (provided by a
+    higher-priority project) are skipped without a lookup."""
+    versions: dict[str, "str | None"] = {}
     for _, pkg_path in find_packages(
         resolve_project_path(structure_id), structure_id, recursive=False
     ):
-        if _is_artifact_package(pkg_path):
+        if _is_artifact_package(pkg_path) or pkg_path.name in (taken or ()):
             continue
-        version = lookup.version(structure_id, pkg_path.name)
-        if version:
-            versions[pkg_path.name] = version
+        versions[pkg_path.name] = lookup.version(structure_id, pkg_path.name)
     return versions
 
 
@@ -608,7 +610,7 @@ def _package_versions(project: str, lookup: _VersionLookup) -> dict[str, str]:
         structure = staging_top + project[len(release_top) :]
     own = _own_package_versions(structure, lookup)
     if own and not _builds_artifacts(structure):
-        return own
+        return {n: v for n, v in own.items() if v}
     config = _load_project_config_with_inheritance(resolve_project_path(structure))
     sources: list[str] = []
     for repo in config.get("repositories", []) or []:
@@ -616,13 +618,15 @@ def _package_versions(project: str, lookup: _VersionLookup) -> dict[str, str]:
             sub = path_info.get("subproject") if isinstance(path_info, dict) else None
             if sub and sub != structure and sub not in sources:
                 sources.append(sub)
-    versions: dict[str, str] = dict(own)
+    # Selection follows the local tree (which packages), never the OBS result:
+    # a name taken by a higher-priority project stays taken even when it has
+    # no version there.
+    candidates: dict[str, "str | None"] = dict(own)
     for sub in sources:
         if not resolve_project_path(sub).is_dir():
             continue
-        for name, version in _own_package_versions(sub, lookup).items():
-            versions.setdefault(name, version)
-    return versions
+        candidates.update(_own_package_versions(sub, lookup, set(candidates)))
+    return {n: v for n, v in candidates.items() if v}
 
 
 def _expected_versions(versions: dict[str, str], package: str | None = None) -> str:

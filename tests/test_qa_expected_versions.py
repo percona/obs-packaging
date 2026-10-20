@@ -8,6 +8,7 @@ without depending on macro names.
 """
 
 import json
+import shutil
 from types import SimpleNamespace
 
 import pytest
@@ -340,6 +341,9 @@ def _container_tree(tmp_path, monkeypatch):
     _package(staging / "17" / "percona-only17", service=_service("1.0"))
     containers = staging / "18" / "containers"
     _package(containers / "percona-distribution-postgresql", service="<services/>")
+    (containers / "percona-distribution-postgresql" / "obs" / "Dockerfile").write_text(
+        "FROM x\n"
+    )
     (containers / "project.yaml").write_text(
         "title: C\n"
         "repositories:\n"
@@ -429,6 +433,55 @@ def _tarball_tree(tmp_path, monkeypatch, with_recipe=True):
     )
     monkeypatch.setattr(common, "REPO_ROOT", root)
     monkeypatch.setattr(cmd_qa, "REPO_ROOT", root)
+
+
+def test_no_fallback_to_a_lower_provider_without_binaries(
+    tmp_path, monkeypatch, capsys
+):
+    _container_tree(tmp_path, monkeypatch)
+    _obs(
+        monkeypatch,
+        {
+            "isv:percona:ppg:staging:18": {
+                "percona-pgbackrest": {R9: "2.60.0-1.1"},
+                "percona-pgaudit": {},  # present, build failed
+            },
+            "isv:percona:ppg:staging:17": {
+                "percona-pgbackrest": {R9: "2.59.0-1.1"},
+                "percona-pgaudit": {R9: "17.1-1.1"},
+            },
+        },
+    )
+    params, err = _show("ppg:staging:18:containers", capsys)
+    value = params["ubi9"]["EXPECTED_VERSIONS"]
+    assert "percona-pgaudit" not in value
+    assert "percona-pgbackrest=2.60.0" in value
+    assert "no OBS binaries for:" in err and "percona-pgaudit" in err
+
+
+def test_project_without_resolved_versions_does_not_follow_paths(
+    tmp_path, monkeypatch, capsys
+):
+    _container_tree(tmp_path, monkeypatch)
+    staging = tmp_path / "root" / "ppg" / "staging" / "18"
+    shutil.rmtree(staging / "percona-pgaudit")  # only percona-pgbackrest remains
+    (staging / "project.yaml").write_text(
+        "title: P\nrepositories:\n  - name: r\n    paths:\n"
+        "      - subproject: ppg:staging:17\n        repository: UBI_9\n"
+        "    archs: [x86_64]\n"
+        "qa:\n  - name: srv\n    pipeline: p\n    parameters:\n      A: '1'\n"
+    )
+    calls = _obs(
+        monkeypatch,
+        {
+            "isv:percona:ppg:staging:18": {"percona-pgbackrest": {}},
+            "isv:percona:ppg:staging:17": {"percona-only17": {R9: "1.0-1.1"}},
+        },
+    )
+    params, err = _show("ppg:staging:18", capsys)
+    assert "EXPECTED_VERSIONS" not in params["srv"]
+    assert "isv:percona:ppg:staging:17" not in calls
+    assert "warning: no OBS binaries for: percona-pgbackrest" in err
 
 
 _TARBALL_OBS = {
