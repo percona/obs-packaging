@@ -57,7 +57,6 @@ Build-Depends:
     uuid-dev,
     xsltproc,
     zlib1g-dev,
-    libcurl4,
     libcurl4-openssl-dev,
     curl | libz-dev,
     zstd (>= 1.4.0) <!pkg.postgresql.nozstd>,

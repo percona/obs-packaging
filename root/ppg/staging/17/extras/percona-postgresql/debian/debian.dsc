@@ -56,7 +56,6 @@ Build-Depends:
     uuid-dev,
     xsltproc,
     zlib1g-dev,
-    libcurl4,
     libcurl4-openssl-dev,
     curl | libz-dev,
     libzstd-dev,

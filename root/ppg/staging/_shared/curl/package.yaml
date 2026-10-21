@@ -1,0 +1,16 @@
+title: curl 8.23.0 (aggregate of ppg:common:deps/curl)
+description: |
+  Ships ppg:common:deps/curl in this repository. The PPG packages build
+  against that libcurl and require it (CURL_OPENSSL_4 symbol versions on
+  RPM, libcurl4t64 (>= 8.23.0) on Debian), so the published repository
+  must carry it. Ubuntu and Tumbleweed use the distro curl.
+
+# Build scoping mirrors root/ppg/common/deps/curl/package.yaml: aggregate
+# only where the source package builds. Keep the two in sync.
+build:
+  openSUSE_Tumbleweed: false
+  # Ubuntu keeps the distro libcurl: Ubuntu's own curl security updates
+  # carry the CVE fixes.
+  Ubuntu_22.04: false
+  Ubuntu_24.04: false
+  Ubuntu_26.04: false

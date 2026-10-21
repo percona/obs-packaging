@@ -33,7 +33,7 @@ License:        PostgreSQL
 URL:            https://github.com/percona/pg_tde
 Source0:        %{sname}-%{version}.tar.gz
 
-BuildRequires:  %{pg_name}-devel chrpath openssl-devel libcurl-devel zlib-devel libzstd-devel libxml2-devel libxslt-devel libselinux-devel pam-devel krb5-devel readline-devel meson cmake
+BuildRequires:  %{pg_name}-devel chrpath openssl-devel libcurl-devel >= 8.23.0 zlib-devel libzstd-devel libxml2-devel libxslt-devel libselinux-devel pam-devel krb5-devel readline-devel meson cmake
 # meson links the client tools against PostgreSQL's static helper libraries
 # (libpgport.a, libpgcommon.a, libpgfeutils.a). The PG 19 packaging moved
 # them out of -devel into the -static subpackage; <= 18 -devel still

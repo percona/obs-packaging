@@ -185,10 +185,10 @@ BuildRequires:  openldap-devel
 %endif
 
 %if 0%{?suse_version} >= 1500
-BuildRequires:  pkgconfig(libcurl)
+BuildRequires:  pkgconfig(libcurl) >= 8.23.0
 %endif
 %if 0%{?rhel} >= 8
-BuildRequires:  pkgconfig(libcurl)
+BuildRequires:  pkgconfig(libcurl) >= 8.23.0
 %endif
 
 %if %nls

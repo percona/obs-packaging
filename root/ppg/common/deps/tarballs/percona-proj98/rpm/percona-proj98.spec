@@ -74,7 +74,7 @@ BuildRequires:  sqlite
 # proj96/proj98's libproj.so.25 links too — no extra library lands in the
 # tarball, libtiff and libcurl are bundled for GDAL anyway.
 BuildRequires:  libtiff-devel
-BuildRequires:  libcurl-devel
+BuildRequires:  libcurl-devel >= 8.23.0
 
 %description
 PROJ %{version} built from the upstream source with the install prefix
