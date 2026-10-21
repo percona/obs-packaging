@@ -4,15 +4,31 @@ description: 'Extras:containers subproject for ppg:releases:18.
   Builds are disabled; binaries are copied via osc release.
 
   '
-project-config: '%if "%_repository" == "ubi9"
+project-config: '# --- from root/ppg/staging/18/extras/containers/project.yaml ---
+
+  %if "%_repository" == "ubi9"
 
   Type: docker
 
   BuildEngine: podman
 
+  # OCI index + OCI manifests (ppg-testing requires OCI-only media types) with
+
+  # gzip layers, so Docker < 23 can still pull the images.  Stock obs-build
+
+  # only writes an OCI archive for non-gzip compression; the labs workers carry
+
+  # a patch that also selects it for container-build-format:oci.
+
+  BuildFlags: container-compression-format:gzip
+
+  BuildFlags: container-build-format:oci
+
   BuildFlags: dockerarg:PPG_REPO=staging
 
   BuildFlags: dockerarg:RHEL_VER=el9
+
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 
   Preinstall: skopeo
@@ -45,12 +61,24 @@ project-config: '%if "%_repository" == "ubi9"
   %endif
 
   '
+qa:
+- name: custom
+  parameters:
+    DOCKER_TAG: '18'
+    REPOSITORY:
+      image: percona-distribution-postgresql-custom
+      repository: ubi9
+    SERVER_VERSION: '18.6'
+    TESTING_BRANCH: main
+  pipeline: docker-server-parallel-custom
 repositories:
 - archs:
   - x86_64
   - aarch64
   name: ubi9
   paths:
+  - project: RedHat:UBI:Registry
+    repository: images
   - repository: UBI_9
     subproject: ppg:releases:18:extras
   - repository: UBI_9
@@ -59,12 +87,10 @@ repositories:
     subproject: ppg:staging:17
   - repository: UBI_9
     subproject: ppg:common:deps
-  - repository: images
-    subproject: common:containers:ubi9
   - repository: UBI_9
     subproject: common:containers:ubi9
   - project: Fedora:EPEL:9
     repository: standard
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RedHat:UBI-9
+  - project: RedHat:UBI-9
     repository: standard
 title: ppg releases 18 — extras:containers
