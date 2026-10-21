@@ -1,5 +1,7 @@
 build: false
 debuginfo:
+  RockyLinux_10: true
+  RockyLinux_8: true
   RockyLinux_9: true
   RockyLinux_9.6: true
   openSUSE_Leap_16: true
@@ -11,7 +13,17 @@ description: 'Release project for ppg:staging:18 (OBS project ppg:releases:18).
   This project is read-only — do not add or edit packages directly.
 
   '
-project-config: '%if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_8"
+project-config: '# --- from root/project.yaml ---
+
+  # Distro-wide build configuration inherited by every project under root/.
+
+  # Project-specific lines live in the project''s own project.yaml (or in a
+
+  # tier''s subprojects.yaml); the tool concatenates them and marks each block
+
+  # with a "# --- from <file> ---" header.  See root/README.md.
+
+  %if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_8"
 
   ExpandFlags: module:llvm-toolset-rhel8
 
@@ -21,17 +33,12 @@ project-config: '%if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_
 
   ExpandFlags: module:perl-libwww-perl-6.34
 
-  Prefer: python3-devel
-
-  Prefer: atlas
-
   Prefer: selinux-policy-targeted
 
   %endif
 
 
-  %if "%_repository" == "RockyLinux_9" || "%_repository" == "RockyLinux_9.6" || "%_repository"
-  == "UBI_9"
+  %if "%_repository" == "RockyLinux_9" || "%_repository" == "RockyLinux_9.6"
 
   ExpandFlags: module:llvm-toolset-rhel9
 
@@ -71,88 +78,22 @@ project-config: '%if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_
   %endif
 
 
-  %if "%_repository" == "RockyLinux_10"
+  %if "%_repository" == "UBI_10"
 
-  Prefer: selinux-policy-targeted
+  # RHEL 10 appstream ships llvm-libs 21 and EPEL 10 ships llvm21-libs; both
 
-  Prefer: hdf-libs
+  # provide libLLVM.so.21.1, so OBS reports "have choice" for rust (seen on
 
+  # common:deps:build/cargo-pgrx-*). Prefer the distro package, as the
 
-  Macros:
+  # RockyLinux_9.6 block above does.
 
-  %__brp_check_rpaths %{nil}
-
-  :Macros
-
-  %endif
-
-
-  %if "%_repository" == "openSUSE_Tumbleweed"
-
-  # percona-postgresql18-server conflicts with the SUSE postgresql-server and
-
-  # postgresql18-server packages (both own /var/lib/pgsql). The DNF stack
-
-  # (pulled in by yum-utils) recommends postgresql-server on Tumbleweed.
-
-  # Suppress those packages entirely so that postgresql-server requirements
-
-  # resolve to percona-postgresql18-server via its Provides. Also suppress the
-
-  # ppg:17 system package (postgresql17-server) so that this project does not
-
-  # pick it up when both majors are present in the interconnect.
-
-  Prefer: percona-postgresql18-server
-
-  # Our python3-dateutil and python3-six packages shadow the SUSE system packages
-
-  # (python313-python-dateutil, python313-six). Prefer system packages so that
-
-  # build deps like python3-dnf-plugins-core and python3-libmodulemd resolve correctly.
-
-  Prefer: python313-python-dateutil
-
-  Prefer: python313-six
-
-  Ignore: postgresql17-server
-
-  Ignore: postgresql-server
-
-  Ignore: postgresql
+  Prefer: llvm-libs
 
   %endif
 
 
-  %if "%_repository" == "openSUSE_Leap_16"
-
-  # Same conflict as Tumbleweed: the system PostgreSQL packages conflict with
-
-  # percona-postgresql18-server. Suppress them so dependencies resolve correctly.
-
-  Prefer: percona-postgresql18-server
-
-  # Our python3-dateutil and python3-six packages shadow the SUSE system packages
-
-  # (python313-python-dateutil, python313-six). Prefer system packages so that
-
-  # build deps like python3-dnf-plugins-core and python3-libmodulemd resolve correctly.
-
-  Prefer: python313-python-dateutil
-
-  Prefer: python313-six
-
-  Ignore: postgresql17-server
-
-  Ignore: postgresql-server
-
-  Ignore: postgresql
-
-  %endif
-
-
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository"
-  == "Ubuntu_22.04"
+  %if "%_repository" == "Debian_12" || "%_repository" == "Ubuntu_22.04"
 
   # llvm-*-dev needs libtinfo-dev; both libncurses-dev and libtinfo-dev satisfy
 
@@ -164,6 +105,180 @@ project-config: '%if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_
 
   Prefer: cron
 
+  %endif
+
+
+  %if "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository"
+  == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04"
+
+  Prefer: golang-1.26
+
+  %endif
+
+
+  %if "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository"
+  == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
+
+  # libgdal-dev transitively requires both libcurl4-openssl-dev and
+
+  # libcurl4-gnutls-dev which conflict; ignore the gnutls variant so
+
+  # the openssl variant is used consistently.
+
+  Ignore: libcurl4-gnutls-dev
+
+  # libgdal-dev and several of its deps use libjpeg-dev which is provided
+
+  # by both libjpeg62-turbo-dev and libjpeg-dev; prefer the turbo variant.
+
+  Prefer: libjpeg62-turbo-dev
+
+  %endif
+
+
+  # Append the distribution codename to the OBS release counter on deb-based
+
+  # repositories so that deb filenames are distinguishable across distro
+
+  # versions (e.g. …_1.0.15-1+2.1.trixie_amd64.deb).  debtransform appends
+
+  # "+<release>" to the version for packages whose debian.dsc carries
+
+  # "Debtransform-Release: 1".  RPM repositories keep the default
+
+  # <CI_CNT>.<B_CNT> release.
+
+  %if "%_repository" == "Debian_12"
+
+  Release: <CI_CNT>.<B_CNT>.bookworm
+
+  %endif
+
+  %if "%_repository" == "Debian_13"
+
+  Release: <CI_CNT>.<B_CNT>.trixie
+
+  %endif
+
+  %if "%_repository" == "Ubuntu_22.04"
+
+  Release: <CI_CNT>.<B_CNT>.jammy
+
+  %endif
+
+  %if "%_repository" == "Ubuntu_24.04"
+
+  Release: <CI_CNT>.<B_CNT>.noble
+
+  %endif
+
+  %if "%_repository" == "Ubuntu_26.04"
+
+  Release: <CI_CNT>.<B_CNT>.resolute
+
+  %endif
+
+
+  # --- from root/ppg/staging/subprojects.yaml ---
+
+  %if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_8"
+
+  Prefer: python3-devel
+
+  Prefer: atlas
+
+  %endif
+
+
+  %if "%_repository" == "UBI_9"
+
+  # Same toolchain module and hdf-libs pick as the RockyLinux_9 block in the
+
+  # root project.yaml; UBI_9 is a PPG-only repository.
+
+  ExpandFlags: module:llvm-toolset-rhel9
+
+  # hdf-libs (EPEL split package) and hdf both provide libdf.so.0 and libmfhdf.so.0
+
+  Prefer: hdf-libs
+
+  %endif
+
+
+  %if "%_repository" == "RockyLinux_10" || "%_repository" == "UBI_10"
+
+  Prefer: selinux-policy-targeted
+
+  Prefer: hdf-libs
+
+  # EPEL''s gdal3.4-libs needs libspatialite.so.8, which ppg:common:deps''
+
+  # libspatialite50 (PGDG layout, /usr/libspatialite50) now provides too.
+
+  # Keep EPEL''s libspatialite for EPEL''s GDAL. Consumers of gdal313 require
+
+  # libspatialite50 by name, so this does not affect them.
+
+  Prefer: libspatialite
+
+
+  Macros:
+
+  %__brp_check_rpaths %{nil}
+
+  :Macros
+
+  %endif
+
+
+  %if "%_repository" == "openSUSE_Tumbleweed" || "%_repository" == "openSUSE_Leap_16"
+
+  # percona-postgresqlNN-server conflicts with the SUSE postgresql-server and
+
+  # postgresqlNN-server packages (all own /var/lib/pgsql). The DNF stack
+
+  # (pulled in by percona-telemetry-agent -> yum-utils) recommends the SUSE
+
+  # server. Suppress those packages so that postgresql-server requirements
+
+  # resolve to our server via its Provides.  Each major additionally ignores
+
+  # the *other* major''s system package in its own project.yaml.
+
+  Prefer: percona-postgresql18-server
+
+  # Our python3-dateutil and python3-six packages shadow the SUSE system packages
+
+  # (python313-python-dateutil, python313-six). Prefer system packages so that
+
+  # build deps like python3-dnf-plugins-core and python3-libmodulemd resolve correctly.
+
+  Prefer: python313-python-dateutil
+
+  Prefer: python313-six
+
+  Ignore: postgresql-server
+
+  Ignore: postgresql
+
+  %endif
+
+
+  # --- from root/ppg/staging/18/project.yaml ---
+
+  %if "%_repository" == "openSUSE_Tumbleweed" || "%_repository" == "openSUSE_Leap_16"
+
+  # Suppress the previous major''s system package so that this project does not
+
+  # pick it up when both majors are present in the interconnect.
+
+  Ignore: postgresql17-server
+
+  %endif
+
+
+  %if "%_repository" == "Debian_12" || "%_repository" == "Ubuntu_22.04"
+
   # PG 18 JIT requires LLVM >= 19; use repackaged llvm-21 from common:deps:build.
 
   Prefer: llvm-21-dev
@@ -174,7 +289,7 @@ project-config: '%if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_
 
   Substitute: clang clang-21
 
-  # Force the whole llvm-21 toolchain into every Debian 11/12 build root. clang-21/
+  # Force the whole llvm-21 toolchain into every Debian 12 build root. clang-21/
 
   # llvm-21-dev pull the rest transitively but an inherited Ignore strips them,
 
@@ -213,35 +328,6 @@ project-config: '%if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_
   %endif
 
 
-  %if "%_repository" == "Debian_11"
-
-  # python3-distutils is needed for some Python packaging on Bullseye only.
-
-  Support: python3-distutils
-
-  Ignore: libllvm11
-
-  Ignore: llvm-11-runtime
-
-  Ignore: llvm-11-linker-tools
-
-  Ignore: libclang-cpp11
-
-  Ignore: libclang-common-11-dev
-
-  Ignore: libclang1-11
-
-  Ignore: llvm-11-tools
-
-  Ignore: llvm-11
-
-  Ignore: llvm-11-dev
-
-  Ignore: clang-11
-
-  %endif
-
-
   %if "%_repository" == "Debian_12"
 
   # Prefer repackaged llvm-21 over Bookworm''s system LLVM 14.
@@ -266,78 +352,413 @@ project-config: '%if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_
 
   Ignore: clang-14
 
-  %endif
-
-
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository"
-  == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04"
-
-  Prefer: golang-1.26
-
-  %endif
-
-
-  %if "%_repository" == "Debian_11" || "%_repository" == "Debian_12" || "%_repository"
-  == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04"
-  || "%_repository" == "Ubuntu_26.04"
-
-  # libgdal-dev transitively requires both libcurl4-openssl-dev and
-
-  # libcurl4-gnutls-dev which conflict; ignore the gnutls variant so
-
-  # the openssl variant is used consistently.
-
-  Ignore: libcurl4-gnutls-dev
-
-  # libgdal-dev and several of its deps use libjpeg-dev which is provided
-
-  # by both libjpeg62-turbo-dev and libjpeg-dev; prefer the turbo variant.
-
-  Prefer: libjpeg62-turbo-dev
-
-  %endif
-
-
-  # Distro codename suffix for deb releases — keep in sync with the root
-
-  # project.yaml (this project-config overrides the inherited root config).
-
-  %if "%_repository" == "Debian_11"
-
-  Release: <CI_CNT>.<B_CNT>.bullseye
-
-  %endif
-
-  %if "%_repository" == "Debian_12"
-
-  Release: <CI_CNT>.<B_CNT>.bookworm
-
-  %endif
-
-  %if "%_repository" == "Debian_13"
-
-  Release: <CI_CNT>.<B_CNT>.trixie
-
-  %endif
-
-  %if "%_repository" == "Ubuntu_22.04"
-
-  Release: <CI_CNT>.<B_CNT>.jammy
-
-  %endif
-
-  %if "%_repository" == "Ubuntu_24.04"
-
-  Release: <CI_CNT>.<B_CNT>.noble
-
-  %endif
-
-  %if "%_repository" == "Ubuntu_26.04"
-
-  Release: <CI_CNT>.<B_CNT>.resolute
-
   %endif'
+qa:
+- matrix:
+  - IO_METHOD
+  - SCENARIO
+  name: server
+  parameters:
+    IO_METHOD:
+    - worker
+    - sync
+    - io_uring
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18
+    PLATFORMS:
+    - debian-12
+    - debian-12-arm
+    - debian-13
+    - debian-13-arm
+    - ubuntu-jammy
+    - ubuntu-jammy-arm
+    - ubuntu-noble
+    - ubuntu-noble-arm
+    - ubuntu-resolute
+    - ubuntu-resolute-arm
+    - rocky-8
+    - rocky-8-arm
+    - rocky-9
+    - rocky-9-arm
+    - rocky-10
+    - rocky-10-arm
+    - ol-8
+    - ol-8-arm
+    - ol-9
+    - ol-9-arm
+    - ol-10
+    - ol-10-arm
+    - rhel-8
+    - rhel-8-arm
+    - rhel-9
+    - rhel-9-arm
+    - rhel-10
+    - rhel-10-arm
+    SCENARIO:
+    - pg-18
+    - pg-18-meta-server
+    - pg-18-meta-ha
+    TESTING_BRANCH: main
+    USE_OBS_REPO: true
+    VERSION: ppg-18.6
+  pipeline: ppg-multiOS-parallel
+- name: percona-credcheck.credcheck
+  package: percona-credcheck
+  parameters:
+    COMPONENT_REF: v5.0
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18
+    PRODUCT: credcheck
+    TEST_BRANCH: main
+    USE_OBS_REPO: true
+    VERSION: ppg-18.6
+  pipeline: component-generic-parallel
+- name: percona-patroni.patroni
+  package: percona-patroni
+  parameters:
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18
+    PRODUCT: patroni
+    TEST_BRANCH: main
+    USE_OBS_REPO: true
+    VERSION: ppg-18.6
+  pipeline: component-generic-parallel
+- name: percona-pg_repack.pg_repack
+  package: percona-pg_repack
+  parameters:
+    COMPONENT_REF: ver_1.5.3
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18
+    PRODUCT: pg_repack
+    TEST_BRANCH: main
+    USE_OBS_REPO: true
+    VERSION: ppg-18.6
+  pipeline: component-generic-parallel
+- name: percona-pg_stat_monitor.pg_stat_monitor
+  package: percona-pg_stat_monitor
+  parameters:
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18
+    PGSM_BRANCH: release-2.4.1
+    PGSM_PACKAGE_INSTALL: true
+    PGSM_REPO: https://github.com/percona/pg_stat_monitor.git
+    PLATFORMS:
+    - debian-12
+    - debian-12-arm
+    - debian-13
+    - debian-13-arm
+    - ubuntu-jammy
+    - ubuntu-jammy-arm
+    - ubuntu-noble
+    - ubuntu-noble-arm
+    - ubuntu-resolute
+    - ubuntu-resolute-arm
+    - rocky-8
+    - rocky-8-arm
+    - rocky-9
+    - rocky-9-arm
+    - rocky-10
+    - rocky-10-arm
+    - ol-8
+    - ol-8-arm
+    - ol-9
+    - ol-9-arm
+    - ol-10
+    - ol-10-arm
+    - rhel-8
+    - rhel-8-arm
+    - rhel-9
+    - rhel-9-arm
+    - rhel-10
+    - rhel-10-arm
+    TESTING_BRANCH: main
+    USE_OBS_REPO: true
+    VERSION: ppg-18.6
+  pipeline: pgsm-parallel
+- name: percona-pg_tde.pg_tde
+  package: percona-pg_tde
+  parameters:
+    INSTALL_FROM_PACKAGES: true
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18
+    PLATFORMS:
+    - debian-12
+    - debian-12-arm
+    - debian-13
+    - debian-13-arm
+    - ubuntu-jammy
+    - ubuntu-jammy-arm
+    - ubuntu-noble
+    - ubuntu-noble-arm
+    - ubuntu-resolute
+    - ubuntu-resolute-arm
+    - rocky-8
+    - rocky-8-arm
+    - rocky-9
+    - rocky-9-arm
+    - rocky-10
+    - rocky-10-arm
+    - ol-8
+    - ol-8-arm
+    - ol-9
+    - ol-9-arm
+    - ol-10
+    - ol-10-arm
+    - rhel-8
+    - rhel-8-arm
+    - rhel-9
+    - rhel-9-arm
+    - rhel-10
+    - rhel-10-arm
+    TESTING_BRANCH: main
+    TEST_SUITE: All
+    USE_OBS_REPO: true
+    VERSION: ppg-18.6
+  pipeline: tde-core-parallel
+- name: percona-pgaudit.pg_audit
+  package: percona-pgaudit
+  parameters:
+    COMPONENT_REF: '18.0'
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18
+    PRODUCT: pg_audit
+    TEST_BRANCH: main
+    USE_OBS_REPO: true
+    VERSION: ppg-18.6
+  pipeline: component-generic-parallel
+- name: percona-pgaudit_set_user.pgaudit13_set_user
+  package: percona-pgaudit_set_user
+  parameters:
+    COMPONENT_REF: REL4_2_0
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18
+    PRODUCT: pgaudit13_set_user
+    TEST_BRANCH: main
+    USE_OBS_REPO: true
+    VERSION: ppg-18.6
+  pipeline: component-generic-parallel
+- name: percona-pgbackrest.pgbackrest
+  package: percona-pgbackrest
+  parameters:
+    COMPONENT_REF: release/2.60.0
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18
+    PRODUCT: pgbackrest
+    TEST_BRANCH: main
+    USE_OBS_REPO: true
+    VERSION: ppg-18.6
+  pipeline: component-generic-parallel
+- name: percona-pgbadger.pgbadger
+  package: percona-pgbadger
+  parameters:
+    COMPONENT_REF: v13.2
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18
+    PRODUCT: pgbadger
+    TEST_BRANCH: main
+    USE_OBS_REPO: true
+    VERSION: ppg-18.6
+  pipeline: component-generic-parallel
+- name: percona-pgbouncer.pgbouncer
+  package: percona-pgbouncer
+  parameters:
+    COMPONENT_REF: pgbouncer_1_26_1
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18
+    PRODUCT: pgbouncer
+    TEST_BRANCH: main
+    USE_OBS_REPO: true
+    VERSION: ppg-18.6
+  pipeline: component-generic-parallel
+- name: percona-pgpool-II.pgpool
+  package: percona-pgpool-II
+  parameters:
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18
+    PRODUCT: pgpool
+    TEST_BRANCH: main
+    USE_OBS_REPO: true
+    VERSION: ppg-18.6
+  pipeline: component-generic-parallel
+- name: percona-pgvector.pgvector
+  package: percona-pgvector
+  parameters:
+    COMPONENT_REF: v0.8.7
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18
+    PRODUCT: pgvector
+    TEST_BRANCH: main
+    USE_OBS_REPO: true
+    VERSION: ppg-18.6
+  pipeline: component-generic-parallel
+- name: percona-postgis.postgis
+  package: percona-postgis
+  parameters:
+    COMPONENT_REF: 3.5.7
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18
+    PRODUCT: postgis
+    TEST_BRANCH: main
+    USE_OBS_REPO: true
+    VERSION: ppg-18.6
+  pipeline: component-generic-parallel
+- name: percona-wal2json.wal2json
+  package: percona-wal2json
+  parameters:
+    COMPONENT_REF: wal2json_2_7
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18
+    PRODUCT: wal2json
+    TEST_BRANCH: main
+    USE_OBS_REPO: true
+    VERSION: ppg-18.6
+  pipeline: component-generic-parallel
 repositories:
+- archs:
+  - x86_64
+  - aarch64
+  name: RockyLinux_8
+  paths:
+  - repository: RockyLinux_8
+    subproject: ppg:common:deps
+  - repository: RockyLinux_8
+    subproject: common:deps:build
+  - project: Fedora:EPEL:8
+    repository: standard
+  - project: RockyLinux:8
+    repository: appstream
+  - project: RockyLinux:8
+    repository: baseos
+  - project: RockyLinux:8
+    repository: devel
+- archs:
+  - x86_64
+  - aarch64
+  name: RockyLinux_9
+  paths:
+  - repository: RockyLinux_9
+    subproject: ppg:common:deps
+  - repository: RockyLinux_9
+    subproject: common:deps:build
+  - project: Fedora:EPEL:9
+    repository: standard
+  - project: RockyLinux:9
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: RockyLinux_9.6
+  paths:
+  - repository: RockyLinux_9.6
+    subproject: ppg:common:deps
+  - repository: RockyLinux_9.6
+    subproject: common:deps:build
+  - project: Fedora:EPEL:9
+    repository: standard
+  - project: RockyLinux:9.6
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: RockyLinux_10
+  paths:
+  - repository: RockyLinux_10
+    subproject: ppg:common:deps
+  - repository: RockyLinux_10
+    subproject: common:deps:build
+  - project: Fedora:EPEL:10
+    repository: standard
+  - project: RockyLinux:10
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: UBI_9
+  paths:
+  - repository: UBI_9
+    subproject: ppg:common:deps
+  - repository: UBI_9
+    subproject: common:deps:build
+  - project: Fedora:EPEL:9
+    repository: standard
+  - project: RedHat:UBI-9
+    repository: standard
+  - project: RockyLinux:9
+    repository: devel
+- archs:
+  - x86_64
+  - aarch64
+  name: UBI_10
+  paths:
+  - repository: UBI_10
+    subproject: ppg:common:deps
+  - repository: UBI_10
+    subproject: common:deps:build
+  - project: Fedora:EPEL:10
+    repository: standard
+  - project: RedHat:UBI-10
+    repository: standard
+  - project: RockyLinux:10
+    repository: devel
+- archs:
+  - x86_64
+  - aarch64
+  name: UBI_8
+  paths:
+  - repository: UBI_8
+    subproject: ppg:common:deps
+  - repository: UBI_8
+    subproject: common:deps:build
+  - project: Fedora:EPEL:8
+    repository: standard
+  - project: RedHat:UBI-8
+    repository: standard
+  - project: RockyLinux:8
+    repository: appstream
+  - project: RockyLinux:8
+    repository: baseos
+  - project: RockyLinux:8
+    repository: devel
+- archs:
+  - x86_64
+  - aarch64
+  name: Debian_12
+  paths:
+  - repository: Debian_12
+    subproject: ppg:common:deps
+  - repository: Debian_12
+    subproject: common:deps:build
+  - project: Debian:12
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: Debian_13
+  paths:
+  - repository: Debian_13
+    subproject: ppg:common:deps
+  - repository: Debian_13
+    subproject: common:deps:build
+  - project: Debian:13
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: Ubuntu_22.04
+  paths:
+  - repository: Ubuntu_22.04
+    subproject: ppg:common:deps
+  - repository: Ubuntu_22.04
+    subproject: common:deps:build
+  - project: Ubuntu:22.04
+    repository: universe
+- archs:
+  - x86_64
+  - aarch64
+  name: Ubuntu_24.04
+  paths:
+  - repository: Ubuntu_24.04
+    subproject: ppg:common:deps
+  - repository: Ubuntu_24.04
+    subproject: common:deps:build
+  - project: Ubuntu:24.04
+    repository: universe
+- archs:
+  - x86_64
+  - aarch64
+  name: Ubuntu_26.04
+  paths:
+  - repository: Ubuntu_26.04
+    subproject: ppg:common:deps
+  - repository: Ubuntu_26.04
+    subproject: common:deps:build
+  - project: Ubuntu:26.04
+    repository: universe
 - archs:
   - x86_64
   - aarch64
@@ -359,159 +780,5 @@ repositories:
   - repository: openSUSE_Leap_16
     subproject: common:deps:build
   - project: openSUSE:Leap:16.0
-    repository: standard
-- archs:
-  - x86_64
-  - aarch64
-  name: Ubuntu_26.04
-  paths:
-  - repository: Ubuntu_26.04
-    subproject: ppg:common:deps
-  - repository: Ubuntu_26.04
-    subproject: common:deps:build
-  - project: Ubuntu:26.04
-    repository: universe
-- archs:
-  - x86_64
-  - aarch64
-  name: Ubuntu_24.04
-  paths:
-  - repository: Ubuntu_24.04
-    subproject: ppg:common:deps
-  - repository: Ubuntu_24.04
-    subproject: common:deps:build
-  - project: Ubuntu:24.04
-    repository: universe
-- archs:
-  - x86_64
-  - aarch64
-  name: Ubuntu_22.04
-  paths:
-  - repository: Ubuntu_22.04
-    subproject: ppg:common:deps
-  - repository: Ubuntu_22.04
-    subproject: common:deps:build
-  - project: Ubuntu:22.04
-    repository: universe
-- archs:
-  - x86_64
-  - aarch64
-  name: UBI_9
-  paths:
-  - repository: UBI_9
-    subproject: ppg:common:deps
-  - repository: UBI_9
-    subproject: common:deps:build
-  - project: Fedora:EPEL:9
-    repository: standard
-  - project: RedHat:UBI-9
-    repository: standard
-  - project: RockyLinux:9
-    repository: devel
-- archs:
-  - x86_64
-  - aarch64
-  name: UBI_8
-  paths:
-  - repository: UBI_8
-    subproject: common:deps:build
-  - repository: UBI_8
-    subproject: ppg:common:deps
-  - project: Fedora:EPEL:8
-    repository: standard
-  - project: RedHat:UBI-8
-    repository: standard
-  - project: RockyLinux:8
-    repository: appstream
-  - project: RockyLinux:8
-    repository: baseos
-  - project: RockyLinux:8
-    repository: devel
-- archs:
-  - x86_64
-  - aarch64
-  name: RockyLinux_9.6
-  paths:
-  - repository: RockyLinux_9.6
-    subproject: ppg:common:deps
-  - repository: RockyLinux_9.6
-    subproject: common:deps:build
-  - project: Fedora:EPEL:9
-    repository: standard
-  - project: RockyLinux:9.6
-    repository: standard
-- archs:
-  - x86_64
-  - aarch64
-  name: RockyLinux_9
-  paths:
-  - repository: RockyLinux_9
-    subproject: ppg:common:deps
-  - repository: RockyLinux_9
-    subproject: common:deps:build
-  - project: Fedora:EPEL:9
-    repository: standard
-  - project: RockyLinux:9
-    repository: standard
-- archs:
-  - x86_64
-  - aarch64
-  name: RockyLinux_8
-  paths:
-  - repository: RockyLinux_8
-    subproject: ppg:common:deps
-  - repository: RockyLinux_8
-    subproject: common:deps:build
-  - project: Fedora:EPEL:8
-    repository: standard
-  - project: RockyLinux:8
-    repository: appstream
-  - project: RockyLinux:8
-    repository: baseos
-  - project: RockyLinux:8
-    repository: devel
-- archs:
-  - x86_64
-  - aarch64
-  name: RockyLinux_10
-  paths:
-  - repository: RockyLinux_10
-    subproject: common:deps:build
-  - project: Fedora:EPEL:10
-    repository: standard
-  - project: RockyLinux:10
-    repository: standard
-- archs:
-  - x86_64
-  - aarch64
-  name: Debian_13
-  paths:
-  - repository: Debian_13
-    subproject: ppg:common:deps
-  - repository: Debian_13
-    subproject: common:deps:build
-  - project: Debian:13
-    repository: standard
-- archs:
-  - x86_64
-  - aarch64
-  name: Debian_12
-  paths:
-  - repository: Debian_12
-    subproject: ppg:common:deps
-  - repository: Debian_12
-    subproject: common:deps:build
-  - project: Debian:12
-    repository: standard
-- archs:
-  - x86_64
-  - aarch64
-  name: Debian_11
-  paths:
-  - repository: Debian_11
-    subproject: ppg:common:deps
-  - repository: Debian_11
-    subproject: common:deps:build
-  - project: Debian:11
     repository: standard
 title: ppg releases 18

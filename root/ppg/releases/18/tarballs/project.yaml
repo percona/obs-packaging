@@ -4,7 +4,9 @@ description: 'Tarballs subproject for ppg:releases:18.
   Builds are disabled; binaries are copied via osc release.
 
   '
-project-config: '# "Type:" is repo-scoped: only the ssl* repositories build simpleimage
+project-config: '# --- from root/ppg/staging/18/tarballs/project.yaml ---
+
+  # "Type:" is repo-scoped: only the ssl* repositories build simpleimage
 
   # recipes. The RockyLinux_* repos build ordinary RPM specs and must keep
 
@@ -44,35 +46,43 @@ project-config: '# "Type:" is repo-scoped: only the ssl* repositories build simp
 
   # PostGIS''s libgdal.so.NN()(64bit)/libproj.so.NN()(64bit) Requires are a
 
-  # "have choice" between EPEL''s gdal-libs/proj and our /opt-prefixed
+  # "have choice" between the PGDG-mirrored gdal38-libs/proj96 (EL8) or
+
+  # gdal313-libs/proj98 (EL9) — ppg:common:deps:postgis, aggregated into
+
+  # ppg:staging:18 — and our /opt-prefixed
 
   # percona-gdal/percona-proj (ppg:common:deps:tarballs deliberately keeps those
 
-  # auto-Provides). Ours must win: EPEL''s fully-optioned libgdal drags ~70
+  # auto-Provides). Ours must win: the fully-optioned libgdal drags dozens of
 
   # surplus shared objects into the tarball — including the armadillo/BLAS
 
   # chain whose FlexiBLAS ELF constructor abort()s on Rocky hosts — and has
 
-  # its data directory compiled to /usr/share/{gdal,proj}, a path no tarball
+  # its data directory compiled to /usr/<name>/share, a path no tarball
 
-  # host has. build-tarball.sh asserts EPEL''s are absent from the chroot.
+  # host has. build-tarball.sh asserts they are absent from the chroot.
 
-  Prefer: percona-gdal
+  Prefer: percona-gdal38
 
-  Prefer: percona-proj
+  Prefer: percona-proj96
 
   # ...but `Prefer:` only breaks TIES between providers of the SAME symbol.
 
-  # PostGIS also requires the distro GDAL/PROJ *by name* (rpmspec -P on
+  # PostGIS also requires the PGDG-mirrored GDAL/PROJ *by name* (rpmspec -q
+
+  # --requires on
 
   # root/ppg/staging/18/percona-postgis/rpm/percona-postgis.spec:
 
-  # `Requires: gdal-libs >= 3.0.4`, `Requires: gdal-libs` and
+  # `gdal38-libs >= 3.8.5`, `proj96 >= 9.6.2`, `geos315 >= 3.15.0` and
 
-  # `Requires: geos proj libgeotiff` on EL8; `gdal3.4-libs` on EL9 — all in
+  # `libgeotiff17` on EL8; `gdal313-libs >= 3.13.3`, `proj98 >= 9.8.1`,
 
-  # the main percona-postgis35_18 package, no subpackage).
+  # `geos315 >= 3.15.0` and `libgeotiff17` on EL9 — all in the main
+
+  # percona-postgis35_18 package, no subpackage).
 
   # A by-name Requires has exactly one provider, so there is no choice for
 
@@ -86,7 +96,7 @@ project-config: '# "Type:" is repo-scoped: only the ssl* repositories build simp
 
   # `Ignore:` rules when expanding image-type recipes. The effective prjconf
 
-  # carried the lines, yet EPEL''s gdal-libs/gdal3.4-libs and Rocky''s proj
+  # carried the lines, yet the EPEL GDAL of that time and Rocky''s proj
 
   # were still installed and build-tarball.sh section 0a FATALed as
 
@@ -100,17 +110,21 @@ project-config: '# "Type:" is repo-scoped: only the ssl* repositories build simp
 
   # Instead, the payload-free percona-gis-compat shim (from the unpublished
 
-  # ppg:common:deps:tarballs subproject) Provides those distro NAMES
+  # ppg:common:deps:tarballs subproject) Provides the gdal/proj/libgeotiff17
 
-  # itself, which turns each by-name Requires into a real have-choice that
+  # NAMES itself, which turns each by-name Requires into a real have-choice
 
-  # the Prefer: below resolves; the shim Requires percona-gdal/percona-proj
+  # that the Prefer: below resolves; the shim Requires percona-gdal/
 
-  # so the runtimes PostGIS needs still come in. The simpleimage recipe also
+  # percona-proj so the runtimes PostGIS needs still come in, and the real
 
-  # BuildRequires it explicitly, so its presence does not hinge on the
+  # geos315 (not provided by the shim: the tarball bundles its libgeos_c, and
 
-  # choice alone.
+  # ppg:staging:18 on the path above aggregates it). The
+
+  # simpleimage recipe also BuildRequires it explicitly, so its presence does
+
+  # not hinge on the choice alone.
 
   #
 
@@ -187,25 +201,29 @@ project-config: '# "Type:" is repo-scoped: only the ssl* repositories build simp
 
   # See the ssl1.1 block: our lean /opt GDAL+PROJ must win the
 
-  # libgdal.so.NN()(64bit)/libproj.so.NN()(64bit) choice over EPEL''s
+  # libgdal.so.NN()(64bit)/libproj.so.NN()(64bit) choice over
 
-  # gdal-libs/proj.
+  # gdal313-libs/proj98.
 
-  Prefer: percona-gdal
+  Prefer: percona-gdal313
 
-  Prefer: percona-proj
+  Prefer: percona-proj98
 
   # ...but `Prefer:` only breaks TIES between providers of the SAME symbol.
 
-  # PostGIS also requires the distro GDAL/PROJ *by name* (rpmspec -P on
+  # PostGIS also requires the PGDG-mirrored GDAL/PROJ *by name* (rpmspec -q
+
+  # --requires on
 
   # root/ppg/staging/18/percona-postgis/rpm/percona-postgis.spec:
 
-  # `Requires: gdal-libs >= 3.0.4`, `Requires: gdal-libs` and
+  # `gdal38-libs >= 3.8.5`, `proj96 >= 9.6.2`, `geos315 >= 3.15.0` and
 
-  # `Requires: geos proj libgeotiff` on EL8; `gdal3.4-libs` on EL9 — all in
+  # `libgeotiff17` on EL8; `gdal313-libs >= 3.13.3`, `proj98 >= 9.8.1`,
 
-  # the main percona-postgis35_18 package, no subpackage).
+  # `geos315 >= 3.15.0` and `libgeotiff17` on EL9 — all in the main
+
+  # percona-postgis35_18 package, no subpackage).
 
   # A by-name Requires has exactly one provider, so there is no choice for
 
@@ -219,7 +237,7 @@ project-config: '# "Type:" is repo-scoped: only the ssl* repositories build simp
 
   # `Ignore:` rules when expanding image-type recipes. The effective prjconf
 
-  # carried the lines, yet EPEL''s gdal-libs/gdal3.4-libs and Rocky''s proj
+  # carried the lines, yet the EPEL GDAL of that time and Rocky''s proj
 
   # were still installed and build-tarball.sh section 0a FATALed as
 
@@ -233,17 +251,21 @@ project-config: '# "Type:" is repo-scoped: only the ssl* repositories build simp
 
   # Instead, the payload-free percona-gis-compat shim (from the unpublished
 
-  # ppg:common:deps:tarballs subproject) Provides those distro NAMES
+  # ppg:common:deps:tarballs subproject) Provides the gdal/proj/libgeotiff17
 
-  # itself, which turns each by-name Requires into a real have-choice that
+  # NAMES itself, which turns each by-name Requires into a real have-choice
 
-  # the Prefer: below resolves; the shim Requires percona-gdal/percona-proj
+  # that the Prefer: below resolves; the shim Requires percona-gdal/
 
-  # so the runtimes PostGIS needs still come in. The simpleimage recipe also
+  # percona-proj so the runtimes PostGIS needs still come in, and the real
 
-  # BuildRequires it explicitly, so its presence does not hinge on the
+  # geos315 (not provided by the shim: the tarball bundles its libgeos_c, and
 
-  # choice alone.
+  # ppg:staging:18 on the path above aggregates it). The
+
+  # simpleimage recipe also BuildRequires it explicitly, so its presence does
+
+  # not hinge on the choice alone.
 
   #
 
@@ -280,9 +302,11 @@ project-config: '# "Type:" is repo-scoped: only the ssl* repositories build simp
 
   # lean /opt percona-gdal/percona-proj must win the SONAME choices over
 
-  # EPEL''s gdal-libs/proj; the payload-free percona-gis-compat shim turns
+  # gdal313-libs/proj98; the payload-free percona-gis-compat shim turns
 
-  # PostGIS''s by-name distro GDAL/PROJ Requires into resolvable choices
+  # PostGIS''s by-name gdal313-libs/proj98/libgeotiff17 Requires into
+
+  # resolvable choices
 
   # (prjconf Ignore: is NOT applied to image-type expansion — proven
 
@@ -302,9 +326,9 @@ project-config: '# "Type:" is repo-scoped: only the ssl* repositories build simp
 
   Prefer: hdf-libs
 
-  Prefer: percona-gdal
+  Prefer: percona-gdal313
 
-  Prefer: percona-proj
+  Prefer: percona-proj98
 
   Prefer: percona-gis-compat
 
@@ -320,6 +344,31 @@ publish:
   ssl1.1: true
   ssl3: true
   ssl3.5: true
+qa:
+- name: ssl1.1
+  parameters:
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18:tarballs
+    SSL_VERSION: '1'
+    TARBALL_URL: ''
+    TESTING_BRANCH: main
+    VERSION: ppg-18.6
+  pipeline: tarball-parallel-ssl1
+- name: ssl3
+  parameters:
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18:tarballs
+    SSL_VERSION: '3'
+    TARBALL_URL: ''
+    TESTING_BRANCH: main
+    VERSION: ppg-18.6
+  pipeline: tarball-parallel-ssl3
+- name: ssl3.5
+  parameters:
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:18:tarballs
+    SSL_VERSION: '3.5'
+    TARBALL_URL: ''
+    TESTING_BRANCH: main
+    VERSION: ppg-18.6
+  pipeline: tarball-parallel-ssl35
 repositories:
 - archs:
   - x86_64
