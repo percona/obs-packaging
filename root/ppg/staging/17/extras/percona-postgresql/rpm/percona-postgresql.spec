@@ -603,6 +603,9 @@ benchmarks.
 %patch -P 3 -p0
 %patch -P 5 -p0
 %patch -P 6 -p0
+# PERCONA: link llvmjit.so against static LLVM libraries, as PG 18 extras
+# does (Patch7 was declared but never applied).
+%patch -P 7 -p1
 
 %{__cp} -p %{SOURCE12} .
 
