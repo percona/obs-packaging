@@ -176,6 +176,11 @@ project-config: |
   Prefer: libncurses-dev
   # logrotate Recommends a cron daemon; both cron and bcron may be available.
   Prefer: cron
+  # ppg:common:deps/curl builds libcurl4t64 (curl 8.23.0), which takes over
+  # the distro libcurl4 here through "Provides: libcurl4". Both then satisfy
+  # libcurl4 dependencies (e.g. llvm-21's) and OBS reports "have choice";
+  # prefer the Percona build. Harmless where it is not in the path.
+  Prefer: libcurl4t64
   %endif
 
   %if "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04"

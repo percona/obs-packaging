@@ -1,0 +1,25 @@
+title: curl 8.23.0 for every PPG repository
+description: |
+  curl/libcurl 8.23.0 (CVE fixes; curl >= 8.22.0 requires OpenSSL >= 3.0),
+  replacing the distro curl on every PPG repository. Every PPG staging
+  repository, the binary tarballs and the container images resolve
+  ppg:common:deps first, so all PPG packages build against it; the staging
+  repositories ship it through _aggregate packages (root/ppg/staging/
+  _shared/curl).
+
+  RPM (rpm/curl.spec): binary package names match the distro's (curl,
+  libcurl / libcurl4 on SUSE, libcurl-devel) and obsolete the minimal
+  variants. EL8 only has OpenSSL 1.1.1, so there a static OpenSSL 3 is
+  linked into libcurl with its symbols hidden. Symbols are versioned
+  CURL_OPENSSL_4, unlike the distro libcurl, so packages built against it
+  require it.
+
+  Debian/Ubuntu (debian/): curl, libcurl4t64 (taking over libcurl4 on
+  Debian 12 / Ubuntu 22.04), libcurl4-openssl-dev; packages built against
+  it depend on libcurl4t64 (>= 8.23.0).
+
+  Feature set matches the distro's full libcurl.
+
+build:
+  # Tumbleweed already ships curl >= 8.23.0 and keeps moving ahead.
+  openSUSE_Tumbleweed: false

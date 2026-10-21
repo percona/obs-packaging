@@ -6,7 +6,7 @@ Version: 1.0.0
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 9),
- libcurl4-openssl-dev,
+ libcurl4-openssl-dev (>= 8.23.0),
  libkrb5-dev,
  libnuma-dev,
  liblz4-dev,

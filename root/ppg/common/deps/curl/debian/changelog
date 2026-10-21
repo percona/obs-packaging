@@ -1,0 +1,8 @@
+curl (8.23.0-1) unstable; urgency=medium
+
+  * Percona build of curl 8.23.0 (CVE fixes) for every PPG Debian/Ubuntu
+    repository, replacing the distro curl/libcurl (OpenSSL flavour) with
+    the distro's feature set. Packages built against it depend on
+    libcurl4t64 (>= 8.23.0).
+
+ -- Percona Development Team <info@percona.com>  Thu, 22 Oct 2026 10:00:00 +0000

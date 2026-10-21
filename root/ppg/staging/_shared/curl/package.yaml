@@ -1,0 +1,11 @@
+title: curl 8.23.0 (aggregate of ppg:common:deps/curl)
+description: |
+  Ships ppg:common:deps/curl in this repository. Every PPG package builds
+  against that libcurl and requires it (CURL_OPENSSL_4 symbol versions on
+  RPM, libcurl4t64 (>= 8.23.0) on Debian/Ubuntu), so the published
+  repository must carry it.
+
+# Build scoping mirrors root/ppg/common/deps/curl/package.yaml: aggregate
+# only where the source package builds. Keep the two in sync.
+build:
+  openSUSE_Tumbleweed: false

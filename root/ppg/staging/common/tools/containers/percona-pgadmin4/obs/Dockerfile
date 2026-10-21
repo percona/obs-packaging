@@ -17,8 +17,12 @@ LABEL name="Percona pgAdmin 4" \
 LABEL version="%!{PGADMIN_VERSION}"
 LABEL release="1"
 
+# curl/libcurl: the 8.23.0 build from ppg:common:deps, replacing the distro's
+# curl-minimal/libcurl-minimal (which it obsoletes).
 RUN microdnf -y update && \
     microdnf -y install \
+        curl \
+        libcurl \
         percona-pgadmin4 \
         percona-pgadmin4-gunicorn \
         percona-postgresql14 \

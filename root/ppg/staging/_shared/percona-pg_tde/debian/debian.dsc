@@ -13,7 +13,7 @@ Build-Depends:
  ninja-build,
  pkg-config,
  percona-postgresql-server-dev-all (>= 153~),
- libcurl4-openssl-dev,
+ libcurl4-openssl-dev (>= 8.23.0),
  libkrb5-dev,
  libnuma-dev,
  liblz4-dev,

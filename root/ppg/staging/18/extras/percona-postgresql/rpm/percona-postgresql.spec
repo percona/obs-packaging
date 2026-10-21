@@ -98,7 +98,7 @@ BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c+
 BuildRequires:  perl(ExtUtils::MakeMaker)
 BuildRequires:  readline-devel zlib-devel >= 1.0.4
 BuildRequires:  chrpath
-BuildRequires:  libcurl-devel >= 7.61.0
+BuildRequires:  libcurl-devel >= 8.23.0
 BuildRequires:  pkgconfig
 
 # lz4 dependency
