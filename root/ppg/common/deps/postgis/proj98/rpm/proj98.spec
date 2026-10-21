@@ -19,7 +19,7 @@ License:	MIT
 URL:		https://proj.org
 Source0:	%{sname}-%{version}.tar.gz
 
-BuildRequires:	sqlite-devel >= 3.7 libcurl-devel cmake >= 3.16 sqlite
+BuildRequires:	sqlite-devel >= 3.7 libcurl-devel >= 8.23.0 cmake >= 3.16 sqlite
 BuildRequires:	binutils
 %if 0%{?gts_version}
 BuildRequires:	gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc

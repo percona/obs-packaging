@@ -18,7 +18,7 @@ Source4:	       %{sname}.service
 Source6:        %{sname}-sysusers.conf
 BuildRequires:	gcc zlib-devel percona-postgresql%{pgmajorversion}-devel
 BuildRequires:	libzstd-devel libxml2-devel meson
-BuildRequires:	libssh2-devel libyaml-devel libcurl-devel
+BuildRequires:	libssh2-devel libyaml-devel libcurl-devel >= 8.23.0
 
 %if 0%{?suse_version} >= 1500
 Requires:	libopenssl3 libsystemd0

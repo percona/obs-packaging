@@ -101,7 +101,7 @@ BuildRequires:	ant
 BuildRequires:	armadillo-devel
 BuildRequires:	cfitsio-devel
 BuildRequires:	chrpath
-BuildRequires:	curl-devel
+BuildRequires:	curl-devel >= 8.23.0
 BuildRequires:	doxygen
 BuildRequires:	fontconfig-devel
 BuildRequires:	freexl-devel

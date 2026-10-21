@@ -49,6 +49,10 @@ project-config: |
   Prefer: glibc-minimal-langpack
   Prefer: gpgme
   Prefer: iptables-nft
+  # curl/libcurl 8.23.0 (ppg:common:deps) vs the UBI curl-minimal/
+  # libcurl-minimal: both provide libcurl.so.4 / curl, so prefer ours.
+  Prefer: libcurl
+  Prefer: curl
   Prefer: percona-postgresql%!{PG_MAJOR_VERSION}-libs
   Ignore: rocky-release
 

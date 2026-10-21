@@ -1352,6 +1352,33 @@ then
     exit 1
 fi
 
+echo "=== Verification: bundled libcurl audit ==="
+# Every PPG package is built against the Percona curl from ppg:common:deps
+# (>= 8.23.0; the recipe BuildRequires it), so the artifact must bundle
+# exactly that libcurl. Each bundled copy must carry the chroot RPM's
+# version string and define the CURL_OPENSSL_4 symbol version, which only
+# the Percona build has on EL (the distro libcurl is unversioned). Bytes
+# are not compared: patch_rpath rewrites the bundled copies' RUNPATH.
+LIBCURL_VER=$(rpm -q --qf '%{version}' libcurl) \
+    || { echo "FATAL: libcurl RPM not installed in the chroot" >&2; exit 1; }
+if ! printf '%s\n' 8.23.0 "$LIBCURL_VER" | sort -V -C; then
+    echo "FATAL: chroot libcurl $LIBCURL_VER is older than 8.23.0 (not the ppg:common:deps build)" >&2
+    exit 1
+fi
+LIBCURL_BUNDLED=$(find /opt/percona-* -name 'libcurl.so.4*' -type f)
+[ -n "$LIBCURL_BUNDLED" ] || { echo "FATAL: no libcurl.so.4 bundled in the artifact" >&2; exit 1; }
+for f in $LIBCURL_BUNDLED; do
+    if ! grep -aq "libcurl/${LIBCURL_VER}" "$f"; then
+        echo "FATAL: $f is not libcurl ${LIBCURL_VER}" >&2
+        exit 1
+    fi
+    if ! readelf --dyn-syms -W "$f" | grep -q 'curl_easy_init@@CURL_OPENSSL_4'; then
+        echo "FATAL: $f does not define CURL_OPENSSL_4 (not the Percona libcurl build)" >&2
+        exit 1
+    fi
+    echo "  ok: $f (libcurl ${LIBCURL_VER}, CURL_OPENSSL_4)"
+done
+
 echo "=== Verification: component inventory ==="
 # The artifact must contain exactly these THIRTEEN top-level components
 # (QA item 8 added percona-haproxy; the 2026-07 QA round added percona-gdal
