@@ -41,3 +41,105 @@ qa:
         - rhel-10
         - rhel-10-arm
       TESTING_BRANCH: main
+
+  # pg_tde's auxiliary tools (pg_tde_* utilities, key management) from the
+  # OBS packages; only the percona-qa test scripts come from git.
+  - name: pg_tde-auxiliary
+    pipeline: tde-auxiliary-parallel
+    parameters:
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      INSTALL_FROM_PACKAGES: true
+      PLATFORMS:
+        - debian-12
+        - debian-12-arm
+        - debian-13
+        - debian-13-arm
+        - ubuntu-jammy
+        - ubuntu-jammy-arm
+        - ubuntu-noble
+        - ubuntu-noble-arm
+        - ubuntu-resolute
+        - ubuntu-resolute-arm
+        - rocky-8
+        - rocky-8-arm
+        - rocky-9
+        - rocky-9-arm
+        - rocky-10
+        - rocky-10-arm
+        - ol-8
+        - ol-8-arm
+        - ol-9
+        - ol-9-arm
+        - ol-10
+        - ol-10-arm
+        - rhel-8
+        - rhel-8-arm
+        - rhel-9
+        - rhel-9-arm
+        - rhel-10
+        - rhel-10-arm
+      TESTING_BRANCH: main
+
+  # The pg_tde developers' own tests (meson test, from the percona/pg_tde
+  # repository) against the packaged pg_tde from OBS. The job builds the
+  # source only so the test harness can run, and does not install it, so the
+  # tests exercise the package. Pinned to the tag OBS builds pg_tde from.
+  # tde-core above runs QA's own test suite (ppg-testing); this is a
+  # different suite, not a duplicate.
+  - name: pg_tde-developer-tests
+    pipeline: tde-parallel
+    parameters:
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      TDE_BRANCH: "%!{PG_TDE_REVISION}"
+      PLATFORMS:
+        - debian-12
+        - debian-12-arm
+        - debian-13
+        - debian-13-arm
+        - ubuntu-jammy
+        - ubuntu-jammy-arm
+        - ubuntu-noble
+        - ubuntu-noble-arm
+        - ubuntu-resolute
+        - ubuntu-resolute-arm
+        - rocky-8
+        - rocky-8-arm
+        - rocky-9
+        - rocky-9-arm
+        - rocky-10
+        - rocky-10-arm
+        - ol-8
+        - ol-8-arm
+        - ol-9
+        - ol-9-arm
+        - ol-10
+        - ol-10-arm
+        - rhel-8
+        - rhel-8-arm
+        - rhel-9
+        - rhel-9-arm
+        - rhel-10
+        - rhel-10-arm
+      TESTING_BRANCH: main
+
+  # pg_tde minor upgrade: the latest released N.x with pg_tde (FROM_REPO
+  # release; FROM_VERSION empty = ppg-testing's default for pg-N, see the
+  # job) to this build from OBS, upgrading pg_tde too. tde-core skips its
+  # upgrade sections; upgrades are tested here. All platforms (the job has
+  # no PLATFORMS parameter). The major upgrade is in project.post18.yaml.
+  - name: pg_tde-upgrade-minor
+    pipeline: tde-upgrade-parallel
+    parameters:
+      UPGRADE_TYPE: server_minor
+      TDE_UPGRADE: true
+      INSTALL_FROM_PACKAGES: true
+      FROM_VERSION: ''
+      FROM_REPO: release
+      TO_VERSION: ppg-%!{PG_VERSION}
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      TESTING_BRANCH: main
