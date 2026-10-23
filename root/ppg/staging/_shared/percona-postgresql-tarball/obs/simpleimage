@@ -30,8 +30,9 @@ BuildRequires:  percona-credcheck%!{PG_MAJOR_VERSION}
 # names on one BuildRequires line. build-tarball.sh needs no per-component
 # knowledge: bundling, RUNPATH rewriting and every gate enumerate what is
 # actually present in the chroot/artifact.
-BuildRequires:  %!{TARBALL_PG_EXTRA_COMPONENTS}
-BuildRequires:  percona-pg_gather
+# Appended to an existing line: the macro is empty on majors with no
+# extension delta (14-16), and an empty BuildRequires line is not valid.
+BuildRequires:  percona-pg_gather %!{TARBALL_PG_EXTRA_COMPONENTS}
 # Tarball-only helper packages (2026-07 QA round).
 #
 # percona-psql: the psql client rebuilt from the same PostgreSQL source with
