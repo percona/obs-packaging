@@ -13,3 +13,7 @@
 # ship it (-with-postgis and the extras custom image).  Empty by default;
 # staging:19 adds address_standardizer and postgis_tiger_geocoder here.
 - CONTAINER_POSTGIS_EXTRA_COMPONENTS:
+# Extra Percona extensions bundled in the binary tarballs.  Empty by default;
+# majors that ship pg_tde / pg_oidc_validator override it in their own
+# macros.yaml.
+- TARBALL_PG_EXTRA_COMPONENTS:
