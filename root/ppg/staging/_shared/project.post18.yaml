@@ -134,19 +134,18 @@ qa:
     matrix:
       - SCENARIO
 
-  # pg_tde major upgrade into this major: the latest released previous major
-  # with pg_tde (PG 17 for 18) to this build from OBS, via pg_tde_upgrade.
-  # Here and not with the pg_tde package's entries, because the package file
-  # is shared with PG 17, whose previous major (16) has no pg_tde.
+  # pg_tde major upgrade into this major, OBS to OBS: the previous major's
+  # OBS build (FROM_OBS_PROJECT empty = OBS_PROJECT with the major replaced,
+  # ...:staging:17 for 18) to this build, via pg_tde_upgrade. Here and not
+  # with the pg_tde package's entries, because the package file is shared
+  # with PG 17, whose previous major (16) has no pg_tde.
   - name: pg_tde-upgrade-major
     pipeline: tde-upgrade-parallel
     parameters:
       UPGRADE_TYPE: server_major
       TDE_UPGRADE: true
-      INSTALL_FROM_PACKAGES: true
       FROM_VERSION: ''
-      FROM_REPO: release
+      FROM_OBS_PROJECT: ''
       TO_VERSION: ppg-%!{PG_VERSION}
-      USE_OBS_REPO: true
       OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
       TESTING_BRANCH: main

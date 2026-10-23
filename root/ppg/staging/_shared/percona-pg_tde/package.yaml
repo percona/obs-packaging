@@ -126,20 +126,33 @@ qa:
         - rhel-10-arm
       TESTING_BRANCH: main
 
-  # pg_tde minor upgrade: the latest released N.x with pg_tde (FROM_REPO
-  # release; FROM_VERSION empty = ppg-testing's default for pg-N, see the
-  # job) to this build from OBS, upgrading pg_tde too. tde-core skips its
-  # upgrade sections; upgrades are tested here. All platforms (the job has
-  # no PLATFORMS parameter). The major upgrade is in project.post18.yaml.
+  # pg_tde upgrades (tde-upgrade-parallel): OBS-built packages only. The TO
+  # side is this build from OBS; after the upgrade the server and pg_tde
+  # versions are checked against EXPECTED_VERSIONS.
+  #
+  # Minor upgrade: OBS keeps only the newest minor, so the FROM side is the
+  # latest released N.x from repo.percona.com (FROM_VERSION empty = the job's
+  # default for pg-N), server and pg_tde upgraded to this build.
   - name: pg_tde-upgrade-minor
     pipeline: tde-upgrade-parallel
     parameters:
       UPGRADE_TYPE: server_minor
       TDE_UPGRADE: true
-      INSTALL_FROM_PACKAGES: true
       FROM_VERSION: ''
       FROM_REPO: release
       TO_VERSION: ppg-%!{PG_VERSION}
-      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      TESTING_BRANCH: main
+
+  # pg_tde-only upgrade: the same server version, released pg_tde upgraded to
+  # this build's pg_tde. Needs this build's server version released on
+  # repo.percona.com: until then the test skips itself with a message.
+  - name: pg_tde-upgrade-tde-only
+    pipeline: tde-upgrade-parallel
+    parameters:
+      UPGRADE_TYPE: tde_only
+      FROM_VERSION: ''
+      FROM_REPO: release
+      TO_VERSION: ppg-%!{PG_VERSION}
       OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
       TESTING_BRANCH: main
