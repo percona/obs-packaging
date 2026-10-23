@@ -229,7 +229,7 @@ BuildRequires:	libexpat-devel libjson-c-devel
 BuildRequires:	libjasper-devel
 BuildRequires:	libxerces-c-devel
 BuildRequires:	python311-devel
-BuildRequires:	libshp-devel libcurl-devel >= 7.68
+BuildRequires:	libshp-devel libcurl-devel >= 8.23.0
 BuildRequires:	java-11-openjdk-devel
 %endif
 # PERCONA: >= 1600 (PGDG: == 1600) so Tumbleweed gets the SLES 16 set.
@@ -283,7 +283,7 @@ BuildRequires:	SFCGAL-devel
 %if 0%{?suse_version} == 1500
 %endif
 
-BuildRequires:	shapelib-devel curl-devel >= 7.68
+BuildRequires:	shapelib-devel curl-devel >= 8.23.0
 %if 0%{?fedora} >= 42 || 0%{?rhel} >= 8 || 0%{?suse_version} >= 1600
 BuildRequires:	openjpeg2-devel >= 2.3.1
 %endif

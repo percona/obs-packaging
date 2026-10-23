@@ -21,6 +21,12 @@ ARG PPG_REPO
 ARG RHEL_VER
 
 RUN microdnf -y update
+
+# curl/libcurl 8.23.0 from ppg:common:deps replace the distro's (curl-minimal/
+# libcurl-minimal on ubi-minimal, which they obsolete). Named explicitly so the
+# image carries them even where nothing installed below links libcurl.
+RUN microdnf -y install curl libcurl
+
 # glibc-minimal-langpack: see the percona-distribution-postgresql Dockerfile;
 # ubi-minimal pre-installs it and OBS must upload it for glibc to upgrade.
 RUN microdnf -y install \

@@ -9,7 +9,7 @@ Build-Depends:
  debhelper-compat (= 13),
  git,
  libbz2-dev,
- libcurl4-openssl-dev,
+ libcurl4-openssl-dev (>= 8.23.0),
  liblz4-dev,
  libpq-dev,
  libssh2-1-dev,

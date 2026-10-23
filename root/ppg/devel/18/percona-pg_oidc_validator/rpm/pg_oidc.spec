@@ -28,7 +28,7 @@ BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c+
 %endif
 
 BuildRequires:  percona-postgresql%{pgmajorversion}-devel
-BuildRequires:  libcurl-devel
+BuildRequires:  libcurl-devel >= 8.23.0
 BuildRequires:  openssl-devel
 BuildRequires:  krb5-devel
 BuildRequires:  gcc-c++

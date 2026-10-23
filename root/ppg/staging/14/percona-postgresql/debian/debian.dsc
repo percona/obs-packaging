@@ -57,8 +57,7 @@ Build-Depends:
     uuid-dev,
     xsltproc,
     zlib1g-dev,
-    libcurl4,
-    libcurl4-openssl-dev,
+    libcurl4-openssl-dev (>= 8.23.0),
     curl | libz-dev,
     libzstd-dev
 Debtransform-Release: 1

@@ -100,7 +100,7 @@ BuildRequires:  percona-proj%!{GIS_PROJ_MAJOR}
 # copy (GDAL_USE_GEOTIFF_INTERNAL) and libspatialite is not used, so
 # no libgeotiff or libspatialite development package is needed here.
 BuildRequires:  zlib-devel
-BuildRequires:  libcurl-devel
+BuildRequires:  libcurl-devel >= 8.23.0
 BuildRequires:  libxml2-devel
 BuildRequires:  openssl-devel
 BuildRequires:  libzstd-devel
