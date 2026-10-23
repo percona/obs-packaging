@@ -256,8 +256,8 @@ Epoch:          1
 
 Provides:       %{sname} = %{epoch}:%{version}-%{release}
 Provides:       %{vname} = %{epoch}:%{version}-%{release}
-Obsoletes:      %{sname} <= %{version}-%{release}
-Obsoletes:      %{vname} <= %{version}-%{release}
+Obsoletes:      %{sname} <= %{epoch}:%{version}-%{release}
+Obsoletes:      %{vname} <= %{epoch}:%{version}-%{release}
 
 
 %description
@@ -279,8 +279,8 @@ Provides:       postgresql-libs = %{pgmajorversion} libpq5 >= 10.0
 Provides:       postgresql-libs >= %{version}-%{release}
 Provides:       %{sname}-libs = %{epoch}:%{version}-%{release}
 Provides:       %{vname}-libs = %{epoch}:%{version}-%{release}
-Obsoletes:      %{sname}-libs <= %{version}-%{release}
-Obsoletes:      %{vname}-libs <= %{version}-%{release}
+Obsoletes:      %{sname}-libs <= %{epoch}:%{version}-%{release}
+Obsoletes:      %{vname}-libs <= %{epoch}:%{version}-%{release}
 Epoch:          1
 
 %if 0%{?suse_version} == 1500
@@ -328,8 +328,8 @@ Provides:       postgresql-server >= %{version}-%{release}
 Provides:       group(postgres) user(postgres)
 Provides:       %{vname}-server = %{epoch}:%{version}-%{release}
 Provides:       %{sname}-server = %{epoch}:%{version}-%{release}
-Obsoletes:      %{sname}-server <= %{version}-%{release}
-Obsoletes:      %{vname}-server <= %{version}-%{release}
+Obsoletes:      %{sname}-server <= %{epoch}:%{version}-%{release}
+Obsoletes:      %{vname}-server <= %{epoch}:%{version}-%{release}
 Epoch:          1
 
 %description server
@@ -343,8 +343,8 @@ Summary:        Extra documentation for PostgreSQL
 Provides:       postgresql-docs >= %{version}-%{release}
 Provides:       %{vname}-docs = %{epoch}:%{version}-%{release}
 Provides:       %{sname}-docs = %{epoch}:%{version}-%{release}
-Obsoletes:      %{sname}-docs <= %{version}-%{release}
-Obsoletes:      %{vname}-docs <= %{version}-%{release}
+Obsoletes:      %{sname}-docs <= %{epoch}:%{version}-%{release}
+Obsoletes:      %{vname}-docs <= %{epoch}:%{version}-%{release}
 Epoch:          1
 
 BuildRequires:	docbook-dtds
@@ -369,8 +369,8 @@ Requires:       %{name}-libs >= %{version}-%{release}
 Provides:       postgresql-contrib >= %{version}-%{release}
 Provides:       %{vname}-contrib = %{epoch}:%{version}-%{release}
 Provides:       %{sname}-contrib = %{epoch}:%{version}-%{release}
-Obsoletes:      %{sname}-contrib <= %{version}-%{release}
-Obsoletes:      %{vname}-contrib <= %{version}-%{release}
+Obsoletes:      %{sname}-contrib <= %{epoch}:%{version}-%{release}
+Obsoletes:      %{vname}-contrib <= %{epoch}:%{version}-%{release}
 Obsoletes:      percona-postgresql14-plpython3 <= %{epoch}:14.3-%{release}
 Obsoletes:      percona-postgresql14-plpython3 <= 14.3-%{release}
 Epoch:          1
@@ -405,8 +405,8 @@ Provides:       postgresql-devel >= %{version}-%{release}
 Obsoletes:      libpq-devel <= 42.0
 Provides:       %{vname}-devel = %{epoch}:%{version}-%{release}
 Provides:       %{sname}-devel = %{epoch}:%{version}-%{release}
-Obsoletes:      %{sname}-devel <= %{version}-%{release}
-Obsoletes:      %{vname}-devel <= %{version}-%{release}
+Obsoletes:      %{sname}-devel <= %{epoch}:%{version}-%{release}
+Obsoletes:      %{vname}-devel <= %{epoch}:%{version}-%{release}
 Epoch:          1
 
 %description devel
@@ -432,8 +432,8 @@ Requires:	llvm >= 19
 Provides:       postgresql-llvmjit >= %{version}-%{release}
 Provides:       %{vname}-llvmjit = %{epoch}:%{version}-%{release}
 Provides:       %{sname}-llvmjit = %{epoch}:%{version}-%{release}
-Obsoletes:      %{sname}-llvmjit <= %{version}-%{release}
-Obsoletes:      %{vname}-llvmjit <= %{version}-%{release}
+Obsoletes:      %{sname}-llvmjit <= %{epoch}:%{version}-%{release}
+Obsoletes:      %{vname}-llvmjit <= %{epoch}:%{version}-%{release}
 Epoch:          1
 
 %description llvmjit
@@ -480,12 +480,12 @@ counterparts.
 Summary:        The Perl procedural language for PostgreSQL
 Requires:       %{name}-server >= %{version}-%{release}
 Requires:       perl(:MODULE_COMPAT_%(eval "`%{__perl} -V:version`"; echo $version))
-Obsoletes:      postgresql%{pgmajorversion}-pl <= %{version}-%{release}
+Obsoletes:      postgresql%{pgmajorversion}-pl <= %{epoch}:%{version}-%{release}
 Provides:       postgresql-plperl >= %{version}-%{release}
 Provides:       %{vname}-plperl = %{epoch}:%{version}-%{release}
 Provides:       %{sname}-plperl = %{epoch}:%{version}-%{release}
-Obsoletes:      %{sname}-plperl <= %{version}-%{release}
-Obsoletes:      %{vname}-plperl <= %{version}-%{release}
+Obsoletes:      %{sname}-plperl <= %{epoch}:%{version}-%{release}
+Obsoletes:      %{vname}-plperl <= %{epoch}:%{version}-%{release}
 Epoch:          1
 
 %description plperl
@@ -507,8 +507,8 @@ Requires:	python3-libs
 %endif
 Provides:       %{vname}-plpython3 = %{epoch}:%{version}-%{release}
 Provides:       %{sname}-plpython3 = %{epoch}:%{version}-%{release}
-Obsoletes:      %{sname}-plpython3 <= %{version}-%{release}
-Obsoletes:      %{vname}-plpython3 <= %{version}-%{release}
+Obsoletes:      %{sname}-plpython3 <= %{epoch}:%{version}-%{release}
+Obsoletes:      %{vname}-plpython3 <= %{epoch}:%{version}-%{release}
 Epoch:          1
 
 %description plpython3
@@ -526,8 +526,8 @@ Obsoletes:      %{name}-pl <= %{version}-%{release}
 Provides:       postgresql-pltcl >= %{version}-%{release}
 Provides:       %{vname}-pltcl = %{epoch}:%{version}-%{release}
 Provides:       %{sname}-pltcl = %{epoch}:%{version}-%{release}
-Obsoletes:      %{sname}-pltcl <= %{version}-%{release}
-Obsoletes:      %{vname}-pltcl <= %{version}-%{release}
+Obsoletes:      %{sname}-pltcl <= %{epoch}:%{version}-%{release}
+Obsoletes:      %{vname}-pltcl <= %{epoch}:%{version}-%{release}
 Epoch:          1
 
 %description pltcl
@@ -544,8 +544,8 @@ Requires:       %{name}-devel >= %{version}-%{release}
 Provides:       postgresql-test >= %{version}-%{release}
 Provides:       %{vname}-test = %{epoch}:%{version}-%{release}
 Provides:       %{sname}-test = %{epoch}:%{version}-%{release}
-Obsoletes:      %{sname}-test <= %{version}-%{release}
-Obsoletes:      %{vname}-test <= %{version}-%{release}
+Obsoletes:      %{sname}-test <= %{epoch}:%{version}-%{release}
+Obsoletes:      %{vname}-test <= %{epoch}:%{version}-%{release}
 Epoch:          1
 
 %description test
