@@ -12,12 +12,12 @@
 %global python3_sitearch %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('platlib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
 Name:           %{python3_pkgprefix}-pillow
-Version:        12.3.0
+Version:        13.0.0
 Release:        1%{?dist}
 Summary:        Python Imaging Library (Fork)
 License:        MIT-CMU
 URL:            https://python-pillow.github.io
-Source0:        https://files.pythonhosted.org/packages/source/p/pillow/pillow-12.3.0.tar.gz
+Source0:        https://files.pythonhosted.org/packages/source/p/pillow/pillow-13.0.0.tar.gz
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
 Epoch:          1
@@ -37,7 +37,7 @@ Python Imaging Library (Fork).
 Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmin4) dependency stack.
 
 %prep
-%autosetup -p1 -n pillow-12.3.0
+%autosetup -p1 -n pillow-13.0.0
 
 %build
 %{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index -C platform-guessing=disable -C zlib=enable -C jpeg=enable -C tiff=disable -C freetype=disable -C raqm=disable -C lcms=disable -C webp=disable -C xcb=disable -C jpeg2000=disable -C imagequant=disable -C avif=disable --wheel-dir dist .
@@ -52,6 +52,11 @@ PYTHONPATH=%{buildroot}%{python3_sitearch} %{__ospython} -P -c "import PIL"
 %{python3_sitearch}/*
 
 %changelog
+* Fri Oct 23 2026 Percona Development Team <info@percona.com> - 1:13.0.0-1
+- Update to pillow 13.0.0 (3 CRITICAL + 16 HIGH CVEs: CVE-2026-112390, -112392,
+  -112393, -112397, -112399, -112400, -112402..112406, -112892..112897,
+  -112900, -112902); API removals do not affect qrcode 8.2 / pgAdmin MFA
+
 * Fri Sep 04 2026 Percona Development Team <info@percona.com> - 1:12.3.0-1
 - Update to pillow 12.3.0 (12 HIGH CVEs: CVE-2026-25990, -40192, -42311,
   -54058/9/60, -55379/80, -59197/9/200/204/205); needs setuptools>=77 + pybind11

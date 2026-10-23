@@ -1,4 +1,4 @@
-title: certifi 2026.6.17 for Python 3.12
+title: certifi 2026.10.23 for Python 3.12
 description: |
   Python package for providing Mozilla's CA Bundle. RPM-only python3.12-* build from the PyPI sdist,
   consumed by pgAdmin 4 (percona-pgadmin4). Bump by editing obs/_service (sdist URL) and
