@@ -1,0 +1,8 @@
+title: StormWeaver nightly
+description: |
+  StormWeaver built from the main branch. Everything except the stormweaver
+  package itself (interpreter, pytest, libpq) resolves from tools:stormweaver.
+
+path-prefix:
+  - subproject: tools:stormweaver
+    repository: "%_repository"

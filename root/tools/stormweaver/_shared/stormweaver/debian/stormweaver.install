@@ -1,0 +1,5 @@
+opt/percona-python%!{PYFT_MINOR}t/lib/python%!{PYFT_MINOR}t/site-packages/stormweaver
+opt/percona-python%!{PYFT_MINOR}t/lib/python%!{PYFT_MINOR}t/site-packages/stormweaver-*.dist-info
+usr/bin/stormweaver
+etc/stormweaver
+usr/share/stormweaver
