@@ -14,7 +14,7 @@
 
 # PG19-specific component versions; everything else inherits root/macros.yaml.
 - PGAUDIT_VERSION: 19beta4
-- POSTGIS_VERSION: 3.7.0rc2
+- POSTGIS_VERSION: 3.7.0rc3
 - POSTGIS_RPM_MAJOR: 37
 # wal2json 2.7 is the first release with PG 19 support; the other majors stay
 # on the root WAL2JSON_* values until the next release train bumps them.
