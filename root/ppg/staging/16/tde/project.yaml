@@ -240,3 +240,9 @@ project-config: |
   %if "%_repository" == "Ubuntu_26.04"
   Release: <CI_CNT>.<B_CNT>.resolute
   %endif
+
+  # RPM dist tag in the release — keep in sync with the root project.yaml
+  # (this project opts out of the inherited build configuration).
+  %if "%_repository" == "RockyLinux_8" || "%_repository" == "RockyLinux_9" || "%_repository" == "RockyLinux_9.6" || "%_repository" == "RockyLinux_10"
+  Release: <CI_CNT>.<B_CNT> spec:<CI_CNT>.<B_CNT>%%{?dist}
+  %endif

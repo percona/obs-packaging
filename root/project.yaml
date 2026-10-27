@@ -196,8 +196,7 @@ project-config: |
   # repositories so that deb filenames are distinguishable across distro
   # versions (e.g. …_1.0.15-1+2.1.trixie_amd64.deb).  debtransform appends
   # "+<release>" to the version for packages whose debian.dsc carries
-  # "Debtransform-Release: 1".  RPM repositories keep the default
-  # <CI_CNT>.<B_CNT> release.
+  # "Debtransform-Release: 1".
   %if "%_repository" == "Debian_12"
   Release: <CI_CNT>.<B_CNT>.bookworm
   %endif
@@ -212,4 +211,16 @@ project-config: |
   %endif
   %if "%_repository" == "Ubuntu_26.04"
   Release: <CI_CNT>.<B_CNT>.resolute
+  %endif
+
+  # Keep the RPM dist tag (e.g. .el9) in the release.  OBS replaces the spec's
+  # Release tag with this pattern, and the default <CI_CNT>.<B_CNT> drops the
+  # spec's dist macro.  First word is the default, further words are per build
+  # type: only spec builds get %%{?dist} (escaped so the config parser keeps
+  # it for rpmbuild); image/simpleimage builds keep the plain counter, as a
+  # literal macro would end up in file names.  The labs RedHat:UBI-N base
+  # projects set the same line; repeating it here applies it on every
+  # instance and to the RockyLinux repositories.
+  %if "%_repository" == "RockyLinux_8" || "%_repository" == "RockyLinux_9" || "%_repository" == "RockyLinux_9.6" || "%_repository" == "RockyLinux_10" || "%_repository" == "UBI_8" || "%_repository" == "UBI_9" || "%_repository" == "UBI_10"
+  Release: <CI_CNT>.<B_CNT> spec:<CI_CNT>.<B_CNT>%%{?dist}
   %endif
