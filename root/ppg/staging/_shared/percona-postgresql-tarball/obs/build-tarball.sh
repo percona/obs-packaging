@@ -1571,9 +1571,14 @@ fi
 # write the artifact directly into /usr/src/packages/OTHER (collected
 # by OBS as a build result) and skip /.simpleimage.tar.gz entirely.
 PG_FULL_VERSION=$(rpm -q --qf '%{version}' "percona-postgresql${PG_MAJOR}-server")
+# The artifact is named by the PostgreSQL major.minor only: PG >= 17 RPMs
+# carry the Percona patch level as a third field (18.6.1 -> 18.6), and any
+# ~suffix (19.0.1~rc1 -> 19.0~rc1) is kept.
+PG_VERSION_BASE=${PG_FULL_VERSION%%~*}
+PG_TARBALL_VERSION=$(echo "$PG_VERSION_BASE" | cut -d. -f1,2)${PG_FULL_VERSION#"$PG_VERSION_BASE"}
 # SSL_VARIANT was derived at the top of section 15 (EL-major mapping),
 # where the OpenSSL host-ABI audit also depends on it.
-TARBALL="percona-postgresql-${PG_FULL_VERSION}-${SSL_VARIANT}-linux-$(uname -m).tar.gz"
+TARBALL="percona-postgresql-${PG_TARBALL_VERSION}-${SSL_VARIANT}-linux-$(uname -m).tar.gz"
 mkdir -p /usr/src/packages/OTHER
 cd /opt
 # percona-* ONLY — see the artifact-scope note in section 15: the chroot may
