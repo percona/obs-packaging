@@ -361,7 +361,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Go toolchain 1.26.9 → 1.26.10 (rebuilds of etcd, gosu, percona-telemetry-agent): fixes
   CVE-2026-111943, CVE-2026-78663, CVE-2026-78669, plus security fixes in security
   (https://go.dev/doc/devel/release)
-- Not scanned: python3-dns (no scanner for unknown upstream)
+- python3-dns: 2.8.0→2.9.0 fixes CVE-2026-114605
+  (https://github.com/rthalley/dnspython/releases)
 - UBI base-image package CVEs are not covered by this scan.
 
 ## [17.11-2] - 2026-10-21
