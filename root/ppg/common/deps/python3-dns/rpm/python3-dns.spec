@@ -20,7 +20,7 @@ Name:           %{python3_pkgprefix}-dns
 Version:        1.0.0
 Release:        1%{?dist}
 Source0:        %{srcname}-%{version}.tar.gz
-Patch0:         python3-dns-removehatchling.patch
+Patch0:         python3-dns-setuptools-build.patch
 License:        ISC
 BuildArch:      noarch
 Vendor:         Percona, LLC
@@ -38,11 +38,11 @@ authenticated messages and EDNS0.
 
 %prep
 %setup -n %{srcname}-%{version}
-# dnspython 2.x builds with hatchling, which isn't available for python3.12 on EL8/9.
-# Patch0 drops the hatchling build-system; set the version statically (otherwise
-# setuptools falls back to 0.0.0) and add a minimal setup.py for the setuptools build below.
+# dnspython 2.9 builds with uv_build, which isn't available for python3.12 on EL8/9.
+# Patch0 drops the uv_build build-system and turns the PEP 639 license string back into
+# a table (EL setuptools predates 77 and rejects the string); add a minimal setup.py for
+# the setuptools build below.
 %patch -P 0 -p0
-sed -i 's/^dynamic = \["version"\]$/version = "%{version}"/' pyproject.toml
 cat > setup.py <<'EOF'
 from setuptools import setup, find_packages
 setup(packages=find_packages(include=["dns", "dns.*"]), package_data={"dns": ["py.typed"]})
@@ -62,6 +62,9 @@ find %{buildroot}%{python3_sitelib} -mindepth 1 -type d | sed "s|%{buildroot}||"
 %dir %{python3_sitelib}/dns/__pycache__
 
 %changelog
+* Wed Oct 28 2026 Percona Build/Release Team <eng-build@percona.com> - 2.9.0-1
+- Update to dnspython 2.9.0 (fixes CVE-2026-114605)
+
 * Tue Sep 29 2026 Percona Build/Release Team <eng-build@percona.com> - 2.8.0-1
 - Update to dnspython 2.8.0 (fixes CVE-2023-29483)
 
