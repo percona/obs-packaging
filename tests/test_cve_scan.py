@@ -162,6 +162,83 @@ def test_unscannable_upstream_reported_as_not_scanned(tmp_path):
     assert result.unscanned == [("percona-haproxy", "no scanner for git.haproxy.org")]
 
 
+def _git_log(out: str):
+    calls: "list[list[str]]" = []
+
+    def _run_git(args: "list[str]") -> str:
+        calls.append(args)
+        return out
+
+    return _run_git, calls
+
+
+def test_packaging_commit_advisories_cover_unscannable_upstream(tmp_path):
+    pkg = ChangedPackage(
+        key="python3-dns",
+        old_version="2.8.0",
+        new_version="2.9.0",
+        upstream_url="",
+        revision="",
+        source_dir="root/ppg/common/deps/python3-dns",
+    )
+    run_git, calls = _git_log(
+        "6068c662\x00python3-dns: update to dnspython 2.9.0 (CVE-2026-114605)\n\nbody\n\x1e\n"
+        "1234abcd\x00python3-dns: also GHSA-9v8h-qqgm-4m35 and CVE-2026-114605\n\x1e\n"
+    )
+
+    result = scan_release_cves(
+        [pkg], tmp_path, "ppg/18.6-2", fetcher=_fetcher_from_map({}), run_git=run_git
+    )
+
+    assert result.lines == [
+        "- python3-dns: 2.8.0→2.9.0 fixes CVE-2026-114605, GHSA-9v8h-qqgm-4m35 "
+        "(packaging commits 1234abcd,\n  6068c662)"
+    ]
+    assert result.unscanned == []
+    assert result.clean == []
+    assert calls[0] == [
+        "log",
+        "--format=%h%x00%B%x1e",
+        "ppg/18.6-2..HEAD",
+        "--",
+        "root/ppg/common/deps/python3-dns",
+    ]
+
+
+def test_packaging_commit_advisories_skip_ids_upstream_already_lists(tmp_path):
+    pkg = ChangedPackage(
+        key="percona-patroni",
+        old_version="4.1.3",
+        new_version="4.1.5",
+        upstream_url="https://github.com/patroni/patroni.git",
+        revision="v4.1.5",
+        source_dir="root/ppg/staging/_shared/percona-patroni",
+    )
+    fetcher = _fetcher_from_map(
+        {
+            "https://api.github.com/repos/patroni/patroni/compare/": json.dumps(
+                {"commits": [{"commit": {"message": "fix CVE-2026-11111"}}]}
+            ),
+            "https://api.github.com/repos/patroni/patroni/releases": "[]",
+        }
+    )
+    run_git, _ = _git_log("abc1234\x00bump patroni for CVE-2026-11111\n\x1e\n")
+
+    result = scan_release_cves(
+        [pkg], tmp_path, "ppg/18.6-2", fetcher=fetcher, run_git=run_git
+    )
+    assert len(result.lines) == 1  # nothing new from the packaging commit
+
+    run_git, _ = _git_log("abc1234\x00bump patroni for CVE-2026-22222\n\x1e\n")
+    result = scan_release_cves(
+        [pkg], tmp_path, "ppg/18.6-2", fetcher=fetcher, run_git=run_git
+    )
+    assert result.lines[1] == (
+        "- percona-patroni: 4.1.3→4.1.5 also fixes CVE-2026-22222 "
+        "(packaging commit abc1234)"
+    )
+
+
 # --- 6. Fetcher raising never propagates -----------------------------------
 
 

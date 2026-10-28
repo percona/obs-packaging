@@ -14,6 +14,8 @@ name: OBS Release PR
 # overlaps a staging upload.  A second push queues behind the first.
 #
 # Repopulate without a push: workflow_dispatch with the PR number.
+# A push that changes only release CHANGELOG.md files does not repopulate:
+# the changelog never reaches OBS, so the previous populate stands.
 
 on:
   pull_request:
@@ -79,7 +81,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ steps.ctx.outputs.pr_number }}
           STRICT: ${{ github.event_name == 'workflow_dispatch' && '--strict' || '' }}
-        run: python3 .github/scripts/release_pr.py classify "$PR" $STRICT
+          # A push that only edits release CHANGELOG.md files keeps the
+          # populated pre-release (kind=changelog, populate and QA skipped).
+          BEFORE: ${{ github.event.action == 'synchronize' && github.event.before || '' }}
+        run: python3 .github/scripts/release_pr.py classify "$PR" $STRICT ${BEFORE:+--since "$BEFORE"}
 
   populate:
     name: Populate pre-release (${{ matrix.instance.name }})

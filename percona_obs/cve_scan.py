@@ -23,6 +23,8 @@ from pathlib import Path
 from .common import REPO_ROOT, _REPO_DIR
 
 CVE_RE = re.compile(r"CVE-\d{4}-\d{4,}")
+# CVE ids plus GitHub advisory ids, as packaging commit messages name them.
+ADVISORY_RE = re.compile(r"\b(?:CVE-\d{4}-\d{4,}|GHSA(?:-[0-9a-z]{4}){3})\b")
 
 _Fetcher = Callable[[str, "dict[str, str] | None"], str]
 _RunGit = Callable[["list[str]"], str]
@@ -47,6 +49,9 @@ class ChangedPackage:
     upstream_url: str  # from _extract_upstream_info_from_service, may be ""
     revision: (
         str  # the NEW upstream revision/tag from _service (macros already resolved)
+    )
+    source_dir: str = (
+        ""  # repo-relative dir of the package that builds it, "" if unknown
     )
 
 
@@ -404,12 +409,41 @@ def scan_go_toolchain(
     return _wrap_bullet(line), None
 
 
+def _packaging_commit_advisories(
+    pkg: ChangedPackage, prev_tag: "str | None", run_git: _RunGit
+) -> "dict[str, list[str]]":
+    """Advisory ids our own commits name for *pkg* since *prev_tag*: {id: [short sha]}.
+
+    Covers what upstream release notes do not say (a bump made for a CVE the
+    upstream changelog never mentions, GHSA-only advisories) and packages
+    with no upstream scanner.  Empty when the previous tag or the package
+    directory is unknown, or git fails.
+    """
+    if not prev_tag or not pkg.source_dir:
+        return {}
+    try:
+        out = run_git(
+            ["log", "--format=%h%x00%B%x1e", f"{prev_tag}..HEAD", "--", pkg.source_dir]
+        )
+    except Exception:
+        return {}
+    found: "dict[str, list[str]]" = {}
+    for record in out.split("\x1e"):
+        sha, _, body = record.strip().partition("\x00")
+        for adv in ADVISORY_RE.findall(body):
+            shas = found.setdefault(adv, [])
+            if sha not in shas:
+                shas.append(sha)
+    return found
+
+
 def scan_release_cves(
     changed: "list[ChangedPackage]",
     source_path: Path,
     prev_tag: "str | None",
     *,
     fetcher: "_Fetcher | None" = None,
+    run_git: "_RunGit | None" = None,
     has_container_images: bool = False,
 ) -> ScanResult:
     """Best-effort CVE scan across changed packages + the Go toolchain delta.
@@ -424,6 +458,7 @@ def scan_release_cves(
     same staging project path.
     """
     active_fetcher: _Fetcher = fetcher or _default_fetcher
+    active_run_git: _RunGit = run_git or _default_run_git
     lines: "list[str]" = []
     clean: "list[str]" = []
     unscanned: "list[tuple[str, str]]" = []
@@ -437,14 +472,29 @@ def scan_release_cves(
             line, is_clean, reason = None, False, f"scan error: {exc}"
         if line:
             lines.append(line)
-        elif is_clean:
+        advisories = _packaging_commit_advisories(pkg, prev_tag, active_run_git)
+        extra = sorted(a for a in advisories if not line or a not in line)
+        if extra:
+            shas = sorted({sha for a in extra for sha in advisories[a]})
+            plural = "s" if len(shas) > 1 else ""
+            lines.append(
+                _wrap_bullet(
+                    f"- {pkg.key}: {pkg.old_version}→{pkg.new_version} "
+                    f"{'also fixes' if line else 'fixes'} {', '.join(extra)} "
+                    f"(packaging commit{plural} {', '.join(shas)})"
+                )
+            )
+            continue
+        if line:
+            continue
+        if is_clean:
             clean.append(pkg.key)
         else:
             unscanned.append((pkg.key, reason or "unknown error"))
 
     try:
         go_line, go_reason = scan_go_toolchain(
-            REPO_ROOT, prev_tag, active_fetcher, _default_run_git
+            REPO_ROOT, prev_tag, active_fetcher, active_run_git
         )
     except Exception as exc:
         go_line, go_reason = None, f"scan error: {exc}"
