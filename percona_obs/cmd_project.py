@@ -2104,14 +2104,40 @@ def _fetch_project_pkg_versions(apiurl: str, obs_project: str) -> "dict[str, str
     return result
 
 
+def _pkg_service(pkg_dir: Path) -> "Path | None":
+    """Return the _service that builds the package in *pkg_dir*.
+
+    A package carried as a local ``_aggregate`` (e.g. a staging package that
+    reuses ``ppg:common:deps`` binaries) has no _service of its own; follow
+    the aggregate to the source package's.
+    """
+    service = pkg_dir / "obs" / "_service"
+    if service.is_file():
+        return service
+    aggregate = pkg_dir / "obs" / "_aggregate"
+    if aggregate.is_file():
+        src = _resolve_aggregate_source(aggregate)
+        if src is not None:
+            local_project, pkg_name = src
+            service = (
+                REPO_ROOT.joinpath(*local_project.split(":"))
+                / pkg_name
+                / "obs"
+                / "_service"
+            )
+            if service.is_file():
+                return service
+    return None
+
+
 def _find_pkg_service(source_path: Path, pkg: str) -> "Path | None":
-    """Locate <pkg>/obs/_service under the project or its subprojects."""
+    """Locate the _service of <pkg> under the project or its subprojects."""
     candidates = [source_path / pkg]
     candidates += sorted(source_path.glob(f"*/{pkg}"))
     candidates += sorted(source_path.glob(f"*/*/{pkg}"))
     for cand in candidates:
-        service = cand / "obs" / "_service"
-        if service.is_file():
+        service = _pkg_service(cand)
+        if service is not None:
             return service
     return None
 
@@ -2175,11 +2201,7 @@ def _build_changed_packages(
         base_pkg, sub = _split_changelog_key(pkg)
         service_file: "Path | None" = None
         if sub is not None:
-            sub_service = (
-                source_path / Path(*sub.split(":")) / base_pkg / "obs" / "_service"
-            )
-            if sub_service.is_file():
-                service_file = sub_service
+            service_file = _pkg_service(source_path / Path(*sub.split(":")) / base_pkg)
         if service_file is None:
             service_file = _find_pkg_service(source_path, base_pkg)
 
@@ -2190,6 +2212,12 @@ def _build_changed_packages(
             if info:
                 upstream_url, revision = info
 
+        source_dir = ""
+        if service_file is not None:
+            pkg_dir = service_file.parent.parent.resolve()
+            if pkg_dir.is_relative_to(_REPO_DIR):
+                source_dir = pkg_dir.relative_to(_REPO_DIR).as_posix()
+
         changed.append(
             ChangedPackage(
                 key=pkg,
@@ -2197,6 +2225,7 @@ def _build_changed_packages(
                 new_version=new_version,
                 upstream_url=upstream_url,
                 revision=revision,
+                source_dir=source_dir,
             )
         )
 
@@ -2255,11 +2284,7 @@ def _build_changelog_section(
         base_pkg, sub = _split_changelog_key(pkg)
         service_file: "Path | None" = None
         if sub is not None:
-            sub_service = (
-                source_path / Path(*sub.split(":")) / base_pkg / "obs" / "_service"
-            )
-            if sub_service.is_file():
-                service_file = sub_service
+            service_file = _pkg_service(source_path / Path(*sub.split(":")) / base_pkg)
         if service_file is None:
             service_file = _find_pkg_service(source_path, base_pkg)
         if service_file is not None:

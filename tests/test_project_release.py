@@ -222,6 +222,24 @@ def test_find_pkg_service_walks_subprojects(tmp_path):
     assert cmd_project._find_pkg_service(src, "nope") is None
 
 
+def test_find_pkg_service_follows_local_aggregate(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    dep = root / "ppg" / "common" / "deps" / "python3-dns" / "obs"
+    dep.mkdir(parents=True)
+    (dep / "_service").write_text("<services/>")
+    pkg = root / "ppg" / "staging" / "18" / "python3-dns" / "obs"
+    pkg.mkdir(parents=True)
+    (pkg / "_aggregate").write_text(
+        '<aggregatelist><aggregate project="${OBS_ROOTPRJ}:ppg:common:deps">'
+        "<package>python3-dns</package></aggregate></aggregatelist>"
+    )
+    monkeypatch.setattr(cmd_project, "REPO_ROOT", root)
+    assert (
+        cmd_project._find_pkg_service(root / "ppg" / "staging" / "18", "python3-dns")
+        == dep / "_service"
+    )
+
+
 def test_registry_prefix_old_and_new_layouts():
     old = cmd_project._container_registry_prefix(
         "isv:percona:ppg:releases:17:containers:ubi9", "isv:percona", None, "images"

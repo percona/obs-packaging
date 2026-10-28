@@ -81,3 +81,15 @@ def test_decide():
     kind, err = m.decide("mixed", rel, False)
     assert kind == "mixed" and err and "also changes other root/ files" in err
     assert m.decide("release", rel, True) == ("release", None)
+
+
+def test_changelog_only():
+    m = _load()
+    assert m.changelog_only(
+        ["root/ppg/releases/17/CHANGELOG.md", "root/ppg/releases/18/CHANGELOG.md"]
+    )
+    assert not m.changelog_only(
+        ["root/ppg/releases/18/CHANGELOG.md", "root/ppg/releases/18/release.yaml"]
+    )
+    assert not m.changelog_only(["root/ppg/staging/18/CHANGELOG.md"])
+    assert not m.changelog_only([])

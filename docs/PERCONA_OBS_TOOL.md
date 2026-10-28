@@ -1049,7 +1049,10 @@ The process is PR-based:
    synced, rebase the release branch, re-run `project release` (refreshes the open id, the
    changelog section and `source_commit`) and push. When only staging changed and the
    changelog is unaffected, repopulate without a push:
-   `gh workflow run obs-release-pr.yml -f pr_number=N`.
+   `gh workflow run obs-release-pr.yml -f pr_number=N`. Conversely, a push that changes
+   only release `CHANGELOG.md` files (a hand edit of the notes) keeps the populated
+   pre-release: populate and QA are skipped for that push, since the changelog never
+   reaches OBS.
 4. **Merge** — `obs-pr-cleanup.yml` tags the merge commit (one tag per changed `release.yaml`,
    e.g. `ppg/17.9-1`) with `GITHUB_TOKEN` and dispatches `obs-release.yml` **once** with
    `pr_number` and all the tags.
@@ -1226,12 +1229,18 @@ Upstream URLs are derived from the package's `obs/_service` upstream `obs_scm` e
 
 Unless `--no-cve-scan` is passed, `project release` also runs a best-effort CVE
 scan and appends the findings as a `### Security` section (after `### Changed`).
-Three sources are scanned: upstream release notes/commit logs per changed
+Four sources are scanned: upstream release notes/commit logs per changed
 package (PostgreSQL release notes for PostgreSQL itself; GitHub compare-diff +
 releases for packages whose upstream is on GitHub — other upstreams are
 reported as not scanned rather than guessed at), and the Go toolchain delta
 (`GOLANG_VERSION` in `macros.yaml`, checked against GitHub's Security-labeled
-issue search for each intermediate Go patch release). The scan never blocks a
+issue search for each intermediate Go patch release), and this repository's own
+commit messages: every `CVE-…` / `GHSA-…` id named by a commit since the previous
+release tag that touches the changed package's source directory (a staging
+`_aggregate` is followed to the package it reuses, e.g. `ppg:common:deps`) and
+that the upstream line does not already list, as
+`- <pkg>: <old>→<new> fixes <ids> (packaging commit <sha>)`. Name the advisory in
+the commit message of a CVE bump and it reaches the changelog. The scan never blocks a
 release cut — anything it cannot resolve (unrecognized upstream, network
 failure, unrecognized tag scheme) is reported as a "Not scanned: …" line
 rather than silently dropped, and UBI base-image CVEs are explicitly flagged
