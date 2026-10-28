@@ -1303,6 +1303,39 @@ Hop 2 (after merge):
 | Pre-release already deleted | Leg fails on missing source project | Cut a new release: re-run `project release` and open a new release PR. Repopulating the merged PR is refused by the record check, because main's `release.yaml` changed at the merge (`PPG_RELEASE` bumped) |
 | Dispatch failure in obs-pr-cleanup | Tags exist, nothing copied | Manual dispatch as above |
 
+#### Published repo incomplete on the download host
+
+Symptom: a released repo is `published` on OBS and `osc api /published/<prj>/<repo>`
+lists every file, but `download.opensuse.org` / `downloadcontent.opensuse.org` serve only
+part of it (e.g. deb `InRelease` and `Release.gpg` return 404 while `Release` and
+`Packages.gz` return 200). The OBS publisher's rsync to the download host stopped
+half-way; it does not recover on its own. This is not a release-flow failure: do **not**
+re-run the release workflow (the pre-release is gone, and the binaries in the release
+project are already correct). Fix it directly with `osc`, one repo at a time.
+
+Neither a publish-flag toggle nor a title edit alone helps: the publisher is only
+triggered when the repo's binaries change, and it skips the rsync when its state
+(binaries + project title) is unchanged. So change the title, then trigger the publisher
+for the one broken repo with `unpublish` of a package that has **no** binaries in that
+repo (nothing is removed, but the publisher still runs):
+
+```sh
+A="osc -A https://api.opensuse.org"; P=isv:percona:ppg:releases:18; R=Ubuntu_22.04
+$A meta prj $P > meta.orig.xml
+# 1. bump the title only (triggers nothing by itself)
+sed 's|<title>\(.*\)</title>|<title>\1 (republish)</title>|' meta.orig.xml > meta.new.xml
+$A meta prj $P -F meta.new.xml
+# 2. pick a package with no binaries in $R (empty output = none), e.g. an RPM-only one
+$A api /build/$P/$R/x86_64/python3-six | grep '<binary '
+$A api -X POST "/build/$P?cmd=unpublish&repository=$R&package=python3-six"
+# 3. wait for the download host (≈1 min), then check the files are back
+curl -sI https://download.opensuse.org/repositories/${P//:/:\/}/$R/InRelease | head -1
+# 4. restore the title (triggers nothing; other repos are untouched)
+$A meta prj $P -F meta.orig.xml
+```
+
+OBS deb repos are flat: `<arch>/Packages.gz` never exists, so its 404 is expected.
+
 ### `sync prerelease` — hop 1 (staging → PR pre-release)
 
 Run with the PR profile; `--branch-from` names the production profile holding staging:
