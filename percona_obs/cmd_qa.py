@@ -135,7 +135,9 @@ def _image_projects(entry: dict[str, Any]) -> dict[str, str]:
     return {
         name: value["project"]
         for name, value in (entry.get("parameters") or {}).items()
-        if isinstance(value, dict) and isinstance(value.get("project"), str) and value["project"]
+        if isinstance(value, dict)
+        and isinstance(value.get("project"), str)
+        and value["project"]
     }
 
 
@@ -748,21 +750,26 @@ def _lanes_with_expected_versions(
     out = []
     for lane in lanes:
         entries = [
-            {**e, "parameters": {**upgrade[id(e)], **(e.get("parameters") or {})}}
-            if id(e) in upgrade
-            else e
+            (
+                {**e, "parameters": {**upgrade[id(e)], **(e.get("parameters") or {})}}
+                if id(e) in upgrade
+                else e
+            )
             for e in lane.entries
         ]
         out.append(
             Lane(
                 lane.package,
-                _with_expected_versions(entries, project, lane.package, versions) or entries,
+                _with_expected_versions(entries, project, lane.package, versions)
+                or entries,
             )
         )
     return out
 
 
-def _upgrade_expected_versions(lanes: list[Lane], lookup: _VersionLookup) -> dict[int, dict[str, str]]:
+def _upgrade_expected_versions(
+    lanes: list[Lane], lookup: _VersionLookup
+) -> dict[int, dict[str, str]]:
     """Per-phase versions for upgrade entries (those with an OLD_REPOSITORY image).
 
     An upgrade tests two images from two projects (the old and the new major),
@@ -780,7 +787,9 @@ def _upgrade_expected_versions(lanes: list[Lane], lookup: _VersionLookup) -> dic
             if lookup.mirror is not None and prj.startswith(lookup.mirror[0]):
                 structure = lookup.mirror[1] + prj[len(lookup.mirror[0]) :]
             cache[prj] = (
-                _package_versions(prj, lookup) if resolve_project_path(structure).is_dir() else {}
+                _package_versions(prj, lookup)
+                if resolve_project_path(structure).is_dir()
+                else {}
             )
         return cache[prj]
 
