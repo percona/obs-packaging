@@ -549,7 +549,9 @@ Options:
 A release ships in two hops (spec: `docs/superpowers/specs/2026-10-13-prerelease-project-release-flow-design.md`).
 `sync prerelease <releases-project> --branch-from <profile>` copies staging into a PR pre-release
 project after checking the `source_commit` recorded in `release.yaml` against the last synced `main`
-and stamps that SHA into the pre-release project descriptions. `sync release <project> --from <pre-release-project>`
+and stamps that SHA into the pre-release project descriptions. It first deletes any existing
+pre-release tree (project + subprojects, deepest first), so every populate starts from scratch, and
+refuses to run when the profile root equals the `--branch-from` root. `sync release <project> --from <pre-release-project>`
 then copies the pre-release into the release project (no freeze, no git divergence check) after
 verifying the marker equals the tagged entry's `source_commit`. Every hop also writes
 `release_id: <id>` (the tag without its product prefix, e.g. `18.7-1`, `common-1`) as the last line of

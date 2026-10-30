@@ -2861,6 +2861,13 @@ def cmd_sync_prerelease(args) -> None:
     source_rootprj = branch_profile.get("rootprj", "")
     if not source_rootprj:
         raise SystemExit(f"error: profile {args.branch_from!r} has no rootprj")
+    if args.rootprj == source_rootprj:
+        # The pre-release tree is deleted and recreated below: never let that
+        # reach a production :releases: project.
+        raise SystemExit(
+            f"error: rootprj {args.rootprj!r} is the --branch-from root; "
+            "run with the PR profile (-P pr-N)"
+        )
     apiurl: str = osc.conf.config["apiurl"]
     source_obs_project = f"{source_rootprj}:{source_project_id}"
     prerelease_obs_project = f"{args.rootprj}:{args.project}"
@@ -2956,6 +2963,14 @@ def cmd_sync_prerelease(args) -> None:
             f"(release_id: {release_id})  (dry run)"
         )
         return
+
+    # Repopulate from scratch: a previous populate (earlier PR head) may have
+    # left packages, subprojects or meta the new cut no longer has.
+    stale_tree = _fetch_obs_subproject_names(apiurl, prerelease_obs_project)
+    if _obs_project_exists(apiurl, prerelease_obs_project):
+        stale_tree.add(prerelease_obs_project)
+    for obs_name in sorted(stale_tree, key=lambda n: n.count(":"), reverse=True):
+        _delete_obs_project(apiurl, obs_name, dry_run=False, recursive=True)
 
     # Repository paths to projects outside the pre-release tree (e.g.
     # common:containers:ubi9) are redirected to the source root, as
