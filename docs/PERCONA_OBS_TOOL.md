@@ -1469,9 +1469,12 @@ Flags:
    5. **Verify** — still inside the freeze window, polls (bounded by
       `--verify-timeout`) until each released repo holds binaries.
    6. **Restore** — in a `finally` (so it still runs even if verify times out or
-      raises), re-apply each project's exact snapshotted meta last (never a blanket
-      enable, since subprojects carry per-repo flags — e.g. tarballs' `publish:`
-      flags — that must survive the round trip).
+      raises), put back each project's snapshotted `<build>` element last (never a
+      blanket enable, since subprojects carry per-repo build flags that must survive
+      the round trip). Only `<build>` is restored, onto the meta as it is now: changes
+      made inside the freeze window (the hop's own release targets, added and removed
+      around `osc release`) are kept, not rolled back to the pre-freeze snapshot. If the
+      current meta cannot be read, the full snapshot is restored instead.
 5. Release-tier OBS projects with no local mirror are reported loudly as orphans;
    deletion is never automatic — run `sync delete` manually.
 

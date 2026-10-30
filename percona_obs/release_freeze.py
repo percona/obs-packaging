@@ -158,6 +158,32 @@ def _disabled_meta(raw: str) -> str:
     return ET.tostring(root, encoding="unicode")
 
 
+def _restored_meta(current: str, snapshot: str) -> str:
+    """*current* meta with its ``<build>`` replaced by the snapshot's.
+
+    The freeze only rewrites ``<build>``; everything else (e.g. release
+    targets added and removed inside the freeze window) stays as it is now
+    rather than being rolled back to the pre-freeze snapshot.
+    """
+    root = ET.fromstring(current)
+    for build_elem in root.findall("build"):
+        root.remove(build_elem)
+    for build_elem in ET.fromstring(snapshot).findall("build"):
+        root.append(build_elem)
+    ET.indent(root, space="  ")
+    return ET.tostring(root, encoding="unicode")
+
+
+def _meta_to_restore(fetch_current, snapshot: str) -> str:
+    """Restore target for *snapshot*; the snapshot itself if the current meta
+    cannot be read or parsed (unfreezing beats leaving builds disabled)."""
+    try:
+        return _restored_meta(_decode_obs_response(fetch_current()), snapshot)
+    except Exception as exc:
+        print(f"warning: restoring the full pre-freeze meta: {exc}", flush=True)
+        return snapshot
+
+
 def freeze_packages(
     apiurl: str, packages: "dict[str, set[str]]"
 ) -> "dict[tuple[str, str], str]":
@@ -190,9 +216,12 @@ def freeze_packages(
 
 
 def restore_packages(apiurl: str, snapshots: "dict[tuple[str, str], str]") -> None:
-    """Push package meta snapshots back verbatim.  Never raises."""
-    for (prj, pkg), meta in snapshots.items():
+    """Restore the snapshotted ``<build>`` flags on each package.  Never raises."""
+    for (prj, pkg), snapshot in snapshots.items():
         try:
+            meta = _meta_to_restore(
+                lambda: osc.core.show_package_meta(apiurl, prj, pkg), snapshot
+            )
             osc.core.edit_meta(
                 metatype="pkg",
                 path_args=(prj, pkg),
@@ -211,9 +240,9 @@ def restore_packages(apiurl: str, snapshots: "dict[tuple[str, str], str]") -> No
 def freeze_builds(apiurl: str, obs_projects: "list[str]") -> "dict[str, str]":
     """Disable builds on every project; return {project: prior_meta_xml}.
 
-    The snapshot is the exact meta XML fetched before modification, so
-    restore_builds round-trips per-repo flags (publish, debuginfo, partial
-    build enables) without reconstructing them.
+    The snapshot is the exact meta XML fetched before modification;
+    restore_builds puts back only its ``<build>`` element (per-repo partial
+    build enables included), the one element the freeze rewrites.
 
     If freezing any project fails partway through, every project frozen so
     far is restored before the exception propagates — otherwise the earlier
@@ -235,11 +264,15 @@ def freeze_builds(apiurl: str, obs_projects: "list[str]") -> "dict[str, str]":
 
 
 def restore_builds(apiurl: str, snapshots: "dict[str, str]") -> None:
-    """Push snapshotted meta back verbatim.  Never raises: a restore failure
-    is printed as a warning so the caller's finally-block does not mask the
-    primary exception, and the remaining projects are still restored."""
-    for prj, meta in snapshots.items():
+    """Restore the snapshotted ``<build>`` flags on each project.  Never
+    raises: a restore failure is printed as a warning so the caller's
+    finally-block does not mask the primary exception, and the remaining
+    projects are still restored."""
+    for prj, snapshot in snapshots.items():
         try:
+            meta = _meta_to_restore(
+                lambda: osc.core.show_project_meta(apiurl, prj), snapshot
+            )
             _edit_project_meta(apiurl, prj, meta, force=True)
             _print_update(f"{prj}  (builds restored)")
         except Exception as exc:

@@ -119,7 +119,41 @@ def test_freeze_snapshots_and_restores_exact_meta(monkeypatch):
     assert 'repository="R8"' in written[0][1]
 
     rf.restore_builds("http://obs", snaps)
-    assert written[-1] == ("prj", orig, True)
+    prj, restored, force = written[-1]
+    assert prj == "prj" and force
+    assert "<build" not in restored and 'repository="R8"' in restored
+
+
+def test_restore_builds_keeps_changes_made_while_frozen(monkeypatch):
+    """Only <build> is restored: a release target removed inside the freeze
+    window must not come back from the pre-freeze snapshot."""
+    store = {
+        "prj": '<project name="prj"><title/><description/>'
+        '<build><disable repository="R9"/></build>'
+        '<repository name="R8">'
+        '<releasetarget project="deleted" repository="deleted" trigger="manual"/>'
+        "</repository></project>"
+    }
+
+    def fake_edit(apiurl, prj, meta, force):
+        store[prj] = meta
+
+    monkeypatch.setattr(
+        rf.osc.core, "show_project_meta", lambda apiurl, prj: store[prj].encode()
+    )
+    monkeypatch.setattr(rf, "_edit_project_meta", fake_edit)
+    snaps = rf.freeze_builds("http://obs", ["prj"])
+    assert "<disable />" in store["prj"]
+    # the release hop cleans the targets while the project is frozen
+    store["prj"] = store["prj"].replace(
+        '<releasetarget project="deleted" repository="deleted" trigger="manual" />',
+        "",
+    )
+    assert "releasetarget" not in store["prj"]
+    rf.restore_builds("http://obs", snaps)
+    assert "releasetarget" not in store["prj"]
+    assert '<disable repository="R9" />' in store["prj"]
+    assert "<disable />" not in store["prj"]
 
 
 def test_freeze_partial_failure_restores_already_frozen_projects(monkeypatch):
@@ -148,15 +182,29 @@ def test_freeze_partial_failure_restores_already_frozen_projects(monkeypatch):
     # p1 was frozen then restored; p2's failed edit is the second write.
     assert [w[0] for w in written] == ["p1", "p2", "p1"]
     assert "<disable" in written[0][1]  # p1 frozen
-    assert written[2] == ("p1", origs["p1"], True)  # p1 restored to exact prior meta
+    assert written[2][0] == "p1" and "<build" not in written[2][1]  # p1 unfrozen
 
 
 def test_restore_never_raises(monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("obs down")
 
+    monkeypatch.setattr(rf.osc.core, "show_project_meta", boom)
     monkeypatch.setattr(rf, "_edit_project_meta", boom)
     rf.restore_builds("http://obs", {"prj": "<project/>"})  # must not raise
+
+
+def test_restore_falls_back_to_snapshot_when_meta_unreadable(monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("obs down")
+
+    written = []
+    monkeypatch.setattr(rf.osc.core, "show_project_meta", boom)
+    monkeypatch.setattr(
+        rf, "_edit_project_meta", lambda a, prj, meta, force: written.append(meta)
+    )
+    rf.restore_builds("http://obs", {"prj": "<project/>"})
+    assert written == ["<project/>"]
 
 
 def test_verify_release_landed_ok(monkeypatch):
@@ -243,7 +291,7 @@ def test_freeze_packages_round_trip(monkeypatch):
     assert edits[0][0] == "pkg" and edits[0][1] == ("deps", "etcd")
     assert "<disable" in edits[0][2]
     rf.restore_packages("http://obs", snaps)
-    assert edits[1][2] == metas[("deps", "etcd")]
+    assert "<build" not in edits[1][2] and 'name="etcd"' in edits[1][2]
 
 
 def test_freeze_packages_restores_on_partial_failure(monkeypatch):
@@ -270,4 +318,4 @@ def test_freeze_packages_restores_on_partial_failure(monkeypatch):
         rf.freeze_packages("http://obs", {"deps": {"a", "b"}})
     # a was frozen then restored
     assert edits[0][0] == ("deps", "a") and "<disable" in edits[0][1]
-    assert edits[-1] == (("deps", "a"), metas[("deps", "a")])
+    assert edits[-1][0] == ("deps", "a") and "<build" not in edits[-1][1]
