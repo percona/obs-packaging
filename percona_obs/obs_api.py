@@ -1966,6 +1966,10 @@ def _remove_release_targets(
 ) -> None:
     """Remove <releasetarget> entries added by _add_release_targets.
 
+    Also drops targets in the ``deleted`` project: OBS rewrites references to
+    a force-deleted project that way, so a leftover target whose release
+    project was since deleted (e.g. a recreated pre-release) would make
+    ``osc release`` fail with "no permission to write in project deleted".
     Safe to call when no releasetargets are present (no-op).
     Never raises — errors are printed as warnings so the caller's
     finally-block does not mask the primary exception.
@@ -1979,7 +1983,7 @@ def _remove_release_targets(
         removed = 0
         for repo_elem in root.findall("repository"):
             for rt in repo_elem.findall("releasetarget"):
-                if rt.get("project") == release_obs_project:
+                if rt.get("project") in (release_obs_project, "deleted"):
                     repo_elem.remove(rt)
                     removed += 1
 
