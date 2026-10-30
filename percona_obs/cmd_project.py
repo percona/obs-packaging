@@ -2092,15 +2092,21 @@ def _fetch_project_pkg_versions(apiurl: str, obs_project: str) -> "dict[str, str
     if not pkg_names:
         return {}
     pkg_archs = _fetch_all_pkg_archs(apiurl, obs_project)
+    pkg_repo_archs = _fetch_all_pkg_repo_archs(apiurl, obs_project)
     result: dict[str, str] = {}
     for pkg in pkg_names:
-        repo_arch = pkg_archs.get(pkg)
-        if not repo_arch:
-            continue
-        repo, arch = repo_arch
-        versrel = _fetch_pkg_versrel(apiurl, obs_project, repo, arch, pkg)
-        if versrel:
-            result[pkg] = versrel
+        # Preferred (repo, arch) first, then the package's other repos: in a
+        # release project every repo is "disabled", so the preferred one may
+        # be a repo the package never built in (gdal38 only builds on
+        # RockyLinux_8) and holds no binaries.
+        preferred = pkg_archs.get(pkg)
+        candidates = [preferred] if preferred else []
+        candidates += [ra for ra in pkg_repo_archs.get(pkg, []) if ra != preferred]
+        for repo, arch in candidates:
+            versrel = _fetch_pkg_versrel(apiurl, obs_project, repo, arch, pkg)
+            if versrel:
+                result[pkg] = versrel
+                break
     return result
 
 
