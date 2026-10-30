@@ -93,3 +93,35 @@ def test_changelog_only():
     )
     assert not m.changelog_only(["root/ppg/staging/18/CHANGELOG.md"])
     assert not m.changelog_only([])
+
+
+def test_cli_classify_push_reads_head_sha(tmp_path, monkeypatch):
+    # A synchronize push (--since) looks up the PR head; gh prints a jq
+    # string result unquoted, so the lookup must not use --jq.
+    import json
+    import subprocess
+
+    mod = _load()
+    files = [{"path": "root/ppg/releases/17/release.yaml"}]
+
+    def fake_run(cmd, capture_output=True, text=True):
+        args = cmd[1:]
+        if args[:2] == ["pr", "view"] and "files" in args:
+            out = json.dumps(files)
+        elif args[:2] == ["pr", "list"]:
+            out = "[]"
+        elif args[:2] == ["pr", "view"] and "headRefOid" in args:
+            out = "abc123\n" if "--jq" in args else json.dumps({"headRefOid": "abc123"})
+        elif args[0] == "api":
+            assert args[1].endswith("/compare/old...abc123")
+            out = json.dumps(["root/ppg/releases/17/CHANGELOG.md"])
+        else:
+            raise AssertionError(cmd)
+        return subprocess.CompletedProcess(cmd, 0, out, "")
+
+    out_file = tmp_path / "out"
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out_file))
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    mod._cli_classify(201, False, "old")
+    assert "kind=changelog" in out_file.read_text()

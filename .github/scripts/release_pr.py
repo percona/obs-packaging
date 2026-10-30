@@ -123,7 +123,8 @@ def _cli_classify(pr_number: int, strict: bool, since: str | None = None) -> Non
             print(f"::error::open PR #{number} already releases {path}; one in-flight release PR per major")
         sys.exit(1)
     if since and not strict:
-        head = _gh_json(["pr", "view", str(pr_number), "-R", repo, "--json", "headRefOid", "--jq", ".headRefOid"])
+        # No --jq: gh prints a jq string result unquoted, which is not JSON.
+        head = _gh_json(["pr", "view", str(pr_number), "-R", repo, "--json", "headRefOid"])["headRefOid"]
         pushed = _push_files(repo, since, head)
         if pushed is not None and changelog_only(pushed):
             print("::notice::this push changed only release CHANGELOG.md files; the pre-release populated for the previous head stands (populate skipped)")
