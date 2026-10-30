@@ -1425,3 +1425,38 @@ def test_merge_release_obs_data_pairs_container_lists():
         "img (ubi9)": {"pg": "18.4-1"},
         "old (ubi8)": {"pg": "1"},
     }
+
+
+def test_fetch_project_pkg_versions_skips_repos_without_binaries(monkeypatch):
+    # Release projects report every repo "disabled", so the preferred
+    # (repo, arch) can be a repo the package never built in.
+    monkeypatch.setattr(
+        cmd_project, "_fetch_obs_package_names", lambda a, p: {"gdal38", "pg"}
+    )
+    monkeypatch.setattr(
+        cmd_project,
+        "_fetch_all_pkg_archs",
+        lambda a, p: {"gdal38": ("Debian_13", "x86_64"), "pg": ("Debian_13", "x86_64")},
+    )
+    monkeypatch.setattr(
+        cmd_project,
+        "_fetch_all_pkg_repo_archs",
+        lambda a, p: {
+            "gdal38": [("Debian_13", "x86_64"), ("RockyLinux_8", "x86_64")],
+            "pg": [("Debian_13", "x86_64"), ("RockyLinux_8", "x86_64")],
+        },
+    )
+    binaries = {
+        ("RockyLinux_8", "gdal38"): "3.8.5-1.3",
+        ("Debian_13", "pg"): "17.11-1.1",
+        ("RockyLinux_8", "pg"): "17.11-9.9",
+    }
+    monkeypatch.setattr(
+        cmd_project,
+        "_fetch_pkg_versrel",
+        lambda a, p, repo, arch, pkg: binaries.get((repo, pkg)),
+    )
+    assert cmd_project._fetch_project_pkg_versions("http://obs", "prj") == {
+        "gdal38": "3.8.5-1.3",
+        "pg": "17.11-1.1",
+    }
