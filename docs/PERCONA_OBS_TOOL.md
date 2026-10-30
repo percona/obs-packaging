@@ -1364,8 +1364,10 @@ aggregate-frozen package) must be identical between
 `source_commit` and the last synced `main` (`--synced-commit`, else `gh api`), or it
 fails with "staging changed since the cut"; edits under `root/<product>/staging/_shared/...`
 count as staging changes because the check follows the `_shared/` symlink targets of
-packages; (3) pre-release meta from the mirrors, **publish forced on**; (4) drain, assert
-green, freeze, `osc release`, verify, restore; (5) `source_commit: <sha>` and
+packages; (3) an existing pre-release tree (the project and every subproject under it) is
+**deleted**, so a repopulate always starts from scratch; refused when the profile's
+`rootprj` equals the `--branch-from` root; (4) pre-release meta from the mirrors, **publish forced on**; (5) drain, assert
+green, freeze, `osc release`, verify, restore; (6) `source_commit: <sha>` and
 `release_id: <id>` appended, in that order, to each pre-release project description.
 
 **`release_id` marker.** Every release hop (this one, `sync release --from` and the

@@ -62,6 +62,14 @@ def _wire(monkeypatch, src, rel, calls):
         lambda name: {"rootprj": "home:Admin", "apiurl": "http://obs"},
     )
     monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda *a, **k: True)
+    monkeypatch.setattr(cmd_sync, "_fetch_obs_subproject_names", lambda *a: set())
+    monkeypatch.setattr(
+        cmd_sync,
+        "_delete_obs_project",
+        lambda apiurl, prj, dry_run, recursive=False: calls.append(
+            ("delete", prj, recursive)
+        ),
+    )
     monkeypatch.setattr(cmd_sync, "_changed_files_between", lambda *a, **k: [])
     monkeypatch.setattr(
         cmd_sync,
@@ -119,6 +127,36 @@ def test_record_mismatch_aborts_before_drain(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match="staging changed since the cut"):
         cmd_sync.cmd_sync_prerelease(_Args())
     assert "drain" not in calls
+    assert not any(c[0] == "delete" for c in calls if isinstance(c, tuple))
+
+
+def test_rootprj_equal_to_branch_root_refused(tmp_path, monkeypatch):
+    src, rel = _tree_with_record(tmp_path, monkeypatch)
+    calls = []
+    _wire(monkeypatch, src, rel, calls)
+    with pytest.raises(SystemExit, match="is the --branch-from root"):
+        cmd_sync.cmd_sync_prerelease(_Args(rootprj="home:Admin"))
+    assert calls == []
+
+
+def test_existing_prerelease_tree_deleted_deepest_first(tmp_path, monkeypatch):
+    src, rel = _tree_with_record(tmp_path, monkeypatch)
+    calls = []
+    _wire(monkeypatch, src, rel, calls)
+    top = "home:Admin:PR:pr-5:ppg:releases:17"
+    monkeypatch.setattr(
+        cmd_sync,
+        "_fetch_obs_subproject_names",
+        lambda apiurl, prj: {f"{prj}:tarballs", f"{prj}:containers:extras"},
+    )
+    cmd_sync.cmd_sync_prerelease(_Args())
+    deletes = [c for c in calls if isinstance(c, tuple) and c[0] == "delete"]
+    assert deletes == [
+        ("delete", f"{top}:containers:extras", True),
+        ("delete", f"{top}:tarballs", True),
+        ("delete", top, True),
+    ]
+    assert calls.index(deletes[-1]) < calls.index(("meta", top, True))
 
 
 def test_happy_path_order(tmp_path, monkeypatch):
@@ -126,6 +164,7 @@ def test_happy_path_order(tmp_path, monkeypatch):
     calls = []
     _wire(monkeypatch, src, rel, calls)
     cmd_sync.cmd_sync_prerelease(_Args())
+    assert calls.pop(0) == ("delete", "home:Admin:PR:pr-5:ppg:releases:17", True)
     assert calls[0] == ("meta", "home:Admin:PR:pr-5:ppg:releases:17", True)
     assert calls[1:4] == ["drain", "green", "freeze"]
     assert calls[4] == (
