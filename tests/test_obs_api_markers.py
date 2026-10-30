@@ -130,3 +130,27 @@ def test_single_marker_is_appended_last(monkeypatch):
     desc = ET.fromstring(pushed["meta"]).findtext("description")
     assert desc.splitlines()[-1] == "release_id: 17.11-2"
     assert "source_commit: old" in desc
+
+
+def test_remove_release_targets_drops_deleted_project_targets(monkeypatch):
+    """OBS rewrites targets of a force-deleted project to project="deleted";
+    those can never be released into and are removed with ours."""
+    meta = (
+        '<project name="S"><title>t</title><description/>'
+        '<repository name="r">'
+        '<releasetarget project="deleted" repository="deleted" trigger="manual"/>'
+        '<releasetarget project="PR:rel" repository="r" trigger="manual"/>'
+        '<releasetarget project="other" repository="r" trigger="manual"/>'
+        "</repository></project>"
+    )
+    pushed = {}
+    monkeypatch.setattr(obs_api.osc.core, "show_project_meta", lambda a, p: meta)
+    monkeypatch.setattr(
+        obs_api,
+        "_edit_project_meta",
+        lambda a, p, meta, force: pushed.setdefault("meta", meta) and False,
+    )
+    obs_api._remove_release_targets("http://obs", "S", "PR:rel")
+    assert 'project="deleted"' not in pushed["meta"]
+    assert 'project="PR:rel"' not in pushed["meta"]
+    assert 'project="other"' in pushed["meta"]
