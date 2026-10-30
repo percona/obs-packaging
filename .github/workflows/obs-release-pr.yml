@@ -16,6 +16,10 @@ name: OBS Release PR
 # Repopulate without a push: workflow_dispatch with the PR number.
 # A push that changes only release CHANGELOG.md files does not repopulate:
 # the changelog never reaches OBS, so the previous populate stands.
+#
+# Release QA is gated on the `qa-release` label: populate always runs, QA
+# only when the label is on the PR.  Adding the label later runs QA alone
+# against the already-populated pre-release (no repopulate).
 
 on:
   pull_request:
@@ -23,7 +27,7 @@ on:
     # A release PR always changes a release.yaml; mirror/README-only edits
     # under releases/ are not releases.
     paths: ['root/*/releases/*/release.yaml']
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -37,6 +41,8 @@ concurrency:
 jobs:
   resolve:
     name: Resolve release PR
+    # Any other label is not ours: skip the whole run.
+    if: github.event.action != 'labeled' || github.event.label.name == 'qa-release'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -45,6 +51,7 @@ jobs:
       pr_number:        ${{ steps.ctx.outputs.pr_number }}
       head_sha:         ${{ steps.ctx.outputs.head_sha }}
       clone_url:        ${{ steps.ctx.outputs.clone_url }}
+      run_qa:           ${{ steps.ctx.outputs.run_qa }}
       kind:             ${{ steps.classify.outputs.kind }}
       release_files:    ${{ steps.classify.outputs.release_files }}
       release_projects: ${{ steps.classify.outputs.release_projects }}
@@ -70,6 +77,7 @@ jobs:
             echo "pr_number=${PR}"
             echo "head_sha=$(echo "$DATA" | jq -r '.head.sha')"
             echo "clone_url=$(echo "$DATA" | jq -r '.head.repo.clone_url')"
+            echo "run_qa=$(echo "$DATA" | jq -r '[.labels[].name] | index("qa-release") != null')"
           } >> "$GITHUB_OUTPUT"
           if [ "$STATE" != "open" ] && [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "::notice::PR #${PR} is ${STATE}; populating anyway; a merged release PR is refused by the record check (main's release.yaml changed at the merge): cut a new release instead"
@@ -89,7 +97,8 @@ jobs:
   populate:
     name: Populate pre-release (${{ matrix.instance.name }})
     needs: [resolve]
-    if: needs.resolve.outputs.kind == 'release'
+    # Adding the qa-release label runs QA only, against the existing populate.
+    if: needs.resolve.outputs.kind == 'release' && github.event.action != 'labeled'
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     timeout-minutes: 180
@@ -231,10 +240,16 @@ jobs:
         run: python .github/scripts/post_pr_comment.py
 
   # Every QA lane the release mirrors declare, against the pre-release.
+  # Only with the qa-release label: after this run's populate, or alone when
+  # the label was just added (populate skipped).
   qa:
     name: Release
     needs: [resolve, populate]
-    if: ${{ !cancelled() && needs.populate.result == 'success' }}
+    if: >-
+      ${{ !cancelled() && needs.resolve.outputs.kind == 'release'
+          && needs.resolve.outputs.run_qa == 'true'
+          && (needs.populate.result == 'success'
+              || (github.event.action == 'labeled' && needs.populate.result == 'skipped')) }}
     uses: ./.github/workflows/qa-fanout.yml
     with:
       pr_number: ${{ needs.resolve.outputs.pr_number }}

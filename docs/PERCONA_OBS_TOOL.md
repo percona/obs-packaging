@@ -1042,9 +1042,10 @@ The process is PR-based:
    PR remain manual steps.
 2. **PR populates the pre-release and runs QA** — `obs-release-pr.yml` (release-only PRs
    only) runs `sync prerelease <project> --branch-from main` on every OBS instance, posts a
-   per-instance comment listing the pre-release projects, and then runs every QA lane the
-   release mirrors declare against them (the reusable `qa-fanout.yml`; check names are
-   prefixed `Release / OBS QA / …`).
+   per-instance comment listing the pre-release projects. With the `qa-release` label on
+   the PR it then runs every QA lane the release mirrors declare against them (the reusable
+   `qa-fanout.yml`; check names are prefixed `Release / OBS QA / …`). Adding the label
+   later runs QA alone against the already-populated pre-release.
 3. **Fix loop** — if QA fails, fix the package in staging through a normal PR; once merged and
    synced, rebase the release branch, re-run `project release` (refreshes the open id, the
    changelog section and `source_commit`) and push. When only staging changed and the
@@ -1250,7 +1251,7 @@ scan produces nothing (e.g. `--no-cve-scan`, or no packages changed).
 ### Step 2 — CI ships the release
 
 Release-only PRs are handled by `obs-release-pr.yml` (triggered on open/synchronize/reopen
-of a PR that changes a `root/*/releases/*/release.yaml` (PRs touching only mirrors or
+and on adding the `qa-release` label, of a PR that changes a `root/*/releases/*/release.yaml` (PRs touching only mirrors or
 READMEs under `releases/` are skipped with a notice), or by `workflow_dispatch` with a
 `pr_number`); `obs-pr-check.yml` gates them out and needs no label for this. Its jobs:
 
@@ -1265,7 +1266,9 @@ READMEs under `releases/` are skipped with a notice), or by `workflow_dispatch` 
   `sync prerelease <project> --branch-from main --synced-commit <sha>` for
   each release project, uploads the `prerelease-report-<instance>` artifact and posts a
   per-instance PR comment.
-- `qa` — calls `qa-fanout.yml` once every populate leg succeeded.
+- `qa` — calls `qa-fanout.yml` when the PR carries the `qa-release` label: after every
+  populate leg succeeded, or on its own when the run was triggered by adding the label
+  (populate is skipped then; any other label skips the whole run).
 
 On merge:
 

@@ -64,7 +64,8 @@ def render_prerelease_comment(
         marker,
         heading,
         "",
-        "Release QA runs against the pre-release projects below; nothing is built in OBS.",
+        "Release QA runs against the pre-release projects below once the `qa-release` "
+        "label is on the PR; nothing is built in OBS.",
         "",
         "| Release | Pre-release project | Populate | Source commit |",
         "|---|---|---|---|",
