@@ -6,7 +6,7 @@ Version: 1:%!{PG_OIDC_VALIDATOR_VERSION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 9),
- libcurl4-openssl-dev,
+ libcurl4-openssl-dev (>= 8.23.0),
  libkrb5-dev,
  libreadline-dev,
  libssl-dev (>= 1.1.1),

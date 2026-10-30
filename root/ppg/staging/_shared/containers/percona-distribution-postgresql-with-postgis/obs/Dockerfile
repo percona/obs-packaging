@@ -33,6 +33,11 @@ ENV PATH="/pgdata:${PGROOT}/bin:${PATH}"
 
 RUN microdnf -y update
 
+# curl/libcurl 8.23.0 from ppg:common:deps replace the distro's (curl-minimal/
+# libcurl-minimal on ubi-minimal, which they obsolete). Named explicitly so the
+# image carries them even where nothing installed below links libcurl.
+RUN microdnf -y install curl libcurl
+
 # ubi-minimal ships glibc-minimal-langpack (strict `glibc = ver`). OBS only
 # uploads what this list expands to, and glibc-langpack-en already satisfies
 # glibc's langpack requirement, so without naming it here the minimal langpack

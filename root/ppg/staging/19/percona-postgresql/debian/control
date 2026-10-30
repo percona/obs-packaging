@@ -16,7 +16,7 @@ Build-Depends:
  flex,
  gdb <!nocheck>,
  gettext,
- libcurl4-openssl-dev [linux-any],
+ libcurl4-openssl-dev (>= 8.23.0) [linux-any],
  libicu-dev,
  libio-pty-perl <!nocheck>,
  libipc-run-perl <!nocheck>,

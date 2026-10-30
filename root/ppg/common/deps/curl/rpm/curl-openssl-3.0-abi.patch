@@ -1,0 +1,19 @@
+--- a/lib/vtls/openssl.c
++++ b/lib/vtls/openssl.c
+@@ -4012,13 +4012,12 @@
+ 
+ #ifdef HAVE_OPENSSL3
+     SSL_get_peer_signature_type_nid(octx->ssl, &psigtype_nid);
+-#if OPENSSL_VERSION_NUMBER >= 0x30200000L
+-    negotiated_group_name = SSL_get0_group_name(octx->ssl);
+-#else
++    /* PERCONA: always use the OpenSSL 3.0 API here. SSL_get0_group_name()
++       is versioned OPENSSL_3.2.0, which would stop libcurl built on an
++       OpenSSL >= 3.2 base from loading on OpenSSL 3.0/3.1 hosts. */
+     negotiated_group_name =
+       OBJ_nid2sn(SSL_get_negotiated_group(octx->ssl) & 0x0000FFFF);
+ #endif
+-#endif
+ 
+     /* Informational message */
+     infof(data, "SSL connection using %s / %s / %s / %s",

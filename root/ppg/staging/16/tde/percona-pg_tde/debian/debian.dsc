@@ -13,7 +13,7 @@ Build-Depends:
  pkg-config,
  percona-postgresql-server-dev-all (>= 153~),
  clang,
- libcurl4-openssl-dev,
+ libcurl4-openssl-dev (>= 8.23.0),
  libssl-dev (>= 1.1.1),
  zlib1g-dev,
  libzstd-dev,

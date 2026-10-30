@@ -1,0 +1,13 @@
+<services>
+  <!-- curl release tarball. curl >= 8.22.0 requires OpenSSL >= 3.0. -->
+  <service name="download_url">
+    <param name="url">https://curl.se/download/curl-8.23.0.tar.xz</param>
+  </service>
+  <!-- OpenSSL 3 source, built static and linked privately into libcurl on
+       EL8 only (the distro there has OpenSSL 1.1.1). Unused on EL9/EL10,
+       which build against the system OpenSSL 3. Keep the version in sync
+       with %openssl_version in curl.spec. -->
+  <service name="download_url">
+    <param name="url">https://github.com/openssl/openssl/releases/download/openssl-3.5.4/openssl-3.5.4.tar.gz</param>
+  </service>
+</services>

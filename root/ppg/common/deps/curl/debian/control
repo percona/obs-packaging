@@ -1,0 +1,91 @@
+Source: curl
+Section: web
+Priority: optional
+Maintainer: Percona Development Team <info@percona.com>
+Build-Depends: debhelper-compat (= 13),
+               binutils,
+               libbrotli-dev,
+               libidn2-dev,
+               libkrb5-dev,
+               libldap-dev,
+               libnghttp2-dev,
+               libpsl-dev,
+               libssh2-1-dev,
+               libssl-dev,
+               libzstd-dev,
+               perl,
+               pkg-config,
+               zlib1g-dev,
+Standards-Version: 4.6.2
+Homepage: https://curl.se/
+
+Package: curl
+Architecture: any
+Depends: libcurl4t64 (= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends},
+Multi-Arch: foreign
+Description: command line tool for transferring data with URL syntax
+ curl is a command line tool for transferring data with URL syntax, supporting
+ DICT, FILE, FTP, FTPS, GOPHER, HTTP, HTTPS, IMAP, IMAPS, LDAP, LDAPS, MQTT,
+ POP3, POP3S, RTSP, SCP, SFTP, SMB, SMTP, SMTPS, TELNET and TFTP.
+ .
+ Percona build of curl 8.23.0 for Percona Distribution for PostgreSQL.
+
+# One binary name on every Debian/Ubuntu release: Debian 13 and Ubuntu
+# 24.04+ ship libcurl4t64, Debian 12 and Ubuntu 22.04 ship libcurl4. The
+# versioned Provides/Breaks/Replaces take over libcurl4 the same way
+# Debian's own time64 transition did, so packages depending on libcurl4
+# (>= x) are satisfied and the distro library is replaced.
+Package: libcurl4t64
+Architecture: any
+Section: libs
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends},
+Depends: ${misc:Depends},
+         ${shlibs:Depends},
+Recommends: ca-certificates,
+Provides: libcurl4 (= ${binary:Version}),
+Breaks: libcurl4 (<< ${binary:Version}),
+Conflicts: libcurl3,
+Replaces: libcurl3,
+          libcurl4,
+Description: easy-to-use client-side URL transfer library (OpenSSL flavour)
+ libcurl is an easy-to-use client-side URL transfer library, supporting DICT,
+ FILE, FTP, FTPS, GOPHER, HTTP, HTTPS, IMAP, IMAPS, LDAP, LDAPS, MQTT, POP3,
+ POP3S, RTSP, SCP, SFTP, SMB, SMTP, SMTPS, TELNET and TFTP.
+ .
+ Percona build of libcurl 8.23.0 for Percona Distribution for PostgreSQL.
+ SSL support is provided by OpenSSL.
+
+Package: libcurl4-openssl-dev
+Architecture: any
+Section: libdevel
+Multi-Arch: same
+Provides: libcurl-dev,
+          libcurl-ssl-dev,
+          libcurl3-dev,
+          libcurl3-openssl-dev,
+          libcurl4-dev,
+Conflicts: libcurl4-gnutls-dev,
+Depends: libbrotli-dev,
+         libcurl4t64 (= ${binary:Version}),
+         libidn2-dev,
+         libkrb5-dev,
+         libldap-dev,
+         libnghttp2-dev,
+         libpsl-dev,
+         libssh2-1-dev,
+         libssl-dev,
+         libzstd-dev,
+         zlib1g-dev,
+         ${misc:Depends},
+Suggests: pkg-config,
+Description: development files and documentation for libcurl (OpenSSL flavour)
+ libcurl is an easy-to-use client-side URL transfer library.
+ .
+ This package provides the development files (includes, pkg-config file,
+ curl-config, manual pages) for building software that uses libcurl.
+ .
+ Percona build of libcurl 8.23.0 for Percona Distribution for PostgreSQL.
+ SSL support is provided by OpenSSL.

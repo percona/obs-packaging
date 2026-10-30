@@ -222,6 +222,13 @@ project-config: |
   Prefer: libjpeg62-turbo-dev
   %endif
 
+  # Same as the root project.yaml Debian_12/Ubuntu_22.04 block (this
+  # project opts out of the inherited build configuration): prefer the
+  # Percona libcurl4t64 (ppg:common:deps/curl) over the distro libcurl4.
+  %if "%_repository" == "Debian_12" || "%_repository" == "Ubuntu_22.04"
+  Prefer: libcurl4t64
+  %endif
+
   # Distro codename suffix for deb releases — keep in sync with the root
   # project.yaml (this project opts out of the inherited build
   # configuration, so the block is repeated here).

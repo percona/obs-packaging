@@ -30,7 +30,7 @@ BuildRequires:	python3-PyYAML
 %if 0%{?rhel} >= 8 || 0%{?fedora} >= 42
 BuildRequires:	libssh2-devel
 %endif
-BuildRequires:	libcurl-devel
+BuildRequires:	libcurl-devel >= 8.23.0
 
 %if 0%{?suse_version} >= 1500
 Requires:	libopenssl3

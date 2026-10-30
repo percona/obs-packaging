@@ -1,0 +1,75 @@
+#!/usr/bin/make -f
+# Percona build of curl 8.23.0 for every PPG Debian/Ubuntu repository
+# (ppg:common:deps). Based on Debian's curl 8.23.0-1 packaging, OpenSSL
+# flavour only (the GnuTLS libcurl has its own soname and is left to the
+# distro). Feature set matches the distro libcurl: HTTP/2, IDN, PSL,
+# brotli, zstd, GSS-API/Kerberos, SCP/SFTP (libssh2), LDAP/LDAPS, NTLM
+# (opt-in upstream since 8.20.0; SMB was removed upstream in 8.23.0).
+
+include /usr/share/dpkg/pkg-info.mk
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,--no-undefined
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		--disable-static \
+		--enable-symbol-hiding \
+		--enable-versioned-symbols \
+		--enable-threaded-resolver \
+		--with-openssl \
+		--with-zlib \
+		--with-brotli \
+		--with-zstd \
+		--with-libidn2 \
+		--with-libpsl \
+		--with-nghttp2 \
+		--without-ngtcp2 \
+		--without-nghttp3 \
+		--without-libssh \
+		--with-libssh2 \
+		--with-gssapi=/usr \
+		--enable-ldap \
+		--enable-ldaps \
+		--with-lber-lib=lber \
+		--without-libgsasl \
+		--enable-ntlm \
+		--with-ca-path=/etc/ssl/certs \
+		--with-ca-bundle=/etc/ssl/certs/ca-certificates.crt \
+		--includedir=/usr/include/$(DEB_HOST_MULTIARCH) \
+		--without-zsh-functions-dir \
+		--without-fish-functions-dir
+
+# The upstream test suite is long and partly network-bound; check what
+# this build exists for instead: version, distro feature parity
+# (AsynchDNS: libpq-oauth needs a non-blocking resolver) and the
+# CURL_OPENSSL_4 symbol version the distro libcurl also uses.
+override_dh_auto_test:
+	LD_LIBRARY_PATH=lib/.libs src/curl -V | tee curl-V.txt
+	grep -q '^curl $(DEB_VERSION_UPSTREAM) ' curl-V.txt
+	grep -q 'OpenSSL/3\.' curl-V.txt
+	set -e; for p in https scp sftp ldap ldaps; do \
+		grep -qE "^Protocols:.* $$p( |$$)" curl-V.txt || { echo "Error: protocol $$p missing"; exit 1; }; \
+	done
+	set -e; for f in AsynchDNS brotli GSS-API HTTP2 IDN Kerberos NTLM PSL SPNEGO zstd; do \
+		grep -qE "^Features:.* $$f( |$$)" curl-V.txt || { echo "Error: feature $$f missing"; exit 1; }; \
+	done
+	objdump -T lib/.libs/libcurl.so.4 | grep -q ' CURL_OPENSSL_4 *curl_easy_init$$'
+
+override_dh_auto_install:
+	dh_auto_install
+	find debian/tmp -name '*.la' -delete
+
+# No symbols file: every package built against this libcurl gets
+# "libcurl4t64 (>= 8.23.0)", which only this build satisfies on all PPG
+# Debian/Ubuntu releases, so installing a PPG package pulls it in.
+override_dh_makeshlibs:
+	dh_makeshlibs -V 'libcurl4t64 (>= $(DEB_VERSION_UPSTREAM))'
+
+override_dh_installchangelogs:
+	dh_installchangelogs CHANGES.md
