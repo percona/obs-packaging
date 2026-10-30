@@ -5,4 +5,5 @@ Architecture: any
 Version: 1:%!{PG_VERSION}-1
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends: debhelper-compat (= 13)
+Debtransform-Release: 1
 Debtransform-Tar: debian.tar.gz
