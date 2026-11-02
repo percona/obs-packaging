@@ -858,6 +858,9 @@ touch -r %{SOURCE10} %{sname}-%{pgmajorversion}-check-db-dir
 %{__install} -d -m 755 %{buildroot}%{pgbaseinstdir}/share/
 %{__install} -m 700 %{SOURCE9} %{buildroot}%{pgbaseinstdir}/share/
 
+# Install the rpm macros file.
+install -D -m 0644 %{SOURCE20} %{buildroot}%{_rpmmacrodir}/macros.percona-postgresql
+
 %if %sysuserd
 # Install sysusers.d config file to allow rpm to create users/groups automatically.
 %{__install} -m 0644 -D %{SOURCE40} %{buildroot}%{_sysusersdir}/%{sname}%{pgpackageversion}-pgdg.conf
