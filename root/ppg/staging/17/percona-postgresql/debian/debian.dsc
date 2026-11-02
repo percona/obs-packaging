@@ -20,8 +20,7 @@ Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
     autoconf,
     bison,
-    clang [!alpha !hppa !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32],
-    debhelper,
+    clang [amd64 arm64 mips64el ppc64 ppc64el s390x] <!pkg.postgresql.nollvm>,
     dh-exec (>= 0.13~),
     docbook-xml,
     docbook-xsl (>= 1.77),
@@ -36,6 +35,7 @@ Build-Depends:
     libipc-run-perl <!nocheck>,
     libkrb5-dev,
     libldap2-dev,
+    lz4 | liblz4-tool,
     liblz4-dev,
     libpam0g-dev | libpam-dev,
     libperl-dev,
@@ -46,12 +46,13 @@ Build-Depends:
     libxml2-dev,
     libxml2-utils,
     libxslt1-dev,
-    llvm-dev [!alpha !hppa !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32],
+    llvm-dev [amd64 arm64 mips64el ppc64 ppc64el s390x] <!pkg.postgresql.nollvm>,
     mawk,
+    openssl,
     perl (>= 5.8),
     pkg-config,
     python3-dev,
-    systemtap-sdt-dev,
+    systemtap-sdt-dev [linux-any],
     tcl-dev,
     uuid-dev,
     xsltproc,
@@ -59,7 +60,8 @@ Build-Depends:
     libcurl4,
     libcurl4-openssl-dev,
     curl | libz-dev,
-    libzstd-dev,
+    zstd (>= 1.4.0) <!pkg.postgresql.nozstd>,
+    libzstd-dev (>= 1.4.0) <!pkg.postgresql.nozstd>,
     percona-postgresql-common-dev
 Debtransform-Release: 1
 Debtransform-Files-Tar: debian.tar.gz
