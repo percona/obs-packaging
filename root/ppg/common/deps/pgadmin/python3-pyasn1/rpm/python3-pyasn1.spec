@@ -13,12 +13,12 @@
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
 Name:           %{python3_pkgprefix}-pyasn1
-Version:        0.6.4
+Version:        0.6.5
 Release:        1%{?dist}
 Summary:        Pure-Python implementation of ASN.1 types and DER/BER/CER codecs (X.208)
 License:        BSD-2-Clause
 URL:            https://github.com/pyasn1/pyasn1
-Source0:        https://files.pythonhosted.org/packages/source/p/pyasn1/pyasn1-0.6.4.tar.gz
+Source0:        https://files.pythonhosted.org/packages/source/p/pyasn1/pyasn1-0.6.5.tar.gz
 BuildArch:      noarch
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
@@ -35,7 +35,7 @@ Pure-Python implementation of ASN.1 types and DER/BER/CER codecs (X.208).
 Built for Python 3.12 from the PyPI sdist; part of the pgAdmin 4 (percona-pgadmin4) dependency stack.
 
 %prep
-%autosetup -p1 -n pyasn1-0.6.4
+%autosetup -p1 -n pyasn1-0.6.5
 
 %build
 %{__ospython} -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir dist .
@@ -50,5 +50,9 @@ PYTHONPATH=%{buildroot}%{python3_sitelib} %{__ospython} -P -c "import pyasn1"
 %{python3_sitelib}/*
 
 %changelog
+* Mon Nov 02 2026 Percona Development Team <info@percona.com> - 0.6.5-1
+- Update to 0.6.5 (CVE-2026-119194, CVE-2026-119195, CVE-2026-119196,
+  CVE-2026-119197)
+
 * Thu Aug 27 2026 Percona Development Team <info@percona.com> - 0.6.4-1
 - Package pyasn1 0.6.4 for Python 3.12 (pgAdmin 4 dependency stack)
