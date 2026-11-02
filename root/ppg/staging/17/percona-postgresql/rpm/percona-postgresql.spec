@@ -17,10 +17,6 @@
 %global gts_version 14
 %endif
 
-# Macros that define the configure parameters:
-%{!?kerbdir:%global kerbdir "/usr"}
-%{!?disablepgfts:%global disablepgfts 0}
-
 %if 0%{?suse_version} >= 1315
 %{!?enabletaptests:%global enabletaptests 0}
 %else
@@ -30,12 +26,20 @@
 %{!?icu:%global icu 1}
 %{!?kerberos:%global kerberos 1}
 %{!?ldap:%global ldap 1}
+%{!?llvm:%global llvm 1}
 %{!?nls:%global nls 1}
 %{!?pam:%global pam 1}
 
 %{!?pltcl:%global pltcl 1}
 %{!?plperl:%global plperl 1}
+%{!?plpython3:%global plpython3 1}
+%{!?selinux:%global selinux 1}
 %{!?ssl:%global ssl 1}
+%if 0%{?fedora} >= 43
+%{!?sysuserd:%global sysuserd 1}
+%else
+%{!?sysuserd:%global sysuserd 0}
+%endif
 %{!?test:%global test 1}
 %{!?runselftest:%global runselftest 0}
 %{!?uuid:%global uuid 1}
@@ -45,22 +49,6 @@
 %{!?sdt:%global sdt 0}
 %else
  %{!?sdt:%global sdt 1}
-%endif
-
-%ifarch ppc64 ppc64le s390 s390x armv7hl
- %if 0%{?rhel} && 0%{?rhel} == 7
-  %{!?llvm:%global llvm 0}
- %else
-  %{!?llvm:%global llvm 1}
- %endif
-%else
- %{!?llvm:%global llvm 1}
-%endif
-
-%{!?selinux:%global selinux 1}
-
-%if 0%{?fedora} > 30
-%global _hardened_build 1
 %endif
 
 %if ! %{defined _rpmmacrodir}
@@ -99,7 +87,9 @@ Source18:       %{sname}.service
 Source19:       %{sname}-tmpfiles.d
 Source20:       percona-postgresql-extensions-macros
 Source30:       percona-postgresql-rpmlintrc
-Source999:      call-home.sh
+%if %sysuserd
+Source40:        %{sname}-sysusers.conf
+%endif
 
 Patch1:         %{sname}-rpm-pgsql.patch
 Patch3:         %{sname}-conf.patch
@@ -111,7 +101,7 @@ Patch7:         llvm_static_linking.patch
 BuildRequires:  update-alternatives
 %endif
 
-BuildRequires:  perl glibc-devel bison flex >= 2.5.31
+BuildRequires:  perl glibc-devel bison >= 2.3 flex >= 2.5.35
 BuildRequires:  gcc-c++
 %if 0%{?gts_version}
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
@@ -119,10 +109,12 @@ BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c+
 BuildRequires:  perl(ExtUtils::MakeMaker)
 BuildRequires:  readline-devel zlib-devel >= 1.0.4
 BuildRequires:  libxml2-devel libxslt-devel
+BuildRequires:  chrpath
 
 # lz4 dependency
 %if 0%{?suse_version} >= 1500
 BuildRequires:  liblz4-devel
+Requires:        liblz4-1
 %endif
 %if 0%{?rhel} || 0%{?fedora}
 BuildRequires:  lz4-devel
@@ -130,7 +122,7 @@ Requires:       lz4-libs
 %endif
 
 # zstd dependency
-%if 0%{?suse_version} >= 1499
+%if 0%{?suse_version} >= 1500
 BuildRequires:	libzstd-devel >= 1.4.0
 Requires:	libzstd1 >= 1.4.0
 %endif
@@ -151,18 +143,11 @@ Requires:       /sbin/ldconfig
 
 %if %icu
 BuildRequires:  libicu-devel
+Requires:       libicu
 %endif
 
 %if %llvm
-%if 0%{?rhel} && 0%{?rhel} == 7
-# Packages come from EPEL and SCL:
-%ifarch aarch64
-BuildRequires:	llvm-toolset-7.0-llvm-devel >= 7.0.1 llvm-toolset-7.0-clang >= 7.0.1
-%else
-BuildRequires:  llvm5.0-devel >= 5.0 llvm-toolset-7-clang >= 4.0.1
-%endif
-%endif
-BuildRequires:  llvm-devel clang-devel
+BuildRequires:	llvm-devel >= 19 clang-devel >= 19
 %endif
 
 %if %kerberos
@@ -172,7 +157,7 @@ BuildRequires:  e2fsprogs-devel
 
 %if %ldap
 %if 0%{?suse_version}
-%if 0%{?suse_version} >= 1315
+%if 0%{?suse_version} >= 1500
 BuildRequires:  openldap2-devel
 %endif
 %else
@@ -196,10 +181,7 @@ BuildRequires:  pam-devel
 %endif
 
 %if %plperl
-%if 0%{?rhel} && 0%{?rhel} >= 7
-BuildRequires:  perl-ExtUtils-Embed
-%endif
-%if 0%{?fedora} >= 22
+%if 0%{?fedora} || 0%{?rhel}
 BuildRequires:  perl-ExtUtils-Embed
 %endif
 %endif
@@ -238,16 +220,23 @@ BuildRequires:  selinux-policy >= 3.9.13
 %endif
 
 %if %ssl
-%if 0%{?suse_version} >= 1315 && 0%{?suse_version} <= 1499
-BuildRequires:  libopenssl-devel
-%else
+%if 0%{?suse_version} >= 1500
+BuildRequires:  libopenssl-3-devel
+%endif
+%if 0%{?rhel} == 9
+BuildRequires: openssl-devel >= 3.5
+%endif
+%if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
 BuildRequires:  openssl-devel
+%endif
+%if 0%{?fedora} >= 41
+BuildRequires:        openssl-devel-engine
 %endif
 %endif
 
 %if %uuid
 %if 0%{?suse_version}
-%if 0%{?suse_version} >= 1315
+%if 0%{?suse_version} >= 1500
 BuildRequires:  uuid-devel
 %endif
 %else
@@ -335,7 +324,10 @@ Summary:        The programs needed to create and run a PostgreSQL server
 Group:          Productivity/Databases/Servers
 Requires:       %{name} >= %{version}-%{release}
 Requires:       %{name}-libs >= %{version}-%{release}
+%if ! %sysuserd
 Requires(pre):  /usr/sbin/useradd /usr/sbin/groupadd
+%endif
+Requires:        util-linux
 Recommends:     percona-pg-telemetry%{pgmajorversion}
 Requires:       percona-pg_tde%{pgmajorversion}
 # for /sbin/ldconfig
@@ -435,17 +427,17 @@ Requires:       llvm-devel >= 19 clang-devel >= 19
 %endif
 
 %if %enabletaptests
-%if 0%{?suse_version} && 0%{?suse_version} >= 1315
+%if 0%{?suse_version} && 0%{?suse_version} >= 1500
 Requires:       perl-IPC-Run
 BuildRequires:  perl-IPC-Run
 %endif
-%if 0%{?rhel} && 0%{?rhel} <= 7
+%if 0%{?rhel}
 Requires:       perl-Test-Simple
-BuildRequires:  perl-Test-Simple
+BuildRequires:  perl-Test-Simple perl-IPC-Run perl-Time-HiRes
 %endif
-%if 0%{?fedora} || 0%{?rhel} >= 8
+%if 0%{?fedora}
 Requires:       perl-IPC-Run
-BuildRequires:  perl-IPC-Run
+BuildRequires:  perl-Test-Simple perl-IPC-Run perl-Time-HiRes
 %endif
 %endif
 
@@ -474,8 +466,14 @@ to develop applications which will interact with a PostgreSQL server.
 Summary:        Just-in-time compilation support for PostgreSQL
 Group:          Productivity/Databases/Servers
 Requires:       %{name}-server >= %{version}-%{release}
+%if 0%{?suse_version} == 1500
+Requires:        libLLVM17
+%endif
+%if 0%{?suse_version} == 1600
+Requires:        libLLVM19
+%endif
 %if 0%{?fedora} || 0%{?rhel}
-Requires:       llvm >= 19
+Requires:       llvm => 19
 %endif
 
 Provides:       postgresql-llvmjit >= %{version}-%{release}
@@ -526,6 +524,7 @@ Install this if you want to write database functions in Perl.
 
 %endif
 
+%if %plpython3
 %package plpython3
 Summary:        The Python3 procedural language for PostgreSQL
 Group:          Productivity/Databases/Servers
@@ -533,8 +532,9 @@ Requires:       %{name} >= %{version}-%{release}
 Requires:       %{name}-server >= %{version}-%{release}
 Obsoletes:      %{name}-pl <= %{version}-%{release}
 Provides:       postgresql-plpython3 >= %{version}-%{release}
-%if 0%{?rhel} == 7
-# We support Python3 natively on RHEL/CentOS 7 as of 7.7+,
+%if 0%{?suse_version} >= 1500
+Requires:        python3-base
+%else
 Requires:       python3-libs
 %endif
 Provides:       %{vname}-plpython3 = %{epoch}:%{version}-%{release}
@@ -552,6 +552,7 @@ Epoch:          1
 The postgresql%{pgmajorversion}-plpython3 package contains the PL/Python3 procedural language,
 which is an extension to the PostgreSQL database server.
 Install this if you want to write database functions in Python 3.
+%endif
 
 %if %pltcl
 %package pltcl
@@ -637,14 +638,6 @@ export CFLAGS
 source /opt/rh/gcc-toolset-%{gts_version}/enable
 %endif
 
-%if 0%{?rhel} && 0%{?rhel} == 7
-%ifarch aarch64
-        export CLANG=/opt/rh/llvm-toolset-7.0/root/usr/bin/clang LLVM_CONFIG=/opt/rh/llvm-toolset-7.0/root/usr/bin/llvm-config
-%else
-        export CLANG=/opt/rh/llvm-toolset-7/root/usr/bin/clang LLVM_CONFIG=%{_libdir}/llvm5.0/bin/llvm-config
-%endif
-%endif
-
 %if 0%{?rhel} && 0%{?rhel} >= 8
         export CLANG=%{_bindir}/clang LLVM_CONFIG=%{_bindir}/llvm-config
 %endif
@@ -669,9 +662,7 @@ export PYTHON=%{_bindir}/python3.12
         --datadir=%{pgbaseinstdir}/share \
         --libdir=%{pgbaseinstdir}/lib \
         --with-lz4 \
-%if 0%{?rhel} || 0%{?suse_version} >= 1499 || 0%{?fedora}
 	--with-zstd \
-%endif
 %if %beta
         --enable-debug \
         --enable-cassert \
@@ -688,7 +679,9 @@ export PYTHON=%{_bindir}/python3.12
 %if %plperl
         --with-perl \
 %endif
+%if %plpython3
 	--with-python \
+%endif
 %if %pltcl
         --with-tcl \
         --with-tclconfig=%{_libdir} \
@@ -701,17 +694,14 @@ export PYTHON=%{_bindir}/python3.12
 %endif
 %if %kerberos
         --with-gssapi \
-        --with-includes=%{kerbdir}/include \
-        --with-libraries=%{kerbdir}/%{_lib} \
+        --with-includes=%{_includedir} \
+        --with-libraries=%{_libdir} \
 %endif
 %if %nls
         --enable-nls \
 %endif
 %if %sdt
         --enable-dtrace \
-%endif
-%if %disablepgfts
-        --disable-thread-safety \
 %endif
 %if %uuid
         --with-uuid=e2fs \
@@ -741,8 +731,8 @@ sed "s|C=\`pwd\`;|C=%{pgbaseinstdir}/lib/tutorial;|" < src/tutorial/Makefile > s
 %{__make} %{?_smp_mflags} -C src/tutorial NO_PGXS=1 all
 %{__rm} -f src/tutorial/GNUmakefile
 
-%{__mkdir} -p %{buildroot}%{pgbaseinstdir}/share/extensions/
 MAKELEVEL=0 %{__make} %{?_smp_mflags} all
+%{__make} %{?_smp_mflags} -C doc all
 %{__make} %{?_smp_mflags} -C contrib all
 %if %uuid
 %{__make} %{?_smp_mflags} -C contrib/uuid-ossp all
@@ -775,7 +765,9 @@ run_testsuite()
 	run_testsuite "src/test/regress"
 	%{__make} clean -C "src/test/regress"
 	run_testsuite "src/pl"
+%if %plpython3
 	run_testsuite "src/pl/plpython"
+%endif
 	run_testsuite "contrib"
 %endif
 
@@ -792,11 +784,13 @@ pushd doc/src; make all; popd
 %{__make} DESTDIR=%{buildroot} install
 
 	# Install PL/Python3
+%if %plpython3
 	pushd src/pl/plpython
 	%{__make} DESTDIR=%{buildroot} install
 	popd
+%endif
 
-%{__mkdir} -p %{buildroot}%{pgbaseinstdir}/share/extensions/
+%{__mkdir} -p %{buildroot}%{pgbaseinstdir}/share/extension/
 %{__make} -C contrib DESTDIR=%{buildroot} install
 %if %uuid
 %{__make} -C contrib/uuid-ossp DESTDIR=%{buildroot} install
@@ -857,15 +851,17 @@ touch -r %{SOURCE10} %{sname}-%{pgmajorversion}-check-db-dir
 %{__install} -d -m 700 %{buildroot}/var/lib/pgsql/%{pgmajorversion}/backups
 
 # Create the multiple PostgreSQL version startup directory
-%{__install} -d -m 700 %{buildroot}/etc/sysconfig/pgsql/%{pgmajorversion}
+%{__install} -d -m 700 %{buildroot}/etc/sysconfig/pgsql/
 
 # Install linker conf file under postgresql installation directory.
 # We will install the latest version via alternatives.
 %{__install} -d -m 755 %{buildroot}%{pgbaseinstdir}/share/
 %{__install} -m 700 %{SOURCE9} %{buildroot}%{pgbaseinstdir}/share/
 
-# Install the rpm macros file.
-install -D -m 0644 %{SOURCE20} %{buildroot}%{_rpmmacrodir}/macros.percona-postgresql
+%if %sysuserd
+# Install sysusers.d config file to allow rpm to create users/groups automatically.
+%{__install} -m 0644 -D %{SOURCE40} %{buildroot}%{_sysusersdir}/%{sname}%{pgpackageversion}-pgdg.conf
+%endif
 
 %if %test
 	# tests. There are many files included here that are unnecessary,
@@ -889,10 +885,12 @@ install -D -m 0644 %{SOURCE20} %{buildroot}%{_rpmmacrodir}/macros.percona-postgr
 	chmod 0644 %{buildroot}%{pgbaseinstdir}/lib/test/regress/Makefile
 %endif
 
+%if %plpython3
 # Quick hack:
 %{__rm} -f %{buildroot}/%{pgbaseinstdir}/share/extension/*plpython2u*
 %{__rm} -f %{buildroot}/%{pgbaseinstdir}/share/extension/*plpythonu-*
 %{__rm} -f %{buildroot}/%{pgbaseinstdir}/share/extension/*_plpythonu.control
+%endif
 
 # Fix some more documentation
 # gzip doc/internals.ps
@@ -942,10 +940,10 @@ install -D -m 0644 %{SOURCE20} %{buildroot}%{_rpmmacrodir}/macros.percona-postgr
 cat plperl-%{pgmajorversion}.lang > pg_plperl.lst
 %endif
 %find_lang plpgsql-%{pgmajorversion}
-# plpython3 shares message files with plpython
+%if %plpython3
 %find_lang plpython-%{pgmajorversion}
 cat plpython-%{pgmajorversion}.lang >> pg_plpython3.lst
-
+%endif
 %if %pltcl
 %find_lang pltcl-%{pgmajorversion}
 cat pltcl-%{pgmajorversion}.lang > pg_pltcl.lst
@@ -961,21 +959,22 @@ cat postgres-%{pgmajorversion}.lang pg_resetwal-%{pgmajorversion}.lang pg_checks
 %endif
 
 %pre server
+%if %sysuserd
+# We need this user to be created ASAP so that we can set up
+# ownership of some directories:
+%sysusers_create_package %{name} %SOURCE20
+%else
+# This is replaced by sysusers.d in recent OSes:
 groupadd -g 26 -o -r postgres >/dev/null 2>&1 || :
 useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
         -c "PostgreSQL Server" -u 26 postgres >/dev/null 2>&1 || :
+%endif
 
 %post server
 /sbin/ldconfig
 if [ $1 -eq 1 ] ; then
    /bin/systemctl daemon-reload >/dev/null 2>&1 || :
-   %if 0%{?suse_version}
-   %if 0%{?suse_version} >= 1315
-   %service_add_pre postgresql-%{pgpackageversion}.service
-   %endif
-   %else
    %systemd_post %{sname}-%{pgpackageversion}.service
-   %endif
 fi
 
 # postgres' .bash_profile.
@@ -990,12 +989,6 @@ export PGDATA
 [ -f /var/lib/pgsql/.pgsql_profile ] && source /var/lib/pgsql/.pgsql_profile" > /var/lib/pgsql/.bash_profile
 chown postgres: /var/lib/pgsql/.bash_profile
 chmod 700 /var/lib/pgsql/.bash_profile
-cp %SOURCE999 /tmp/ 2>/dev/null || :
-bash /tmp/call-home.sh -f "PRODUCT_FAMILY_POSTGRESQL" -v "17.5-1" -d "PACKAGE" &>/dev/null || :
-chgrp percona-telemetry /usr/local/percona/telemetry_uuid &>/dev/null || :
-chmod 664 /usr/local/percona/telemetry_uuid &>/dev/null || :
-rm -f /tmp/call-home.sh
-
 
 %preun server
 if [ $1 -eq 0 ] ; then
@@ -1104,6 +1097,7 @@ fi
 # so that extensions can use this dir.
 %dir %{pgbaseinstdir}/lib/bitcode
 %endif
+%doc doc/KNOWN_BUGS doc/MISSING_FEATURES
 %doc COPYRIGHT
 %doc README.rpm-dist
 %dir %{pgbaseinstdir}
@@ -1151,7 +1145,9 @@ fi
 %{pgbaseinstdir}/share/man/man1/pg_dump.*
 %{pgbaseinstdir}/share/man/man1/pg_dumpall.*
 %{pgbaseinstdir}/share/man/man1/pg_isready.*
+%{pgbaseinstdir}/share/man/man1/pg_receivewal.*
 %{pgbaseinstdir}/share/man/man1/pg_restore.*
+%{pgbaseinstdir}/share/man/man1/pg_waldump.*
 %{pgbaseinstdir}/share/man/man1/pg_walsummary.*
 %{pgbaseinstdir}/share/man/man1/psql.*
 %{pgbaseinstdir}/share/man/man1/reindexdb.*
@@ -1162,7 +1158,6 @@ fi
 %files docs
 %defattr(-,root,root)
 %doc doc/src/*
-%doc doc/KNOWN_BUGS doc/MISSING_FEATURES
 %doc *-A4.pdf
 %doc src/tutorial
 %doc doc/html
@@ -1202,15 +1197,19 @@ fi
 %{pgbaseinstdir}/share/extension/jsonb_plperl*.sql
 %{pgbaseinstdir}/share/extension/jsonb_plperl*.control
 %endif
+%if %plpython3
 %{pgbaseinstdir}/lib/hstore_plpython3.so
 %{pgbaseinstdir}/lib/jsonb_plpython3.so
 %{pgbaseinstdir}/lib/ltree_plpython3.so
+%endif
 %{pgbaseinstdir}/lib/lo.so
 %{pgbaseinstdir}/lib/ltree.so
 %{pgbaseinstdir}/lib/moddatetime.so
 %{pgbaseinstdir}/lib/pageinspect.so
 %{pgbaseinstdir}/lib/passwordcheck.so
+%if %ssl
 %{pgbaseinstdir}/lib/pgcrypto.so
+%endif
 %{pgbaseinstdir}/lib/pgrowlocks.so
 %{pgbaseinstdir}/lib/pgstattuple.so
 %{pgbaseinstdir}/lib/pg_buffercache.so
@@ -1278,7 +1277,9 @@ fi
 %{pgbaseinstdir}/share/extension/pg_trgm*
 %{pgbaseinstdir}/share/extension/pg_visibility*
 %{pgbaseinstdir}/share/extension/pg_walinspect*
+%if %ssl
 %{pgbaseinstdir}/share/extension/pgcrypto*
+%endif
 %{pgbaseinstdir}/share/extension/pgrowlocks*
 %{pgbaseinstdir}/share/extension/pgstattuple*
 %{pgbaseinstdir}/share/extension/postgres_fdw*
@@ -1322,6 +1323,9 @@ fi
 %{pgbaseinstdir}/bin/%{sname}-%{pgmajorversion}-setup
 %{_bindir}/%{sname}-%{pgmajorversion}-setup
 %{pgbaseinstdir}/bin/%{sname}-%{pgmajorversion}-check-db-dir
+%if %sysuserd
+%{_sysusersdir}/%{sname}%{pgpackageversion}-pgdg.conf
+%endif
 %{_tmpfilesdir}/%{sname}-%{pgmajorversion}.conf
 %{_unitdir}/%{sname}-%{pgmajorversion}.service
 %if %pam
@@ -1348,13 +1352,11 @@ fi
 %{pgbaseinstdir}/share/man/man1/pg_controldata.*
 %{pgbaseinstdir}/share/man/man1/pg_ctl.*
 %{pgbaseinstdir}/share/man/man1/pg_resetwal.*
-%{pgbaseinstdir}/share/man/man1/pg_receivewal.*
 %{pgbaseinstdir}/share/man/man1/pg_rewind.1
 %{pgbaseinstdir}/share/man/man1/pg_test_fsync.1
 %{pgbaseinstdir}/share/man/man1/pg_test_timing.1
 %{pgbaseinstdir}/share/man/man1/pg_upgrade.1
 %{pgbaseinstdir}/share/man/man1/pg_verifybackup.*
-%{pgbaseinstdir}/share/man/man1/pg_waldump.1
 %{pgbaseinstdir}/share/man/man1/postgres.*
 %{pgbaseinstdir}/share/postgres.bki
 %{pgbaseinstdir}/share/system_constraints.sql
@@ -1441,11 +1443,14 @@ fi
 %{pgbaseinstdir}/share/extension/pltcl*
 %endif
 
+%if %plpython3
 %files plpython3 -f pg_plpython3.lst
+%defattr(-,root,root)
 %dir %{pgbaseinstdir}/share/locale
 %{pgbaseinstdir}/share/extension/plpython3*
 %{pgbaseinstdir}/lib/plpython3.so
 %{pgbaseinstdir}/share/extension/*_plpython3u*
+%endif
 
 %if %test
 %files test
