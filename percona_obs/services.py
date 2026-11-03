@@ -652,35 +652,47 @@ def _cargo_vendor_src_hash(svc: ET.Element, workdir: Path) -> str | None:
 _SPEC_RELEASE_RE = re.compile(r"^Release:[ \t]*.*$", re.MULTILINE)
 
 
-def _spec_release_lines(workdir: Path) -> dict[str, str]:
-    """First ``Release:`` line of every ``*.spec`` in *workdir*, by file name."""
-    lines: dict[str, str] = {}
+def _spec_release_lines(workdir: Path) -> dict[str, list[str]]:
+    """Every ``Release:`` line of every ``*.spec`` in *workdir*, in order, by file name."""
+    lines: dict[str, list[str]] = {}
     for spec in sorted(workdir.glob("*.spec")):
-        m = _SPEC_RELEASE_RE.search(spec.read_text("utf-8"))
-        if m:
-            lines[spec.name] = m.group(0)
+        found = _SPEC_RELEASE_RE.findall(spec.read_text("utf-8"))
+        if found:
+            lines[spec.name] = found
     return lines
 
 
-def _restore_spec_release_lines(workdir: Path, lines: dict[str, str]) -> None:
-    """Put the snapshotted ``Release:`` line back after the buildtime services.
+def _restore_spec_release_lines(workdir: Path, lines: dict[str, list[str]]) -> None:
+    """Put the snapshotted ``Release:`` lines back after the buildtime services.
 
     obs-service-set_version rewrites every spec's ``Release:`` to ``0``
     unconditionally (no parameter controls it).  The OBS source server reads
     the committed spec's ``Release:`` at commit time as the floor of the
     package's ``vrev`` (CI_CNT), which is how ``%!{PKG_REVISION}`` reaches the
-    built RPM; so the rendered line must win over set_version's reset.  Only
-    the first ``Release:`` line is restored: that is the one OBS parses.
+    built RPM; so the rendered lines must win over set_version's reset.  Every
+    ``Release:`` line is restored in order: a spec may carry one per ``%if``
+    branch, and the source server reads whichever branch its config selects.
     """
-    for name, line in lines.items():
+    for name, saved in lines.items():
         spec = workdir / name
         if not spec.is_file():
             continue
         text = spec.read_text("utf-8")
-        new = _SPEC_RELEASE_RE.sub(lambda _m: line, text, count=1)
+        count = len(_SPEC_RELEASE_RE.findall(text))
+        if count != len(saved):
+            logger.debug(
+                f"{name}: {count} Release: lines after services, "
+                f"{len(saved)} before; restoring {min(count, len(saved))}"
+            )
+        it = iter(saved)
+
+        def _sub(m: re.Match[str]) -> str:
+            return next(it, m.group(0))
+
+        new = _SPEC_RELEASE_RE.sub(_sub, text)
         if new != text:
             spec.write_text(new, "utf-8")
-            logger.debug(f"restored {name} {line!r} after buildtime services")
+            logger.debug(f"restored {name} Release lines {saved!r} after services")
 
 
 def _copy_file_with_macros(src: Path, dst: Path, macros: dict[str, str]) -> None:

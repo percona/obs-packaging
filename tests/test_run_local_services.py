@@ -183,8 +183,8 @@ def test_spec_release_survives_set_version(set_version_pkg):
     text = (workdir / "foo.spec").read_text()
     assert "Version:        1.0\n" in text  # set_version did run
     assert "Release:        5%{?dist}\n" in text  # restored
-    # only the first is restored; the %package one stays as set_version left it
-    assert text.count("Release:") == 2 and "Release:        0\n" in text
+    # every Release: line is restored, the %package one included
+    assert text.count("Release:") == 2 and "Release:        99\n" in text
     assert (
         workdir / "norelease.spec"
     ).read_text() == "Name:           bar\nVersion:        1.0\n"
