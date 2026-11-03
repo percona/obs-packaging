@@ -649,6 +649,40 @@ def _cargo_vendor_src_hash(svc: ET.Element, workdir: Path) -> str | None:
     return h.hexdigest()
 
 
+_SPEC_RELEASE_RE = re.compile(r"^Release:[ \t]*.*$", re.MULTILINE)
+
+
+def _spec_release_lines(workdir: Path) -> dict[str, str]:
+    """First ``Release:`` line of every ``*.spec`` in *workdir*, by file name."""
+    lines: dict[str, str] = {}
+    for spec in sorted(workdir.glob("*.spec")):
+        m = _SPEC_RELEASE_RE.search(spec.read_text("utf-8"))
+        if m:
+            lines[spec.name] = m.group(0)
+    return lines
+
+
+def _restore_spec_release_lines(workdir: Path, lines: dict[str, str]) -> None:
+    """Put the snapshotted ``Release:`` line back after the buildtime services.
+
+    obs-service-set_version rewrites every spec's ``Release:`` to ``0``
+    unconditionally (no parameter controls it).  The OBS source server reads
+    the committed spec's ``Release:`` at commit time as the floor of the
+    package's ``vrev`` (CI_CNT), which is how ``%!{PKG_REVISION}`` reaches the
+    built RPM; so the rendered line must win over set_version's reset.  Only
+    the first ``Release:`` line is restored: that is the one OBS parses.
+    """
+    for name, line in lines.items():
+        spec = workdir / name
+        if not spec.is_file():
+            continue
+        text = spec.read_text("utf-8")
+        new = _SPEC_RELEASE_RE.sub(lambda _m: line, text, count=1)
+        if new != text:
+            spec.write_text(new, "utf-8")
+            logger.debug(f"restored {name} {line!r} after buildtime services")
+
+
 def _copy_file_with_macros(src: Path, dst: Path, macros: dict[str, str]) -> None:
     """Copy *src* to *dst*, applying macro substitution to UTF-8 text files.
 
@@ -1061,6 +1095,7 @@ def _run_local_services(
     # Phase 3 so that buildtime services like set_version can find
     # .dsc and .spec files.
     _copy_local_packaging(obs_dir, workdir, pkg_label, macros=macros)
+    spec_release_lines = _spec_release_lines(workdir)
 
     # ── Phase 3: buildtime services (tar, recompress, set_version) ────────
     # Always run — these are fast, deterministic local transforms.  The one
@@ -1098,6 +1133,8 @@ def _run_local_services(
                         logger.warning(f"cargo_vendor cache store failed: {exc}")
                 continue
         _run_one(svc)
+
+    _restore_spec_release_lines(workdir, spec_release_lines)
 
     # ── Cleanup: remove intermediates that should not be uploaded ─────────
     # If we skipped any kiwi services, keep a _service file in the upload
