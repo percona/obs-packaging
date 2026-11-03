@@ -5,7 +5,8 @@
 Name:		librttopo
 Version:	%!{GIS_LIBRTTOPO_VERSION}
 # PERCONA: keep PGDG's release base so this build outranks EPEL's/distro librttopo (which links the distro GEOS)
-Release:        %!{PKG_REVISION}%{?dist}
+# Release pinned by hand: RHEL rebuild, the number backs the exact-EVR -devel pins on UBI (see docs/PERCONA_OBS_TOOL.md "PKG_REVISION").
+Release:	45%{?dist}
 Vendor:		Percona LLC
 Packager:	Percona LLC
 Summary:	Create and manage SQL/MM topologies

@@ -53,7 +53,8 @@ Version: 1.18.2
 # PERCONA: ".percona.N" appended to the distro Release (34) so that this
 # rebuild's EVR beats 1.18.2-34.el8_10 during dependency resolution while
 # still yielding to a future distro 1.18.2-35 security rebase.
-Release:        %!{PKG_REVISION}%{?dist}
+# Release pinned by hand: must sort above the distro package of the same name (tarball chroot EVR race, see docs/PERCONA_OBS_TOOL.md "PKG_REVISION").
+Release: 34.percona.1%{?dist}
 
 # lookaside-cached sources; two downloads and a build artifact
 Source0: https://web.mit.edu/kerberos/dist/krb5/1.18/krb5-%{version}%{prerelease}.tar.gz

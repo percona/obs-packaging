@@ -57,7 +57,8 @@ BuildRequires: pkgconfig(libsystemd)
 Name:    qt5-qtbase
 Summary: Qt5 - QtBase components
 Version: 5.15.9
-Release:        %!{PKG_REVISION}%{?dist}
+# Release pinned by hand: RHEL rebuild, the number backs the exact-EVR -devel pins on UBI (see docs/PERCONA_OBS_TOOL.md "PKG_REVISION").
+Release: 11%{?dist}.1
 
 
 # See LGPL_EXCEPTIONS.txt, for exception details

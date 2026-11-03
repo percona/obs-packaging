@@ -4,7 +4,8 @@
 
 Name:           libproxy
 Version:        0.4.15
-Release:        %!{PKG_REVISION}%{?dist}
+# Release pinned by hand: RHEL rebuild, the number backs the exact-EVR -devel pins on UBI (see docs/PERCONA_OBS_TOOL.md "PKG_REVISION").
+Release:        35%{?dist}
 Summary:        A library handling all the details of proxy configuration
 
 License:        LGPLv2+

@@ -63,7 +63,8 @@
 Summary:        GDAL/PROJ name-compatibility shim for the binary tarball chroot
 Name:           percona-gis-compat
 Version:        1.0.0
-Release:        %!{PKG_REVISION}%{?dist}
+# Release pinned by hand: no set_version in _service, the literal is the OBS vrev floor (see docs/PERCONA_OBS_TOOL.md "PKG_REVISION").
+Release:        2%{?dist}
 License:        Apache-2.0
 Group:          Development/Tools/Building
 URL:            https://www.percona.com/software/postgresql-distribution
