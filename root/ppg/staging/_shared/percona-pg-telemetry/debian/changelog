@@ -1,4 +1,4 @@
-percona-pg-telemetry (%!{PG_TELEMETRY_VERSION}-1) unstable; urgency=low
+percona-pg-telemetry (%!{PG_TELEMETRY_VERSION}-3) unstable; urgency=low
 
   * Update to upstream version %!{PG_TELEMETRY_VERSION}
 
