@@ -1,4 +1,4 @@
-ydiff (1.2-0) unstable; urgency=medium
+ydiff (%!{YDIFF_VERSION}-%!{PKG_REVISION}) unstable; urgency=medium
 
   * Initial upload.
 

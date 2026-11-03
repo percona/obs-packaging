@@ -15,7 +15,7 @@ Binary:
     percona-postgresql-plpython3-%!{PG_MAJOR_VERSION},
     percona-postgresql-pltcl-%!{PG_MAJOR_VERSION}
 Architecture: any all
-Version: 1.0
+Version: 2:%!{PG_VERSION}-%!{PKG_REVISION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
     autoconf,

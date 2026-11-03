@@ -1,4 +1,4 @@
-etcd (3.5.33-1) unstable; urgency=low
+etcd (%!{ETCD_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Update to upstream version 3.5.33, per changes described at: https://github.com/etcd-io/etcd/blob/main/CHANGELOG/CHANGELOG-3.5.md#v3533-2026-07-23
 

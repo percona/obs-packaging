@@ -1,4 +1,4 @@
-percona-pgaudit%!{PG_MAJOR_VERSION}-set-user (%!{PGAUDIT_SET_USER_VERSION}-1) unstable; urgency=low
+percona-pgaudit%!{PG_MAJOR_VERSION}-set-user (%!{PGAUDIT_SET_USER_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Update to upstream version %!{PGAUDIT_SET_USER_VERSION}
 

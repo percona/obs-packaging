@@ -1,4 +1,4 @@
-percona-pg-stat-monitor (%!{PG_STAT_MONITOR_VERSION}-1) unstable; urgency=low
+percona-pg-stat-monitor (%!{PG_STAT_MONITOR_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Update to upstream version %!{PG_STAT_MONITOR_VERSION}
 

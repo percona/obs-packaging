@@ -1,4 +1,4 @@
-percona-credcheck (%!{CREDCHECK_VERSION}-1) unstable; urgency=low
+percona-credcheck (%!{CREDCHECK_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Update to upstream version %!{CREDCHECK_VERSION}.
 

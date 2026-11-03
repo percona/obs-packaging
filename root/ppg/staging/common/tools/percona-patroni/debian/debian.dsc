@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: percona-patroni
 Binary: percona-patroni, percona-patroni-doc
 Architecture: all
-Version: 1:%!{PATRONI_VERSION}
+Version: 1:%!{PATRONI_VERSION}-%!{PKG_REVISION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 10),

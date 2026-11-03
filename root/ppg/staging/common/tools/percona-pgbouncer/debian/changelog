@@ -1,4 +1,4 @@
-percona-pgbouncer (%!{PGBOUNCER_VERSION}-1) unstable; urgency=low
+percona-pgbouncer (%!{PGBOUNCER_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Update to upstream version %!{PGBOUNCER_VERSION}
 

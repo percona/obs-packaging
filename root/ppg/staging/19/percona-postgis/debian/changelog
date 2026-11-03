@@ -1,4 +1,4 @@
-percona-postgis (%!{POSTGIS_VERSION}-1) unstable; urgency=low
+percona-postgis (%!{POSTGIS_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Update to upstream version %!{POSTGIS_VERSION}.
 

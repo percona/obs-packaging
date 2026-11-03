@@ -16,7 +16,7 @@ Binary: libpq-dev,
         percona-postgresql-pltcl-%!{PG_MAJOR_VERSION},
         percona-postgresql-%!{PG_MAJOR_VERSION}-jit
 Architecture: any all
-Version: 1.0
+Version: 3:%!{PG_PACKAGE_VERSION}-%!{PKG_REVISION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends: autoconf,
                bison,

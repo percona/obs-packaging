@@ -1,4 +1,4 @@
-percona-pgaudit (%!{PGAUDIT_VERSION}-1) unstable; urgency=low
+percona-pgaudit (%!{PGAUDIT_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Update to upstream version %!{PGAUDIT_VERSION}
 

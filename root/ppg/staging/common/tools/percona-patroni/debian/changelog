@@ -1,4 +1,4 @@
-percona-patroni (%!{PATRONI_VERSION}-1) unstable; urgency=low
+percona-patroni (%!{PATRONI_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Update to upstream version %!{PATRONI_VERSION}.
 

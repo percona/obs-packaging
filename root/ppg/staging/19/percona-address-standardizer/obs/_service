@@ -15,5 +15,6 @@
   </service>
   <service mode="buildtime" name="set_version">
     <param name="basename">percona-address-standardizer%!{PG_MAJOR_VERSION}</param>
+    <param name="file">percona-address-standardizer.spec</param>
   </service>
 </services>

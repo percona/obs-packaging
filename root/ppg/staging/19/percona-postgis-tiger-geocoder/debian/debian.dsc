@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: percona-postgis-tiger-geocoder
 Binary: percona-postgresql-%!{PG_MAJOR_VERSION}-postgis-tiger-geocoder
 Architecture: all
-Version: 1.0.0
+Version: %!{POSTGIS_TIGER_GEOCODER_VERSION}-%!{PKG_REVISION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper,

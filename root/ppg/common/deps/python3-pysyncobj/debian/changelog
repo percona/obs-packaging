@@ -1,4 +1,4 @@
-python3-pysyncobj (0.3.10-2) unstable; urgency=medium
+python3-pysyncobj (%!{PYSYNCOBJ_VERSION}-%!{PKG_REVISION}) unstable; urgency=medium
 
   * Update to 0.3.10 version.
 

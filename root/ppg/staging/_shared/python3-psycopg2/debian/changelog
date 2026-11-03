@@ -1,4 +1,4 @@
-psycopg2 (2.9.5-1) unstable; urgency=low
+psycopg2 (%!{PSYCOPG2_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Update to 2.9.5 version.
 

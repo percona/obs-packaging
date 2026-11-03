@@ -1,4 +1,4 @@
-percona-pg-cron (%!{PG_CRON_VERSION}-1) unstable; urgency=low
+percona-pg-cron (%!{PG_CRON_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Update to upstream version %!{PG_CRON_VERSION}.
 

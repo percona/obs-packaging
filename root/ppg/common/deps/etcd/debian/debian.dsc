@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: etcd
 Binary: etcd-client, etcd-server
 Architecture: any all
-Version: 1:%!{ETCD_VERSION}
+Version: 1:%!{ETCD_VERSION}-%!{PKG_REVISION}
 Maintainer: Debian Go Packaging Team <team+pkg-go@tracker.debian.org>
 Build-Depends: debhelper,
                golang (>= 1.25)

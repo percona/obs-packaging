@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: percona-pgaudit
 Binary: percona-postgresql-%!{PG_MAJOR_VERSION}-pgaudit
 Architecture: any
-Version: 1:%!{PGAUDIT_VERSION}
+Version: 1:%!{PGAUDIT_VERSION}-%!{PKG_REVISION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 10),

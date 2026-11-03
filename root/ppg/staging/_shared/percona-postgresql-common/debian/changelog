@@ -1,4 +1,4 @@
-percona-postgresql-common (%!{POSTGRESQL_COMMON_VERSION}) unstable; urgency=low
+percona-postgresql-common (%!{POSTGRESQL_COMMON_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Update to upstream version %!{POSTGRESQL_COMMON_VERSION}.
 
