@@ -880,14 +880,25 @@ if [ ! -e "$PYTHON_PREFIX/lib/$PLPY_LIBPYTHON" ]; then
 fi
 patchelf --set-rpath '/opt/percona-tcl/lib:$ORIGIN' "$PG_PREFIX/lib/pltcl.so"
 
-# All other PostgreSQL lib/ .so files get $ORIGIN
+# The PL/Python transforms link libpython too, so section 13 bundled the
+# distro copy (prefix /usr) into $PG_PREFIX/lib; with an $ORIGIN RUNPATH
+# they loaded it and fataled on hosts without /usr/lib64/python3.12
+# (PG-2888). Drop it: /opt/percona-python3's must be the only libpython.
+rm -f "$PG_PREFIX"/lib/libpython*
+
+# All other PostgreSQL lib/ .so files get $ORIGIN; libpython consumers
+# (picked by NEEDED) get the same RUNPATH as plpython3.so.
 find $PG_PREFIX/lib -name '*.so*' -type f | while read f; do
     case "$(basename "$f")" in
         plperl.so|plpython3.so|pltcl.so) continue ;;
     esac
     file "$f" 2>/dev/null | grep -q ELF || continue
+    rpath='$ORIGIN'
+    if patchelf --print-needed "$f" 2>/dev/null | grep -q '^libpython'; then
+        rpath='/opt/percona-python3/lib:$ORIGIN'
+    fi
     # Same FATAL-on-failure policy as patch_rpath above.
-    if ! patchelf --set-rpath '$ORIGIN' "$f"; then
+    if ! patchelf --set-rpath "$rpath" "$f"; then
         echo "FATAL: patchelf failed on $f — dynamic ELF would ship without its RUNPATH" >&2
         exit 1
     fi
