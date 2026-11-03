@@ -2,7 +2,8 @@
 
 Name:      icu
 Version:   67.1
-Release:        %!{PKG_REVISION}%{?dist}
+# Release pinned by hand: RHEL rebuild, the number backs the exact-EVR -devel pins on UBI (see docs/PERCONA_OBS_TOOL.md "PKG_REVISION").
+Release:   10%{?dist}
 Summary:   International Components for Unicode
 
 License:   Unicode-DFS-2016 AND BSD-2-Clause AND BSD-3-Clause AND LicenseRef-Fedora-Public-Domain

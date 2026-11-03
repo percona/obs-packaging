@@ -50,7 +50,8 @@
 
 Name:           percona-python3
 Version:        3.12.13
-Release:        %!{PKG_REVISION}%{?dist}
+# Release pinned by hand: no set_version in _service, the literal is the OBS vrev floor (see docs/PERCONA_OBS_TOOL.md "PKG_REVISION").
+Release:        2%{?dist}
 Summary:        CPython runtime under /opt/percona-python3 for the Percona PostgreSQL binary tarball
 License:        Python-2.0.1
 URL:            https://www.python.org/

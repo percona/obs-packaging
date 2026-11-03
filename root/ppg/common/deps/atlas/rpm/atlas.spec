@@ -5,7 +5,8 @@ Version:        3.10.3
 %if "%{?enable_native_atlas}" != "0"
 %define dist .native
 %endif
-Release:        %!{PKG_REVISION}%{?dist}
+# Release pinned by hand: no set_version in _service, the literal is the OBS vrev floor (see docs/PERCONA_OBS_TOOL.md "PKG_REVISION").
+Release:        3%{?dist}
 Summary:        Automatically Tuned Linear Algebra Software
 
 License:        BSD

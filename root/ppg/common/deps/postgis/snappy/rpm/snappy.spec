@@ -1,7 +1,8 @@
 %global __cmake_in_source_build 1
 Name:           snappy
 Version:        1.1.8
-Release:        %!{PKG_REVISION}%{?dist}
+# Release pinned by hand: RHEL rebuild, the number backs the exact-EVR -devel pins on UBI (see docs/PERCONA_OBS_TOOL.md "PKG_REVISION").
+Release:        8%{?dist}
 Summary:        Fast compression and decompression library
 
 License:        BSD
