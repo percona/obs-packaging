@@ -257,7 +257,7 @@ _PKG_REVISION_FLOORS: dict[tuple[str, str, str], int] = {
   hotfix with a higher counter before the migration, the table is regenerated
   and committed; after the migration it is never touched again.
 - The table is in code, so both sides of `_macros_changed_since` evaluate the
-  same constants.
+  same constants. A table-only edit therefore changes no upload by itself: the affected packages are re-pushed with a forced sync.
 
 Resulting values at the first migration sync (ppg-17): pgaudit `17.1-5`,
 set_user `4.2.0-7`, pg_repack `1.5.3-6`, postgresql-common `293-2`, pg_tde
@@ -396,7 +396,7 @@ In this repository (pytest, `tests/`):
   the offline guard (SHA revision without a tag → error).
 - `_macros_changed_since` symmetry: a package referencing `PKG_REVISION`
   compares equal to itself at the last synced commit when nothing changed,
-  and unequal after a table change or a `V` change.
+  and unequal after a `V` change (a table-only change is invisible by design, see Seed table).
 - Rendering tests: the dsc `Version:`, the changelog first line and the spec
   `Release:` render the same revision for one package of each style, and the
   spec `Release:` survives a local `set_version` run.
