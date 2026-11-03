@@ -103,7 +103,7 @@ A minimal changelog. The header uses the same macros as the dsc `Version:`; debt
 re-stamps it with the final version at build time.
 
 ```
-percona-pgbadger (13.2-1) unstable; urgency=low
+percona-pgbadger (%!{MYPKG_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Update to 13.2 version.
 
@@ -174,9 +174,9 @@ Debtransform-Files-Tar: debian.tar.gz rpm.tar.gz
 - **Epoch.** If the package also ships in Percona Repo with an epoch (`1:`, `2:`, …), the OBS
   deb must carry the *same* epoch, or apt ranks every Percona Repo version above every OBS
   version. `set_version` rewrites the whole `Version:` line and would drop it, so instead:
-  write `Version: <epoch>:%!{<PKG>_VERSION}` in `debian.dsc`, and restrict `set_version` in
+  write `Version: <epoch>:%!{<PKG>_VERSION}-%!{PKG_REVISION}` in `debian.dsc`, and restrict `set_version` in
   `obs/_service` to the spec with `<param name="file"><name>.spec</param>`. `debtransform`
-  then produces `<epoch>:<version>-1+<release>`. Never raise or drop an epoch once shipped.
+  then produces `<epoch>:<version>-<PKG_REVISION>+<release>`. Never raise or drop an epoch once shipped.
 - `Binary:` lists all binary package names from `control`, space-separated.
 - `Debtransform-Files-Tar:` lists the tarballs OBS must produce. Always include `debian.tar.gz`
   and `rpm.tar.gz`. For Go packages with vendored modules, also list the vendor tarballs
@@ -287,9 +287,13 @@ The `_service` file tells OBS how to fetch packaging files and the upstream sour
     <param name="compression">gz</param>
   </service>
 
-  <service mode="buildtime" name="set_version" />
+  <service mode="buildtime" name="set_version">
+    <param name="file">percona-pgbadger.spec</param>
+  </service>
 </services>
 ```
+
+The `file` param keeps `set_version` off the dsc and changelog, whose `Version:` already carries the epoch and `-%!{PKG_REVISION}`; without it the service rewrites them to `<ver>-0`.
 
 The first two `obs_scm` services always use the same env-var template — `percona-obs` injects
 the correct paths automatically. Only the third service (the upstream source fetch) is
@@ -705,7 +709,7 @@ Rules:
 |---|---|---|
 | `debian/control` | yes | Source + binary package definitions |
 | `debian/rules` | yes | Build rules; always override `dh_builddeb` to force gzip |
-| `debian/changelog` | yes | Placeholder version `1.0.0`; source name must match `control` |
+| `debian/changelog` | yes | Header `(<version macro>-%!{PKG_REVISION})`, re-stamped by debtransform at build time; source name must match `control` |
 | `debian/compat` | yes* | Omit if `debhelper-compat (= N)` is in `Build-Depends` |
 | `debian/debian.dsc` | yes | OBS-specific; `Version: <epoch>:%!{<PKG>_VERSION}-%!{PKG_REVISION}`; `Debtransform-Files-Tar` must be complete |
 | `debian/source/format` | yes | `3.0 (quilt)` or `3.0 (native)` |
