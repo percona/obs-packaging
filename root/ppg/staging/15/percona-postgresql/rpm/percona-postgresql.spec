@@ -100,7 +100,7 @@ Version:        1.0
 # which overrides our packages. Increase our release number on SuSE.
 Release:        %!{PKG_REVISION}%{?dist}
 %else
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 %endif
 License:        PostgreSQL
 Url:            https://www.postgresql.org/
