@@ -1087,6 +1087,66 @@ Two consequences follow, and both are deliberate:
 A project that needs its own pinned counter can still declare `PPG_RELEASE` in its
 `macros.yaml`; an explicit declaration always wins over the computed value.
 
+### The `PKG_REVISION` floor
+
+`PKG_REVISION` is the second tool-computed macro. It renders into every spec
+`Release:` and every dsc revision in the staging and common tiers:
+
+```
+Release:        %!{PKG_REVISION}%{?dist}
+Version: 1:%!{PGAUDIT_VERSION}-%!{PKG_REVISION}
+```
+
+Its value is `floor + 1`, where `floor` is the counter the old
+`postgres-packaging` process shipped to repo.percona.com for this package at
+this upstream version (`percona_obs/pkg_version.py`, `PKG_REVISION_FLOORS`,
+keyed `(OBS project, package, upstream version)`), and 1 when there is no
+entry. The upstream version is read offline from the package's `obs/_service`
+with the same extractor `project versions` uses. A source package whose
+`_service` yields no upstream version (download_url-only sources with a
+literal spec `Version:`, metapackages with no `_service`) gets 1: the floor
+table cannot key it. Packages with neither a spec nor a dsc (aggregates,
+images, tarballs, `_link`) get no value.
+
+It is a floor, not a counter. OBS keeps the counter: at every commit the
+source server sets the package's `vrev` (what the prjconf calls `<CI_CNT>`)
+to `max(previous vrev at the same version + 1, the spec's Release)`, and a
+new upstream version starts again from the spec's Release. Observed on labs:
+
+| commit | spec Version / Release | vrev |
+|---|---|---|
+| 1 | 1.0 / 9 | 9 |
+| 2 | 1.0 / 9 | 10 |
+| 3 | 1.0 / 3 | 11 (lowering the floor does nothing) |
+| 4 | 1.1 / 9 | 9 (new version restarts at the floor) |
+| 5 | 1.1 / 9 | 10 |
+| 6 | 1.0 / 1 | 12 (keyed by version string, not by order) |
+
+So an RPM is `V-<vrev>.<B_CNT>.elN` with `vrev >= PKG_REVISION`, and a deb is
+`[epoch:]V-<PKG_REVISION>+<vrev>.<B_CNT>.<codename>`: the fixed revision beats
+production, `+vrev.B_CNT` orders OBS builds among themselves.
+
+`sync` runs `set_version` locally, and that service resets every spec
+`Release:` to `0`; `services.py` restores the rendered line afterwards so
+the floor reaches OBS. The committed `_service` of a package with a dsc must
+restrict `set_version` to the spec (`<param name="file">pkg.spec</param>`),
+otherwise the dsc revision and epoch are lost.
+
+Eleven rebuilds under `root/ppg/common/deps` have no `set_version` and keep a
+literal `Release:` on purpose (krb5, libssh, percona-python3,
+percona-gis-compat, atlas, and the PostGIS deps icu, qt5-qtbase, qhull,
+libproxy, librttopo, snappy), each marked `# Release pinned by hand`. The
+literal is their `vrev` floor exactly as `PKG_REVISION` is for the others:
+krb5/libssh must beat the distro package of the same name in the tarball
+chroots, and the PostGIS rebuilds' numbers back the exact-EVR `-devel` pins on
+UBI. Do not convert them.
+
+Deleting and re-adding a package in OBS restarts `vrev` at the floor, which
+may be below the package's own earlier builds at the same version. Repair
+by committing once with the OBS commit API's `vrev=<n>` parameter, or by
+raising the table entry. Entries become dead when the package moves to
+another upstream version; delete the table once every entry is dead.
+
 `PG_PREV_MAJOR_VERSION` is computed the same way: whenever the chain defines
 `PG_MAJOR_VERSION`, `load_macros` sets it to that major minus one (the server spec's
 `prevmajorversion` and the extras upgrade QA job use it). Declare it explicitly only
