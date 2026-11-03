@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-annotated-doc
 Version:        0.0.5
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Document parameters, class attributes, return types, and variables inline, with Annotated
 License:        MIT
 URL:            https://github.com/fastapi/annotated-doc

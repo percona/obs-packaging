@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-flask-mail
 Version:        0.10.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Flask extension for sending email
 License:        BSD-3-Clause
 URL:            https://github.com/pallets-eco/flask-mail/

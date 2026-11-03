@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-user-agents
 Version:        2.2.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        A library to identify devices (phones, tablets) and their capabilities by parsing browser user agent strings
 License:        MIT
 URL:            https://github.com/selwin/python-user-agents

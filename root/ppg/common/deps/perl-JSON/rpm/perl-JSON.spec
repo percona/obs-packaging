@@ -1,6 +1,6 @@
 Name:           perl-JSON
 Version:        4.03
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Parse and convert to JSON (JavaScript Object Notation)
 License:        GPL+ or Artistic
 URL:            https://metacpan.org/release/JSON

@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-packaging
 Version:        25.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Core utilities for Python packages
 License:        Apache-2.0
 URL:            https://github.com/pypa/packaging

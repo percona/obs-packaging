@@ -57,7 +57,7 @@ BuildRequires: pkgconfig(libsystemd)
 Name:    qt5-qtbase
 Summary: Qt5 - QtBase components
 Version: 5.15.9
-Release: 11%{?dist}.1
+Release:        %!{PKG_REVISION}%{?dist}
 
 
 # See LGPL_EXCEPTIONS.txt, for exception details

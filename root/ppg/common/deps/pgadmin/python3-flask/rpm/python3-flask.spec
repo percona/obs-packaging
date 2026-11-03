@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-flask
 Version:        3.1.3
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        A simple framework for building complex web applications
 License:        BSD-3-Clause
 URL:            https://github.com/pallets/flask/

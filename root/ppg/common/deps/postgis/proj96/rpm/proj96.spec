@@ -9,7 +9,7 @@
 
 Name:		%{sname}96
 Version:	%!{GIS_PROJ_EL8_VERSION}
-Release:	1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Vendor:		Percona LLC
 Packager:	Percona LLC
 Epoch:		0

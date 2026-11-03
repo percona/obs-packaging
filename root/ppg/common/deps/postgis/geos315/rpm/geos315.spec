@@ -7,7 +7,7 @@
 
 Name:		%{sname}%{_geosversion}
 Version:	%!{GIS_GEOS_VERSION}
-Release:	1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:	GEOS is a C++ port of the Java Topology Suite
 
 License:	LGPLv2

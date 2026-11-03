@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-more-itertools
 Version:        11.1.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        More routines for operating on iterables, beyond itertools
 License:        MIT
 URL:            https://github.com/more-itertools/more-itertools

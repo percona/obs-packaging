@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-babel
 Version:        2.18.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Internationalization utilities
 License:        BSD-3-Clause
 URL:            https://babel.pocoo.org/

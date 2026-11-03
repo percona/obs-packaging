@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-poetry-core
 Version:        2.2.1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Poetry PEP 517 Build Backend
 License:        MIT
 URL:            https://github.com/python-poetry/poetry-core

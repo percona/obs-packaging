@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-jeepney
 Version:        0.9.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Low-level, pure Python DBus protocol wrapper
 License:        MIT
 URL:            https://gitlab.com/takluyver/jeepney

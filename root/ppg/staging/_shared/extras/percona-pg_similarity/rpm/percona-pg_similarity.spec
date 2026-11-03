@@ -14,7 +14,7 @@
 Summary:	   Set of functions and operators for executing similarity queries for PostgreSQL
 Name:		   %{sname}
 Version:	   1.0.0
-Release:	   1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 URL:		   https://github.com/eulerto/%{pname}
 Source0:	   %{sname}-%{version}.tar.gz
 Patch0:		%{pname}-hamming.patch

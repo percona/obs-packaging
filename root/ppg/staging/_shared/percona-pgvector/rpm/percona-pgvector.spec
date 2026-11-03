@@ -20,7 +20,7 @@
 
 Name:		%{sname}
 Version:	1.0.0
-Release:	1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:	Open-source vector similarity search for Postgres
 License:	PostgreSQL
 URL:		https://github.com/%{sname}/%{sname}/

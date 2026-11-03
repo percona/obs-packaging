@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-rich
 Version:        15.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal
 License:        MIT
 URL:            https://github.com/Textualize/rich

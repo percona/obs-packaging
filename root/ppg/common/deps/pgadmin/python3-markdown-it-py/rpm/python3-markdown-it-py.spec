@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-markdown-it-py
 Version:        4.2.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Python port of markdown-it. Markdown parsing, done right!
 License:        MIT
 URL:            https://github.com/executablebooks/markdown-it-py

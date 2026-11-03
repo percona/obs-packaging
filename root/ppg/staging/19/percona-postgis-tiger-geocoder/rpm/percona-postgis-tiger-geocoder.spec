@@ -9,7 +9,7 @@
 Summary:	Geocoder and reverse geocoder for US TIGER data
 Name:		percona-postgis-tiger-geocoder%{pgmajorversion}
 Version:	1.0.0
-Release:	1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:	GPLv2
 Source0:	%{name}-%{version}.tar.gz
 URL:		https://git.osgeo.org/gitea/postgis/postgis_tiger_geocoder

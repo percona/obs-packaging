@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-sqlparse
 Version:        0.6.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        A non-validating SQL parser
 License:        BSD-3-Clause
 URL:            https://github.com/andialbrecht/sqlparse

@@ -18,7 +18,7 @@
 Summary:        JSON Matching Expressions
 Name:           %{python3_pkgprefix}-jmespath
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Source0:        %{srcname}-%{version}.tar.gz
 License:        MIT
 BuildArch:      noarch

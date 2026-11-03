@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-werkzeug
 Version:        3.1.8
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        The comprehensive WSGI web application library
 License:        BSD-3-Clause
 URL:            https://github.com/pallets/werkzeug/

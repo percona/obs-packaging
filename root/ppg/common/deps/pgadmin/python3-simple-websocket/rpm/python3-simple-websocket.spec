@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-simple-websocket
 Version:        1.1.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Simple WebSocket server and client for Python
 License:        MIT
 URL:            https://github.com/miguelgrinberg/simple-websocket

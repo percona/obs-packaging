@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-ldap3
 Version:        2.9.1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        A strictly RFC 4510 conforming LDAP V3 pure Python client library
 License:        LGPL-3.0-only
 URL:            https://github.com/cannatag/ldap3

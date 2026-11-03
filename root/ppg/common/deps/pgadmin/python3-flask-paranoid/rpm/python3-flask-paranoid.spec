@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-flask-paranoid
 Version:        0.3.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Simple user session protection
 License:        MIT
 URL:            https://github.com/miguelgrinberg/flask-paranoid

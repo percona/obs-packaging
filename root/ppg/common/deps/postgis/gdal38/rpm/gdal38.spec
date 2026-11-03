@@ -69,7 +69,7 @@
 
 Name:		%{sname}38
 Version:	%!{GIS_GDAL_EL8_VERSION}
-Release:	1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Vendor:		Percona LLC
 Packager:	Percona LLC
 Summary:	GIS file format library

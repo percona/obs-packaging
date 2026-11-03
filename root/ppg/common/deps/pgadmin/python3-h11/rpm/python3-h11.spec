@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-h11
 Version:        0.16.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        A pure-Python, bring-your-own-I/O implementation of HTTP/1.1
 License:        MIT
 URL:            https://github.com/python-hyper/h11

@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-shellingham
 Version:        1.5.4
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Tool to Detect Surrounding Shell
 License:        ISC
 URL:            https://github.com/sarugaku/shellingham

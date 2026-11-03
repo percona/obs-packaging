@@ -2,7 +2,7 @@ Summary:        Library for accessing USB devices
 Name:           libusbx
 %define upstream 1.0.30
 Version:        %( echo %{upstream} | sed s/-/~/ )
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 # upstream libusbx has merged back with libusb and is now called libusb again
 # but we already have a libusb package for the old libusb-compat-0.1, renaming
 # that to libusb-compat while at the same time giving this its name is a bit

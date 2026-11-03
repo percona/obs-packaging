@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-hatchling
 Version:        1.28.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Modern, extensible Python build backend
 License:        MIT
 URL:            https://hatch.pypa.io/latest/

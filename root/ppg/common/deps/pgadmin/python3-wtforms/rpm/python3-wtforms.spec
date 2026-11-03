@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-wtforms
 Version:        3.2.2
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Form validation and rendering for Python web development
 License:        BSD-3-Clause
 URL:            https://pypi.org/project/WTForms/

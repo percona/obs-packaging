@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-flask-compress
 Version:        1.24
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Compress responses in your Flask app with gzip, deflate, brotli or zstandard
 License:        MIT
 URL:            https://github.com/colour-science/flask-compress

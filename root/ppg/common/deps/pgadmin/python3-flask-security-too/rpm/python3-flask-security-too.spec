@@ -20,7 +20,7 @@
 # this to 5.8.2+ until pgAdmin inverts its is_locked. pgAdmin pins 5.8.*.
 Name:           %{python3_pkgprefix}-flask-security-too
 Version:        5.8.1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Quickly add security features to your Flask application
 License:        MIT
 URL:            https://github.com/pallets-eco/flask-security

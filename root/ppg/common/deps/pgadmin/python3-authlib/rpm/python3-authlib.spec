@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-authlib
 Version:        1.9.1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        The ultimate Python library in building OAuth and OpenID Connect servers and clients
 License:        BSD-3-Clause
 URL:            https://github.com/authlib/authlib

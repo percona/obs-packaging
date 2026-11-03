@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-jaraco-context
 Version:        6.1.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Useful decorators and context managers
 License:        MIT
 URL:            https://github.com/jaraco/jaraco.context

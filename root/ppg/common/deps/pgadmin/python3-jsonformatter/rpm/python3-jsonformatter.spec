@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-jsonformatter
 Version:        0.3.4
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Python log in json format
 License:        MIT
 URL:            https://github.com/MyColorfulDays/jsonformatter.git

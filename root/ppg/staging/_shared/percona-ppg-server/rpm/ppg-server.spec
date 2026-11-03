@@ -4,7 +4,7 @@
 Summary:        Percona base selection of PostgreSQL %{pgmajor} components
 Name:           percona-ppg-server%{pgmajor}
 Version:        %{pgmajor}.%{pgminorversion}
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:        PostgreSQL
 Group:          Applications/Databases
 URL:            https://www.percona.com/software/postgresql-distribution

@@ -13,7 +13,7 @@
 
 Name:           %{python3_pkgprefix}-markupsafe
 Version:        3.0.3
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Safely add untrusted strings to HTML/XML markup
 License:        BSD-3-Clause
 URL:            https://github.com/pallets/markupsafe/

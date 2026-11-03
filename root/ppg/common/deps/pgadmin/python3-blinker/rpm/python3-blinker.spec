@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-blinker
 Version:        1.9.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Fast, simple object-to-object and broadcast signaling
 License:        MIT
 URL:            https://github.com/pallets-eco/blinker/

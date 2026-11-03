@@ -72,7 +72,7 @@
 
 Name:           percona-gdal%!{GIS_GDAL_EL8_MAJOR}
 Version:        %{gdal_version}
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        GDAL runtime under /opt/percona-gdal for the Percona PostgreSQL binary tarball
 License:        MIT
 URL:            https://gdal.org/

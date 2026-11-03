@@ -71,7 +71,7 @@
 
 Name:           percona-perl532
 Version:        %{perl_version}
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Perl runtime under /opt/percona-perl for the Percona PostgreSQL binary tarball
 License:        GPL-1.0-or-later OR Artistic-1.0-Perl
 URL:            https://www.perl.org/

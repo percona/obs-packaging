@@ -14,7 +14,7 @@
 
 Name:		etcd
 Version:	1.0.0
-Release:	1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:	Distributed reliable key-value store
 License:	ASL 2.0
 URL:		https://github.com/%{name}-io/%{name}

@@ -13,7 +13,7 @@
 
 Name:           %{python3_pkgprefix}-maturin
 Version:        1.15.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Build tool for Rust-based Python packages (PEP 517 backend)
 License:        MIT OR Apache-2.0
 URL:            https://www.maturin.rs/

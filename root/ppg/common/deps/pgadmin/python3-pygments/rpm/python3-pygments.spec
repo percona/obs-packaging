@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-pygments
 Version:        2.21.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Pygments is a syntax highlighting package written in Python
 License:        BSD-2-Clause
 URL:            https://pygments.org

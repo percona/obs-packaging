@@ -9,7 +9,7 @@
 
 Name:		percona-%{sname}
 Version:	1.0.0
-Release:	4%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Epoch:      1
 Provides:	pgaudit%{pgmajorversion}_set_user = %{version}-%{release}
 URL:        https://github.com/pgaudit/set_user.git

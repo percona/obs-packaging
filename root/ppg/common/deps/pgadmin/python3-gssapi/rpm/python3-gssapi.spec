@@ -13,7 +13,7 @@
 
 Name:           %{python3_pkgprefix}-gssapi
 Version:        1.11.1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Python GSSAPI Wrapper
 License:        ISC
 URL:            https://github.com/pythongssapi/python-gssapi

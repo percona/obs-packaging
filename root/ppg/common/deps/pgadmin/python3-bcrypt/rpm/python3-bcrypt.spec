@@ -13,7 +13,7 @@
 
 Name:           %{python3_pkgprefix}-bcrypt
 Version:        5.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Modern password hashing for your software and your servers
 License:        Apache-2.0
 URL:            https://pypi.org/project/bcrypt/

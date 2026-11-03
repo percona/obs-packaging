@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-libgravatar
 Version:        1.0.4
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        A library that provides a Python 3 interface for the Gravatar API
 License:        MIT
 URL:            https://github.com/pabluk/libgravatar

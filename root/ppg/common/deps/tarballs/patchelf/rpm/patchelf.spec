@@ -47,7 +47,7 @@ Summary:        Utility to modify the dynamic linker and RPATH of ELF executable
 Name:           patchelf
 # Placeholder: rewritten by the OBS set_version source service (see obs/_service).
 Version:        1.0.0
-Release:        1.percona%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:        GPL-3.0-or-later
 Group:          Development/Tools
 Url:            https://github.com/NixOS/patchelf

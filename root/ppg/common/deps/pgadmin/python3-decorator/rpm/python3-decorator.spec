@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-decorator
 Version:        5.3.1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Decorators for Humans
 License:        BSD-2-Clause
 URL:            https://pypi.org/project/decorator/

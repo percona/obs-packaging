@@ -19,7 +19,7 @@ ExclusiveArch:  do_not_build
 Summary:        Reorganize tables in PostgreSQL databases without any locks
 Name:           %{sname}%{pgmajorversion}
 Version:        1.0.0
-Release:        3%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Epoch:          1
 License:        BSD
 Group:          Applications/Databases

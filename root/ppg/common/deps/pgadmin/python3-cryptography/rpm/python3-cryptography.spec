@@ -13,7 +13,7 @@
 
 Name:           %{python3_pkgprefix}-cryptography
 Version:        50.0.1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Cryptographic recipes and primitives for Python
 License:        Apache-2.0 OR BSD-3-Clause
 URL:            https://cryptography.io/

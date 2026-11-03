@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-jaraco-functools
 Version:        4.1.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Functools like those found in stdlib
 License:        MIT
 URL:            https://github.com/jaraco/jaraco.functools

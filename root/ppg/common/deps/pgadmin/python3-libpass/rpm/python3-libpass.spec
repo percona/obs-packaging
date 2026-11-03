@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-libpass
 Version:        1.9.3
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Fork of passlib, a comprehensive password hashing framework supporting over 30 schemes
 License:        BSD
 URL:            https://github.com/notypecheck/passlib

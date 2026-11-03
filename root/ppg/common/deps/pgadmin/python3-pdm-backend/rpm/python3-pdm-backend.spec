@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-pdm-backend
 Version:        2.4.5
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        The build backend used by PDM that supports latest packaging standards
 License:        MIT
 URL:            https://github.com/pdm-project/pdm-backend

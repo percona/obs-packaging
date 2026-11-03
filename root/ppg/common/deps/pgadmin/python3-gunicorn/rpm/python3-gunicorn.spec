@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-gunicorn
 Version:        26.2.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        WSGI HTTP Server for UNIX
 License:        MIT
 URL:            https://gunicorn.org

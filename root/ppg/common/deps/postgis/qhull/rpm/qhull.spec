@@ -5,7 +5,7 @@ Version: 7.2.1
 # - Older releases used year.month
 # - Newer releases use x.y.z
 Epoch: 1
-Release: 11%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License: Qhull
 Source0: qhull-%{version}.tar.gz
 

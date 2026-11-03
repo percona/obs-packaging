@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-joserfc
 Version:        1.7.7
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        The ultimate Python library for JOSE RFCs, including JWS, JWE, JWK, JWA, JWT
 License:        BSD-3-Clause
 URL:            https://github.com/authlib/joserfc

@@ -14,7 +14,7 @@
 Summary:	SI Units for PostgreSQL
 Name:		  %{sname}
 Version:	1.0.0
-Release:	1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:	BSD
 Source0:	%{sname}-%{version}.tar.gz
 URL:		https://github.com/ChristophBerg/%{pname}

@@ -5,7 +5,7 @@
 Name:		librttopo
 Version:	%!{GIS_LIBRTTOPO_VERSION}
 # PERCONA: keep PGDG's release base so this build outranks EPEL's/distro librttopo (which links the distro GEOS)
-Release:	45%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Vendor:		Percona LLC
 Packager:	Percona LLC
 Summary:	Create and manage SQL/MM topologies

@@ -17,7 +17,7 @@
 
 Name:           flexiblas
 Version:        %{major_version}.%{minor_version}.%{patch_version}
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        A BLAS/LAPACK wrapper library with runtime exchangeable backends
 
 # GPLv3 with an exception for the BLAS/LAPACK interface

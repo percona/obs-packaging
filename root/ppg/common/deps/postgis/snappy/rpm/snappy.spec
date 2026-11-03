@@ -1,7 +1,7 @@
 %global __cmake_in_source_build 1
 Name:           snappy
 Version:        1.1.8
-Release:        8%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Fast compression and decompression library
 
 License:        BSD

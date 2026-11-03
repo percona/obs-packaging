@@ -14,7 +14,7 @@
 Summary:	Routing functionality for PostGIS
 Name:		%{sname}
 Version:	1.0.0
-Release:	1%{dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:	GPLv2+
 Source0:	%{sname}-%{version}.tar.gz
 URL:		https://pgrouting.org/

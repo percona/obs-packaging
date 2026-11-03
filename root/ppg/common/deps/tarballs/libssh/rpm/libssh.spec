@@ -20,7 +20,7 @@ Version:        0.9.6
 # PERCONA: ".percona.N" appended to the distro Release (16) so that this
 # rebuild's EVR beats 0.9.6-16.el8_10 during dependency resolution while
 # still yielding to a future distro 0.9.6-17 security rebase.
-Release:        16.percona.1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        A library implementing the SSH protocol
 License:        LGPLv2+
 URL:            http://www.libssh.org

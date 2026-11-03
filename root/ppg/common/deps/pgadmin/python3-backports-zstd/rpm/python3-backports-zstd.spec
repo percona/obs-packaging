@@ -13,7 +13,7 @@
 
 Name:           %{python3_pkgprefix}-backports-zstd
 Version:        1.7.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Backport of compression.zstd
 License:        PSF-2.0
 URL:            https://github.com/rogdham/backports.zstd

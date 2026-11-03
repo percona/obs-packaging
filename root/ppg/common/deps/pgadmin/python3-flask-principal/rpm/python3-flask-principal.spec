@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-flask-principal
 Version:        0.4.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Identity management for flask
 License:        MIT
 URL:            http://packages.python.org/Flask-Principal/

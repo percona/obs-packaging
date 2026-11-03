@@ -1,6 +1,6 @@
 Name:           nlohmann-json
 Version:        3.11.3
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        JSON for Modern C++ -- a header-only JSON library
 License:        MIT
 URL:            https://github.com/nlohmann/json

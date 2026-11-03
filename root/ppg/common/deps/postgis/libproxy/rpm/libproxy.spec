@@ -4,7 +4,7 @@
 
 Name:           libproxy
 Version:        0.4.15
-Release:        35%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        A library handling all the details of proxy configuration
 
 License:        LGPLv2+

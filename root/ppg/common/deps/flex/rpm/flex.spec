@@ -1,6 +1,6 @@
 Name:           flex
 Version:        2.6.4
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        A tool for creating scanners (tokenizers)
 License:        BSD
 URL:            https://github.com/westes/flex

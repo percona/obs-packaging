@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-pyotp
 Version:        2.9.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Python One Time Password Library
 License:        MIT
 URL:            https://github.com/pyotp/pyotp

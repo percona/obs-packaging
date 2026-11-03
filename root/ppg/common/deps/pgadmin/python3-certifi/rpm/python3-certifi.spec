@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-certifi
 Version:        2026.10.23
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Python package for providing Mozilla's CA Bundle
 License:        MPL-2.0
 URL:            https://github.com/certifi/python-certifi

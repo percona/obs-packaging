@@ -10,7 +10,7 @@
 Summary:	PostgreSQL based time-series database
 Name:		percona-%{sname}_%{pgmajorversion}
 Version:	1.0.0
-Release:	1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:	Apache
 Source0:	%{name}-%{version}.tar.gz	
 Packager:       Percona Development Team <https://jira.percona.com>

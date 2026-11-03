@@ -2,7 +2,7 @@
 
 Name:     gosu
 Version:  1.0.0
-Release:  1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:  Lightweight Go-based su replacement for containers
 License:  GPL-3.0-only
 URL:      https://github.com/tianon/gosu

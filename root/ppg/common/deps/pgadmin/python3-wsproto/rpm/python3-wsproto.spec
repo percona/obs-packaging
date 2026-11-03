@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-wsproto
 Version:        1.3.2
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Pure-Python WebSocket protocol implementation
 License:        MIT
 URL:            https://github.com/python-hyper/wsproto/

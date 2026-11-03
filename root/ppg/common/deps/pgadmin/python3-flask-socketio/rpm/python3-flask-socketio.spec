@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-flask-socketio
 Version:        5.6.1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Socket.IO integration for Flask applications
 License:        MIT
 URL:            https://github.com/miguelgrinberg/flask-socketio

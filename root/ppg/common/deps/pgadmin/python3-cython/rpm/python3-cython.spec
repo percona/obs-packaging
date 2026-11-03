@@ -13,7 +13,7 @@
 
 Name:           %{python3_pkgprefix}-cython
 Version:        3.2.4
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        The Cython compiler for writing C extensions in the Python language
 License:        Apache-2.0
 URL:            https://cython.org/

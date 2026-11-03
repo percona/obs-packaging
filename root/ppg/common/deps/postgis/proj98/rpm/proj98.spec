@@ -10,7 +10,7 @@
 
 Name:		%{sname}98
 Version:	%!{GIS_PROJ_VERSION}
-Release:	1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Vendor:		Percona LLC
 Packager:	Percona LLC
 Summary:	Cartographic projection software (PROJ)

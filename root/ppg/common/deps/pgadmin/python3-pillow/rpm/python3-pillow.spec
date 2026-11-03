@@ -13,7 +13,7 @@
 
 Name:           %{python3_pkgprefix}-pillow
 Version:        13.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Python Imaging Library (Fork)
 License:        MIT-CMU
 URL:            https://python-pillow.github.io

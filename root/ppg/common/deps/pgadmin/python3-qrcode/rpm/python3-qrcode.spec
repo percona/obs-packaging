@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-qrcode
 Version:        8.2
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        QR Code image generator
 License:        BSD-3-Clause
 URL:            https://github.com/lincolnloop/python-qrcode

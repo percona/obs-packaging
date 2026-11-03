@@ -13,7 +13,7 @@
 
 Name:           %{python3_pkgprefix}-setuptools
 Version:        80.10.2
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Easily download, build, install, upgrade, and uninstall Python packages
 License:        MIT
 URL:            https://github.com/pypa/setuptools

@@ -12,7 +12,7 @@
 Summary:        Statistics collector for PostgreSQL
 Name:           %{sname}%{pgrel}
 Version:        1.2.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:        PostgreSQL
 Source0:        %{sname}-%{version}.tar.gz
 URL:            https://github.com/percona/percona_pg_telemetry

@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-itsdangerous
 Version:        2.2.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Safely pass data to untrusted environments and back
 License:        BSD-3-Clause
 URL:            https://github.com/pallets/itsdangerous/
