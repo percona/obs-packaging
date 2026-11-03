@@ -423,6 +423,19 @@ is the gate for the invariant in goal 1.
 - **A repo-owned `set_version` variant** that keeps `Release:`: forks a
   500-line upstream script for one line; the post-step in `services.py` is
   smaller.
+- **`CI_CNT` as the Debian revision.** obs-build only ever appends the
+  prjconf release after a `+` (`debtransform` line 589, `OBS-DCH-RELEASE` in
+  `build-recipe-dsc`); a dsc without a revision is rejected by dpkg-source
+  for `3.0 (quilt)`. A letter-led revision (`V-obs+<CI_CNT>.<B_CNT>`) does
+  beat every numeric production revision in dpkg, verified, but leaves the
+  rpm side on the floor anyway and bakes `obs` into public versions.
+- **Tool predicts `vrev` and renders it** (`V-N+<B_CNT>.<codename>`, deb
+  prjconf without `<CI_CNT>`): same number on both formats and old-process
+  looks, but the macro would depend on an OBS `_history` read at upload
+  time, need a placeholder on both sides of the content check and offline
+  renders, a `vrev=N` commit parameter to close the read/commit race, and a
+  deb prjconf edit in six places. Cosmetics only; the floor gives the same
+  ordering.
 
 ## Open questions
 
