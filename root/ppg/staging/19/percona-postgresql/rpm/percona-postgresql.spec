@@ -45,13 +45,12 @@
 %{!?uuid:%global uuid 1}
 %{!?xml:%global xml 1}
 %{!?sdt:%global sdt 1}
-%{!?llvm:%global llvm 1}
 %{!?selinux:%global selinux 1}
 
 
 #Filter out some Perl "dependencies"
-%global __requires_exclude ^perl\\((PostgresVersion|PostgresNode|RecursiveCopy|SimpleTee|TestLib|PostgreSQL::Test::(BackgroundPsql))
-%global __provides_exclude ^perl\\((PostgresVersion|PostgresNode|RecursiveCopy|SimpleTee|TestLib|PostgreSQL::Test::(BackgroundPsql))
+%global __requires_exclude ^perl\\((PostgresVersion|PostgresNode|RecursiveCopy|SimpleTee|TestLib|PostgreSQL::Test::BackgroundPsql)
+%global __provides_exclude ^perl\\((PostgresVersion|PostgresNode|RecursiveCopy|SimpleTee|TestLib|PostgreSQL::Test::BackgroundPsql)
 
 
 Summary:        PostgreSQL client programs and libraries
@@ -73,12 +72,18 @@ Source6:        %{sname}-%{pgmajorversion}-README.rpm-dist
 %endif
 Source7:        %{sname}-%{pgmajorversion}-ecpg_config.h
 Source9:        %{sname}-%{pgmajorversion}-libs.conf
-Source12:       https://www.postgresql.org/files/documentation/pdf/%{pgpackageversion}/%{sname}-%{pgpackageversion}-A4.pdf
+Source12:       %{sname}-A4.pdf
+%if 0%{?suse_version}
+Source14:	%{sname}-%{pgmajorversion}.pam.suse
+%else
 Source14:	%{sname}-%{pgmajorversion}.pam
+%endif
 Source17:	%{sname}-%{pgmajorversion}-setup
 Source10:       %{sname}-%{pgmajorversion}-check-db-dir
 Source18:       %{sname}-%{pgmajorversion}.service
 Source19:       %{sname}-%{pgmajorversion}-tmpfiles.d
+Source20:       %{sname}-%{pgmajorversion}-sysusers.conf
+Source21:       %{sname}-%{pgmajorversion}-sshd-selinux.te
 
 Patch1:         %{sname}-%{pgmajorversion}-rpm-pgsql.patch
 Patch3:         %{sname}-%{pgmajorversion}-conf.patch
@@ -201,6 +206,11 @@ BuildRequires:	libselinux-devel >= 2.9
 %if 0%{?rhel} || 0%{?fedora}
 BuildRequires:	selinux-policy >= 3.4.3
 %endif
+# EL-10 and Fedora >= 44 ship a local policy module to work around a
+# search/read denial for sshd_session_t on postgresql_db_t (see %post server):
+%if 0%{?rhel} >= 10 || 0%{?fedora} >= 44
+BuildRequires:	selinux-policy-devel
+%endif
 %endif
 
 %if %libnuma
@@ -218,6 +228,7 @@ Requires:	libnuma1
 Requires:	libopenssl3
 BuildRequires:	libopenssl-3-devel
 %endif
+
 %endif
 
 %if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
@@ -289,8 +300,8 @@ Requires:	libopenssl3
 %if 0%{?suse_version} == 1600
 Requires:	libopenssl3
 %endif
-%if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
-Requires:	openssl-libs >= 1.1.1k
+%if 0%{?fedora} >= 43 || 0%{?rhel} >= 9
+Requires:	openssl-libs >= 3.2.2
 %endif
 
 %description libs
@@ -396,7 +407,7 @@ Requires:	llvm-devel >= 17.0 clang-devel >= 17.0
 
 %if %enabletaptests
 %if 0%{?rhel}
-Requires:       perl-Test-Simple
+Requires:       perl-IPC-Run
 BuildRequires:  perl-Test-Simple perl-IPC-Run perl-Time-HiRes
 %endif
 %endif
@@ -494,6 +505,7 @@ which is an extension to the PostgreSQL database server.
 Install this if you want to write database functions in Perl.
 %endif
 
+%if %plpython3
 %package plpython3
 Summary:        The Python3 procedural language for PostgreSQL
 Requires:       %{name} >= %{version}-%{release}
@@ -515,6 +527,7 @@ Epoch:          1
 The postgresql%{pgmajorversion}-plpython3 package contains the PL/Python3 procedural language,
 which is an extension to the PostgreSQL database server.
 Install this if you want to write database functions in Python 3.
+%endif
 
 %if %pltcl
 %package pltcl
@@ -697,8 +710,8 @@ sed "s|C=\`pwd\`;|C=%{pgbaseinstdir}/lib/tutorial;|" < src/tutorial/Makefile > s
 %{__make} %{?_smp_mflags} -C src/tutorial NO_PGXS=1 all
 %{__rm} -f src/tutorial/GNUmakefile
 
-%{__mkdir} -p %{buildroot}%{pgbaseinstdir}/share/extension/
 MAKELEVEL=0 %{__make} %{?_smp_mflags} all
+%{__make} %{?_smp_mflags} -C doc all
 %{__make} %{?_smp_mflags} -C contrib all
 %if %uuid
 %{__make} %{?_smp_mflags} -C contrib/uuid-ossp all
@@ -824,6 +837,19 @@ touch -r %{SOURCE10} %{sname}-%{pgmajorversion}-check-db-dir
 %{__install} -d -m 755 %{buildroot}%{pgbaseinstdir}/share/
 %{__install} -m 700 %{SOURCE9} %{buildroot}%{pgbaseinstdir}/share/
 
+%{__install} -m 0644 -D %{SOURCE20} %{buildroot}%{_sysusersdir}/%{sname}%{pgpackageversion}.conf
+
+%if %selinux && (0%{?rhel} >= 10 || 0%{?fedora} >= 44)
+# Build and install the local SELinux policy module that lets sshd_session_t
+# search/read the postgres user's home dir (postgresql_db_t), needed for
+# ~/.ssh/authorized_keys pubkey auth to work under EL-10/Fedora 44+'s
+# SELinux policy.
+checkmodule -M -m -o postgresql%{pgmajorversion}_sshd_fix.mod %{SOURCE21}
+semodule_package -o postgresql%{pgmajorversion}_sshd_fix.pp -m postgresql%{pgmajorversion}_sshd_fix.mod
+%{__install} -d -m 755 %{buildroot}%{_datadir}/selinux/packages
+%{__install} -m 644 postgresql%{pgmajorversion}_sshd_fix.pp %{buildroot}%{_datadir}/selinux/packages/
+%endif
+
 %if %test
 	# tests. There are many files included here that are unnecessary,
 	# but include them anyway for completeness.  We replace the original
@@ -931,9 +957,7 @@ cat postgresql-regress-%{pgmajorversion}.lang > pg_test.lst
 %endif
 
 %pre server
-groupadd -g 26 -o -r postgres >/dev/null 2>&1 || :
-useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
-        -c "PostgreSQL Server" -u 26 postgres >/dev/null 2>&1 || :
+%sysusers_create_package %{name} %SOURCE20
 
 %post server
 /sbin/ldconfig
@@ -947,6 +971,11 @@ if [ $1 -eq 1 ] ; then
    %systemd_post %{sname}-%{pgpackageversion}.service
    %endif
 fi
+
+%if %selinux && (0%{?rhel} >= 10 || 0%{?fedora} >= 44)
+%{_sbindir}/selinuxenabled 2>/dev/null && \
+        %{_sbindir}/semodule -i %{_datadir}/selinux/packages/postgresql%{pgmajorversion}_sshd_fix.pp >/dev/null 2>&1 || :
+%endif
 
 %preun server
 if [ $1 -eq 0 ] ; then
@@ -962,6 +991,14 @@ if [ $1 -ge 1 ] ; then
 	# Package upgrade, not uninstall
 	/bin/systemctl try-restart %{sname}-%{pgmajorversion}.service >/dev/null 2>&1 || :
 fi
+
+%if %selinux && (0%{?rhel} >= 10 || 0%{?fedora} >= 44)
+if [ $1 -eq 0 ] ; then
+        # Package removal, not upgrade
+        %{_sbindir}/selinuxenabled 2>/dev/null && \
+                %{_sbindir}/semodule -r postgresql%{pgmajorversion}_sshd_fix >/dev/null 2>&1 || :
+fi
+%endif
 
 # Create alternatives entries for common binaries and man files
 %post
@@ -1169,11 +1206,15 @@ fi
 %{pgbaseinstdir}/lib/moddatetime.so
 %{pgbaseinstdir}/lib/pageinspect.so
 %{pgbaseinstdir}/lib/passwordcheck.so
+%if %ssl
 %{pgbaseinstdir}/lib/pgcrypto.so
+%endif
 %{pgbaseinstdir}/lib/pgrowlocks.so
 %{pgbaseinstdir}/lib/pgstattuple.so
 %{pgbaseinstdir}/lib/pg_buffercache.so
 %{pgbaseinstdir}/lib/pg_freespacemap.so
+%{pgbaseinstdir}/lib/pg_logicalinspect.so
+%{pgbaseinstdir}/lib/pg_overexplain.so
 %{pgbaseinstdir}/lib/pg_plan_advice.so
 %{pgbaseinstdir}/lib/pg_prewarm.so
 %{pgbaseinstdir}/lib/pg_stash_advice.so
@@ -1241,7 +1282,9 @@ fi
 %{pgbaseinstdir}/share/extension/pg_trgm*
 %{pgbaseinstdir}/share/extension/pg_visibility*
 %{pgbaseinstdir}/share/extension/pg_walinspect*
+%if %ssl
 %{pgbaseinstdir}/share/extension/pgcrypto*
+%endif
 %{pgbaseinstdir}/share/extension/pgrowlocks*
 %{pgbaseinstdir}/share/extension/pgstattuple*
 %{pgbaseinstdir}/share/extension/postgres_fdw*
@@ -1289,8 +1332,12 @@ fi
 %{pgbaseinstdir}/bin/%{sname}-%{pgmajorversion}-setup
 %{_bindir}/%{sname}-%{pgmajorversion}-setup
 %{pgbaseinstdir}/bin/%{sname}-%{pgmajorversion}-check-db-dir
+%{_sysusersdir}/%{sname}%{pgpackageversion}.conf
 %{_tmpfilesdir}/%{sname}-%{pgmajorversion}.conf
 %{_unitdir}/%{sname}-%{pgmajorversion}.service
+%if %selinux && (0%{?rhel} >= 10 || 0%{?fedora} >= 44)
+%{_datadir}/selinux/packages/postgresql%{pgmajorversion}_sshd_fix.pp
+%endif
 %if %pam
 %config(noreplace) /etc/pam.d/%{sname}
 %endif
