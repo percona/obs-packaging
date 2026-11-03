@@ -1087,9 +1087,14 @@ Two consequences follow, and both are deliberate:
 A project that needs its own pinned counter can still declare `PPG_RELEASE` in its
 `macros.yaml`; an explicit declaration always wins over the computed value.
 
+`PG_PREV_MAJOR_VERSION` is computed the same way: whenever the chain defines
+`PG_MAJOR_VERSION`, `load_macros` sets it to that major minus one (the server spec's
+`prevmajorversion` and the extras upgrade QA job use it). Declare it explicitly only
+to override the arithmetic.
+
 ### The `PKG_REVISION` floor
 
-`PKG_REVISION` is the second tool-computed macro. It renders into every spec
+`PKG_REVISION` is a tool-computed macro, like `PPG_RELEASE` and `PG_PREV_MAJOR_VERSION`. It renders into every spec
 `Release:` and every dsc revision in the staging and common tiers:
 
 ```
@@ -1154,10 +1159,13 @@ by committing once with the OBS commit API's `vrev=<n>` parameter, or by
 raising the table entry. Entries become dead when the package moves to
 another upstream version; delete the table once every entry is dead.
 
-`PG_PREV_MAJOR_VERSION` is computed the same way: whenever the chain defines
-`PG_MAJOR_VERSION`, `load_macros` sets it to that major minus one (the server spec's
-`prevmajorversion` and the extras upgrade QA job use it). Declare it explicitly only
-to override the arithmetic.
+First sync after this change: every staging and common package re-uploads
+(spec, dsc and changelog changed) and rebuilds, with the usual dependency
+cascade into containers and tarballs; packages elsewhere that run
+`set_version` re-upload once because their spec `Release:` now survives it.
+Rollback: reverting the packaging restores `-1` dsc revisions, so OBS builds
+after the revert sort below the ones built before it at the same upstream
+version; only an issue before the first migration release.
 
 ### Step 1 — Create or update a release
 
