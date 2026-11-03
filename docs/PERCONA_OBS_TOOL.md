@@ -1108,6 +1108,13 @@ literal spec `Version:`, metapackages with no `_service`) gets 1: the floor
 table cannot key it. Packages with neither a spec nor a dsc (aggregates,
 images, tarballs, `_link`) get no value.
 
+The table is Python, so a commit that changes only a seed value is invisible
+to the sync content check (both sides of the comparison use the same
+constants). After editing the table, re-push the affected packages with a
+forced sync: `sync-main` `workflow_dispatch` with the `force` input and the
+`project`/`package` scope, or `sync push --force <project> <package>` per
+package on a PR project.
+
 It is a floor, not a counter. OBS keeps the counter: at every commit the
 source server sets the package's `vrev` (what the prjconf calls `<CI_CNT>`)
 to `max(previous vrev at the same version + 1, the spec's Release)`, and a

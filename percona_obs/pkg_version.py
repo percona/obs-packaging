@@ -15,7 +15,9 @@ the OBS migration.  Keyed by OBS project, package directory name and
 upstream version (no epoch); the value is max(deb revision, rpm release)
 over every production vault, codename and EL major, from the index dump of
 2026-11-02/03.  An entry is dead once the package ships another upstream
-version; delete the table when every entry is dead.  See
+version; delete the table when every entry is dead.  The table is code, so
+a commit that only edits a seed is invisible to the sync content check: re-push
+the affected packages with a forced sync (sync-main force, or sync push --force).  See
 docs/superpowers/specs/2026-11-02-deb-revision-counter-design.md.
 """
 
