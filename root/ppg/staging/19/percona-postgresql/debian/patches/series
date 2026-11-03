@@ -9,3 +9,4 @@ libpgport-pkglibdir
 autoconf2.69
 pgstat-report-conflicts-immediately.patch
 hurd-postmaster-socket-send
+libpq.pc-no-libcurl
