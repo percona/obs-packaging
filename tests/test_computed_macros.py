@@ -188,3 +188,122 @@ def test_compute_counts_mapping_entries():
 
 def test_compute_tolerates_garbage_entries():
     assert compute_ppg_release("ppg", "18.4", "releases: [{x: 1}]\n") == "1"
+
+
+import percona_obs.pkg_version as pkg_version
+
+SERVICE = """<services>
+  <service name="obs_scm">
+    <param name="url">https://github.com/pgaudit/pgaudit.git</param>
+    <param name="revision">%!{PGAUDIT_VERSION}</param>
+    <param name="version">%!{PGAUDIT_VERSION}</param>
+    <param name="filename">percona-pgaudit</param>
+  </service>
+</services>
+"""
+
+
+def _pkg_tree(
+    tmp_path: Path, version_line: str = "- PGAUDIT_VERSION: 17.1\n"
+) -> tuple[Path, Path]:
+    root = tmp_path / "root"
+    proj = root / "ppg" / "staging" / "17"
+    pkg = proj / "percona-pgaudit"
+    (pkg / "obs").mkdir(parents=True)
+    (proj / "macros.yaml").write_text(version_line)
+    (pkg / "obs" / "_service").write_text(SERVICE)
+    return root, pkg
+
+
+def _read(p: Path):
+    return common._read_worktree_file(p)
+
+
+def test_pkg_revision_injected_from_seed(tmp_path, monkeypatch):
+    root, pkg = _pkg_tree(tmp_path)
+    monkeypatch.setitem(
+        pkg_version.PKG_REVISION_FLOORS,
+        ("ppg:staging:17", "percona-pgaudit", "17.1"),
+        4,
+    )
+    out = inject_computed_macros(
+        {"PGAUDIT_VERSION": "17.1"}, pkg, _read, repo_root=root
+    )
+    assert out["PKG_REVISION"] == "5"
+
+
+def test_pkg_revision_resets_on_upstream_bump(tmp_path):
+    root, pkg = _pkg_tree(tmp_path, "- PGAUDIT_VERSION: 17.2\n")
+    out = inject_computed_macros(
+        {"PGAUDIT_VERSION": "17.2"}, pkg, _read, repo_root=root
+    )
+    assert out["PKG_REVISION"] == "1"
+
+
+def test_pkg_revision_without_pg_version_in_chain(tmp_path):
+    # ppg:common:deps has no PG_VERSION; PKG_REVISION must still appear.
+    root = tmp_path / "root"
+    pkg = root / "ppg" / "common" / "deps" / "ydiff"
+    (pkg / "obs").mkdir(parents=True)
+    (pkg / "obs" / "_service").write_text(
+        '<services><service name="obs_scm"><param name="version">1.4.2</param>'
+        '<param name="filename">ydiff</param></service></services>'
+    )
+    out = inject_computed_macros({}, pkg, _read, repo_root=root)
+    assert out["PKG_REVISION"] == str(
+        pkg_version.PKG_REVISION_FLOORS[("ppg:common:deps", "ydiff", "1.4.2")] + 1
+    )
+    assert "PPG_RELEASE" not in out
+
+
+def test_pkg_revision_not_injected_without_service(tmp_path):
+    root = tmp_path / "root"
+    pkg = root / "ppg" / "staging" / "17" / "percona-postgresql-tarball"
+    (pkg / "obs").mkdir(parents=True)
+    (pkg / "obs" / "_aggregate").write_text("<aggregatelist/>")
+    out = inject_computed_macros({"PG_VERSION": "17.11"}, pkg, _read, repo_root=root)
+    assert "PKG_REVISION" not in out
+
+
+def test_pkg_revision_not_injected_for_project_path(tmp_path):
+    root, pkg = _pkg_tree(tmp_path)
+    out = inject_computed_macros(
+        {"PGAUDIT_VERSION": "17.1"}, pkg.parent, _read, repo_root=root
+    )
+    assert "PKG_REVISION" not in out
+
+
+def test_pkg_revision_skipped_when_version_unresolved(tmp_path):
+    root, pkg = _pkg_tree(tmp_path)
+    # PGAUDIT_VERSION missing from the chain: V renders to "%!{PGAUDIT_VERSION}".
+    out = inject_computed_macros({}, pkg, _read, repo_root=root)
+    assert "PKG_REVISION" not in out
+    (pkg / "obs" / "_service").write_text(
+        SERVICE.replace("%!{PGAUDIT_VERSION}", "${PGAUDIT_REF}")
+    )
+    out = inject_computed_macros({}, pkg, _read, repo_root=root)
+    assert "PKG_REVISION" not in out
+
+
+def test_declared_pkg_revision_wins(tmp_path):
+    root, pkg = _pkg_tree(tmp_path)
+    out = inject_computed_macros(
+        {"PGAUDIT_VERSION": "17.1", "PKG_REVISION": "42"}, pkg, _read, repo_root=root
+    )
+    assert out["PKG_REVISION"] == "42"
+
+
+def test_pkg_revision_computed_identically_from_git_reader(tmp_path):
+    # The git side passes a reader over "git show"; the same text must give the
+    # same value.  Simulate with a dict-backed reader.
+    root, pkg = _pkg_tree(tmp_path)
+    blobs = {pkg / "obs" / "_service": SERVICE}
+    out = inject_computed_macros(
+        {"PGAUDIT_VERSION": "17.1"}, pkg, lambda p: blobs.get(p), repo_root=root
+    )
+    assert (
+        out["PKG_REVISION"]
+        == inject_computed_macros(
+            {"PGAUDIT_VERSION": "17.1"}, pkg, _read, repo_root=root
+        )["PKG_REVISION"]
+    )

@@ -149,3 +149,58 @@ def test_package_without_macro_references_never_changes(repo):
     _commit(repo_dir, "bump major")
 
     assert _macros_changed_since(sha, pkg) is False
+
+
+import percona_obs.pkg_version as pkg_version
+
+PKG_SERVICE = """<services>
+  <service name="obs_scm">
+    <param name="url">https://example.org/pgaudit.git</param>
+    <param name="revision">%!{PGAUDIT_VERSION}</param>
+    <param name="version">%!{PGAUDIT_VERSION}</param>
+    <param name="filename">percona-pgaudit</param>
+  </service>
+</services>
+"""
+
+
+@pytest.fixture
+def symlinked_repo(monkeypatch, tmp_path):
+    """A package under staging/17 that is a symlink into _shared/, referencing PKG_REVISION."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _write(repo, "root/ppg/staging/17/macros.yaml", "- PGAUDIT_VERSION: 17.1\n")
+    _write(repo, "root/ppg/staging/_shared/percona-pgaudit/obs/_service", PKG_SERVICE)
+    _write(
+        repo,
+        "root/ppg/staging/_shared/percona-pgaudit/rpm/percona-pgaudit.spec",
+        "Name: x\nVersion: 1.0.0\nRelease: %!{PKG_REVISION}%{?dist}\n",
+    )
+    link = repo / "root/ppg/staging/17/percona-pgaudit"
+    link.symlink_to("../_shared/percona-pgaudit")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "init")
+    sha = _git(repo, "rev-parse", "--short", "HEAD")
+    monkeypatch.setattr(git_utils, "_REPO_DIR", repo)
+    monkeypatch.setattr(git_utils, "_REPO_ROOT", repo / "root")
+    monkeypatch.setattr(common, "REPO_ROOT", repo / "root")
+    git_utils._git_show_cache.clear()
+    return repo, sha, link
+
+
+def test_pkg_revision_unchanged_through_symlink(symlinked_repo):
+    repo, sha, pkg = symlinked_repo
+    assert _macros_changed_since(sha, pkg) is False
+
+
+def test_pkg_revision_changes_when_service_version_changes(symlinked_repo, monkeypatch):
+    repo, sha, pkg = symlinked_repo
+    # An upstream bump resets PKG_REVISION (seeded 17.1 -> 4+1, 17.2 -> 1)
+    monkeypatch.setitem(
+        pkg_version.PKG_REVISION_FLOORS,
+        ("ppg:staging:17", "percona-pgaudit", "17.1"),
+        4,
+    )
+    _write(repo, "root/ppg/staging/17/macros.yaml", "- PGAUDIT_VERSION: 17.2\n")
+    assert _macros_changed_since(sha, pkg) is True
