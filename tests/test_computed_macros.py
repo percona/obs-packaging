@@ -335,15 +335,17 @@ def test_pkg_revision_is_one_for_package_without_service_but_with_dsc(tmp_path):
     assert out["PKG_REVISION"] == "1"
 
 
-def test_every_seed_resolves_its_version_from_the_repo_tree():
-    # A seed whose package stops deriving V from _service would silently render 1.
+def test_every_seed_package_still_derives_a_version():
+    # A seeded package that stopped deriving a version would silently render 1
+    # and lose to production.  A dead seed (the package moved to another
+    # upstream version) is expected, not an error, so only "derives" is checked.
     from percona_obs.common import REPO_ROOT, apply_macro_substitution, load_macros
     from percona_obs.pkg_version import (
         PKG_REVISION_FLOORS,
         extract_version_from_service_text,
     )
 
-    for project, package, version in PKG_REVISION_FLOORS:
+    for project, package, _seed in PKG_REVISION_FLOORS:
         pkg = REPO_ROOT.joinpath(*project.split(":")) / package
         service = pkg / "obs" / "_service"
         assert service.is_file(), (project, package)
@@ -351,7 +353,9 @@ def test_every_seed_resolves_its_version_from_the_repo_tree():
         rendered = apply_macro_substitution(
             service.read_text("utf-8"), chain, strict=False
         )
-        assert extract_version_from_service_text(rendered) == version, (
+        derived = extract_version_from_service_text(rendered)
+        assert derived and "%!{" not in derived and "${" not in derived, (
             project,
             package,
+            derived,
         )

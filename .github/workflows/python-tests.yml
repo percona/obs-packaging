@@ -14,6 +14,8 @@ on:
     paths:
       - 'percona_obs/**'
       - 'tests/**'
+      - 'root/**/obs/_service'
+      - 'root/**/macros.yaml'
       - 'requirements.txt'
       - 'pyrightconfig.json'
       - '.github/workflows/python-tests.yml'
