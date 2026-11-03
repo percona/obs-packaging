@@ -131,3 +131,61 @@ def test_manual_obscpio_kept_on_cache_hit(fake_services):
         assert not (workdir / "foo.obscpio").exists()
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
+
+
+SERVICE_XML_SET_VERSION = """<services>
+  <service name="obs_scm">
+    <param name="url">https://example.invalid/foo.git</param>
+    <param name="scm">git</param>
+    <param name="revision">v1.0</param>
+    <param name="filename">foo</param>
+  </service>
+  <service mode="buildtime" name="set_version">
+    <param name="basename">foo</param>
+  </service>
+</services>
+"""
+
+# Fake set_version: does to every spec in cwd what the real one does
+# (obs-service-set_version 0.6.6 line 490): Version from the archive name,
+# Release reset to 0, inline rpm macro kept.
+FAKE_SET_VERSION = r"""#!/bin/sh
+set -e
+outdir=""
+while [ $# -gt 0 ]; do
+  if [ "$1" = "--outdir" ]; then outdir="$2"; shift; fi
+  shift
+done
+for f in *.spec; do
+  [ -f "$f" ] || continue
+  sed -e 's/^Version:\([ \t]*\)[^%]*/Version:\11.0/' -e 's/^Release:\([ \t]*\)[^%]*/Release:\10/' "$f" > "$outdir/$f"
+done
+"""
+
+
+@pytest.fixture
+def set_version_pkg(fake_services):
+    bindir, obs_dir, _cache = fake_services
+    _install(bindir, "set_version", FAKE_SET_VERSION)
+    (obs_dir / "_service").write_text(SERVICE_XML_SET_VERSION)
+    rpm = obs_dir.parent / "rpm"
+    rpm.mkdir()
+    (rpm / "foo.spec").write_text(
+        "Name:           foo\nVersion:        1.0.0\nRelease:        5%{?dist}\n"
+        "Summary:        x\n%package sub\nRelease:        99\n%description\n"
+    )
+    (rpm / "norelease.spec").write_text("Name:           bar\nVersion:        1.0.0\n")
+    return obs_dir
+
+
+def test_spec_release_survives_set_version(set_version_pkg):
+    workdir = _run_local_services(set_version_pkg, cache=False)
+    text = (workdir / "foo.spec").read_text()
+    assert "Version:        1.0\n" in text  # set_version did run
+    assert "Release:        5%{?dist}\n" in text  # restored
+    # only the first is restored; the %package one stays as set_version left it
+    assert text.count("Release:") == 2 and "Release:        0\n" in text
+    assert (
+        workdir / "norelease.spec"
+    ).read_text() == "Name:           bar\nVersion:        1.0\n"
+    shutil.rmtree(workdir, ignore_errors=True)
