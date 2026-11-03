@@ -358,6 +358,13 @@ def _read_worktree_file(path: Path) -> "str | None":
         return None
 
 
+def _is_source_package(package_path: Path) -> bool:
+    """True when *package_path* holds a spec or a dsc (something OBS builds from)."""
+    return any((package_path / "rpm").glob("*.spec")) or any(
+        (package_path / "debian").glob("*.dsc")
+    )
+
+
 def inject_computed_macros(
     macros: dict[str, str],
     project_path: Path,
@@ -374,10 +381,11 @@ def inject_computed_macros(
     commit — see ``git_utils._macros_changed_since``.  *repo_root* defaults to
     the module global and exists so tests can point at a fixture tree.
 
-    ``PPG_RELEASE`` needs ``PG_VERSION`` in the chain.  ``PKG_REVISION`` needs
-    *project_path* to be a package (``obs/_service`` readable) whose upstream
-    version renders to a concrete string; projects, aggregates, images,
-    tarballs and ``_link`` packages get nothing.  An explicitly declared
+    ``PPG_RELEASE`` needs ``PG_VERSION`` in the chain.  Packages whose
+    ``obs/_service`` upstream version renders to a concrete string get the
+    seeded floor + 1; source packages (a spec or dsc present) with no
+    derivable version get 1; projects, aggregates, images, tarballs and
+    ``_link`` packages get nothing.  An explicitly declared
     ``PPG_RELEASE``/``PKG_REVISION`` always wins.
     """
     from .pkg_version import compute_pkg_revision, extract_version_from_service_text
@@ -407,17 +415,26 @@ def inject_computed_macros(
             }
 
     if "PKG_REVISION" not in macros and len(parts) >= 2:
+        version: str | None = None
         service_text = read_file(project_path / "obs" / "_service")
         if service_text is not None:
             rendered = apply_macro_substitution(service_text, macros, strict=False)
             version = extract_version_from_service_text(rendered)
-            if version and "%!{" not in version and "${" not in version:
-                macros = {
-                    **macros,
-                    "PKG_REVISION": compute_pkg_revision(
-                        ":".join(parts[:-1]), parts[-1], version
-                    ),
-                }
+            if version and ("%!{" in version or "${" in version):
+                version = None
+        if version:
+            macros = {
+                **macros,
+                "PKG_REVISION": compute_pkg_revision(
+                    ":".join(parts[:-1]), parts[-1], version
+                ),
+            }
+        elif _is_source_package(project_path):
+            # No derivable upstream version (download_url-only _service, or no
+            # _service at all: metapackages, shims).  The floor table cannot
+            # key such a package, so it starts at 1; the macro must still
+            # render wherever a spec or dsc references it.
+            macros = {**macros, "PKG_REVISION": "1"}
     return macros
 
 

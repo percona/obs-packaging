@@ -273,7 +273,9 @@ def test_pkg_revision_not_injected_for_project_path(tmp_path):
     assert "PKG_REVISION" not in out
 
 
-def test_pkg_revision_skipped_when_version_unresolved(tmp_path):
+def test_pkg_revision_not_injected_when_version_unresolved_and_no_source_files(
+    tmp_path,
+):
     root, pkg = _pkg_tree(tmp_path)
     # PGAUDIT_VERSION missing from the chain: V renders to "%!{PGAUDIT_VERSION}".
     out = inject_computed_macros({}, pkg, _read, repo_root=root)
@@ -307,3 +309,49 @@ def test_pkg_revision_computed_identically_from_git_reader(tmp_path):
             {"PGAUDIT_VERSION": "17.1"}, pkg, _read, repo_root=root
         )["PKG_REVISION"]
     )
+
+
+def test_pkg_revision_is_one_for_source_package_without_version(tmp_path):
+    root, pkg = _pkg_tree(tmp_path)
+    (pkg / "rpm").mkdir()
+    (pkg / "rpm" / "x.spec").write_text(
+        "Name: x\nVersion: 1.1.10\nRelease: %!{PKG_REVISION}%{?dist}\n"
+    )
+    # download_url-only _service: no version derivable
+    (pkg / "obs" / "_service").write_text(
+        '<services><service name="download_url"><param name="url">https://x/y-1.1.10.tar.gz</param></service></services>'
+    )
+    assert inject_computed_macros({}, pkg, _read, repo_root=root)["PKG_REVISION"] == "1"
+
+
+def test_pkg_revision_is_one_for_package_without_service_but_with_dsc(tmp_path):
+    root = tmp_path / "root"
+    pkg = root / "ppg" / "staging" / "17" / "percona-ppg-server"
+    (pkg / "debian").mkdir(parents=True)
+    (pkg / "debian" / "debian.dsc").write_text(
+        "Version: 1:%!{PG_VERSION}-%!{PKG_REVISION}\n"
+    )
+    out = inject_computed_macros({"PG_VERSION": "17.12"}, pkg, _read, repo_root=root)
+    assert out["PKG_REVISION"] == "1"
+
+
+def test_every_seed_resolves_its_version_from_the_repo_tree():
+    # A seed whose package stops deriving V from _service would silently render 1.
+    from percona_obs.common import REPO_ROOT, apply_macro_substitution, load_macros
+    from percona_obs.pkg_version import (
+        PKG_REVISION_FLOORS,
+        extract_version_from_service_text,
+    )
+
+    for project, package, version in PKG_REVISION_FLOORS:
+        pkg = REPO_ROOT.joinpath(*project.split(":")) / package
+        service = pkg / "obs" / "_service"
+        assert service.is_file(), (project, package)
+        chain = {k: v for k, v in load_macros(pkg).items() if k != "PKG_REVISION"}
+        rendered = apply_macro_substitution(
+            service.read_text("utf-8"), chain, strict=False
+        )
+        assert extract_version_from_service_text(rendered) == version, (
+            project,
+            package,
+        )
