@@ -1,4 +1,4 @@
-percona-pgbadger (%!{PGBADGER_VERSION}-1) unstable; urgency=low
+percona-pgbadger (%!{PGBADGER_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Update to upstream version %!{PGBADGER_VERSION}
 

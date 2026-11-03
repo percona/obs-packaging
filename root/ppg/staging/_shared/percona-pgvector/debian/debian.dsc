@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: percona-pgvector
 Binary: percona-postgresql-%!{PG_MAJOR_VERSION}-pgvector
 Architecture: any
-Version: 1:%!{PGVECTOR_VERSION}
+Version: 1:%!{PGVECTOR_VERSION}-%!{PKG_REVISION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper-compat (= 13),

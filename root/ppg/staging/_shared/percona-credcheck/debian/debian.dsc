@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: percona-credcheck
 Binary: percona-postgresql-%!{PG_MAJOR_VERSION}-credcheck
 Architecture: any
-Version: %!{CREDCHECK_VERSION}
+Version: %!{CREDCHECK_VERSION}-%!{PKG_REVISION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper-compat (= 13),

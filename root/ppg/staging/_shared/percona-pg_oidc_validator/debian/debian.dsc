@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: percona-pg-oidc-validator%!{PG_MAJOR_VERSION}
 Binary: percona-pg-oidc-validator%!{PG_MAJOR_VERSION}
 Architecture: any
-Version: 1:%!{PG_OIDC_VALIDATOR_VERSION}
+Version: 1:%!{PG_OIDC_VALIDATOR_VERSION}-%!{PKG_REVISION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 9),

@@ -13,5 +13,6 @@
   </service>
   <service mode="buildtime" name="set_version">
     <param name="basename">percona-pgaudit</param>
+    <param name="file">percona-pgaudit.spec</param>
   </service>
 </services>

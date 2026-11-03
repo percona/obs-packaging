@@ -1,4 +1,4 @@
-percona-postgresql-%!{PG_MAJOR_VERSION} (%!{PG_VERSION}-1) unstable; urgency=low
+percona-postgresql-%!{PG_MAJOR_VERSION} (%!{PG_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Percona PostgreSQL based on upstream version %!{PG_VERSION}.
 

@@ -1,4 +1,4 @@
-percona-pgbackrest (%!{PGBACKREST_VERSION}-1) unstable; urgency=low
+percona-pgbackrest (%!{PGBACKREST_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Update to upstream version %!{PGBACKREST_VERSION}
 

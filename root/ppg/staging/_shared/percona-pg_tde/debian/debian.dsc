@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: percona-pg-tde%!{PG_MAJOR_VERSION}
 Binary: percona-pg-tde%!{PG_MAJOR_VERSION}, percona-pg-tde%!{PG_MAJOR_VERSION}-client
 Architecture: any
-Version: 1:%!{PG_TDE_VERSION}
+Version: 1:%!{PG_TDE_VERSION}-%!{PKG_REVISION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 9),

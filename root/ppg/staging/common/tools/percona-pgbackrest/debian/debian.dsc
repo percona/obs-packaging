@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: percona-pgbackrest
 Binary: percona-pgbackrest, percona-pgbackrest-doc
 Architecture: any all
-Version: 1:%!{PGBACKREST_VERSION}
+Version: 1:%!{PGBACKREST_VERSION}-%!{PKG_REVISION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends: debhelper-compat (= 13),
                libbz2-dev,

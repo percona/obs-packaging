@@ -1,4 +1,4 @@
-percona-pg-tde%!{PG_MAJOR_VERSION} (%!{PG_TDE_VERSION}-1) unstable; urgency=low
+percona-pg-tde%!{PG_MAJOR_VERSION} (%!{PG_TDE_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Update to upstream version %!{PG_TDE_VERSION}
 

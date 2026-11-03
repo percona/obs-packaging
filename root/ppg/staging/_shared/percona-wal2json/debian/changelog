@@ -1,4 +1,4 @@
-percona-wal2json (%!{WAL2JSON_VERSION}-1) unstable; urgency=low
+percona-wal2json (%!{WAL2JSON_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Update to upstream version %!{WAL2JSON_VERSION}
 

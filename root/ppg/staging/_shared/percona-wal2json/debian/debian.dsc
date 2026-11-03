@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: percona-wal2json
 Binary: percona-postgresql-%!{PG_MAJOR_VERSION}-wal2json
 Architecture: any
-Version: 1:%!{WAL2JSON_VERSION}
+Version: 1:%!{WAL2JSON_VERSION}-%!{PKG_REVISION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper (>= 10),

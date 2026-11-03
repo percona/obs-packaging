@@ -1,4 +1,4 @@
-percona-address-standardizer (%!{ADDRESS_STANDARDIZER_VERSION}-1) unstable; urgency=low
+percona-address-standardizer (%!{ADDRESS_STANDARDIZER_VERSION}-%!{PKG_REVISION}) unstable; urgency=low
 
   * Initial packaging of the standalone address_standardizer extension.
 

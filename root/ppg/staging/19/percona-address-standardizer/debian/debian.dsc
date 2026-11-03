@@ -2,7 +2,7 @@ Format: 3.0 (quilt)
 Source: percona-address-standardizer
 Binary: percona-postgresql-%!{PG_MAJOR_VERSION}-address-standardizer
 Architecture: any
-Version: 1.0.0
+Version: %!{ADDRESS_STANDARDIZER_VERSION}-%!{PKG_REVISION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
  debhelper,
