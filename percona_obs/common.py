@@ -12,6 +12,12 @@ from typing import TYPE_CHECKING, Callable
 
 import yaml
 
+from .pkg_version import (  # noqa: F401
+    _ENV_VAR_RE,
+    compute_pkg_revision,
+    extract_version_from_service_text,
+)
+
 if TYPE_CHECKING:
     from percona_obs.project_config import RepositoryFilter
 
@@ -164,7 +170,6 @@ def find_packages(project_path: Path, obs_project: str, recursive: bool = True):
             yield from find_packages(child, f"{obs_project}:{child.name}")
 
 
-_ENV_VAR_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 _MACRO_RE = re.compile(r"%!\{([A-Za-z_][A-Za-z0-9_]*)\}")
 # Matches a single entry line in macros.yaml: "- KEY: value"
 # Values may contain %!{...} references which PyYAML cannot parse unquoted.
@@ -388,8 +393,6 @@ def inject_computed_macros(
     ``_link`` packages get nothing.  An explicitly declared
     ``PPG_RELEASE``/``PKG_REVISION`` always wins.
     """
-    from .pkg_version import compute_pkg_revision, extract_version_from_service_text
-
     root = REPO_ROOT if repo_root is None else repo_root
     major_str = (macros.get("PG_MAJOR_VERSION") or "").strip()
     if major_str.isdigit() and "PG_PREV_MAJOR_VERSION" not in macros:
@@ -429,6 +432,9 @@ def inject_computed_macros(
                     ":".join(parts[:-1]), parts[-1], version
                 ),
             }
+        # Directory listing from the working tree on both sides of
+        # `_macros_changed_since`; its callers guarantee the package directory is
+        # unchanged since the synced SHA, and any divergence errs towards 'changed'.
         elif _is_source_package(project_path):
             # No derivable upstream version (download_url-only _service, or no
             # _service at all: metapackages, shims).  The floor table cannot
