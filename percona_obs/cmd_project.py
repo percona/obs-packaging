@@ -90,11 +90,10 @@ from .release_scope import has_container_images, tree_has_server_package
 from .release_record import ReleaseEntry, dump_release_entry, parse_release_entries
 from .github_api import last_synced_head_sha, repo_slug_from_url
 from .services import _git_head_sha, _git_tag_for_sha
+from .pkg_version import extract_version_from_service
 
 _YAML_FILENAMES = {"project.yaml", "package.yaml"}
 _OBS_FILENAMES = {"_service", "_aggregate", "_link"}
-
-_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _render_resolved_yaml(obs_project_name: str, config: dict) -> str:
@@ -104,99 +103,14 @@ def _render_resolved_yaml(obs_project_name: str, config: dict) -> str:
     )
 
 
-_ARCHIVE_SUFFIX_RE = re.compile(r"\.(tar\.(gz|bz2|xz|zst)|tgz|tbz2|txz|zip)$")
-
-
-def _version_from_set_version(root_el: "ET.Element") -> "str | None":
-    """Version that a set_version service gives the package, or None.
-
-    Mirrors OBS's set_version: an explicit ``version`` param wins; otherwise
-    the version is read from a downloaded file named ``<basename>-<version>``
-    plus an archive suffix, here the ``filename`` (or URL basename) of a
-    download_url service. Macros (``%!{VAR}``) are returned unresolved, like
-    the obs_scm version, for the caller to substitute.
-    """
-    for svc in root_el.findall("service"):
-        if svc.get("name") != "set_version":
-            continue
-        params = {p.get("name"): (p.text or "").strip() for p in svc.findall("param")}
-        if params.get("version"):
-            return params["version"]
-        basename = params.get("basename", "")
-        if not basename:
-            return None
-        for dl in root_el.findall("service"):
-            if dl.get("name") != "download_url":
-                continue
-            dl_params = {
-                p.get("name"): (p.text or "").strip() for p in dl.findall("param")
-            }
-            filename = (
-                dl_params.get("filename") or dl_params.get("url", "").rsplit("/", 1)[-1]
-            )
-            if filename.startswith(basename + "-"):
-                version = _ARCHIVE_SUFFIX_RE.sub("", filename[len(basename) + 1 :])
-                if version:
-                    return version
-        return None
-    return None
-
-
 def _extract_version_from_service(service_file: Path) -> "str | None":
-    """Return the upstream version from an obs/_service file, or None."""
-    try:
-        text = service_file.read_text("utf-8")
-        root_el = ET.fromstring(text)
-    except (ET.ParseError, OSError):
-        return None
+    """Return the upstream version from an obs/_service file, or None.
 
-    for svc in root_el.findall("service"):
-        if svc.get("name") != "obs_scm":
-            continue
-        params = {p.get("name"): (p.text or "").strip() for p in svc.findall("param")}
-        if params.get("filename") in ("debian", "rpm"):
-            continue  # packaging service, not upstream
-
-        version = params.get("version", "")
-        versionformat = params.get("versionformat", "")
-        revision = params.get("revision", "")
-
-        if version and version != "_none_":
-            return version
-        if versionformat and versionformat != "@PARENT_TAG@":
-            return versionformat
-        if versionformat == "@PARENT_TAG@":
-            pattern = params.get("versionrewrite-pattern", "")
-            if pattern and revision:
-                try:
-                    m = re.match(pattern, revision)
-                    if m and m.lastindex:
-                        return m.group(1)
-                except re.error:
-                    pass
-            # revision is a commit SHA — look up the tag that points to it
-            if _SHA_RE.match(revision):
-                url = params.get("url", "")
-                if url and not _ENV_VAR_RE.search(url):
-                    tag = _git_tag_for_sha(url, revision)
-                    if tag is not None:
-                        if pattern:
-                            try:
-                                m = re.match(pattern, tag)
-                                if m and m.lastindex:
-                                    return m.group(1)
-                            except re.error:
-                                pass
-                        return tag
-            if revision and not _ENV_VAR_RE.search(revision):
-                return revision
-            return None
-        if revision and not _ENV_VAR_RE.search(revision):
-            return revision
-        return None
-
-    # No obs_scm version: a set_version service names it, as OBS applies it.
-    return _version_from_set_version(root_el)
+    Online variant: a commit SHA revision is resolved to its tag through
+    ``_git_tag_for_sha`` (``git ls-remote``).  The computed macros use the
+    offline function in ``pkg_version`` directly.
+    """
+    return extract_version_from_service(service_file, resolve_tag=_git_tag_for_sha)
 
 
 # Matches local aggregate project names: "${OBS_ROOTPRJ}:colon:notation"
