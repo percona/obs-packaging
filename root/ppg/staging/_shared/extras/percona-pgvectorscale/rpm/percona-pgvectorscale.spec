@@ -8,7 +8,7 @@
 Summary:        Vector scaling extension for PostgreSQL
 Name:           %{sname}
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:        PostgreSQL
 URL:            https://github.com/timescale/pgvectorscale
 Source0:        %{sname}-%{version}.tar.gz

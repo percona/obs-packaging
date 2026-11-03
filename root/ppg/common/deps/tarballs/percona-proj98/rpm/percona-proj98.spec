@@ -51,7 +51,7 @@
 
 Name:           percona-proj%!{GIS_PROJ_MAJOR}
 Version:        %{proj_version}
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        PROJ runtime under /opt/percona-proj for the Percona PostgreSQL binary tarball
 License:        MIT
 URL:            https://proj.org/

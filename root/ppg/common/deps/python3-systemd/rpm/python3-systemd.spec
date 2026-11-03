@@ -4,7 +4,7 @@
 
 Name:           python3.12-systemd
 Version:        235
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Python interface for libsystemd
 License:        LGPL-2.1-or-later
 URL:            https://github.com/systemd/python-systemd

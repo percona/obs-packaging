@@ -2,7 +2,7 @@
 
 Name:      icu
 Version:   67.1
-Release:   10%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:   International Components for Unicode
 
 License:   Unicode-DFS-2016 AND BSD-2-Clause AND BSD-3-Clause AND LicenseRef-Fedora-Public-Domain

@@ -19,7 +19,7 @@
 
 Name:           percona-pgadmin4
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Management tool for PostgreSQL (pgAdmin 4, server mode)
 License:        PostgreSQL
 URL:            https://www.pgadmin.org

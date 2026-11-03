@@ -18,7 +18,7 @@
 Summary: A library for replicating your python class between multiple servers, based on raft protocol
 Name:           %{name}
 Version:        1.0.0
-Release:        2%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Source0:        %{name}-%{version}.tar.gz
 License:        MIT
 Group:          Development/Libraries

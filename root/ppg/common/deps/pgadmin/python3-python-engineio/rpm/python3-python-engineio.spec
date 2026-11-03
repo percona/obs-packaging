@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-python-engineio
 Version:        4.13.5
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Engine.IO server and client for Python
 License:        MIT
 URL:            https://github.com/miguelgrinberg/python-engineio

@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-alembic
 Version:        1.19.1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        A database migration tool for SQLAlchemy
 License:        MIT
 URL:            https://alembic.sqlalchemy.org

@@ -14,7 +14,7 @@
 Summary:	Uber's H3 Hexagonal Hierarchical Geospatial Indexing System in PostgreSQL
 Name:		%{sname}
 Version:	1.0.0
-Release:	1%{dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:	Apache
 URL:		https://github.com/postgis/%{pname}
 Packager:       Percona Development Team <https://jira.percona.com>

@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-bidict
 Version:        0.23.1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        The bidirectional mapping library for Python
 License:        MPL-2.0
 URL:            https://pypi.org/project/bidict/

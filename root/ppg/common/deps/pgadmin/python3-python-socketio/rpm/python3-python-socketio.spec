@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-python-socketio
 Version:        5.16.4
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Socket.IO server and client for Python
 License:        MIT
 URL:            https://github.com/miguelgrinberg/python-socketio

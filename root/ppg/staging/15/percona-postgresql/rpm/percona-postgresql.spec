@@ -98,7 +98,7 @@ Version:        1.0
 %if 0%{?suse_version} >= 1315
 # SuSE upstream packages have release numbers like 150200.5.19.1
 # which overrides our packages. Increase our release number on SuSE.
-Release:        42001%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 %else
 Release:        1%{?dist}
 %endif

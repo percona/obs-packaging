@@ -27,7 +27,7 @@ ExclusiveArch:  do_not_build
 
 Name:           %{sname}
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        PostgreSQL extension for transparent data encryption.
 License:        PostgreSQL
 URL:            https://github.com/percona/pg_tde

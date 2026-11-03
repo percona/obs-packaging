@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-ua-parser
 Version:        0.18.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Python port of Browserscope's user agent parser
 License:        Apache-2.0
 URL:            https://github.com/ua-parser/uap-python

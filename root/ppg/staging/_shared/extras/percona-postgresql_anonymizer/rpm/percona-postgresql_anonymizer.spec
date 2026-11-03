@@ -8,7 +8,7 @@
 Summary:	Anonymization & Data Masking for PostgreSQL
 Name:		percona-%{sname}_%{pgmajorversion}
 Version:	1.0.0
-Release:	1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:	PostgreSQL
 Source0:	percona-%{sname}_%{pgmajorversion}-%{version}.tar.gz
 Source1:    vendor.tar.gz

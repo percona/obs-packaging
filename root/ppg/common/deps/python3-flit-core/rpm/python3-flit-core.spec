@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-flit-core
 Version:        3.12.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Distribution-building parts of Flit. See flit package for more information
 License:        BSD-3-Clause
 URL:            https://github.com/pypa/flit

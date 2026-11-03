@@ -20,7 +20,7 @@
 Summary:        PostgreSQL database adapter for Python
 Name:           %{pkgprefix}-%{srcname}
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Epoch:          1
 # The exceptions allow linking to OpenSSL and PostgreSQL's libpq
 License:        LGPLv3+ with exceptions

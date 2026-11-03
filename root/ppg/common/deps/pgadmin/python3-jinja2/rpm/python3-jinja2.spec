@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-jinja2
 Version:        3.1.6
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        A very fast and expressive template engine
 License:        BSD-3-Clause
 URL:            https://github.com/pallets/jinja/

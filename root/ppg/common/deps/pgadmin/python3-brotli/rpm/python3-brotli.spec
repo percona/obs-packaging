@@ -13,7 +13,7 @@
 
 Name:           %{python3_pkgprefix}-brotli
 Version:        1.2.1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Python bindings for the Brotli compression library
 License:        MIT
 URL:            https://github.com/google/brotli

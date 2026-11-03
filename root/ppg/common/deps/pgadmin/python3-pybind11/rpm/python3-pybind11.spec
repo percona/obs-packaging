@@ -13,7 +13,7 @@
 
 Name:           %{python3_pkgprefix}-pybind11
 Version:        2.13.6
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Seamless operability between C++11 and Python
 License:        BSD-3-Clause
 URL:            https://github.com/pybind/pybind11

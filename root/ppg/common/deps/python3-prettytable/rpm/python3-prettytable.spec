@@ -18,7 +18,7 @@
 Summary:        A simple Python library for easily displaying tabular data in a visually appealing ASCII table format
 Name:           %{python3_pkgprefix}-prettytable
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Source0:        %{srcname}-%{version}.tar.gz
 License:        BSD-3-Clause
 BuildArch:      noarch

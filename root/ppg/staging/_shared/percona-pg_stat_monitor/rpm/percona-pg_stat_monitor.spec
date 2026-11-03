@@ -9,7 +9,7 @@
 Summary:        Statistics collector for PostgreSQL
 Name:           %{sname}%{pgmajorversion}
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:        PostgreSQL
 Source0:        %{sname}-%{version}.tar.gz
 URL:            https://github.com/percona/pg_stat_monitor

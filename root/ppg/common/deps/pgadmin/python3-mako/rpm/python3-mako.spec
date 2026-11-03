@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-mako
 Version:        1.4.1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        A super-fast templating language that borrows the best ideas from the existing templating languages
 License:        MIT
 URL:            https://www.makotemplates.org/

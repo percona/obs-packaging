@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-flask-login
 Version:        0.6.3
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        User authentication and session management for Flask
 License:        MIT
 URL:            https://github.com/maxcountryman/flask-login

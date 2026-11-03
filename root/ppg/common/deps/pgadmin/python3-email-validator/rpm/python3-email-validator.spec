@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-email-validator
 Version:        2.3.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        A robust email address syntax and deliverability validation library
 License:        Unlicense
 URL:            https://github.com/JoshData/python-email-validator

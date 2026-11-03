@@ -4,7 +4,7 @@
 Summary:        Percona selection of PostgreSQL %{pgmajor} HA components
 Name:           percona-ppg-server-ha%{pgmajor}
 Version:        %{pgmajor}.%{pgminorversion}
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:        PostgreSQL
 Group:          Applications/Databases
 URL:            https://www.percona.com/software/postgresql-distribution

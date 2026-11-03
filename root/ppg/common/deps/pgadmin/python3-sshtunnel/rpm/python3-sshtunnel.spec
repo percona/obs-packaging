@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-sshtunnel
 Version:        0.4.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Pure python SSH tunnels
 License:        MIT
 URL:            https://github.com/pahaz/sshtunnel

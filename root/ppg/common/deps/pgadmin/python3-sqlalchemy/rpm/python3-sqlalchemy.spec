@@ -13,7 +13,7 @@
 
 Name:           %{python3_pkgprefix}-sqlalchemy
 Version:        2.0.52
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Database Abstraction Library
 License:        MIT
 URL:            https://www.sqlalchemy.org

@@ -14,7 +14,7 @@
 
 Name:		%{sname}%{libgeotiffversion}
 Version:	%!{GIS_LIBGEOTIFF_VERSION}
-Release:	1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Vendor:		Percona LLC
 Packager:	Percona LLC
 Summary:	GeoTIFF format library

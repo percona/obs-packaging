@@ -13,7 +13,7 @@
 
 Name:           %{python3_pkgprefix}-cffi
 Version:        2.1.1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        C Foreign Function Interface for Python
 License:        MIT-0
 URL:            https://cffi.readthedocs.io/

@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-jaraco-classes
 Version:        3.4.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Utility functions for Python class constructs
 License:        MIT
 URL:            https://github.com/jaraco/jaraco.classes

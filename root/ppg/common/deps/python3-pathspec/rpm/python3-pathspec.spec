@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-pathspec
 Version:        0.12.1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Utility library for gitignore style pattern matching of file paths
 License:        MPL-2.0
 URL:            https://pypi.org/project/pathspec/

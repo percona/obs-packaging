@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-keyring
 Version:        25.2.1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Store and access your passwords safely
 License:        MIT
 URL:            https://github.com/jaraco/keyring

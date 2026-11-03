@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-paramiko
 Version:        3.5.1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        SSH2 protocol library
 License:        LGPL-2.1-or-later
 URL:            https://paramiko.org

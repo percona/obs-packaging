@@ -22,7 +22,7 @@
 Summary:        PostgreSQL username/password checks
 Name:           %{sname}%{pgmajorversion}
 Version:        %!{CREDCHECK_VERSION}
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:        PostgreSQL
 URL:            https://github.com/HexaCluster/credcheck
 Source0:        %{sname}-%{version}.tar.gz

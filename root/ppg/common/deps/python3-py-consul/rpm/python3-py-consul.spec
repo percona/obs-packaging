@@ -29,7 +29,7 @@
 Summary:        Python client for Consul
 Name:           %{name}
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Source0:        %{name}-%{version}.tar.gz
 License:        MIT
 Group:          Development/Libraries

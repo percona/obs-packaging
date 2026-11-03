@@ -12,7 +12,7 @@
 Summary:	PostgreSQL extension adding HyperLogLog data structures as a native data type
 Name:		percona-%{sname}_%{pgmajorversion}
 Version:	1.0.0
-Release:	1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:	Apache
 Source0:	percona-%{sname}_%{pgmajorversion}-%{version}.tar.gz
 Packager:       Percona Development Team <https://jira.percona.com>

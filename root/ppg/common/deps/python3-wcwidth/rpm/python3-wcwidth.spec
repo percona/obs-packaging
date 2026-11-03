@@ -18,7 +18,7 @@
 Summary:        Measures the displayed width of unicode strings in a terminal
 Name:           %{python3_pkgprefix}-wcwidth
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Source0:        %{srcname}-%{version}.tar.gz
 License:        MIT
 BuildArch:      noarch

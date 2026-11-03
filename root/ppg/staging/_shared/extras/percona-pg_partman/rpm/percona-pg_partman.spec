@@ -12,7 +12,7 @@
 Summary:	A PostgreSQL extension to manage partitioned tables by time or ID
 Name:		percona-%{sname}_%{pgmajorversion}
 Version:	1.0.0
-Release:	1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:	PostgreSQL
 Source0:	percona-%{sname}_%{pgmajorversion}-%{version}.tar.gz
 Packager:	Percona Development Team <https://jira.percona.com>

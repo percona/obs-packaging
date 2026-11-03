@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-mdurl
 Version:        0.1.2
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Markdown URL utilities
 License:        MIT
 URL:            https://github.com/executablebooks/mdurl

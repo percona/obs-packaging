@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-flask-sqlalchemy
 Version:        3.1.1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Add SQLAlchemy support to your Flask application
 License:        BSD-3-Clause
 URL:            https://pypi.org/project/Flask-SQLAlchemy/

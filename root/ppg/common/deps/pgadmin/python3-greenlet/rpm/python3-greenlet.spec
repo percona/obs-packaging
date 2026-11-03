@@ -13,7 +13,7 @@
 
 Name:           %{python3_pkgprefix}-greenlet
 Version:        3.5.5
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Lightweight in-process concurrent programming
 License:        MIT AND PSF-2.0
 URL:            https://greenlet.readthedocs.io

@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-flask-migrate
 Version:        4.1.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        SQLAlchemy database migrations for Flask applications using Alembic
 License:        MIT
 URL:            https://github.com/miguelgrinberg/flask-migrate

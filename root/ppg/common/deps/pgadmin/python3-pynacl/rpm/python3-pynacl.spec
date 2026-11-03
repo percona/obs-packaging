@@ -13,7 +13,7 @@
 
 Name:           %{python3_pkgprefix}-pynacl
 Version:        1.6.2
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Python binding to the Networking and Cryptography (NaCl) library
 License:        Apache-2.0
 URL:            https://github.com/pyca/pynacl

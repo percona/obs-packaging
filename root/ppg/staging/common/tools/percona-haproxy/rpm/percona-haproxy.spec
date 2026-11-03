@@ -8,7 +8,7 @@
 
 Name:           percona-haproxy
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        HAProxy reverse proxy for high availability environments
 
 License:        GPLv2+

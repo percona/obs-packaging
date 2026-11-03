@@ -16,7 +16,7 @@
 Summary:        pgpool-II connection pooling server for PostgreSQL %{pgmajorversion}
 Name:           percona-pgpool-II-pg%{pgmajorversion}
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:        BSD
 URL:            https://www.pgpool.net/
 Source0:        pgpool2-%{version}.tar.gz

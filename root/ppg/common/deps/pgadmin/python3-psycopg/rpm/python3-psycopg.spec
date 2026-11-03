@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-psycopg
 Version:        3.3.4
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        PostgreSQL database adapter for Python
 License:        LGPL-3.0-only
 URL:            https://psycopg.org/

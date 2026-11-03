@@ -17,7 +17,7 @@
 
 Name:		blis
 Version:	0.7.0
-Release:	1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:	BLAS-like Library Instantiation Software Framework
 License:	BSD
 URL:		https://github.com/flame/blis

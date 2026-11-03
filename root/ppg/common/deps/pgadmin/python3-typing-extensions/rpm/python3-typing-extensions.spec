@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-typing-extensions
 Version:        4.16.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Backported and Experimental Type Hints for Python 3.9+
 License:        PSF-2.0
 URL:            https://pypi.org/project/typing-extensions/

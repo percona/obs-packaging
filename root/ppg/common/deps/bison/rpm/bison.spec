@@ -1,6 +1,6 @@
 Name:           bison
 Version:        3.8.2
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        A GNU general-purpose parser generator
 License:        GPL-3.0-or-later
 URL:            https://www.gnu.org/software/bison/

@@ -18,7 +18,7 @@
 Summary:        Easy, practical library for making terminal apps
 Name:           %{python3_pkgprefix}-blessed
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Source0:        %{srcname}-%{version}.tar.gz
 License:        MIT
 BuildArch:      noarch

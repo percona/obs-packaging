@@ -29,7 +29,7 @@ ExcludeArch: %{ix86}
 
 Name:           %{pkgname}
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        C++ wrapper library around CGAL for ISO 19107:2013 geometry operations
 License:        LGPL-2.0-or-later
 URL:            https://sfcgal.gitlab.io/SFCGAL/

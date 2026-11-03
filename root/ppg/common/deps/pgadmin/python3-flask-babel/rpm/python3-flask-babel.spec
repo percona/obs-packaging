@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-flask-babel
 Version:        4.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Adds i18n/l10n support for Flask applications
 License:        BSD-3-Clause
 URL:            https://github.com/python-babel/flask-babel

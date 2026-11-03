@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-pyasn1
 Version:        0.6.5
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Pure-Python implementation of ASN.1 types and DER/BER/CER codecs (X.208)
 License:        BSD-2-Clause
 URL:            https://github.com/pyasn1/pyasn1

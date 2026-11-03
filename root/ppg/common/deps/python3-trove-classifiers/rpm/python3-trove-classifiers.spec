@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-trove-classifiers
 Version:        2025.9.11.17
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Canonical source for classifiers on PyPI (pypi.org)
 License:        Apache-2.0
 URL:            https://github.com/pypa/trove-classifiers

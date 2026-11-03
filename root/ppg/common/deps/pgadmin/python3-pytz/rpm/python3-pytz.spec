@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-pytz
 Version:        2026.3.post1
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        World timezone definitions, modern and historical
 License:        MIT
 URL:            http://pythonhosted.org/pytz

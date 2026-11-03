@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-secretstorage
 Version:        3.5.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Python bindings to FreeDesktop.org Secret Service API
 License:        BSD-3-Clause
 URL:            https://github.com/mitya57/secretstorage

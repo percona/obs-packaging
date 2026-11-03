@@ -18,7 +18,7 @@
 Summary:        DNS toolkit for Python
 Name:           %{python3_pkgprefix}-dns
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Source0:        %{srcname}-%{version}.tar.gz
 Patch0:         python3-dns-setuptools-build.patch
 License:        ISC

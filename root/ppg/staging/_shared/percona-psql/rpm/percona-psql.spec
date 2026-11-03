@@ -41,7 +41,7 @@ Summary:        PostgreSQL interactive terminal linked against libedit
 Name:           percona-psql
 # Placeholder: rewritten by the OBS set_version source service (see obs/_service).
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:        PostgreSQL
 Group:          Productivity/Databases/Tools
 Url:            https://www.postgresql.org/

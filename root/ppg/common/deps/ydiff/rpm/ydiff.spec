@@ -30,7 +30,7 @@
 
 Name:           ydiff
 Version:        1.0.0
-Release:        2%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        View colored, incremental diff
 URL:            https://github.com/ymattw/ydiff
 License:        BSD

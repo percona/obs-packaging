@@ -34,7 +34,7 @@
 
 Name:           percona-tcl
 Version:        8.6.10
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Tcl runtime under /opt/percona-tcl for the Percona PostgreSQL binary tarball
 License:        TCL
 URL:            https://www.tcl.tk/

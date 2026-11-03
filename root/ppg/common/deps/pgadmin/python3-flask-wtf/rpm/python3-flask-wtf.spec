@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-flask-wtf
 Version:        1.3.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Form rendering, validation, and CSRF protection for Flask with WTForms
 License:        BSD-3-Clause
 URL:            https://pypi.org/project/Flask-WTF/

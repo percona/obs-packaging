@@ -13,7 +13,7 @@
 Summary:	Parse a street address into its components
 Name:		percona-address-standardizer%{pgmajorversion}
 Version:	1.0.0
-Release:	1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:	MIT
 Source0:	%{name}-%{version}.tar.gz
 URL:		https://github.com/postgis/address_standardizer

@@ -21,7 +21,7 @@
 Summary:	Run periodic jobs in PostgreSQL
 Name:		%{sname}
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License:	AGPLv3
 Source0:	%{sname}-%{version}.tar.gz
 URL:		https://github.com/citusdata/pg_cron

@@ -16,7 +16,7 @@
 Summary:        Cross-platform process and system utilities module for Python
 Name:           %{python3_pkgprefix}-psutil
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Source0:        %{srcname}-%{version}.tar.gz
 License:        BSD-3-Clause
 Vendor:         Percona, LLC

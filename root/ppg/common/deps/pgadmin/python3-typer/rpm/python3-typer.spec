@@ -14,7 +14,7 @@
 
 Name:           %{python3_pkgprefix}-typer
 Version:        0.26.8
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        Typer, build great CLIs. Easy to code. Based on Python type hints
 License:        MIT
 URL:            https://github.com/fastapi/typer

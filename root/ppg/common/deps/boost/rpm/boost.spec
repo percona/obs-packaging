@@ -46,7 +46,7 @@ Name: boost
 %global real_name boost
 Summary: The free peer-reviewed portable C++ source libraries
 Version: 1.75.0
-Release: 1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 License: Boost and MIT and Python
 
 # Replace each . with _ in %%{version}
