@@ -1,7 +1,7 @@
 # Package revision floor (`PKG_REVISION`) on top of the OBS commit counter
 
 Date: 2026-11-02, rewritten 2026-11-03
-Status: design for review, not yet implemented
+Status: implemented (branch deb-revision-counter), 2026-11-03
 
 ## Problem
 
@@ -209,9 +209,12 @@ Two rules keep it pure:
 - **Offline only.** The helper's SHA → git tag lookup (network) is disabled
   on this path. A package whose `V` would need it fails `project verify`:
   "pin a tag or add a `version` param". No package hits this today.
-- **No `_service`, no macro.** Aggregates, images, simpleimage tarballs and
-  `_link` packages get nothing injected. `V` carries no epoch; the epoch stays
-  in the dsc/spec where it is today.
+- **No upstream version, revision 1.** A source package (spec or dsc present)
+  whose `_service` yields no version, or has no `_service`, gets 1: the floor
+  cannot key it (download_url-only rebuilds, the ppg-server metapackages,
+  gis-compat). Aggregates, images, simpleimage tarballs and `_link` packages
+  get nothing injected. `V` carries no epoch; the epoch stays in the dsc/spec
+  where it is today.
 
 `inject_computed_macros` already receives the package path from every
 `load_macros` caller; it gains the per-package lookup next to `PPG_RELEASE`.
@@ -290,7 +293,7 @@ debtransform no longer inserts `-1`, so the result is
 
 ### RPM packaging files
 
-Every spec in the staging and common tiers (199 files today, with `Release:`
+Every spec in the staging and common tiers (200 files today, with `Release:`
 values from `1%{?dist}` to `42001%{?dist}`, all dead under the prjconf
 override) gets the same line:
 
@@ -303,10 +306,18 @@ The spec's `Release:` is consumed by the OBS source server at commit time
 only, as the `vrev` floor; obs-build still replaces it in the build. Result:
 `V-<vrev>.<B_CNT>.elN` with `vrev >= PKG_REVISION`.
 
+Eleven rebuilds without a `set_version` keep their literal `Release:`
+(`# Release pinned by hand`): krb5 and libssh beat the distro package of the
+same name in the tarball chroots, the PostGIS deps icu, qt5-qtbase, qhull,
+libproxy, librttopo and snappy carry RHEL release numbers that back exact-EVR
+`-devel` pins, and atlas, percona-python3 and percona-gis-compat keep the
+floors they already had. With no `set_version` nothing zeroes those lines, so
+they already are the `vrev` floor.
+
 Spec `Epoch:` lines match production (`Epoch: 1` wherever the old process had
 one). No change.
 
-Normalising all 199 lines is what makes the next item safe: after it, the
+Normalising the other 189 lines is what makes the next item safe: after it, the
 spec `Release:` in git is meaningful again and never a stray `42001`.
 
 ### Tool: keep the floor through `set_version`

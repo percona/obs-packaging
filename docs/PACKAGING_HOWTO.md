@@ -99,8 +99,8 @@ the OBS build environment.
 
 ## Step 4 — Write `debian/changelog`
 
-A minimal changelog. The version here is a placeholder; OBS overwrites it with the version
-extracted from the upstream source tag at build time.
+A minimal changelog. The header uses the same macros as the dsc `Version:`; debtransform
+re-stamps it with the final version at build time.
 
 ```
 percona-pgbadger (13.2-1) unstable; urgency=low
@@ -161,15 +161,16 @@ Format: 3.0 (quilt)
 Source: percona-pgbadger
 Binary: percona-pgbadger
 Architecture: all
-Version: 1.0.0
+Version: 1:%!{MYPKG_VERSION}-%!{PKG_REVISION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends: debhelper (>= 9), perl, libjson-xs-perl, libtext-csv-xs-perl
 Debtransform-Release: 1
 Debtransform-Files-Tar: debian.tar.gz rpm.tar.gz
 ```
 
-- `Version:` is `1.0.0` — a placeholder replaced by OBS at service run time — unless the
-  package needs an epoch (see below).
+- `Version:` is `1:%!{MYPKG_VERSION}-%!{PKG_REVISION}` (epoch as shipped in Percona Repo, see
+  below). The upstream version macro is the one your `_service` uses; `PKG_REVISION` is
+  computed by the tool (see the tool reference).
 - **Epoch.** If the package also ships in Percona Repo with an epoch (`1:`, `2:`, …), the OBS
   deb must carry the *same* epoch, or apt ranks every Percona Repo version above every OBS
   version. `set_version` rewrites the whole `Version:` line and would drop it, so instead:
@@ -194,7 +195,7 @@ The spec file is the RPM equivalent of all the Debian files combined.
 Summary:    A fast PostgreSQL log analyzer
 Name:       percona-pgbadger
 Version:    1.0.0
-Release:    1%{?dist}
+Release:    %!{PKG_REVISION}%{?dist}
 License:    PostgreSQL
 Source0:    %{name}-%{version}.tar.gz
 URL:        https://github.com/darold/%{sname}
@@ -233,8 +234,10 @@ reports from your PostgreSQL log file.
 
 Important conventions:
 - `Version:` is always `1.0.0` — OBS's `set_version` service overwrites it.
-- `Release:` must be a hardcoded value like `1%{?dist}`. Using `%{release}` without defining
-  it causes an empty string under OBS.
+- `Release:` must be `%!{PKG_REVISION}%{?dist}`. The tool renders the production floor into it
+  and OBS counts commits above it; a literal number is ignored by the build and would only
+  mislead the OBS source server. The only exception is a rebuild that has no `set_version`
+  and must track a distro release number; mark it `# Release pinned by hand` and say why.
 - `Source0:` is `%{name}-%{version}.tar.gz` — OBS generates this tarball automatically from
   the upstream `obs_scm` fetch. **Do not add this file to `rpm/`.**
 - Only add `Source1`, `Source2`, … files to `rpm/` for supplementary sources the spec
@@ -451,7 +454,7 @@ PEP 639 metadata; use ours from `ppg:common:deps` (see the conditional below).
 
 Name:           %{python3_pkgprefix}-flask
 Version:        3.1.3
-Release:        1%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Source0:        https://files.pythonhosted.org/packages/source/f/flask/flask-3.1.3.tar.gz
 BuildArch:      noarch
 Epoch:          1
@@ -704,12 +707,12 @@ Rules:
 | `debian/rules` | yes | Build rules; always override `dh_builddeb` to force gzip |
 | `debian/changelog` | yes | Placeholder version `1.0.0`; source name must match `control` |
 | `debian/compat` | yes* | Omit if `debhelper-compat (= N)` is in `Build-Depends` |
-| `debian/debian.dsc` | yes | OBS-specific; `Version: 1.0.0` (or `<epoch>:%!{<PKG>_VERSION}` if Percona Repo uses an epoch); `Debtransform-Files-Tar` must be complete |
+| `debian/debian.dsc` | yes | OBS-specific; `Version: <epoch>:%!{<PKG>_VERSION}-%!{PKG_REVISION}`; `Debtransform-Files-Tar` must be complete |
 | `debian/source/format` | yes | `3.0 (quilt)` or `3.0 (native)` |
 | `debian/source/options` | yes | Always include `extend-diff-ignore = rpm/` |
 | `debian/patches/` | if needed | Quilt patches applied to upstream source |
 | `debian/*.install` | if needed | File installation lists for binary packages |
-| `rpm/<name>.spec` | yes | `Version: 1.0.0`; `Release: 1%{?dist}`; no `Source0` file in `rpm/` |
+| `rpm/<name>.spec` | yes | `Version: 1.0.0`; `Release: %!{PKG_REVISION}%{?dist}`; no `Source0` file in `rpm/` |
 | `rpm/python3-<name>.spec` | Python 3.12 libs | Template in "Python 3.12 packages"; `Version:` literal; runtime deps also `BuildRequires` |
 | `rpm/<extra-sources>` | if needed | Only files referenced as `Source1`, `Source2`, … in the spec |
 | `obs/_service` | yes | Use env-var template for packaging services; customise only the upstream service |
