@@ -366,44 +366,59 @@ def inject_computed_macros(
 ) -> dict[str, str]:
     """Return *macros* plus the tool-computed entries, without mutating it.
 
-    Two entries: ``PG_PREV_MAJOR_VERSION`` (the major before ``PG_MAJOR_VERSION``,
-    PostgreSQL majors being consecutive integers) and ``PPG_RELEASE``.
-    *read_file* returns a repo file's contents
-    or None; callers pass a working-tree reader or a git-revision reader so the
-    identical value can be computed at any commit — see
-    ``git_utils._macros_changed_since``.  *repo_root* defaults to the module
-    global and exists so tests can point at a fixture tree.
+    Three entries: ``PG_PREV_MAJOR_VERSION`` (the major before
+    ``PG_MAJOR_VERSION``), ``PPG_RELEASE`` (see ``compute_ppg_release``) and
+    ``PKG_REVISION`` (see ``pkg_version.compute_pkg_revision``).  *read_file*
+    returns a repo file's contents or None; callers pass a working-tree reader
+    or a git-revision reader so the identical value can be computed at any
+    commit — see ``git_utils._macros_changed_since``.  *repo_root* defaults to
+    the module global and exists so tests can point at a fixture tree.
 
-    Nothing is injected when the chain defines no ``PG_VERSION`` (e.g. under
-    ``root/ppg/common/deps``): those packages never reference the counter, and
-    one that did would still fail with the usual undefined-macro error.  An
-    explicitly declared ``PPG_RELEASE`` always wins, so a project can pin its
-    own counter.
+    ``PPG_RELEASE`` needs ``PG_VERSION`` in the chain.  ``PKG_REVISION`` needs
+    *project_path* to be a package (``obs/_service`` readable) whose upstream
+    version renders to a concrete string; projects, aggregates, images,
+    tarballs and ``_link`` packages get nothing.  An explicitly declared
+    ``PPG_RELEASE``/``PKG_REVISION`` always wins.
     """
+    from .pkg_version import compute_pkg_revision, extract_version_from_service_text
+
     root = REPO_ROOT if repo_root is None else repo_root
     major_str = (macros.get("PG_MAJOR_VERSION") or "").strip()
     if major_str.isdigit() and "PG_PREV_MAJOR_VERSION" not in macros:
         macros = {**macros, "PG_PREV_MAJOR_VERSION": str(int(major_str) - 1)}
-    pg_version = macros.get("PG_VERSION")
-    if not pg_version or "PPG_RELEASE" in macros:
-        return macros
     try:
         parts = project_path.relative_to(root).parts
     except ValueError:
         return macros
     if not parts:
         return macros
-    product = parts[0]
-    major = pg_version.split(".", 1)[0].strip()
-    if not major:
-        return macros
-    release_file = root / product / "releases" / major / "release.yaml"
-    return {
-        **macros,
-        "PPG_RELEASE": compute_ppg_release(
-            product, pg_version, read_file(release_file)
-        ),
-    }
+
+    pg_version = macros.get("PG_VERSION")
+    if pg_version and "PPG_RELEASE" not in macros:
+        product = parts[0]
+        major = pg_version.split(".", 1)[0].strip()
+        if major:
+            release_file = root / product / "releases" / major / "release.yaml"
+            macros = {
+                **macros,
+                "PPG_RELEASE": compute_ppg_release(
+                    product, pg_version, read_file(release_file)
+                ),
+            }
+
+    if "PKG_REVISION" not in macros and len(parts) >= 2:
+        service_text = read_file(project_path / "obs" / "_service")
+        if service_text is not None:
+            rendered = apply_macro_substitution(service_text, macros, strict=False)
+            version = extract_version_from_service_text(rendered)
+            if version and "%!{" not in version and "${" not in version:
+                macros = {
+                    **macros,
+                    "PKG_REVISION": compute_pkg_revision(
+                        ":".join(parts[:-1]), parts[-1], version
+                    ),
+                }
+    return macros
 
 
 def load_macros(project_path: Path) -> dict[str, str]:

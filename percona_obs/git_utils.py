@@ -322,7 +322,9 @@ def _macros_changed_since(short_sha: str, package_path: Path) -> bool:
         then = inject_computed_macros(
             resolve_macros(sources),
             package_path,
-            lambda p: _git_show_at(short_sha, p.relative_to(_REPO_DIR).as_posix()),
+            lambda p: _git_show_at(
+                short_sha, _git_tracked_path(p).relative_to(_REPO_DIR).as_posix()
+            ),
         )
         now = load_macros(package_path)
     except SystemExit:
