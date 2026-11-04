@@ -884,18 +884,27 @@ patchelf --set-rpath '/opt/percona-tcl/lib:$ORIGIN' "$PG_PREFIX/lib/pltcl.so"
 # distro copy (prefix /usr) into $PG_PREFIX/lib; with an $ORIGIN RUNPATH
 # they loaded it and fataled on hosts without /usr/lib64/python3.12
 # (PG-2888). Drop it: /opt/percona-python3's must be the only libpython.
-rm -f "$PG_PREFIX"/lib/libpython*
+# The PL/Perl transforms (hstore_plperl, jsonb_plperl, bool_plperl) do the
+# same with libperl: the distro copy carries a /usr @INC, and once a
+# transform loads it before plperl.so, PL/Perl fails for the rest of the
+# backend ("Can't locate strict.pm in @INC") on hosts without /usr/share/perl5.
+# libcrypt stays: libsasl2 and libpgpoolpcp need it too.
+rm -f "$PG_PREFIX"/lib/libpython* "$PG_PREFIX"/lib/libperl*
 
-# All other PostgreSQL lib/ .so files get $ORIGIN; libpython consumers
-# (picked by NEEDED) get the same RUNPATH as plpython3.so.
+# All other PostgreSQL lib/ .so files get $ORIGIN; libpython and libperl
+# consumers (picked by NEEDED) get the same RUNPATH as plpython3.so and
+# plperl.so.
 find $PG_PREFIX/lib -name '*.so*' -type f | while read f; do
     case "$(basename "$f")" in
         plperl.so|plpython3.so|pltcl.so) continue ;;
     esac
     file "$f" 2>/dev/null | grep -q ELF || continue
     rpath='$ORIGIN'
-    if patchelf --print-needed "$f" 2>/dev/null | grep -q '^libpython'; then
+    needed=$(patchelf --print-needed "$f" 2>/dev/null || true)
+    if echo "$needed" | grep -q '^libpython'; then
         rpath='/opt/percona-python3/lib:$ORIGIN'
+    elif echo "$needed" | grep -q '^libperl'; then
+        rpath="/opt/percona-perl/lib/${PERL_VER}/CORE:\$ORIGIN"
     fi
     # Same FATAL-on-failure policy as patch_rpath above.
     if ! patchelf --set-rpath "$rpath" "$f"; then
