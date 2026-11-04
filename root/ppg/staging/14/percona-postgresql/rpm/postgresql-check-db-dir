@@ -15,12 +15,12 @@ then
     exit 1
 fi
 
-# PGVERSION is the full package version, e.g., 17.0
+# PGVERSION is the full package version, e.g., 14.0
 # Note: the specfile inserts the correct value during package build
 PGVERSION=xxxx
-# PGMAJORVERSION is major version, e.g., 17 (this should match PG_VERSION)
+# PGMAJORVERSION is major version, e.g., 14 (this should match PG_VERSION)
 PGMAJORVERSION=`echo "$PGVERSION" | sed 's/^\([0-9]*\.[0-9]*\).*$/\1/'`
-# PREVMAJORVERSION is the previous major version, e.g., 15 for upgrades
+# PREVMAJORVERSION is the previous major version, e.g., 12 for upgrades
 # Note: the specfile inserts the correct value during package build
 PREVMAJORVERSION=xxxx
 # PGDOCDIR is the directory containing the package's documentation
@@ -49,7 +49,7 @@ then
 else
     # No existing PGDATA! Warn the user to initdb it.
     echo $"\"$PGDATA\" is missing or empty."
-    echo $"Use \"/usr/pgsql-17/bin/postgresql-17-setup initdb\" to initialize the database cluster."
+    echo $"Use \"/usr/pgsql-14/bin/postgresql-14-setup initdb\" to initialize the database cluster."
     echo $"See $PGDOCDIR/README.rpm-dist for more information."
     exit 1
 fi

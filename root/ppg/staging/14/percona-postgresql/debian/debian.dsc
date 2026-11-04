@@ -20,7 +20,7 @@ Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
     autoconf,
     bison,
-    clang [!alpha !hppa !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32],
+    clang [amd64 arm64 mips64el ppc64 ppc64el s390x],
     debhelper,
     dh-exec (>= 0.13~),
     docbook-xml,
@@ -39,7 +39,8 @@ Build-Depends:
     percona-postgresql-common-dev,
     liblz4-dev,
     libpam0g-dev | libpam-dev,
-    libperl-dev,
+    libperl-dev <!noperl>,
+    libpq-dev <pkg.postgresql.nolibpkgs>,
     libreadline-dev,
     libselinux1-dev [linux-any],
     libssl-dev,
@@ -47,18 +48,17 @@ Build-Depends:
     libxml2-dev,
     libxml2-utils,
     libxslt1-dev,
-    llvm-dev [!alpha !hppa !hurd-i386 !ia64 !kfreebsd-amd64 !kfreebsd-i386 !m68k !powerpc !riscv64 !sh4 !sparc64 !x32],
+    llvm-dev [amd64 arm64 mips64el ppc64 ppc64el s390x],
     mawk,
     perl (>= 5.8),
     pkg-config,
-    python3-dev,
+    python3-dev <!nopython>,
     systemtap-sdt-dev,
-    tcl-dev,
+    tcl-dev <!notcl>,
     uuid-dev,
     xsltproc,
     zlib1g-dev,
     libcurl4-openssl-dev,
-    curl | libz-dev,
-    libzstd-dev
+    curl | libz-dev
 Debtransform-Release: 1
 Debtransform-Files-Tar: debian.tar.gz
