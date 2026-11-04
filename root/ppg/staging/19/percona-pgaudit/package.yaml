@@ -1,0 +1,10 @@
+qa:
+  - name: pg_audit
+    pipeline: component-generic-parallel
+    parameters:
+      PRODUCT: pg_audit
+      COMPONENT_REF: "%!{PGAUDIT_VERSION}"
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      TEST_BRANCH: main
