@@ -1379,6 +1379,12 @@ echo "=== Verification: bundled libcurl audit ==="
 # version string and define the CURL_OPENSSL_4 symbol version, which only
 # the Percona build has on EL (the distro libcurl is unversioned). Bytes
 # are not compared: patch_rpath rewrites the bundled copies' RUNPATH.
+# The version is matched on NUL-terminated strings, not raw bytes: the
+# literals libcurl keeps by pointer (curl_version_info's "8.23.0", often
+# tail-merged into "libcurl/8.23.0", and dict.c's "CLIENT libcurl 8.23.0")
+# are always contiguous, whereas the "libcurl/8.23.0" that curl_version()
+# copies into a buffer is emitted as immediate stores by GCC 11 on x86_64
+# (EL9) and never appears as one string in the file.
 LIBCURL_VER=$(rpm -q --qf '%{version}' libcurl) \
     || { echo "FATAL: libcurl RPM not installed in the chroot" >&2; exit 1; }
 if ! printf '%s\n' 8.23.0 "$LIBCURL_VER" | sort -V -C; then
@@ -1388,7 +1394,7 @@ fi
 LIBCURL_BUNDLED=$(find /opt/percona-* -name 'libcurl.so.4*' -type f)
 [ -n "$LIBCURL_BUNDLED" ] || { echo "FATAL: no libcurl.so.4 bundled in the artifact" >&2; exit 1; }
 for f in $LIBCURL_BUNDLED; do
-    if ! grep -aq "libcurl/${LIBCURL_VER}" "$f"; then
+    if ! strings -a "$f" | grep -qE "(^|libcurl[/ ])${LIBCURL_VER//./\\.}\$"; then
         echo "FATAL: $f is not libcurl ${LIBCURL_VER}" >&2
         exit 1
     fi
