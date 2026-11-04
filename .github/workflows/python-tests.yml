@@ -16,6 +16,7 @@ on:
       - 'tests/**'
       - 'root/**/obs/_service'
       - 'root/**/macros.yaml'
+      - 'root/**/debian/rules'
       - 'requirements.txt'
       - 'pyrightconfig.json'
       - '.github/workflows/python-tests.yml'
