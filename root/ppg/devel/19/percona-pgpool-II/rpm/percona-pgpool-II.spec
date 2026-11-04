@@ -228,7 +228,7 @@ systemd-tmpfiles --create %{_tmpfilesdir}/%{name}.conf 2>/dev/null || :
 %{_libdir}/libpgpoolpcp.so.*
 %{_tmpfilesdir}/%{name}.conf
 %ghost %dir /run/pgpool
-%ghost %dir %{_sysconfdir}/sudoers.d
+%dir %attr(0750,root,root) %{_sysconfdir}/sudoers.d
 %{_sysconfdir}/sudoers.d/pgpool
 %{_unitdir}/pgpool.service
 %attr(0755,postgres,postgres) %dir %{_varlogdir}
