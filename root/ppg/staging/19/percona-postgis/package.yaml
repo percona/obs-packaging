@@ -1,0 +1,10 @@
+qa:
+  - name: postgis
+    pipeline: component-generic-parallel
+    parameters:
+      PRODUCT: postgis
+      COMPONENT_REF: "%!{POSTGIS_VERSION}"
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      TEST_BRANCH: main
