@@ -16,6 +16,9 @@ override_dh_dwz:
 override_dh_compress:
 override_dh_shlibdeps:
 
+override_dh_builddeb:
+	dh_builddeb -- -Zgzip
+
 override_dh_auto_build:
 	tar -xzf $(OBS_SOURCES_DIR)/vendor-server.tar.gz   -C server/
 	tar -xzf $(OBS_SOURCES_DIR)/vendor-etcdctl.tar.gz  -C etcdctl/

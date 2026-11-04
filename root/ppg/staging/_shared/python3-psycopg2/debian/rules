@@ -13,7 +13,7 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 %:
 	dh $@ --with python3,sphinxdoc --buildsystem=pybuild
 
-override_dh_buildde:
+override_dh_builddeb:
 	dh_builddeb -- -Zgzip
 
 override_dh_auto_build-indep:
