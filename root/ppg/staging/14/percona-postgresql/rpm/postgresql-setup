@@ -2,15 +2,15 @@
 #
 # postgresql-setup	Initialization and upgrade operations for PostgreSQL
 
-# PGVERSION is the full package version, e.g., 17.0
+# PGVERSION is the full package version, e.g., 14.0
 # Note: the specfile inserts the correct value during package build
 PGVERSION=xxx
-# PGMAJORVERSION is major version, e.g., 17 (this should match PG_VERSION)
+# PGMAJORVERSION is major version, e.g., 14 (this should match PG_VERSION)
 PGMAJORVERSION=`echo "$PGVERSION" | sed 's/^\([0-9]*\.[0-9]*\).*$/\1/'`
 # PGENGINE is the directory containing the postgres executable file.
 # Note: the specfile inserts the correct value during package build
 PGENGINE=xxxx
-# PREVMAJORVERSION is the previous major version, e.g., 15, for upgrades
+# PREVMAJORVERSION is the previous major version, e.g., 13, for upgrades
 PREVMAJORVERSION=xxx
 # PREVPGENGINE is the directory containing the previous PostgreSQL version executable
 PREVPGENGINE=/usr/pgsql-$PREVMAJORVERSION/bin
@@ -136,7 +136,7 @@ perform_initdb(){
     fi
 
     # Initialize the database
-    initdbcmd="$PGENGINE/initdb --pgdata='$PGDATA' -A scram-sha-256 --auth-local=peer"
+    initdbcmd="$PGENGINE/initdb --pgdata='$PGDATA' -A scram-sha-256 --auth-local=peer --pwfile /usr/pgsql-14/share/postgresql.conf.sample"
     initdbcmd+=" $PGSETUP_INITDB_OPTIONS"
 
     $SU -l postgres -c "$initdbcmd" >> "$PGLOG" 2>&1 < /dev/null

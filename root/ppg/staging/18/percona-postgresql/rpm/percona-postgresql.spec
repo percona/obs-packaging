@@ -50,8 +50,8 @@
 
 
 #Filter out some Perl "dependencies"
-%global __requires_exclude ^perl\\((PostgresVersion|PostgresNode|RecursiveCopy|SimpleTee|TestLib|PostgreSQL::Test::(BackgroundPsql))
-%global __provides_exclude ^perl\\((PostgresVersion|PostgresNode|RecursiveCopy|SimpleTee|TestLib|PostgreSQL::Test::(BackgroundPsql))
+%global __requires_exclude ^perl\\((PostgresVersion|PostgresNode|RecursiveCopy|SimpleTee|TestLib|PostgreSQL::Test::BackgroundPsql)
+%global __provides_exclude ^perl\\((PostgresVersion|PostgresNode|RecursiveCopy|SimpleTee|TestLib|PostgreSQL::Test::BackgroundPsql)
 
 
 Summary:        PostgreSQL client programs and libraries
@@ -66,19 +66,21 @@ Vendor:         Percona, LLC
 Source0:        percona-postgresql-%{version}.tar.gz
 Source4:        %{sname}-%{pgmajorversion}-Makefile.regress
 Source5:        %{sname}-%{pgmajorversion}-pg_config.h
-%if %{pgmajorversion} < 18
-Source6:        %{sname}-%{pgmajorversion}-README-systemd.rpm-dist
-%else
 Source6:        %{sname}-%{pgmajorversion}-README.rpm-dist
-%endif
 Source7:        %{sname}-%{pgmajorversion}-ecpg_config.h
 Source9:        %{sname}-%{pgmajorversion}-libs.conf
 Source12:       https://www.postgresql.org/files/documentation/pdf/%{pgpackageversion}/%{sname}-%{pgpackageversion}-A4.pdf
+%if 0%{?suse_version}
+Source14:	%{sname}-%{pgmajorversion}.pam.suse
+%else
 Source14:	%{sname}-%{pgmajorversion}.pam
+%endif
 Source17:	%{sname}-%{pgmajorversion}-setup
 Source10:       %{sname}-%{pgmajorversion}-check-db-dir
 Source18:       %{sname}-%{pgmajorversion}.service
 Source19:       %{sname}-%{pgmajorversion}-tmpfiles.d
+Source20:	%{sname}-%{pgmajorversion}-sysusers.conf
+Source21:	%{sname}-%{pgmajorversion}-sshd-selinux.te
 
 Patch1:         %{sname}-%{pgmajorversion}-rpm-pgsql.patch
 Patch3:         %{sname}-%{pgmajorversion}-conf.patch
@@ -89,7 +91,7 @@ Patch6:         %{sname}-%{pgmajorversion}-perl-rpath.patch
 BuildRequires:  update-alternatives
 %endif
 
-BuildRequires:  perl glibc-devel bison flex >= 2.5.31
+BuildRequires:  perl glibc-devel bison >= 3.0.4 flex >= 2.6.1
 BuildRequires:  gcc-c++
 %if 0%{?gts_version}
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
@@ -206,6 +208,11 @@ BuildRequires:	libselinux-devel >= 2.9
 %if 0%{?rhel} || 0%{?fedora}
 BuildRequires:	selinux-policy >= 3.4.3
 %endif
+# EL-10 and Fedora >= 44 ship a local policy module to work around a
+# search/read denial for sshd_session_t on postgresql_db_t (see %post server):
+%if 0%{?rhel} >= 10 || 0%{?fedora} >= 44
+BuildRequires:	selinux-policy-devel
+%endif
 %endif
 
 %if %libnuma
@@ -278,6 +285,42 @@ If you want to manipulate a PostgreSQL database on a local or remote PostgreSQL
 server, you need this package. You also need to install this package
 if you're installing the postgresql%{pgmajorversion}-server package.
 
+%package ecpg-libs
+Summary:	Run-time libraries for ECPG programs
+
+%if 0%{?suse_version} == 1500
+Requires:	libopenssl3
+%endif
+%if 0%{?suse_version} == 1600
+Requires:	libopenssl3
+%endif
+%if 0%{?fedora} >= 41 || 0%{?rhel} >= 8 || 0%{?amzn}
+Requires:	openssl-libs >= 1.1.1k
+%endif
+
+%description ecpg-libs
+The postgresql%{pgmajorversion}-ecpg-libs is used by programs built with ECPG
+(Embedded PostgreSQL for C).
+
+%package ecpg-devel
+Summary:	Development files for ECPG (Embedded PostgreSQL for C)
+Requires:	%{name}-ecpg-libs%{?_isa} = %{version}-%{release}
+
+%if 0%{?suse_version} == 1500
+Requires:	libopenssl3
+%endif
+%if 0%{?suse_version} == 1600
+Requires:	libopenssl3
+%endif
+%if 0%{?fedora} >= 41 || 0%{?rhel} >= 8 || 0%{?amzn}
+Requires:	openssl-libs >= 1.1.1k
+%endif
+
+%description ecpg-devel
+The postgresql%{pgmajorversion}-ecpg-devel package contains the necessary
+files to build ECPG (Embedded PostgreSQL for C) programs. It includes the
+development libraries and the preprocessor program ecpg.
+
 %package libs
 Summary:        The shared libraries required for any PostgreSQL clients
 Provides:       postgresql-libs = %{pgmajorversion} libpq5 >= 10.0
@@ -308,6 +351,7 @@ PostgreSQL server.
 Summary:        The programs needed to create and run a PostgreSQL server
 Requires:       %{name} >= %{version}-%{release}
 Requires:       %{name}-libs >= %{version}-%{release}
+Requires:	util-linux
 Requires(pre):  /usr/sbin/useradd /usr/sbin/groupadd
 %if %liburing
 %if 0%{?fedora} || 0%{?rhel}
@@ -342,6 +386,21 @@ PostgreSQL is an advanced Object-Relational database management system (DBMS).
 The postgresql%{pgmajorversion}-server package contains the programs needed to create
 and run a PostgreSQL server, which will in turn allow you to create
 and maintain PostgreSQL databases.
+
+%package static
+Summary:        Statically linked PostgreSQL libraries
+Requires:        %{name}-devel >= %{version}-%{release}
+Provides:        %{name}-static = %{version}-%{release}
+Provides:        %{name}-static >= %{version}-%{release}
+Provides:        %{vname}-static = %{epoch}:%{version}-%{release}
+Provides:        %{sname}-static = %{epoch}:%{version}-%{release}
+Obsoletes:       %{sname}-static <= %{epoch}:%{version}-%{release}
+Obsoletes:       %{vname}-static <= %{epoch}:%{version}-%{release}
+Epoch:          1
+
+%description static
+Statically linked PostgreSQL libraries that do not have dynamically linked
+counterparts.
 
 %package docs
 Summary:        Extra documentation for PostgreSQL
@@ -396,12 +455,12 @@ Requires:	libicu-devel
 
 %if %llvm
 Requires:	%{name} >= %{version}-%{release}
-Requires:	llvm-devel >= 17.0 clang-devel >= 17.0
+Requires:	llvm-devel >= 19 clang-devel >= 19
 %endif
 
 %if %enabletaptests
 %if 0%{?rhel}
-Requires:       perl-Test-Simple
+Requires:       perl-Test-Simple perl-IPC-Run
 BuildRequires:  perl-Test-Simple perl-IPC-Run perl-Time-HiRes
 %endif
 %endif
@@ -417,8 +476,7 @@ Epoch:          1
 %description devel
 The postgresql%{pgmajorversion}-devel package contains the header files and libraries
 needed to compile C or C++ applications which will directly interact
-with a PostgreSQL database management server. It also contains the ecpg
-Embedded C Postgres preprocessor. You need to install this package if you want
+with a PostgreSQL database management server. You need to install this package if you want
 to develop applications which will interact with a PostgreSQL server.
 
 %if %llvm
@@ -488,6 +546,7 @@ which is an extension to the PostgreSQL database server.
 Install this if you want to write database functions in Perl.
 %endif
 
+%if %plpython3
 %package plpython3
 Summary:        The Python3 procedural language for PostgreSQL
 Requires:       %{name} >= %{version}-%{release}
@@ -509,6 +568,7 @@ Epoch:          1
 The postgresql%{pgmajorversion}-plpython3 package contains the PL/Python3 procedural language,
 which is an extension to the PostgreSQL database server.
 Install this if you want to write database functions in Python 3.
+%endif
 
 %if %pltcl
 %package pltcl
@@ -691,8 +751,8 @@ sed "s|C=\`pwd\`;|C=%{pgbaseinstdir}/lib/tutorial;|" < src/tutorial/Makefile > s
 %{__make} %{?_smp_mflags} -C src/tutorial NO_PGXS=1 all
 %{__rm} -f src/tutorial/GNUmakefile
 
-%{__mkdir} -p %{buildroot}%{pgbaseinstdir}/share/extensions/
 MAKELEVEL=0 %{__make} %{?_smp_mflags} all
+%{__make} %{?_smp_mflags} -C doc all
 %{__make} %{?_smp_mflags} -C contrib all
 %if %uuid
 %{__make} %{?_smp_mflags} -C contrib/uuid-ossp all
@@ -811,12 +871,26 @@ touch -r %{SOURCE10} %{sname}-%{pgmajorversion}-check-db-dir
 %{__install} -d -m 700 %{buildroot}/var/lib/pgsql/%{pgmajorversion}/backups
 
 # Create the multiple PostgreSQL version startup directory
-%{__install} -d -m 700 %{buildroot}/etc/sysconfig/pgsql/%{pgmajorversion}
+%{__install} -d -m 700 %{buildroot}/etc/sysconfig/pgsql/
 
 # Install linker conf file under postgresql installation directory.
 # We will install the latest version via alternatives.
 %{__install} -d -m 755 %{buildroot}%{pgbaseinstdir}/share/
 %{__install} -m 700 %{SOURCE9} %{buildroot}%{pgbaseinstdir}/share/
+
+# Install sysusers.d config file to allow rpm to create users/groups automatically.
+%{__install} -m 0644 -D %{SOURCE20} %{buildroot}%{_sysusersdir}/%{sname}%{pgpackageversion}.conf
+
+%if %selinux && (0%{?rhel} >= 10 || 0%{?fedora} >= 44)
+# Build and install the local SELinux policy module that lets sshd_session_t
+# search/read the postgres user's home dir (postgresql_db_t), needed for
+# ~/.ssh/authorized_keys pubkey auth to work under EL-10/Fedora 44+'s
+# SELinux policy.
+checkmodule -M -m -o postgresql%{pgmajorversion}_sshd_fix.mod %{SOURCE21}
+semodule_package -o postgresql%{pgmajorversion}_sshd_fix.pp -m postgresql%{pgmajorversion}_sshd_fix.mod
+%{__install} -d -m 755 %{buildroot}%{_datadir}/selinux/packages
+%{__install} -m 644 postgresql%{pgmajorversion}_sshd_fix.pp %{buildroot}%{_datadir}/selinux/packages/
+%endif
 
 %if %test
 	# tests. There are many files included here that are unnecessary,
@@ -915,27 +989,26 @@ done
 
 cat pg_amcheck-%{pgmajorversion}.lang > pg_contrib.lst
 cat libpq5-%{pgmajorversion}.lang > pg_libpq5.lst
-cat pg_config-%{pgmajorversion}.lang ecpg-%{pgmajorversion}.lang ecpglib6-%{pgmajorversion}.lang > pg_devel.lst
+cat pg_config-%{pgmajorversion}.lang > pg_devel.lst
+cat ecpg-%{pgmajorversion}.lang ecpglib6-%{pgmajorversion}.lang > ecpg.lst
+
+# find_lang lists only the .mo files; own the locale directory tree, too.
+# -libs is the base of the dependency chain. -ecpg-libs does not require it.
+find %{buildroot}%{pgbaseinstdir}/share/locale -type d | sed "s|^%{buildroot}|%%dir |" > pg_localedirs.lst
+cat pg_localedirs.lst >> pg_libpq5.lst
+cat pg_localedirs.lst >> ecpg.lst
 cat initdb-%{pgmajorversion}.lang pg_ctl-%{pgmajorversion}.lang psql-%{pgmajorversion}.lang pg_dump-%{pgmajorversion}.lang pg_basebackup-%{pgmajorversion}.lang pgscripts-%{pgmajorversion}.lang pg_combinebackup-%{pgmajorversion}.lang pg_walsummary-%{pgmajorversion}.lang > pg_main.lst
 cat postgres-%{pgmajorversion}.lang pg_resetwal-%{pgmajorversion}.lang pg_checksums-%{pgmajorversion}.lang pg_verifybackup-%{pgmajorversion}.lang pg_controldata-%{pgmajorversion}.lang plpgsql-%{pgmajorversion}.lang pg_test_timing-%{pgmajorversion}.lang pg_test_fsync-%{pgmajorversion}.lang pg_archivecleanup-%{pgmajorversion}.lang pg_waldump-%{pgmajorversion}.lang pg_rewind-%{pgmajorversion}.lang pg_upgrade-%{pgmajorversion}.lang > pg_server.lst
 %endif
 
 %pre server
-groupadd -g 26 -o -r postgres >/dev/null 2>&1 || :
-useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
-        -c "PostgreSQL Server" -u 26 postgres >/dev/null 2>&1 || :
+%sysusers_create_package %{name} %SOURCE20
 
 %post server
 /sbin/ldconfig
 if [ $1 -eq 1 ] ; then
    /bin/systemctl daemon-reload >/dev/null 2>&1 || :
-   %if 0%{?suse_version}
-   %if 0%{?suse_version} >= 1315
-   %service_add_pre postgresql-%{pgpackageversion}.service
-   %endif
-   %else
    %systemd_post %{sname}-%{pgpackageversion}.service
-   %endif
 fi
 
 # postgres' .bash_profile.
@@ -951,6 +1024,10 @@ export PGDATA
 chown postgres: /var/lib/pgsql/.bash_profile
 chmod 700 /var/lib/pgsql/.bash_profile
 
+%if %selinux && (0%{?rhel} >= 10 || 0%{?fedora} >= 44)
+%{_sbindir}/selinuxenabled 2>/dev/null && \
+        %{_sbindir}/semodule -i %{_datadir}/selinux/packages/postgresql%{pgmajorversion}_sshd_fix.pp >/dev/null 2>&1 || :
+%endif
 
 %preun server
 if [ $1 -eq 0 ] ; then
@@ -966,6 +1043,14 @@ if [ $1 -ge 1 ] ; then
 	# Package upgrade, not uninstall
 	/bin/systemctl try-restart %{sname}-%{pgmajorversion}.service >/dev/null 2>&1 || :
 fi
+
+%if %selinux && (0%{?rhel} >= 10 || 0%{?fedora} >= 44)
+if [ $1 -eq 0 ] ; then
+        # Package removal, not upgrade
+        %{_sbindir}/selinuxenabled 2>/dev/null && \
+                %{_sbindir}/semodule -r postgresql%{pgmajorversion}_sshd_fix >/dev/null 2>&1 || :
+fi
+%endif
 
 # Create alternatives entries for common binaries and man files
 %post
@@ -1033,6 +1118,7 @@ if [ "$1" -eq 0 ]
 	%{_sbindir}/update-alternatives --remove pgsql-pg_restore	%{pgbaseinstdir}/bin/pg_restore
 	%{_sbindir}/update-alternatives --remove pgsql-pg_restoreman	%{pgbaseinstdir}/share/man/man1/pg_restore.1
 	%{_sbindir}/update-alternatives --remove pgsql-pg_walsummary	%{pgbaseinstdir}/bin/pg_walsummary
+        %{_sbindir}/update-alternatives --remove pgsql-pg_walsummaryman %{pgbaseinstdir}/share/man/man1/pg_walsummary.1
 	%{_sbindir}/update-alternatives --remove pgsql-psqlman		%{pgbaseinstdir}/share/man/man1/psql.1
 	%{_sbindir}/update-alternatives --remove pgsql-reindexdb	%{pgbaseinstdir}/bin/reindexdb
 	%{_sbindir}/update-alternatives --remove pgsql-reindexdbman	%{pgbaseinstdir}/share/man/man1/reindexdb.1
@@ -1107,7 +1193,9 @@ fi
 %{pgbaseinstdir}/share/man/man1/pg_dump.*
 %{pgbaseinstdir}/share/man/man1/pg_dumpall.*
 %{pgbaseinstdir}/share/man/man1/pg_isready.*
+%{pgbaseinstdir}/share/man/man1/pg_receivewal.*
 %{pgbaseinstdir}/share/man/man1/pg_restore.*
+%{pgbaseinstdir}/share/man/man1/pg_waldump.*
 %{pgbaseinstdir}/share/man/man1/pg_walsummary.*
 %{pgbaseinstdir}/share/man/man1/psql.*
 %{pgbaseinstdir}/share/man/man1/reindexdb.*
@@ -1169,7 +1257,9 @@ fi
 %{pgbaseinstdir}/lib/moddatetime.so
 %{pgbaseinstdir}/lib/pageinspect.so
 %{pgbaseinstdir}/lib/passwordcheck.so
+%if %ssl
 %{pgbaseinstdir}/lib/pgcrypto.so
+%endif
 %{pgbaseinstdir}/lib/pgrowlocks.so
 %{pgbaseinstdir}/lib/pgstattuple.so
 %{pgbaseinstdir}/lib/pg_buffercache.so
@@ -1238,7 +1328,9 @@ fi
 %{pgbaseinstdir}/share/extension/pg_trgm*
 %{pgbaseinstdir}/share/extension/pg_visibility*
 %{pgbaseinstdir}/share/extension/pg_walinspect*
+%if %ssl
 %{pgbaseinstdir}/share/extension/pgcrypto*
+%endif
 %{pgbaseinstdir}/share/extension/pgrowlocks*
 %{pgbaseinstdir}/share/extension/pgstattuple*
 %{pgbaseinstdir}/share/extension/postgres_fdw*
@@ -1267,13 +1359,39 @@ fi
 %{pgbaseinstdir}/share/man/man1/pg_recvlogical.1
 %{pgbaseinstdir}/share/man/man1/vacuumlo.1
 
+%files ecpg-libs -f ecpg.lst
+%defattr(-,root,root)
+%dir %{pgbaseinstdir}
+%dir %{pgbaseinstdir}/lib
+%dir %{pgbaseinstdir}/share
+%dir %{pgbaseinstdir}/share/man
+%dir %{pgbaseinstdir}/share/man/man1
+%{pgbaseinstdir}/lib/libecpg.so*
+%{pgbaseinstdir}/lib/libecpg_compat.so*
+%{pgbaseinstdir}/lib/libecpg.a
+%{pgbaseinstdir}/lib/libecpg_compat.a
+%{pgbaseinstdir}/lib/libpgtypes.a
+%{pgbaseinstdir}/lib/libpgtypes.so*
+%{pgbaseinstdir}/share/man/man1/ecpg.*
+
+%files ecpg-devel
+%defattr(-,root,root)
+%dir %{pgbaseinstdir}/bin
+%{pgbaseinstdir}/bin/ecpg
+%dir %{pgbaseinstdir}/include
+%{pgbaseinstdir}/include/informix
+%{pgbaseinstdir}/include/pgtypes*h
+%{pgbaseinstdir}/include/ecpg*.h
+%{pgbaseinstdir}/include/sql3types.h
+%{pgbaseinstdir}/include/sqlca.h
+%{pgbaseinstdir}/include/sqlda*.h
+%dir %{pgbaseinstdir}/lib/pkgconfig
+%{pgbaseinstdir}/lib/pkgconfig/libecpg*.pc
+%{pgbaseinstdir}/lib/pkgconfig/libpgtypes.pc
+
 %files libs -f pg_libpq5.lst
 %defattr(-,root,root)
-%dir %{pgbaseinstdir}/share/locale
 %{pgbaseinstdir}/lib/libpq.so.*
-%{pgbaseinstdir}/lib/libecpg.so*
-%{pgbaseinstdir}/lib/libpgtypes.so.*
-%{pgbaseinstdir}/lib/libecpg_compat.so.*
 %{pgbaseinstdir}/lib/libpqwalreceiver.so
 %config(noreplace) %attr (644,root,root) %{pgbaseinstdir}/share/%{sname}-%{pgmajorversion}-libs.conf
 
@@ -1286,8 +1404,12 @@ fi
 %{pgbaseinstdir}/bin/%{sname}-%{pgmajorversion}-setup
 %{_bindir}/%{sname}-%{pgmajorversion}-setup
 %{pgbaseinstdir}/bin/%{sname}-%{pgmajorversion}-check-db-dir
+%{_sysusersdir}/%{sname}%{pgpackageversion}.conf
 %{_tmpfilesdir}/%{sname}-%{pgmajorversion}.conf
 %{_unitdir}/%{sname}-%{pgmajorversion}.service
+%if %selinux && (0%{?rhel} >= 10 || 0%{?fedora} >= 44)
+%{_datadir}/selinux/packages/postgresql%{pgmajorversion}_sshd_fix.pp
+%endif
 %if %pam
 %config(noreplace) /etc/pam.d/%{sname}
 %endif
@@ -1316,13 +1438,11 @@ fi
 %{pgbaseinstdir}/share/man/man1/pg_controldata.*
 %{pgbaseinstdir}/share/man/man1/pg_ctl.*
 %{pgbaseinstdir}/share/man/man1/pg_resetwal.*
-%{pgbaseinstdir}/share/man/man1/pg_receivewal.*
 %{pgbaseinstdir}/share/man/man1/pg_rewind.1
 %{pgbaseinstdir}/share/man/man1/pg_test_fsync.1
 %{pgbaseinstdir}/share/man/man1/pg_test_timing.1
 %{pgbaseinstdir}/share/man/man1/pg_upgrade.1
 %{pgbaseinstdir}/share/man/man1/pg_verifybackup.*
-%{pgbaseinstdir}/share/man/man1/pg_waldump.1
 %{pgbaseinstdir}/share/man/man1/postgres.*
 %{pgbaseinstdir}/share/postgres.bki
 %{pgbaseinstdir}/share/system_constraints.sql
@@ -1360,33 +1480,23 @@ fi
 
 %files devel -f pg_devel.lst
 %defattr(-,root,root)
-%dir %{pgbaseinstdir}
-%dir %{pgbaseinstdir}/bin
 %dir %{pgbaseinstdir}/include
-%dir %{pgbaseinstdir}/lib
-%dir %{pgbaseinstdir}/lib/pgxs
-%dir %{pgbaseinstdir}/lib/pkgconfig
-%dir %{pgbaseinstdir}/share/man
-%dir %{pgbaseinstdir}/share/man/man1
-%{pgbaseinstdir}/include/*
-%{pgbaseinstdir}/bin/ecpg
+%{pgbaseinstdir}/include/libpq*.h
+%{pgbaseinstdir}/include/pg_config*.h
+%{pgbaseinstdir}/include/postgres_ext.h
+%{pgbaseinstdir}/include/internal
+%{pgbaseinstdir}/include/libpq
+%{pgbaseinstdir}/include/server
 %{pgbaseinstdir}/lib/libpq.so
-%{pgbaseinstdir}/lib/libecpg.so
 %{pgbaseinstdir}/lib/libpq.a
 %{pgbaseinstdir}/lib/libpq-oauth.a
-%{pgbaseinstdir}/lib/libecpg.a
-%{pgbaseinstdir}/lib/libecpg_compat.so
-%{pgbaseinstdir}/lib/libecpg_compat.a
 %{pgbaseinstdir}/lib/libpgcommon.a
 %{pgbaseinstdir}/lib/libpgcommon_shlib.a
 %{pgbaseinstdir}/lib/libpgport.a
 %{pgbaseinstdir}/lib/libpgport_shlib.a
-%{pgbaseinstdir}/lib/libpgtypes.so
-%{pgbaseinstdir}/lib/libpgtypes.a
-%{pgbaseinstdir}/lib/pgxs/*
-%{pgbaseinstdir}/lib/pkgconfig/*
-%{pgbaseinstdir}/share/man/man1/ecpg.*
-%{pgbaseinstdir}/lib/libpgfeutils.a
+%{pgbaseinstdir}/lib/pgxs
+%dir %{pgbaseinstdir}/lib/pkgconfig
+%{pgbaseinstdir}/lib/pkgconfig/libpq.pc
 
 %if %llvm
 %files llvmjit
@@ -1416,11 +1526,15 @@ fi
 
 %if %plpython3
 %files plpython3 -f pg_plpython3.lst
+%defattr(-,root,root)
 %dir %{pgbaseinstdir}/share/locale
 %{pgbaseinstdir}/share/extension/plpython3*
 %{pgbaseinstdir}/lib/plpython3.so
 %{pgbaseinstdir}/share/extension/*_plpython3u*
 %endif
+
+%files static
+%{pgbaseinstdir}/lib/libpgfeutils.a
 
 %if %test
 %files test

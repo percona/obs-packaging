@@ -90,6 +90,7 @@ Source30:       percona-postgresql-rpmlintrc
 %if %sysuserd
 Source40:        %{sname}-sysusers.conf
 %endif
+Source21:        %{sname}-%{pgmajorversion}-sshd-selinux.te
 
 Patch1:         %{sname}-rpm-pgsql.patch
 Patch3:         %{sname}-conf.patch
@@ -132,7 +133,7 @@ Requires:	libzstd >= 1.4.0
 %endif
 
 # This dependency is needed for Source 16:
-%if 0%{?fedora} || 0%{?rhel} > 7
+%if 0%{?fedora} || 0%{?rhel}
 BuildRequires:  perl-generators
 %endif
 
@@ -186,6 +187,7 @@ BuildRequires:  perl-ExtUtils-Embed
 %endif
 %endif
 
+%if %plpython3
 # PERCONA: build plpython3 against the parallel python3.12 stack on EL8 AND
 # EL9 so the embedded interpreter matches the percona python3.12-* runtime
 # packages (and the python 3.12 stdlib bundled in the binary tarball).
@@ -195,6 +197,7 @@ BuildRequires:  perl-ExtUtils-Embed
 BuildRequires:  python3.12-devel
 %else
 BuildRequires:	python3-devel
+%endif
 %endif
 
 %if %pltcl
@@ -216,6 +219,11 @@ BuildRequires:  selinux-policy >= 3.9.13
 # RHEL/Fedora has selinux-policy:
 %if 0%{?rhel} || 0%{?fedora}
 BuildRequires:  selinux-policy >= 3.9.13
+%endif
+# EL-10 and Fedora >= 44 ship a local policy module to work around a
+# search/read denial for sshd_session_t on postgresql_db_t (see %post server):
+%if 0%{?rhel} >= 10 || 0%{?fedora} >= 44
+BuildRequires:        selinux-policy-devel
 %endif
 %endif
 
@@ -460,6 +468,21 @@ needed to compile C or C++ applications which will directly interact
 with a PostgreSQL database management server. It also contains the ecpg
 Embedded C Postgres preprocessor. You need to install this package if you want
 to develop applications which will interact with a PostgreSQL server.
+
+%package static
+Summary:        Statically linked PostgreSQL libraries
+Requires:        %{name}-devel >= %{version}-%{release}
+Provides:        %{name}-static = %{version}-%{release}
+Provides:        %{name}-static >= %{version}-%{release}
+Provides:        %{vname}-static = %{epoch}:%{version}-%{release}
+Provides:        %{sname}-static = %{epoch}:%{version}-%{release}
+Obsoletes:       %{sname}-static <= %{epoch}:%{version}-%{release}
+Obsoletes:       %{vname}-static <= %{epoch}:%{version}-%{release}
+Epoch:          1
+
+%description static
+Statically linked PostgreSQL libraries that do not have dynamically linked
+counterparts.
 
 %if %llvm
 %package llvmjit
@@ -863,7 +886,18 @@ install -D -m 0644 %{SOURCE20} %{buildroot}%{_rpmmacrodir}/macros.percona-postgr
 
 %if %sysuserd
 # Install sysusers.d config file to allow rpm to create users/groups automatically.
-%{__install} -m 0644 -D %{SOURCE40} %{buildroot}%{_sysusersdir}/%{sname}%{pgpackageversion}-pgdg.conf
+%{__install} -m 0644 -D %{SOURCE40} %{buildroot}%{_sysusersdir}/%{sname}%{pgpackageversion}.conf
+%endif
+
+%if %selinux && (0%{?rhel} >= 10 || 0%{?fedora} >= 44)
+# Build and install the local SELinux policy module that lets sshd_session_t
+# search/read the postgres user's home dir (postgresql_db_t), needed for
+# ~/.ssh/authorized_keys pubkey auth to work under EL-10/Fedora 44+'s
+# SELinux policy.
+checkmodule -M -m -o postgresql%{pgmajorversion}_sshd_fix.mod %{SOURCE21}
+semodule_package -o postgresql%{pgmajorversion}_sshd_fix.pp -m postgresql%{pgmajorversion}_sshd_fix.mod
+%{__install} -d -m 755 %{buildroot}%{_datadir}/selinux/packages
+%{__install} -m 644 postgresql%{pgmajorversion}_sshd_fix.pp %{buildroot}%{_datadir}/selinux/packages/
 %endif
 
 %if %test
@@ -956,6 +990,11 @@ cat pltcl-%{pgmajorversion}.lang > pg_pltcl.lst
 
 cat pg_amcheck-%{pgmajorversion}.lang > pg_contrib.lst
 cat libpq5-%{pgmajorversion}.lang > pg_libpq5.lst
+# find_lang lists only the .mo files; own the locale directory tree, too.
+# -libs is the base of the dependency chain (ecpg's runtime libs live there
+# too, but its own .mo files are shipped in -devel; -devel Requires -libs).
+find %{buildroot}%{pgbaseinstdir}/share/locale -type d | sed "s|^%{buildroot}|%%dir |" > pg_localedirs.lst
+cat pg_localedirs.lst >> pg_libpq5.lst
 cat pg_config-%{pgmajorversion}.lang ecpg-%{pgmajorversion}.lang ecpglib6-%{pgmajorversion}.lang > pg_devel.lst
 cat initdb-%{pgmajorversion}.lang pg_ctl-%{pgmajorversion}.lang psql-%{pgmajorversion}.lang pg_dump-%{pgmajorversion}.lang pg_basebackup-%{pgmajorversion}.lang pgscripts-%{pgmajorversion}.lang pg_combinebackup-%{pgmajorversion}.lang pg_walsummary-%{pgmajorversion}.lang > pg_main.lst
 cat postgres-%{pgmajorversion}.lang pg_resetwal-%{pgmajorversion}.lang pg_checksums-%{pgmajorversion}.lang pg_verifybackup-%{pgmajorversion}.lang pg_controldata-%{pgmajorversion}.lang plpgsql-%{pgmajorversion}.lang pg_test_timing-%{pgmajorversion}.lang pg_test_fsync-%{pgmajorversion}.lang pg_archivecleanup-%{pgmajorversion}.lang pg_waldump-%{pgmajorversion}.lang pg_rewind-%{pgmajorversion}.lang pg_upgrade-%{pgmajorversion}.lang > pg_server.lst
@@ -965,7 +1004,7 @@ cat postgres-%{pgmajorversion}.lang pg_resetwal-%{pgmajorversion}.lang pg_checks
 %if %sysuserd
 # We need this user to be created ASAP so that we can set up
 # ownership of some directories:
-%sysusers_create_package %{name} %SOURCE20
+%sysusers_create_package %{name} %SOURCE40
 %else
 # This is replaced by sysusers.d in recent OSes:
 groupadd -g 26 -o -r postgres >/dev/null 2>&1 || :
@@ -993,6 +1032,11 @@ export PGDATA
 chown postgres: /var/lib/pgsql/.bash_profile
 chmod 700 /var/lib/pgsql/.bash_profile
 
+%if %selinux && (0%{?rhel} >= 10 || 0%{?fedora} >= 44)
+%{_sbindir}/selinuxenabled 2>/dev/null && \
+        %{_sbindir}/semodule -i %{_datadir}/selinux/packages/postgresql%{pgmajorversion}_sshd_fix.pp >/dev/null 2>&1 || :
+%endif
+
 %preun server
 if [ $1 -eq 0 ] ; then
 	# Package removal, not upgrade
@@ -1007,6 +1051,14 @@ if [ $1 -ge 1 ] ; then
 	# Package upgrade, not uninstall
 	/bin/systemctl try-restart %{sname}-%{pgmajorversion}.service >/dev/null 2>&1 || :
 fi
+
+%if %selinux && (0%{?rhel} >= 10 || 0%{?fedora} >= 44)
+if [ $1 -eq 0 ] ; then
+        # Package removal, not upgrade
+        %{_sbindir}/selinuxenabled 2>/dev/null && \
+                %{_sbindir}/semodule -r postgresql%{pgmajorversion}_sshd_fix >/dev/null 2>&1 || :
+fi
+%endif
 
 # Create alternatives entries for common binaries and man files
 %post
@@ -1074,6 +1126,7 @@ if [ "$1" -eq 0 ]
 	%{_sbindir}/update-alternatives --remove pgsql-pg_restore	%{pgbaseinstdir}/bin/pg_restore
 	%{_sbindir}/update-alternatives --remove pgsql-pg_restoreman	%{pgbaseinstdir}/share/man/man1/pg_restore.1
 	%{_sbindir}/update-alternatives --remove pgsql-pg_walsummary	%{pgbaseinstdir}/bin/pg_walsummary
+        %{_sbindir}/update-alternatives --remove pgsql-pg_walsummaryman %{pgbaseinstdir}/share/man/man1/pg_walsummary.1
 	%{_sbindir}/update-alternatives --remove pgsql-psqlman		%{pgbaseinstdir}/share/man/man1/psql.1
 	%{_sbindir}/update-alternatives --remove pgsql-reindexdb	%{pgbaseinstdir}/bin/reindexdb
 	%{_sbindir}/update-alternatives --remove pgsql-reindexdbman	%{pgbaseinstdir}/share/man/man1/reindexdb.1
@@ -1155,8 +1208,8 @@ fi
 %{pgbaseinstdir}/share/man/man1/psql.*
 %{pgbaseinstdir}/share/man/man1/reindexdb.*
 %{pgbaseinstdir}/share/man/man1/vacuumdb.*
-%{pgbaseinstdir}/share/man/man3/*
-%{pgbaseinstdir}/share/man/man7/*
+%{pgbaseinstdir}/share/man/man3
+%{pgbaseinstdir}/share/man/man7
 
 %files docs
 %defattr(-,root,root)
@@ -1327,10 +1380,13 @@ fi
 %{_bindir}/%{sname}-%{pgmajorversion}-setup
 %{pgbaseinstdir}/bin/%{sname}-%{pgmajorversion}-check-db-dir
 %if %sysuserd
-%{_sysusersdir}/%{sname}%{pgpackageversion}-pgdg.conf
+%{_sysusersdir}/%{sname}%{pgpackageversion}.conf
 %endif
 %{_tmpfilesdir}/%{sname}-%{pgmajorversion}.conf
 %{_unitdir}/%{sname}-%{pgmajorversion}.service
+%if %selinux && (0%{?rhel} >= 10 || 0%{?fedora} >= 44)
+%{_datadir}/selinux/packages/postgresql%{pgmajorversion}_sshd_fix.pp
+%endif
 %if %pam
 %config(noreplace) /etc/pam.d/%{sname}
 %endif
@@ -1414,7 +1470,6 @@ fi
 %{pgbaseinstdir}/lib/libpgport_shlib.a
 %{pgbaseinstdir}/lib/libpgtypes.so
 %{pgbaseinstdir}/lib/libpgtypes.a
-%{pgbaseinstdir}/lib/libpgfeutils.a
 %{pgbaseinstdir}/lib/pgxs/*
 %{pgbaseinstdir}/lib/pkgconfig/*
 %{pgbaseinstdir}/share/man/man1/ecpg.*
@@ -1454,6 +1509,9 @@ fi
 %{pgbaseinstdir}/lib/plpython3.so
 %{pgbaseinstdir}/share/extension/*_plpython3u*
 %endif
+
+%files static
+%{pgbaseinstdir}/lib/libpgfeutils.a
 
 %if %test
 %files test
