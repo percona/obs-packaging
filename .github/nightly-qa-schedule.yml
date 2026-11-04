@@ -14,5 +14,4 @@ tue: 15
 wed: 16
 thu: 17
 fri: 18
-# PG 19 (in development) is not scheduled yet; run it on demand with the
-# workflow's "major" input, or add e.g. "sun: 19" once it should run weekly.
+sat: 19
