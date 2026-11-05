@@ -1,0 +1,3 @@
+# Percona Repo and earlier OBS builds shipped this unused file (the init
+# script reads /etc/default/pgbouncer); upstream Debian has none.
+rm_conffile /etc/default/percona-pgbouncer 1:%!{PGBOUNCER_VERSION}-%!{PKG_REVISION}~
