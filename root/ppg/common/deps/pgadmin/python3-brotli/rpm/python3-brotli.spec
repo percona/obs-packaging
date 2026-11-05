@@ -20,7 +20,6 @@ URL:            https://github.com/google/brotli
 Source0:        https://files.pythonhosted.org/packages/source/b/brotli/brotli-1.2.1.tar.gz
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
-Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip

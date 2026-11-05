@@ -24,7 +24,6 @@ Packager:       Percona Development Team <https://jira.percona.com>
 # Epoch 1 so this outranks the RHEL 9 python3.12-cryptography 41 (pgAdmin 9.17
 # targets cryptography 49: CFB8 only exists in hazmat.decrepit there, and 41
 # has no decrepit at all)
-Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip
@@ -34,7 +33,7 @@ BuildRequires:  python%{python3_buildversion}-setuptools
 BuildRequires:  python%{python3_buildversion}-wheel
 # PEP 517 backend (shells out to the maturin binary; pgAdmin stack package)
 BuildRequires:  %{python3_pkgprefix}-maturin
-BuildRequires:  %{python3_pkgprefix}-cffi >= 1:2.0
+BuildRequires:  %{python3_pkgprefix}-cffi >= 2.0
 # _cffi_src/build_openssl.py runs cffi.FFI() during the cargo build
 BuildRequires:  %{python3_pkgprefix}-pycparser
 BuildRequires:  cargo
@@ -43,7 +42,7 @@ BuildRequires:  gcc
 BuildRequires:  openssl-devel
 BuildRequires:  pkgconf
 
-Requires:       %{python3_pkgprefix}-cffi >= 1:2.0
+Requires:       %{python3_pkgprefix}-cffi >= 2.0
 
 %description
 cryptography includes both high level recipes and low level interfaces to

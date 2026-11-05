@@ -22,7 +22,6 @@ Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
 # Epoch 1 so this outranks the RHEL 9 python3.12-cffi 1.x (cryptography >= 49
 # requires cffi >= 2.0)
-Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip

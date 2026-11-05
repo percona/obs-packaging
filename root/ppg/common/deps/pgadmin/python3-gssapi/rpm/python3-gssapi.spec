@@ -20,7 +20,6 @@ URL:            https://github.com/pythongssapi/python-gssapi
 Source0:        https://files.pythonhosted.org/packages/source/g/gssapi/gssapi-1.11.1.tar.gz
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
-Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip

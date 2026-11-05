@@ -20,7 +20,6 @@ URL:            https://cython.org/
 Source0:        https://files.pythonhosted.org/packages/source/C/Cython/cython-3.2.4.tar.gz
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
-Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip

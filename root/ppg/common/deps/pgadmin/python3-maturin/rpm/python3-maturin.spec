@@ -21,7 +21,6 @@ Source0:        https://files.pythonhosted.org/packages/source/m/maturin/maturin
 Source1:        vendor.tar.gz
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
-Epoch:          1
 
 # The maturin binary is a plain cargo build; the PEP 517 python module in the
 # sdist is a pure-python shim that shells out to that binary, so the sdist's

@@ -21,7 +21,6 @@ Source0:        https://files.pythonhosted.org/packages/source/b/bcrypt/bcrypt-5
 Source1:        vendor.tar.gz
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
-Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip

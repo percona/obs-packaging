@@ -20,7 +20,6 @@ URL:            https://greenlet.readthedocs.io
 Source0:        https://files.pythonhosted.org/packages/source/g/greenlet/greenlet-3.5.5.tar.gz
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
-Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip

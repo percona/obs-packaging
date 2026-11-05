@@ -20,7 +20,6 @@ URL:            https://python-pillow.github.io
 Source0:        https://files.pythonhosted.org/packages/source/p/pillow/pillow-13.0.0.tar.gz
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
-Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip

@@ -20,7 +20,6 @@ URL:            https://github.com/rogdham/backports.zstd
 Source0:        https://files.pythonhosted.org/packages/source/b/backports.zstd/backports_zstd-1.7.0.tar.gz
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
-Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip

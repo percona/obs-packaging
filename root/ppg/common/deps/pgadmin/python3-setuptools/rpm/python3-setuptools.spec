@@ -25,7 +25,6 @@ Packager:       Percona Development Team <https://jira.percona.com>
 # setuptools-backed package in this project. Chosen over the newest 84.x line,
 # which removes pkg_resources (still imported by older packages) and raises the
 # Python floor to 3.10; 80.10.2 still ships pkg_resources and is >=3.9.
-Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip
@@ -34,7 +33,7 @@ BuildRequires:  python%{python3_buildversion}-wheel
 
 # setuptools provides pkg_resources; keep an explicit Provides so consumers can
 # depend on it by name if needed (auto python3.12dist provides are excluded).
-Provides:       %{python3_pkgprefix}-pkg_resources = %{epoch}:%{version}-%{release}
+Provides:       %{python3_pkgprefix}-pkg_resources = %{version}-%{release}
 
 %description
 setuptools is a fully-featured, actively-maintained, and stable library for

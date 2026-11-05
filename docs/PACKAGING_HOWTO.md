@@ -177,6 +177,10 @@ Debtransform-Files-Tar: debian.tar.gz rpm.tar.gz
   write `Version: <epoch>:%!{<PKG>_VERSION}-%!{PKG_REVISION}` in `debian.dsc`, and restrict `set_version` in
   `obs/_service` to the spec with `<param name="file"><name>.spec</param>`. `debtransform`
   then produces `<epoch>:<version>-<PKG_REVISION>+<release>`. Never raise or drop an epoch once shipped.
+  The same rule holds for the RPM `Epoch:` tag: copy it only when Percona Repo ships one
+  (python3 dependencies carry none). Subpackage `Requires` pinned with `=` must then
+  spell the epoch, `%{name} = %{?epoch:%{epoch}:}%{version}-%{release}`, or dnf
+  treats the missing epoch as 0 and the subpackage cannot be installed.
 - `Binary:` lists all binary package names from `control`, space-separated.
 - `Debtransform-Files-Tar:` lists the tarballs OBS must produce. Always include `debian.tar.gz`
   and `rpm.tar.gz`. For Go packages with vendored modules, also list the vendor tarballs
@@ -461,7 +465,6 @@ Version:        3.1.3
 Release:        %!{PKG_REVISION}%{?dist}
 Source0:        https://files.pythonhosted.org/packages/source/f/flask/flask-3.1.3.tar.gz
 BuildArch:      noarch
-Epoch:          1
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip
 BuildRequires:  python%{python3_buildversion}-setuptools

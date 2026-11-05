@@ -20,7 +20,6 @@ URL:            https://github.com/pyca/pynacl
 Source0:        https://files.pythonhosted.org/packages/source/P/PyNaCl/pynacl-1.6.2.tar.gz
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
-Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip

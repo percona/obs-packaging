@@ -22,7 +22,6 @@ Source0:        https://files.pythonhosted.org/packages/source/J/Jinja2/jinja2-3
 BuildArch:      noarch
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
-Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip
