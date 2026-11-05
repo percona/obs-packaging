@@ -1391,6 +1391,7 @@ fi
 
 %files libs -f pg_libpq5.lst
 %defattr(-,root,root)
+%dir %{pgbaseinstdir}/lib
 %{pgbaseinstdir}/lib/libpq.so.*
 %{pgbaseinstdir}/lib/libpqwalreceiver.so
 %config(noreplace) %attr (644,root,root) %{pgbaseinstdir}/share/%{sname}-%{pgmajorversion}-libs.conf
