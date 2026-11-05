@@ -1,9 +1,16 @@
 [Unit]
 Description=sockets for PgBouncer
 
+# Opt-in: shipped disabled; enable with
+#   systemctl enable --now percona-pgbouncer.socket
+# While this socket is active pgbouncer takes its listening sockets from
+# systemd and ignores listen_addr, listen_port and unix_socket_dir in
+# pgbouncer.ini, so edit ListenStream= (systemctl edit) to change them.
+# The defaults mirror pgbouncer.ini: localhost and the unix socket, port 6432.
 [Socket]
 ListenStream=/var/run/postgresql/.s.PGSQL.6432
-ListenStream=6432
+ListenStream=127.0.0.1:6432
+ListenStream=[::1]:6432
 
 # additional settings that might be useful
 #Backlog=
