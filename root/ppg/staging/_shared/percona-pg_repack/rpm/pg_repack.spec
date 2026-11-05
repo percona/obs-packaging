@@ -85,7 +85,7 @@ The module is developed to be a better alternative of CLUSTER and VACUUM FULL.
 %if %llvm
 %package llvmjit
 Summary:        Just-in-time compilation support for pg_repack
-Requires:       %{name}%{?_isa} = %{version}-%{release}
+Requires:       %{name}%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
 %if 0%{?suse_version} == 1500
 BuildRequires:  llvm17-devel clang17-devel
 Requires:       llvm17

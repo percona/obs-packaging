@@ -439,7 +439,7 @@ goal of accelerating analytics queries.
 %package libs-oauth
 Summary:	The shared libraries required for any PostgreSQL clients - OAuth flow
 Provides:	postgresql-libs-oauth = %{pgmajorversion}
-Requires:	postgresql%{pgmajorversion}-libs%{?_isa} = %{version}-%{release}
+Requires:	%{name}-libs%{?_isa} = %{epoch}:%{version}-%{release}
 
 %if 0%{?suse_version} >= 1500
 Requires:	libcurl4
