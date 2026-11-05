@@ -40,7 +40,6 @@ BuildArch:      noarch
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
 Url:            https://github.com/jplana/python-etcd
-Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-setuptools
@@ -84,32 +83,6 @@ rm -rf $RPM_BUILD_ROOT
 %dir %{python3_sitelib}/etcd/tests/unit
 %dir %{python3_sitelib}/etcd/tests/unit/__pycache__
 %dir %{python3_sitelib}/python_etcd-%{version}-py%{py3ver}.egg-info
-
-%if 0%{?rhel} && 0%{?rhel} >= 9
-%package -n python3-etcd
-Summary:        Compatibility alias for python3-etcd on RHEL >= 9
-Requires:       python3.12-etcd = %{epoch}:%{version}-%{release}
-BuildArch:      noarch
-Epoch:          1
-
-%description -n python3-etcd
-Compatibility alias that pulls in python3.12-etcd on RHEL >= 9.
-
-%files -n python3-etcd
-%endif
-
-%if 0%{?rhel} && 0%{?rhel} == 8
-%package -n python3-etcd
-Summary:        Compatibility alias for python3-etcd on RHEL 8
-Requires:       python3.12-etcd = %{epoch}:%{version}-%{release}
-BuildArch:      noarch
-Epoch:          1
-
-%description -n python3-etcd
-Compatibility alias that pulls in python3.12-etcd on RHEL 8.
-
-%files -n python3-etcd
-%endif
 
 %changelog
 * Sun Mar 30 2026 Percona Build/Release Team <eng-build@percona.com> - 0.4.5-2

@@ -12,7 +12,11 @@ Packager:       Percona Development Team <https://jira.percona.com>
 Vendor:         Percona, LLC
 
 Requires:       etcd
+%if 0%{?rhel}
+Requires:       python3.12-etcd
+%else
 Requires:       python3-etcd
+%endif
 Requires:       percona-patroni
 Requires:       percona-haproxy
 Requires:       percona-postgresql%{pgmajor}-server

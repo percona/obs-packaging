@@ -140,7 +140,7 @@ Requires:        %{python3_pkgprefix}-etcd >= 0.4.3
 Requires:        %{python3_pkgprefix}-dns
 %endif
 %if 0%{?rhel} && 0%{?rhel} == 10
-Requires:        python3-etcd >= 0.4.3
+Requires:        %{python3_pkgprefix}-etcd >= 0.4.3
 Requires:        python3-dns
 %endif
 %if 0%{?suse_version} >= 1500
