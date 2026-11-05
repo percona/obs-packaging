@@ -34,6 +34,13 @@ Summary:        C++ wrapper library around CGAL for ISO 19107:2013 geometry oper
 License:        LGPL-2.0-or-later
 URL:            https://sfcgal.gitlab.io/SFCGAL/
 Source0:        %{srcname}-%{version}.tar.gz
+%if 0%{?rhel}
+# Percona Repo (PGDG layout) shipped the library in SFCGAL-libs; it owns the
+# same /usr/lib64/libSFCGAL.so* paths, so take it over on upgrade.
+Provides:       %{name}-libs = %{version}-%{release}
+Provides:       %{name}-libs%{?_isa} = %{version}-%{release}
+Obsoletes:      %{name}-libs < %{version}-%{release}
+%endif
 Vendor:         Percona LLC
 Packager:       Percona LLC
 
