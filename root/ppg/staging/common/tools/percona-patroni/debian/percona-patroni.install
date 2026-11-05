@@ -1,4 +1,5 @@
-extras/startup-scripts/patroni etc/init.d
+debian/patroni.service lib/systemd/system
+debian/patroni.yml.sample etc/patroni
 debian/pg_clonecluster_patroni usr/share/patroni
 debian/pg_createcluster_patroni usr/share/patroni
 debian/pg_createconfig_patroni usr/bin
