@@ -20,7 +20,6 @@ URL:            https://www.sqlalchemy.org
 Source0:        https://files.pythonhosted.org/packages/source/S/SQLAlchemy/sqlalchemy-2.0.52.tar.gz
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
-Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip

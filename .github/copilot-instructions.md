@@ -93,7 +93,10 @@ Debtransform-Files-Tar: debian.tar.gz vendor.tar.gz rpm.tar.gz
 - `Percona Development Team <info@percona.com>` (Debian)
 - `Percona LLC` (RPM)
 
-**Epoch: 1** is set on PostgreSQL-related packages to allow version management.
+**RPM epochs** match what Percona Repo ships for the same package: `Epoch: 1` on the
+PostgreSQL packages that already carry it there, none on the python3 dependencies
+(`root/ppg/common/deps/**/python3-*`, `python3-psycopg2`), which Percona Repo ships
+without one. An epoch can never be dropped once published, so do not add one by habit.
 
 **Debian epochs** must match the epoch Percona Repo uses for the same source package
 (e.g. `1:` for pgbackrest, `2:` for haproxy/postgis). They live in `debian/debian.dsc` as

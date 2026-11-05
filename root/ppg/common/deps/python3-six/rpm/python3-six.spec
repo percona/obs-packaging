@@ -25,7 +25,6 @@ BuildArch:      noarch
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
 Url:            https://github.com/benjaminp/six
-Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-setuptools

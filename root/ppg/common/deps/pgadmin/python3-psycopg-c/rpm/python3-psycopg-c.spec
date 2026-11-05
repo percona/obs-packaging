@@ -20,7 +20,6 @@ URL:            https://psycopg.org/
 Source0:        https://files.pythonhosted.org/packages/source/p/psycopg-c/psycopg_c-3.3.4.tar.gz
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
-Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-pip
