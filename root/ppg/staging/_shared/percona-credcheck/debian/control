@@ -6,7 +6,7 @@ Build-Depends:
  debhelper-compat (= 13),
  libkrb5-dev,
  percona-postgresql-server-dev-all (>= 153~),
-Standards-Version: 4.6.2
+Standards-Version: 4.7.4
 Rules-Requires-Root: no
 Homepage: https://github.com/HexaCluster/credcheck
 Vcs-Browser: https://salsa.debian.org/postgresql/credcheck

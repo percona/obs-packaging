@@ -1,6 +1,23 @@
 %define pgmajorversion %!{PG_MAJOR_VERSION}
 %global pginstdir /usr/pgsql-%{pgmajorversion}
 
+%{!?runselftest:%global runselftest 0}
+
+# EL-10 and Fedora >= 44: ship a local SELinux policy module that lets
+# sshd_session_t search/read the postgres user's home dir (postgresql_db_t),
+# so that SSH pubkey auth via ~/.ssh/authorized_keys works:
+%if 0%{?rhel} >= 10 || 0%{?fedora} >= 44
+%global sshd_selinux 1
+%else
+%global sshd_selinux 0
+%endif
+
+# On RHEL, libssh2 comes from pgdg-libssh2 (EPEL is not needed), which does
+# not provide its soname; it is found through the rpath:
+%if 0%{?rhel}
+%global __requires_exclude ^libssh2\\.so
+%endif
+
 %global sname pgbackrest
 
 Summary:        Reliable PostgreSQL Backup & Restore
@@ -16,9 +33,19 @@ Source2:	       %{sname}-tmpfiles.d
 Source3:	       %{sname}.logrotate
 Source4:	       %{sname}.service
 Source6:        %{sname}-sysusers.conf
+Source8:        %{sname}-sshd-selinux.te
+
 BuildRequires:	gcc zlib-devel percona-postgresql%{pgmajorversion}-devel
 BuildRequires:	libzstd-devel libxml2-devel meson
 BuildRequires:	libssh2-devel libyaml-devel libcurl-devel >= 8.23.0
+
+%if %sshd_selinux
+BuildRequires:        selinux-policy-devel
+%endif
+%if %runselftest
+# The smoke test runs a backup/restore cycle against the PostgreSQL it finds
+BuildRequires:        percona-postgresql%{pgmajorversion}-server python3
+%endif
 
 %if 0%{?suse_version} >= 1500
 Requires:	libopenssl3 libsystemd0
@@ -73,6 +100,11 @@ unset PKG_CONFIG_PATH
 %meson
 %meson_build
 
+%if %sshd_selinux
+checkmodule -M -m -o %{sname}_sshd_fix.mod %{SOURCE8}
+semodule_package -o %{sname}_sshd_fix.pp -m %{sname}_sshd_fix.mod
+%endif
+
 %install
 export PG_CONFIG=/usr/pgsql-%{pgmajorversion}/bin/pg_config
 %meson_install
@@ -87,13 +119,28 @@ export PG_CONFIG=/usr/pgsql-%{pgmajorversion}/bin/pg_config
 %{__install} -p -d %{buildroot}%{_sysconfdir}/logrotate.d
 %{__install} -p -m 644 %{SOURCE3} %{buildroot}%{_sysconfdir}/logrotate.d/%{sname}
 
-# ... and make a tmpfiles script to recreate it at reboot.
-%{__mkdir} -p %{buildroot}/%{_tmpfilesdir}
-%{__install} -m 0644 %{SOURCE2} %{buildroot}/%{_tmpfilesdir}/%{sname}.conf
-
 # Install unit file:
 %{__install} -d %{buildroot}%{_unitdir}
 %{__install} -m 644 %{SOURCE4} %{buildroot}%{_unitdir}/%{sname}.service
+
+%{__install} -m 0644 -D %{SOURCE6} %{buildroot}%{_sysusersdir}/%{sname}.conf
+
+%{__mkdir} -p %{buildroot}/%{_tmpfilesdir}
+%{__install} -m 0644 %{SOURCE2} %{buildroot}/%{_tmpfilesdir}/%{sname}.conf
+
+%if %sshd_selinux
+%{__install} -d -m 755 %{buildroot}%{_datadir}/selinux/packages
+%{__install} -m 644 %{sname}_sshd_fix.pp %{buildroot}%{_datadir}/selinux/packages/
+%endif
+
+%check
+%if %runselftest
+# Upstream's smoke test for packagers: initdb, stanza-create, check, full and
+# incremental backups, then a restore of the latter, against every supported
+# PostgreSQL found on the system. When run as root, it drops to the postgres
+# user.
+%meson_test --suite smoke -v
+%endif
 
 %pre
 %sysusers_create_package %{sname} %SOURCE6
@@ -107,6 +154,11 @@ if [ $1 -eq 1 ] ; then
    %systemd_post %{sname}.service
    %endif
 fi
+
+%if %sshd_selinux
+%{_sbindir}/selinuxenabled 2>/dev/null && \
+        %{_sbindir}/semodule -i %{_datadir}/selinux/packages/%{sname}_sshd_fix.pp >/dev/null 2>&1 || :
+%endif
 
 %preun
 if [ $1 -eq 0 ] ; then
@@ -123,6 +175,14 @@ if [ $1 -ge 1 ] ; then
 	/usr/bin/systemctl try-restart %{sname}.service >/dev/null 2>&1 || :
 fi
 
+%if %sshd_selinux
+if [ $1 -eq 0 ] ; then
+        # Package removal, not upgrade
+        %{_sbindir}/selinuxenabled 2>/dev/null && \
+                %{_sbindir}/semodule -r %{sname}_sshd_fix >/dev/null 2>&1 || :
+fi
+%endif
+
 %files
 %defattr(-,root,root)
 %license LICENSE
@@ -130,7 +190,11 @@ fi
 %config(noreplace) %attr (644,root,root) %{_sysconfdir}/%{sname}.conf
 %config(noreplace) %{_sysconfdir}/logrotate.d/%{sname}
 %{_tmpfilesdir}/%{sname}.conf
+%{_sysusersdir}/%{sname}.conf
 %{_unitdir}/%{sname}.service
+%if %sshd_selinux
+%{_datadir}/selinux/packages/%{sname}_sshd_fix.pp
+%endif
 %attr(-,postgres,postgres) /var/log/%{sname}
 %attr(-,postgres,postgres) %{_sharedstatedir}/%{sname}
 %attr(-,postgres,postgres) /var/spool/%{sname}

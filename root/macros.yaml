@@ -39,12 +39,12 @@
 - CREDCHECK_VERSION: 5.0
 - CREDCHECK_TAG: v%!{CREDCHECK_VERSION}
 
-- HAPROXY_VERSION: 2.8.30
+- HAPROXY_VERSION: 2.8.31
 - PATRONI_VERSION: 4.1.5
 - PGAUDIT_SET_USER_TAG: REL4_2_0
 - PGAUDIT_SET_USER_VERSION: 4.2.0
 - PGBACKREST_VERSION: 2.60.0
-- PGBADGER_VERSION: 13.2
+- PGBADGER_VERSION: 13.3
 
 # Keep _VERSION and _TAG macros in sync for consistency.
 - PGBOUNCER_VERSION: 1.26.1
@@ -65,8 +65,8 @@
 # PG_STAT_MONITOR_REF is the git ref obs/_service and the QA suite check out.
 # 2.4.1 is not tagged yet, so it tracks the release branch; switch it back
 # to %!{PG_STAT_MONITOR_VERSION} once upstream publishes the tag.
-- PG_STAT_MONITOR_VERSION: 2.4.1
-- PG_STAT_MONITOR_REF: release-2.4.1
+- PG_STAT_MONITOR_VERSION: 2.4.0
+- PG_STAT_MONITOR_REF: release-2.4.0
 - PG_TDE_VERSION: 2.2.2
 # PG_TDE_REVISION is the git ref obs/_service checks out; a major whose PG
 # version has no pg_tde tag yet (staging:19) overrides it with a branch and
@@ -126,7 +126,7 @@
 
 # ppg:common:deps package versions that are also stamped into the package's
 # debian.dsc (with the epoch Percona Repo uses), so both stay in step.
-- ETCD_VERSION: 3.5.34
+- ETCD_VERSION: 3.5.35
 - PYSYNCOBJ_VERSION: 0.3.17
 - YDIFF_VERSION: 1.4.2
 
