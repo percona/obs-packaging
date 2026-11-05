@@ -99,7 +99,6 @@ Source18:       %{sname}.service
 Source19:       %{sname}-tmpfiles.d
 Source20:       percona-postgresql-extensions-macros
 Source30:       percona-postgresql-rpmlintrc
-Source999:      call-home.sh
 
 Patch1:         %{sname}-rpm-pgsql.patch
 Patch3:         %{sname}-conf.patch
@@ -977,11 +976,6 @@ export PGDATA
 [ -f /var/lib/pgsql/.pgsql_profile ] && source /var/lib/pgsql/.pgsql_profile" > /var/lib/pgsql/.bash_profile
 chown postgres: /var/lib/pgsql/.bash_profile
 chmod 700 /var/lib/pgsql/.bash_profile
-cp %SOURCE999 /tmp/ 2>/dev/null || :
-bash /tmp/call-home.sh -f "PRODUCT_FAMILY_POSTGRESQL" -v "17.5-1" -d "PACKAGE" &>/dev/null || :
-chgrp percona-telemetry /usr/local/percona/telemetry_uuid &>/dev/null || :
-chmod 664 /usr/local/percona/telemetry_uuid &>/dev/null || :
-rm -f /tmp/call-home.sh
 
 
 %preun server
