@@ -1,4 +1,5 @@
 startup_scripts.patch
+percona-config-fallback.patch
 acceptance_tests_system_patroni.patch
 offline_intersphinx.patch
 avoid_overwriting_configuration_during_boostrap.patch

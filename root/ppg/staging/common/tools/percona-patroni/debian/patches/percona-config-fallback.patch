@@ -1,0 +1,32 @@
+Description: Fall back to /etc/patroni/patroni.yml
+ Earlier percona-patroni packages in Percona Repo shipped a patroni.service that ran
+ /etc/patroni/patroni.yml (overridable with PATRONI_CONFIG_LOCATION).  Keep
+ starting those installs after the upgrade to the Debian config.yml layout.
+Author: Percona Development Team <info@percona.com>
+Forwarded: not-needed
+
+--- a/extras/startup-scripts/patroni.service
++++ b/extras/startup-scripts/patroni.service
+@@ -1,7 +1,10 @@
+ [Unit]
+ Description=Runners to orchestrate a high-availability PostgreSQL
+ After=network.target
+-ConditionPathExists=/etc/patroni/config.yml
++# Percona: start with the Debian config.yml, or with patroni.yml, the file the
++# earlier percona-patroni packages used.  "|" makes these OR'ed.
++ConditionPathExists=|/etc/patroni/config.yml
++ConditionPathExists=|/etc/patroni/patroni.yml
+ 
+ [Service]
+ Type=notify
+@@ -27,7 +30,9 @@
+ #ExecStartPre=-+/bin/chown postgres /dev/watchdog
+ 
+ # Start the patroni process
+-ExecStart=/usr/bin/patroni /etc/patroni/config.yml
++# PATRONI_CONFIG_LOCATION (e.g. set in a drop-in) wins; otherwise config.yml,
++# falling back to patroni.yml.
++ExecStart=/bin/sh -c 'c="$${PATRONI_CONFIG_LOCATION:-/etc/patroni/config.yml}"; [ -n "$$PATRONI_CONFIG_LOCATION" ] || [ -e "$$c" ] || c=/etc/patroni/patroni.yml; exec /usr/bin/patroni "$$c"'
+ 
+ # Send HUP to reload from patroni.yml
+ ExecReload=/bin/kill -s HUP $MAINPID
