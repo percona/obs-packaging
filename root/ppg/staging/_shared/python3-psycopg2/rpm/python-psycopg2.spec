@@ -21,7 +21,6 @@ Summary:        PostgreSQL database adapter for Python
 Name:           %{pkgprefix}-%{srcname}
 Version:        1.0.0
 Release:        %!{PKG_REVISION}%{?dist}
-Epoch:          1
 # The exceptions allow linking to OpenSSL and PostgreSQL's libpq
 License:        LGPLv3+ with exceptions
 URL:            http://initd.org/psycopg/
@@ -102,19 +101,6 @@ done
 %{python3_sitearch}/psycopg2/tests
 %endif
 
-
-%if 0%{?rhel} && 0%{?rhel} >= 8
-%package -n python3-psycopg2
-Summary:        Compatibility alias for python3-psycopg2 on RHEL >= 8
-Requires:       python3.12-psycopg2 = %{epoch}:%{version}-%{release}
-BuildArch:      noarch
-Epoch:          1
-
-%description -n python3-psycopg2
-Compatibility alias that pulls in python3.12-psycopg2 on RHEL >= 8.
-
-%files -n python3-psycopg2
-%endif
 
 %changelog
 * Sun Mar 30 2026 Percona Build/Release Team <eng-build@percona.com> - 2.9.10-1
