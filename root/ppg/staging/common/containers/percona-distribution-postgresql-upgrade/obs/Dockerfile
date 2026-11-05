@@ -27,6 +27,13 @@ RUN microdnf -y update
 # image carries them even where nothing installed below links libcurl.
 RUN microdnf -y install curl libcurl
 
+# TEMPORARY egress probe (remove before merging): never fails the build, the
+# result is the "EGRESS:" line in the build log.
+RUN curl -fsSL -o /tmp/percona-release.rpm https://repo.percona.com/yum/percona-release-latest.noarch.rpm \
+    && echo "EGRESS: OK ($(stat -c %s /tmp/percona-release.rpm) bytes)" \
+    || echo "EGRESS: NONE"; \
+    rm -f /tmp/percona-release.rpm
+
 # glibc-minimal-langpack: see the percona-distribution-postgresql Dockerfile;
 # ubi-minimal pre-installs it and OBS must upload it for glibc to upgrade.
 RUN microdnf -y install \
