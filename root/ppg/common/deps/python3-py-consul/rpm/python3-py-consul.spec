@@ -24,13 +24,13 @@
 %{expand: %%global py3ver %(echo `%{__ospython} -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" `)}
 %global python3_sitelib %(%{__ospython} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '/usr', 'base': '%{_prefix}'}))")
 
-%define         name python3-py-consul
+%define         srcname python3-py-consul
 
 Summary:        Python client for Consul
-Name:           %{name}
+Name:           %{python3_pkgprefix}-py-consul
 Version:        1.0.0
 Release:        %!{PKG_REVISION}%{?dist}
-Source0:        %{name}-%{version}.tar.gz
+Source0:        %{srcname}-%{version}.tar.gz
 License:        MIT
 Group:          Development/Libraries
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-buildroot
@@ -39,7 +39,6 @@ BuildArch:      noarch
 Vendor:         Percona, LLC
 Packager:       Percona Development Team <https://jira.percona.com>
 Url:            https://github.com/criteo/py-consul
-Epoch:          1
 
 BuildRequires:  python%{python3_buildversion}-devel
 BuildRequires:  python%{python3_buildversion}-setuptools
@@ -50,6 +49,8 @@ BuildRequires:  %{python3_pkgprefix}-setuptools
 Requires:       %{python3_pkgprefix}-requests
 
 Provides:       py-consul = %{version}-%{release}
+# repo.percona.com shipped this module as py-consul-1.6.0-44 (same files)
+Obsoletes:      py-consul < 1.6.0-45
 
 %description
 Python client for Consul (http://www.consul.io/).
@@ -57,7 +58,7 @@ Includes support for Consul's Key/Value store, services, health checks,
 sessions, events, ACLs, and more.
 
 %prep
-%setup -n %{name}-%{version}
+%setup -n %{srcname}-%{version}
 
 %build
 %{__ospython} setup.py build
