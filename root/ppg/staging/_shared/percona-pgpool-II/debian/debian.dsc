@@ -1,11 +1,11 @@
 Format: 3.0 (quilt)
 Source: percona-pgpool2
-Binary: percona-pgpool2, libpgpool2, libpgpool-dev, postgresql-%!{PG_MAJOR_VERSION}-pgpool2
+Binary: percona-pgpool2, libpgpoolpcp3, libpgpool-dev, postgresql-%!{PG_MAJOR_VERSION}-pgpool2
 Architecture: any
 Version: 1:%!{PGPOOL_VERSION}-%!{PKG_REVISION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
- debhelper (>= 10),
+ debhelper-compat (= 13),
  bison,
  chrpath,
  docbook,

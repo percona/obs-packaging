@@ -1,0 +1,18 @@
+Install set_user.h to server include dir so .deb files for different PG versions do not conflict
+
+--- a/Makefile
++++ b/Makefile
+@@ -30,10 +30,10 @@ endif
+ install: install-headers
+ 
+ install-headers:
+-	$(MKDIR_P) "$(DESTDIR)$(includedir)"
+-	$(INSTALL_DATA) "src/set_user.h" "$(DESTDIR)$(includedir)"
++	$(MKDIR_P) "$(DESTDIR)$(includedir_server)"
++	$(INSTALL_DATA) "src/set_user.h" "$(DESTDIR)$(includedir_server)"
+ 
+ uninstall: uninstall-headers
+ 
+ uninstall-headers:
+-	rm "$(DESTDIR)$(includedir)/set_user.h"
++	rm "$(DESTDIR)$(includedir_server)/set_user.h"

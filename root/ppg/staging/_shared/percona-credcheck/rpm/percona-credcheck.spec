@@ -2,6 +2,7 @@
 %global pgmajorversion %!{PG_MAJOR_VERSION}
 
 %{!?llvm:%global llvm 1}
+%{!?runselftest:%global runselftest 0}
 
 # Propagate %%llvm into the actual build: PGXS decides whether to invoke
 # clang/llvm-config based on with_llvm from the installed postgresql*-devel's
@@ -44,7 +45,12 @@ Requires:       openssl-libs >= 1.1.1k
 BuildRequires:  openssl-devel
 %endif
 
-Requires:       percona-postgresql%{pgmajorversion}
+Requires:       percona-postgresql%{pgmajorversion}-server
+%if %runselftest
+BuildRequires:  percona-postgresql%{pgmajorversion}-server pgdg-srpm-macros >= 2.0.0
+# prove and IPC::Run, for the TAP test
+BuildRequires:  perl(Test::Harness) perl(IPC::Run)
+%endif
 
 %description
 The credcheck PostgreSQL extension provides few general credential checks,
@@ -58,7 +64,21 @@ check_password_hook hook.
 %package llvmjit
 Summary:        Just-in-time compilation support for credcheck
 Requires:       %{name}%{?_isa} = %{epoch}:%{version}-%{release}
-BuildRequires:  clang llvm
+%if 0%{?suse_version} == 1500
+BuildRequires:  llvm17-devel clang17-devel
+Requires:       llvm17
+%endif
+%if 0%{?suse_version} == 1600
+BuildRequires:  llvm19-devel clang19-devel
+Requires:       llvm19
+%endif
+%if 0%{?suse_version} > 1600
+BuildRequires:  llvm-devel clang-devel
+%endif
+%if ( 0%{?fedora} || 0%{?rhel} >= 8 ) && !0%{?amzn}
+BuildRequires:  llvm-devel >= 19.0 clang-devel >= 19.0
+Requires:       llvm >= 19.0
+%endif
 
 %description llvmjit
 This package provides JIT support for credcheck
@@ -81,12 +101,16 @@ USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags} %{with_llvm_arg
 USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags} install DESTDIR=%{buildroot} %{with_llvm_arg}
 
 
-%clean
-%{__rm} -rf %{buildroot}
+%check
+%if %runselftest
+# Some of the tests need credcheck in shared_preload_libraries
+%pgdg_check_init
+pgdg_check_start main "shared_preload_libraries = 'credcheck'"
+pgdg_installcheck %{with_llvm_arg}
+%endif
 
 
 %files
-%defattr(755,root,root,755)
 %doc README.md
 %license LICENSE
 %dir %{pginstdir}

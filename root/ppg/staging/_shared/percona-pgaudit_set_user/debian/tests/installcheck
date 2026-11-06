@@ -1,0 +1,6 @@
+#!/bin/sh
+
+export PG_VIRTUALENV_ARGS="-o shared_preload_libraries=set_user"
+
+# run tests as user postgres, disable createcluster.conf to get the default log_line_prefix
+USER=postgres pg_buildext -c '--createclusterconf=/dev/null' installcheck
