@@ -4,6 +4,369 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [18.6-5] - 2026-11-06
+
+### Added
+- curl: add upstream version 8.23.0
+
+### Changed
+- etcd: update upstream version 3.5.35 (https://github.com/etcd-io/etcd/releases/tag/v3.5.35)
+- percona-haproxy: update upstream version 2.8.31 (https://git.haproxy.org/git/haproxy-2.8.git/)
+- percona-pg_stat_monitor: update upstream version 2.4.0 (https://github.com/percona/pg_stat_monitor/releases/tag/release-2.4.0)
+- percona-pgbadger: update upstream version 13.3 (https://github.com/darold/pgbadger/releases/tag/v13.3)
+- percona-distribution-postgresql (ubi10) [container image]: update image 18.6-4 → 18.6-5
+  - added: curl 8.23.0-3.1.el10
+  - added: libcurl 8.23.0-3.1.el10
+  - added: percona-postgresql18-ecpg-libs 18.6.1-8.1.el10
+  - updated: gosu 1.19-4.4.el10 -> 1.19-5.5.el10
+  - updated: percona-credcheck18 5.0-3.9.el10 -> 5.0-5.1.el10
+  - updated: percona-patroni 4.1.5-1.10.el10 -> 4.1.5-6.1.el10
+  - updated: percona-patroni-etcd 4.1.5-1.10.el10 -> 4.1.5-6.1.el10
+  - updated: percona-pg_cron_18 1.6.8-2.15.el10 -> 1.6.8-3.8.el10
+  - updated: percona-pg_oidc_validator18 1.1.0-3.9.el10 -> 1.1.0-5.7.el10
+  - updated: percona-pg_repack18 1.5.3-3.14.el10 -> 1.5.3-7.5.el10
+  - updated: percona-pg_stat_monitor18 2.4.1-4.3.el10 -> 2.4.0-3.1.el10
+  - updated: percona-pg_tde18 2.2.2-4.7.el10 -> 2.2.2-7.4.el10
+  - updated: percona-pgaudit18 18.0-2.15.el10 -> 18.0-5.8.el10
+  - updated: percona-pgaudit18_set_user 4.2.0-2.15.el10 -> 4.2.0-5.8.el10
+  - updated: percona-pgbackrest 2.60.0-1.9.el10 -> 2.60.0-4.1.el10
+  - updated: percona-pgvector_18 0.8.7-1.9.el10 -> 0.8.7-2.8.el10
+  - updated: percona-pgvector_18-llvmjit 0.8.7-1.9.el10 -> 0.8.7-2.8.el10
+  - updated: percona-postgresql-client-common 293-2.11.el10 -> 293-5.1.el10
+  - updated: percona-postgresql-common 293-2.11.el10 -> 293-5.1.el10
+  - updated: percona-postgresql18 18.6.1-2.5.el10 -> 18.6.1-8.1.el10
+  - updated: percona-postgresql18-contrib 18.6.1-2.5.el10 -> 18.6.1-8.1.el10
+  - updated: percona-postgresql18-libs 18.6.1-2.5.el10 -> 18.6.1-8.1.el10
+  - updated: percona-postgresql18-llvmjit 18.6.1-2.5.el10 -> 18.6.1-8.1.el10
+  - updated: percona-postgresql18-server 18.6.1-2.5.el10 -> 18.6.1-8.1.el10
+  - updated: percona-wal2json18 2.7-1.9.el10 -> 2.7-2.8.el10
+  - updated: perl-JSON 4.10-1.15.el10 -> 4.10-1.20.el10
+  - updated: python3-ydiff 1.4.2-2.11.el10 -> 1.4.2-4.4.el10
+  - updated: python3.12-click 8.1.7-1.15.el10 -> 8.1.7-3.2.el10
+  - updated: python3.12-etcd 0.4.5-1.15.el10 -> 0.4.5-3.2.el10
+  - updated: python3.12-psycopg2 2.9.13-2.15.el10 -> 2.9.13-5.5.el10
+- percona-distribution-postgresql (ubi8) [container image]: update image 18.6-4 → 18.6-5
+  - added: curl 8.23.0-3.1.el8
+  - added: libcurl 8.23.0-3.1.el8
+  - added: percona-postgresql18-ecpg-libs 18.6.1-8.1.el8
+  - updated: gosu 1.19-4.5.el8 -> 1.19-5.3.el8
+  - updated: percona-credcheck18 5.0-3.9.el8 -> 5.0-5.1.el8
+  - updated: percona-patroni 4.1.5-1.11.el8 -> 4.1.5-6.1.el8
+  - updated: percona-patroni-etcd 4.1.5-1.11.el8 -> 4.1.5-6.1.el8
+  - updated: percona-pg_cron_18 1.6.8-2.15.el8 -> 1.6.8-3.9.el8
+  - updated: percona-pg_oidc_validator18 1.1.0-3.8.el8 -> 1.1.0-5.7.el8
+  - updated: percona-pg_repack18 1.5.3-3.14.el8 -> 1.5.3-7.5.el8
+  - updated: percona-pg_stat_monitor18 2.4.1-4.3.el8 -> 2.4.0-3.1.el8
+  - updated: percona-pg_tde18 2.2.2-4.7.el8 -> 2.2.2-7.4.el8
+  - updated: percona-pgaudit18 18.0-2.14.el8 -> 18.0-5.9.el8
+  - updated: percona-pgaudit18_set_user 4.2.0-2.14.el8 -> 4.2.0-5.9.el8
+  - updated: percona-pgbackrest 2.60.0-1.9.el8 -> 2.60.0-4.1.el8
+  - updated: percona-pgvector_18 0.8.7-1.8.el8 -> 0.8.7-2.9.el8
+  - updated: percona-pgvector_18-llvmjit 0.8.7-1.8.el8 -> 0.8.7-2.9.el8
+  - updated: percona-postgresql-client-common 293-2.13.el8 -> 293-5.1.el8
+  - updated: percona-postgresql-common 293-2.13.el8 -> 293-5.1.el8
+  - updated: percona-postgresql18 18.6.1-2.6.el8 -> 18.6.1-8.1.el8
+  - updated: percona-postgresql18-contrib 18.6.1-2.6.el8 -> 18.6.1-8.1.el8
+  - updated: percona-postgresql18-libs 18.6.1-2.6.el8 -> 18.6.1-8.1.el8
+  - updated: percona-postgresql18-llvmjit 18.6.1-2.6.el8 -> 18.6.1-8.1.el8
+  - updated: percona-postgresql18-server 18.6.1-2.6.el8 -> 18.6.1-8.1.el8
+  - updated: percona-wal2json18 2.7-1.8.el8 -> 2.7-2.8.el8
+  - updated: perl-JSON 4.03-1.21.el8 -> 4.03-1.24.el8
+  - updated: perl-Net-SSLeay 1.88-1.17.el8 -> 1.88-1.20.el8
+  - updated: python3-ydiff 1.4.2-2.13.el8 -> 1.4.2-4.2.el8
+  - updated: python3.12-click 8.1.7-1.21.el8 -> 8.1.7-3.1.el8
+  - updated: python3.12-dateutil 2.9.0.post0-1.20.el8 -> 2.9.0.post0-3.1.el8
+  - updated: python3.12-dns 2.9.0-1.2.el8 -> 2.9.0-3.1.el8
+  - updated: python3.12-etcd 0.4.5-1.19.el8 -> 0.4.5-3.1.el8
+  - updated: python3.12-prettytable 3.4.0-1.19.el8 -> 3.4.0-3.1.el8
+  - updated: python3.12-psutil 6.1.1-1.19.el8 -> 6.1.1-3.1.el8
+  - updated: python3.12-psycopg2 2.9.13-2.14.el8 -> 2.9.13-5.4.el8
+  - updated: python3.12-six 1.17.0-1.19.el8 -> 1.17.0-3.1.el8
+  - updated: python3.12-systemd 235-1.19.el8 -> 235-2.2.el8
+  - updated: python3.12-wcwidth 0.2.13-1.20.el8 -> 0.2.13-3.1.el8
+- percona-distribution-postgresql (ubi9) [container image]: update image 18.6-4 → 18.6-5
+  - added: curl 8.23.0-3.1.el9
+  - added: libcurl 8.23.0-3.1.el9
+  - added: percona-postgresql18-ecpg-libs 18.6.1-8.1.el9
+  - updated: gosu 1.19-4.4.el9 -> 1.19-5.2.el9
+  - updated: libicu 67.1-10.8.el9 -> 67.1-11.2.el9
+  - updated: percona-credcheck18 5.0-3.9.el9 -> 5.0-5.1.el9
+  - updated: percona-patroni 4.1.5-1.12.el9 -> 4.1.5-6.1.el9
+  - updated: percona-patroni-etcd 4.1.5-1.12.el9 -> 4.1.5-6.1.el9
+  - updated: percona-pg_cron_18 1.6.8-2.15.el9 -> 1.6.8-3.8.el9
+  - updated: percona-pg_oidc_validator18 1.1.0-3.9.el9 -> 1.1.0-5.7.el9
+  - updated: percona-pg_repack18 1.5.3-3.15.el9 -> 1.5.3-7.6.el9
+  - updated: percona-pg_stat_monitor18 2.4.1-4.3.el9 -> 2.4.0-3.1.el9
+  - updated: percona-pg_tde18 2.2.2-4.7.el9 -> 2.2.2-7.5.el9
+  - updated: percona-pgaudit18 18.0-2.15.el9 -> 18.0-5.8.el9
+  - updated: percona-pgaudit18_set_user 4.2.0-2.15.el9 -> 4.2.0-5.8.el9
+  - updated: percona-pgbackrest 2.60.0-1.10.el9 -> 2.60.0-4.1.el9
+  - updated: percona-pgvector_18 0.8.7-1.9.el9 -> 0.8.7-2.8.el9
+  - updated: percona-pgvector_18-llvmjit 0.8.7-1.9.el9 -> 0.8.7-2.8.el9
+  - updated: percona-postgresql-client-common 293-2.12.el9 -> 293-5.1.el9
+  - updated: percona-postgresql-common 293-2.12.el9 -> 293-5.1.el9
+  - updated: percona-postgresql18 18.6.1-2.5.el9 -> 18.6.1-8.1.el9
+  - updated: percona-postgresql18-contrib 18.6.1-2.5.el9 -> 18.6.1-8.1.el9
+  - updated: percona-postgresql18-libs 18.6.1-2.5.el9 -> 18.6.1-8.1.el9
+  - updated: percona-postgresql18-llvmjit 18.6.1-2.5.el9 -> 18.6.1-8.1.el9
+  - updated: percona-postgresql18-server 18.6.1-2.5.el9 -> 18.6.1-8.1.el9
+  - updated: percona-wal2json18 2.7-1.9.el9 -> 2.7-2.8.el9
+  - updated: perl-JSON 4.03-1.17.el9 -> 4.03-1.20.el9
+  - updated: python3-ydiff 1.4.2-2.12.el9 -> 1.4.2-4.2.el9
+  - updated: python3.12-click 8.1.7-1.17.el9 -> 8.1.7-3.2.el9
+  - updated: python3.12-dateutil 2.9.0.post0-1.17.el9 -> 2.9.0.post0-3.2.el9
+  - updated: python3.12-dns 2.9.0-1.1.el9 -> 2.9.0-3.2.el9
+  - updated: python3.12-etcd 0.4.5-1.17.el9 -> 0.4.5-3.2.el9
+  - updated: python3.12-prettytable 3.4.0-1.17.el9 -> 3.4.0-3.2.el9
+  - updated: python3.12-psutil 6.1.1-1.17.el9 -> 6.1.1-3.2.el9
+  - updated: python3.12-psycopg2 2.9.13-2.15.el9 -> 2.9.13-5.6.el9
+  - updated: python3.12-six 1.17.0-1.17.el9 -> 1.17.0-3.2.el9
+  - updated: python3.12-systemd 235-1.17.el9 -> 235-2.2.el9
+  - updated: python3.12-wcwidth 0.2.13-1.17.el9 -> 0.2.13-3.2.el9
+- percona-distribution-postgresql-custom (extras/ubi9) [container image]: update image 18.6-4 → 18.6-5
+  - added: curl 8.23.0-3.1.el9
+  - added: libcurl 8.23.0-3.1.el9
+  - updated: SFCGAL 2.3.0-1.9.el9 -> 2.3.0-3.1.el9
+  - updated: blas 3.9.0-1.17.el9 -> 3.9.0-2.2.el9
+  - updated: boost-serialization 1.75.0-1.18.el9 -> 1.75.0-2.2.el9
+  - updated: flexiblas 3.0.4-1.17.el9 -> 3.0.4-1.21.el9
+  - updated: flexiblas-netlib 3.0.4-1.17.el9 -> 3.0.4-1.21.el9
+  - updated: flexiblas-netlib64 3.0.4-1.17.el9 -> 3.0.4-1.21.el9
+  - updated: flexiblas-openblas-threads 3.0.4-1.17.el9 -> 3.0.4-1.21.el9
+  - updated: gdal313-libs 3.13.3-1.14.el9 -> 3.13.3-3.9.el9
+  - updated: geos315 3.15.0-1.7.el9 -> 3.15.0-2.2.el9
+  - updated: gosu 1.19-4.4.el9 -> 1.19-5.2.el9
+  - updated: h3 4.5.0-1.17.el9 -> 4.5.0-2.2.el9
+  - updated: lapack 3.9.0-1.17.el9 -> 3.9.0-2.2.el9
+  - updated: libgeotiff17 1.7.4-1.8.el9 -> 1.7.4-2.5.el9
+  - updated: libicu 67.1-10.8.el9 -> 67.1-11.2.el9
+  - updated: libproxy 0.4.15-35.8.el9 -> 0.4.15-36.3.el9
+  - updated: libqhull_r 7.2.1-11.7.el9 -> 7.2.1-12.2.el9
+  - updated: librttopo 1.1.0-45.7.el9 -> 1.1.0-46.2.el9
+  - updated: libspatialite50 5.1.0-1.7.el9 -> 5.1.0-2.5.el9
+  - updated: libusbx 1.0.30-1.8.el9 -> 1.0.30-1.11.el9
+  - updated: percona-h3-pg_18 4.5.0-1.19.el9 -> 4.5.0-2.6.el9
+  - updated: percona-hll_18 2.21-1.20.el9 -> 2.21-2.6.el9
+  - updated: percona-ip4r_18 2.4.3-1.20.el9 -> 2.4.3-2.6.el9
+  - updated: percona-patroni 4.1.5-1.12.el9 -> 4.1.5-6.1.el9
+  - updated: percona-patroni-etcd 4.1.5-1.12.el9 -> 4.1.5-6.1.el9
+  - updated: percona-pg_cron_18 1.6.8-2.15.el9 -> 1.6.8-3.8.el9
+  - updated: percona-pg_oidc_validator18 1.1.0-3.9.el9 -> 1.1.0-5.7.el9
+  - updated: percona-pg_partman_18 5.5.0-1.9.el9 -> 5.5.0-2.6.el9
+  - updated: percona-pg_repack18 1.5.3-3.15.el9 -> 1.5.3-7.6.el9
+  - updated: percona-pg_similarity_18 1.0-1.10.el9 -> 1.0-2.6.el9
+  - updated: percona-pg_stat_monitor18 2.4.1-4.3.el9 -> 2.4.0-3.1.el9
+  - updated: percona-pgaudit18 18.0-2.15.el9 -> 18.0-5.8.el9
+  - updated: percona-pgaudit18_set_user 4.2.0-2.15.el9 -> 4.2.0-5.8.el9
+  - updated: percona-pgbackrest 2.60.0-1.10.el9 -> 2.60.0-4.1.el9
+  - updated: percona-pgrouting_18 4.0.2-1.9.el9 -> 4.0.2-2.6.el9
+  - updated: percona-pgvector_18 0.8.7-1.9.el9 -> 0.8.7-2.8.el9
+  - updated: percona-pgvector_18-llvmjit 0.8.7-1.9.el9 -> 0.8.7-2.8.el9
+  - updated: percona-pgvectorscale_18 0.9.1-1.9.el9 -> 0.9.1-2.6.el9
+  - updated: percona-postgis35_18 3.5.7-3.12.el9 -> 3.5.7-4.8.el9
+  - updated: percona-postgis35_18-client 3.5.7-3.12.el9 -> 3.5.7-4.8.el9
+  - updated: percona-postgis35_18-gui 3.5.7-3.12.el9 -> 3.5.7-4.8.el9
+  - updated: percona-postgis35_18-llvmjit 3.5.7-3.12.el9 -> 3.5.7-4.8.el9
+  - updated: percona-postgis35_18-utils 3.5.7-3.12.el9 -> 3.5.7-4.8.el9
+  - updated: percona-postgresql-client-common 293-2.12.el9 -> 293-5.1.el9
+  - updated: percona-postgresql-common 293-2.12.el9 -> 293-5.1.el9
+  - updated: percona-postgresql-unit_18 7.10-1.20.el9 -> 7.10-2.6.el9
+  - updated: percona-postgresql18 18.6-2.5.el9 -> 18.6-5.3.el9
+  - updated: percona-postgresql18-contrib 18.6-2.5.el9 -> 18.6-5.3.el9
+  - updated: percona-postgresql18-libs 18.6-2.5.el9 -> 18.6-5.3.el9
+  - updated: percona-postgresql18-llvmjit 18.6-2.5.el9 -> 18.6-5.3.el9
+  - updated: percona-postgresql18-server 18.6-2.5.el9 -> 18.6-5.3.el9
+  - updated: percona-postgresql_anonymizer_18 3.2.3-1.9.el9 -> 3.2.3-2.6.el9
+  - updated: percona-rum_18 1.3.15-1.20.el9 -> 1.3.15-2.6.el9
+  - updated: percona-timescaledb_18 2.30.2-1.9.el9 -> 2.30.2-2.6.el9
+  - updated: percona-wal2json18 2.7-1.9.el9 -> 2.7-2.8.el9
+  - updated: perl-JSON 4.03-1.17.el9 -> 4.03-1.20.el9
+  - updated: proj98 9.8.1-1.7.el9 -> 9.8.1-3.5.el9
+  - updated: python3-ydiff 1.4.2-2.12.el9 -> 1.4.2-4.2.el9
+  - updated: python3.12-click 8.1.7-1.17.el9 -> 8.1.7-3.2.el9
+  - updated: python3.12-dateutil 2.9.0.post0-1.17.el9 -> 2.9.0.post0-3.2.el9
+  - updated: python3.12-dns 2.9.0-1.1.el9 -> 2.9.0-3.2.el9
+  - updated: python3.12-etcd 0.4.5-1.17.el9 -> 0.4.5-3.2.el9
+  - updated: python3.12-prettytable 3.4.0-1.17.el9 -> 3.4.0-3.2.el9
+  - updated: python3.12-psutil 6.1.1-1.17.el9 -> 6.1.1-3.2.el9
+  - updated: python3.12-psycopg2 2.9.13-2.15.el9 -> 2.9.13-5.6.el9
+  - updated: python3.12-six 1.17.0-1.17.el9 -> 1.17.0-3.2.el9
+  - updated: python3.12-systemd 235-1.17.el9 -> 235-2.2.el9
+  - updated: python3.12-wcwidth 0.2.13-1.17.el9 -> 0.2.13-3.2.el9
+  - updated: qt5-qtbase 5.15.9-11.8.el9 -> 5.15.9-12.3.el9
+  - updated: qt5-qtbase-common 5.15.9-11.8.el9 -> 5.15.9-12.3.el9
+  - updated: snappy 1.1.8-8.7.el9 -> 1.1.8-9.2.el9
+  - removed: python3-psycopg2
+- percona-distribution-postgresql-with-postgis (ubi10) [container image]: update image 18.6-4 → 18.6-5
+  - added: curl 8.23.0-3.1.el10
+  - added: libcurl 8.23.0-3.1.el10
+  - added: percona-postgresql18-ecpg-libs 18.6.1-8.1.el10
+  - updated: SFCGAL 2.3.0-1.7.el10 -> 2.3.0-3.1.el10
+  - updated: boost-serialization 1.83.0-1.16.el10 -> 1.83.0-2.5.el10
+  - updated: gdal313-libs 3.13.3-1.13.el10 -> 3.13.3-3.8.el10
+  - updated: geos315 3.15.0-1.7.el10 -> 3.15.0-2.5.el10
+  - updated: gosu 1.19-4.4.el10 -> 1.19-5.5.el10
+  - updated: libgeotiff17 1.7.4-1.9.el10 -> 1.7.4-2.5.el10
+  - updated: librttopo 1.1.0-45.7.el10 -> 1.1.0-46.4.el10
+  - updated: libspatialite50 5.1.0-1.8.el10 -> 5.1.0-2.5.el10
+  - updated: percona-credcheck18 5.0-3.9.el10 -> 5.0-5.1.el10
+  - updated: percona-patroni 4.1.5-1.10.el10 -> 4.1.5-6.1.el10
+  - updated: percona-patroni-etcd 4.1.5-1.10.el10 -> 4.1.5-6.1.el10
+  - updated: percona-pg_cron_18 1.6.8-2.15.el10 -> 1.6.8-3.8.el10
+  - updated: percona-pg_oidc_validator18 1.1.0-3.9.el10 -> 1.1.0-5.7.el10
+  - updated: percona-pg_repack18 1.5.3-3.14.el10 -> 1.5.3-7.5.el10
+  - updated: percona-pg_stat_monitor18 2.4.1-4.3.el10 -> 2.4.0-3.1.el10
+  - updated: percona-pg_tde18 2.2.2-4.7.el10 -> 2.2.2-7.4.el10
+  - updated: percona-pgaudit18 18.0-2.15.el10 -> 18.0-5.8.el10
+  - updated: percona-pgaudit18_set_user 4.2.0-2.15.el10 -> 4.2.0-5.8.el10
+  - updated: percona-pgbackrest 2.60.0-1.9.el10 -> 2.60.0-4.1.el10
+  - updated: percona-pgvector_18 0.8.7-1.9.el10 -> 0.8.7-2.8.el10
+  - updated: percona-pgvector_18-llvmjit 0.8.7-1.9.el10 -> 0.8.7-2.8.el10
+  - updated: percona-postgis35_18 3.5.7-3.12.el10 -> 3.5.7-4.8.el10
+  - updated: percona-postgis35_18-client 3.5.7-3.12.el10 -> 3.5.7-4.8.el10
+  - updated: percona-postgis35_18-gui 3.5.7-3.12.el10 -> 3.5.7-4.8.el10
+  - updated: percona-postgis35_18-llvmjit 3.5.7-3.12.el10 -> 3.5.7-4.8.el10
+  - updated: percona-postgis35_18-utils 3.5.7-3.12.el10 -> 3.5.7-4.8.el10
+  - updated: percona-postgresql-client-common 293-2.11.el10 -> 293-5.1.el10
+  - updated: percona-postgresql-common 293-2.11.el10 -> 293-5.1.el10
+  - updated: percona-postgresql18 18.6.1-2.5.el10 -> 18.6.1-8.1.el10
+  - updated: percona-postgresql18-contrib 18.6.1-2.5.el10 -> 18.6.1-8.1.el10
+  - updated: percona-postgresql18-libs 18.6.1-2.5.el10 -> 18.6.1-8.1.el10
+  - updated: percona-postgresql18-llvmjit 18.6.1-2.5.el10 -> 18.6.1-8.1.el10
+  - updated: percona-postgresql18-server 18.6.1-2.5.el10 -> 18.6.1-8.1.el10
+  - updated: percona-wal2json18 2.7-1.9.el10 -> 2.7-2.8.el10
+  - updated: perl-JSON 4.10-1.15.el10 -> 4.10-1.20.el10
+  - updated: proj98 9.8.1-1.8.el10 -> 9.8.1-3.5.el10
+  - updated: python3-ydiff 1.4.2-2.11.el10 -> 1.4.2-4.4.el10
+  - updated: python3.12-click 8.1.7-1.15.el10 -> 8.1.7-3.2.el10
+  - updated: python3.12-etcd 0.4.5-1.15.el10 -> 0.4.5-3.2.el10
+  - updated: python3.12-psycopg2 2.9.13-2.15.el10 -> 2.9.13-5.5.el10
+  - updated: snappy 1.1.10-1.13.el10 -> 1.1.10-1.18.el10
+- percona-distribution-postgresql-with-postgis (ubi8) [container image]: update image 18.6-4 → 18.6-5
+  - added: curl 8.23.0-3.1.el8
+  - added: libcurl 8.23.0-3.1.el8
+  - added: percona-postgresql18-ecpg-libs 18.6.1-8.1.el8
+  - updated: SFCGAL 2.3.0-1.7.el8 -> 2.3.0-3.1.el8
+  - updated: blas 3.9.0-1.20.el8 -> 3.9.0-2.2.el8
+  - updated: gdal38-libs 3.8.5-2.10.el8 -> 3.8.5-4.8.el8
+  - updated: geos315 3.15.0-1.7.el8 -> 3.15.0-2.2.el8
+  - updated: gosu 1.19-4.5.el8 -> 1.19-5.3.el8
+  - updated: lapack 3.9.0-1.20.el8 -> 3.9.0-2.2.el8
+  - updated: libgeotiff17 1.7.4-1.8.el8 -> 1.7.4-2.5.el8
+  - updated: librttopo 1.1.0-45.7.el8 -> 1.1.0-46.2.el8
+  - updated: libspatialite50 5.1.0-1.7.el8 -> 5.1.0-2.5.el8
+  - updated: percona-credcheck18 5.0-3.9.el8 -> 5.0-5.1.el8
+  - updated: percona-patroni 4.1.5-1.11.el8 -> 4.1.5-6.1.el8
+  - updated: percona-patroni-etcd 4.1.5-1.11.el8 -> 4.1.5-6.1.el8
+  - updated: percona-pg_cron_18 1.6.8-2.15.el8 -> 1.6.8-3.9.el8
+  - updated: percona-pg_oidc_validator18 1.1.0-3.8.el8 -> 1.1.0-5.7.el8
+  - updated: percona-pg_repack18 1.5.3-3.14.el8 -> 1.5.3-7.5.el8
+  - updated: percona-pg_stat_monitor18 2.4.1-4.3.el8 -> 2.4.0-3.1.el8
+  - updated: percona-pg_tde18 2.2.2-4.7.el8 -> 2.2.2-7.4.el8
+  - updated: percona-pgaudit18 18.0-2.14.el8 -> 18.0-5.9.el8
+  - updated: percona-pgaudit18_set_user 4.2.0-2.14.el8 -> 4.2.0-5.9.el8
+  - updated: percona-pgbackrest 2.60.0-1.9.el8 -> 2.60.0-4.1.el8
+  - updated: percona-pgvector_18 0.8.7-1.8.el8 -> 0.8.7-2.9.el8
+  - updated: percona-pgvector_18-llvmjit 0.8.7-1.8.el8 -> 0.8.7-2.9.el8
+  - updated: percona-postgis35_18 3.5.7-3.10.el8 -> 3.5.7-4.9.el8
+  - updated: percona-postgis35_18-client 3.5.7-3.10.el8 -> 3.5.7-4.9.el8
+  - updated: percona-postgis35_18-gui 3.5.7-3.10.el8 -> 3.5.7-4.9.el8
+  - updated: percona-postgis35_18-llvmjit 3.5.7-3.10.el8 -> 3.5.7-4.9.el8
+  - updated: percona-postgis35_18-utils 3.5.7-3.10.el8 -> 3.5.7-4.9.el8
+  - updated: percona-postgresql-client-common 293-2.13.el8 -> 293-5.1.el8
+  - updated: percona-postgresql-common 293-2.13.el8 -> 293-5.1.el8
+  - updated: percona-postgresql18 18.6.1-2.6.el8 -> 18.6.1-8.1.el8
+  - updated: percona-postgresql18-contrib 18.6.1-2.6.el8 -> 18.6.1-8.1.el8
+  - updated: percona-postgresql18-libs 18.6.1-2.6.el8 -> 18.6.1-8.1.el8
+  - updated: percona-postgresql18-llvmjit 18.6.1-2.6.el8 -> 18.6.1-8.1.el8
+  - updated: percona-postgresql18-server 18.6.1-2.6.el8 -> 18.6.1-8.1.el8
+  - updated: percona-wal2json18 2.7-1.8.el8 -> 2.7-2.8.el8
+  - updated: perl-DBD-Pg 3.7.4-1.15.el8 -> 3.7.4-1.18.el8
+  - updated: perl-JSON 4.03-1.21.el8 -> 4.03-1.24.el8
+  - updated: perl-Net-SSLeay 1.88-1.17.el8 -> 1.88-1.20.el8
+  - updated: proj96 9.6.2-1.7.el8 -> 9.6.2-3.4.el8
+  - updated: python3-ydiff 1.4.2-2.13.el8 -> 1.4.2-4.2.el8
+  - updated: python3.12-click 8.1.7-1.21.el8 -> 8.1.7-3.1.el8
+  - updated: python3.12-dateutil 2.9.0.post0-1.20.el8 -> 2.9.0.post0-3.1.el8
+  - updated: python3.12-dns 2.9.0-1.2.el8 -> 2.9.0-3.1.el8
+  - updated: python3.12-etcd 0.4.5-1.19.el8 -> 0.4.5-3.1.el8
+  - updated: python3.12-prettytable 3.4.0-1.19.el8 -> 3.4.0-3.1.el8
+  - updated: python3.12-psutil 6.1.1-1.19.el8 -> 6.1.1-3.1.el8
+  - updated: python3.12-psycopg2 2.9.13-2.14.el8 -> 2.9.13-5.4.el8
+  - updated: python3.12-six 1.17.0-1.19.el8 -> 1.17.0-3.1.el8
+  - updated: python3.12-systemd 235-1.19.el8 -> 235-2.2.el8
+  - updated: python3.12-wcwidth 0.2.13-1.20.el8 -> 0.2.13-3.1.el8
+- percona-distribution-postgresql-with-postgis (ubi9) [container image]: update image 18.6-4 → 18.6-5
+  - added: curl 8.23.0-3.1.el9
+  - added: libcurl 8.23.0-3.1.el9
+  - added: percona-postgresql18-ecpg-libs 18.6.1-8.1.el9
+  - updated: SFCGAL 2.3.0-1.9.el9 -> 2.3.0-3.1.el9
+  - updated: blas 3.9.0-1.17.el9 -> 3.9.0-2.2.el9
+  - updated: boost-serialization 1.75.0-1.18.el9 -> 1.75.0-2.2.el9
+  - updated: flexiblas 3.0.4-1.17.el9 -> 3.0.4-1.21.el9
+  - updated: flexiblas-netlib 3.0.4-1.17.el9 -> 3.0.4-1.21.el9
+  - updated: flexiblas-netlib64 3.0.4-1.17.el9 -> 3.0.4-1.21.el9
+  - updated: flexiblas-openblas-threads 3.0.4-1.17.el9 -> 3.0.4-1.21.el9
+  - updated: gdal313-libs 3.13.3-1.14.el9 -> 3.13.3-3.9.el9
+  - updated: geos315 3.15.0-1.7.el9 -> 3.15.0-2.2.el9
+  - updated: gosu 1.19-4.4.el9 -> 1.19-5.2.el9
+  - updated: lapack 3.9.0-1.17.el9 -> 3.9.0-2.2.el9
+  - updated: libgeotiff17 1.7.4-1.8.el9 -> 1.7.4-2.5.el9
+  - updated: libicu 67.1-10.8.el9 -> 67.1-11.2.el9
+  - updated: libproxy 0.4.15-35.8.el9 -> 0.4.15-36.3.el9
+  - updated: libqhull_r 7.2.1-11.7.el9 -> 7.2.1-12.2.el9
+  - updated: librttopo 1.1.0-45.7.el9 -> 1.1.0-46.2.el9
+  - updated: libspatialite50 5.1.0-1.7.el9 -> 5.1.0-2.5.el9
+  - updated: libusbx 1.0.30-1.8.el9 -> 1.0.30-1.11.el9
+  - updated: percona-credcheck18 5.0-3.9.el9 -> 5.0-5.1.el9
+  - updated: percona-patroni 4.1.5-1.12.el9 -> 4.1.5-6.1.el9
+  - updated: percona-patroni-etcd 4.1.5-1.12.el9 -> 4.1.5-6.1.el9
+  - updated: percona-pg_cron_18 1.6.8-2.15.el9 -> 1.6.8-3.8.el9
+  - updated: percona-pg_oidc_validator18 1.1.0-3.9.el9 -> 1.1.0-5.7.el9
+  - updated: percona-pg_repack18 1.5.3-3.15.el9 -> 1.5.3-7.6.el9
+  - updated: percona-pg_stat_monitor18 2.4.1-4.3.el9 -> 2.4.0-3.1.el9
+  - updated: percona-pg_tde18 2.2.2-4.7.el9 -> 2.2.2-7.5.el9
+  - updated: percona-pgaudit18 18.0-2.15.el9 -> 18.0-5.8.el9
+  - updated: percona-pgaudit18_set_user 4.2.0-2.15.el9 -> 4.2.0-5.8.el9
+  - updated: percona-pgbackrest 2.60.0-1.10.el9 -> 2.60.0-4.1.el9
+  - updated: percona-pgvector_18 0.8.7-1.9.el9 -> 0.8.7-2.8.el9
+  - updated: percona-pgvector_18-llvmjit 0.8.7-1.9.el9 -> 0.8.7-2.8.el9
+  - updated: percona-postgis35_18 3.5.7-3.12.el9 -> 3.5.7-4.8.el9
+  - updated: percona-postgis35_18-client 3.5.7-3.12.el9 -> 3.5.7-4.8.el9
+  - updated: percona-postgis35_18-gui 3.5.7-3.12.el9 -> 3.5.7-4.8.el9
+  - updated: percona-postgis35_18-llvmjit 3.5.7-3.12.el9 -> 3.5.7-4.8.el9
+  - updated: percona-postgis35_18-utils 3.5.7-3.12.el9 -> 3.5.7-4.8.el9
+  - updated: percona-postgresql-client-common 293-2.12.el9 -> 293-5.1.el9
+  - updated: percona-postgresql-common 293-2.12.el9 -> 293-5.1.el9
+  - updated: percona-postgresql18 18.6.1-2.5.el9 -> 18.6.1-8.1.el9
+  - updated: percona-postgresql18-contrib 18.6.1-2.5.el9 -> 18.6.1-8.1.el9
+  - updated: percona-postgresql18-libs 18.6.1-2.5.el9 -> 18.6.1-8.1.el9
+  - updated: percona-postgresql18-llvmjit 18.6.1-2.5.el9 -> 18.6.1-8.1.el9
+  - updated: percona-postgresql18-server 18.6.1-2.5.el9 -> 18.6.1-8.1.el9
+  - updated: percona-wal2json18 2.7-1.9.el9 -> 2.7-2.8.el9
+  - updated: perl-JSON 4.03-1.17.el9 -> 4.03-1.20.el9
+  - updated: proj98 9.8.1-1.7.el9 -> 9.8.1-3.5.el9
+  - updated: python3-ydiff 1.4.2-2.12.el9 -> 1.4.2-4.2.el9
+  - updated: python3.12-click 8.1.7-1.17.el9 -> 8.1.7-3.2.el9
+  - updated: python3.12-dateutil 2.9.0.post0-1.17.el9 -> 2.9.0.post0-3.2.el9
+  - updated: python3.12-dns 2.9.0-1.1.el9 -> 2.9.0-3.2.el9
+  - updated: python3.12-etcd 0.4.5-1.17.el9 -> 0.4.5-3.2.el9
+  - updated: python3.12-prettytable 3.4.0-1.17.el9 -> 3.4.0-3.2.el9
+  - updated: python3.12-psutil 6.1.1-1.17.el9 -> 6.1.1-3.2.el9
+  - updated: python3.12-psycopg2 2.9.13-2.15.el9 -> 2.9.13-5.6.el9
+  - updated: python3.12-six 1.17.0-1.17.el9 -> 1.17.0-3.2.el9
+  - updated: python3.12-systemd 235-1.17.el9 -> 235-2.2.el9
+  - updated: python3.12-wcwidth 0.2.13-1.17.el9 -> 0.2.13-3.2.el9
+  - updated: qt5-qtbase 5.15.9-11.8.el9 -> 5.15.9-12.3.el9
+  - updated: qt5-qtbase-common 5.15.9-11.8.el9 -> 5.15.9-12.3.el9
+  - updated: snappy 1.1.8-8.7.el9 -> 1.1.8-9.2.el9
+
+### Security
+- etcd: 3.5.34→3.5.35 fixes CVE-2026-111943 (https://github.com/etcd-io/etcd/releases)
+- No CVE fixes mentioned upstream for: percona-pg_stat_monitor, percona-pgbadger (release notes and commit logs scanned for the version range).
+- Not scanned: percona-haproxy (no scanner for git.haproxy.org)
+- UBI base-image package CVEs are not covered by this scan.
+
 ## [18.6-4] - 2026-10-30
 
 ### Added
