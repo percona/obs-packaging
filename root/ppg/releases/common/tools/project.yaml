@@ -1,0 +1,531 @@
+build: false
+debuginfo:
+  RockyLinux_10: true
+  RockyLinux_8: true
+  RockyLinux_9: true
+  RockyLinux_9.6: true
+  openSUSE_Leap_16: true
+  openSUSE_Tumbleweed: true
+description: 'Tools subproject for ppg:releases:common.
+
+  Builds are disabled; binaries are copied via osc release.
+
+  '
+project-config: '# --- from root/project.yaml ---
+
+  # Distro-wide build configuration inherited by every project under root/.
+
+  # Project-specific lines live in the project''s own project.yaml (or in a
+
+  # tier''s subprojects.yaml); the tool concatenates them and marks each block
+
+  # with a "# --- from <file> ---" header.  See root/README.md.
+
+  %if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_8"
+
+  ExpandFlags: module:llvm-toolset-rhel8
+
+  ExpandFlags: module:perl-5.26
+
+  ExpandFlags: module:perl-IO-Socket-SSL-2.066
+
+  ExpandFlags: module:perl-libwww-perl-6.34
+
+  Prefer: selinux-policy-targeted
+
+  %endif
+
+
+  %if "%_repository" == "RockyLinux_9" || "%_repository" == "RockyLinux_9.6"
+
+  ExpandFlags: module:llvm-toolset-rhel9
+
+  # hdf-libs (EPEL split package) and hdf both provide libdf.so.0 and libmfhdf.so.0
+
+  Prefer: hdf-libs
+
+  %endif
+
+
+  %if "%_repository" == "RockyLinux_9.6"
+
+  # EPEL 9 tracks the latest RHEL 9 minor and ships llvm19-libs as a compat
+
+  # package for the newer distro LLVM. On the 9.6 baseline the distro
+
+  # llvm-libs (19.1.7) provides the same libLLVM.so.19.1, so OBS reports
+
+  # "have choice" (e.g. for annobin). The 9.6 toolchain (llvm-devel,
+
+  # clang-libs) hard-requires llvm-libs = 19.1.7, so prefer the distro
+
+  # package over the EPEL compat one.
+
+  Prefer: llvm-libs
+
+  # armadillo (EPEL, gdal chain for postgis) needs liblapack.so.3, which
+
+  # both lapack and lapack64 provide in 9.6; the same split exists for
+
+  # libblas.so.3 (blas/blas64). Prefer the standard LP64 variants.
+
+  Prefer: lapack
+
+  Prefer: blas
+
+  %endif
+
+
+  %if "%_repository" == "UBI_10"
+
+  # RHEL 10 appstream ships llvm-libs 21 and EPEL 10 ships llvm21-libs; both
+
+  # provide libLLVM.so.21.1, so OBS reports "have choice" for rust (seen on
+
+  # common:deps:build/cargo-pgrx-*). Prefer the distro package, as the
+
+  # RockyLinux_9.6 block above does.
+
+  Prefer: llvm-libs
+
+  %endif
+
+
+  %if "%_repository" == "Debian_12" || "%_repository" == "Ubuntu_22.04"
+
+  # llvm-*-dev needs libtinfo-dev; both libncurses-dev and libtinfo-dev satisfy
+
+  # it and OBS reports "have choice" without a Prefer.
+
+  Prefer: libncurses-dev
+
+  # logrotate Recommends a cron daemon; both cron and bcron may be available.
+
+  Prefer: cron
+
+  %endif
+
+
+  %if "%_repository" == "Debian_12"
+
+  # ppg:common:deps/curl builds libcurl4t64 (curl 8.23.0), which takes over
+
+  # the distro libcurl4 here through "Provides: libcurl4". Both then satisfy
+
+  # libcurl4 dependencies (e.g. llvm-21''s) and OBS reports "have choice";
+
+  # prefer the Percona build. Harmless where it is not in the path. (Not on
+
+  # Ubuntu: ppg:common:deps/curl is not built there.)
+
+  Prefer: libcurl4t64
+
+  %endif
+
+
+  %if "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository"
+  == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04"
+
+  Prefer: golang-1.26
+
+  %endif
+
+
+  %if "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository"
+  == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04" || "%_repository" == "Ubuntu_26.04"
+
+  # libgdal-dev transitively requires both libcurl4-openssl-dev and
+
+  # libcurl4-gnutls-dev which conflict; ignore the gnutls variant so
+
+  # the openssl variant is used consistently.
+
+  Ignore: libcurl4-gnutls-dev
+
+  # libgdal-dev and several of its deps use libjpeg-dev which is provided
+
+  # by both libjpeg62-turbo-dev and libjpeg-dev; prefer the turbo variant.
+
+  Prefer: libjpeg62-turbo-dev
+
+  %endif
+
+
+  # Append the distribution codename to the OBS release counter on deb-based
+
+  # repositories so that deb filenames are distinguishable across distro
+
+  # versions (e.g. …_1.0.15-1+2.1.trixie_amd64.deb).  debtransform appends
+
+  # "+<release>" to the version for packages whose debian.dsc carries
+
+  # "Debtransform-Release: 1".
+
+  %if "%_repository" == "Debian_12"
+
+  Release: <CI_CNT>.<B_CNT>.bookworm
+
+  %endif
+
+  %if "%_repository" == "Debian_13"
+
+  Release: <CI_CNT>.<B_CNT>.trixie
+
+  %endif
+
+  %if "%_repository" == "Ubuntu_22.04"
+
+  Release: <CI_CNT>.<B_CNT>.jammy
+
+  %endif
+
+  %if "%_repository" == "Ubuntu_24.04"
+
+  Release: <CI_CNT>.<B_CNT>.noble
+
+  %endif
+
+  %if "%_repository" == "Ubuntu_26.04"
+
+  Release: <CI_CNT>.<B_CNT>.resolute
+
+  %endif
+
+
+  # Keep the RPM dist tag (e.g. .el9) in the release.  OBS replaces the spec''s
+
+  # Release tag with this pattern, and the default <CI_CNT>.<B_CNT> drops the
+
+  # spec''s dist macro.  First word is the default, further words are per build
+
+  # type: only spec builds get %%{?dist} (escaped so the config parser keeps
+
+  # it for rpmbuild); image/simpleimage builds keep the plain counter, as a
+
+  # literal macro would end up in file names.  The labs RedHat:UBI-N base
+
+  # projects set the same line; repeating it here applies it on every
+
+  # instance and to the RockyLinux repositories.
+
+  %if "%_repository" == "RockyLinux_8" || "%_repository" == "RockyLinux_9" || "%_repository"
+  == "RockyLinux_9.6" || "%_repository" == "RockyLinux_10" || "%_repository" == "UBI_8"
+  || "%_repository" == "UBI_9" || "%_repository" == "UBI_10"
+
+  Release: <CI_CNT>.<B_CNT> spec:<CI_CNT>.<B_CNT>%%{?dist}
+
+  %endif
+
+
+  # --- from root/ppg/staging/common/subprojects.yaml ---
+
+  %if "%_repository" == "RockyLinux_8" || "%_repository" == "UBI_8"
+
+  Prefer: python3-devel
+
+  Prefer: atlas
+
+  %endif
+
+
+  %if "%_repository" == "UBI_9"
+
+  # Same toolchain module and hdf-libs pick as the RockyLinux_9 block in the
+
+  # root project.yaml; UBI_9 is a PPG-only repository.
+
+  ExpandFlags: module:llvm-toolset-rhel9
+
+  # hdf-libs (EPEL split package) and hdf both provide libdf.so.0 and libmfhdf.so.0
+
+  Prefer: hdf-libs
+
+  %endif
+
+
+  %if "%_repository" == "RockyLinux_10" || "%_repository" == "UBI_10"
+
+  Prefer: selinux-policy-targeted
+
+  Prefer: hdf-libs
+
+  # EPEL''s gdal3.4-libs needs libspatialite.so.8, which ppg:common:deps''
+
+  # libspatialite50 (PGDG layout, /usr/libspatialite50) now provides too.
+
+  # Keep EPEL''s libspatialite for EPEL''s GDAL. Consumers of gdal313 require
+
+  # libspatialite50 by name, so this does not affect them.
+
+  Prefer: libspatialite
+
+
+  Macros:
+
+  %__brp_check_rpaths %{nil}
+
+  :Macros
+
+  %endif
+
+
+  %if "%_repository" == "openSUSE_Tumbleweed" || "%_repository" == "openSUSE_Leap_16"
+
+  # percona-postgresqlNN-server conflicts with the SUSE postgresql-server and
+
+  # postgresqlNN-server packages (all own /var/lib/pgsql). The DNF stack
+
+  # (pulled in by percona-telemetry-agent -> yum-utils) recommends the SUSE
+
+  # server. Suppress those packages so that postgresql-server requirements
+
+  # resolve to our server via its Provides.  Each major additionally ignores
+
+  # the *other* major''s system package in its own project.yaml.
+
+  Prefer: percona-postgresql18-server
+
+  # Our python3-dateutil and python3-six packages shadow the SUSE system packages
+
+  # (python313-python-dateutil, python313-six). Prefer system packages so that
+
+  # build deps like python3-dnf-plugins-core and python3-libmodulemd resolve correctly.
+
+  Prefer: python313-python-dateutil
+
+  Prefer: python313-six
+
+  Ignore: postgresql-server
+
+  Ignore: postgresql
+
+  %endif
+
+
+  # --- from root/ppg/staging/common/tools/project.yaml ---
+
+  %if "%_repository" == "UBI_9"
+
+  # pgAdmin''s webpack build and local-npm-registry need Node.js >= 20; the
+
+  # obs-tools image pins the same major for npm_lockfile — bump both together.
+
+  ExpandFlags: module:nodejs:22
+
+  %endif
+
+  '
+repositories:
+- archs:
+  - x86_64
+  - aarch64
+  name: RockyLinux_8
+  paths:
+  - repository: RockyLinux_8
+    subproject: ppg:staging:18
+  - repository: RockyLinux_8
+    subproject: ppg:common:deps
+  - repository: RockyLinux_8
+    subproject: common:deps:build
+  - project: Fedora:EPEL:8
+    repository: standard
+  - project: RockyLinux:8
+    repository: appstream
+  - project: RockyLinux:8
+    repository: baseos
+  - project: RockyLinux:8
+    repository: devel
+- archs:
+  - x86_64
+  - aarch64
+  name: RockyLinux_9
+  paths:
+  - repository: RockyLinux_9
+    subproject: ppg:staging:18
+  - repository: RockyLinux_9
+    subproject: ppg:common:deps
+  - repository: RockyLinux_9
+    subproject: common:deps:build
+  - project: Fedora:EPEL:9
+    repository: standard
+  - project: RockyLinux:9
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: RockyLinux_9.6
+  paths:
+  - repository: RockyLinux_9.6
+    subproject: ppg:staging:18
+  - repository: RockyLinux_9.6
+    subproject: ppg:common:deps
+  - repository: RockyLinux_9.6
+    subproject: common:deps:build
+  - project: Fedora:EPEL:9
+    repository: standard
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9.6
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: RockyLinux_10
+  paths:
+  - repository: RockyLinux_10
+    subproject: ppg:staging:18
+  - repository: RockyLinux_10
+    subproject: ppg:common:deps
+  - repository: RockyLinux_10
+    subproject: common:deps:build
+  - project: Fedora:EPEL:10
+    repository: standard
+  - project: RockyLinux:10
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: UBI_9
+  paths:
+  - repository: UBI_9
+    subproject: ppg:staging:18
+  - repository: UBI_9
+    subproject: ppg:common:deps
+  - repository: UBI_9
+    subproject: ppg:common:deps:pgadmin
+  - repository: UBI_9
+    subproject: common:deps:build
+  - project: Fedora:EPEL:9
+    repository: standard
+  - project: RedHat:UBI-9
+    repository: standard
+  - project: RockyLinux:9
+    repository: devel
+- archs:
+  - x86_64
+  - aarch64
+  name: UBI_10
+  paths:
+  - repository: UBI_10
+    subproject: ppg:staging:18
+  - repository: UBI_10
+    subproject: ppg:common:deps
+  - repository: UBI_10
+    subproject: common:deps:build
+  - project: Fedora:EPEL:10
+    repository: standard
+  - project: RedHat:UBI-10
+    repository: standard
+  - project: RockyLinux:10
+    repository: devel
+- archs:
+  - x86_64
+  - aarch64
+  name: UBI_8
+  paths:
+  - repository: UBI_8
+    subproject: ppg:staging:18
+  - repository: UBI_8
+    subproject: ppg:common:deps
+  - repository: UBI_8
+    subproject: common:deps:build
+  - project: Fedora:EPEL:8
+    repository: standard
+  - project: RedHat:UBI-8
+    repository: standard
+  - project: RockyLinux:8
+    repository: appstream
+  - project: RockyLinux:8
+    repository: baseos
+  - project: RockyLinux:8
+    repository: devel
+- archs:
+  - x86_64
+  - aarch64
+  name: Debian_12
+  paths:
+  - repository: Debian_12
+    subproject: ppg:staging:18
+  - repository: Debian_12
+    subproject: ppg:common:deps
+  - repository: Debian_12
+    subproject: common:deps:build
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:12
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: Debian_13
+  paths:
+  - repository: Debian_13
+    subproject: ppg:staging:18
+  - repository: Debian_13
+    subproject: ppg:common:deps
+  - repository: Debian_13
+    subproject: common:deps:build
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:13
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: Ubuntu_22.04
+  paths:
+  - repository: Ubuntu_22.04
+    subproject: ppg:staging:18
+  - repository: Ubuntu_22.04
+    subproject: ppg:common:deps
+  - repository: Ubuntu_22.04
+    subproject: common:deps:build
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:22.04
+    repository: universe
+- archs:
+  - x86_64
+  - aarch64
+  name: Ubuntu_24.04
+  paths:
+  - repository: Ubuntu_24.04
+    subproject: ppg:staging:18
+  - repository: Ubuntu_24.04
+    subproject: ppg:common:deps
+  - repository: Ubuntu_24.04
+    subproject: common:deps:build
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:24.04
+    repository: universe
+- archs:
+  - x86_64
+  - aarch64
+  name: Ubuntu_26.04
+  paths:
+  - repository: Ubuntu_26.04
+    subproject: ppg:staging:18
+  - repository: Ubuntu_26.04
+    subproject: ppg:common:deps
+  - repository: Ubuntu_26.04
+    subproject: common:deps:build
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:26.04
+    repository: universe
+- archs:
+  - x86_64
+  - aarch64
+  name: openSUSE_Tumbleweed
+  paths:
+  - repository: openSUSE_Tumbleweed
+    subproject: ppg:staging:18
+  - repository: openSUSE_Tumbleweed
+    subproject: ppg:common:deps
+  - repository: openSUSE_Tumbleweed
+    subproject: common:deps:build
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Tumbleweed
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: openSUSE_Leap_16
+  paths:
+  - repository: openSUSE_Leap_16
+    subproject: ppg:staging:18
+  - repository: openSUSE_Leap_16
+    subproject: ppg:common:deps
+  - repository: openSUSE_Leap_16
+    subproject: common:deps:build
+  - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Leap:16.0
+    repository: standard
+title: ppg releases common — tools
