@@ -44,7 +44,7 @@
 
 Name:           curl
 Version:        8.23.0
-Release:        1.percona%{?dist}
+Release:        %!{PKG_REVISION}%{?dist}
 Summary:        A utility for getting files from remote servers (FTP, HTTP, and others)
 License:        curl
 URL:            https://curl.se/
@@ -114,6 +114,11 @@ Provides:       libcurl-full%{?_isa} = %{version}-%{release}
 Provides:       libcurl-minimal = %{version}-%{release}
 Provides:       libcurl-minimal%{?_isa} = %{version}-%{release}
 Obsoletes:      libcurl-minimal < %{version}-%{release}
+# The curl tool from before 8.17 sets CURLOPT_KRBLEVEL on every transfer,
+# which this libcurl rejects (FTP Kerberos was removed in 8.17): the
+# distro curl, and rpm --import with it, would fail with curl: (4).
+# Installing this libcurl must upgrade curl as well.
+Conflicts:      curl < %{version}-%{release}
 %if 0%{?suse_version}
 Provides:       libcurl-mini4 = %{version}-%{release}
 Obsoletes:      libcurl-mini4 < %{version}-%{release}
@@ -288,6 +293,11 @@ fi
 %{_datadir}/aclocal/libcurl.m4
 
 %changelog
+* Fri Nov 06 2026 Percona Development Team <info@percona.com> - 8.23.0-2
+- libcurl conflicts with older curl: the distro curl tool (7.61.1 on EL8)
+  fails every transfer with curl: (4) against libcurl 8.23.0, which broke
+  rpm --import over HTTPS (PG-2905).
+
 * Thu Oct 22 2026 Percona Development Team <info@percona.com> - 8.23.0-1.percona
 - curl 8.23.0 for every PPG RPM repository (CVE fixes), replacing the
   distro curl with the distro's feature set (HTTP/2, IDN, PSL, brotli,
