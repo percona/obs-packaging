@@ -43,6 +43,14 @@ project-config: '# --- from root/ppg/staging/17/containers/project.yaml ---
 
   Prefer: iptables-nft
 
+  # curl/libcurl 8.23.0 (ppg:common:deps) vs the UBI curl-minimal/
+
+  # libcurl-minimal: both provide libcurl.so.4 / curl, so prefer ours.
+
+  Prefer: libcurl
+
+  Prefer: curl
+
   Prefer: percona-postgresql17-libs
 
   Ignore: rocky-release
