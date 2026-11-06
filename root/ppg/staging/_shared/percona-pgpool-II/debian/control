@@ -3,7 +3,7 @@ Section: database
 Priority: optional
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
- debhelper (>= 10),
+ debhelper-compat (= 13),
  bison,
  chrpath,
  docbook,
@@ -22,10 +22,12 @@ Build-Depends:
  opensp,
  percona-postgresql-server-dev-%!{PG_MAJOR_VERSION},
  percona-postgresql-server-dev-all,
- postgresql-common,
+ percona-postgresql-common,
  xsltproc,
 Standards-Version: 4.7.4
 Homepage: https://www.pgpool.net/mediawiki/index.php/Main_Page
+Vcs-Git: https://salsa.debian.org/postgresql/pgpool2.git
+Vcs-Browser: https://salsa.debian.org/postgresql/pgpool2
 
 Package: percona-pgpool2
 Architecture: linux-any
@@ -85,7 +87,7 @@ Package: postgresql-%!{PG_MAJOR_VERSION}-pgpool2
 Architecture: linux-any
 Depends:
  libpgpoolpcp3 (>= ${binary:Version}),
- postgresql-%!{PG_MAJOR_VERSION} | percona-postgresql-%!{PG_MAJOR_VERSION},
+ percona-postgresql-%!{PG_MAJOR_VERSION} | postgresql-%!{PG_MAJOR_VERSION},
  ${misc:Depends},
  ${shlibs:Depends},
 Breaks:
