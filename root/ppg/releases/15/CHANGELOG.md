@@ -1,0 +1,346 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [15.19-1] - 2026-11-06
+
+### Added
+- curl: add upstream version 8.23.0
+- etcd: add upstream version 3.5.35 (https://github.com/etcd-io/etcd/releases/tag/v3.5.35)
+- gdal313: add upstream version 3.13.3
+- gdal38: add upstream version 3.8.5
+- geos315: add upstream version 3.15.0
+- icu: add upstream version 67.1
+- libgeotiff17: add upstream version 1.7.4
+- libproxy: add upstream version 0.4.15
+- librttopo: add upstream version 1.1.0
+- libspatialite50: add upstream version 5.1.0
+- libusbx: add upstream version 1.0.30
+- percona-credcheck: add upstream version 5.0 (https://github.com/HexaCluster/credcheck/releases/tag/v5.0)
+- percona-haproxy: add upstream version 2.8.31 (https://git.haproxy.org/git/haproxy-2.8.git/)
+- percona-patroni: add upstream version 4.1.5 (https://github.com/zalando/patroni/releases/tag/v4.1.5)
+- percona-pg-telemetry: add upstream version 1.2.0 (https://github.com/percona/percona_pg_telemetry/releases/tag/1.2.0-3)
+- percona-pg_cron: add upstream version 1.6.8 (https://github.com/citusdata/pg_cron/releases/tag/v1.6.8)
+- percona-pg_gather: add upstream version 33 (https://github.com/jobinau/pg_gather/releases/tag/v33)
+- percona-pg_repack: add upstream version 1.5.3 (https://github.com/reorg/pg_repack/releases/tag/ver_1.5.3)
+- percona-pg_stat_monitor: add upstream version 2.4.0 (https://github.com/percona/pg_stat_monitor/releases/tag/release-2.4.0)
+- percona-pgaudit: add upstream version 1.7.1 (https://github.com/pgaudit/pgaudit/releases/tag/1.7.1)
+- percona-pgaudit_set_user: add upstream version 4.2.0 (https://github.com/pgaudit/set_user/releases/tag/REL4_2_0)
+- percona-pgbackrest: add upstream version 2.60.0
+- percona-pgbadger: add upstream version 13.3 (https://github.com/darold/pgbadger/releases/tag/v13.3)
+- percona-pgbouncer: add upstream version 1.26.1 (https://github.com/pgbouncer/pgbouncer/releases/tag/pgbouncer_1_26_1)
+- percona-pgpool-II: add upstream version 4.7.2 (https://github.com/pgpool/pgpool2/releases/tag/V4_7_2)
+- percona-pgvector: add upstream version 0.8.7 (https://github.com/pgvector/pgvector/releases/tag/v0.8.7)
+- percona-postgis: add upstream version 3.5.7 (https://github.com/postgis/postgis/releases/tag/3.5.7)
+- percona-postgresql: add upstream version 15.19 (https://github.com/postgres/postgres/releases/tag/REL_15_19)
+- percona-postgresql-common: add upstream version 293 (https://salsa.debian.org/postgresql/postgresql-common.git)
+- percona-ppg-server: add upstream version 15.19
+- percona-ppg-server-ha: add upstream version 15.19
+- percona-psql (tarballs): add upstream version 15.19 (https://github.com/postgres/postgres/releases/tag/REL_15_19)
+- percona-wal2json: add upstream version 2.7 (https://github.com/eulerto/wal2json/releases/tag/wal2json_2_7)
+- proj96: add upstream version 9.6.2
+- proj98: add upstream version 9.8.1
+- python3-attrs: add upstream version 22.1.0 (https://github.com/python-attrs/attrs/releases/tag/22.1.0)
+- python3-blessed: add upstream version 1.22.0 (https://github.com/jquast/blessed/releases/tag/1.22.0)
+- python3-boto3: add upstream version 1.38.19 (https://github.com/boto/boto3/releases/tag/1.38.19)
+- python3-botocore: add upstream version 1.38.19 (https://github.com/boto/botocore/releases/tag/1.38.19)
+- python3-click: add upstream version 8.1.7 (https://github.com/pallets/click/releases/tag/8.1.7)
+- python3-dateutil: add upstream version 2.9.0.post0 (https://github.com/dateutil/dateutil/releases/tag/2.9.0.post0)
+- python3-dns: add upstream version 2.9.0 (https://github.com/rthalley/dnspython/releases/tag/v2.9.0)
+- python3-etcd: add upstream version 0.4.5 (https://github.com/jplana/python-etcd/releases/tag/0.4.5)
+- python3-jmespath: add upstream version 1.0.1 (https://github.com/jmespath/jmespath.py/releases/tag/1.0.1)
+- python3-kazoo: add upstream version 2.8.0 (https://github.com/python-zk/kazoo/releases/tag/2.8.0)
+- python3-lz4: add upstream version 4.3.3 (https://github.com/python-lz4/python-lz4/releases/tag/v4.3.3)
+- python3-prettytable: add upstream version 3.4.0 (https://github.com/jazzband/prettytable/releases/tag/3.4.0)
+- python3-psutil: add upstream version 6.1.1 (https://github.com/giampaolo/psutil/releases/tag/release-6.1.1)
+- python3-psycopg2: add upstream version 2.9.13 (https://github.com/psycopg/psycopg2/releases/tag/2.9.13)
+- python3-py-consul: add upstream version 1.6.0 (https://github.com/criteo/py-consul/releases/tag/v1.6.0)
+- python3-pysyncobj: add upstream version 0.3.17 (https://github.com/bakwc/PySyncObj/releases/tag/v0.3.17)
+- python3-s3transfer: add upstream version 0.12.0 (https://github.com/boto/s3transfer/releases/tag/0.12.0)
+- python3-six: add upstream version 1.17.0 (https://github.com/benjaminp/six/releases/tag/1.17.0)
+- python3-systemd: add upstream version 235 (https://github.com/systemd/python-systemd/releases/tag/v235)
+- python3-wcwidth: add upstream version 0.2.13 (https://github.com/jquast/wcwidth/releases/tag/0.2.13)
+- python3-zstandard: add upstream version 0.23.0 (https://github.com/indygreg/python-zstandard/releases/tag/0.23.0)
+- qhull: add upstream version 7.2.1
+- qt5-qtbase: add upstream version 5.15.9
+- sfcgal: add upstream version 2.3.0 (https://gitlab.com/sfcgal/SFCGAL.git)
+- snappy: add upstream version 1.1.8
+- ydiff: add upstream version 1.4.2 (https://github.com/ymattw/ydiff/releases/tag/1.4.2)
+- percona-distribution-postgresql (ubi10) [container image]: add image 15.19-1
+  - curl 8.23.0-3.1.el10
+  - gosu 1.19-5.5.el10
+  - libcurl 8.23.0-3.1.el10
+  - percona-credcheck15 5.0-5.1.el10
+  - percona-patroni 4.1.5-6.1.el10
+  - percona-patroni-etcd 4.1.5-6.1.el10
+  - percona-pg-telemetry15 1.2.0-4.5.el10
+  - percona-pg_cron_15 1.6.8-3.5.el10
+  - percona-pg_repack15 1.5.3-7.3.el10
+  - percona-pg_stat_monitor15 2.4.0-3.1.el10
+  - percona-pgaudit15 1.7.1-8.5.el10
+  - percona-pgaudit15_set_user 4.2.0-5.5.el10
+  - percona-pgbackrest 2.60.0-4.1.el10
+  - percona-pgvector_15 0.8.7-2.5.el10
+  - percona-pgvector_15-llvmjit 0.8.7-2.5.el10
+  - percona-postgresql-client-common 293-5.1.el10
+  - percona-postgresql-common 293-5.1.el10
+  - percona-postgresql15 15.19-5.2.el10
+  - percona-postgresql15-contrib 15.19-5.2.el10
+  - percona-postgresql15-libs 15.19-5.2.el10
+  - percona-postgresql15-llvmjit 15.19-5.2.el10
+  - percona-postgresql15-server 15.19-5.2.el10
+  - percona-wal2json15 2.7-2.5.el10
+  - perl-JSON 4.10-1.20.el10
+  - python3-ydiff 1.4.2-4.4.el10
+  - python3.12-click 8.1.7-3.2.el10
+  - python3.12-etcd 0.4.5-3.2.el10
+  - python3.12-psycopg2 2.9.13-5.3.el10
+- percona-distribution-postgresql (ubi8) [container image]: add image 15.19-1
+  - curl 8.23.0-3.1.el8
+  - gosu 1.19-5.3.el8
+  - libcurl 8.23.0-3.1.el8
+  - llvm 21.1.8-1.6.el8
+  - llvm-filesystem 21.1.8-1.6.el8
+  - llvm-libs 21.1.8-1.6.el8
+  - percona-credcheck15 5.0-5.1.el8
+  - percona-patroni 4.1.5-6.1.el8
+  - percona-patroni-etcd 4.1.5-6.1.el8
+  - percona-pg-telemetry15 1.2.0-4.5.el8
+  - percona-pg_cron_15 1.6.8-3.5.el8
+  - percona-pg_repack15 1.5.3-7.2.el8
+  - percona-pg_stat_monitor15 2.4.0-3.1.el8
+  - percona-pgaudit15 1.7.1-8.5.el8
+  - percona-pgaudit15_set_user 4.2.0-5.5.el8
+  - percona-pgbackrest 2.60.0-4.1.el8
+  - percona-pgvector_15 0.8.7-2.5.el8
+  - percona-pgvector_15-llvmjit 0.8.7-2.5.el8
+  - percona-postgresql-client-common 293-5.1.el8
+  - percona-postgresql-common 293-5.1.el8
+  - percona-postgresql15 15.19-5.1.el8
+  - percona-postgresql15-contrib 15.19-5.1.el8
+  - percona-postgresql15-libs 15.19-5.1.el8
+  - percona-postgresql15-llvmjit 15.19-5.1.el8
+  - percona-postgresql15-server 15.19-5.1.el8
+  - percona-wal2json15 2.7-2.4.el8
+  - perl-IO-Socket-SSL 2.066-1.6.el8
+  - perl-JSON 4.03-1.24.el8
+  - perl-Mozilla-CA 20160104-1.7.el8
+  - perl-Net-SSLeay 1.88-1.20.el8
+  - python3-ydiff 1.4.2-4.2.el8
+  - python3.12-click 8.1.7-3.1.el8
+  - python3.12-dateutil 2.9.0.post0-3.1.el8
+  - python3.12-dns 2.9.0-3.1.el8
+  - python3.12-etcd 0.4.5-3.1.el8
+  - python3.12-prettytable 3.4.0-3.1.el8
+  - python3.12-psutil 6.1.1-3.1.el8
+  - python3.12-psycopg2 2.9.13-5.2.el8
+  - python3.12-six 1.17.0-3.1.el8
+  - python3.12-systemd 235-2.2.el8
+  - python3.12-wcwidth 0.2.13-3.1.el8
+- percona-distribution-postgresql (ubi9) [container image]: add image 15.19-1
+  - curl 8.23.0-3.1.el9
+  - gosu 1.19-5.2.el9
+  - libcurl 8.23.0-3.1.el9
+  - libicu 67.1-11.2.el9
+  - percona-credcheck15 5.0-5.1.el9
+  - percona-patroni 4.1.5-6.1.el9
+  - percona-patroni-etcd 4.1.5-6.1.el9
+  - percona-pg-telemetry15 1.2.0-4.4.el9
+  - percona-pg_cron_15 1.6.8-3.4.el9
+  - percona-pg_repack15 1.5.3-7.3.el9
+  - percona-pg_stat_monitor15 2.4.0-3.1.el9
+  - percona-pgaudit15 1.7.1-8.4.el9
+  - percona-pgaudit15_set_user 4.2.0-5.4.el9
+  - percona-pgbackrest 2.60.0-4.1.el9
+  - percona-pgvector_15 0.8.7-2.4.el9
+  - percona-pgvector_15-llvmjit 0.8.7-2.4.el9
+  - percona-postgresql-client-common 293-5.1.el9
+  - percona-postgresql-common 293-5.1.el9
+  - percona-postgresql15 15.19-5.2.el9
+  - percona-postgresql15-contrib 15.19-5.2.el9
+  - percona-postgresql15-libs 15.19-5.2.el9
+  - percona-postgresql15-llvmjit 15.19-5.2.el9
+  - percona-postgresql15-server 15.19-5.2.el9
+  - percona-wal2json15 2.7-2.4.el9
+  - perl-JSON 4.03-1.20.el9
+  - python3-ydiff 1.4.2-4.2.el9
+  - python3.12-click 8.1.7-3.2.el9
+  - python3.12-dateutil 2.9.0.post0-3.2.el9
+  - python3.12-dns 2.9.0-3.2.el9
+  - python3.12-etcd 0.4.5-3.2.el9
+  - python3.12-prettytable 3.4.0-3.2.el9
+  - python3.12-psutil 6.1.1-3.2.el9
+  - python3.12-psycopg2 2.9.13-5.3.el9
+  - python3.12-six 1.17.0-3.2.el9
+  - python3.12-systemd 235-2.2.el9
+  - python3.12-wcwidth 0.2.13-3.2.el9
+- percona-distribution-postgresql-with-postgis (ubi10) [container image]: add image 15.19-1
+  - SFCGAL 2.3.0-3.1.el10
+  - boost-serialization 1.83.0-2.5.el10
+  - curl 8.23.0-3.1.el10
+  - gdal313-libs 3.13.3-3.8.el10
+  - geos315 3.15.0-2.5.el10
+  - gosu 1.19-5.5.el10
+  - libcurl 8.23.0-3.1.el10
+  - libgeotiff17 1.7.4-2.5.el10
+  - librttopo 1.1.0-46.4.el10
+  - libspatialite50 5.1.0-2.5.el10
+  - percona-credcheck15 5.0-5.1.el10
+  - percona-patroni 4.1.5-6.1.el10
+  - percona-patroni-etcd 4.1.5-6.1.el10
+  - percona-pg-telemetry15 1.2.0-4.5.el10
+  - percona-pg_cron_15 1.6.8-3.5.el10
+  - percona-pg_repack15 1.5.3-7.3.el10
+  - percona-pg_stat_monitor15 2.4.0-3.1.el10
+  - percona-pgaudit15 1.7.1-8.5.el10
+  - percona-pgaudit15_set_user 4.2.0-5.5.el10
+  - percona-pgbackrest 2.60.0-4.1.el10
+  - percona-pgvector_15 0.8.7-2.5.el10
+  - percona-pgvector_15-llvmjit 0.8.7-2.5.el10
+  - percona-postgis35_15 3.5.7-4.8.el10
+  - percona-postgis35_15-client 3.5.7-4.8.el10
+  - percona-postgis35_15-gui 3.5.7-4.8.el10
+  - percona-postgis35_15-llvmjit 3.5.7-4.8.el10
+  - percona-postgis35_15-utils 3.5.7-4.8.el10
+  - percona-postgresql-client-common 293-5.1.el10
+  - percona-postgresql-common 293-5.1.el10
+  - percona-postgresql15 15.19-5.2.el10
+  - percona-postgresql15-contrib 15.19-5.2.el10
+  - percona-postgresql15-libs 15.19-5.2.el10
+  - percona-postgresql15-llvmjit 15.19-5.2.el10
+  - percona-postgresql15-server 15.19-5.2.el10
+  - percona-wal2json15 2.7-2.5.el10
+  - perl-JSON 4.10-1.20.el10
+  - proj98 9.8.1-3.5.el10
+  - python3-ydiff 1.4.2-4.4.el10
+  - python3.12-click 8.1.7-3.2.el10
+  - python3.12-etcd 0.4.5-3.2.el10
+  - python3.12-psycopg2 2.9.13-5.3.el10
+  - snappy 1.1.10-1.18.el10
+- percona-distribution-postgresql-with-postgis (ubi8) [container image]: add image 15.19-1
+  - SFCGAL 2.3.0-3.1.el8
+  - blas 3.9.0-2.2.el8
+  - curl 8.23.0-3.1.el8
+  - gdal38-libs 3.8.5-4.8.el8
+  - geos315 3.15.0-2.2.el8
+  - gosu 1.19-5.3.el8
+  - lapack 3.9.0-2.2.el8
+  - libcurl 8.23.0-3.1.el8
+  - libgeotiff17 1.7.4-2.5.el8
+  - librttopo 1.1.0-46.2.el8
+  - libspatialite50 5.1.0-2.5.el8
+  - llvm 21.1.8-1.6.el8
+  - llvm-filesystem 21.1.8-1.6.el8
+  - llvm-libs 21.1.8-1.6.el8
+  - percona-credcheck15 5.0-5.1.el8
+  - percona-patroni 4.1.5-6.1.el8
+  - percona-patroni-etcd 4.1.5-6.1.el8
+  - percona-pg-telemetry15 1.2.0-4.5.el8
+  - percona-pg_cron_15 1.6.8-3.5.el8
+  - percona-pg_repack15 1.5.3-7.2.el8
+  - percona-pg_stat_monitor15 2.4.0-3.1.el8
+  - percona-pgaudit15 1.7.1-8.5.el8
+  - percona-pgaudit15_set_user 4.2.0-5.5.el8
+  - percona-pgbackrest 2.60.0-4.1.el8
+  - percona-pgvector_15 0.8.7-2.5.el8
+  - percona-pgvector_15-llvmjit 0.8.7-2.5.el8
+  - percona-postgis35_15 3.5.7-4.9.el8
+  - percona-postgis35_15-client 3.5.7-4.9.el8
+  - percona-postgis35_15-gui 3.5.7-4.9.el8
+  - percona-postgis35_15-llvmjit 3.5.7-4.9.el8
+  - percona-postgis35_15-utils 3.5.7-4.9.el8
+  - percona-postgresql-client-common 293-5.1.el8
+  - percona-postgresql-common 293-5.1.el8
+  - percona-postgresql15 15.19-5.1.el8
+  - percona-postgresql15-contrib 15.19-5.1.el8
+  - percona-postgresql15-libs 15.19-5.1.el8
+  - percona-postgresql15-llvmjit 15.19-5.1.el8
+  - percona-postgresql15-server 15.19-5.1.el8
+  - percona-wal2json15 2.7-2.4.el8
+  - perl-DBD-Pg 3.7.4-1.18.el8
+  - perl-IO-Socket-SSL 2.066-1.6.el8
+  - perl-JSON 4.03-1.24.el8
+  - perl-Mozilla-CA 20160104-1.7.el8
+  - perl-Net-SSLeay 1.88-1.20.el8
+  - proj96 9.6.2-3.4.el8
+  - python3-ydiff 1.4.2-4.2.el8
+  - python3.12-click 8.1.7-3.1.el8
+  - python3.12-dateutil 2.9.0.post0-3.1.el8
+  - python3.12-dns 2.9.0-3.1.el8
+  - python3.12-etcd 0.4.5-3.1.el8
+  - python3.12-prettytable 3.4.0-3.1.el8
+  - python3.12-psutil 6.1.1-3.1.el8
+  - python3.12-psycopg2 2.9.13-5.2.el8
+  - python3.12-six 1.17.0-3.1.el8
+  - python3.12-systemd 235-2.2.el8
+  - python3.12-wcwidth 0.2.13-3.1.el8
+- percona-distribution-postgresql-with-postgis (ubi9) [container image]: add image 15.19-1
+  - SFCGAL 2.3.0-3.1.el9
+  - blas 3.9.0-2.2.el9
+  - boost-serialization 1.75.0-2.2.el9
+  - curl 8.23.0-3.1.el9
+  - flexiblas 3.0.4-1.21.el9
+  - flexiblas-netlib 3.0.4-1.21.el9
+  - flexiblas-netlib64 3.0.4-1.21.el9
+  - flexiblas-openblas-threads 3.0.4-1.21.el9
+  - gdal313-libs 3.13.3-3.9.el9
+  - geos315 3.15.0-2.2.el9
+  - gosu 1.19-5.2.el9
+  - lapack 3.9.0-2.2.el9
+  - libcurl 8.23.0-3.1.el9
+  - libgeotiff17 1.7.4-2.5.el9
+  - libicu 67.1-11.2.el9
+  - libproxy 0.4.15-36.3.el9
+  - libqhull_r 7.2.1-12.2.el9
+  - librttopo 1.1.0-46.2.el9
+  - libspatialite50 5.1.0-2.5.el9
+  - libusbx 1.0.30-1.11.el9
+  - percona-credcheck15 5.0-5.1.el9
+  - percona-patroni 4.1.5-6.1.el9
+  - percona-patroni-etcd 4.1.5-6.1.el9
+  - percona-pg-telemetry15 1.2.0-4.4.el9
+  - percona-pg_cron_15 1.6.8-3.4.el9
+  - percona-pg_repack15 1.5.3-7.3.el9
+  - percona-pg_stat_monitor15 2.4.0-3.1.el9
+  - percona-pgaudit15 1.7.1-8.4.el9
+  - percona-pgaudit15_set_user 4.2.0-5.4.el9
+  - percona-pgbackrest 2.60.0-4.1.el9
+  - percona-pgvector_15 0.8.7-2.4.el9
+  - percona-pgvector_15-llvmjit 0.8.7-2.4.el9
+  - percona-postgis35_15 3.5.7-4.8.el9
+  - percona-postgis35_15-client 3.5.7-4.8.el9
+  - percona-postgis35_15-gui 3.5.7-4.8.el9
+  - percona-postgis35_15-llvmjit 3.5.7-4.8.el9
+  - percona-postgis35_15-utils 3.5.7-4.8.el9
+  - percona-postgresql-client-common 293-5.1.el9
+  - percona-postgresql-common 293-5.1.el9
+  - percona-postgresql15 15.19-5.2.el9
+  - percona-postgresql15-contrib 15.19-5.2.el9
+  - percona-postgresql15-libs 15.19-5.2.el9
+  - percona-postgresql15-llvmjit 15.19-5.2.el9
+  - percona-postgresql15-server 15.19-5.2.el9
+  - percona-wal2json15 2.7-2.4.el9
+  - perl-JSON 4.03-1.20.el9
+  - proj98 9.8.1-3.5.el9
+  - python3-ydiff 1.4.2-4.2.el9
+  - python3.12-click 8.1.7-3.2.el9
+  - python3.12-dateutil 2.9.0.post0-3.2.el9
+  - python3.12-dns 2.9.0-3.2.el9
+  - python3.12-etcd 0.4.5-3.2.el9
+  - python3.12-prettytable 3.4.0-3.2.el9
+  - python3.12-psutil 6.1.1-3.2.el9
+  - python3.12-psycopg2 2.9.13-5.3.el9
+  - python3.12-six 1.17.0-3.2.el9
+  - python3.12-systemd 235-2.2.el9
+  - python3.12-wcwidth 0.2.13-3.2.el9
+  - qt5-qtbase 5.15.9-12.3.el9
+  - qt5-qtbase-common 5.15.9-12.3.el9
+  - snappy 1.1.8-9.2.el9
+
+### Changed
+
+### Security
+- UBI base-image package CVEs are not covered by this scan.
+
