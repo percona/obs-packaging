@@ -287,6 +287,10 @@ if you're installing the postgresql%{pgmajorversion}-server package.
 
 %package ecpg-libs
 Summary:	Run-time libraries for ECPG programs
+Provides:       %{sname}-ecpg-libs = %{epoch}:%{version}-%{release}
+Provides:       %{vname}-ecpg-libs = %{epoch}:%{version}-%{release}
+Obsoletes:      %{sname}-ecpg-libs <= %{epoch}:%{version}-%{release}
+Obsoletes:      %{vname}-ecpg-libs <= %{epoch}:%{version}-%{release}
 
 %if 0%{?suse_version} == 1500
 Requires:	libopenssl3
@@ -304,7 +308,11 @@ The postgresql%{pgmajorversion}-ecpg-libs is used by programs built with ECPG
 
 %package ecpg-devel
 Summary:	Development files for ECPG (Embedded PostgreSQL for C)
-Requires:	%{name}-ecpg-libs%{?_isa} = %{version}-%{release}
+Provides:       %{sname}-ecpg-devel = %{epoch}:%{version}-%{release}
+Provides:       %{vname}-ecpg-devel = %{epoch}:%{version}-%{release}
+Obsoletes:      %{sname}-ecpg-devel <= %{epoch}:%{version}-%{release}
+Obsoletes:      %{vname}-ecpg-devel <= %{epoch}:%{version}-%{release}
+Requires:	%{name}-ecpg-libs%{?_isa} = %{epoch}:%{version}-%{release}
 
 %if 0%{?suse_version} == 1500
 Requires:	libopenssl3
@@ -330,6 +338,9 @@ Provides:       %{vname}-libs = %{epoch}:%{version}-%{release}
 Obsoletes:      %{sname}-libs <= %{epoch}:%{version}-%{release}
 Obsoletes:      %{vname}-libs <= %{epoch}:%{version}-%{release}
 Epoch:          1
+# Percona released PG 18 with the ECPG run-time libraries in -libs; they
+# moved to -ecpg-libs later. Keep them installed across dnf/zypper upgrades.
+Requires:       %{name}-ecpg-libs%{?_isa} = %{epoch}:%{version}-%{release}
 
 %if 0%{?suse_version} == 1500
 Requires:	libopenssl3
@@ -472,6 +483,9 @@ Provides:       %{sname}-devel = %{epoch}:%{version}-%{release}
 Obsoletes:      %{sname}-devel <= %{epoch}:%{version}-%{release}
 Obsoletes:      %{vname}-devel <= %{epoch}:%{version}-%{release}
 Epoch:          1
+# Same upgrade bridge for the ecpg preprocessor, headers and link-time files
+# that Percona's PG 18 -devel used to ship (now in -ecpg-devel).
+Requires:       %{name}-ecpg-devel%{?_isa} = %{epoch}:%{version}-%{release}
 
 %description devel
 The postgresql%{pgmajorversion}-devel package contains the header files and libraries
