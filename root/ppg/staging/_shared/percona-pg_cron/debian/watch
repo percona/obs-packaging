@@ -1,2 +1,5 @@
-version=4
-https://github.com/citusdata/pg_cron/tags .*/v(.*).tar.gz
+Version: 5
+
+Template: Github
+Owner: citusdata
+Project: pg_cron

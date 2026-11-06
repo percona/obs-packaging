@@ -5,7 +5,7 @@ Architecture: any
 Version: 1:%!{WAL2JSON_VERSION}-%!{PKG_REVISION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
- debhelper (>= 10),
+ debhelper-compat (= 13),
  mawk,
  percona-postgresql-server-dev-all (>= 153~),
 Debtransform-Release: 1

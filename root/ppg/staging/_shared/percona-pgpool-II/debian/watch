@@ -1,0 +1,4 @@
+Version: 5
+
+Source: https://www.pgpool.net/source/
+Matching-Pattern: pgpool-II-([0-9.]+).tar.gz

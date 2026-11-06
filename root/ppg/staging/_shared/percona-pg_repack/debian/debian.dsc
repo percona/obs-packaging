@@ -5,7 +5,7 @@ Architecture: any
 Version: 1:%!{PG_REPACK_VERSION}-%!{PKG_REVISION}
 Maintainer: Percona Development Team <info@percona.com>
 Build-Depends:
- debhelper (>= 13),
+ debhelper-compat (= 13),
  liblz4-dev,
  libnuma-dev,
  libreadline-dev,

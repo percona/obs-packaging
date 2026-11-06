@@ -1,0 +1,7 @@
+#!/bin/sh
+
+# testsuite expects some users
+export USER=postgres
+export PG_VIRTUALENV_ARGS="-i -Atrust"
+
+pg_buildext -o 'shared_preload_libraries=credcheck' installcheck
