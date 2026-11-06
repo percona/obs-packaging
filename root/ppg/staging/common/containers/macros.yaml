@@ -8,6 +8,10 @@
 # of PG_VERSION releases already listed in root/ppg/releases/<major>/release.yaml,
 # so it resets to 1 on its own when PG_MINOR_VERSION is bumped.  Declare it here
 # only if this project needs its own pinned counter.
-- PG_MAJOR_VERSION: 18
-- PG_MINOR_VERSION: 6
+- PG_MAJOR_VERSION: 19
+- PG_MINOR_VERSION: %!{PG_19_MINOR_VERSION}
 - PG_VERSION: %!{PG_MAJOR_VERSION}.%!{PG_MINOR_VERSION}
+# PostGIS RPM major of the *target* major only (PostGIS 3.7 on PG 19, as in
+# staging/19/macros.yaml); the older majors installed by the Dockerfile's
+# {{FOR}} block stay on postgis35.
+- POSTGIS_RPM_MAJOR: 37
