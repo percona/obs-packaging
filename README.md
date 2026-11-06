@@ -23,6 +23,8 @@ Per-distribution package version lists, updated automatically after every succes
 | `ppg:staging:17` | [isv:percona:ppg:staging:17](https://build.opensuse.org/project/show/isv:percona:ppg:staging:17) | [docs/versions/ppg-staging-17.md](docs/versions/ppg-staging-17.md) | [![QA ppg:staging:17](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/percona/obs-packaging/badges/qa-badge-ppg-staging-17.json)](https://github.com/percona/obs-packaging/actions/workflows/obs-nightly-qa.yml) |
 | `ppg:staging:18` | [isv:percona:ppg:staging:18](https://build.opensuse.org/project/show/isv:percona:ppg:staging:18) | [docs/versions/ppg-staging-18.md](docs/versions/ppg-staging-18.md) | [![QA ppg:staging:18](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/percona/obs-packaging/badges/qa-badge-ppg-staging-18.json)](https://github.com/percona/obs-packaging/actions/workflows/obs-nightly-qa.yml) |
 
+The stormweaver development snapshot is the [isv:percona:tools:stormweaver:nightly](https://build.opensuse.org/project/show/isv:percona:tools:stormweaver:nightly) project, which builds the tool's main branch.
+
 ## Current Releases
 
 Released package versions, published to the release OBS projects after each successful release tag.

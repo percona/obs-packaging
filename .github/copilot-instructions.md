@@ -23,6 +23,13 @@ root/
 │               ├── debian/
 │               ├── rpm/
 │               └── obs/_service
+├── tools/                          # internal tools, flat layout (root/README.md "Tools")
+│   └── stormweaver/
+│       ├── _shared/stormweaver/    # the package, symlinked from both projects below
+│       ├── stormweaver -> _shared/stormweaver
+│       ├── percona-python3.14t/
+│       ├── percona-python3.14t-pytest/
+│       └── nightly/                # tools:stormweaver:nightly, builds main
 └── <product>/                      # e.g. ppg/
     ├── releases/                   # release pointer files (see root/README.md)
     │   └── <name>/release.yaml

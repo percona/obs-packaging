@@ -1,0 +1,5 @@
+<services>
+  <service name="download_url">
+    <param name="url">https://www.python.org/ftp/python/%!{PYFT_VERSION}/Python-%!{PYFT_VERSION}.tar.xz</param>
+  </service>
+</services>

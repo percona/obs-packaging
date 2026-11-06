@@ -1,0 +1,18 @@
+# Release tag once stormweaver has one; until then both projects build main
+# and stamp STORMWEAVER_PACKAGE_VERSION. Switching to tags: set
+# STORMWEAVER_REVISION to v%!{STORMWEAVER_VERSION}, and in
+# _shared/stormweaver/obs/_service replace the "version" param with
+#   versionformat=@PARENT_TAG@+@TAG_OFFSET@, versionrewrite-pattern=v(.*),
+#   versionrewrite-replacement=\1, match-tag=v*
+# (tar_scm ignores "version" when versionformat is set; match-tag keeps the
+# floating "latest" tag from winning git describe).
+- STORMWEAVER_VERSION: 0.1.0
+- STORMWEAVER_REVISION: main
+- STORMWEAVER_PACKAGE_VERSION: 0.1.0~dev
+
+# Free-threaded interpreter minor the stormweaver package builds against.
+# Each percona-python<X>t package pins its own PYFT_MINOR in its macros.yaml.
+- PYFT_MINOR: 3.14
+
+# libpq comes from this ppg staging major (path-prefix in project.yaml).
+- STORMWEAVER_PG_MAJOR: 18

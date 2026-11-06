@@ -1,0 +1,5 @@
+title: StormWeaver
+description: |
+  Concurrent database testing tool: C++23 core driven from free-threaded
+  Python scenarios. Installs into /opt/percona-python%!{PYFT_MINOR}t's
+  site-packages with a /usr/bin/stormweaver launcher.

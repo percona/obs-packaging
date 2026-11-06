@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /opt/percona-python%!{PYFT_MINOR}t/bin/python%!{PYFT_MINOR}t -I -m stormweaver "$@"
