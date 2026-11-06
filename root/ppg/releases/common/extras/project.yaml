@@ -1,0 +1,8 @@
+build: false
+description: 'Extras subproject for ppg:releases:common.
+
+  Builds are disabled; binaries are copied via osc release.
+
+  '
+repositories: []
+title: ppg releases common — extras

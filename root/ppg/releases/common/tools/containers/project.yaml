@@ -1,0 +1,858 @@
+build: false
+description: 'Tools:containers subproject for ppg:releases:common.
+
+  Builds are disabled; binaries are copied via osc release.
+
+  '
+project-config: '# --- from root/ppg/staging/common/tools/containers/project.yaml
+  ---
+
+  Type: docker
+
+  BuildEngine: podman
+
+  BuildFlags: sbom:spdx
+
+  BuildFlags: sbom:cyclonedx
+
+  PublishFlags: withsbom
+
+  # OCI index + OCI manifests (ppg-testing requires OCI-only media types) with
+
+  # gzip layers, so Docker < 23 can still pull the images.  Stock obs-build
+
+  # only writes an OCI archive for non-gzip compression; the labs workers carry
+
+  # a patch that also selects it for container-build-format:oci.
+
+  BuildFlags: container-compression-format:gzip
+
+  BuildFlags: container-build-format:oci
+
+
+  Preinstall: skopeo
+
+
+  ExpandFlags: filterbasecontainerpkgs
+
+
+  Prefer: redhat-release
+
+  Prefer: glibc-minimal-langpack
+
+  Prefer: gpgme
+
+  Prefer: iptables-nft
+
+  # curl/libcurl 8.23.0 (ppg:common:deps) vs the UBI curl-minimal/
+
+  # libcurl-minimal: both provide libcurl.so.4 / curl, so prefer ours.
+
+  Prefer: libcurl
+
+  Prefer: curl
+
+  Prefer: percona-postgresql18-libs
+
+  Ignore: rocky-release
+
+  Substitute: rocky-release redhat-release
+
+
+  BuildFlags: dockerarg:PPG_REPO=staging
+
+
+  %if "%_repository" == "ubi8"
+
+
+  ExpandFlags: module:container-tools-rhel8
+
+  # Only the perl:5.26 stream is enabled: its artifacts are plain RPMs. Any
+
+  # other stream would expose .module+ packages that microdnf rejects inside
+
+  # the real ubi8/ubi-minimal image. UBI 8 AppStream carries BOTH copies of
+
+  # perl-IO-Socket-SSL, perl-Net-SSLeay and perl-Mozilla-CA and the expander
+
+  # takes the modular one (its release string sorts higher), so
+
+  # common:containers:ubi8 (earlier in the path) shadows them with non-modular
+
+  # rebuilds, and adds perl-DBD-Pg and llvm which UBI 8 only has as streams.
+
+  ExpandFlags: module:perl-5.26
+
+  # redhat-rpm-config (pulled by perl -> perl-devel on EL8) requires these files;
+
+  # OBS needs the mapping to put findutils into the image''s package repository.
+
+  FileProvides: /usr/bin/find findutils
+
+  FileProvides: /usr/bin/xargs findutils
+
+
+  BuildFlags: dockerarg:RHEL_VER=el8
+
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi8/ubi-minimal:latest
+
+
+  %endif
+
+
+  %if "%_repository" == "ubi9"
+
+
+  BuildFlags: dockerarg:RHEL_VER=el9
+
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+
+  %endif
+
+
+  %if "%_repository" == "ubi10"
+
+
+  BuildFlags: dockerarg:RHEL_VER=el10
+
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi10/ubi-minimal:latest
+
+
+  # EL10''s atk pulls in at-spi2-core, which requires /usr/bin/xprop; the
+
+  # expander needs the hint to pull xprop (UBI 10 AppStream) into the build root.
+
+  FileProvides: /usr/bin/xprop xprop
+
+
+  # containers-common-extra: UBI 10 ships crun, not runc.
+
+  Prefer: crun
+
+  # EL10''s system Python is 3.12, so the distro python3-* packages also
+
+  # provide python3.12-*: take the distro package where UBI 10 ships it …
+
+  Prefer: python3-attrs python3-dateutil python3-dns python3-six python3-wcwidth
+
+  Prefer: python3-jmespath python3-prettytable python3-psutil
+
+  # … and ours where only EPEL has it (the Percona repo must work without EPEL)
+
+  # or where ours is built against Percona libpq (psycopg2).
+
+  Prefer: python3.12-click python3.12-boto3 python3.12-botocore python3.12-lz4 python3.12-s3transfer
+
+  Prefer: python3.12-psycopg2 python3.12-etcd
+
+
+  %endif
+
+  '
+qa:
+- name: ubi8-pgbackrest-pg14
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '14'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi8
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:14:containers
+      repository: ubi8
+    SERVER_VERSION: '14.24'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi8-pgbackrest-pg15
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '15'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi8
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:15:containers
+      repository: ubi8
+    SERVER_VERSION: '15.19'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi8-pgbackrest-pg16
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '16'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi8
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:16:containers
+      repository: ubi8
+    SERVER_VERSION: '16.15'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi8-pgbackrest-pg17
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '17'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi8
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:17:containers
+      repository: ubi8
+    SERVER_VERSION: '17.11'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi8-pgbackrest-pg18
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '18'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi8
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:18:containers
+      repository: ubi8
+    SERVER_VERSION: '18.6'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi8-pgbackrest-pg19
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '19'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi8
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:19:containers
+      repository: ubi8
+    SERVER_VERSION: '19.0'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi8-pgbouncer-pg14
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '14'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi8
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:14:containers
+      repository: ubi8
+    SERVER_VERSION: '14.24'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi8-pgbouncer-pg15
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '15'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi8
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:15:containers
+      repository: ubi8
+    SERVER_VERSION: '15.19'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi8-pgbouncer-pg16
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '16'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi8
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:16:containers
+      repository: ubi8
+    SERVER_VERSION: '16.15'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi8-pgbouncer-pg17
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '17'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi8
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:17:containers
+      repository: ubi8
+    SERVER_VERSION: '17.11'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi8-pgbouncer-pg18
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '18'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi8
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:18:containers
+      repository: ubi8
+    SERVER_VERSION: '18.6'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi8-pgbouncer-pg19
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '19'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi8
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:19:containers
+      repository: ubi8
+    SERVER_VERSION: '19.0'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi9-pgbackrest-pg14
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '14'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi9
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:14:containers
+      repository: ubi9
+    SERVER_VERSION: '14.24'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi9-pgbackrest-pg15
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '15'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi9
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:15:containers
+      repository: ubi9
+    SERVER_VERSION: '15.19'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi9-pgbackrest-pg16
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '16'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi9
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:16:containers
+      repository: ubi9
+    SERVER_VERSION: '16.15'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi9-pgbackrest-pg17
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '17'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi9
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:17:containers
+      repository: ubi9
+    SERVER_VERSION: '17.11'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi9-pgbackrest-pg18
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '18'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi9
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:18:containers
+      repository: ubi9
+    SERVER_VERSION: '18.6'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi9-pgbackrest-pg19
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '19'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi9
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:19:containers
+      repository: ubi9
+    SERVER_VERSION: '19.0'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi9-pgbouncer-pg14
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '14'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi9
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:14:containers
+      repository: ubi9
+    SERVER_VERSION: '14.24'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi9-pgbouncer-pg15
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '15'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi9
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:15:containers
+      repository: ubi9
+    SERVER_VERSION: '15.19'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi9-pgbouncer-pg16
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '16'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi9
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:16:containers
+      repository: ubi9
+    SERVER_VERSION: '16.15'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi9-pgbouncer-pg17
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '17'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi9
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:17:containers
+      repository: ubi9
+    SERVER_VERSION: '17.11'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi9-pgbouncer-pg18
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '18'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi9
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:18:containers
+      repository: ubi9
+    SERVER_VERSION: '18.6'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi9-pgbouncer-pg19
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '19'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi9
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:19:containers
+      repository: ubi9
+    SERVER_VERSION: '19.0'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi10-pgbackrest-pg14
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '14'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi10
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:14:containers
+      repository: ubi10
+    SERVER_VERSION: '14.24'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi10-pgbackrest-pg15
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '15'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi10
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:15:containers
+      repository: ubi10
+    SERVER_VERSION: '15.19'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi10-pgbackrest-pg16
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '16'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi10
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:16:containers
+      repository: ubi10
+    SERVER_VERSION: '16.15'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi10-pgbackrest-pg17
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '17'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi10
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:17:containers
+      repository: ubi10
+    SERVER_VERSION: '17.11'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi10-pgbackrest-pg18
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '18'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi10
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:18:containers
+      repository: ubi10
+    SERVER_VERSION: '18.6'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi10-pgbackrest-pg19
+  parameters:
+    COMPONENT: pgbackrest
+    COMPONENT_VERSION: 2.60.0
+    DOCKER_COMPONENT_TAG: 2.60.0
+    DOCKER_SERVER_TAG: '19'
+    REPOSITORY:
+      image: percona-pgbackrest
+      repository: ubi10
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:19:containers
+      repository: ubi10
+    SERVER_VERSION: '19.0'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi10-pgbouncer-pg14
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '14'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi10
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:14:containers
+      repository: ubi10
+    SERVER_VERSION: '14.24'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi10-pgbouncer-pg15
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '15'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi10
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:15:containers
+      repository: ubi10
+    SERVER_VERSION: '15.19'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi10-pgbouncer-pg16
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '16'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi10
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:16:containers
+      repository: ubi10
+    SERVER_VERSION: '16.15'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi10-pgbouncer-pg17
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '17'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi10
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:17:containers
+      repository: ubi10
+    SERVER_VERSION: '17.11'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi10-pgbouncer-pg18
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '18'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi10
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:18:containers
+      repository: ubi10
+    SERVER_VERSION: '18.6'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+- name: ubi10-pgbouncer-pg19
+  parameters:
+    COMPONENT: pgbouncer
+    COMPONENT_VERSION: 1.26.1
+    DOCKER_COMPONENT_TAG: 1.26.1
+    DOCKER_SERVER_TAG: '19'
+    REPOSITORY:
+      image: percona-pgbouncer
+      repository: ubi10
+    SERVER_REPOSITORY:
+      image: percona-distribution-postgresql
+      project: ppg:staging:19:containers
+      repository: ubi10
+    SERVER_VERSION: '19.0'
+    TESTING_BRANCH: main
+    WITH_TDE: false
+  pipeline: docker-component-parallel
+repositories:
+- archs:
+  - x86_64
+  - aarch64
+  name: ubi8
+  paths:
+  - project: RedHat:UBI:Registry
+    repository: images
+  - repository: UBI_8
+    subproject: ppg:releases:common:tools
+  - repository: UBI_8
+    subproject: ppg:staging:18
+  - repository: UBI_8
+    subproject: ppg:staging:17
+  - repository: UBI_8
+    subproject: ppg:staging:16
+  - repository: UBI_8
+    subproject: ppg:staging:15
+  - repository: UBI_8
+    subproject: ppg:staging:14
+  - repository: UBI_8
+    subproject: ppg:common:deps
+  - repository: UBI_8
+    subproject: common:containers:ubi8
+  - project: Fedora:EPEL:8
+    repository: standard
+  - project: RedHat:UBI-8
+    repository: appstream
+  - project: RedHat:UBI-8
+    repository: baseos
+  - project: RockyLinux:8
+    repository: appstream
+  - project: RockyLinux:8
+    repository: baseos
+  - project: RockyLinux:8
+    repository: devel
+- archs:
+  - x86_64
+  - aarch64
+  name: ubi9
+  paths:
+  - project: RedHat:UBI:Registry
+    repository: images
+  - repository: UBI_9
+    subproject: ppg:releases:common:tools
+  - repository: UBI_9
+    subproject: ppg:staging:18
+  - repository: UBI_9
+    subproject: ppg:staging:17
+  - repository: UBI_9
+    subproject: ppg:staging:16
+  - repository: UBI_9
+    subproject: ppg:staging:15
+  - repository: UBI_9
+    subproject: ppg:staging:14
+  - repository: UBI_9
+    subproject: ppg:common:deps
+  - repository: UBI_9
+    subproject: ppg:common:deps:pgadmin
+  - repository: UBI_9
+    subproject: common:containers:ubi9
+  - project: Fedora:EPEL:9
+    repository: standard
+  - project: RedHat:UBI-9
+    repository: standard
+- archs:
+  - x86_64
+  - aarch64
+  name: ubi10
+  paths:
+  - project: RedHat:UBI:Registry
+    repository: images
+  - repository: UBI_10
+    subproject: ppg:releases:common:tools
+  - repository: UBI_10
+    subproject: ppg:staging:18
+  - repository: UBI_10
+    subproject: ppg:staging:17
+  - repository: UBI_10
+    subproject: ppg:staging:16
+  - repository: UBI_10
+    subproject: ppg:staging:15
+  - repository: UBI_10
+    subproject: ppg:staging:14
+  - repository: UBI_10
+    subproject: ppg:common:deps
+  - repository: UBI_10
+    subproject: common:containers:ubi10
+  - project: Fedora:EPEL:10
+    repository: standard
+  - project: RedHat:UBI-10
+    repository: standard
+title: ppg releases common — tools:containers
