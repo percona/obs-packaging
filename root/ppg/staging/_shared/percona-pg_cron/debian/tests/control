@@ -1,8 +1,16 @@
-Depends: @, make
-Tests: cron
-Restrictions: allow-stderr
+Depends:
+ postgresql-common-dev,
+ @,
+Tests:
+ cron,
+Restrictions:
+ allow-stderr,
 
-Depends: @, make
+Depends:
+ postgresql-common-dev,
+ @,
 Test-Command: pg_buildext -o 'shared_preload_libraries=pg_cron' installcheck
-Features: test-name=installcheck
-Restrictions: allow-stderr
+Features:
+ test-name=installcheck,
+Restrictions:
+ allow-stderr,

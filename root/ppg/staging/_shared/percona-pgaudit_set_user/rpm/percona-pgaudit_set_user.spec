@@ -7,16 +7,29 @@
 %global  sname pgaudit%{pgmajorversion}_set_user
 %define pginstdir /usr/pgsql-%{pgmajorversion}/
 
+%{!?llvm:%global llvm 1}
+%{!?runselftest:%global runselftest 0}
+
+# Propagate %%llvm into the actual build: PGXS decides whether to invoke
+# clang/llvm-config based on with_llvm from the installed postgresql*-devel's
+# Makefile.global, not from this spec's %%llvm. Without passing with_llvm=no
+# through to make, setting %%llvm 0 here only drops the llvm BuildRequires/
+# files, while the build still tries to run clang regardless.
+%if %llvm
+%global with_llvm_arg %{nil}
+%else
+%global with_llvm_arg with_llvm=no
+%endif
+
 Name:		percona-%{sname}
 Version:	1.0.0
 Release:        %!{PKG_REVISION}%{?dist}
 Epoch:      1
 Provides:	pgaudit%{pgmajorversion}_set_user = %{version}-%{release}
-URL:        https://github.com/pgaudit/set_user.git
+URL:        https://github.com/pgaudit/set_user
 License:	PostgreSQL
-Group:		Applications/Database
 Source:		%{name}-%{version}.tar.gz
-Summary:	pgaudit%{pgmajorversion}_set_user - PostgreSQL extension allowing privilege escalation with enhanced logging and control
+Summary:	PostgreSQL extension allowing privilege escalation with enhanced logging and control
 Packager:       Percona Development Team <https://jira.percona.com>
 Vendor:         Percona, LLC
 
@@ -27,17 +40,20 @@ BuildRequires:	openssl-devel
 %if 0%{?gts_version}
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
 %endif
+%if %llvm
 BuildRequires:	clang llvm
+%endif
 
-Requires:	postgresql%{pgmajorversion}
+Requires:	postgresql%{pgmajorversion}-server
+%if %runselftest
+BuildRequires:	percona-postgresql%{pgmajorversion}-server pgdg-srpm-macros >= 2.0.0
+%endif
 
 %description
-PostgreSQL is an advanced Object-Relational database management system.
-The PostgreSQL Audit extension (pgaudit) provides detailed session and/or
-object audit logging via the standard PostgreSQL logging facility.
-The set_user part of that extension allows for extra logging with regard
- to granting of superuser privileges, and also enforces
- a superuser-request policy over direct superuser logins.
+This PostgreSQL extension allows switching users and optional privilege
+escalation with enhanced logging and control. It provides an additional layer
+of logging and control when unprivileged users must escalate themselves to
+superuser or object owner roles in order to perform needed maintenance tasks.
 
 %prep
 %setup -q -n %{name}-%{version}
@@ -46,34 +62,45 @@ The set_user part of that extension allows for extra logging with regard
 %if 0%{?gts_version}
 source /opt/rh/gcc-toolset-%{gts_version}/enable
 %endif
-sed -i 's:PG_CONFIG = pg_config:PG_CONFIG = /usr/pgsql-%{pgmajorversion}/bin/pg_config:' Makefile
-%{__make} USE_PGXS=1 %{?_smp_mflags}
+USE_PGXS=1 PATH=%{pginstdir}/bin/:$PATH %{__make} %{?_smp_mflags} %{with_llvm_arg}
 
 %install
-%{__make} USE_PGXS=1 DESTDIR=%{buildroot} install
+USE_PGXS=1 PATH=%{pginstdir}/bin/:$PATH %{__make} %{with_llvm_arg} DESTDIR=%{buildroot} install
+# Install README under the PostgreSQL installation directory:
+%{__install} -d %{buildroot}%{pginstdir}/doc/extension
+%{__install} -m 644 README.md %{buildroot}%{pginstdir}/doc/extension/README-set_user.md
 
-%clean
-rm -rf ${RPM_BUILD_ROOT}
+%check
+%if %runselftest
+# The tests need set_user in shared_preload_libraries
+%pgdg_check_init
+pgdg_check_start main "shared_preload_libraries = 'set_user'"
+pgdg_installcheck %{with_llvm_arg}
+%endif
 
 %files
 %defattr(-,root,root)
 %dir %{pginstdir}
 %dir %{pginstdir}/include
+%dir %{pginstdir}/doc
+%dir %{pginstdir}/doc/extension
 %dir %{pginstdir}/lib
+%dir %{pginstdir}/share
+%dir %{pginstdir}/share/extension
+%{pginstdir}/lib/set_user.so
+%{pginstdir}/include/set_user.h
+%{pginstdir}/share/extension/set_user-*.sql
+%{pginstdir}/share/extension/set_user.control
+%license LICENSE
+%doc %{pginstdir}/doc/extension/README-set_user.md
+%if %llvm
 %dir %{pginstdir}/lib/bitcode
 %dir %{pginstdir}/lib/bitcode/src
 %dir %{pginstdir}/lib/bitcode/src/set_user
 %dir %{pginstdir}/lib/bitcode/src/set_user/src
-%dir %{pginstdir}/share
-%dir %{pginstdir}/share/extension
-%{pginstdir}/lib/set_user.so
 %{pginstdir}/lib/bitcode/src/set_user.index.bc
 %{pginstdir}/lib/bitcode/src/set_user/src/set_user.bc
-%{pginstdir}/include/set_user.h
-%{pginstdir}/share/extension/set_user-*.sql
-%{pginstdir}/share/extension/set_user.control
-%doc LICENSE
-%doc README.md
+%endif
 
 %changelog
 * %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PGAUDIT_SET_USER_VERSION}-1

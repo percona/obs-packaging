@@ -10,6 +10,16 @@
 %global _varlogdir      %{_localstatedir}/log/pgpool
 %global _varlibdir      %{_localstatedir}/lib/pgpool
 
+# EL-10 and Fedora >= 44: ship a local SELinux policy module that lets
+# sshd_session_t search/read the postgres user's home dir (postgresql_db_t),
+# so that SSH pubkey auth via ~/.ssh/authorized_keys works for the failover
+# and online recovery scripts on hosts without a PostgreSQL server package:
+%if 0%{?rhel} >= 10 || 0%{?fedora} >= 44
+%global sshd_selinux 1
+%else
+%global sshd_selinux 0
+%endif
+
 # pcp_* tools are all the same binary (hardlinked); suppress duplicate build-id errors
 %undefine _unique_build_ids
 
@@ -20,6 +30,7 @@ Release:        %!{PKG_REVISION}%{?dist}
 License:        BSD
 URL:            https://www.pgpool.net/
 Source0:        pgpool2-%{version}.tar.gz
+Source1:        pgpool-II-sshd-selinux.te
 Patch0:         pgpool_socket_dir.patch
 Patch1:         pcp_unix_domain_path.patch
 Patch2:         pgpool_log.patch
@@ -52,6 +63,9 @@ BuildRequires:  libmemcached-awesome-devel
 BuildRequires:  libmemcached-devel
 %endif
 BuildRequires:  systemd
+%if %sshd_selinux
+BuildRequires:  selinux-policy-devel
+%endif
 Requires:       percona-postgresql%{pgmajorversion} >= %{pgmajorversion}
 %if 0%{?rhel}
 Requires(post):   systemd-sysv
@@ -168,6 +182,13 @@ install -d %{buildroot}%{_sysconfdir}/sudoers.d
 install -m 0440 src/redhat/pgpool_sudoers.d \
     %{buildroot}%{_sysconfdir}/sudoers.d/pgpool
 
+%if %sshd_selinux
+checkmodule -M -m -o pgpool_II_sshd_fix.mod %{SOURCE1}
+semodule_package -o pgpool_II_sshd_fix.pp -m pgpool_II_sshd_fix.mod
+install -d -m 755 %{buildroot}%{_datadir}/selinux/packages
+install -m 644 pgpool_II_sshd_fix.pp %{buildroot}%{_datadir}/selinux/packages/
+%endif
+
 # var directories
 mkdir -p %{buildroot}%{_varlogdir}
 mkdir -p %{buildroot}%{_varlibdir}
@@ -188,6 +209,10 @@ useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
 /sbin/ldconfig
 %systemd_post pgpool.service
 systemd-tmpfiles --create %{_tmpfilesdir}/%{name}.conf 2>/dev/null || :
+%if %sshd_selinux
+%{_sbindir}/selinuxenabled 2>/dev/null && \
+	%{_sbindir}/semodule -i %{_datadir}/selinux/packages/pgpool_II_sshd_fix.pp >/dev/null 2>&1 || :
+%endif
 
 %preun
 %systemd_preun pgpool.service
@@ -195,9 +220,17 @@ systemd-tmpfiles --create %{_tmpfilesdir}/%{name}.conf 2>/dev/null || :
 %postun
 /sbin/ldconfig
 %systemd_postun_with_restart pgpool.service
+%if %sshd_selinux
+if [ $1 -eq 0 ] ; then
+	# Package removal, not upgrade
+	%{_sbindir}/selinuxenabled 2>/dev/null && \
+		%{_sbindir}/semodule -r pgpool_II_sshd_fix >/dev/null 2>&1 || :
+fi
+%endif
 
 %files
-%doc README TODO COPYING
+%doc README TODO INSTALL AUTHORS ChangeLog NEWS
+%license COPYING
 %dir %{_datadir}/%{short_name}
 %{_bindir}/pgpool
 %{_bindir}/pcp_attach_node
@@ -231,6 +264,9 @@ systemd-tmpfiles --create %{_tmpfilesdir}/%{name}.conf 2>/dev/null || :
 %dir %attr(0750,root,root) %{_sysconfdir}/sudoers.d
 %{_sysconfdir}/sudoers.d/pgpool
 %{_unitdir}/pgpool.service
+%if %sshd_selinux
+%{_datadir}/selinux/packages/pgpool_II_sshd_fix.pp
+%endif
 %attr(0755,postgres,postgres) %dir %{_varlogdir}
 %attr(0755,postgres,postgres) %dir %{_varlibdir}
 %defattr(600,postgres,postgres,-)
@@ -260,28 +296,10 @@ systemd-tmpfiles --create %{_tmpfilesdir}/%{name}.conf 2>/dev/null || :
 %ghost %dir %{pghome}/share
 %ghost %dir %{pghome}/share/extension
 %{pghome}/share/extension/pgpool-recovery.sql
-%{pghome}/share/extension/pgpool_recovery--1.1.sql
-%{pghome}/share/extension/pgpool_recovery--1.2.sql
-%{pghome}/share/extension/pgpool_recovery--1.1--1.2.sql
-%{pghome}/share/extension/pgpool_recovery--1.3.sql
-%{pghome}/share/extension/pgpool_recovery--1.2--1.3.sql
-%{pghome}/share/extension/pgpool_recovery--1.4.sql
-%{pghome}/share/extension/pgpool_recovery--1.3--1.4.sql
+%{pghome}/share/extension/pgpool_recovery*.sql
 %{pghome}/share/extension/pgpool_recovery.control
 %{pghome}/lib/pgpool-recovery.so
-%{pghome}/share/extension/pgpool_adm--1.0.sql
-%{pghome}/share/extension/pgpool_adm--1.1.sql
-%{pghome}/share/extension/pgpool_adm--1.0--1.1.sql
-%{pghome}/share/extension/pgpool_adm--1.2.sql
-%{pghome}/share/extension/pgpool_adm--1.1--1.2.sql
-%{pghome}/share/extension/pgpool_adm--1.3.sql
-%{pghome}/share/extension/pgpool_adm--1.2--1.3.sql
-%{pghome}/share/extension/pgpool_adm--1.4.sql
-%{pghome}/share/extension/pgpool_adm--1.3--1.4.sql
-%{pghome}/share/extension/pgpool_adm--1.5.sql
-%{pghome}/share/extension/pgpool_adm--1.4--1.5.sql
-%{pghome}/share/extension/pgpool_adm--1.6.sql
-%{pghome}/share/extension/pgpool_adm--1.5--1.6.sql
+%{pghome}/share/extension/pgpool_adm*.sql
 %{pghome}/share/extension/pgpool_adm.control
 %{pghome}/lib/pgpool_adm.so
 %ghost %dir %{pghome}/lib/bitcode
