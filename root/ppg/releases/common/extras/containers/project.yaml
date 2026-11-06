@@ -1,0 +1,147 @@
+build: false
+description: 'Extras:containers subproject for ppg:releases:common.
+
+  Builds are disabled; binaries are copied via osc release.
+
+  '
+project-config: '# --- from root/ppg/staging/common/extras/containers/project.yaml
+  ---
+
+  %if "%_repository" == "ubi9"
+
+  Type: docker
+
+  BuildEngine: podman
+
+  # OCI index + OCI manifests (ppg-testing requires OCI-only media types) with
+
+  # gzip layers, so Docker < 23 can still pull the images.  Stock obs-build
+
+  # only writes an OCI archive for non-gzip compression; the labs workers carry
+
+  # a patch that also selects it for container-build-format:oci.
+
+  BuildFlags: container-compression-format:gzip
+
+  BuildFlags: container-build-format:oci
+
+  BuildFlags: dockerarg:PPG_REPO=staging
+
+  BuildFlags: dockerarg:RHEL_VER=el9
+
+  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+
+  Preinstall: skopeo
+
+
+  ExpandFlags: filterbasecontainerpkgs
+
+  Prefer: redhat-release
+
+  Prefer: glibc-minimal-langpack
+
+  Prefer: gpgme
+
+  Prefer: iptables-nft
+
+  # curl/libcurl 8.23.0 (ppg:common:deps) vs the UBI curl-minimal/
+
+  # libcurl-minimal: both provide libcurl.so.4 / curl, so prefer ours.
+
+  Prefer: libcurl
+
+  Prefer: curl
+
+  Prefer: percona-postgresql18-libs
+
+  Ignore: rocky-release
+
+
+  BuildFlags: sbom:spdx
+
+  BuildFlags: sbom:cyclonedx
+
+  PublishFlags: withsbom
+
+  %endif
+
+  '
+qa:
+- name: ubi9-16-to-17
+  parameters:
+    NEW_REPOSITORY:
+      image: percona-distribution-postgresql-custom
+      project: ppg:staging:17:extras:containers
+      repository: ubi9
+    NEW_SERVER_VERSION: '17.11'
+    NEW_VERSION_DOCKER_TAG: '17'
+    OLD_REPOSITORY:
+      image: percona-distribution-postgresql-custom
+      project: ppg:staging:16:extras:containers
+      repository: ubi9
+    OLD_SERVER_VERSION: '16.15'
+    OLD_VERSION_DOCKER_TAG: '16'
+    REPOSITORY:
+      image: percona-distribution-postgresql-custom
+      project: ppg:staging:17:extras:containers
+      repository: ubi9
+    TESTING_BRANCH: main
+    UPGRADE_DOCKER_TAG: 18-17-16
+    UPGRADE_REPOSITORY:
+      image: percona-distribution-postgresql-upgrade-custom
+      repository: ubi9
+  pipeline: docker-server-parallel-custom-upgrade
+- name: ubi9-17-to-18
+  parameters:
+    NEW_REPOSITORY:
+      image: percona-distribution-postgresql-custom
+      project: ppg:staging:18:extras:containers
+      repository: ubi9
+    NEW_SERVER_VERSION: '18.6'
+    NEW_VERSION_DOCKER_TAG: '18'
+    OLD_REPOSITORY:
+      image: percona-distribution-postgresql-custom
+      project: ppg:staging:17:extras:containers
+      repository: ubi9
+    OLD_SERVER_VERSION: '17.11'
+    OLD_VERSION_DOCKER_TAG: '17'
+    REPOSITORY:
+      image: percona-distribution-postgresql-custom
+      project: ppg:staging:18:extras:containers
+      repository: ubi9
+    TESTING_BRANCH: main
+    UPGRADE_DOCKER_TAG: 18-17-16
+    UPGRADE_REPOSITORY:
+      image: percona-distribution-postgresql-upgrade-custom
+      repository: ubi9
+  pipeline: docker-server-parallel-custom-upgrade
+repositories:
+- archs:
+  - x86_64
+  - aarch64
+  name: ubi9
+  paths:
+  - project: RedHat:UBI:Registry
+    repository: images
+  - repository: UBI_9
+    subproject: ppg:staging:18:extras
+  - repository: UBI_9
+    subproject: ppg:staging:17:extras
+  - repository: UBI_9
+    subproject: ppg:staging:16:extras
+  - repository: UBI_9
+    subproject: ppg:staging:18
+  - repository: UBI_9
+    subproject: ppg:staging:17
+  - repository: UBI_9
+    subproject: ppg:staging:16
+  - repository: UBI_9
+    subproject: ppg:common:deps
+  - repository: UBI_9
+    subproject: common:containers:ubi9
+  - project: Fedora:EPEL:9
+    repository: standard
+  - project: RedHat:UBI-9
+    repository: standard
+title: ppg releases common — extras:containers
