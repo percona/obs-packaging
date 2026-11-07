@@ -628,12 +628,14 @@ def _package_versions(project: str, lookup: _VersionLookup) -> dict[str, str]:
     repositories build from (``subproject:`` paths), in path order, the first
     provider winning.  A release mirror has no package directories: its
     structure is the staging project it mirrors, its versions are read from
-    the mirror's OBS projects.
+    the mirror's OBS projects.  Projects outside the mirror (another major's
+    staging project, named by an upgrade entry) are their own structure.
     """
     structure = project
     if lookup.mirror is not None:
         release_top, staging_top = lookup.mirror
-        structure = staging_top + project[len(release_top) :]
+        if project == release_top or project.startswith(release_top + ":"):
+            structure = staging_top + project[len(release_top) :]
     own = _own_package_versions(structure, lookup)
     if own and not _builds_artifacts(structure):
         return {n: v for n, v in own.items() if v}

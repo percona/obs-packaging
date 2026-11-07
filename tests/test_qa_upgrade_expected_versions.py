@@ -178,3 +178,21 @@ def test_real_upgrade_entries_get_each_majors_versions(
             old["percona-postgresql"] == "16.0" and new["percona-postgresql"] == "17.0"
         )
         assert old["percona-pgaudit"] == "16.0" and new["percona-pgaudit"] == "17.0"
+
+
+def test_mirror_lookup_keeps_projects_outside_the_mirror(monkeypatch):
+    """A release mirror's upgrade entries name other majors' staging projects:
+    only names inside the mirror are translated to its staging structure."""
+    seen = []
+
+    def own(structure, lookup):
+        seen.append(structure)
+        return {"a": "1"}
+
+    monkeypatch.setattr(cmd_qa, "_own_package_versions", own)
+    monkeypatch.setattr(cmd_qa, "_builds_artifacts", lambda structure: False)
+    lookup = _lookup()
+    lookup.mirror = ("ppg:releases:common", "ppg:staging:common")
+    cmd_qa._package_versions("ppg:staging:16:containers", lookup)
+    cmd_qa._package_versions("ppg:releases:common:containers", lookup)
+    assert seen == ["ppg:staging:16:containers", "ppg:staging:common:containers"]
