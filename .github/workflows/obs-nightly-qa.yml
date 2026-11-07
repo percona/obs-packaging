@@ -1,7 +1,7 @@
 name: OBS Nightly QA
 
 # One PostgreSQL major per night (see .github/nightly-qa-schedule.yml):
-# at 23:00 UTC Monday to Friday, runs the QA of the major listed for that
+# at 23:00 UTC Monday to Saturday, runs the QA of the major listed for that
 # weekday against `main`: its own projects plus the shared-image builds that
 # involve it. `percona-obs qa run` triggers Jenkins for each matrix combo
 # (each its own GitHub Actions check run on the main HEAD).
@@ -16,7 +16,7 @@ name: OBS Nightly QA
 
 on:
   schedule:
-    - cron: '0 2 * * 1-5'    # 02:00 UTC, Monday to Friday
+    - cron: '0 2 * * 1-6'    # 02:00 UTC, Monday to Saturday
   workflow_dispatch:
     inputs:
       major:
