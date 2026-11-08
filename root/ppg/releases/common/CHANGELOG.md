@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [common-1] - 2026-11-06
+## [common-1] - 2026-11-08
 
 ### Added
 - curl (tools): add upstream version 8.23.0
@@ -26,23 +26,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - libspatialite50 5.1.0-2.5.el10
   - percona-credcheck14 5.0-5.1.el10
   - percona-credcheck15 5.0-5.1.el10
-  - percona-credcheck16 5.0-5.1.el10
+  - percona-credcheck16 5.0-5.2.el10
   - percona-credcheck17 5.0-5.1.el10
   - percona-credcheck18 5.0-5.1.el10
   - percona-pg_cron_14 1.6.8-3.5.el10
   - percona-pg_cron_15 1.6.8-3.5.el10
-  - percona-pg_cron_16 1.6.8-3.7.el10
+  - percona-pg_cron_16 1.6.8-3.8.el10
   - percona-pg_cron_17 1.6.8-3.6.el10
   - percona-pg_cron_18 1.6.8-3.8.el10
   - percona-pg_oidc_validator18 1.1.0-5.7.el10
   - percona-pg_repack14 1.5.3-7.3.el10
   - percona-pg_repack15 1.5.3-7.3.el10
-  - percona-pg_repack16 1.5.3-7.3.el10
+  - percona-pg_repack16 1.5.3-7.4.el10
   - percona-pg_repack17 1.5.3-7.3.el10
   - percona-pg_repack18 1.5.3-7.5.el10
   - percona-pg_stat_monitor14 2.4.0-3.1.el10
   - percona-pg_stat_monitor15 2.4.0-3.1.el10
-  - percona-pg_stat_monitor16 2.4.0-3.1.el10
+  - percona-pg_stat_monitor16 2.4.0-3.2.el10
   - percona-pg_stat_monitor17 2.4.0-3.1.el10
   - percona-pg_stat_monitor18 2.4.0-3.1.el10
   - percona-pg_tde17 2.2.2-7.2.el10
@@ -51,8 +51,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - percona-pgaudit14_set_user 4.2.0-5.5.el10
   - percona-pgaudit15 1.7.1-8.5.el10
   - percona-pgaudit15_set_user 4.2.0-5.5.el10
-  - percona-pgaudit16 16.1-5.7.el10
-  - percona-pgaudit16_set_user 4.2.0-5.7.el10
+  - percona-pgaudit16 16.1-5.8.el10
+  - percona-pgaudit16_set_user 4.2.0-5.8.el10
   - percona-pgaudit17 17.1-5.6.el10
   - percona-pgaudit17_set_user 4.2.0-7.6.el10
   - percona-pgaudit18 18.0-5.8.el10
@@ -61,8 +61,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - percona-pgvector_14-llvmjit 0.8.7-2.5.el10
   - percona-pgvector_15 0.8.7-2.5.el10
   - percona-pgvector_15-llvmjit 0.8.7-2.5.el10
-  - percona-pgvector_16 0.8.7-2.7.el10
-  - percona-pgvector_16-llvmjit 0.8.7-2.7.el10
+  - percona-pgvector_16 0.8.7-2.8.el10
+  - percona-pgvector_16-llvmjit 0.8.7-2.8.el10
   - percona-pgvector_17 0.8.7-2.6.el10
   - percona-pgvector_17-llvmjit 0.8.7-2.6.el10
   - percona-pgvector_18 0.8.7-2.8.el10
@@ -71,8 +71,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - percona-postgis35_14-llvmjit 3.5.7-4.8.el10
   - percona-postgis35_15 3.5.7-4.8.el10
   - percona-postgis35_15-llvmjit 3.5.7-4.8.el10
-  - percona-postgis35_16 3.5.7-4.9.el10
-  - percona-postgis35_16-llvmjit 3.5.7-4.9.el10
+  - percona-postgis35_16 3.5.7-4.10.el10
+  - percona-postgis35_16-llvmjit 3.5.7-4.10.el10
   - percona-postgis35_17 3.5.7-4.8.el10
   - percona-postgis35_17-llvmjit 3.5.7-4.8.el10
   - percona-postgis35_18 3.5.7-4.8.el10
@@ -92,11 +92,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - percona-postgresql15-libs 15.19-5.2.el10
   - percona-postgresql15-llvmjit 15.19-5.2.el10
   - percona-postgresql15-server 15.19-5.2.el10
-  - percona-postgresql16 16.15-7.3.el10
-  - percona-postgresql16-contrib 16.15-7.3.el10
-  - percona-postgresql16-libs 16.15-7.3.el10
-  - percona-postgresql16-llvmjit 16.15-7.3.el10
-  - percona-postgresql16-server 16.15-7.3.el10
+  - percona-postgresql16 16.15-8.1.el10
+  - percona-postgresql16-contrib 16.15-8.1.el10
+  - percona-postgresql16-libs 16.15-8.1.el10
+  - percona-postgresql16-llvmjit 16.15-8.1.el10
+  - percona-postgresql16-server 16.15-8.1.el10
   - percona-postgresql17 17.11.1-8.3.el10
   - percona-postgresql17-contrib 17.11.1-8.3.el10
   - percona-postgresql17-libs 17.11.1-8.3.el10
@@ -110,7 +110,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - percona-postgresql18-server 18.6.1-8.1.el10
   - percona-wal2json14 2.7-2.5.el10
   - percona-wal2json15 2.7-2.5.el10
-  - percona-wal2json16 2.7-2.7.el10
+  - percona-wal2json16 2.7-2.8.el10
   - percona-wal2json17 2.7-2.6.el10
   - percona-wal2json18 2.7-2.8.el10
   - perl-JSON 4.10-1.20.el10
@@ -132,23 +132,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - llvm-libs 21.1.8-1.6.el8
   - percona-credcheck14 5.0-5.1.el8
   - percona-credcheck15 5.0-5.1.el8
-  - percona-credcheck16 5.0-5.1.el8
+  - percona-credcheck16 5.0-5.2.el8
   - percona-credcheck17 5.0-5.1.el8
   - percona-credcheck18 5.0-5.1.el8
   - percona-pg_cron_14 1.6.8-3.5.el8
   - percona-pg_cron_15 1.6.8-3.5.el8
-  - percona-pg_cron_16 1.6.8-3.7.el8
+  - percona-pg_cron_16 1.6.8-3.8.el8
   - percona-pg_cron_17 1.6.8-3.7.el8
   - percona-pg_cron_18 1.6.8-3.9.el8
   - percona-pg_oidc_validator18 1.1.0-5.7.el8
   - percona-pg_repack14 1.5.3-7.2.el8
   - percona-pg_repack15 1.5.3-7.2.el8
-  - percona-pg_repack16 1.5.3-7.3.el8
+  - percona-pg_repack16 1.5.3-7.4.el8
   - percona-pg_repack17 1.5.3-7.3.el8
   - percona-pg_repack18 1.5.3-7.5.el8
   - percona-pg_stat_monitor14 2.4.0-3.1.el8
   - percona-pg_stat_monitor15 2.4.0-3.1.el8
-  - percona-pg_stat_monitor16 2.4.0-3.1.el8
+  - percona-pg_stat_monitor16 2.4.0-3.2.el8
   - percona-pg_stat_monitor17 2.4.0-3.1.el8
   - percona-pg_stat_monitor18 2.4.0-3.1.el8
   - percona-pg_tde17 2.2.2-7.2.el8
@@ -157,8 +157,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - percona-pgaudit14_set_user 4.2.0-5.5.el8
   - percona-pgaudit15 1.7.1-8.5.el8
   - percona-pgaudit15_set_user 4.2.0-5.5.el8
-  - percona-pgaudit16 16.1-5.7.el8
-  - percona-pgaudit16_set_user 4.2.0-5.8.el8
+  - percona-pgaudit16 16.1-5.8.el8
+  - percona-pgaudit16_set_user 4.2.0-5.9.el8
   - percona-pgaudit17 17.1-5.7.el8
   - percona-pgaudit17_set_user 4.2.0-7.7.el8
   - percona-pgaudit18 18.0-5.9.el8
@@ -167,8 +167,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - percona-pgvector_14-llvmjit 0.8.7-2.5.el8
   - percona-pgvector_15 0.8.7-2.5.el8
   - percona-pgvector_15-llvmjit 0.8.7-2.5.el8
-  - percona-pgvector_16 0.8.7-2.7.el8
-  - percona-pgvector_16-llvmjit 0.8.7-2.7.el8
+  - percona-pgvector_16 0.8.7-2.8.el8
+  - percona-pgvector_16-llvmjit 0.8.7-2.8.el8
   - percona-pgvector_17 0.8.7-2.7.el8
   - percona-pgvector_17-llvmjit 0.8.7-2.7.el8
   - percona-pgvector_18 0.8.7-2.9.el8
@@ -177,8 +177,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - percona-postgis35_14-llvmjit 3.5.7-4.9.el8
   - percona-postgis35_15 3.5.7-4.9.el8
   - percona-postgis35_15-llvmjit 3.5.7-4.9.el8
-  - percona-postgis35_16 3.5.7-4.9.el8
-  - percona-postgis35_16-llvmjit 3.5.7-4.9.el8
+  - percona-postgis35_16 3.5.7-4.10.el8
+  - percona-postgis35_16-llvmjit 3.5.7-4.10.el8
   - percona-postgis35_17 3.5.7-4.9.el8
   - percona-postgis35_17-llvmjit 3.5.7-4.9.el8
   - percona-postgis35_18 3.5.7-4.9.el8
@@ -198,11 +198,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - percona-postgresql15-libs 15.19-5.1.el8
   - percona-postgresql15-llvmjit 15.19-5.1.el8
   - percona-postgresql15-server 15.19-5.1.el8
-  - percona-postgresql16 16.15-7.2.el8
-  - percona-postgresql16-contrib 16.15-7.2.el8
-  - percona-postgresql16-libs 16.15-7.2.el8
-  - percona-postgresql16-llvmjit 16.15-7.2.el8
-  - percona-postgresql16-server 16.15-7.2.el8
+  - percona-postgresql16 16.15-8.1.el8
+  - percona-postgresql16-contrib 16.15-8.1.el8
+  - percona-postgresql16-libs 16.15-8.1.el8
+  - percona-postgresql16-llvmjit 16.15-8.1.el8
+  - percona-postgresql16-server 16.15-8.1.el8
   - percona-postgresql17 17.11.1-8.2.el8
   - percona-postgresql17-contrib 17.11.1-8.2.el8
   - percona-postgresql17-libs 17.11.1-8.2.el8
@@ -216,7 +216,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - percona-postgresql18-server 18.6.1-8.1.el8
   - percona-wal2json14 2.7-2.4.el8
   - percona-wal2json15 2.7-2.4.el8
-  - percona-wal2json16 2.7-2.6.el8
+  - percona-wal2json16 2.7-2.7.el8
   - percona-wal2json17 2.7-2.6.el8
   - percona-wal2json18 2.7-2.8.el8
   - perl-DBD-Pg 3.7.4-1.18.el8
@@ -247,23 +247,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - libusbx 1.0.30-1.11.el9
   - percona-credcheck14 5.0-5.1.el9
   - percona-credcheck15 5.0-5.1.el9
-  - percona-credcheck16 5.0-5.1.el9
+  - percona-credcheck16 5.0-5.2.el9
   - percona-credcheck17 5.0-5.1.el9
   - percona-credcheck18 5.0-5.1.el9
   - percona-pg_cron_14 1.6.8-3.4.el9
   - percona-pg_cron_15 1.6.8-3.4.el9
-  - percona-pg_cron_16 1.6.8-3.6.el9
+  - percona-pg_cron_16 1.6.8-3.7.el9
   - percona-pg_cron_17 1.6.8-3.6.el9
   - percona-pg_cron_18 1.6.8-3.8.el9
   - percona-pg_oidc_validator18 1.1.0-5.7.el9
   - percona-pg_repack14 1.5.3-7.3.el9
   - percona-pg_repack15 1.5.3-7.3.el9
-  - percona-pg_repack16 1.5.3-7.4.el9
+  - percona-pg_repack16 1.5.3-7.5.el9
   - percona-pg_repack17 1.5.3-7.4.el9
   - percona-pg_repack18 1.5.3-7.6.el9
   - percona-pg_stat_monitor14 2.4.0-3.1.el9
   - percona-pg_stat_monitor15 2.4.0-3.1.el9
-  - percona-pg_stat_monitor16 2.4.0-3.1.el9
+  - percona-pg_stat_monitor16 2.4.0-3.2.el9
   - percona-pg_stat_monitor17 2.4.0-3.1.el9
   - percona-pg_stat_monitor18 2.4.0-3.1.el9
   - percona-pg_tde17 2.2.2-7.3.el9
@@ -272,8 +272,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - percona-pgaudit14_set_user 4.2.0-5.4.el9
   - percona-pgaudit15 1.7.1-8.4.el9
   - percona-pgaudit15_set_user 4.2.0-5.4.el9
-  - percona-pgaudit16 16.1-5.6.el9
-  - percona-pgaudit16_set_user 4.2.0-5.7.el9
+  - percona-pgaudit16 16.1-5.7.el9
+  - percona-pgaudit16_set_user 4.2.0-5.8.el9
   - percona-pgaudit17 17.1-5.6.el9
   - percona-pgaudit17_set_user 4.2.0-7.6.el9
   - percona-pgaudit18 18.0-5.8.el9
@@ -282,8 +282,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - percona-pgvector_14-llvmjit 0.8.7-2.4.el9
   - percona-pgvector_15 0.8.7-2.4.el9
   - percona-pgvector_15-llvmjit 0.8.7-2.4.el9
-  - percona-pgvector_16 0.8.7-2.6.el9
-  - percona-pgvector_16-llvmjit 0.8.7-2.6.el9
+  - percona-pgvector_16 0.8.7-2.7.el9
+  - percona-pgvector_16-llvmjit 0.8.7-2.7.el9
   - percona-pgvector_17 0.8.7-2.6.el9
   - percona-pgvector_17-llvmjit 0.8.7-2.6.el9
   - percona-pgvector_18 0.8.7-2.8.el9
@@ -292,8 +292,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - percona-postgis35_14-llvmjit 3.5.7-4.8.el9
   - percona-postgis35_15 3.5.7-4.8.el9
   - percona-postgis35_15-llvmjit 3.5.7-4.8.el9
-  - percona-postgis35_16 3.5.7-4.9.el9
-  - percona-postgis35_16-llvmjit 3.5.7-4.9.el9
+  - percona-postgis35_16 3.5.7-4.10.el9
+  - percona-postgis35_16-llvmjit 3.5.7-4.10.el9
   - percona-postgis35_17 3.5.7-4.8.el9
   - percona-postgis35_17-llvmjit 3.5.7-4.8.el9
   - percona-postgis35_18 3.5.7-4.8.el9
@@ -313,11 +313,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - percona-postgresql15-libs 15.19-5.2.el9
   - percona-postgresql15-llvmjit 15.19-5.2.el9
   - percona-postgresql15-server 15.19-5.2.el9
-  - percona-postgresql16 16.15-7.3.el9
-  - percona-postgresql16-contrib 16.15-7.3.el9
-  - percona-postgresql16-libs 16.15-7.3.el9
-  - percona-postgresql16-llvmjit 16.15-7.3.el9
-  - percona-postgresql16-server 16.15-7.3.el9
+  - percona-postgresql16 16.15-8.1.el9
+  - percona-postgresql16-contrib 16.15-8.1.el9
+  - percona-postgresql16-libs 16.15-8.1.el9
+  - percona-postgresql16-llvmjit 16.15-8.1.el9
+  - percona-postgresql16-server 16.15-8.1.el9
   - percona-postgresql17 17.11.1-8.3.el9
   - percona-postgresql17-contrib 17.11.1-8.3.el9
   - percona-postgresql17-libs 17.11.1-8.3.el9
@@ -331,7 +331,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - percona-postgresql18-server 18.6.1-8.1.el9
   - percona-wal2json14 2.7-2.4.el9
   - percona-wal2json15 2.7-2.4.el9
-  - percona-wal2json16 2.7-2.6.el9
+  - percona-wal2json16 2.7-2.7.el9
   - percona-wal2json17 2.7-2.6.el9
   - percona-wal2json18 2.7-2.8.el9
   - perl-JSON 4.03-1.20.el9
@@ -360,67 +360,67 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - librttopo 1.1.0-46.2.el9
   - libspatialite50 5.1.0-2.5.el9
   - libusbx 1.0.30-1.11.el9
-  - percona-h3-pg_16 4.5.0-2.5.el9
+  - percona-h3-pg_16 4.5.0-2.6.el9
   - percona-h3-pg_17 4.5.0-2.6.el9
   - percona-h3-pg_18 4.5.0-2.6.el9
-  - percona-hll_16 2.21-2.5.el9
+  - percona-hll_16 2.21-2.6.el9
   - percona-hll_17 2.21-2.6.el9
   - percona-hll_18 2.21-2.6.el9
-  - percona-ip4r_16 2.4.3-2.5.el9
+  - percona-ip4r_16 2.4.3-2.6.el9
   - percona-ip4r_17 2.4.3-2.6.el9
   - percona-ip4r_18 2.4.3-2.6.el9
   - percona-pg-telemetry17 1.2.0-4.6.el9
-  - percona-pg_cron_16 1.6.8-3.6.el9
+  - percona-pg_cron_16 1.6.8-3.7.el9
   - percona-pg_cron_17 1.6.8-3.6.el9
   - percona-pg_cron_18 1.6.8-3.8.el9
   - percona-pg_oidc_validator18 1.1.0-5.7.el9
-  - percona-pg_partman_16 5.5.0-2.5.el9
+  - percona-pg_partman_16 5.5.0-2.6.el9
   - percona-pg_partman_17 5.5.0-2.6.el9
   - percona-pg_partman_18 5.5.0-2.6.el9
-  - percona-pg_repack16 1.5.3-7.4.el9
+  - percona-pg_repack16 1.5.3-7.5.el9
   - percona-pg_repack17 1.5.3-7.4.el9
   - percona-pg_repack18 1.5.3-7.6.el9
-  - percona-pg_similarity_16 1.0-2.5.el9
+  - percona-pg_similarity_16 1.0-2.6.el9
   - percona-pg_similarity_17 1.0-2.6.el9
   - percona-pg_similarity_18 1.0-2.6.el9
-  - percona-pg_stat_monitor16 2.4.0-3.1.el9
+  - percona-pg_stat_monitor16 2.4.0-3.2.el9
   - percona-pg_stat_monitor17 2.4.0-3.1.el9
   - percona-pg_stat_monitor18 2.4.0-3.1.el9
   - percona-pg_tde17 2.2.2-7.3.el9
-  - percona-pgaudit16 16.1-5.6.el9
-  - percona-pgaudit16_set_user 4.2.0-5.7.el9
+  - percona-pgaudit16 16.1-5.7.el9
+  - percona-pgaudit16_set_user 4.2.0-5.8.el9
   - percona-pgaudit17 17.1-5.6.el9
   - percona-pgaudit17_set_user 4.2.0-7.6.el9
   - percona-pgaudit18 18.0-5.8.el9
   - percona-pgaudit18_set_user 4.2.0-5.8.el9
-  - percona-pgrouting_16 4.0.2-2.5.el9
+  - percona-pgrouting_16 4.0.2-2.6.el9
   - percona-pgrouting_17 4.0.2-2.6.el9
   - percona-pgrouting_18 4.0.2-2.6.el9
-  - percona-pgvector_16 0.8.7-2.6.el9
-  - percona-pgvector_16-llvmjit 0.8.7-2.6.el9
+  - percona-pgvector_16 0.8.7-2.7.el9
+  - percona-pgvector_16-llvmjit 0.8.7-2.7.el9
   - percona-pgvector_17 0.8.7-2.6.el9
   - percona-pgvector_17-llvmjit 0.8.7-2.6.el9
   - percona-pgvector_18 0.8.7-2.8.el9
   - percona-pgvector_18-llvmjit 0.8.7-2.8.el9
-  - percona-pgvectorscale_16 0.9.1-2.5.el9
+  - percona-pgvectorscale_16 0.9.1-2.6.el9
   - percona-pgvectorscale_17 0.9.1-2.6.el9
   - percona-pgvectorscale_18 0.9.1-2.6.el9
-  - percona-postgis35_16 3.5.7-4.9.el9
-  - percona-postgis35_16-llvmjit 3.5.7-4.9.el9
+  - percona-postgis35_16 3.5.7-4.10.el9
+  - percona-postgis35_16-llvmjit 3.5.7-4.10.el9
   - percona-postgis35_17 3.5.7-4.8.el9
   - percona-postgis35_17-llvmjit 3.5.7-4.8.el9
   - percona-postgis35_18 3.5.7-4.8.el9
   - percona-postgis35_18-client 3.5.7-4.8.el9
   - percona-postgis35_18-llvmjit 3.5.7-4.8.el9
   - percona-postgis35_18-utils 3.5.7-4.8.el9
-  - percona-postgresql-unit_16 7.10-2.5.el9
+  - percona-postgresql-unit_16 7.10-2.6.el9
   - percona-postgresql-unit_17 7.10-2.6.el9
   - percona-postgresql-unit_18 7.10-2.6.el9
-  - percona-postgresql16 16.15-4.4.el9
-  - percona-postgresql16-contrib 16.15-4.4.el9
-  - percona-postgresql16-libs 16.15-4.4.el9
-  - percona-postgresql16-llvmjit 16.15-4.4.el9
-  - percona-postgresql16-server 16.15-4.4.el9
+  - percona-postgresql16 16.15-5.1.el9
+  - percona-postgresql16-contrib 16.15-5.1.el9
+  - percona-postgresql16-libs 16.15-5.1.el9
+  - percona-postgresql16-llvmjit 16.15-5.1.el9
+  - percona-postgresql16-server 16.15-5.1.el9
   - percona-postgresql17 17.11-8.2.el9
   - percona-postgresql17-contrib 17.11-8.2.el9
   - percona-postgresql17-libs 17.11-8.2.el9
@@ -431,16 +431,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - percona-postgresql18-libs 18.6-5.3.el9
   - percona-postgresql18-llvmjit 18.6-5.3.el9
   - percona-postgresql18-server 18.6-5.3.el9
-  - percona-postgresql_anonymizer_16 3.2.3-2.5.el9
+  - percona-postgresql_anonymizer_16 3.2.3-2.6.el9
   - percona-postgresql_anonymizer_17 3.2.3-2.6.el9
   - percona-postgresql_anonymizer_18 3.2.3-2.6.el9
-  - percona-rum_16 1.3.15-2.5.el9
+  - percona-rum_16 1.3.15-2.6.el9
   - percona-rum_17 1.3.15-2.6.el9
   - percona-rum_18 1.3.15-2.6.el9
-  - percona-timescaledb_16 2.30.2-2.5.el9
+  - percona-timescaledb_16 2.30.2-2.6.el9
   - percona-timescaledb_17 2.30.2-2.6.el9
   - percona-timescaledb_18 2.30.2-2.6.el9
-  - percona-wal2json16 2.7-2.6.el9
+  - percona-wal2json16 2.7-2.7.el9
   - percona-wal2json17 2.7-2.6.el9
   - percona-wal2json18 2.7-2.8.el9
   - proj98 9.8.1-3.5.el9
@@ -457,8 +457,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - percona-postgresql14-libs 14.24-6.2.el9
   - percona-postgresql15 15.19-5.2.el9
   - percona-postgresql15-libs 15.19-5.2.el9
-  - percona-postgresql16 16.15-7.3.el9
-  - percona-postgresql16-libs 16.15-7.3.el9
+  - percona-postgresql16 16.15-8.1.el9
+  - percona-postgresql16-libs 16.15-8.1.el9
   - percona-postgresql17 17.11.1-8.3.el9
   - percona-postgresql17-libs 17.11.1-8.3.el9
   - percona-postgresql18 18.6.1-8.1.el9
@@ -595,4 +595,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 - UBI base-image package CVEs are not covered by this scan.
-
