@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [16.15-1] - 2026-11-06
+## [16.15-1] - 2026-11-08
 
 ### Added
 - curl: add upstream version 8.23.0
@@ -106,31 +106,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - curl 8.23.0-3.1.el10
   - gosu 1.19-5.5.el10
   - libcurl 8.23.0-3.1.el10
-  - percona-credcheck16 5.0-5.1.el10
+  - percona-credcheck16 5.0-5.2.el10
   - percona-patroni 4.1.5-6.1.el10
   - percona-patroni-etcd 4.1.5-6.1.el10
-  - percona-pg-telemetry16 1.2.0-4.7.el10
-  - percona-pg_cron_16 1.6.8-3.7.el10
-  - percona-pg_repack16 1.5.3-7.3.el10
-  - percona-pg_stat_monitor16 2.4.0-3.1.el10
-  - percona-pgaudit16 16.1-5.7.el10
-  - percona-pgaudit16_set_user 4.2.0-5.7.el10
+  - percona-pg-telemetry16 1.2.0-4.8.el10
+  - percona-pg_cron_16 1.6.8-3.8.el10
+  - percona-pg_repack16 1.5.3-7.4.el10
+  - percona-pg_stat_monitor16 2.4.0-3.2.el10
+  - percona-pgaudit16 16.1-5.8.el10
+  - percona-pgaudit16_set_user 4.2.0-5.8.el10
   - percona-pgbackrest 2.60.0-4.1.el10
-  - percona-pgvector_16 0.8.7-2.7.el10
-  - percona-pgvector_16-llvmjit 0.8.7-2.7.el10
+  - percona-pgvector_16 0.8.7-2.8.el10
+  - percona-pgvector_16-llvmjit 0.8.7-2.8.el10
   - percona-postgresql-client-common 293-5.1.el10
   - percona-postgresql-common 293-5.1.el10
-  - percona-postgresql16 16.15-7.3.el10
-  - percona-postgresql16-contrib 16.15-7.3.el10
-  - percona-postgresql16-libs 16.15-7.3.el10
-  - percona-postgresql16-llvmjit 16.15-7.3.el10
-  - percona-postgresql16-server 16.15-7.3.el10
-  - percona-wal2json16 2.7-2.7.el10
+  - percona-postgresql16 16.15-8.1.el10
+  - percona-postgresql16-contrib 16.15-8.1.el10
+  - percona-postgresql16-libs 16.15-8.1.el10
+  - percona-postgresql16-llvmjit 16.15-8.1.el10
+  - percona-postgresql16-server 16.15-8.1.el10
+  - percona-wal2json16 2.7-2.8.el10
   - perl-JSON 4.10-1.20.el10
   - python3-ydiff 1.4.2-4.4.el10
   - python3.12-click 8.1.7-3.2.el10
   - python3.12-etcd 0.4.5-3.2.el10
-  - python3.12-psycopg2 2.9.13-5.3.el10
+  - python3.12-psycopg2 2.9.13-5.4.el10
 - percona-distribution-postgresql (ubi8) [container image]: add image 16.15-1
   - curl 8.23.0-3.1.el8
   - gosu 1.19-5.3.el8
@@ -138,26 +138,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - llvm 21.1.8-1.6.el8
   - llvm-filesystem 21.1.8-1.6.el8
   - llvm-libs 21.1.8-1.6.el8
-  - percona-credcheck16 5.0-5.1.el8
+  - percona-credcheck16 5.0-5.2.el8
   - percona-patroni 4.1.5-6.1.el8
   - percona-patroni-etcd 4.1.5-6.1.el8
-  - percona-pg-telemetry16 1.2.0-4.7.el8
-  - percona-pg_cron_16 1.6.8-3.7.el8
-  - percona-pg_repack16 1.5.3-7.3.el8
-  - percona-pg_stat_monitor16 2.4.0-3.1.el8
-  - percona-pgaudit16 16.1-5.7.el8
-  - percona-pgaudit16_set_user 4.2.0-5.8.el8
+  - percona-pg-telemetry16 1.2.0-4.8.el8
+  - percona-pg_cron_16 1.6.8-3.8.el8
+  - percona-pg_repack16 1.5.3-7.4.el8
+  - percona-pg_stat_monitor16 2.4.0-3.2.el8
+  - percona-pgaudit16 16.1-5.8.el8
+  - percona-pgaudit16_set_user 4.2.0-5.9.el8
   - percona-pgbackrest 2.60.0-4.1.el8
-  - percona-pgvector_16 0.8.7-2.7.el8
-  - percona-pgvector_16-llvmjit 0.8.7-2.7.el8
+  - percona-pgvector_16 0.8.7-2.8.el8
+  - percona-pgvector_16-llvmjit 0.8.7-2.8.el8
   - percona-postgresql-client-common 293-5.1.el8
   - percona-postgresql-common 293-5.1.el8
-  - percona-postgresql16 16.15-7.2.el8
-  - percona-postgresql16-contrib 16.15-7.2.el8
-  - percona-postgresql16-libs 16.15-7.2.el8
-  - percona-postgresql16-llvmjit 16.15-7.2.el8
-  - percona-postgresql16-server 16.15-7.2.el8
-  - percona-wal2json16 2.7-2.6.el8
+  - percona-postgresql16 16.15-8.1.el8
+  - percona-postgresql16-contrib 16.15-8.1.el8
+  - percona-postgresql16-libs 16.15-8.1.el8
+  - percona-postgresql16-llvmjit 16.15-8.1.el8
+  - percona-postgresql16-server 16.15-8.1.el8
+  - percona-wal2json16 2.7-2.7.el8
   - perl-IO-Socket-SSL 2.066-1.6.el8
   - perl-JSON 4.03-1.24.el8
   - perl-Mozilla-CA 20160104-1.7.el8
@@ -169,7 +169,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - python3.12-etcd 0.4.5-3.1.el8
   - python3.12-prettytable 3.4.0-3.1.el8
   - python3.12-psutil 6.1.1-3.1.el8
-  - python3.12-psycopg2 2.9.13-5.3.el8
+  - python3.12-psycopg2 2.9.13-5.4.el8
   - python3.12-six 1.17.0-3.1.el8
   - python3.12-systemd 235-2.2.el8
   - python3.12-wcwidth 0.2.13-3.1.el8
@@ -178,26 +178,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - gosu 1.19-5.2.el9
   - libcurl 8.23.0-3.1.el9
   - libicu 67.1-11.2.el9
-  - percona-credcheck16 5.0-5.1.el9
+  - percona-credcheck16 5.0-5.2.el9
   - percona-patroni 4.1.5-6.1.el9
   - percona-patroni-etcd 4.1.5-6.1.el9
-  - percona-pg-telemetry16 1.2.0-4.7.el9
-  - percona-pg_cron_16 1.6.8-3.6.el9
-  - percona-pg_repack16 1.5.3-7.4.el9
-  - percona-pg_stat_monitor16 2.4.0-3.1.el9
-  - percona-pgaudit16 16.1-5.6.el9
-  - percona-pgaudit16_set_user 4.2.0-5.7.el9
+  - percona-pg-telemetry16 1.2.0-4.8.el9
+  - percona-pg_cron_16 1.6.8-3.7.el9
+  - percona-pg_repack16 1.5.3-7.5.el9
+  - percona-pg_stat_monitor16 2.4.0-3.2.el9
+  - percona-pgaudit16 16.1-5.7.el9
+  - percona-pgaudit16_set_user 4.2.0-5.8.el9
   - percona-pgbackrest 2.60.0-4.1.el9
-  - percona-pgvector_16 0.8.7-2.6.el9
-  - percona-pgvector_16-llvmjit 0.8.7-2.6.el9
+  - percona-pgvector_16 0.8.7-2.7.el9
+  - percona-pgvector_16-llvmjit 0.8.7-2.7.el9
   - percona-postgresql-client-common 293-5.1.el9
   - percona-postgresql-common 293-5.1.el9
-  - percona-postgresql16 16.15-7.3.el9
-  - percona-postgresql16-contrib 16.15-7.3.el9
-  - percona-postgresql16-libs 16.15-7.3.el9
-  - percona-postgresql16-llvmjit 16.15-7.3.el9
-  - percona-postgresql16-server 16.15-7.3.el9
-  - percona-wal2json16 2.7-2.6.el9
+  - percona-postgresql16 16.15-8.1.el9
+  - percona-postgresql16-contrib 16.15-8.1.el9
+  - percona-postgresql16-libs 16.15-8.1.el9
+  - percona-postgresql16-llvmjit 16.15-8.1.el9
+  - percona-postgresql16-server 16.15-8.1.el9
+  - percona-wal2json16 2.7-2.7.el9
   - perl-JSON 4.03-1.20.el9
   - python3-ydiff 1.4.2-4.2.el9
   - python3.12-click 8.1.7-3.2.el9
@@ -206,7 +206,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - python3.12-etcd 0.4.5-3.2.el9
   - python3.12-prettytable 3.4.0-3.2.el9
   - python3.12-psutil 6.1.1-3.2.el9
-  - python3.12-psycopg2 2.9.13-5.4.el9
+  - python3.12-psycopg2 2.9.13-5.5.el9
   - python3.12-six 1.17.0-3.2.el9
   - python3.12-systemd 235-2.2.el9
   - python3.12-wcwidth 0.2.13-3.2.el9
@@ -232,41 +232,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - librttopo 1.1.0-46.2.el9
   - libspatialite50 5.1.0-2.5.el9
   - libusbx 1.0.30-1.11.el9
-  - percona-h3-pg_16 4.5.0-2.5.el9
-  - percona-hll_16 2.21-2.5.el9
-  - percona-ip4r_16 2.4.3-2.5.el9
+  - percona-h3-pg_16 4.5.0-2.6.el9
+  - percona-hll_16 2.21-2.6.el9
+  - percona-ip4r_16 2.4.3-2.6.el9
   - percona-patroni 4.1.5-6.1.el9
   - percona-patroni-etcd 4.1.5-6.1.el9
-  - percona-pg-telemetry16 1.2.0-4.7.el9
-  - percona-pg_cron_16 1.6.8-3.6.el9
-  - percona-pg_partman_16 5.5.0-2.5.el9
-  - percona-pg_repack16 1.5.3-7.4.el9
-  - percona-pg_similarity_16 1.0-2.5.el9
-  - percona-pg_stat_monitor16 2.4.0-3.1.el9
-  - percona-pgaudit16 16.1-5.6.el9
-  - percona-pgaudit16_set_user 4.2.0-5.7.el9
+  - percona-pg-telemetry16 1.2.0-4.8.el9
+  - percona-pg_cron_16 1.6.8-3.7.el9
+  - percona-pg_partman_16 5.5.0-2.6.el9
+  - percona-pg_repack16 1.5.3-7.5.el9
+  - percona-pg_similarity_16 1.0-2.6.el9
+  - percona-pg_stat_monitor16 2.4.0-3.2.el9
+  - percona-pgaudit16 16.1-5.7.el9
+  - percona-pgaudit16_set_user 4.2.0-5.8.el9
   - percona-pgbackrest 2.60.0-4.1.el9
-  - percona-pgrouting_16 4.0.2-2.5.el9
-  - percona-pgvector_16 0.8.7-2.6.el9
-  - percona-pgvector_16-llvmjit 0.8.7-2.6.el9
-  - percona-pgvectorscale_16 0.9.1-2.5.el9
-  - percona-postgis35_16 3.5.7-4.9.el9
-  - percona-postgis35_16-client 3.5.7-4.9.el9
-  - percona-postgis35_16-gui 3.5.7-4.9.el9
-  - percona-postgis35_16-llvmjit 3.5.7-4.9.el9
-  - percona-postgis35_16-utils 3.5.7-4.9.el9
+  - percona-pgrouting_16 4.0.2-2.6.el9
+  - percona-pgvector_16 0.8.7-2.7.el9
+  - percona-pgvector_16-llvmjit 0.8.7-2.7.el9
+  - percona-pgvectorscale_16 0.9.1-2.6.el9
+  - percona-postgis35_16 3.5.7-4.10.el9
+  - percona-postgis35_16-client 3.5.7-4.10.el9
+  - percona-postgis35_16-gui 3.5.7-4.10.el9
+  - percona-postgis35_16-llvmjit 3.5.7-4.10.el9
+  - percona-postgis35_16-utils 3.5.7-4.10.el9
   - percona-postgresql-client-common 293-5.1.el9
   - percona-postgresql-common 293-5.1.el9
-  - percona-postgresql-unit_16 7.10-2.5.el9
-  - percona-postgresql16 16.15-4.4.el9
-  - percona-postgresql16-contrib 16.15-4.4.el9
-  - percona-postgresql16-libs 16.15-4.4.el9
-  - percona-postgresql16-llvmjit 16.15-4.4.el9
-  - percona-postgresql16-server 16.15-4.4.el9
-  - percona-postgresql_anonymizer_16 3.2.3-2.5.el9
-  - percona-rum_16 1.3.15-2.5.el9
-  - percona-timescaledb_16 2.30.2-2.5.el9
-  - percona-wal2json16 2.7-2.6.el9
+  - percona-postgresql-unit_16 7.10-2.6.el9
+  - percona-postgresql16 16.15-5.1.el9
+  - percona-postgresql16-contrib 16.15-5.1.el9
+  - percona-postgresql16-libs 16.15-5.1.el9
+  - percona-postgresql16-llvmjit 16.15-5.1.el9
+  - percona-postgresql16-server 16.15-5.1.el9
+  - percona-postgresql_anonymizer_16 3.2.3-2.6.el9
+  - percona-rum_16 1.3.15-2.6.el9
+  - percona-timescaledb_16 2.30.2-2.6.el9
+  - percona-wal2json16 2.7-2.7.el9
   - perl-JSON 4.03-1.20.el9
   - proj98 9.8.1-3.5.el9
   - python3-ydiff 1.4.2-4.2.el9
@@ -276,7 +276,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - python3.12-etcd 0.4.5-3.2.el9
   - python3.12-prettytable 3.4.0-3.2.el9
   - python3.12-psutil 6.1.1-3.2.el9
-  - python3.12-psycopg2 2.9.13-5.4.el9
+  - python3.12-psycopg2 2.9.13-5.5.el9
   - python3.12-six 1.17.0-3.2.el9
   - python3.12-systemd 235-2.2.el9
   - python3.12-wcwidth 0.2.13-3.2.el9
@@ -294,37 +294,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - libgeotiff17 1.7.4-2.5.el10
   - librttopo 1.1.0-46.4.el10
   - libspatialite50 5.1.0-2.5.el10
-  - percona-credcheck16 5.0-5.1.el10
+  - percona-credcheck16 5.0-5.2.el10
   - percona-patroni 4.1.5-6.1.el10
   - percona-patroni-etcd 4.1.5-6.1.el10
-  - percona-pg-telemetry16 1.2.0-4.7.el10
-  - percona-pg_cron_16 1.6.8-3.7.el10
-  - percona-pg_repack16 1.5.3-7.3.el10
-  - percona-pg_stat_monitor16 2.4.0-3.1.el10
-  - percona-pgaudit16 16.1-5.7.el10
-  - percona-pgaudit16_set_user 4.2.0-5.7.el10
+  - percona-pg-telemetry16 1.2.0-4.8.el10
+  - percona-pg_cron_16 1.6.8-3.8.el10
+  - percona-pg_repack16 1.5.3-7.4.el10
+  - percona-pg_stat_monitor16 2.4.0-3.2.el10
+  - percona-pgaudit16 16.1-5.8.el10
+  - percona-pgaudit16_set_user 4.2.0-5.8.el10
   - percona-pgbackrest 2.60.0-4.1.el10
-  - percona-pgvector_16 0.8.7-2.7.el10
-  - percona-pgvector_16-llvmjit 0.8.7-2.7.el10
-  - percona-postgis35_16 3.5.7-4.9.el10
-  - percona-postgis35_16-client 3.5.7-4.9.el10
-  - percona-postgis35_16-gui 3.5.7-4.9.el10
-  - percona-postgis35_16-llvmjit 3.5.7-4.9.el10
-  - percona-postgis35_16-utils 3.5.7-4.9.el10
+  - percona-pgvector_16 0.8.7-2.8.el10
+  - percona-pgvector_16-llvmjit 0.8.7-2.8.el10
+  - percona-postgis35_16 3.5.7-4.10.el10
+  - percona-postgis35_16-client 3.5.7-4.10.el10
+  - percona-postgis35_16-gui 3.5.7-4.10.el10
+  - percona-postgis35_16-llvmjit 3.5.7-4.10.el10
+  - percona-postgis35_16-utils 3.5.7-4.10.el10
   - percona-postgresql-client-common 293-5.1.el10
   - percona-postgresql-common 293-5.1.el10
-  - percona-postgresql16 16.15-7.3.el10
-  - percona-postgresql16-contrib 16.15-7.3.el10
-  - percona-postgresql16-libs 16.15-7.3.el10
-  - percona-postgresql16-llvmjit 16.15-7.3.el10
-  - percona-postgresql16-server 16.15-7.3.el10
-  - percona-wal2json16 2.7-2.7.el10
+  - percona-postgresql16 16.15-8.1.el10
+  - percona-postgresql16-contrib 16.15-8.1.el10
+  - percona-postgresql16-libs 16.15-8.1.el10
+  - percona-postgresql16-llvmjit 16.15-8.1.el10
+  - percona-postgresql16-server 16.15-8.1.el10
+  - percona-wal2json16 2.7-2.8.el10
   - perl-JSON 4.10-1.20.el10
   - proj98 9.8.1-3.5.el10
   - python3-ydiff 1.4.2-4.4.el10
   - python3.12-click 8.1.7-3.2.el10
   - python3.12-etcd 0.4.5-3.2.el10
-  - python3.12-psycopg2 2.9.13-5.3.el10
+  - python3.12-psycopg2 2.9.13-5.4.el10
   - snappy 1.1.10-1.18.el10
 - percona-distribution-postgresql-with-postgis (ubi8) [container image]: add image 16.15-1
   - SFCGAL 2.3.0-3.1.el8
@@ -341,31 +341,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - llvm 21.1.8-1.6.el8
   - llvm-filesystem 21.1.8-1.6.el8
   - llvm-libs 21.1.8-1.6.el8
-  - percona-credcheck16 5.0-5.1.el8
+  - percona-credcheck16 5.0-5.2.el8
   - percona-patroni 4.1.5-6.1.el8
   - percona-patroni-etcd 4.1.5-6.1.el8
-  - percona-pg-telemetry16 1.2.0-4.7.el8
-  - percona-pg_cron_16 1.6.8-3.7.el8
-  - percona-pg_repack16 1.5.3-7.3.el8
-  - percona-pg_stat_monitor16 2.4.0-3.1.el8
-  - percona-pgaudit16 16.1-5.7.el8
-  - percona-pgaudit16_set_user 4.2.0-5.8.el8
+  - percona-pg-telemetry16 1.2.0-4.8.el8
+  - percona-pg_cron_16 1.6.8-3.8.el8
+  - percona-pg_repack16 1.5.3-7.4.el8
+  - percona-pg_stat_monitor16 2.4.0-3.2.el8
+  - percona-pgaudit16 16.1-5.8.el8
+  - percona-pgaudit16_set_user 4.2.0-5.9.el8
   - percona-pgbackrest 2.60.0-4.1.el8
-  - percona-pgvector_16 0.8.7-2.7.el8
-  - percona-pgvector_16-llvmjit 0.8.7-2.7.el8
-  - percona-postgis35_16 3.5.7-4.9.el8
-  - percona-postgis35_16-client 3.5.7-4.9.el8
-  - percona-postgis35_16-gui 3.5.7-4.9.el8
-  - percona-postgis35_16-llvmjit 3.5.7-4.9.el8
-  - percona-postgis35_16-utils 3.5.7-4.9.el8
+  - percona-pgvector_16 0.8.7-2.8.el8
+  - percona-pgvector_16-llvmjit 0.8.7-2.8.el8
+  - percona-postgis35_16 3.5.7-4.10.el8
+  - percona-postgis35_16-client 3.5.7-4.10.el8
+  - percona-postgis35_16-gui 3.5.7-4.10.el8
+  - percona-postgis35_16-llvmjit 3.5.7-4.10.el8
+  - percona-postgis35_16-utils 3.5.7-4.10.el8
   - percona-postgresql-client-common 293-5.1.el8
   - percona-postgresql-common 293-5.1.el8
-  - percona-postgresql16 16.15-7.2.el8
-  - percona-postgresql16-contrib 16.15-7.2.el8
-  - percona-postgresql16-libs 16.15-7.2.el8
-  - percona-postgresql16-llvmjit 16.15-7.2.el8
-  - percona-postgresql16-server 16.15-7.2.el8
-  - percona-wal2json16 2.7-2.6.el8
+  - percona-postgresql16 16.15-8.1.el8
+  - percona-postgresql16-contrib 16.15-8.1.el8
+  - percona-postgresql16-libs 16.15-8.1.el8
+  - percona-postgresql16-llvmjit 16.15-8.1.el8
+  - percona-postgresql16-server 16.15-8.1.el8
+  - percona-wal2json16 2.7-2.7.el8
   - perl-DBD-Pg 3.7.4-1.18.el8
   - perl-IO-Socket-SSL 2.066-1.6.el8
   - perl-JSON 4.03-1.24.el8
@@ -379,7 +379,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - python3.12-etcd 0.4.5-3.1.el8
   - python3.12-prettytable 3.4.0-3.1.el8
   - python3.12-psutil 6.1.1-3.1.el8
-  - python3.12-psycopg2 2.9.13-5.3.el8
+  - python3.12-psycopg2 2.9.13-5.4.el8
   - python3.12-six 1.17.0-3.1.el8
   - python3.12-systemd 235-2.2.el8
   - python3.12-wcwidth 0.2.13-3.1.el8
@@ -404,31 +404,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - librttopo 1.1.0-46.2.el9
   - libspatialite50 5.1.0-2.5.el9
   - libusbx 1.0.30-1.11.el9
-  - percona-credcheck16 5.0-5.1.el9
+  - percona-credcheck16 5.0-5.2.el9
   - percona-patroni 4.1.5-6.1.el9
   - percona-patroni-etcd 4.1.5-6.1.el9
-  - percona-pg-telemetry16 1.2.0-4.7.el9
-  - percona-pg_cron_16 1.6.8-3.6.el9
-  - percona-pg_repack16 1.5.3-7.4.el9
-  - percona-pg_stat_monitor16 2.4.0-3.1.el9
-  - percona-pgaudit16 16.1-5.6.el9
-  - percona-pgaudit16_set_user 4.2.0-5.7.el9
+  - percona-pg-telemetry16 1.2.0-4.8.el9
+  - percona-pg_cron_16 1.6.8-3.7.el9
+  - percona-pg_repack16 1.5.3-7.5.el9
+  - percona-pg_stat_monitor16 2.4.0-3.2.el9
+  - percona-pgaudit16 16.1-5.7.el9
+  - percona-pgaudit16_set_user 4.2.0-5.8.el9
   - percona-pgbackrest 2.60.0-4.1.el9
-  - percona-pgvector_16 0.8.7-2.6.el9
-  - percona-pgvector_16-llvmjit 0.8.7-2.6.el9
-  - percona-postgis35_16 3.5.7-4.9.el9
-  - percona-postgis35_16-client 3.5.7-4.9.el9
-  - percona-postgis35_16-gui 3.5.7-4.9.el9
-  - percona-postgis35_16-llvmjit 3.5.7-4.9.el9
-  - percona-postgis35_16-utils 3.5.7-4.9.el9
+  - percona-pgvector_16 0.8.7-2.7.el9
+  - percona-pgvector_16-llvmjit 0.8.7-2.7.el9
+  - percona-postgis35_16 3.5.7-4.10.el9
+  - percona-postgis35_16-client 3.5.7-4.10.el9
+  - percona-postgis35_16-gui 3.5.7-4.10.el9
+  - percona-postgis35_16-llvmjit 3.5.7-4.10.el9
+  - percona-postgis35_16-utils 3.5.7-4.10.el9
   - percona-postgresql-client-common 293-5.1.el9
   - percona-postgresql-common 293-5.1.el9
-  - percona-postgresql16 16.15-7.3.el9
-  - percona-postgresql16-contrib 16.15-7.3.el9
-  - percona-postgresql16-libs 16.15-7.3.el9
-  - percona-postgresql16-llvmjit 16.15-7.3.el9
-  - percona-postgresql16-server 16.15-7.3.el9
-  - percona-wal2json16 2.7-2.6.el9
+  - percona-postgresql16 16.15-8.1.el9
+  - percona-postgresql16-contrib 16.15-8.1.el9
+  - percona-postgresql16-libs 16.15-8.1.el9
+  - percona-postgresql16-llvmjit 16.15-8.1.el9
+  - percona-postgresql16-server 16.15-8.1.el9
+  - percona-wal2json16 2.7-2.7.el9
   - perl-JSON 4.03-1.20.el9
   - proj98 9.8.1-3.5.el9
   - python3-ydiff 1.4.2-4.2.el9
@@ -438,7 +438,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - python3.12-etcd 0.4.5-3.2.el9
   - python3.12-prettytable 3.4.0-3.2.el9
   - python3.12-psutil 6.1.1-3.2.el9
-  - python3.12-psycopg2 2.9.13-5.4.el9
+  - python3.12-psycopg2 2.9.13-5.5.el9
   - python3.12-six 1.17.0-3.2.el9
   - python3.12-systemd 235-2.2.el9
   - python3.12-wcwidth 0.2.13-3.2.el9
@@ -450,4 +450,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 - UBI base-image package CVEs are not covered by this scan.
-
