@@ -49,6 +49,7 @@
  %{!?llvm:%global llvm 1}
 %endif
 
+%{!?runselftest:%global runselftest 0}
 %{!?utils:%global	utils 1}
 %{!?shp2pgsqlgui:%global	shp2pgsqlgui 1}
 %if 0%{?suse_version} >= 1315
@@ -57,15 +58,11 @@
 %{!?raster:%global     raster 1}
 %endif
 
-%if 0%{?fedora} >= 41 || 0%{?rhel} >= 7 || 0%{?suse_version} >= 1500
-%ifnarch ppc64 ppc64le
-# TODO
-%{!?sfcgal:%global     sfcgal 1}
-%else
-%{!?sfcgal:%global     sfcgal 0}
+%if 0%{?fedora} >= 43 || 0%{?rhel} >= 9 || 0%{?suse_version} >= 1500
+%{!?sfcgal:%global	sfcgal 1}
 %endif
-%else
-%{!?sfcgal:%global    sfcgal 0}
+%if 0%{?rhel} == 8
+%{!?sfcgal:%global	sfcgal 1}
 %endif
 
 Summary:	Geographic Information Systems Extensions to PostgreSQL
@@ -88,6 +85,15 @@ BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c+
 %endif
 BuildRequires:	geos%{geosmajorversion}-devel >= %{geosfullversion}
 BuildRequires:	libgeotiff%{libgeotiffmajorversion}-devel
+%if %runselftest
+BuildRequires:	percona-postgresql%{pgmajorversion}-server percona-postgresql%{pgmajorversion}-contrib
+BuildRequires:	pgdg-srpm-macros >= 2.0.0
+%if 0%{?suse_version} >= 1500
+BuildRequires:	cunit-devel
+%else
+BuildRequires:	CUnit-devel
+%endif
+%endif
 %if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
 Requires:       pcre2
 %else
@@ -291,6 +297,8 @@ autoconf
 %endif
 %if %{sfcgal}
 	--with-sfcgal=%{_bindir}/sfcgal-config \
+%else
+  --without-sfcgal \
 %endif
 %if %{shp2pgsqlgui}
 	--with-gui \
@@ -329,6 +337,24 @@ SHLIB_LINK="$SHLIB_LINK" %{__make} %{?_smp_mflags} install DESTDIR=%{buildroot}
 readelf -d %{buildroot}%{pginstdir}/lib/postgis_raster-%{postgissomajorversion}.so \
   | grep -qE '\((RUNPATH|RPATH)\).*%{gdalinstdir}/lib' \
   || { echo "PERCONA: postgis_raster lacks RUNPATH to %{gdalinstdir}/lib"; exit 1; }
+%endif
+
+%check
+%if %runselftest
+%pgdg_check_init
+pgdg_check_start main
+# The unit tests of liblwgeom, the loader and the raster core. They need CUnit.
+%{__make} check-unit %{with_llvm_arg}
+# PostGIS runs its regression tests with a harness of its own, run_test.pl.
+# installcheck-base makes it load PostGIS with CREATE EXTENSION, from this
+# package's files, and then run the tests once more after upgrading the
+# extensions. Keep the harness' files in the build directory instead of the
+# shared /tmp/pgis_reg, and print the diffs of the failed tests.
+export PGIS_REG_TMPDIR=$PGDG_CHECK_DIR/pgis_reg
+%{__make} installcheck-base %{with_llvm_arg} || {
+	find $PGIS_REG_TMPDIR -name '*_diff' -printf '===== %p\n' -exec cat {} \;
+	exit 1
+}
 %endif
 
 # Create alternatives entries for common binaries
