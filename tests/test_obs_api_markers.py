@@ -154,3 +154,51 @@ def test_remove_release_targets_drops_deleted_project_targets(monkeypatch):
     assert 'project="deleted"' not in pushed["meta"]
     assert 'project="PR:rel"' not in pushed["meta"]
     assert 'project="other"' in pushed["meta"]
+
+
+def _capture_publish(monkeypatch, meta):
+    pushed = {}
+    monkeypatch.setattr(obs_api.osc.core, "show_project_meta", lambda a, p: meta)
+    monkeypatch.setattr(
+        obs_api,
+        "_edit_project_meta",
+        lambda a, p, m, force: pushed.setdefault("meta", m) and False,
+    )
+    return pushed
+
+
+def test_set_project_publish_replaces_only_publish(monkeypatch):
+    meta = (
+        '<project name="P"><title>t</title><description>d\nrelease_id: x</description>'
+        "<publish><enable/></publish><build><disable/></build>"
+        '<repository name="r"/></project>'
+    )
+    pushed = _capture_publish(monkeypatch, meta)
+    obs_api.set_project_publish("http://obs", "P", False)
+    root = obs_api.ET.fromstring(pushed["meta"])
+    assert [c.tag for c in root] == [
+        "title",
+        "description",
+        "publish",
+        "build",
+        "repository",
+    ]
+    assert root.find("publish/disable") is not None
+    assert root.find("publish/enable") is None
+    assert root.findtext("description").endswith("release_id: x")
+
+
+def test_set_project_publish_inserts_before_build_and_drops(monkeypatch):
+    meta = (
+        '<project name="P"><title>t</title><description/>'
+        '<build><disable/></build><repository name="r"/></project>'
+    )
+    pushed = _capture_publish(monkeypatch, meta)
+    obs_api.set_project_publish("http://obs", "P", {"r": True})
+    root = obs_api.ET.fromstring(pushed["meta"])
+    assert [c.tag for c in root][2:4] == ["publish", "build"]
+    assert root.find("publish/enable").get("repository") == "r"
+
+    pushed2 = _capture_publish(monkeypatch, pushed["meta"])
+    obs_api.set_project_publish("http://obs", "P", None)
+    assert obs_api.ET.fromstring(pushed2["meta"]).find("publish") is None

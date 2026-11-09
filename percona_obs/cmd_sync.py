@@ -2634,6 +2634,7 @@ def cmd_sync_release(args) -> None:
             mirror_pairs,
             args.rootprj,
             shared_env_vars,
+            top_mirror_path=release_path,
             verify_timeout=args.verify_timeout,
             release_id=release_id,
         )
@@ -2740,6 +2741,7 @@ def cmd_sync_release(args) -> None:
             subproject_pairs,
             args.rootprj,
             shared_env_vars,
+            top_mirror_path=release_path,
             verify_timeout=args.verify_timeout,
             release_id=release_id,
         ),
@@ -2831,7 +2833,7 @@ def cmd_sync_prerelease(args) -> None:
 
     Runs with the PR profile (``-P pr-N``); ``--branch-from`` names the
     profile of the production instance that holds staging.  Steps (spec §2):
-    record check, pre-release meta from the mirrors with publish forced on,
+    record check, pre-release meta from the mirrors (publishing held during the copy, then forced on),
     drain/green/freeze staging, osc release, verify, restore, pin
     ``source_commit`` in the pre-release description.
     """
@@ -2979,7 +2981,7 @@ def cmd_sync_prerelease(args) -> None:
         f"{prerelease_obs_project}:{name}" for name, _ in subproject_pairs
     }
 
-    # Top-level pre-release meta from the mirror, publish forced on (spec §1).
+    # Top-level pre-release meta from the mirror, publish forced on once the copy has landed (spec §1; release_tree holds it until then).
     apply_mirror_meta(
         apiurl,
         prerelease_obs_project,
@@ -3005,6 +3007,7 @@ def cmd_sync_prerelease(args) -> None:
             subproject_pairs,
             args.rootprj,
             shared_env_vars,
+            top_mirror_path=release_path,
             publish_override=True,
             verify_timeout=args.verify_timeout,
             branch_rootprj=source_rootprj,

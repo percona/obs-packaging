@@ -90,6 +90,7 @@ def _wire_release_update_path(monkeypatch, src, rel):
     monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda *a, **k: True)
     monkeypatch.setattr(rc, "_apply_project_config", lambda *a, **k: (False, None))
     monkeypatch.setattr(rc, "_disable_project_builds", lambda *a, **k: None)
+    monkeypatch.setattr(rc, "set_project_publish", lambda *a, **k: None)
     monkeypatch.setattr(rc, "_read_project_release_source", lambda *a, **k: ([], None))
     monkeypatch.setattr(
         rc, "filter_release_repo_names", lambda apiurl, names, target: names
@@ -244,6 +245,7 @@ def _wire_release_first_path(monkeypatch, src, rel):
     monkeypatch.setattr(cmd_sync, "_copy_project_conf", lambda *a, **k: None)
     monkeypatch.setattr(rc, "_apply_project_config", lambda *a, **k: (False, None))
     monkeypatch.setattr(rc, "_disable_project_builds", lambda *a, **k: None)
+    monkeypatch.setattr(rc, "set_project_publish", lambda *a, **k: None)
     monkeypatch.setattr(rc, "_read_project_release_source", lambda *a, **k: ([], None))
     monkeypatch.setattr(
         rc, "filter_release_repo_names", lambda apiurl, names, target: names

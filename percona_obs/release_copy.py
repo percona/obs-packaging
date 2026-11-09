@@ -18,6 +18,7 @@ from pathlib import Path
 
 from .common import (
     _REPO_DIR,
+    _load_project_config_with_inheritance,
     _print_ok,
     _print_pending,
     find_projects,
@@ -32,6 +33,7 @@ from .obs_api import (
     _read_project_release_source,
     _remove_release_targets,
     set_project_description_marker,
+    set_project_publish,
 )
 from .project_config import project_in_slice
 from .release_freeze import verify_release_landed
@@ -197,6 +199,17 @@ def warn_orphans(
             )
 
 
+def mirror_publish_flags(
+    mirror_path: Path,
+    env_vars: "dict[str, str]",
+    publish_override: "dict[str, bool] | bool | None" = None,
+) -> "dict[str, bool] | bool | None":
+    """Publish flags a target gets once its copy is complete."""
+    if publish_override is not None:
+        return publish_override
+    return _load_project_config_with_inheritance(mirror_path, env_vars).get("publish")
+
+
 def release_tree(
     apiurl: str,
     source_obs_project: str,
@@ -205,6 +218,7 @@ def release_tree(
     rootprj: str,
     env_vars: "dict[str, str]",
     *,
+    top_mirror_path: Path,
     publish_override: "dict[str, bool] | bool | None" = None,
     verify_timeout: int = 600,
     branch_rootprj: "str | None" = None,
@@ -218,11 +232,28 @@ def release_tree(
     before any freeze); subproject meta is applied here, right before each
     subproject's copy, exactly as the single-hop release always did.
 
+    Publishing is held off on every target until all copies have landed,
+    then set to the mirror's flags (*top_mirror_path* for the top project),
+    or *publish_override*.  An arch-independent binary (``_all.deb``,
+    ``noarch.rpm``) is built once per arch with different bytes and OBS
+    publishes one of them under a single name: publishing while copies land
+    lets the first arch to arrive win, so a re-copy can swap the bytes behind
+    an unchanged URL and download CDNs keep serving the old ones for days.
+    With every arch present, the publisher's pick is stable.  A run that
+    fails mid-copy leaves publishing held; re-running releases it.
+
     With *release_id*, every target project gets ``release_id: <id>`` as the
     last description line after its meta is applied and before its
     ``osc release``, so the description already names the release when the
     binaries land.
     """
+    held = [
+        (
+            target_obs_project,
+            mirror_publish_flags(top_mirror_path, env_vars, publish_override),
+        )
+    ]
+    set_project_publish(apiurl, target_obs_project, False)
     if release_id:
         set_project_description_marker(
             apiurl, target_obs_project, "release_id", release_id
@@ -236,10 +267,13 @@ def release_tree(
             mirror_path,
             rootprj,
             env_vars,
-            publish_override=publish_override,
+            publish_override=False,
             branch_rootprj=branch_rootprj,
             active_projects=active_projects,
             branch_fallbacks=branch_fallbacks,
+        )
+        held.append(
+            (target_sub, mirror_publish_flags(mirror_path, env_vars, publish_override))
         )
         if release_id:
             set_project_description_marker(apiurl, target_sub, "release_id", release_id)
@@ -257,4 +291,6 @@ def release_tree(
                 f"{target_obs_project}:{subproject_name}",
                 timeout_s=verify_timeout,
             )
+    for obs_project, flags in held:
+        set_project_publish(apiurl, obs_project, flags)
     warn_orphans(apiurl, target_obs_project, pairs, rootprj)

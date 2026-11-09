@@ -28,6 +28,14 @@ def _stub_obs(monkeypatch, calls):
         lambda *a, **k: calls.append(("meta", a[1])) or (False, True),
     )
     monkeypatch.setattr(rc, "_disable_project_builds", lambda *a, **k: None)
+    monkeypatch.setattr(
+        rc,
+        "set_project_publish",
+        lambda apiurl, prj, flags: calls.append(("publish", prj, flags)),
+    )
+    monkeypatch.setattr(
+        rc, "mirror_publish_flags", lambda path, env, override=None: override
+    )
     monkeypatch.setattr(rc, "_fetch_obs_subproject_names", lambda apiurl, prefix: set())
     monkeypatch.setattr(
         rc,
@@ -74,7 +82,16 @@ def test_release_tree_order_and_verify(monkeypatch, tmp_path):
         lambda apiurl, s, t, timeout_s=600: calls.append(("verify", s, t)),
     )
     pairs = [("containers", tmp_path / "containers")]
-    rc.release_tree("http://obs", "S", "T", pairs, "home:Admin", {}, verify_timeout=5)
+    rc.release_tree(
+        "http://obs",
+        "S",
+        "T",
+        pairs,
+        "home:Admin",
+        {},
+        top_mirror_path=tmp_path,
+        verify_timeout=5,
+    )
     assert [c for c in calls if c[0] in ("osc", "meta")] == [
         ("osc", "S"),
         ("meta", "T:containers"),
@@ -101,10 +118,54 @@ def test_release_tree_publish_override_reaches_meta(monkeypatch, tmp_path):
         [("x", tmp_path)],
         "home:Admin",
         {},
+        top_mirror_path=tmp_path,
         publish_override=True,
         verify_timeout=0,
     )
-    assert seen["publish"] is True
+    # Subproject meta holds publishing; the override applies after the copy.
+    assert seen["publish"] is False
+    assert ("publish", "T:x", True) in calls
+
+
+def test_release_tree_holds_publish_until_verified(monkeypatch, tmp_path):
+    calls = []
+    _stub_obs(monkeypatch, calls)
+    monkeypatch.setattr(
+        rc.subprocess, "run", lambda cmd, **k: calls.append(("osc", cmd[4]))
+    )
+    monkeypatch.setattr(
+        rc,
+        "verify_release_landed",
+        lambda apiurl, s, t, timeout_s=600: calls.append(("verify", s, t)),
+    )
+    monkeypatch.setattr(
+        rc,
+        "mirror_publish_flags",
+        lambda path, env, override=None: {"top": True, "sub": {"r": False}}[path.name],
+    )
+    rc.release_tree(
+        "http://obs",
+        "S",
+        "T",
+        [("x", tmp_path / "sub")],
+        "home:Admin",
+        {},
+        top_mirror_path=tmp_path / "top",
+        verify_timeout=5,
+    )
+    kinds = [c[0] for c in calls]
+    assert calls[0] == ("publish", "T", False)
+    last_verify = max(i for i, k in enumerate(kinds) if k == "verify")
+    last_osc = max(i for i, k in enumerate(kinds) if k == "osc")
+    released = [c for c in calls if c[0] == "publish" and c[2] is not False]
+    assert released == [("publish", "T", True), ("publish", "T:x", {"r": False})]
+    assert all(calls.index(c) > max(last_verify, last_osc) for c in released)
+
+
+def test_mirror_publish_flags(tmp_path):
+    (tmp_path / "project.yaml").write_text("publish:\n  r: false\n")
+    assert rc.mirror_publish_flags(tmp_path, {}) == {"r": False}
+    assert rc.mirror_publish_flags(tmp_path, {}, True) is True
 
 
 def test_warn_orphans(monkeypatch, capsys):
@@ -163,6 +224,7 @@ def test_release_tree_forwards_branch_redirection_to_subprojects(monkeypatch, tm
     )
     monkeypatch.setattr(rc, "copy_project_binaries", lambda *a, **k: None)
     monkeypatch.setattr(rc, "warn_orphans", lambda *a, **k: None)
+    monkeypatch.setattr(rc, "set_project_publish", lambda *a, **k: None)
     rc.release_tree(
         "http://obs",
         "S",
@@ -170,6 +232,7 @@ def test_release_tree_forwards_branch_redirection_to_subprojects(monkeypatch, tm
         [("containers", tmp_path)],
         "PR",
         {},
+        top_mirror_path=tmp_path,
         verify_timeout=0,
         branch_rootprj="prod",
         active_projects={"PR:T", "PR:T:containers"},
@@ -193,6 +256,7 @@ def test_release_tree_writes_release_id_before_each_copy(monkeypatch, tmp_path):
         pairs,
         "home:Admin",
         {},
+        top_mirror_path=tmp_path,
         verify_timeout=0,
         release_id="18.7-1",
     )
@@ -210,6 +274,13 @@ def test_release_tree_without_release_id_writes_no_marker(monkeypatch, tmp_path)
     _stub_obs(monkeypatch, calls)
     monkeypatch.setattr(rc.subprocess, "run", lambda *a, **k: None)
     rc.release_tree(
-        "http://obs", "S", "T", [("x", tmp_path)], "home:Admin", {}, verify_timeout=0
+        "http://obs",
+        "S",
+        "T",
+        [("x", tmp_path)],
+        "home:Admin",
+        {},
+        top_mirror_path=tmp_path,
+        verify_timeout=0,
     )
     assert not [c for c in calls if c[0] == "marker"]
