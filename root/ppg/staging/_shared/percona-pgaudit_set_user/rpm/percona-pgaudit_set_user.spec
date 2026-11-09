@@ -44,7 +44,7 @@ BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c+
 BuildRequires:	clang llvm
 %endif
 
-Requires:	postgresql%{pgmajorversion}-server
+Requires:	percona-postgresql%{pgmajorversion}-server
 %if %runselftest
 BuildRequires:	percona-postgresql%{pgmajorversion}-server pgdg-srpm-macros >= 2.0.0
 %endif
