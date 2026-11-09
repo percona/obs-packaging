@@ -267,13 +267,13 @@ postinst_check_catversion()
 	  pg_dropcluster ${MAJOR_VER} ${cluster}.old
 	  rm -rf ${VARTMPDIR}
 	EOF
-        db_fset percona-postgresql-common/catversion-bump seen false
-        db_subst percona-postgresql-common/catversion-bump version $MAJOR_VER
-        db_subst percona-postgresql-common/catversion-bump cluster $cluster
-        db_subst percona-postgresql-common/catversion-bump db_catversion $DB_CATVERSION
-        db_subst percona-postgresql-common/catversion-bump new_catversion $NEW_CATVERSION
-        db_subst percona-postgresql-common/catversion-bump vartmpdir $VARTMPDIR
-        db_input high percona-postgresql-common/catversion-bump || true
+        db_fset postgresql-common/catversion-bump seen false
+        db_subst postgresql-common/catversion-bump version $MAJOR_VER
+        db_subst postgresql-common/catversion-bump cluster $cluster
+        db_subst postgresql-common/catversion-bump db_catversion $DB_CATVERSION
+        db_subst postgresql-common/catversion-bump new_catversion $NEW_CATVERSION
+        db_subst postgresql-common/catversion-bump vartmpdir $VARTMPDIR
+        db_input high postgresql-common/catversion-bump || true
         db_go || true
     done
 }
