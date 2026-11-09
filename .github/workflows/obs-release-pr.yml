@@ -239,15 +239,67 @@ jobs:
           WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: python .github/scripts/post_pr_comment.py
 
+  # Release QA installs from download.opensuse.org, which serves the
+  # downloadcontentcdn.opensuse.org CDN.  The CDN keeps an old copy of a file
+  # whose bytes changed under the same name (arch-independent binaries) for
+  # days, so wait until it serves what OBS published before QA starts: a
+  # timeout fails here with the stale URLs instead of in dozens of QA lanes.
+  # Re-running failed jobs re-runs this gate and then QA.
+  cdn-wait:
+    name: Wait for download CDN (${{ matrix.instance.name }})
+    needs: [resolve, populate]
+    if: >-
+      ${{ !cancelled() && needs.resolve.outputs.kind == 'release'
+          && needs.resolve.outputs.run_qa == 'true'
+          && (needs.populate.result == 'success'
+              || (github.event.action == 'labeled' && needs.populate.result == 'skipped')) }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    timeout-minutes: 200
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: ${{ fromJSON(vars.OBS_INSTANCES) }}
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      # Only the openSUSE instance publishes through the openSUSE CDN.
+      - uses: actions/checkout@v4
+        if: matrix.instance.apiurl == 'https://api.opensuse.org'
+        with:
+          ref: ${{ needs.resolve.outputs.head_sha }}
+
+      - uses: ./.github/actions/obs-setup
+        if: matrix.instance.apiurl == 'https://api.opensuse.org'
+        with:
+          obs-apiurl: ${{ matrix.instance.apiurl }}
+          obs-user: ${{ matrix.instance.user || vars.OBS_USER }}
+          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance.name)] }}
+
+      - name: Wait until the CDN serves the published binaries
+        if: matrix.instance.apiurl == 'https://api.opensuse.org'
+        shell: bash
+        env:
+          OBS_APIURL: ${{ matrix.instance.apiurl }}
+          PR_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}:pr-${{ needs.resolve.outputs.pr_number }}
+          RELEASE_PROJECTS: ${{ needs.resolve.outputs.release_projects }}
+        run: |
+          set -euo pipefail
+          mapfile -t projects < <(jq -r '.[]' <<<"$RELEASE_PROJECTS")
+          venv/bin/python -u -m percona_obs -A "$OBS_APIURL" -R "$PR_ROOTPRJ" \
+            qa wait-cdn "${projects[@]}" --timeout 180 --interval 10
+
   # Every QA lane the release mirrors declare, against the pre-release.
   # Only with the qa-release label: after this run's populate, or alone when
   # the label was just added (populate skipped).
   qa:
     name: Release
-    needs: [resolve, populate]
+    needs: [resolve, populate, cdn-wait]
     if: >-
       ${{ !cancelled() && needs.resolve.outputs.kind == 'release'
           && needs.resolve.outputs.run_qa == 'true'
+          && needs.cdn-wait.result == 'success'
           && (needs.populate.result == 'success'
               || (github.event.action == 'labeled' && needs.populate.result == 'skipped')) }}
     uses: ./.github/workflows/qa-fanout.yml

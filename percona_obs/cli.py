@@ -28,6 +28,7 @@ from .cmd_qa import (
     cmd_qa_show,
     cmd_qa_status,
 )
+from .cdn_wait import cmd_qa_wait_cdn
 from .cmd_sync import (
     cmd_sync,
     cmd_sync_delete,
@@ -640,6 +641,43 @@ def build_parser() -> argparse.ArgumentParser:
         dest="report_json",
     )
     qa_retry_parser.set_defaults(func=cmd_qa_retry)
+
+    qa_wait_cdn_parser = qa_subparsers.add_parser(
+        "wait-cdn",
+        help="Wait until the download CDN serves the published arch-independent "
+        "binaries (_all.deb, noarch.rpm) of projects and their subprojects.",
+    )
+    qa_wait_cdn_parser.add_argument(
+        "projects",
+        nargs="+",
+        metavar="project",
+        help="Project name relative to rootprj (colon notation, e.g. ppg:releases:18).",
+    )
+    qa_wait_cdn_parser.add_argument(
+        "--origin",
+        default="downloadcontent.opensuse.org",
+        help="Download origin host (default: %(default)s).",
+    )
+    qa_wait_cdn_parser.add_argument(
+        "--cdn",
+        default="downloadcontentcdn.opensuse.org",
+        help="CDN host checked against the origin (default: %(default)s).",
+    )
+    qa_wait_cdn_parser.add_argument(
+        "--timeout",
+        type=int,
+        default=180,
+        metavar="MIN",
+        help="Give up after this many minutes (default: %(default)s).",
+    )
+    qa_wait_cdn_parser.add_argument(
+        "--interval",
+        type=int,
+        default=10,
+        metavar="MIN",
+        help="Minutes between checks (default: %(default)s).",
+    )
+    qa_wait_cdn_parser.set_defaults(func=cmd_qa_wait_cdn)
 
     qa_list_parser = qa_subparsers.add_parser(
         "list",
