@@ -1441,9 +1441,19 @@ fails with "staging changed since the cut"; edits under `root/<product>/staging/
 count as staging changes because the check follows the `_shared/` symlink targets of
 packages; (3) an existing pre-release tree (the project and every subproject under it) is
 **deleted**, so a repopulate always starts from scratch; refused when the profile's
-`rootprj` equals the `--branch-from` root; (4) pre-release meta from the mirrors, **publish forced on**; (5) drain, assert
+`rootprj` equals the `--branch-from` root; (4) pre-release meta from the mirrors, **publish forced on** once the copy has landed; (5) drain, assert
 green, freeze, `osc release`, verify, restore; (6) `source_commit: <sha>` and
 `release_id: <id>` appended, in that order, to each pre-release project description.
+
+**Publishing held during the copy.** Every release hop sets `<publish><disable/>` on each
+target project before its `osc release` and restores the mirror's `publish:` flags (the
+pre-release: forced on) only after every copy has landed and verified. Arch-independent
+binaries (`_all.deb`, `noarch.rpm`) are built once per arch with different bytes and OBS
+publishes one copy under a single name; publishing while copies land let the first arch
+to arrive win, so a repopulate swapped the bytes behind unchanged URLs and the
+download.opensuse.org CDN served the old copy for days ("File has unexpected size").
+A hop that fails mid-copy leaves publishing held; re-running it releases it. On a release
+project, downloads may lag or be briefly unavailable while publishing is held.
 
 **`release_id` marker.** Every release hop (this one, `sync release --from` and the
 legacy single-hop `sync release`) writes `release_id: <id>` as the **last line** of each

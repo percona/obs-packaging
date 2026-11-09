@@ -16,6 +16,7 @@ from .common import (
     _RED,
     _col,
     _decode_obs_response,
+    _emit_flag_section,
     _load_project_config_with_inheritance,
     _print_create,
     _print_pending,
@@ -1210,6 +1211,53 @@ def _disable_project_builds(apiurl: str, obs_project_name: str) -> None:
         meta = ET.tostring(root, encoding="unicode")
         _edit_project_meta(apiurl, obs_project_name, meta, force=False)
         _print_update(f"project meta  {obs_project_name}  (builds disabled)")
+
+
+def set_project_publish(
+    apiurl: str,
+    obs_project_name: str,
+    flags: "dict[str, bool] | bool | None",
+) -> None:
+    """Replace only the ``<publish>`` section of an existing project's meta.
+
+    *flags* follows ``_emit_flag_section`` (None drops the section, which
+    leaves OBS's default: published).  Description markers, paths and every
+    other element are kept as they are on OBS.
+    """
+    raw = _decode_obs_response(osc.core.show_project_meta(apiurl, obs_project_name))
+    root = ET.fromstring(raw)
+    children = list(root)
+    old = root.find("publish")
+    if old is not None:
+        at = children.index(old)
+        root.remove(old)
+    else:
+        # build_project_meta's order: publish right before build/debuginfo
+        # and the repositories.
+        at = next(
+            (
+                i
+                for i, child in enumerate(children)
+                if child.tag in ("build", "debuginfo", "repository")
+            ),
+            len(children),
+        )
+    scratch = ET.Element("scratch")
+    _emit_flag_section(scratch, "publish", flags)
+    for i, section in enumerate(scratch):
+        root.insert(at + i, section)
+    ET.indent(root, space="  ")
+    stripped = _edit_project_meta(
+        apiurl, obs_project_name, ET.tostring(root, encoding="unicode"), force=False
+    )
+    if stripped:
+        raise SystemExit(
+            f"error: setting publish flags on {obs_project_name} stripped its "
+            "repository paths (repository_access_failure); the project meta must "
+            "be re-applied before retrying"
+        )
+    state = "held" if flags is False else "released"
+    _print_update(f"project meta  {obs_project_name}  (publish {state})")
 
 
 def set_project_description_marker(
