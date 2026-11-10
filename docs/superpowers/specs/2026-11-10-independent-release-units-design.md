@@ -13,8 +13,8 @@ Everything else in those specs (two hops, freeze, record check, tags,
 
 Releasing `ppg:staging:<major>` releases every subproject below it. For
 `ppg:staging:18` that is the top project plus `containers`, `tarballs`,
-`extras` and `extras:containers`; a release of `ppg:staging:16` would also
-pull in `tde`.
+`extras` and `extras:containers`; `ppg:staging:16` also releases `tde`, and
+`ppg:staging:common` releases `tools` and `extras`.
 
 `extras` and `tde` are separate products with their own cadence. Bundling
 them means a main release is blocked by an unrelated red extras build, and an
@@ -24,7 +24,7 @@ Two further problems surface once units are split:
 
 - Release mirrors rewrite `subproject:` repository paths to the release
   namespace. A nested unit would then path to its parent's release project,
-  which may not exist (`ppg:releases:16` does not).
+  which need not exist once units are released independently.
 - The copy only ever adds. A package or subproject removed from staging stays
   in the release project forever; `warn_orphans` reports stale subprojects
   and stale packages are not detected at all.
@@ -60,7 +60,7 @@ unit, by the same rule.
 | `ppg:staging:18` | top, `containers`, `tarballs` | `ppg:releases:18` |
 | `ppg:staging:18:extras` | `extras`, `extras:containers` | `ppg:releases:18:extras` |
 | `ppg:staging:16:tde` | `tde` | `ppg:releases:16:tde` |
-| `ppg:staging:common` | per the same rule | `ppg:releases:common` |
+| `ppg:staging:common` | **open, see below** | `ppg:releases:common` |
 
 The bundled names are a constant in the tool (`BUNDLED_SUBPROJECTS =
 ("containers", "tarballs")`), not configuration. `release_scope.py` gains
@@ -78,9 +78,10 @@ member projects of a unit. Every place that walks the release source with
 "A unit member without a mirror is a hard error" is unchanged, now limited to
 unit members.
 
-`ppg:staging:common` must be checked during implementation: if it has
-subprojects other than `containers`/`tarballs` that its release ships today,
-they become units of their own and the plan must list them.
+**Open: `ppg:staging:common`.** Its children are `containers`, `extras`
+(with `extras:containers`) and `tools` (with `tools:containers`), all shipped
+by `ppg/common-1` today. Under the rule above `tools` and `extras` become
+units of their own. To be decided before the plan is written.
 
 ### 2. Records, ids and tags
 
@@ -119,8 +120,8 @@ drops every `subproject:` path and keeps `project:` paths (base distros,
 EPEL, UBI) in their original order; OBS still takes the repository's base
 configuration and publish type from those.
 
-Every repository in the existing 17/18 mirrors keeps at least one `project:`
-path. A repository left with no path at all is a hard error in the mirror
+Every repository in the existing mirrors is expected to keep at least one `project:`
+path (verified for 17/18; the plan re-checks all). A repository left with no path at all is a hard error in the mirror
 writer, naming the repository.
 
 Removed as a consequence:
@@ -156,7 +157,7 @@ deepest first. This replaces `warn_orphans`.
 
 A nested unit keeps its mirror directory, so it is never stale from its
 parent's point of view; this also covers `releases/{17,18}/extras`, which
-exist today without a `release.yaml`. Retiring a nested unit is `git rm` of
+exist today without a `release.yaml` (as do `releases/16/{extras,tde}`). Retiring a nested unit is `git rm` of
 its release directory: the parent's next release removes the OBS project.
 
 **Packages.** For the top project and each bundled child: packages listed in
@@ -184,15 +185,15 @@ releasing the package again.
 
 No one-off step.
 
-- `ppg:releases:{17,18}:extras` keep their content. The first
+- `ppg:releases:{16,17,18}:extras` and `ppg:releases:16:tde` keep their
+  content and their mirror directories. The first
   `project release ppg:staging:<V>:extras` adds `release.yaml` and
   `CHANGELOG.md` to the existing mirror directory and yields
-  `extras-<minor>-1`. Its changelog baseline is what the release project
-  holds on OBS at that time.
-- The next main release of 17/18 rewrites the main mirrors without internal
-  paths, drops extras from its changelog, and prunes the packages that are
-  stale in `ppg:releases:17` and `ppg:releases:18` today.
-- `root/ppg/releases/16/tde/` is created by the first `tde` release.
+  `extras-<minor>-1` (likewise `tde`). Its changelog baseline is what the
+  release project holds on OBS at that time.
+- The next main release of a major rewrites the main mirrors without
+  internal paths, drops extras/tde from its changelog, and prunes the
+  packages that are stale in its release project today.
 
 ### 7. CI
 
