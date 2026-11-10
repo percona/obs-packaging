@@ -2,7 +2,10 @@
   <service name="obs_scm">
     <param name="url">https://github.com/postgres/postgres.git</param>
     <param name="scm">git</param>
-    <param name="revision">REL_%!{PG_MAJOR_VERSION}_%!{PG_MINOR_VERSION}</param>
+    <!-- Upstream has not tagged this minor yet: build the release stamp commit
+         at the tip of the stable branch. Switch back to the REL_<major>_<minor>
+         tag once it exists; same commit, so nothing rebuilds. -->
+    <param name="revision">REL_%!{PG_MAJOR_VERSION}_STABLE</param>
     <param name="version">%!{PG_VERSION}</param>
     <param name="filename">percona-postgresql</param>
   </service>
