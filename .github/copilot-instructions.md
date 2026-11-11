@@ -1188,6 +1188,8 @@ Permissions: `contents: write` (tag creation), `actions: write` (dispatch + cach
 
 **Required repository config**: as Workflow 5's QA part (`OBS_INSTANCES`, `OBS_USER`, `JENKINS_URL`, `JENKINS_USER`; `OBS_PASSWORD_<NAME>`, `JENKINS_API_TOKEN`).
 
+**Release cut**: `obs-release-cut.yml` (`workflow_dispatch`, inputs `units` and `branch`, `run-name` `Cut <branch>`, concurrency `obs-release-cut-<branch>`) runs `project release --yes` per unit on top of `main` (helpers in `.github/scripts/release_cut.py`), squashes to one signed-off commit `release: <id>, <id>…`, and force-pushes `<branch>` only after every unit was cut; it uploads the `generated-changelogs` artifact and never opens the PR.
+
 **Dashboard contract**: the workflow file names, the `qa-release`/`obs-sync` labels, the job names of `obs-release-pr.yml` / `obs-release.yml`, the `prerelease-report-<instance>` artifact and `obs-release.yml`'s `run-name` (`Release PR #<N>`) are read by an external release dashboard and pinned by `tests/test_dashboard_contract.py`; do not rename them (see `docs/PERCONA_OBS_TOOL.md`, "Populate report format and stable names").
 
 ### Workflow 8 — `obs-release.yml` (hop 2: copy the pre-release into the release project)

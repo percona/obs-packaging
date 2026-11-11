@@ -1115,7 +1115,16 @@ The process is PR-based:
 1. **`project release`** — auto-derives the release ID from OBS, regenerates the unit's
    `releases/<name>/` mirror tree from staging's current config, updates `release.yaml`
    and `CHANGELOG.md`, and commits locally. Pushing the branch and opening the review
-   PR remain manual steps.
+   PR remain manual steps. `--yes` skips the confirmation prompt.
+   **`obs-release-cut.yml`** does the cut in CI: `workflow_dispatch` with `units`
+   (space-separated release unit roots, e.g. `ppg:staging:18 ppg:staging:17:extras`) and
+   `branch` (`release/<name>`) runs `project release --yes` for every unit on top of
+   `main`, squashes the result into one signed-off commit
+   (`release: <id>, <id>…`) and force-pushes it to `<branch>`, uploading the
+   `generated-changelogs` artifact. Nothing is pushed unless every unit was cut. It never
+   opens the PR (a PR opened with the workflow token triggers nothing, and so does the
+   push): the caller opens the PR and adds `obs-sync`.
+   `gh workflow run obs-release-cut.yml -f units="ppg:staging:18" -f branch=release/18.6-2`
 2. **PR populates the pre-release and runs QA** — `obs-release-pr.yml` (release-only PRs
    only) populates only when the PR carries the `obs-sync` label (a hand-opened release PR
    needs it too; adding the label starts the sync, and a retry is remove-then-add, or

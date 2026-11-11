@@ -965,6 +965,14 @@ def build_parser() -> argparse.ArgumentParser:
         "the release (repeatable); versions and image lists are merged across "
         "instances, the first wins on a clash.",
     )
+    project_release_parser.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        default=False,
+        dest="yes",
+        help="Do not ask for confirmation before writing the release files.",
+    )
     project_release_parser.set_defaults(func=cmd_project_release)
 
     project_release_units_parser = project_subparsers.add_parser(

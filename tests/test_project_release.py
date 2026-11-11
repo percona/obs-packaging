@@ -1668,3 +1668,26 @@ def test_first_nested_id_without_parent_record_or_with_own_tags():
         "extras-18.6-1", "extras-", ["ppg/extras-18.5-1"], _PARENT
     )
     cmd_project._check_first_nested_release_id("18.6-1", "", [], _PARENT)
+
+
+def test_confirm_release_yes_never_prompts(monkeypatch):
+    def boom(*a, **k):
+        raise AssertionError("input() must not be called with --yes")
+
+    monkeypatch.setattr("builtins.input", boom)
+    cmd_project._confirm_release(True, True)
+
+
+def test_confirm_release_prompts_without_yes(monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda prompt="": "y")
+    cmd_project._confirm_release(False, False)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "n")
+    with pytest.raises(SystemExit, match="Aborted"):
+        cmd_project._confirm_release(False, False)
+
+
+def test_release_parser_accepts_yes():
+    from percona_obs.cli import build_parser
+
+    ns = build_parser().parse_args(["project", "release", "ppg:staging:18", "--yes"])
+    assert ns.yes is True
