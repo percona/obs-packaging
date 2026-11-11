@@ -2751,16 +2751,20 @@ def _scope_local_paths(
         if path not in paths:
             paths.append(path)
 
-    # PPG_RELEASE is computed from <product>/releases/<major>/release.yaml
+    # PPG_RELEASE is computed from the release record of the unit
     # (common.inject_computed_macros), so a change to it changes the staging
     # container images.  After a release PR merges, main's copy differs from
-    # source_commit and a repopulate must fail.  The file may not exist: it is
-    # only a git pathspec.
+    # source_commit and a repopulate must fail.  The files may not exist: they
+    # are only git pathspecs.
     if source_path.is_relative_to(common.REPO_ROOT):
-        product = source_path.relative_to(common.REPO_ROOT).parts[0]
-        _add(
-            common.REPO_ROOT / product / "releases" / source_path.name / "release.yaml"
-        )
+        rel = source_path.relative_to(common.REPO_ROOT).parts
+        # <product>/<tier>/<top>/<unit…>: the unit's own record and, for a
+        # nested unit, the parent's (it supplies the counter until the unit
+        # has a record of its own).
+        if len(rel) >= 3:
+            releases = common.REPO_ROOT / rel[0] / "releases"
+            _add(releases.joinpath(*rel[2:], "release.yaml"))
+            _add(releases / rel[2] / "release.yaml")
 
     project_dirs = [source_path]
     for prj in freeze_scope:

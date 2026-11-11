@@ -292,3 +292,16 @@ def test_shared_symlink_target_edit_is_detected(tmp_path, monkeypatch):
     assert cmd_sync._changed_files_between(a, b, paths) == [
         "root/ppg/staging/_shared/pkgx/rpm/x.spec"
     ]
+
+
+def test_scope_local_paths_nested_unit_watches_both_records(tmp_path, monkeypatch):
+    import percona_obs.common as common
+
+    root = tmp_path / "root"
+    src = root / "ppg/staging/18/extras"
+    src.mkdir(parents=True)
+    (src / "project.yaml").write_text("title: e\n")
+    monkeypatch.setattr(common, "REPO_ROOT", root)
+    paths = cmd_sync._scope_local_paths(src, [], {}, "R")
+    assert root / "ppg/releases/18/extras/release.yaml" in paths
+    assert root / "ppg/releases/18/release.yaml" in paths
