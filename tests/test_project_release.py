@@ -1362,8 +1362,6 @@ def test_collect_release_obs_data_single_instance(tmp_path, monkeypatch):
         "ppg:releases:17",
         ["tarballs"],
         ["containers"],
-        is_first_release=False,
-        prev_release_id="17.10-1",
     )
     assert data.source_versions == {
         "percona-postgresql17": "17.11-1",
@@ -1399,8 +1397,6 @@ def test_collect_release_obs_data_release_project_missing(tmp_path, monkeypatch)
         "ppg:releases:17",
         [],
         ["containers"],
-        is_first_release=False,
-        prev_release_id="17.10-1",
     )
     assert data.release_versions is None
     assert data.source_versions == {"x": "1-1"}
@@ -1519,3 +1515,113 @@ def test_fetch_project_pkg_versions_skips_repos_without_binaries(monkeypatch):
         "gdal38": "3.8.5-1.3",
         "pg": "17.11-1.1",
     }
+
+
+def test_derive_release_id_nested_counts_own_tags():
+    rid = cmd_project._derive_release_id(
+        pkg_archs={"percona-postgresql": ("UBI_9", "x86_64")},
+        existing_releases=[
+            "ppg/extras-18.6-6",
+            "ppg/extras-18.6-7",
+            "ppg/extras-18.5-2",
+        ],
+        release_name="18-extras",
+        versrel_lookup=lambda repo, arch, pkg: "18.6-1.1",
+        major="18",
+        prefix="extras-",
+        parent_releases=["ppg/18.6-1", "ppg/18.6-2"],
+    )
+    assert rid == "extras-18.6-8"
+
+
+def test_derive_release_id_nested_first_release_continues_parent():
+    rid = cmd_project._derive_release_id(
+        pkg_archs={"percona-postgresql": ("UBI_9", "x86_64")},
+        existing_releases=[],
+        release_name="18-extras",
+        versrel_lookup=lambda repo, arch, pkg: "18.6-1.1",
+        major="18",
+        prefix="extras-",
+        parent_releases=["ppg/18.5-1", "ppg/18.6-1", "ppg/18.6-2"],
+    )
+    assert rid == "extras-18.6-3"
+
+
+def test_derive_release_id_nested_new_minor_starts_at_one():
+    rid = cmd_project._derive_release_id(
+        pkg_archs={"percona-postgresql": ("UBI_9", "x86_64")},
+        existing_releases=["ppg/extras-18.6-6"],
+        release_name="18-extras",
+        versrel_lookup=lambda repo, arch, pkg: "18.7-1.1",
+        major="18",
+        prefix="extras-",
+        parent_releases=["ppg/18.7-1"],
+    )
+    assert rid == "extras-18.7-1"
+
+
+def test_derive_release_id_nested_without_parent_record():
+    rid = cmd_project._derive_release_id(
+        pkg_archs={"percona-postgresql": ("UBI_9", "x86_64")},
+        existing_releases=[],
+        release_name="16-tde",
+        versrel_lookup=lambda repo, arch, pkg: "16.15-1.1",
+        major="16",
+        prefix="tde-",
+        parent_releases=None,
+    )
+    assert rid == "tde-16.15-1"
+
+
+def test_derive_release_id_counter_mode_uses_counter_name():
+    rid = cmd_project._derive_release_id(
+        pkg_archs={},
+        existing_releases=["ppg/common-upgrade-1"],
+        release_name="common-upgrade",
+        versrel_lookup=lambda repo, arch, pkg: None,
+        counter_mode=True,
+        prefix="upgrade-",
+    )
+    assert rid == "common-upgrade-2"
+
+
+def _release_args(project):
+    return argparse.Namespace(
+        project=project,
+        rootprj="R",
+        apiurl="http://obs",
+        release_name=None,
+        release_id=None,
+        env_overrides=None,
+        source_commit=None,
+        also_profiles=None,
+        no_cve_scan=True,
+    )
+
+
+def test_project_release_refuses_bundled_child(tmp_path, monkeypatch):
+    _staging_tree(tmp_path)
+    monkeypatch.setattr(cmd_project, "REPO_ROOT", tmp_path / "root")
+    monkeypatch.setattr(
+        cmd_project,
+        "resolve_project_path",
+        lambda pid: tmp_path / "root" / Path(*pid.split(":")),
+    )
+    with pytest.raises(SystemExit, match="part of release unit ppg:staging:17"):
+        cmd_project.cmd_project_release(_release_args("ppg:staging:17:containers"))
+
+
+def test_project_release_refuses_empty_unit(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    common_dir = root / "ppg/staging/common"
+    (common_dir / "tools" / "percona-haproxy" / "obs").mkdir(parents=True)
+    (common_dir / "project.yaml").write_text("title: c\n")
+    (common_dir / "tools" / "project.yaml").write_text("title: t\n")
+    monkeypatch.setattr(cmd_project, "REPO_ROOT", root)
+    monkeypatch.setattr(
+        cmd_project, "resolve_project_path", lambda pid: root / Path(*pid.split(":"))
+    )
+    with pytest.raises(
+        SystemExit, match="nothing to release.*ppg:staging:common:tools"
+    ):
+        cmd_project.cmd_project_release(_release_args("ppg:staging:common"))

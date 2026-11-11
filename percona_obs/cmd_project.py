@@ -88,11 +88,20 @@ from .obs_versions import (
     project_binary_versions,
 )
 from .release_scope import (
+    bundled_parent,
     has_container_images,
+    nested_unit_roots,
+    release_location,
     release_unit_members,
     tree_has_server_package,
+    unit_packages,
 )
-from .release_record import ReleaseEntry, dump_release_entry, parse_release_entries
+from .release_record import (
+    ReleaseEntry,
+    dump_release_entry,
+    parse_release_entries,
+    release_tags,
+)
 from .github_api import last_synced_head_sha, repo_slug_from_url
 from .services import _git_head_sha, _git_tag_for_sha
 from .pkg_version import extract_version_from_service
@@ -2302,6 +2311,8 @@ def _derive_release_id(
     *,
     counter_mode: bool = False,
     major: "str | None" = None,
+    prefix: str = "",
+    parent_releases: "list[str] | None" = None,
 ) -> str:
     """Return the next release id for a source project.
 
@@ -2309,8 +2320,20 @@ def _derive_release_id(
     where N counts existing releases of that minor.  Counter mode (no server
     package - no percona-postgresql* package directory anywhere under the source tree, such as ``ppg:staging:common``):
     ``<release_name>-N`` where N is one plus the number of existing releases.
-    The major-suffixed server package name uses *major* (the last component
-    of the source project), falling back to *release_name*.
+    The major-suffixed server package name uses *major* (the PG major of
+    the source project), falling back to *release_name*.
+
+    PG-mode ids carry *prefix* (``"extras-"`` for ``ppg:staging:18:extras``)
+    and N is chosen as follows:
+
+    * the unit has own tags of that minor: N = highest own N + 1;
+    * the unit has no tag at all and *parent_releases* is given (a nested
+      unit whose parent has a record): N continues the parent's count of
+      that minor, so no image tag already published with the parent is
+      reused;
+    * otherwise N = 1.
+
+    Counter mode passes the unit's counter name as *release_name*.
     """
     suffixed = f"percona-postgresql{major or release_name}"
     pg_pkg = "percona-postgresql"
@@ -2334,8 +2357,21 @@ def _derive_release_id(
         )
     ver_parts = versrel.split("-")[0].split(".")
     major_minor = ".".join(ver_parts[:2])
-    matching_count = sum(1 for t in existing_releases if f"/{major_minor}-" in t)
-    return f"{major_minor}-{matching_count + 1}"
+    needle = f"/{prefix}{major_minor}-"
+    own = [
+        int(t.rsplit("-", 1)[1])
+        for t in existing_releases
+        if needle in t and t.rsplit("-", 1)[1].isdigit()
+    ]
+    if own:
+        n = max(own) + 1
+    elif not existing_releases and parent_releases is not None:
+        # First release of a unit that shipped bundled with its parent so
+        # far: continue the parent's numbering, so no image tag is reused.
+        n = sum(1 for t in parent_releases if f"/{major_minor}-" in t) + 1
+    else:
+        n = 1
+    return f"{prefix}{major_minor}-{n}"
 
 
 def _tag_exists_locally(tag: str) -> bool:
@@ -2476,9 +2512,6 @@ def _collect_release_obs_data(
     release_project_id: str,
     noncontainer_subs: "list[str]",
     container_subs: "list[str]",
-    *,
-    is_first_release: bool,
-    prev_release_id: "str | None",
 ) -> _ReleaseObsData:
     """Fetch the CHANGELOG inputs of a release from one OBS instance.
 
@@ -2502,7 +2535,7 @@ def _collect_release_obs_data(
         )
 
     release_versions: dict[str, str] | None = None
-    if not is_first_release and _obs_project_exists(apiurl, release_obs_project):
+    if _obs_project_exists(apiurl, release_obs_project):
         release_versions = _fetch_project_pkg_versions(apiurl, release_obs_project)
         for subproject_name in noncontainer_subs:
             rel_sub = f"{release_obs_project}:{subproject_name}"
@@ -2527,11 +2560,15 @@ def _collect_release_obs_data(
             ),
             sub_full,
         )
-    if not is_first_release and prev_release_id:
-        # Diff against whatever release subprojects actually exist on OBS —
+    if release_versions is not None:
+        # Diff against the unit's release subprojects that exist on OBS —
         # this is what makes the ubi9 old-layout → new-layout migration diff
-        # correctly instead of dumping every image as "add".
+        # correctly instead of dumping every image as "add".  Subprojects
+        # outside the bundled children belong to other release units.
+        prefix_len = len(release_obs_project) + 1
         for rel_sub in sorted(_fetch_obs_subproject_names(apiurl, release_obs_project)):
+            if rel_sub[prefix_len:].split(":", 1)[0] not in BUNDLED_SUBPROJECTS:
+                continue
             _merge_container_pkgs(
                 release_container_pkgs,
                 _fetch_subproject_container_pkgs(
@@ -2603,20 +2640,29 @@ def _merge_release_obs_data(parts: "list[_ReleaseObsData]") -> _ReleaseObsData:
 
 def cmd_project_release(args: argparse.Namespace) -> None:
     """Create or update a release: release.yaml, CHANGELOG.md, project.yaml, commit, and open a PR."""
-    product = args.project.split(":")[0]
-    major = args.project.split(":")[-1]
-
     parts = args.project.split(":")
     if len(parts) < 3 or parts[1] != "staging":
         raise SystemExit(
             "error: project release requires a staging-tier source "
-            f"(<product>:staging:<version>), got: {args.project}"
+            f"(<product>:staging:<version>[:<unit>]), got: {args.project}"
+        )
+    unit_root = bundled_parent(args.project)
+    if unit_root and len(parts) > 3:
+        raise SystemExit(
+            f"error: {args.project} is part of release unit {unit_root}; "
+            f"release that instead"
         )
 
     source_path = resolve_project_path(args.project)
     if not source_path.is_dir():
         raise SystemExit(
             f"error: source project directory does not exist: {source_path}"
+        )
+    if not any(unit_packages(source_path, args.project)):
+        below = ", ".join(nested_unit_roots(source_path, args.project)) or "none"
+        raise SystemExit(
+            f"error: {args.project} has nothing to release (no packages in the "
+            f"project or its containers/tarballs); release units below it: {below}"
         )
 
     if not args.rootprj:
@@ -2627,12 +2673,21 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     osc.conf.get_config(override_apiurl=args.apiurl)
     apiurl: str = osc.conf.config["apiurl"]
 
-    release_name: str = args.release_name or major
-    release_dir = REPO_ROOT / product / "releases" / release_name
-    release_project = f"{product}:releases:{release_name}"
+    loc = release_location(args.project, args.release_name)
+    product, major = loc.product, loc.major
+    release_name = loc.counter_name
+    release_dir = loc.release_dir
+    release_project = loc.release_project
     source_obs_project = f"{args.rootprj}:{args.project}"
 
-    is_first_release = not release_dir.is_dir()
+    # A nested unit's directory may already exist as a mirror written by a
+    # bundled release: only the record makes it a release of its own.
+    is_first_release = not (release_dir / "release.yaml").is_file()
+    parent_releases: "list[str] | None" = None
+    if loc.unit_path:
+        parent_record = REPO_ROOT / product / "releases" / loc.top / "release.yaml"
+        if parent_record.is_file():
+            parent_releases = release_tags(load_yaml(parent_record))
 
     # Load existing release list if updating.
     existing_entries: list[ReleaseEntry] = []
@@ -2662,6 +2717,8 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             ),
             counter_mode=not tree_has_server_package(source_path),
             major=major,
+            prefix=loc.id_prefix,
+            parent_releases=parent_releases,
         )
 
     repo_url = release_env.get("PERCONA_OBS_PACKAGING_REPO", "")
@@ -2692,11 +2749,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
 
     noncontainer_subs: list[str] = []
     container_subs: list[str] = []
-    for sub_obs_id, sub_path in find_projects(source_path, args.project):
-        if sub_obs_id == args.project:
-            continue
-        if not (sub_path / "project.yaml").is_file():
-            continue
+    for sub_obs_id, sub_path in release_unit_members(source_path, args.project)[1:]:
         subproject_name = sub_obs_id[len(args.project) + 1 :]
         if has_container_images(sub_path):
             container_subs.append(subproject_name)
@@ -2731,8 +2784,6 @@ def cmd_project_release(args: argparse.Namespace) -> None:
                 release_project,
                 noncontainer_subs,
                 container_subs,
-                is_first_release=is_first_release,
-                prev_release_id=prev_release_id,
             )
             for inst_apiurl, inst_rootprj in instances
         ]
@@ -2779,8 +2830,9 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     }
 
     # Build project.yaml for the release directory.
+    release_title_name = ":".join((loc.top, *loc.unit_path))
     project_data: dict = {
-        "title": f"{product} releases {release_name}",
+        "title": f"{product} releases {release_title_name}",
         "description": (
             f"Release project for {args.project} (OBS project {release_project}).\n"
             "Binaries are populated by osc release and builds are disabled.\n"
@@ -2868,7 +2920,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             args.project,
             release_project,
             product,
-            release_name,
+            release_title_name,
         )
 
     else:
@@ -2898,7 +2950,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             args.project,
             release_project,
             product,
-            release_name,
+            release_title_name,
         )
 
     # Commit.
