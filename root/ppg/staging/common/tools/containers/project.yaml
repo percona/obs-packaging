@@ -152,21 +152,21 @@ project-config: |
   FileProvides: /usr/bin/xargs findutils
 
   BuildFlags: dockerarg:RHEL_VER=el8
-  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi8/ubi-minimal:latest
+  BuildFlags: dockerarg:UBI_BASE=%!{UBI8_BASE_IMAGE}
 
   %endif
 
   %if "%_repository" == "ubi9"
 
   BuildFlags: dockerarg:RHEL_VER=el9
-  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
+  BuildFlags: dockerarg:UBI_BASE=%!{UBI9_BASE_IMAGE}
 
   %endif
 
   %if "%_repository" == "ubi10"
 
   BuildFlags: dockerarg:RHEL_VER=el10
-  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi10/ubi-minimal:latest
+  BuildFlags: dockerarg:UBI_BASE=%!{UBI10_BASE_IMAGE}
 
   # EL10's atk pulls in at-spi2-core, which requires /usr/bin/xprop; the
   # expander needs the hint to pull xprop (UBI 10 AppStream) into the build root.

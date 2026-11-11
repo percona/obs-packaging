@@ -4,7 +4,7 @@
 #!BuildTag: percona-pgadmin4:<VERSION>
 #!BuildTag: percona-pgadmin4:latest
 
-ARG UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
+ARG UBI_BASE=%!{UBI9_BASE_IMAGE}
 FROM $UBI_BASE
 
 LABEL name="Percona pgAdmin 4" \
