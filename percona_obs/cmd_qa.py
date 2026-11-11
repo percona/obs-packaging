@@ -55,7 +55,10 @@ from .jenkins import (
     wait_for_finish,
     wait_for_start,
 )
-from .obs_api import _fetch_obs_package_names_or_fail
+from .obs_api import (
+    _fetch_obs_package_names_or_fail,
+    _fetch_obs_project_repository_names,
+)
 from .qa_images import (
     ImageDecision,
     ImageResolver,
@@ -113,15 +116,33 @@ def _image_resolver(
         rootprj=args.rootprj,
         fallback_rootprj=fallback,
         list_packages=lambda p: _fetch_obs_package_names_or_fail(apiurl, p),
+        list_repositories=lambda p: _fetch_obs_project_repository_names(apiurl, p),
     )
 
 
 def _resolve_lane_images(
     lanes: list[Lane], project: str, resolver: ImageResolver
 ) -> list[ImageDecision]:
-    """Render every image reference of every lane in place; return the decisions."""
+    """Render every image reference of every lane in place; return the decisions.
+
+    Entries outside the OBS project's repository slice are dropped first
+    (see :meth:`ImageResolver.outside_slice`), each named on stderr.
+    """
     decisions: list[ImageDecision] = []
     for lane in lanes:
+        kept: list[dict[str, Any]] = []
+        for entry in lane.entries:
+            repository = resolver.outside_slice(entry, project)
+            if repository is None:
+                kept.append(entry)
+                continue
+            print(
+                f"  entry {entry.get('name') or entry['pipeline']} "
+                f"({_lane_where(project, lane.package)}) skipped: repository "
+                f"{repository} not in {resolver.rootprj}:{project}",
+                file=sys.stderr,
+            )
+        lane.entries = kept
         for entry in lane.entries:
             # Resolution replaces each reference with a registry path; keep
             # the projects the images come from for EXPECTED_VERSIONS.
@@ -152,6 +173,8 @@ def _print_image_decisions(decisions: list[ImageDecision]) -> None:
             why = f"present in {d.obs_project}"
         elif d.reason == "fallback":
             why = f"fallback: not in {d.obs_project}"
+        elif d.reason == "fallback-repo":
+            why = f"fallback: repository not in {d.obs_project}"
         else:
             why = "no fallback configured"
         print(

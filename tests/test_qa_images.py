@@ -83,12 +83,13 @@ class _Lister:
         return self.present.get(obs_project, set())
 
 
-def _resolver(fallback, lister):
+def _resolver(fallback, lister, repos=None):
     return qa_images.ImageResolver(
         registry="reg.example",
         rootprj="isv:percona:PR:pr-5",
         fallback_rootprj=fallback,
         list_packages=lister,
+        list_repositories=None if repos is None else _Lister(repos),
     )
 
 
@@ -195,3 +196,60 @@ def test_resolve_entry_images_without_refs_is_a_noop():
         == []
     )
     assert entry["parameters"] == {"X": "1"}
+
+
+_P18 = "isv:percona:PR:pr-5:ppg:staging:18:containers"
+
+
+def test_present_package_in_missing_repository_falls_back():
+    d = _resolver("isv:percona", _Lister({_P18: {"img"}}), {_P18: {"ubi9"}}).decide(
+        "REPOSITORY",
+        {"image": "img", "repository": "ubi8", "project": "ppg:staging:18:containers"},
+        "ppg:staging:common:upgrade:containers",
+    )
+    assert (d.rootprj, d.reason) == ("isv:percona", "fallback-repo")
+    assert d.value == "reg.example/isv/percona/ppg/staging/18/containers/ubi8"
+
+
+def test_empty_repository_list_narrows_nothing():
+    r = _resolver("isv:percona", _Lister({_P18: {"img"}}), {})
+    ref = {"image": "img", "repository": "ubi8"}
+    assert r.decide("REPOSITORY", ref, "ppg:staging:18:containers").reason == "present"
+    entry = {"pipeline": "p", "parameters": {"REPOSITORY": ref}}
+    assert r.outside_slice(entry, "ppg:staging:18:containers") is None
+
+
+def test_outside_slice_only_for_own_images():
+    r = _resolver("isv:percona", _Lister({}), {_P18: {"ubi9"}})
+    own = {"pipeline": "p", "parameters": {"R": {"image": "i", "repository": "ubi8"}}}
+    named_own = {
+        "pipeline": "p",
+        "parameters": {
+            "R": {"image": "i", "repository": "ubi10", "project": "ppg:staging:18:containers"}
+        },
+    }
+    other = {
+        "pipeline": "p",
+        "parameters": {
+            "R": {"image": "i", "repository": "ubi8", "project": "ppg:staging:17:containers"}
+        },
+    }
+    in_slice = {"pipeline": "p", "parameters": {"R": {"image": "i", "repository": "ubi9"}}}
+    assert r.outside_slice(own, "ppg:staging:18:containers") == "ubi8"
+    assert r.outside_slice(named_own, "ppg:staging:18:containers") == "ubi10"
+    assert r.outside_slice(other, "ppg:staging:18:containers") is None
+    assert r.outside_slice(in_slice, "ppg:staging:18:containers") is None
+
+
+def test_outside_slice_without_fallback_never_queries_obs():
+    repos = _Lister({_P18: {"ubi9"}})
+    r = qa_images.ImageResolver(
+        registry="reg.example",
+        rootprj="isv:percona:PR:pr-5",
+        fallback_rootprj=None,
+        list_packages=_Lister({}),
+        list_repositories=repos,
+    )
+    entry = {"pipeline": "p", "parameters": {"R": {"image": "i", "repository": "ubi8"}}}
+    assert r.outside_slice(entry, "ppg:staging:18:containers") is None
+    assert repos.calls == []

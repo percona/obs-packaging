@@ -28,6 +28,12 @@ qa:
 """
 
 
+@pytest.fixture(autouse=True)
+def _no_repo_listing(monkeypatch):
+    """Repository lists are unknown (narrow nothing) unless a test sets them."""
+    monkeypatch.setattr(cmd_qa, "_fetch_obs_project_repository_names", lambda a, p: set())
+
+
 def _tree(tmp_path, monkeypatch, qa_text=_QA) -> Path:
     root = tmp_path / "root"
     proj = root / "ppg" / "staging" / "common" / "tools" / "containers"
@@ -98,6 +104,84 @@ def test_show_falls_back_for_absent_image_and_reports(tmp_path, monkeypatch, cap
     ]
     assert "percona-distribution-postgresql" in err and "fallback" in err
     assert "percona-pgbouncer" in err and "present" in err
+
+
+_QA_TWO_REPOS = """\
+title: C
+qa:
+  - name: ubi8
+    pipeline: docker-component-parallel
+    parameters:
+      REPOSITORY:
+        image: percona-pgbouncer
+        repository: ubi8
+      SERVER_REPOSITORY:
+        image: percona-distribution-postgresql
+        repository: ubi8
+        project: ppg:staging:18:containers
+  - name: ubi9
+    pipeline: docker-component-parallel
+    parameters:
+      REPOSITORY:
+        image: percona-pgbouncer
+        repository: ubi9
+      SERVER_REPOSITORY:
+        image: percona-distribution-postgresql
+        repository: ubi9
+        project: ppg:staging:18:containers
+"""
+
+
+def test_show_drops_entries_outside_the_pr_repository_slice(
+    tmp_path, monkeypatch, capsys
+):
+    """PR built only ubi9 of the lane project (labels narrowed it): the ubi8
+    entry is dropped, not pointed at a registry path that was never built."""
+    _tree(tmp_path, monkeypatch, _QA_TWO_REPOS)
+    monkeypatch.setattr(
+        cmd_qa,
+        "_fetch_obs_package_names_or_fail",
+        lambda a, p: {"percona-pgbouncer", "percona-distribution-postgresql"},
+    )
+    repos = {
+        "isv:percona:PR:pr-9:ppg:staging:common:tools:containers": {"ubi9"},
+        "isv:percona:PR:pr-9:ppg:staging:18:containers": {"ubi9"},
+    }
+    monkeypatch.setattr(
+        cmd_qa, "_fetch_obs_project_repository_names", lambda a, p: repos[p]
+    )
+    entries, err = _show_json(capsys, _args(image_fallback_rootprj="isv:percona"))
+    assert [e["params"]["REPOSITORY"].rsplit("/", 1)[1] for e in entries] == ["ubi9"]
+    assert entries[0]["params"]["SERVER_REPOSITORY"] == (
+        "reg.example/isv/percona/pr/pr-9/ppg/staging/18/containers/ubi9"
+    )
+    assert "entry ubi8" in err and "skipped: repository ubi8" in err
+
+
+def test_show_falls_back_for_other_project_missing_repository(
+    tmp_path, monkeypatch, capsys
+):
+    """The lane project builds ubi8 but the server project in the PR does not:
+    the server image comes from the fallback root."""
+    _tree(tmp_path, monkeypatch, _QA_TWO_REPOS)
+    monkeypatch.setattr(
+        cmd_qa,
+        "_fetch_obs_package_names_or_fail",
+        lambda a, p: {"percona-pgbouncer", "percona-distribution-postgresql"},
+    )
+    repos = {
+        "isv:percona:PR:pr-9:ppg:staging:common:tools:containers": {"ubi8", "ubi9"},
+        "isv:percona:PR:pr-9:ppg:staging:18:containers": {"ubi9"},
+    }
+    monkeypatch.setattr(
+        cmd_qa, "_fetch_obs_project_repository_names", lambda a, p: repos[p]
+    )
+    entries, err = _show_json(capsys, _args(image_fallback_rootprj="isv:percona"))
+    assert len(entries) == 2
+    assert entries[0]["params"]["SERVER_REPOSITORY"] == (
+        "reg.example/isv/percona/ppg/staging/18/containers/ubi8"
+    )
+    assert "fallback: repository not in" in err
 
 
 def test_mapping_without_image_is_rejected(tmp_path, monkeypatch):

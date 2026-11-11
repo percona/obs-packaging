@@ -757,7 +757,7 @@ discovered on disk from the project's direct package directories (symlinks into
 `_shared/` are followed and `%!{...}` macros resolve from the link's location,
 so one block under `_shared/<pkg>/package.yaml` renders per major), without
 descending into subprojects. The package's `obs/_link`, if any, is irrelevant.
-The tool calls OBS from `qa show` / `qa run` only to resolve image references when `image-fallback-rootprj` is set (one package listing per project).
+The tool calls OBS from `qa show` / `qa run` only to resolve image references when `image-fallback-rootprj` is set (one package and one repository listing per project).
 
 ```yaml
 # root/ppg/staging/_shared/pg_tde/package.yaml
@@ -789,14 +789,21 @@ and choose the root project per image:
 | `image-fallback-rootprj` set? | image listed in `<rootprj>:<project>` on OBS? | root used |
 |---|---|---|
 | no | not queried | the current rootprj |
-| yes | yes (promoted into the PR project) | the current rootprj |
+| yes | yes (promoted into the PR project), and `<rootprj>:<project>` has `repository` | the current rootprj |
+| yes | yes, but `<rootprj>:<project>` lacks `repository` | the fallback rootprj |
 | yes | no | the fallback rootprj |
 
 PR projects hold only promoted packages, and the registry publishes an image only under
 the project that built it, so a PR that promotes one image must still pull its siblings
 from the production root. CI writes `image-fallback-rootprj: <production root>` into the PR
 profiles; the nightly and production dispatches have no fallback and never query OBS.
-Each decision is printed on stderr (`image <pkg> (<project>) → <PARAM> = <path> [present|fallback|no-fallback: …]`).
+Each decision is printed on stderr (`image <pkg> (<project>) → <PARAM> = <path> [present|fallback|fallback-repo|no-fallback: …]`).
+
+Repository labels (e.g. `UBI_9`, `ubi9-images`) narrow a PR project to some repositories.
+With a fallback set, an entry whose own image (no `project:`, or the lane's project) names a
+repository the lane's OBS project does not have is outside the PR's slice: it is dropped
+(`entry <name> (<project>) skipped: repository <repo> not in …` on stderr) instead of
+pointing at an image the PR never built. An empty repository listing narrows nothing.
 `project verify` checks that `image` is a package directory of `project` and that
 `repository` is one of its repositories (references to projects not in the tree are skipped).
 
