@@ -168,17 +168,6 @@ def test_mirror_publish_flags(tmp_path):
     assert rc.mirror_publish_flags(tmp_path, {}, True) is True
 
 
-def test_warn_orphans(monkeypatch, capsys):
-    monkeypatch.setattr(
-        rc,
-        "_fetch_obs_subproject_names",
-        lambda apiurl, prefix: {"T:containers", "T:containers:ubi9"},
-    )
-    rc.warn_orphans("http://obs", "T", [("containers", Path("/x"))], "home:Admin")
-    out = capsys.readouterr().out
-    assert "T:containers:ubi9" in out and "sync delete" in out
-
-
 def test_release_tree_writes_release_id_before_each_copy(monkeypatch, tmp_path):
     calls = []
     _stub_obs(monkeypatch, calls)
@@ -221,3 +210,154 @@ def test_release_tree_without_release_id_writes_no_marker(monkeypatch, tmp_path)
         verify_timeout=0,
     )
     assert not [c for c in calls if c[0] == "marker"]
+
+
+def _stub_listing(monkeypatch, packages, subprojects):
+    deleted = []
+    monkeypatch.setattr(
+        rc,
+        "_fetch_obs_package_names_or_fail",
+        lambda apiurl, prj: set(packages.get(prj, ())),
+    )
+    monkeypatch.setattr(
+        rc, "_fetch_obs_package_names", lambda apiurl, prj: set(packages.get(prj, ()))
+    )
+    monkeypatch.setattr(
+        rc, "_fetch_obs_subproject_names", lambda apiurl, prj: set(subprojects)
+    )
+    monkeypatch.setattr(
+        rc,
+        "_delete_obs_package",
+        lambda apiurl, prj, pkg, dry_run: deleted.append(("pkg", prj, pkg, dry_run)),
+    )
+    monkeypatch.setattr(
+        rc,
+        "_delete_obs_project",
+        lambda apiurl, prj, dry_run, recursive=False: deleted.append(
+            ("prj", prj, dry_run, recursive)
+        ),
+    )
+    return deleted
+
+
+def _mirror(tmp_path, *subs):
+    top = tmp_path / "releases/18"
+    for sub in ("", *subs):
+        (top / sub).mkdir(parents=True, exist_ok=True)
+        (top / sub / "project.yaml").write_text("build: false\n")
+    return top
+
+
+def test_prune_deletes_stale_packages_per_member(tmp_path, monkeypatch):
+    top = _mirror(tmp_path, "containers")
+    deleted = _stub_listing(
+        monkeypatch,
+        {
+            "S": {"a", "b"},
+            "T": {"a", "b", "gone"},
+            "S:containers": {"img"},
+            "T:containers": {"img", "old-img"},
+        },
+        {"T:containers"},
+    )
+    rc.prune_release_tree(
+        "http://obs", "S", "T", [("containers", top / "containers")], top
+    )
+    assert deleted == [
+        ("pkg", "T", "gone", False),
+        ("pkg", "T:containers", "old-img", False),
+    ]
+
+
+def test_stale_subprojects_keeps_projects_with_a_mirror(tmp_path, monkeypatch):
+    # extras is another unit: it has a mirror dir (no release.yaml yet) and stays.
+    top = _mirror(tmp_path, "containers", "extras", "extras/containers")
+    deleted = _stub_listing(
+        monkeypatch,
+        {"S": {"a"}, "T": {"a"}, "S:containers": {"i"}, "T:containers": {"i"}},
+        {"T:containers", "T:extras", "T:extras:containers", "T:old", "T:old:ubi9"},
+    )
+    rc.prune_release_tree(
+        "http://obs", "S", "T", [("containers", top / "containers")], top
+    )
+    assert deleted == [("prj", "T:old", False, True)]
+
+
+def test_prune_refuses_empty_source_with_packages_in_target(tmp_path, monkeypatch):
+    top = _mirror(tmp_path)
+    deleted = _stub_listing(monkeypatch, {"S": set(), "T": {"a", "b"}}, set())
+    with pytest.raises(SystemExit, match="S lists no packages"):
+        rc.prune_release_tree("http://obs", "S", "T", [], top)
+    assert deleted == []
+
+
+def test_prune_allows_packageless_root(tmp_path, monkeypatch):
+    top = _mirror(tmp_path, "containers")
+    deleted = _stub_listing(
+        monkeypatch,
+        {"S": set(), "T": set(), "S:containers": {"i"}, "T:containers": {"i", "x"}},
+        {"T:containers"},
+    )
+    rc.prune_release_tree(
+        "http://obs", "S", "T", [("containers", top / "containers")], top
+    )
+    assert deleted == [("pkg", "T:containers", "x", False)]
+
+
+def test_prune_dry_run_reports_without_deleting(tmp_path, monkeypatch):
+    top = _mirror(tmp_path)
+    deleted = _stub_listing(monkeypatch, {"S": {"a"}, "T": {"a", "gone"}}, {"T:old"})
+    rc.prune_release_tree("http://obs", "S", "T", [], top, dry_run=True)
+    assert deleted == [("pkg", "T", "gone", True), ("prj", "T:old", True, True)]
+
+
+def test_release_tree_prunes_after_verify_and_before_publish(tmp_path, monkeypatch):
+    calls = []
+    _stub_obs(monkeypatch, calls)
+    monkeypatch.setattr(rc.subprocess, "run", lambda cmd, **k: None)
+    monkeypatch.setattr(
+        rc, "verify_release_landed", lambda *a, **k: calls.append(("verify", a[2]))
+    )
+    monkeypatch.setattr(
+        rc, "prune_release_tree", lambda *a, **k: calls.append(("prune", a[2]))
+    )
+    rc.release_tree(
+        "http://obs", "S", "T", [], "R", {}, top_mirror_path=tmp_path, prune=True
+    )
+    kinds = [c[0] for c in calls]
+    assert kinds.index("verify") < kinds.index("prune")
+    assert kinds.index("prune") < len(kinds) - 1 - kinds[::-1].index("publish")
+
+
+def test_release_tree_skips_prune_without_verify(tmp_path, monkeypatch, capsys):
+    calls = []
+    _stub_obs(monkeypatch, calls)
+    monkeypatch.setattr(rc.subprocess, "run", lambda cmd, **k: None)
+    monkeypatch.setattr(
+        rc, "prune_release_tree", lambda *a, **k: calls.append(("prune",))
+    )
+    rc.release_tree(
+        "http://obs",
+        "S",
+        "T",
+        [],
+        "R",
+        {},
+        top_mirror_path=tmp_path,
+        prune=True,
+        verify_timeout=0,
+    )
+    assert ("prune",) not in calls
+    assert "not pruned" in capsys.readouterr().out
+
+
+def test_release_tree_does_not_prune_by_default(tmp_path, monkeypatch):
+    calls = []
+    _stub_obs(monkeypatch, calls)
+    monkeypatch.setattr(rc.subprocess, "run", lambda cmd, **k: None)
+    monkeypatch.setattr(rc, "verify_release_landed", lambda *a, **k: None)
+    monkeypatch.setattr(
+        rc, "prune_release_tree", lambda *a, **k: calls.append(("prune",))
+    )
+    rc.release_tree("http://obs", "S", "T", [], "R", {}, top_mirror_path=tmp_path)
+    assert ("prune",) not in calls

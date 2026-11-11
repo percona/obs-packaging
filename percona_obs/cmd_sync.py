@@ -60,6 +60,7 @@ from .release_copy import (
     apply_mirror_meta,
     collect_release_subprojects,
     mirror_subproject_pairs,
+    prune_release_tree,
     release_tree,
 )
 from .github_api import last_synced_head_sha, repo_slug_from_url
@@ -2603,6 +2604,15 @@ def cmd_sync_release(args) -> None:
         if getattr(args, "dry_run", False):
             for name, _ in mirror_pairs:
                 _print_same(f"+ {release_obs_project}:{name}")
+            if _obs_project_exists(apiurl, release_obs_project):
+                prune_release_tree(
+                    apiurl,
+                    from_project,
+                    release_obs_project,
+                    mirror_pairs,
+                    release_path,
+                    dry_run=True,
+                )
             _print_ok(
                 f"release dry-run passed for {entry.tag}  "
                 f"({from_project} → {release_obs_project}, "
@@ -2622,6 +2632,7 @@ def cmd_sync_release(args) -> None:
             top_mirror_path=release_path,
             verify_timeout=args.verify_timeout,
             release_id=release_id,
+            prune=True,
         )
         _print_ok(f"release  {from_project} → {release_obs_project} ({entry.tag})")
         return
@@ -2729,6 +2740,7 @@ def cmd_sync_release(args) -> None:
             top_mirror_path=release_path,
             verify_timeout=args.verify_timeout,
             release_id=release_id,
+            prune=True,
         ),
     )
 

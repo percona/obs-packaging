@@ -27,7 +27,11 @@ from .common import (
 from .obs_api import (
     _add_release_targets,
     _apply_project_config,
+    _delete_obs_package,
+    _delete_obs_project,
     _disable_project_builds,
+    _fetch_obs_package_names,
+    _fetch_obs_package_names_or_fail,
     _fetch_obs_project_repository_names,
     _fetch_obs_subproject_names,
     _read_project_release_source,
@@ -176,23 +180,66 @@ def copy_project_binaries(
     _print_ok(f"released  {source_obs_project} → {target_obs_project}")
 
 
-def warn_orphans(
+def _stale_packages(apiurl: str, source: str, target: str) -> "list[str]":
+    """Packages of *target* that *source* no longer has."""
+    in_source = _fetch_obs_package_names_or_fail(apiurl, source)
+    in_target = _fetch_obs_package_names(apiurl, target)
+    if not in_source and in_target:
+        raise SystemExit(
+            f"error: {source} lists no packages but {target} has "
+            f"{len(in_target)}; refusing to prune (wrong or deleted source?)"
+        )
+    return sorted(in_target - in_source)
+
+
+def _stale_subprojects(
+    apiurl: str, target_obs_project: str, top_mirror_path: Path
+) -> "list[str]":
+    """Target subprojects with no mirror project.yaml in the local release
+    tree, outermost only (a recursive delete takes their children along).
+
+    Another release unit below this one keeps its mirror directory, so it is
+    never stale here.
+    """
+    prefix_len = len(target_obs_project) + 1
+    stale: list[str] = []
+    for obs_sub in sorted(_fetch_obs_subproject_names(apiurl, target_obs_project)):
+        rel = obs_sub[prefix_len:].split(":")
+        if (top_mirror_path.joinpath(*rel) / "project.yaml").is_file():
+            continue
+        if any(obs_sub.startswith(s + ":") for s in stale):
+            continue
+        stale.append(obs_sub)
+    return stale
+
+
+def prune_release_tree(
     apiurl: str,
+    source_obs_project: str,
     target_obs_project: str,
     pairs: "list[tuple[str, Path]]",
-    rootprj: str,
+    top_mirror_path: Path,
+    *,
+    dry_run: bool = False,
 ) -> None:
-    """Report target-tier OBS subprojects with no local mirror (never deleted)."""
-    local_names = {name for name, _ in pairs}
-    for obs_sub in sorted(_fetch_obs_subproject_names(apiurl, target_obs_project)):
-        sub_name = obs_sub[len(target_obs_project) + 1 :]
-        if sub_name not in local_names:
-            print(
-                f"warning: orphaned release subproject on OBS: {obs_sub} "
-                "(no local mirror) — remove manually with "
-                f"'percona-obs sync delete {obs_sub[len(rootprj) + 1 :]}'",
-                flush=True,
-            )
+    """Delete what left the release: target packages the source no longer
+    has (top project and every pair) and target subprojects without a
+    mirror.  All listings are read before the first delete, so a refused
+    listing deletes nothing."""
+    members = [(source_obs_project, target_obs_project)] + [
+        (f"{source_obs_project}:{name}", f"{target_obs_project}:{name}")
+        for name, _ in pairs
+    ]
+    stale_pkgs = [
+        (target, pkg)
+        for source, target in members
+        for pkg in _stale_packages(apiurl, source, target)
+    ]
+    stale_prjs = _stale_subprojects(apiurl, target_obs_project, top_mirror_path)
+    for target, pkg in stale_pkgs:
+        _delete_obs_package(apiurl, target, pkg, dry_run)
+    for obs_sub in stale_prjs:
+        _delete_obs_project(apiurl, obs_sub, dry_run, recursive=True)
 
 
 def mirror_publish_flags(
@@ -218,6 +265,7 @@ def release_tree(
     publish_override: "dict[str, bool] | bool | None" = None,
     verify_timeout: int = 600,
     release_id: "str | None" = None,
+    prune: bool = False,
 ) -> None:
     """Copy the top project and every (subproject, mirror) pair, then verify.
 
@@ -239,6 +287,10 @@ def release_tree(
     last description line after its meta is applied and before its
     ``osc release``, so the description already names the release when the
     binaries land.
+
+    With *prune*, packages and subprojects that left the release are deleted
+    once every copy is verified and before publishing resumes; without
+    verification nothing is deleted.
     """
     held = [
         (
@@ -281,6 +333,15 @@ def release_tree(
                 f"{target_obs_project}:{subproject_name}",
                 timeout_s=verify_timeout,
             )
+        if prune:
+            prune_release_tree(
+                apiurl, source_obs_project, target_obs_project, pairs, top_mirror_path
+            )
+    elif prune:
+        print(
+            "warning: copy not verified (--verify-timeout 0): "
+            f"{target_obs_project} not pruned",
+            flush=True,
+        )
     for obs_project, flags in held:
         set_project_publish(apiurl, obs_project, flags)
-    warn_orphans(apiurl, target_obs_project, pairs, rootprj)
