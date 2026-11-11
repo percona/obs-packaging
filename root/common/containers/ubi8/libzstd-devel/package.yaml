@@ -1,0 +1,2 @@
+title: libzstd-devel
+description: "Development files for libzstd (repackaged from AlmaLinux 8.10 for UBI-8 x86_64 builds; UBI 8 ships it for aarch64 only)"
