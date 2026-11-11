@@ -1696,10 +1696,11 @@ def test_release_parser_accepts_yes():
 # --- --also-profile instance selection --------------------------------------
 
 
-def _also_setup(monkeypatch, in_slice, existing):
+def _also_setup(tmp_path, monkeypatch, in_slice, existing):
     """Patch the profile, slice and OBS lookups of ``_also_instance``.
 
-    *in_slice*: directory names (unit members) inside the profile's slice;
+    *in_slice*: directory names of the unit members with a package in the
+    profile's slice;
     *existing*: OBS project names that exist on the instance.
     """
     queried: list[str] = []
@@ -1711,22 +1712,26 @@ def _also_setup(monkeypatch, in_slice, existing):
     monkeypatch.setattr(cmd_project, "_load_profile_env", lambda name: {})
     monkeypatch.setattr(cmd_project, "_load_profile_filter", lambda name: "FILTER")
 
-    def fake_in_slice(path, env, repo_filter=None):
+    def fake_in_slice(pkg_path, env, repo_filter=None):
         assert repo_filter == "FILTER"
-        return path.name in in_slice
+        return pkg_path.parent.name in in_slice
 
     def fake_exists(apiurl, project):
         queried.append(project)
         return project in existing
 
-    monkeypatch.setattr(cmd_project, "project_in_slice", fake_in_slice)
+    for member in ("", "containers", "tarballs"):
+        (tmp_path / "root/ppg/staging/17" / member / "pkg" / "obs").mkdir(
+            parents=True, exist_ok=True
+        )
+    monkeypatch.setattr(cmd_project, "package_in_slice", fake_in_slice)
     monkeypatch.setattr(cmd_project, "_obs_project_exists", fake_exists)
     return queried
 
 
 def test_also_instance_skipped_when_unit_out_of_slice(tmp_path, monkeypatch, capsys):
     _staging_tree(tmp_path)
-    queried = _also_setup(monkeypatch, in_slice=set(), existing=set())
+    queried = _also_setup(tmp_path, monkeypatch, in_slice=set(), existing=set())
     src = tmp_path / "root/ppg/staging/17"
     assert cmd_project._also_instance("labs", src, "ppg:staging:17") is None
     assert queried == []
@@ -1736,7 +1741,10 @@ def test_also_instance_skipped_when_unit_out_of_slice(tmp_path, monkeypatch, cap
 def test_also_instance_in_slice_and_present(tmp_path, monkeypatch):
     _staging_tree(tmp_path)
     queried = _also_setup(
-        monkeypatch, in_slice={"17", "containers"}, existing={"L:ppg:staging:17"}
+        tmp_path,
+        monkeypatch,
+        in_slice={"17", "containers"},
+        existing={"L:ppg:staging:17"},
     )
     src = tmp_path / "root/ppg/staging/17"
     assert cmd_project._also_instance("labs", src, "ppg:staging:17") == (
@@ -1748,7 +1756,7 @@ def test_also_instance_in_slice_and_present(tmp_path, monkeypatch):
 
 def test_also_instance_in_slice_but_missing_is_an_error(tmp_path, monkeypatch):
     _staging_tree(tmp_path)
-    _also_setup(monkeypatch, in_slice={"17"}, existing=set())
+    _also_setup(tmp_path, monkeypatch, in_slice={"17"}, existing=set())
     src = tmp_path / "root/ppg/staging/17"
     with pytest.raises(SystemExit, match="L:ppg:staging:17 not found on http://labs"):
         cmd_project._also_instance("labs", src, "ppg:staging:17")
@@ -1757,6 +1765,7 @@ def test_also_instance_in_slice_but_missing_is_an_error(tmp_path, monkeypatch):
 def test_also_instance_only_bundled_child_in_slice(tmp_path, monkeypatch):
     _staging_tree(tmp_path)
     queried = _also_setup(
+        tmp_path,
         monkeypatch,
         in_slice={"containers"},
         existing={"L:ppg:staging:17:containers"},
@@ -1767,3 +1776,43 @@ def test_also_instance_only_bundled_child_in_slice(tmp_path, monkeypatch):
         "L",
     )
     assert queried == ["L:ppg:staging:17:containers"]
+
+
+def test_server_package_instance_takes_first_instance_with_the_server(monkeypatch):
+    archs = {
+        "B:ppg:staging:18:extras": {},
+        "L:ppg:staging:18:extras": {"percona-postgresql": ("UBI_9", "x86_64")},
+    }
+    monkeypatch.setattr(
+        cmd_project, "_fetch_all_pkg_archs", lambda apiurl, prj: archs[prj]
+    )
+    got = cmd_project._server_package_instance(
+        [("http://boo", "B"), ("http://labs", "L")], "ppg:staging:18:extras", "18"
+    )
+    assert got == (
+        "http://labs",
+        "L:ppg:staging:18:extras",
+        {"percona-postgresql": ("UBI_9", "x86_64")},
+    )
+
+
+def test_server_package_instance_prefers_the_main_instance(monkeypatch):
+    monkeypatch.setattr(
+        cmd_project,
+        "_fetch_all_pkg_archs",
+        lambda apiurl, prj: {"percona-postgresql18": (apiurl, "x86_64")},
+    )
+    got = cmd_project._server_package_instance(
+        [("http://boo", "B"), ("http://labs", "L")], "ppg:staging:18", "18"
+    )
+    assert got[:2] == ("http://boo", "B:ppg:staging:18")
+
+
+def test_server_package_instance_without_server_is_the_main_instance(monkeypatch):
+    monkeypatch.setattr(cmd_project, "_fetch_all_pkg_archs", lambda apiurl, prj: {})
+    got = cmd_project._server_package_instance(
+        [("http://boo", "B"), ("http://labs", "L")],
+        "ppg:staging:common:upgrade",
+        "common",
+    )
+    assert got == ("http://boo", "B:ppg:staging:common:upgrade", {})

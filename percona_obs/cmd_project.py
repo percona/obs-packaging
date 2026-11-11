@@ -2706,13 +2706,34 @@ def cmd_project_release_units(args: argparse.Namespace) -> None:
     sys.stdout.write(json.dumps(list_release_units(), indent=2) + "\n")
 
 
+def _server_package_instance(
+    instances: "list[tuple[str, str]]", project: str, major: str
+) -> "tuple[str, str, dict[str, tuple[str, str]]]":
+    """(apiurl, obs_project, pkg_archs) of the instance the release id is
+    derived from.
+
+    The server package of a unit lives on the instance whose slice holds it
+    (``ppg:staging:18:extras`` builds only for UBI): the first instance that
+    has it wins, the ``-P`` one first.  None has it (counter mode): the first
+    instance, with no package archs.
+    """
+    server_pkgs = ("percona-postgresql", f"percona-postgresql{major}")
+    for inst_apiurl, inst_rootprj in instances:
+        inst_project = f"{inst_rootprj}:{project}"
+        inst_archs = _fetch_all_pkg_archs(inst_apiurl, inst_project)
+        if any(pkg in inst_archs for pkg in server_pkgs):
+            return inst_apiurl, inst_project, inst_archs
+    first_apiurl, first_rootprj = instances[0]
+    return first_apiurl, f"{first_rootprj}:{project}", {}
+
+
 def _also_instance(
     also_name: str, source_path: Path, project: str
 ) -> "tuple[str, str] | None":
     """(apiurl, rootprj) of an ``--also-profile`` instance, or None to skip it.
 
-    An instance whose slice holds no member of the release unit never gets
-    the unit's projects (``ppg:staging:16:tde`` has no UBI repository, so the
+    An instance whose slice holds no package of the release unit has nothing
+    of it to report (``ppg:staging:16:tde`` has no UBI repository, so the
     UBI-only instance does not carry it): it has nothing for the CHANGELOG
     and is skipped.  A member inside the slice that is missing on OBS is an
     error (wrong profile or missing credentials).
@@ -2730,11 +2751,14 @@ def _also_instance(
     in_slice = [
         member
         for member, path in release_unit_members(source_path, project)
-        if project_in_slice(path, also_env, repo_filter=also_filter)
+        if any(
+            package_in_slice(pkg_path, also_env, repo_filter=also_filter)
+            for _, pkg_path in find_packages(path, member, recursive=False)
+        )
     ]
     if not in_slice:
         _print_same(
-            f"also: {also_name} skipped ({project} has no repository in its slice)"
+            f"also: {also_name} skipped ({project} has no package in its slice)"
         )
         return None
     if not _obs_project_exists(also_apiurl, f"{also_rootprj}:{in_slice[0]}"):
@@ -2815,14 +2839,22 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         release_env.get("PERCONA_OBS_PACKAGING_REPO", ""),
     )
 
+    instances: list[tuple[str, str]] = [(apiurl, args.rootprj)]
+    for also_name in getattr(args, "also_profiles", None) or []:
+        also_instance = _also_instance(also_name, source_path, args.project)
+        if also_instance:
+            instances.append(also_instance)
+
     def _derive() -> str:
-        pkg_archs = _fetch_all_pkg_archs(apiurl, source_obs_project)
+        id_apiurl, id_project, pkg_archs = _server_package_instance(
+            instances, args.project, major
+        )
         return _derive_release_id(
             pkg_archs,
             existing_releases,
             release_name,
             lambda repo, arch, pkg: _fetch_pkg_versrel(
-                apiurl, source_obs_project, repo, arch, pkg
+                id_apiurl, id_project, repo, arch, pkg
             ),
             counter_mode=not tree_has_server_package(source_path),
             major=major,
@@ -2877,12 +2909,6 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             container_subs.append(subproject_name)
         else:
             noncontainer_subs.append(subproject_name)
-
-    instances: list[tuple[str, str]] = [(apiurl, args.rootprj)]
-    for also_name in getattr(args, "also_profiles", None) or []:
-        also_instance = _also_instance(also_name, source_path, args.project)
-        if also_instance:
-            instances.append(also_instance)
 
     obs_data = _merge_release_obs_data(
         [

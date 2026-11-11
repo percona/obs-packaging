@@ -1292,9 +1292,11 @@ most packages, labs has the UBI repos and container images), so the CHANGELOG is
 from the union of package versions and image lists across all instances (the `-P`
 profile wins on a clash), and a package whose directory is still in the source tree is
 never reported as removed.
-An instance whose slice holds no project of the release unit is skipped with an
+An instance whose slice holds no package of the release unit is skipped with an
 `also: NAME skipped` line (`ppg:staging:16:tde` has no UBI repository, so labs does not
-carry it); a unit project inside the slice that is missing there is still an error.
+carry it); a unit project with packages in the slice that is missing there is still an
+error. The release id is derived from the first instance that builds the unit's server
+package, the `-P` one first (`ppg:staging:18:extras` builds only on labs).
 
 Before cutting, run `git fetch --tags` (or `git fetch percona --tags`): the open-release
 detection below reads local git tags and also consults the remote
