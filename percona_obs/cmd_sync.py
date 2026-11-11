@@ -115,7 +115,7 @@ from .obs_api import (
     read_project_description_marker,
     set_project_description_markers,
 )
-from .release_scope import collect_release_scope
+from .release_scope import collect_release_scope, nested_unit_dirs
 from .release_freeze import (
     assert_all_green,
     freeze_builds,
@@ -2466,9 +2466,22 @@ def _build_freeze_scope(
     return whole, packages
 
 
+def _repo_relative(path: Path) -> str:
+    """*path* as a git pathspec relative to the repository root."""
+    return str(path.relative_to(_REPO_DIR)) if path.is_absolute() else str(path)
+
+
+def _exclude_pathspec(path: Path) -> str:
+    """Git pathspec excluding *path* (a directory or file) from a diff."""
+    return f":(exclude){_repo_relative(path)}"
+
+
 def _check_source_unchanged_since_tag(source_project_id: str, tag: str, args) -> None:
     """Abort when the source project's tree changed since *tag* (legacy
-    single-hop release only; ``--skip-tag-check`` skips, no tag = nothing)."""
+    single-hop release only; ``--skip-tag-check`` skips, no tag = nothing).
+
+    Nested release units below the source (``extras``, ``tde``) are released
+    on their own, so their directories are excluded from the diff."""
     if not tag:
         return
     if getattr(args, "skip_tag_check", False):
@@ -2476,8 +2489,17 @@ def _check_source_unchanged_since_tag(source_project_id: str, tag: str, args) ->
         return
     source_path = resolve_project_path(source_project_id)
     _print_pending(f"checking for changes in {source_project_id} since tag {tag}")
+    excludes = [_exclude_pathspec(d) for d in nested_unit_dirs(source_path)]
     result = subprocess.run(
-        ["git", "diff", "--name-only", f"{tag}..HEAD", "--", str(source_path)],
+        [
+            "git",
+            "diff",
+            "--name-only",
+            f"{tag}..HEAD",
+            "--",
+            _repo_relative(source_path),
+            *excludes,
+        ],
         capture_output=True,
         text=True,
         cwd=_REPO_DIR,
@@ -2601,10 +2623,19 @@ def cmd_sync_release(args) -> None:
                     "or cut a new release"
                 )
         mirror_pairs = mirror_subproject_pairs(release_path)
+        # --force skips the source_commit check, the only proof that hop 1
+        # completed: never prune against an unproven source.
+        prune = not args.force
+        if not prune:
+            print(
+                "warning: --force: pre-release provenance not checked, "
+                f"{release_obs_project} not pruned",
+                flush=True,
+            )
         if getattr(args, "dry_run", False):
             for name, _ in mirror_pairs:
                 _print_same(f"+ {release_obs_project}:{name}")
-            if _obs_project_exists(apiurl, release_obs_project):
+            if prune and _obs_project_exists(apiurl, release_obs_project):
                 prune_release_tree(
                     apiurl,
                     from_project,
@@ -2632,7 +2663,7 @@ def cmd_sync_release(args) -> None:
             top_mirror_path=release_path,
             verify_timeout=args.verify_timeout,
             release_id=release_id,
-            prune=True,
+            prune=prune,
         )
         _print_ok(f"release  {from_project} → {release_obs_project} ({entry.tag})")
         return
@@ -2762,11 +2793,15 @@ def _scope_local_paths(
     freeze_scope: "list[str]",
     freeze_packages_map: "dict[str, set[str]]",
     rootprj: str,
-) -> "list[Path]":
+) -> "list[Path | str]":
     """Local git paths whose content decides the released binaries: the
     source tree, its macros chain, the product's release record for this
-    major, every whole-frozen project and every aggregate-frozen package."""
-    paths: list[Path] = [source_path, *_macros_chain_files(source_path)]
+    major, every whole-frozen project and every aggregate-frozen package.
+
+    Nested release units below the source (``extras``, ``tde``) are released
+    on their own: their directories follow as ``:(exclude)`` pathspec
+    strings, unless another watched path lies inside one of them."""
+    paths: "list[Path | str]" = [source_path, *_macros_chain_files(source_path)]
 
     def _add(path: Path) -> None:
         if path not in paths:
@@ -2810,11 +2845,20 @@ def _scope_local_paths(
         for pkg in sorted(pkgs):
             for path in _package_pathspecs(base / pkg):
                 _add(path)
+    # An exclude pathspec hides matching paths from every positive one, so a
+    # nested unit that is also frozen (or holds a watched file) stays in.
+    watched = [p for p in paths if isinstance(p, Path) and p != source_path]
+    for nested in nested_unit_dirs(source_path):
+        if not any(p == nested or p.is_relative_to(nested) for p in watched):
+            paths.append(_exclude_pathspec(nested))
     return paths
 
 
-def _changed_files_between(a: str, b: str, paths: "list[Path]") -> "list[str]":
-    """``git diff --name-only a b -- paths`` (both commits must exist locally)."""
+def _changed_files_between(a: str, b: str, paths: "list[Path | str]") -> "list[str]":
+    """``git diff --name-only a b -- paths`` (both commits must exist locally).
+
+    A ``Path`` is made relative to the repository root; a ``str`` is passed
+    to git as is (e.g. a ``:(exclude)…`` pathspec)."""
     for sha in (a, b):
         r = subprocess.run(
             ["git", "cat-file", "-e", f"{sha}^{{commit}}"],
@@ -2826,7 +2870,7 @@ def _changed_files_between(a: str, b: str, paths: "list[Path]") -> "list[str]":
                 f"error: commit {sha} is not available locally; "
                 "fetch the repository (full history) and retry"
             )
-    rel = [str(p.relative_to(_REPO_DIR)) if p.is_absolute() else str(p) for p in paths]
+    rel = [p if isinstance(p, str) else _repo_relative(p) for p in paths]
     r = subprocess.run(
         ["git", "diff", "--name-only", a, b, "--", *rel],
         cwd=_REPO_DIR,
@@ -2836,6 +2880,19 @@ def _changed_files_between(a: str, b: str, paths: "list[Path]") -> "list[str]":
     if r.returncode != 0:
         raise SystemExit(f"error: git diff {a} {b} failed: {r.stderr.strip()}")
     return [l.strip() for l in r.stdout.splitlines() if l.strip()]
+
+
+def _prerelease_unit_tree(prerelease_obs_project: str, names) -> "list[str]":
+    """The subprojects among *names* that belong to the pre-release's own
+    release unit: the bundled children (``containers``, ``tarballs``) and
+    everything below them.  Nested units' pre-releases are left out."""
+    prefix = f"{prerelease_obs_project}:"
+    return [
+        name
+        for name in names
+        if name.startswith(prefix)
+        and name[len(prefix) :].split(":", 1)[0] in common.BUNDLED_SUBPROJECTS
+    ]
 
 
 def cmd_sync_prerelease(args) -> None:
@@ -2977,10 +3034,15 @@ def cmd_sync_prerelease(args) -> None:
         return
 
     # Repopulate from scratch: a previous populate (earlier PR head) may have
-    # left packages, subprojects or meta the new cut no longer has.
-    stale_tree = _fetch_obs_subproject_names(apiurl, prerelease_obs_project)
+    # left packages, subprojects or meta the new cut no longer has.  Only this
+    # unit's tree goes: a nested unit's pre-release (pr-N:…:18:extras) is
+    # populated by another leg of the same PR.
+    stale_tree = _prerelease_unit_tree(
+        prerelease_obs_project,
+        _fetch_obs_subproject_names(apiurl, prerelease_obs_project),
+    )
     if _obs_project_exists(apiurl, prerelease_obs_project):
-        stale_tree.add(prerelease_obs_project)
+        stale_tree.append(prerelease_obs_project)
     for obs_name in sorted(stale_tree, key=lambda n: n.count(":"), reverse=True):
         _delete_obs_project(apiurl, obs_name, dry_run=False, recursive=True)
 

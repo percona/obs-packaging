@@ -427,3 +427,58 @@ def test_release_tree_does_not_prune_by_default(tmp_path, monkeypatch):
     )
     rc.release_tree("http://obs", "S", "T", [], "R", {}, top_mirror_path=tmp_path)
     assert ("prune",) not in calls
+
+
+def test_release_tree_restores_publish_when_prune_fails(tmp_path, monkeypatch):
+    calls = []
+    _stub_obs(monkeypatch, calls)
+    monkeypatch.setattr(rc.subprocess, "run", lambda cmd, **k: None)
+    monkeypatch.setattr(rc, "verify_release_landed", lambda *a, **k: None)
+    monkeypatch.setattr(
+        rc,
+        "mirror_publish_flags",
+        lambda path, env, override=None: {"top": True, "sub": {"r": False}}[path.name],
+    )
+
+    def refuse(*a, **k):
+        calls.append(("prune",))
+        raise SystemExit("error: refusing to prune")
+
+    monkeypatch.setattr(rc, "prune_release_tree", refuse)
+    with pytest.raises(SystemExit, match="refusing to prune"):
+        rc.release_tree(
+            "http://obs",
+            "S",
+            "T",
+            [("x", tmp_path / "sub")],
+            "R",
+            {},
+            top_mirror_path=tmp_path / "top",
+            prune=True,
+        )
+    assert ("prune",) in calls
+    released = [c for c in calls if c[0] == "publish" and c[2] is not False]
+    assert released == [("publish", "T", True), ("publish", "T:x", {"r": False})]
+
+
+def test_release_tree_keeps_publish_held_when_verify_fails(tmp_path, monkeypatch):
+    calls = []
+    _stub_obs(monkeypatch, calls)
+    monkeypatch.setattr(rc.subprocess, "run", lambda cmd, **k: None)
+    monkeypatch.setattr(
+        rc, "mirror_publish_flags", lambda path, env, override=None: True
+    )
+
+    def not_landed(*a, **k):
+        raise SystemExit("error: release did not land")
+
+    monkeypatch.setattr(rc, "verify_release_landed", not_landed)
+    monkeypatch.setattr(
+        rc, "prune_release_tree", lambda *a, **k: calls.append(("prune",))
+    )
+    with pytest.raises(SystemExit):
+        rc.release_tree(
+            "http://obs", "S", "T", [], "R", {}, top_mirror_path=tmp_path, prune=True
+        )
+    assert ("prune",) not in calls
+    assert [c for c in calls if c[0] == "publish"] == [("publish", "T", False)]

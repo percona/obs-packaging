@@ -159,6 +159,34 @@ def test_existing_prerelease_tree_deleted_deepest_first(tmp_path, monkeypatch):
     assert calls.index(deletes[-1]) < calls.index(("meta", top, True))
 
 
+def test_repopulate_keeps_nested_unit_prerelease(tmp_path, monkeypatch):
+    src, rel = _tree_with_record(tmp_path, monkeypatch)
+    calls = []
+    _wire(monkeypatch, src, rel, calls)
+    top = "home:Admin:PR:pr-5:ppg:releases:17"
+    monkeypatch.setattr(
+        cmd_sync,
+        "_fetch_obs_subproject_names",
+        lambda apiurl, prj: {
+            f"{prj}:containers",
+            f"{prj}:containers:ubi9",
+            f"{prj}:extras",
+            f"{prj}:extras:containers",
+        },
+    )
+    cmd_sync.cmd_sync_prerelease(_Args())
+    deletes = [c[1] for c in calls if isinstance(c, tuple) and c[0] == "delete"]
+    assert deletes == [f"{top}:containers:ubi9", f"{top}:containers", top]
+
+
+def test_prerelease_unit_tree_filters_by_first_component():
+    names = ["P:containers", "P:tarballs:x", "P:extras", "P:extras:containers", "Q:c"]
+    assert cmd_sync._prerelease_unit_tree("P", names) == [
+        "P:containers",
+        "P:tarballs:x",
+    ]
+
+
 def test_happy_path_order(tmp_path, monkeypatch):
     src, rel = _tree_with_record(tmp_path, monkeypatch)
     calls = []
@@ -305,3 +333,102 @@ def test_scope_local_paths_nested_unit_watches_both_records(tmp_path, monkeypatc
     paths = cmd_sync._scope_local_paths(src, [], {}, "R")
     assert root / "ppg/releases/18/extras/release.yaml" in paths
     assert root / "ppg/releases/18/release.yaml" in paths
+
+
+def _nested_units_repo(tmp_path, monkeypatch):
+    """Git repo with staging/18 (+containers, a package) and a nested
+    staging/18/extras unit; returns (git, commit)."""
+    import subprocess
+
+    import percona_obs.common as common
+
+    def git(*a):
+        return subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@x", *a],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    s18 = tmp_path / "root/ppg/staging/18"
+    for d in ("", "containers", "pkg", "extras", "extras/containers"):
+        (s18 / d).mkdir(parents=True, exist_ok=True)
+    for d in ("", "containers", "extras", "extras/containers"):
+        (s18 / d / "project.yaml").write_text("title: t\n")
+    for d in ("containers", "pkg", "extras"):
+        (s18 / d / "x").write_text("1\n")
+    git("init", "-q")
+    git("add", "-A")
+    git("commit", "-q", "-m", "a")
+    monkeypatch.setattr(cmd_sync, "_REPO_DIR", tmp_path)
+    monkeypatch.setattr(common, "REPO_ROOT", tmp_path / "root")
+    monkeypatch.setattr(
+        cmd_sync,
+        "resolve_project_path",
+        lambda pid: tmp_path / "root" / pid.replace(":", "/"),
+    )
+
+    def commit(rel):
+        (s18 / rel).write_text("2\n")
+        git("commit", "-q", "-am", rel)
+        return git("rev-parse", "HEAD")
+
+    return s18, git("rev-parse", "HEAD"), commit
+
+
+def test_nested_unit_change_not_reported_for_parent(tmp_path, monkeypatch):
+    s18, a, commit = _nested_units_repo(tmp_path, monkeypatch)
+    b = commit("extras/x")
+    paths = cmd_sync._scope_local_paths(
+        s18,
+        ["home:Admin:ppg:staging:18", "home:Admin:ppg:staging:18:containers"],
+        {},
+        "home:Admin",
+    )
+    assert cmd_sync._changed_files_between(a, b, paths) == []
+    extras = cmd_sync._scope_local_paths(
+        s18 / "extras", ["home:Admin:ppg:staging:18:extras"], {}, "home:Admin"
+    )
+    assert cmd_sync._changed_files_between(a, b, extras) == [
+        "root/ppg/staging/18/extras/x"
+    ]
+
+
+@pytest.mark.parametrize("rel", ["containers/x", "pkg/x"])
+def test_own_change_reported_for_parent(tmp_path, monkeypatch, rel):
+    s18, a, commit = _nested_units_repo(tmp_path, monkeypatch)
+    b = commit(rel)
+    paths = cmd_sync._scope_local_paths(
+        s18, ["home:Admin:ppg:staging:18"], {}, "home:Admin"
+    )
+    assert cmd_sync._changed_files_between(a, b, paths) == [
+        f"root/ppg/staging/18/{rel}"
+    ]
+
+
+def test_nested_unit_frozen_whole_is_not_excluded(tmp_path, monkeypatch):
+    s18, a, commit = _nested_units_repo(tmp_path, monkeypatch)
+    b = commit("extras/x")
+    paths = cmd_sync._scope_local_paths(
+        s18,
+        ["home:Admin:ppg:staging:18", "home:Admin:ppg:staging:18:extras"],
+        {},
+        "home:Admin",
+    )
+    assert cmd_sync._changed_files_between(a, b, paths) == [
+        "root/ppg/staging/18/extras/x"
+    ]
+
+
+def test_tag_check_ignores_nested_unit(tmp_path, monkeypatch):
+    s18, a, commit = _nested_units_repo(tmp_path, monkeypatch)
+    import subprocess
+
+    subprocess.run(["git", "tag", "t1", a], cwd=tmp_path, check=True)
+    commit("extras/x")
+    args = type("A", (), {"skip_tag_check": False})()
+    cmd_sync._check_source_unchanged_since_tag("ppg:staging:18", "t1", args)
+    commit("pkg/x")
+    with pytest.raises(SystemExit, match="diverged"):
+        cmd_sync._check_source_unchanged_since_tag("ppg:staging:18", "t1", args)

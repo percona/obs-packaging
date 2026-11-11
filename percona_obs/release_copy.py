@@ -312,7 +312,9 @@ def release_tree(
 
     With *prune*, packages and subprojects that left the release are deleted
     once every copy is verified and before publishing resumes; without
-    verification nothing is deleted.
+    verification nothing is deleted.  A prune that fails (refused listing,
+    refused delete) still restores the publish flags, since the copies are
+    verified, and then re-raises; re-running finishes the prune.
     """
     held = [
         (
@@ -355,15 +357,18 @@ def release_tree(
                 f"{target_obs_project}:{subproject_name}",
                 timeout_s=verify_timeout,
             )
-        if prune:
-            prune_release_tree(
-                apiurl, source_obs_project, target_obs_project, pairs, top_mirror_path
-            )
     elif prune:
         print(
             "warning: copy not verified (--verify-timeout 0): "
             f"{target_obs_project} not pruned",
             flush=True,
         )
-    for obs_project, flags in held:
-        set_project_publish(apiurl, obs_project, flags)
+    # The copies are in place: publishing resumes even when the prune fails.
+    try:
+        if prune and verify_timeout > 0:
+            prune_release_tree(
+                apiurl, source_obs_project, target_obs_project, pairs, top_mirror_path
+            )
+    finally:
+        for obs_project, flags in held:
+            set_project_publish(apiurl, obs_project, flags)
