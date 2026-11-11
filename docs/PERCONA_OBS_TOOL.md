@@ -1059,7 +1059,12 @@ root) and a project with nothing to release (naming the units below it).
 unit's own tags for that minor, plus one. The first release of a nested unit
 that has no tags of its own continues the numbering of the parent's record
 (the parent's tag count for that minor, plus one), since the unit used to ship
-with it; otherwise it starts at 1. A unit without a server package uses a
+with it; otherwise it starts at 1. Only the parent's shipped tags count: an
+open last entry of the parent record (cut on the same branch, no git tag yet)
+is ignored, matching the `PPG_RELEASE` the staging images carry. An explicit
+`--release-id <prefix><MAJOR.MINOR>-<N>` on such a first release is refused
+when `N` does not exceed the parent's shipped tags of that minor; the error
+names the lowest allowed id. Ids of any other shape are not checked. A unit without a server package uses a
 plain counter named after its release directory (`common-tools-1`).
 `PPG_RELEASE` (image tags) follows the same record: for a project or package
 inside a nested unit of a PG major it is read from that unit's `release.yaml`
@@ -1081,7 +1086,10 @@ judged; a non-bundled child that has a mirror is another unit and is left
 alone. Deletions run deepest first. Nothing is pruned when the copy was not
 verified (`--verify-timeout 0`, with a warning), when a source listing fails,
 or when the source lists no packages while the target still has some; the
-last two abort the release. `--dry-run` (on both hops) prints the deletions
+last two abort the release. Publishing is restored even when the prune fails
+(the copies are verified by then); re-run `sync release` to finish the prune.
+Hop 2 with `--force` (pre-release provenance not checked) copies but never
+prunes, with a warning. `--dry-run` (on both hops) prints the deletions
 and deletes nothing; it exits non-zero on the empty-source guard. The release
 PR comment lists them under "Removed from the release on merge". To retire a
 nested unit, `git rm` its release directory: the parent's next release
@@ -1407,7 +1415,7 @@ READMEs under `releases/` are skipped with a notice), or by `workflow_dispatch` 
 `pr_number`); `obs-pr-check.yml` gates them out and needs no label for this. Its jobs:
 
 - `resolve` — classifies the PR with `.github/scripts/release_pr.py classify`: release-only
-  check and the one-in-flight-per-major guard; a PR with no `release.yaml` change is skipped
+  check and the one-in-flight-per-release-unit guard; a PR with no `release.yaml` change is skipped
   (`kind=none`; `--strict` on `workflow_dispatch` fails instead).
 - `populate` — one leg per `OBS_INSTANCES` entry, serialized on the instance's
   `sync-main-sync-<name>` concurrency group (never cancelled; no overlap with a staging
@@ -1520,10 +1528,13 @@ nested unit — `PPG_RELEASE` is computed from them, so
 a merged release refuses a repopulate — every whole-frozen project, every
 aggregate-frozen package) must be identical between
 `source_commit` and the last synced `main` (`--synced-commit`, else `gh api`), or it
-fails with "staging changed since the cut"; edits under `root/<product>/staging/_shared/...`
+fails with "staging changed since the cut"; the directories of nested units below the
+source (`extras`, `tde`) are excluded, since they are released on their own (unless a
+nested unit is itself in the freeze scope); edits under `root/<product>/staging/_shared/...`
 count as staging changes because the check follows the `_shared/` symlink targets of
-packages; (3) an existing pre-release tree (the project and every subproject under it) is
-**deleted**, so a repopulate always starts from scratch; refused when the profile's
+packages; (3) an existing pre-release tree (the project and its `containers`/`tarballs`
+subtrees; a nested unit's pre-release such as `…:18:extras`, populated by another leg of
+the same PR, is kept) is **deleted**, so a repopulate always starts from scratch; refused when the profile's
 `rootprj` equals the `--branch-from` root; (4) pre-release meta from the mirrors, **publish forced on** once the copy has landed; (5) drain, assert
 green, freeze, `osc release`, verify, restore; (6) `source_commit: <sha>` and
 `release_id: <id>` appended, in that order, to each pre-release project description.
@@ -1573,12 +1584,15 @@ last line. On release projects the hop-2 meta apply drops the pre-release
 No freeze, no git divergence check. The last `release.yaml` entry must have a
 `source_commit` and the pre-release description's marker must equal it; a missing or
 different marker, or an entry without `source_commit`, is refused (`--force` skips both
-checks). Then the release project meta is applied from the mirrors, `release_id: <id>` is
+checks, and then the release project is not pruned: `warning: --force: pre-release
+provenance not checked, <release project> not pruned`). Then the release project meta is applied from the mirrors, `release_id: <id>` is
 appended to each project description and binaries are copied with `osc release`. Once every
 copy of the unit is verified, the release project is pruned (see Release units): packages
 the pre-release no longer has and subprojects with no mirror are deleted, deepest first.
 `--dry-run` together with `--from` prints those deletions and changes nothing; it exits
 non-zero when the pre-release lists no packages while the release project still has some.
+The deletion preview is printed only when the release project already exists on OBS, and
+not at all with `--force`.
 
 ### Running `sync release` manually
 
@@ -1592,8 +1606,8 @@ Flags:
 
 | Flag | Default | Effect |
 |---|---|---|
-| `--dry-run` | off | Read-only: checks that every bundled child of the unit has a mirror, the `CHANGELOG.md` section for the release ID exists, the tag does not already exist, the source OBS project is reachable, and every staging package currently reports `succeeded`; prints the packages and subprojects the prune would delete. Does not freeze, release, or write anything. |
-| `--force` | off | Skips the divergence (tag) check entirely. |
+| `--dry-run` | off | Read-only: checks that every bundled child of the unit has a mirror, the `CHANGELOG.md` section for the release ID exists, the tag does not already exist, the source OBS project is reachable, and every staging package currently reports `succeeded`; once those checks pass and only when the release project already exists on OBS, prints the packages and subprojects the prune would delete. Does not freeze, release, or write anything. |
+| `--force` | off | Skips the divergence (tag) check entirely (single hop; the source is staging, so the prune still runs). With `--from` it skips the provenance checks and the prune. |
 | `--skip-tag-check` | off | Skips only the `git diff <tag>..HEAD` check — use when the tag doesn't exist locally yet. |
 | `--no-freeze` | off | Skips the drain/freeze/restore sequence (§ below) — for recovery scenarios where staging is already known idle. |
 | `--freeze-timeout` | `3600` (seconds) | Bound on the drain step; the release fails rather than waiting forever for a stuck package. |
@@ -1651,6 +1665,7 @@ Flags:
    project is pruned as described in Release units: packages and subprojects the source
    no longer has are deleted, deepest first, inside this unit only. It is skipped with
    `--verify-timeout 0`, and aborts rather than delete on a failed or empty source listing.
+   Publishing is restored even when the prune aborts; re-run to finish the prune.
 
 Skip all divergence checks:
 
