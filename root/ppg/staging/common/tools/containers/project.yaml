@@ -160,6 +160,11 @@ project-config: |
 
   BuildFlags: dockerarg:RHEL_VER=el9
   BuildFlags: dockerarg:UBI_BASE=%!{UBI9_BASE_IMAGE}
+  # TEMPORARY (2026-11-11): UBI 9 appstream ships netavark 3:1.17.2 requiring
+  # aardvark-dns >= 3:1.17, but only aardvark-dns 2:1.17.1 is published, so
+  # the podman build environment is unresolvable.  Build-env only; drop once
+  # Red Hat publishes the matching aardvark-dns.
+  Ignore: netavark:aardvark-dns
 
   %endif
 
