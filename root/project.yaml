@@ -162,11 +162,12 @@ project-config: |
   Prefer: blas
   %endif
 
-  %if "%_repository" == "UBI_10"
+  %if "%_repository" == "UBI_9" || "%_repository" == "UBI_10"
   # RHEL 10 appstream ships llvm-libs 21 and EPEL 10 ships llvm21-libs; both
   # provide libLLVM.so.21.1, so OBS reports "have choice" for rust (seen on
-  # common:deps:build/cargo-pgrx-*). Prefer the distro package, as the
-  # RockyLinux_9.6 block above does.
+  # common:deps:build/cargo-pgrx-*). UBI 9 appstream moved to llvm-libs 21
+  # too (2026-11), clashing with EPEL 9's llvm21-libs for annobin. Prefer
+  # the distro package, as the RockyLinux_9.6 block above does.
   Prefer: llvm-libs
   %endif
 

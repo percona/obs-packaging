@@ -23,4 +23,8 @@ project-config: |
   %if "%_repository" == "UBI_9"
   Type: spec
   Ignore: kbd-legacy < 2.4.0-11
+  # UBI 9 appstream llvm-libs 21 and EPEL 9 llvm21-libs both provide
+  # libLLVM.so.21.1 (needed by annobin): prefer the distro package, as the
+  # root project.yaml does for UBI_9 (this project does not inherit it).
+  Prefer: llvm-libs
   %endif
