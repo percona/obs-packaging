@@ -559,13 +559,14 @@ carry no `subproject:` repository paths.
 `sync prerelease <releases-project> --branch-from <profile>` copies the unit from staging into a PR pre-release
 project after checking the `source_commit` recorded in `release.yaml` against the last synced `main`
 and stamps that SHA into the pre-release project descriptions. It first deletes any existing
-pre-release tree (project + subprojects, deepest first), so every populate starts from scratch (it never prunes), and
+pre-release tree (project + its `containers`/`tarballs` subtrees, deepest first; a nested unit's pre-release is kept), so every populate starts from scratch (it never prunes), and
 refuses to run when the profile root equals the `--branch-from` root. `sync release <project> --from <pre-release-project>`
 then copies the pre-release into the release project (no freeze, no git divergence check) after
 verifying the marker equals the tagged entry's `source_commit`; once every copy of the unit is verified it
 prunes the release project (packages the source no longer has in the unit's projects, subprojects with no
 mirror inside the unit; deepest first; guarded: no prune with `--verify-timeout 0`, aborts on a failed or
-empty source listing; `--dry-run` prints the deletions on both hops). Every hop also writes
+empty source listing, publish flags restored even when the prune aborts; `--dry-run` prints the deletions
+on both hops). `--force` on hop 2 skips the marker check and therefore never prunes (warning printed). Every hop also writes
 `release_id: <id>` (the tag without its product prefix, e.g. `18.7-1`, `common-1`) as the last line of
 each target project description, before that project's `osc release`. `release.yaml` entries are plain tag
 strings (historical) or `{tag, source_commit}` mappings; `obs-pr-cleanup.yml` and
