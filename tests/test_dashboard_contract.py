@@ -95,3 +95,32 @@ def test_obs_release_names():
 
 def test_unit_list_file_exists():
     assert (ROOT / "docs" / "versions" / "release-units.json").is_file()
+
+
+CUT = _load("obs-release-cut.yml")
+
+
+def test_release_cut_workflow():
+    # PyYAML loads the bare `on:` key as True.
+    assert CUT["run-name"] == "Cut ${{ inputs.branch }}"
+    assert list(CUT[True]) == ["workflow_dispatch"]
+    inputs = CUT[True]["workflow_dispatch"]["inputs"]
+    assert set(inputs) == {"units", "branch"}
+    assert all(i["required"] for i in inputs.values())
+    assert CUT["concurrency"] == {
+        "group": "obs-release-cut-${{ inputs.branch }}",
+        "cancel-in-progress": False,
+    }
+    perms = CUT["jobs"]["cut"]["permissions"]
+    assert perms == {"contents": "write", "actions": "read", "packages": "read"}
+    steps = CUT["jobs"]["cut"]["steps"]
+    upload = [
+        s for s in steps if s.get("with", {}).get("name") == "generated-changelogs"
+    ]
+    assert len(upload) == 1 and "if" not in upload[0]
+    names = [s.get("name") for s in steps]
+    assert names.index("Push the release branch") < steps.index(upload[0])
+    assert names.index("Squash into one commit and summarize") < names.index(
+        "Push the release branch"
+    )
+    assert "gh pr create" not in _text("obs-release-cut.yml")

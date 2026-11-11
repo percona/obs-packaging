@@ -1,0 +1,175 @@
+name: OBS Release Cut
+
+# Cuts a release branch for the dashboard's Release tab (docs/superpowers/
+# specs/2026-11-11-dashboard-release-contract-design.md § 1): one commit on
+# top of main for every unit, force-pushed to <branch>.  Never opens the PR
+# (a PR opened with the workflow token triggers nothing) and the push
+# triggers nothing either: the sync starts when `obs-sync` is added.
+# Dashboard contract (§ 4): file name, run-name, artifact name. Do not rename.
+
+on:
+  workflow_dispatch:
+    inputs:
+      units:
+        description: "Release unit roots, space-separated (e.g. ppg:staging:18 ppg:staging:17:extras)"
+        required: true
+      branch:
+        description: "Release branch to create or reset (release/<name>)"
+        required: true
+
+run-name: Cut ${{ inputs.branch }}
+
+concurrency:
+  group: obs-release-cut-${{ inputs.branch }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  cut:
+    name: Cut release
+    runs-on: ubuntu-latest
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      actions: read
+      packages: read
+    env:
+      UNITS: ${{ inputs.units }}
+      BRANCH: ${{ inputs.branch }}
+    steps:
+      - name: Validate the branch name
+        shell: bash
+        run: |
+          [[ "$BRANCH" =~ ^release/[A-Za-z0-9._-]+$ ]] \
+            || { echo "::error::branch '$BRANCH' must match release/[A-Za-z0-9._-]+"; exit 1; }
+
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Validate the units
+        shell: bash
+        run: |
+          read -r -a UNIT_LIST <<<"$UNITS"
+          python3 .github/scripts/release_cut.py check "${UNIT_LIST[@]}"
+
+      - uses: ./.github/actions/obs-setup
+        with:
+          obs-apiurl: ${{ fromJSON(vars.OBS_INSTANCES)[0].apiurl }}
+          obs-user: ${{ fromJSON(vars.OBS_INSTANCES)[0].user || vars.OBS_USER }}
+          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', fromJSON(vars.OBS_INSTANCES)[0].name)] }}
+
+      # The changelog is built from every instance, so this one job needs
+      # credentials for all of them.  secrets[...] cannot be looped outside a
+      # matrix; this step alone receives the secrets and adds one oscrc
+      # section per further instance.
+      - name: Add osc credentials for the other instances
+        shell: bash
+        env:
+          OBS_INSTANCES: ${{ vars.OBS_INSTANCES }}
+          OBS_USER: ${{ vars.OBS_USER }}
+          SECRETS: ${{ toJSON(secrets) }}
+        run: |
+          python3 - <<'PYEOF'
+          import configparser, json, os, pathlib
+          secrets = json.loads(os.environ["SECRETS"])
+          p = pathlib.Path.home() / ".config" / "osc" / "oscrc"
+          c = configparser.RawConfigParser()
+          c.read(p)
+          for inst in json.loads(os.environ["OBS_INSTANCES"])[1:]:
+              c[inst["apiurl"]] = {
+                  "user": inst.get("user") or os.environ["OBS_USER"],
+                  "pass": secrets[f"OBS_PASSWORD_{inst['name']}".upper()],
+              }
+          with open(p, "w") as f:
+              c.write(f)
+          PYEOF
+
+      # First OBS_INSTANCES entry = `main` (ids and versions come from it);
+      # every further entry = `also-<name>`.  Same slice flags and instance
+      # env as obs-release-pr.yml's populate job.
+      - name: Create percona-obs profiles
+        shell: bash
+        env:
+          OBS_INSTANCES: ${{ vars.OBS_INSTANCES }}
+          MAIN_REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+        run: |
+          set -euo pipefail
+          n=$(jq length <<<"$OBS_INSTANCES")
+          : > "$RUNNER_TEMP/also-profiles"
+          for i in $(seq 0 $((n - 1))); do
+            inst=$(jq -c ".[$i]" <<<"$OBS_INSTANCES")
+            name=$(jq -r .name <<<"$inst")
+            profile=main
+            if [ "$i" -gt 0 ]; then profile="also-${name}"; echo "$profile" >> "$RUNNER_TEMP/also-profiles"; fi
+            args=()
+            for key in include_repos exclude_repos include_projects exclude_projects; do
+              val=$(jq -r ".${key} // empty" <<<"$inst")
+              if [ -n "$val" ]; then args+=("--${key//_/-}" "$val"); fi
+            done
+            env_args=()
+            while IFS= read -r kv; do
+              if [ -n "$kv" ]; then env_args+=(-e "$kv"); fi
+            done <<<"$(jq -r '(.env // {}) | to_entries[] | "\(.key):\(.value)"' <<<"$inst")"
+            venv/bin/python -m percona_obs -A "$(jq -r .apiurl <<<"$inst")" -R "$(jq -r .rootprj <<<"$inst")" \
+              -e "REMOTE_OBS_ORG_INTERCONNECT:" -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
+              -e "PERCONA_OBS_PACKAGING_REPO:${MAIN_REPO_URL}" "${env_args[@]}" \
+              profile create "$profile" "${args[@]}"
+          done
+
+      # Nothing is pushed unless every unit is cut: a partial release branch
+      # must never exist.  The tool's SystemExit reason becomes an ::error::
+      # annotation that names the unit (cli.main).
+      - name: Cut every unit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rev-parse HEAD > "$RUNNER_TEMP/base"
+          git switch -C "$BRANCH"
+          also=()
+          while IFS= read -r p; do
+            if [ -n "$p" ]; then also+=(--also-profile "$p"); fi
+          done < "$RUNNER_TEMP/also-profiles"
+          read -r -a UNIT_LIST <<<"$UNITS"
+          for unit in "${UNIT_LIST[@]}"; do
+            echo "== project release ${unit}"
+            venv/bin/python -u -m percona_obs -P main project release "$unit" --yes "${also[@]}"
+          done
+
+      - name: Squash into one commit and summarize
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=$(cat "$RUNNER_TEMP/base")
+          read -r -a UNIT_LIST <<<"$UNITS"
+          SUBJECT=$(venv/bin/python .github/scripts/release_cut.py summarize \
+            --out "$RUNNER_TEMP/changelogs.json" "${UNIT_LIST[@]}")
+          git reset --soft "$BASE"
+          git commit -s -m "$SUBJECT"
+          [ "$(git rev-list --count "${BASE}..HEAD")" = 1 ] \
+            || { echo "::error::expected exactly one release commit on top of main"; exit 1; }
+          if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+            echo "::error::working tree not clean after the cut"
+            git status --short --untracked-files=no
+            exit 1
+          fi
+          echo "$SUBJECT"
+
+      - name: Push the release branch
+        shell: bash
+        run: git push --force origin "HEAD:refs/heads/${BRANCH}"
+
+      - name: Upload the generated changelogs
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-changelogs
+          path: ${{ runner.temp }}/changelogs.json
+          retention-days: 30

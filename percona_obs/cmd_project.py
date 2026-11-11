@@ -2417,6 +2417,27 @@ def _is_ancestor_of_head(sha: str) -> bool:
     return r.returncode == 0
 
 
+def _confirm_release(is_first_release: bool, assume_yes: bool) -> None:
+    """Ask before writing the release files; *assume_yes* skips the prompt."""
+    if assume_yes:
+        return
+    try:
+        answer = (
+            input(
+                "Create release? [y/N] "
+                if is_first_release
+                else "Update release? [y/N] "
+            )
+            .strip()
+            .lower()
+        )
+    except (EOFError, KeyboardInterrupt):
+        print()
+        raise SystemExit("Aborted.")
+    if answer not in ("y", "yes"):
+        raise SystemExit("Aborted.")
+
+
 def _resolve_source_commit(override: "str | None", repo_url: str) -> str:
     """The commit of main whose staging tree the release is cut from.
 
@@ -2938,21 +2959,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     print(f"  Commit message: {commit_msg}")
     print()
 
-    try:
-        answer = (
-            input(
-                "Create release? [y/N] "
-                if is_first_release
-                else "Update release? [y/N] "
-            )
-            .strip()
-            .lower()
-        )
-    except (EOFError, KeyboardInterrupt):
-        print()
-        raise SystemExit("Aborted.")
-    if answer not in ("y", "yes"):
-        raise SystemExit("Aborted.")
+    _confirm_release(is_first_release, bool(getattr(args, "yes", False)))
 
     # Write files.
     committed_paths: list[str] = []
