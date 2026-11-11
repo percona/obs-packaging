@@ -15,6 +15,14 @@ and built there), else the fallback root project (profile key
 ``image-fallback-rootprj``; the production root in PR runs).  Without a
 fallback the current root is always used and OBS is never queried.
 
+A PR project may build only some repositories (repository labels narrow its
+slice).  An entry whose own image (one without ``project:``, or naming the
+lane's project) lives in a repository the lane's OBS project does not have is
+outside the slice and is dropped: the PR built nothing there to test.  An
+image of another project whose repository is missing falls back, like an
+absent package.  An empty repository list (project missing, or the query
+failed) narrows nothing.
+
 Resolution is keyed on the value, never on the parameter name: pipelines
 name their parameters differently (``REPOSITORY``, ``OLD_DOCKER_REPOSITORY``).
 """
@@ -72,7 +80,7 @@ class ImageDecision:
     project: str  # colon notation, without rootprj
     obs_project: str  # the project that was (or would have been) listed
     rootprj: str  # the root project used in ``value``
-    reason: str  # "no-fallback" | "present" | "fallback"
+    reason: str  # "no-fallback" | "present" | "fallback" | "fallback-repo"
     value: str  # rendered registry path
 
 
@@ -80,8 +88,9 @@ class ImageResolver:
     """Renders image references, choosing the rootprj per image.
 
     *list_packages* returns the package names of an OBS project (empty on
-    404); it is called at most once per project and only when
-    *fallback_rootprj* is set.
+    404) and *list_repositories* its repository names (empty when unknown);
+    each is called at most once per project and only when *fallback_rootprj*
+    is set.
     """
 
     def __init__(
@@ -90,17 +99,43 @@ class ImageResolver:
         rootprj: str,
         fallback_rootprj: str | None,
         list_packages: Callable[[str], set[str]],
+        list_repositories: Callable[[str], set[str]] | None = None,
     ) -> None:
         self.registry = registry
         self.rootprj = rootprj
         self.fallback_rootprj = fallback_rootprj or None
         self._list_packages = list_packages
+        self._list_repositories = list_repositories
         self._present: dict[str, set[str]] = {}
+        self._repos: dict[str, set[str]] = {}
 
     def _packages(self, obs_project: str) -> set[str]:
         if obs_project not in self._present:
             self._present[obs_project] = set(self._list_packages(obs_project))
         return self._present[obs_project]
+
+    def _repo_missing(self, obs_project: str, repository: str) -> bool:
+        """True when *obs_project* lists repositories and *repository* is not
+        one of them (an empty list is unknown and narrows nothing)."""
+        if self.fallback_rootprj is None or self._list_repositories is None:
+            return False
+        if obs_project not in self._repos:
+            self._repos[obs_project] = set(self._list_repositories(obs_project))
+        repos = self._repos[obs_project]
+        return bool(repos) and repository not in repos
+
+    def outside_slice(self, entry: dict[str, Any], lane_project: str) -> str | None:
+        """The repository of the first own image reference of *entry* that the
+        lane's OBS project does not build, else None."""
+        obs_project = f"{self.rootprj}:{lane_project}"
+        for value in (entry.get("parameters") or {}).values():
+            if not is_image_ref(value):
+                continue
+            if (value.get("project") or lane_project) != lane_project:
+                continue
+            if self._repo_missing(obs_project, value["repository"]):
+                return value["repository"]
+        return None
 
     def decide(
         self, param: str, ref: dict[str, Any], lane_project: str
@@ -110,10 +145,12 @@ class ImageResolver:
         obs_project = f"{self.rootprj}:{project}"
         if self.fallback_rootprj is None:
             rootprj, reason = self.rootprj, "no-fallback"
-        elif image in self._packages(obs_project):
-            rootprj, reason = self.rootprj, "present"
-        else:
+        elif image not in self._packages(obs_project):
             rootprj, reason = self.fallback_rootprj, "fallback"
+        elif self._repo_missing(obs_project, ref["repository"]):
+            rootprj, reason = self.fallback_rootprj, "fallback-repo"
+        else:
+            rootprj, reason = self.rootprj, "present"
         return ImageDecision(
             param=param,
             image=image,
