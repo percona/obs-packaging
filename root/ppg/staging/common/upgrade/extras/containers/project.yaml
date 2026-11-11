@@ -54,7 +54,7 @@ project-config: |
   BuildFlags: container-build-format:oci
   BuildFlags: dockerarg:PPG_REPO=staging
   BuildFlags: dockerarg:RHEL_VER=el9
-  BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
+  BuildFlags: dockerarg:UBI_BASE=%!{UBI9_BASE_IMAGE}
 
   Preinstall: skopeo
 

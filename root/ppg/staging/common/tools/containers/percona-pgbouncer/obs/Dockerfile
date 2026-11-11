@@ -4,7 +4,7 @@
 #!BuildTag: percona-pgbouncer:<VERSION>
 #!BuildTag: percona-pgbouncer:latest
 
-ARG UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
+ARG UBI_BASE=%!{UBI9_BASE_IMAGE}
 FROM $UBI_BASE
 
 ARG RHEL_VER

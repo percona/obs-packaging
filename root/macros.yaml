@@ -25,6 +25,19 @@
 - PG_19_MINOR_VERSION: 0
 - PG_19_PERCONA_PATCH_VERSION: 1
 
+# Base image of every UBI container image, one per UBI major.  The containers
+# project.yaml files pass it to the Dockerfiles as `BuildFlags:
+# dockerarg:UBI_BASE=...` on the matching ubiN repository (the Dockerfiles'
+# `ARG UBI_BASE` default uses the UBI 9 value).  Pin a dated tag here, e.g.
+# registry.access.redhat.com/ubi9/ubi-minimal:9.8-1794186349, when the
+# registry image runs ahead of the UBI RPM repos (its preinstalled packages are
+# newer than the mirror offers and microdnf cannot resolve the install step);
+# go back to :latest once the repos catch up.  Release cuts copy the rendered
+# value, so a released project keeps the image it was built from.
+- UBI8_BASE_IMAGE: registry.access.redhat.com/ubi8/ubi-minimal:latest
+- UBI9_BASE_IMAGE: registry.access.redhat.com/ubi9/ubi-minimal:latest
+- UBI10_BASE_IMAGE: registry.access.redhat.com/ubi10/ubi-minimal:latest
+
 # Component (extension / tool) versions shared by every tier that ships them:
 # devel/<V>, staging/<V> and their extras subprojects all resolve these through
 # this file, so a bump here lands in devel and staging at once.  A tier or major

@@ -248,6 +248,15 @@ difference in those images — the extra Percona extensions installed (pg_tde, p
 the `CONTAINER_PG_EXTRA_COMPONENTS` macro, empty in `staging/macros.yaml` and overridden by the majors
 that ship them.
 
+Every UBI container image is built `FROM $UBI_BASE`. Each staging `containers/project.yaml` sets it per
+repository (`BuildFlags: dockerarg:UBI_BASE=%!{UBI9_BASE_IMAGE}` on `ubi9`, and likewise for `ubi8` and
+`ubi10`), and the Dockerfiles' `ARG UBI_BASE` default uses `%!{UBI9_BASE_IMAGE}`. The three
+`UBI<N>_BASE_IMAGE` macros live in `root/macros.yaml` and default to the registry's `ubi-minimal:latest`.
+To pin a base image (e.g. when the registry image ships packages newer than the UBI RPM repos and the
+`microdnf install` step can no longer resolve), set the macro to a dated tag such as
+`registry.access.redhat.com/ubi9/ubi-minimal:9.8-1794186349`; the change rebuilds every image on that
+repository. Release cuts copy the rendered value into `releases/`.
+
 #### `tarballs/`
 
 Binary-tarball builds (OBS `simpleimage` format) for air-gapped / unsupported-distro

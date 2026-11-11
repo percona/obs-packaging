@@ -4,7 +4,7 @@
 #!BuildTag: percona-distribution-postgresql-with-postgis:%!{PG_VERSION}
 #!BuildTag: percona-distribution-postgresql-with-postgis:%!{PG_MAJOR_VERSION}
 
-ARG UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
+ARG UBI_BASE=%!{UBI9_BASE_IMAGE}
 FROM $UBI_BASE
 
 LABEL name="Percona Distribution for PostgreSQL" \
