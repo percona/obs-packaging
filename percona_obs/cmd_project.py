@@ -1,6 +1,7 @@
 import argparse
 import concurrent.futures
 import datetime
+import json
 import difflib
 import re
 import shutil
@@ -90,6 +91,7 @@ from .obs_versions import (
 from .release_scope import (
     bundled_parent,
     has_container_images,
+    list_release_units,
     nested_unit_roots,
     release_location,
     release_unit_members,
@@ -2676,6 +2678,11 @@ def _merge_release_obs_data(parts: "list[_ReleaseObsData]") -> _ReleaseObsData:
         source_container_pkgs=source_container_pkgs,
         release_container_pkgs=release_container_pkgs,
     )
+
+
+def cmd_project_release_units(args: argparse.Namespace) -> None:
+    """Print every releasable staging unit as JSON (git tree only)."""
+    sys.stdout.write(json.dumps(list_release_units(), indent=2) + "\n")
 
 
 def cmd_project_release(args: argparse.Namespace) -> None:

@@ -18,6 +18,7 @@ from .cmd_project import (
     cmd_project_config,
     cmd_project_install,
     cmd_project_release,
+    cmd_project_release_units,
     cmd_project_verify,
     cmd_project_versions,
 )
@@ -964,6 +965,12 @@ def build_parser() -> argparse.ArgumentParser:
         "instances, the first wins on a clash.",
     )
     project_release_parser.set_defaults(func=cmd_project_release)
+
+    project_release_units_parser = project_subparsers.add_parser(
+        "release-units",
+        help="Print every releasable staging unit as JSON (reads the git tree only).",
+    )
+    project_release_units_parser.set_defaults(func=cmd_project_release_units)
 
     return parser
 
