@@ -1,15 +1,15 @@
 #!UseOBSRepositories
-#!BuildVersion: 18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-14.%!{PG_14_MINOR_VERSION}
-#!BuildTag: percona-distribution-postgresql-upgrade:18-17-16-15-14-<RELEASE>
-#!BuildTag: percona-distribution-postgresql-upgrade:18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-14.%!{PG_14_MINOR_VERSION}-<RELEASE>
-#!BuildTag: percona-distribution-postgresql-upgrade:18-17-16-15-14
-#!BuildTag: percona-distribution-postgresql-upgrade:18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-14.%!{PG_14_MINOR_VERSION}
+#!BuildVersion: 19.%!{PG_19_MINOR_VERSION}-18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-14.%!{PG_14_MINOR_VERSION}
+#!BuildTag: percona-distribution-postgresql-upgrade:19-18-17-16-15-14-<RELEASE>
+#!BuildTag: percona-distribution-postgresql-upgrade:19.%!{PG_19_MINOR_VERSION}-18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-14.%!{PG_14_MINOR_VERSION}-<RELEASE>
+#!BuildTag: percona-distribution-postgresql-upgrade:19-18-17-16-15-14
+#!BuildTag: percona-distribution-postgresql-upgrade:19.%!{PG_19_MINOR_VERSION}-18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-14.%!{PG_14_MINOR_VERSION}
 
 ARG UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
 FROM $UBI_BASE
 
 LABEL name="Percona Distribution for PostgreSQL Upgrade" \
-      description="Upgrade container for Percona Distribution for PostgreSQL. Facilitates major version upgrades from PostgreSQL 14, 15, 16, or 17 to %!{PG_MAJOR_VERSION} using pg_upgrade." \
+      description="Upgrade container for Percona Distribution for PostgreSQL. Facilitates major version upgrades from PostgreSQL 14, 15, 16, 17, or 18 to %!{PG_MAJOR_VERSION} using pg_upgrade." \
       vendor="Percona" \
       summary="Percona Distribution for PostgreSQL major version upgrade container" \
       maintainer="Percona Development <info@percona.com>" \
@@ -75,11 +75,14 @@ RUN set -ex; \
         percona-postgresql${PPG_MAJOR_VERSION}-llvmjit \
         percona-pgvector_${PPG_MAJOR_VERSION}-llvmjit \
         percona-wal2json${PPG_MAJOR_VERSION} \
-        percona-postgis35_${PPG_MAJOR_VERSION} \
-        percona-postgis35_${PPG_MAJOR_VERSION}-client \
-        percona-postgis35_${PPG_MAJOR_VERSION}-gui \
-        percona-postgis35_${PPG_MAJOR_VERSION}-llvmjit \
-        percona-postgis35_${PPG_MAJOR_VERSION}-utils \
+        percona-postgis%!{POSTGIS_RPM_MAJOR}_${PPG_MAJOR_VERSION} \
+        percona-postgis%!{POSTGIS_RPM_MAJOR}_${PPG_MAJOR_VERSION}-client \
+        percona-postgis%!{POSTGIS_RPM_MAJOR}_${PPG_MAJOR_VERSION}-gui \
+        percona-postgis%!{POSTGIS_RPM_MAJOR}_${PPG_MAJOR_VERSION}-llvmjit \
+        percona-postgis%!{POSTGIS_RPM_MAJOR}_${PPG_MAJOR_VERSION}-utils \
+        percona-address-standardizer${PPG_MAJOR_VERSION} \
+        percona-address-standardizer${PPG_MAJOR_VERSION}-llvmjit \
+        percona-postgis-tiger-geocoder${PPG_MAJOR_VERSION} \
         percona-credcheck${PPG_MAJOR_VERSION} \
         percona-pg_cron_${PPG_MAJOR_VERSION}; \
     microdnf clean all
@@ -90,7 +93,7 @@ RUN set -ex; \
 # (expand_for_blocks) into one literal, fully-expanded RUN per version before the file
 # ever reaches OBS — OBS's Dockerfile scanner statically resolves package names and
 # cannot expand a real shell loop variable, so what OBS sees is never this block itself.
-{{FOR pg_version IN 17,16,15,14}}
+{{FOR pg_version IN 18,17,16,15,14}}
 RUN set -ex; \
     microdnf install -y \
         percona-postgresql${pg_version}-server \
@@ -110,10 +113,13 @@ RUN set -ex; \
     microdnf clean all
 {{ENDFOR}}
 
-# pg_tde is only packaged standalone from PG17 onward, so it's installed separately
-# here rather than inside the loop above.
+# pg_tde is only packaged standalone from PG17 onward and pg_oidc_validator from PG18
+# onward, so they are installed separately here rather than inside the loop above.
 RUN set -ex; \
-    microdnf install -y percona-pg_tde17; \
+    microdnf install -y \
+        percona-pg_tde17 \
+        percona-pg_tde18 \
+        percona-pg_oidc_validator18; \
     microdnf clean all; \
     rm -rf /var/cache/dnf /var/cache/yum
 
