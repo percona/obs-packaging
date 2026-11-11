@@ -74,6 +74,15 @@ class _Args:
         self.from_project = None
 
 
+def _stub_prune_listings(monkeypatch):
+    """Keep the post-verify prune off OBS: empty listings, deletes fail."""
+    monkeypatch.setattr(rc, "_fetch_obs_package_names_or_fail", lambda a, p: set())
+    monkeypatch.setattr(rc, "_fetch_obs_package_names", lambda a, p: set())
+    fail = lambda *a, **k: pytest.fail("unexpected OBS delete")
+    monkeypatch.setattr(rc, "_delete_obs_package", fail)
+    monkeypatch.setattr(rc, "_delete_obs_project", fail)
+
+
 def _wire_release_update_path(monkeypatch, src, rel):
     """Stub every OBS/osc touchpoint cmd_sync_release hits on the update
     (project-exists) path, so the test only exercises the freeze wiring."""
@@ -99,6 +108,7 @@ def _wire_release_update_path(monkeypatch, src, rel):
     monkeypatch.setattr(rc, "_remove_release_targets", lambda *a, **k: None)
     monkeypatch.setattr(rc, "_fetch_obs_subproject_names", lambda apiurl, prefix: set())
     monkeypatch.setattr(rc, "set_project_description_marker", lambda *a, **k: None)
+    _stub_prune_listings(monkeypatch)
 
 
 def test_missing_mirror_is_hard_error(tmp_path, monkeypatch):
@@ -254,6 +264,7 @@ def _wire_release_first_path(monkeypatch, src, rel):
     monkeypatch.setattr(rc, "_remove_release_targets", lambda *a, **k: None)
     monkeypatch.setattr(rc, "_fetch_obs_subproject_names", lambda apiurl, prefix: set())
     monkeypatch.setattr(rc, "set_project_description_marker", lambda *a, **k: None)
+    _stub_prune_listings(monkeypatch)
 
 
 def test_first_release_does_not_shell_out_to_dry_run_sync(tmp_path, monkeypatch):
@@ -589,6 +600,64 @@ def test_from_prerelease_dry_run_writes_nothing(tmp_path, monkeypatch, capsys):
     assert "containers" in capsys.readouterr().out
 
 
+def test_from_prerelease_dry_run_lists_prune(tmp_path, monkeypatch, capsys):
+    src, rel = _mk_tree(tmp_path, monkeypatch)
+    _mapping_release_yaml(rel)
+    _wire_release_update_path(monkeypatch, src, rel)
+    monkeypatch.setattr(
+        cmd_sync, "read_project_description_marker", lambda a, p, k: "b" * 40
+    )
+    monkeypatch.setattr(
+        cmd_sync, "apply_mirror_meta", lambda *a, **k: pytest.fail("no write")
+    )
+    monkeypatch.setattr(
+        cmd_sync, "release_tree", lambda *a, **k: pytest.fail("no write")
+    )
+    seen = []
+    monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda apiurl, prj: True)
+    monkeypatch.setattr(
+        cmd_sync,
+        "prune_release_tree",
+        lambda *a, **k: seen.append((a[1], a[2], k.get("dry_run"))),
+    )
+    cmd_sync.cmd_sync_release(_args_from(rel, dry_run=True))
+    assert seen == [
+        ("home:Admin:PR:pr-5:ppg:releases:17", "home:Admin:ppg:releases:17", True)
+    ]
+
+
+def test_from_prerelease_dry_run_skips_prune_without_release_project(
+    tmp_path, monkeypatch
+):
+    src, rel = _mk_tree(tmp_path, monkeypatch)
+    _mapping_release_yaml(rel)
+    _wire_release_update_path(monkeypatch, src, rel)
+    monkeypatch.setattr(
+        cmd_sync, "read_project_description_marker", lambda a, p, k: "b" * 40
+    )
+    monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda apiurl, prj: False)
+    monkeypatch.setattr(
+        cmd_sync, "prune_release_tree", lambda *a, **k: pytest.fail("no prune")
+    )
+    cmd_sync.cmd_sync_release(_args_from(rel, dry_run=True))
+
+
+def test_from_prerelease_release_prunes(tmp_path, monkeypatch):
+    src, rel = _mk_tree(tmp_path, monkeypatch)
+    _mapping_release_yaml(rel)
+    _wire_release_update_path(monkeypatch, src, rel)
+    monkeypatch.setattr(
+        cmd_sync, "read_project_description_marker", lambda a, p, k: "b" * 40
+    )
+    monkeypatch.setattr(cmd_sync, "apply_mirror_meta", lambda *a, **k: None)
+    got = []
+    monkeypatch.setattr(
+        cmd_sync, "release_tree", lambda *a, **k: got.append(k.get("prune"))
+    )
+    cmd_sync.cmd_sync_release(_args_from(rel))
+    assert got == [True]
+
+
 def test_single_hop_release_writes_release_id_before_each_copy(tmp_path, monkeypatch):
     src, rel = _mk_tree(tmp_path, monkeypatch)
     (rel / "tarballs").mkdir()
@@ -623,6 +692,39 @@ def test_single_hop_release_writes_release_id_before_each_copy(tmp_path, monkeyp
         "release_id",
         rid,
     ) in events
+
+
+def test_single_hop_release_prunes_after_verify(tmp_path, monkeypatch):
+    src, rel = _mk_tree(tmp_path, monkeypatch)
+    (rel / "tarballs").mkdir()
+    (rel / "tarballs" / "project.yaml").write_text(
+        "build: false\n" + _REPO_YAML.format(name="ssl3")
+    )
+    _wire_release_update_path(monkeypatch, src, rel)
+    monkeypatch.setattr(cmd_sync, "restore_builds", lambda *a, **k: None)
+    monkeypatch.setattr(rc.subprocess, "run", lambda cmd, **k: None)
+    events = []
+    monkeypatch.setattr(
+        rc, "verify_release_landed", lambda *a, **k: events.append("verify")
+    )
+    monkeypatch.setattr(
+        rc,
+        "prune_release_tree",
+        lambda apiurl, s, t, pairs, top, **k: events.append(
+            ("prune", s, t, [n for n, _ in pairs], top, k.get("dry_run", False))
+        ),
+    )
+    args = _Args(project="ppg:releases:17", rootprj="home:Admin", no_freeze=True)
+    cmd_sync.cmd_sync_release(args)
+    assert events[-1] == (
+        "prune",
+        "home:Admin:ppg:staging:17",
+        "home:Admin:ppg:releases:17",
+        ["containers", "tarballs"],
+        rel,
+        False,
+    )
+    assert "verify" in events[:-1]
 
 
 def test_collect_ignores_non_bundled_subprojects(tmp_path, monkeypatch):
