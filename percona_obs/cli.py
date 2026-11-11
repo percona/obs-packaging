@@ -40,6 +40,7 @@ from .cmd_sync import (
 from .common import (
     _DIM,
     _col,
+    github_annotation,
     logger,
     registry_env_override,
     set_default_repository_filter,
@@ -1037,6 +1038,14 @@ def main() -> None:
 
     try:
         args.func(args)
+    except SystemExit as e:
+        if isinstance(e.code, str):
+            reason = e.code.removeprefix("error: ")
+            project = getattr(args, "project", None)
+            if isinstance(project, str):
+                reason = f"{project}: {reason}"
+            github_annotation("error", reason)
+        raise
     except urllib3.exceptions.MaxRetryError as e:
         host = f"{e.pool.host}:{e.pool.port}" if e.pool else args.apiurl or "OBS"
         print(f"error: cannot connect to OBS ({host}): {e.reason}", file=sys.stderr)

@@ -52,6 +52,19 @@ def _col(code: str, text: str) -> str:
     return f"{code}{text}{_RESET}" if _USE_COLOR else text
 
 
+def github_annotation(level: str, message: str, title: "str | None" = None) -> None:
+    """Print a GitHub Actions workflow command (``::notice::`` / ``::error::``).
+
+    No-op outside GitHub Actions.  The line is plain (never coloured) so the
+    runner and external readers can parse it from column 0.
+    """
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    data = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    props = f" title={title}" if title else ""
+    print(f"::{level}{props}::{data}", flush=True)
+
+
 def _erase() -> str:
     """Return the ANSI erase-line sequence when colour output is enabled.
 

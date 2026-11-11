@@ -339,8 +339,10 @@ def test_dry_run_reports_all_failures(tmp_path, monkeypatch, capsys):
         "run",
         lambda *a, **k: type("R", (), {"returncode": 1, "stdout": "", "stderr": ""})(),
     )
-    with pytest.raises(SystemExit, match="dry-run failed"):
+    with pytest.raises(SystemExit, match="dry-run failed") as exc:
         cmd_sync.cmd_sync_release(_dry_run_args())
+    assert "not found on OBS" in exc.value.code
+    assert "CHANGELOG.md has no" in exc.value.code
     err = capsys.readouterr().err
     assert "missing release mirror" in err and "tarballs" in err
     assert "## [17.11-1]" in err

@@ -2722,7 +2722,7 @@ def cmd_sync_release(args) -> None:
         if failures:
             for f in failures:
                 print(f"  ✗ {f}", file=sys.stderr)
-            raise SystemExit("error: release dry-run failed")
+            raise SystemExit("error: release dry-run failed: " + "; ".join(failures))
         if _obs_project_exists(apiurl, release_obs_project):
             prune_release_tree(
                 apiurl,
@@ -3026,7 +3026,7 @@ def cmd_sync_prerelease(args) -> None:
         if failures:
             for f in failures:
                 print(f"  ✗ {f}", file=sys.stderr)
-            raise SystemExit("error: prerelease dry-run failed")
+            raise SystemExit("error: prerelease dry-run failed: " + "; ".join(failures))
         _print_ok(
             f"prerelease dry-run passed for {entry.tag}  "
             f"(release_id: {release_id})  (dry run)"
