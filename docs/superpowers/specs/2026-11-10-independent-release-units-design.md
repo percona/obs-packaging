@@ -106,8 +106,14 @@ Release id of a nested unit: the unit's path below the major, joined with
     ppg:staging:16:tde    → tde-16.11-1    → tag ppg/tde-16.11-1
 
 Both units carry their own server package, so the `MAJOR.MINOR` part comes
-from that package as built in the unit root, and `N` counts the unit's own
-releases of that minor. Main ids are unchanged.
+from that package as built in the unit root. `N` is one more than the
+highest `N` among the unit's own tags of that minor. Main ids are unchanged.
+
+The first release of a nested unit that was shipped bundled before
+(`extras`, `tde`) continues the bundled numbering: with no record of its
+own, `N` is one more than the number of the parent's tags of that minor.
+With `ppg/18.6-1` … `ppg/18.6-5` on record, the first independent extras
+release is `extras-18.6-6`. This keeps image tags from being reused (§ 2.1).
 
 A unit without a server package uses counter mode: the release directory
 path below `releases/`, joined with `-`, then the unit's own counter.
@@ -120,6 +126,28 @@ so `release_id_from_tag` and the CI tag handling need no format change.
 
 A nested unit can be released whether or not its parent has ever been
 released, and nothing compares its state to the parent's.
+
+#### 2.1 `PPG_RELEASE` follows the unit
+
+`PPG_RELEASE` (the image tag counter, `…:18.6-<N>`) is computed from the
+main record `releases/<major>/release.yaml` for every project today. With
+independent units that would let two extras releases reuse one image tag,
+and let a main release retag extras images.
+
+For a project inside a nested unit of a PG major (the project path is
+`<tier>/<major>/<unit…>`, e.g. `staging/18/extras/containers`), the counter
+is read from the unit's own record: one more than the highest `N` among tags
+`<product>/<unit>-<PG_VERSION>-<N>` in `releases/<major>/<unit…>/release.yaml`,
+or 1 when it has none for that version. While the unit has no record yet,
+the main record is used as today, which is what the first-release numbering
+above continues from.
+
+Projects under `common` are not inside a PG major and keep today's rule (the
+target major's main record): the upgrade image version tracks the target
+PostgreSQL release.
+
+The pre-release record check of a nested unit watches the unit's record and
+the main record.
 
 ### 3. Mirror metadata without internal paths
 
@@ -138,7 +166,9 @@ Removed as a consequence:
 - `_rewrite_subproject_paths` and its call in `_write_release_tree`,
 - `branch_rootprj` / `active_projects` / `branch_fallbacks` in
   `apply_mirror_meta` and `release_tree`,
-- the second `_apply_project_config` pass for paths OBS stripped.
+
+The second `_apply_project_config` pass for paths OBS stripped stays: an
+external `project:` path can still be missing on an instance.
 
 Consumers checked: release QA `EXPECTED_VERSIONS` reads the staging
 structure for a mirror, and `project install` uses repository names only.
@@ -157,8 +187,10 @@ Existing mirrors are rewritten the next time their unit is released.
 
 ### 5. Prune after copy
 
-`release_tree` (shared by `sync prerelease` and `sync release`) prunes the
-target once the copy of the whole unit has been verified.
+`sync release` (hop 2 and the legacy single hop) prunes the target once the
+copy of the whole unit has been verified, before publishing is switched back
+on. `sync prerelease` needs no prune: it already deletes and recreates the
+pre-release tree on every populate.
 
 **Subprojects.** A target OBS subproject is stale when the local release tree
 has no `project.yaml` for it. Stale subprojects are deleted recursively,
@@ -171,7 +203,7 @@ its release directory: the parent's next release removes the OBS project.
 
 **Packages.** For the top project and each bundled child: packages listed in
 the target OBS project but not in the hop's source OBS project are deleted
-(staging for hop 1, the pre-release for hop 2). The source listing reflects
+(the pre-release for hop 2, staging for the legacy single hop). The source listing reflects
 the instance slice, so no slice logic is needed, and hop 2 still does not
 read the staging tree.
 
@@ -179,12 +211,14 @@ read the staging tree.
 
 - Nothing is deleted unless `verify_release_landed` passed for every project
   of the unit. With `--verify-timeout 0` the prune is skipped with a warning.
-- An empty source package list, or a failed listing, aborts the prune with an
-  error.
+- A failed source listing aborts the prune with an error, and so does an
+  empty source listing while the target still has packages (a package-less
+  namespace root such as `common:upgrade` is empty on both sides).
 - `--dry-run` prints every deletion and performs none.
-- Hop 1 writes the packages and subprojects that hop 2 will delete from the
-  release project into its report, and the PR comment lists them, so removals
-  are reviewed before merge.
+- After a successful populate, `obs-release-pr.yml` runs
+  `sync release <project> --from <pre-release> --dry-run` and adds the
+  deletions it prints to the populate report; the PR comment lists them, so
+  removals are reviewed before merge.
 
 Deleting a package from a release project removes its binaries from the
 published repository. That is the intent; it cannot be undone other than by
@@ -198,7 +232,7 @@ No one-off step.
   content and their mirror directories. The first
   `project release ppg:staging:<V>:extras` adds `release.yaml` and
   `CHANGELOG.md` to the existing mirror directory and yields
-  `extras-<minor>-1` (likewise `tde`). Its changelog baseline is what the
+  the next id in the bundled numbering (§ 2; likewise `tde`). Its changelog baseline is what the
   release project holds on OBS at that time.
 - The next main release of a major rewrites the main mirrors without
   internal paths, drops extras/tde from its changelog, and prunes the
@@ -212,9 +246,9 @@ No one-off step.
   release PR per `release.yaml`" is unchanged.
 - The release project is no longer derived from the tag shape
   (`obs-release.yml` maps `ppg/common-3` to `ppg:releases:common` today).
-  `obs-pr-cleanup.yml` dispatches `obs-release.yml` with the release projects
-  taken from the paths of the changed `release.yaml` files, next to the tags;
-  the tag is a label only.
+  `obs-release.yml` looks each tag up in the tree: the release project is the
+  directory of the `release.yaml` whose last entry carries that tag
+  (`release_pr.py project-for-tag`). Dispatch inputs are unchanged.
 - "Release-only PR" detection is path-prefix based already and needs no
   change.
 - `obs-pr-cleanup.yml` reads the last entry of every changed `release.yaml`,
@@ -270,7 +304,7 @@ unit rule needs no exception:
 | Unit member without a mirror | Hard error (unchanged) |
 | Mirror repository left without any path | Hard error in the mirror writer |
 | Source package listing empty or failing | Prune aborted, non-zero exit; the copy itself has already succeeded and is safe to re-run |
-| Package delete fails | Reported, remaining deletes still attempted, non-zero exit |
+| Package or project delete fails | Run aborts non-zero; the copy has landed and a re-run resumes the prune |
 
 ## Testing
 
