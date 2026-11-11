@@ -549,18 +549,27 @@ Options:
 
 ### Release hops (`sync prerelease`, `sync release --from`)
 
-A release ships in two hops (spec: `docs/superpowers/specs/2026-10-13-prerelease-project-release-flow-design.md`).
-`sync prerelease <releases-project> --branch-from <profile>` copies staging into a PR pre-release
+A release ships in two hops (spec: `docs/superpowers/specs/2026-10-13-prerelease-project-release-flow-design.md`)
+and covers one **release unit**: a staging project plus its direct `containers` and `tarballs`
+children (`common.BUNDLED_SUBPROJECTS`); every other subproject is a unit of its own, released
+separately (`project release ppg:staging:18:extras` → `ppg:releases:18:extras`, tag
+`ppg/extras-18.6-N`). Units, ids, `PPG_RELEASE` per unit and the prune are described in
+[`docs/PERCONA_OBS_TOOL.md`](../docs/PERCONA_OBS_TOOL.md) under "Release units". Release mirrors
+carry no `subproject:` repository paths.
+`sync prerelease <releases-project> --branch-from <profile>` copies the unit from staging into a PR pre-release
 project after checking the `source_commit` recorded in `release.yaml` against the last synced `main`
 and stamps that SHA into the pre-release project descriptions. It first deletes any existing
-pre-release tree (project + subprojects, deepest first), so every populate starts from scratch, and
+pre-release tree (project + subprojects, deepest first), so every populate starts from scratch (it never prunes), and
 refuses to run when the profile root equals the `--branch-from` root. `sync release <project> --from <pre-release-project>`
 then copies the pre-release into the release project (no freeze, no git divergence check) after
-verifying the marker equals the tagged entry's `source_commit`. Every hop also writes
+verifying the marker equals the tagged entry's `source_commit`; once every copy of the unit is verified it
+prunes the release project (packages the source no longer has in the unit's projects, subprojects with no
+mirror inside the unit; deepest first; guarded: no prune with `--verify-timeout 0`, aborts on a failed or
+empty source listing; `--dry-run` prints the deletions on both hops). Every hop also writes
 `release_id: <id>` (the tag without its product prefix, e.g. `18.7-1`, `common-1`) as the last line of
 each target project description, before that project's `osc release`. `release.yaml` entries are plain tag
 strings (historical) or `{tag, source_commit}` mappings; `obs-pr-cleanup.yml` and
-`.github/scripts/update_version_lists.py` read both. CI integration: `obs-release-pr.yml` runs hop 1 on every release PR and the release QA once the PR carries the `qa-release` label, and `obs-release.yml` runs hop 2 after merge.
+`.github/scripts/update_version_lists.py` read both. CI integration: `obs-release-pr.yml` runs hop 1 on every release PR, then the hop-2 dry-run (its deletions go into the PR comment; a failing dry-run fails that project's populate), and the release QA once the PR carries the `qa-release` label, and `obs-release.yml` runs hop 2 after merge.
 
 ### `sync promote [--dry-run] [--no-services] [--no-cache] [-m MSG] [project] [package]`
 
@@ -734,7 +743,7 @@ Exit code is 0 on success, 1 if any check fails.
 
 ## Maintaining Release Changelogs
 
-Release changelogs live at `root/ppg/releases/<major>/CHANGELOG.md` and follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
+Release changelogs live at `root/ppg/releases/<major>/CHANGELOG.md` (`…/<major>/<unit>/CHANGELOG.md` for a nested release unit) and follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ### Rules for release note URLs
 
@@ -1056,7 +1065,7 @@ When branching is involved, always confirm which OBS instance is being queried:
 | Root project config | `root/project.yaml` |
 | Repo-owned OBS service (npm lockfile generation) | `tools/obs-services/npm_lockfile` |
 | Version-independent tool with its own dependency project (pgAdmin) | `root/ppg/staging/common/tools/percona-pgadmin4/` + `root/ppg/common/deps/pgadmin/` |
-| Shared release hop mechanics (mirror meta apply, `osc release` copy, verify, orphans) | `percona_obs/release_copy.py` |
+| Shared release hop mechanics (mirror meta apply, `osc release` copy, verify, prune) | `percona_obs/release_copy.py` |
 | `release.yaml` `releases:` entries (tag strings and `{tag, source_commit}`) | `percona_obs/release_record.py` |
 | `gh api` lookups (last synced `main` commit) | `percona_obs/github_api.py` |
 | Management script | `percona-obs` (commands: `sync push`, `sync delete`, `sync promote`, `build trigger`, `build status`, `build dependency`, `profile create`, `profile list`, `project verify`) |
@@ -1119,7 +1128,7 @@ Permissions: `contents: read`, `pull-requests: write`.
 **What it does**: two jobs. `release-dispatch` runs once per PR: it detects whether every changed `root/**` file sits under a `root/*/releases/` directory (a release-only PR) and, if so and the PR was merged, tags and dispatches the release; it then deletes the PR's Actions caches. `delete` runs once per `OBS_INSTANCES` entry.
 
 **Release PR path** (merged, and every changed `root/**` file is under `root/*/releases/`):
-1. For each `release.yaml` changed by the PR, reads the last entry of its `releases:`
+1. For each `release.yaml` changed by the PR (at any depth under `root/*/releases/`), reads the last entry of its `releases:`
    list (a plain tag string or a `{tag, source_commit}` mapping — both are understood) from the **merge commit** blob (not the PR head) and creates that git tag
    (e.g. `ppg/17.9-1`) pointing at `merge_commit_sha`, using `GITHUB_TOKEN`
    (`contents: write`). A tag-creation error other than "already exists" fails the job; an existing tag is dispatched only when it already points at `merge_commit_sha` (a re-run after a partial failure), otherwise it is logged and skipped.
@@ -1160,11 +1169,11 @@ Permissions: `contents: write` (tag creation), `actions: write` (dispatch + cach
 
 ### Workflow 6 — `obs-release-pr.yml` (hop 1: populate the pre-release, run release QA)
 
-**Trigger**: `pull_request` against `main` (types `opened`, `synchronize`, `reopened`, `labeled`) with paths `root/*/releases/*/release.yaml` (a release PR always changes a `release.yaml`; mirror/README-only edits under `releases/` do not trigger it), and `workflow_dispatch` with a required `pr_number` (repopulate without a push; a merged PR is refused by the record check, since main's `release.yaml` changed at the merge). Fork PRs are refused in `resolve` (populate runs with production credentials). For `labeled` events a job-level `if` on `resolve` skips the run unless the label just added is `qa-release`. Run-level concurrency group `obs-release-pr-<N>` without cancel-in-progress: a second push queues behind the first. This is deliberately not part of `obs-pr-check.yml`, which cancels superseded runs — a cancelled populate would leave production staging frozen.
+**Trigger**: `pull_request` against `main` (types `opened`, `synchronize`, `reopened`, `labeled`) with paths `root/*/releases/**/release.yaml` (a release PR always changes a `release.yaml`; mirror/README-only edits under `releases/` do not trigger it), and `workflow_dispatch` with a required `pr_number` (repopulate without a push; a merged PR is refused by the record check, since main's `release.yaml` changed at the merge). Fork PRs are refused in `resolve` (populate runs with production credentials). For `labeled` events a job-level `if` on `resolve` skips the run unless the label just added is `qa-release`. Run-level concurrency group `obs-release-pr-<N>` without cancel-in-progress: a second push queues behind the first. This is deliberately not part of `obs-pr-check.yml`, which cancels superseded runs — a cancelled populate would leave production staging frozen.
 
 **Jobs**:
-1. `resolve` — fetches PR context (`head_sha`, `clone_url`) and runs `.github/scripts/release_pr.py classify <N>`. A PR that changes no `release.yaml` is not a release PR: `resolve` emits a notice, outputs `kind=none` and `populate`/`qa` are skipped (`--strict`, passed on `workflow_dispatch`, turns this into a failure). It fails the run when the PR is mixed (`release.yaml` plus other `root/` changes) or when an older open PR already changes the same `release.yaml` (one in-flight release PR per major). Outputs `kind`, `release_files`, `release_projects` (JSON list, e.g. `ppg:releases:18`) and `run_qa` (`true` when the PR carries the `qa-release` label).
-2. `populate` — skipped on `labeled` events (adding the label runs QA only); one leg per `OBS_INSTANCES` entry, checked out at the resolved PR head SHA with full history, serialized on the instance's `sync-main-sync-<name>` concurrency group (no cancel-in-progress; so it never overlaps a staging upload). Creates the `main` (production root) and `pr-<N>` profiles with the instance's repo/project slice flags, resolves the last synced `main` commit for that instance (`percona_obs.github_api.last_synced_head_sha(..., instance=<name>)`: the newest sync-main run whose upload leg for the instance succeeded, even while its build poll is still running), then runs `sync prerelease <project> --branch-from main --synced-commit <sha>` with the `pr-<N>` profile for every release project. Writes `prerelease-report-<instance>` (JSON list of `{project, prerelease, outcome, source_commit}`), uploads it as an artifact, and posts a per-instance PR comment through `post_pr_comment.py` in pre-release mode (`IS_RELEASE_PR=true`, `PRERELEASE_REPORT`). Needs `actions: read`, `pull-requests: write`.
+1. `resolve` — fetches PR context (`head_sha`, `clone_url`) and runs `.github/scripts/release_pr.py classify <N>`. A PR that changes no `release.yaml` is not a release PR: `resolve` emits a notice, outputs `kind=none` and `populate`/`qa` are skipped (`--strict`, passed on `workflow_dispatch`, turns this into a failure). It fails the run when the PR is mixed (`release.yaml` plus other `root/` changes) or when an older open PR already changes the same `release.yaml` (one in-flight release PR per release unit). Outputs `kind`, `release_files`, `release_projects` (JSON list, e.g. `ppg:releases:18`, `ppg:releases:18:extras`) and `run_qa` (`true` when the PR carries the `qa-release` label).
+2. `populate` — skipped on `labeled` events (adding the label runs QA only); one leg per `OBS_INSTANCES` entry, checked out at the resolved PR head SHA with full history, serialized on the instance's `sync-main-sync-<name>` concurrency group (no cancel-in-progress; so it never overlaps a staging upload). Creates the `main` (production root) and `pr-<N>` profiles with the instance's repo/project slice flags, resolves the last synced `main` commit for that instance (`percona_obs.github_api.last_synced_head_sha(..., instance=<name>)`: the newest sync-main run whose upload leg for the instance succeeded, even while its build poll is still running), then runs `sync prerelease <project> --branch-from main --synced-commit <sha>` with the `pr-<N>` profile for every release project, and afterwards `sync release <project> --from <pre-release> --dry-run` with the `main` profile (a failing dry-run marks the project's populate failed). Writes `prerelease-report-<instance>` (JSON list of `{project, prerelease, outcome, source_commit, removals}`, `removals` being the dry-run's deletions), uploads it as an artifact, and posts a per-instance PR comment through `post_pr_comment.py` in pre-release mode (`IS_RELEASE_PR=true`, `PRERELEASE_REPORT`), including a "Removed from the release on merge" list. Needs `actions: read`, `pull-requests: write`.
 3. `cdn-wait` — same gating as `qa`; one leg per `OBS_INSTANCES` entry, but only the `https://api.opensuse.org` leg does anything: `percona-obs qa wait-cdn` over `release_projects` (rootprj `<pr_rootprj>:pr-<N>`) waits up to 180 min until `downloadcontentcdn.opensuse.org` serves the same ETag/size as `downloadcontent.opensuse.org` for every published `all/`/`noarch/` binary (raw and `%2B` spellings), else fails listing the stale URLs. The CDN keeps an old copy of a file whose bytes changed under the same name for days; QA would fail with "File has unexpected size".
 4. `qa` — job named `Release`; needs `cdn-wait` to succeed; calls the reusable `qa-fanout.yml` with `qa_types: packages,containers` only when `run_qa` is true: once every populate leg succeeded, or on a `labeled` run (populate skipped) against the existing pre-release. Check runs read `Release / OBS QA / <project> / …`, covering every QA lane of every released major.
 
@@ -1182,7 +1191,7 @@ Permissions: `contents: write` (tag creation), `actions: write` (dispatch + cach
 
 **Trigger**: `workflow_dispatch` only (a pushed tag is inert). Inputs: `pr_number` (the merged release PR) and `tags` (space-separated release tags that PR created). Dispatched by `obs-pr-cleanup.yml`; manual recovery is `gh workflow run obs-release.yml -f pr_number=N -f tags="ppg/17.12-1 ppg/18.7-1"` and is idempotent.
 
-**Jobs**: `validate` (numeric `pr_number`, tag shape `<product>/<major.minor-N>` or `<product>/<name-N>`; outputs `first_tag`) → `release` (one leg per instance, checked out at the first tag — all tags of a PR share the commit — in its own `obs-release-<name>` group — hop 2 writes only `:releases:` projects, which `sync push` never touches, so it does not share sync-main's group; for each tag derives `<product>:releases:<major>` and runs `sync release <project> --from <pr_rootprj>:pr-<N>:<project>`) → `finalize` (if any copy failed: `::error::` with the re-dispatch command and the pre-release is kept; otherwise one GitHub release per tag with its `CHANGELOG.md` section as notes, `gh release edit` when it already exists; `contents: write`) → `delete` (per instance, `sync delete --yes --recursive --from-obs` of the PR project tree, only after every copy and `finalize` succeeded). Staging is never touched, so `sync-main.yml` is not paused.
+**Jobs**: `validate` (numeric `pr_number`, tag shape `<product>/<id>-<N>`, e.g. `ppg/18.6-1`, `ppg/extras-18.6-1`, `ppg/common-tools-1`; outputs `first_tag`) → `release` (one leg per instance, checked out at the first tag — all tags of a PR share the commit — in its own `obs-release-<name>` group — hop 2 writes only `:releases:` projects, which `sync push` never touches, so it does not share sync-main's group; for each tag looks up the release project with `release_pr.py project-for-tag` (the `release.yaml` whose last entry is that tag) and runs `sync release <project> --from <pr_rootprj>:pr-<N>:<project>`) → `finalize` (if any copy failed: `::error::` with the re-dispatch command and the pre-release is kept; otherwise one GitHub release per tag with its `CHANGELOG.md` section (same lookup) as notes, `gh release edit` when it already exists; `contents: write`) → `delete` (per instance, `sync delete --yes --recursive --from-obs` of the PR project tree, only after every copy and `finalize` succeeded). Staging is never touched, so `sync-main.yml` is not paused.
 
 **Required repository config**: `OBS_INSTANCES`, `OBS_USER` (vars); `OBS_PASSWORD_<NAME>` per instance (secrets).
 
