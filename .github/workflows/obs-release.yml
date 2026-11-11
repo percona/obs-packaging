@@ -1,5 +1,8 @@
 name: OBS Release
 
+# Dashboard contract (docs/superpowers/specs/2026-11-11-dashboard-release-contract-design.md § 4): do not rename.
+# The workflow file name is part of the contract too.
+
 # Hop 2 of the two-hop release flow: copy a merged release PR's pre-release
 # OBS project tree (<pr_rootprj>:pr-<N>:<product>:releases:<major>) into the
 # release project, publish the GitHub releases and delete the pre-release.
@@ -11,6 +14,11 @@ name: OBS Release
 # serializes on its own per-instance "obs-release-<name>" group.  A failed leg keeps the
 # pre-release in place; recovery is a re-dispatch with the same inputs:
 #   gh workflow run obs-release.yml -f pr_number=42 -f tags="ppg/17.12-1 ppg/18.7-1"
+
+# Dispatched on main by obs-pr-cleanup.yml, so the head SHA says nothing about
+# the PR; the run name is the only link from a PR to its final sync run.
+# Dashboard contract (docs/superpowers/specs/2026-11-11-dashboard-release-contract-design.md § 4): do not rename.
+run-name: "Release PR #${{ inputs.pr_number }}"
 
 on:
   workflow_dispatch:
@@ -54,6 +62,7 @@ jobs:
           echo "first_tag=${FIRST}" >> "$GITHUB_OUTPUT"
 
   release:
+    # Dashboard contract (docs/superpowers/specs/2026-11-11-dashboard-release-contract-design.md § 4): do not rename.
     name: Release to OBS (${{ matrix.instance.name }})
     needs: validate
     runs-on: ubuntu-latest
@@ -137,6 +146,7 @@ jobs:
           done
 
   finalize:
+    # Dashboard contract (docs/superpowers/specs/2026-11-11-dashboard-release-contract-design.md § 4): do not rename.
     name: Publish GitHub releases and delete the pre-release
     needs: [validate, release]
     if: always() && needs.validate.result == 'success'
@@ -192,6 +202,7 @@ jobs:
   # obs-pr-cleanup.yml's delete job).  Only after every copy succeeded and
   # the GitHub releases exist.
   delete:
+    # Dashboard contract (docs/superpowers/specs/2026-11-11-dashboard-release-contract-design.md § 4): do not rename.
     name: Delete the pre-release (${{ matrix.instance.name }})
     needs: [validate, release, finalize]
     if: needs.release.result == 'success' && needs.finalize.result == 'success'

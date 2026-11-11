@@ -20,6 +20,14 @@ name: OBS PR Cleanup
 # every instance holds its own PR project under its own pr_rootprj and
 # authenticates with its own secret `OBS_PASSWORD_<NAME>`.
 
+# Branch independence (dashboard contract, spec § 7): the dashboard deletes the
+# release/* branch right after merging, and on abandon the PR closes because
+# the branch is deleted.  Neither this workflow nor obs-release.yml needs the
+# branch afterwards: they use the PR number, `merge_commit_sha`, the release
+# tags, `main` and (delete job) `head.repo.clone_url`, which survives branch
+# deletion.  Neither reads `head.ref`.  An unmerged (abandoned) release PR
+# still gets its pre-release tree deleted by the `delete` job below.
+
 on:
   pull_request:
     branches: [main]
