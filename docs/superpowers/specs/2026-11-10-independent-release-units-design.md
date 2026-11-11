@@ -60,7 +60,9 @@ unit, by the same rule.
 | `ppg:staging:18` | top, `containers`, `tarballs` | `ppg:releases:18` |
 | `ppg:staging:18:extras` | `extras`, `extras:containers` | `ppg:releases:18:extras` |
 | `ppg:staging:16:tde` | `tde` | `ppg:releases:16:tde` |
-| `ppg:staging:common` | **open, see below** | `ppg:releases:common` |
+| `ppg:staging:common:tools` | `tools`, `tools:containers` | `ppg:releases:common:tools` |
+| `ppg:staging:common:upgrade` | `upgrade`, `upgrade:containers` | `ppg:releases:common:upgrade` |
+| `ppg:staging:common:upgrade:extras` | `upgrade:extras`, `upgrade:extras:containers` | `ppg:releases:common:upgrade:extras` |
 
 The bundled names are a constant in the tool (`BUNDLED_SUBPROJECTS =
 ("containers", "tarballs")`), not configuration. `release_scope.py` gains
@@ -78,10 +80,10 @@ member projects of a unit. Every place that walks the release source with
 "A unit member without a mirror is a hard error" is unchanged, now limited to
 unit members.
 
-**Open: `ppg:staging:common`.** Its children are `containers`, `extras`
-(with `extras:containers`) and `tools` (with `tools:containers`), all shipped
-by `ppg/common-1` today. Under the rule above `tools` and `extras` become
-units of their own. To be decided before the plan is written.
+The `common` rows assume the tree move of § 8. A unit root with no packages
+and no bundled child (`ppg:staging:common` after the move, `ppg:staging`
+itself) has nothing to release: `project release` refuses it and names the
+units below it.
 
 ### 2. Records, ids and tags
 
@@ -105,8 +107,15 @@ Release id of a nested unit: the unit's path below the major, joined with
 
 Both units carry their own server package, so the `MAJOR.MINOR` part comes
 from that package as built in the unit root, and `N` counts the unit's own
-releases of that minor. A nested unit without a server package uses counter
-mode (`<prefix>-N`). Main ids are unchanged. The tag stays `<product>/<id>`,
+releases of that minor. Main ids are unchanged.
+
+A unit without a server package uses counter mode: the release directory
+path below `releases/`, joined with `-`, then the unit's own counter.
+
+    ppg:staging:common:tools           → common-tools-1
+    ppg:staging:common:upgrade         → common-upgrade-1
+    ppg:staging:common:upgrade:extras  → common-upgrade-extras-1
+ The tag stays `<product>/<id>`,
 so `release_id_from_tag` and the CI tag handling need no format change.
 
 A nested unit can be released whether or not its parent has ever been
@@ -201,6 +210,11 @@ No one-off step.
   `release.yaml` at any depth below `root/*/releases/`. A PR may carry
   several units; each gets its own populate, tag and hop 2. "One in-flight
   release PR per `release.yaml`" is unchanged.
+- The release project is no longer derived from the tag shape
+  (`obs-release.yml` maps `ppg/common-3` to `ppg:releases:common` today).
+  `obs-pr-cleanup.yml` dispatches `obs-release.yml` with the release projects
+  taken from the paths of the changed `release.yaml` files, next to the tags;
+  the tag is a label only.
 - "Release-only PR" detection is path-prefix based already and needs no
   change.
 - `obs-pr-cleanup.yml` reads the last entry of every changed `release.yaml`,
@@ -210,10 +224,48 @@ No one-off step.
 - `update_version_lists.py` and any script that globs
   `releases/*/release.yaml` must be checked for the nested depth.
 
+### 8. `common` tree move and delivery order
+
+Two pull requests.
+
+**PR 1: tool and CI** — §§ 1–7. Until PR 2 lands, `ppg:staging:common` still
+has a `containers` child and is a unit of top + `containers`; `tools` and
+`extras` are already units of their own.
+
+**PR 2: packaging tree** — moves the cross-version upgrade images so the
+unit rule needs no exception:
+
+    root/ppg/staging/common/containers/         → root/ppg/staging/common/upgrade/containers/
+    root/ppg/staging/common/extras/containers/  → root/ppg/staging/common/upgrade/extras/containers/
+
+- `upgrade/project.yaml` and `upgrade/extras/project.yaml` are package-less
+  namespace projects, as `common/extras/project.yaml` is today (which is
+  removed).
+- Both images rebuild in the new staging projects; sync-main's orphan cleanup
+  removes `ppg:staging:common:containers` and `ppg:staging:common:extras`.
+- Registry paths change in staging and, from the first release, in releases:
+  `…/common/containers/<ubi>/…` → `…/common/upgrade/containers/<ubi>/…`, and
+  likewise for extras. To update: the `qa:` blocks of both image projects,
+  `root/macros.yaml` and `root/README.md` comments, and outside this
+  repository obs-sync (registry copier) and ppg-testing image references.
+- `root/ppg/releases/common/release.yaml` and its `CHANGELOG.md` are removed
+  (`ppg/common-1` remains the last `common` tag); `releases/common/project.yaml`
+  stays as the namespace project.
+- The mirrors `releases/common/containers/` and `releases/common/extras/` are
+  removed, and the OBS projects `ppg:releases:common:containers`,
+  `ppg:releases:common:extras` and `ppg:releases:common:extras:containers`
+  are deleted by hand with `sync delete`. No release prunes them, because
+  `common` is never released again. This happens only after
+  `common-upgrade-1` and `common-upgrade-extras-1` are released and the
+  external consumers read the new paths.
+- `releases/common/tools/` is untouched; it gets its `release.yaml` from the
+  first `project release ppg:staging:common:tools`.
+
 ## Error handling
 
 | Situation | Behaviour |
 |---|---|
+| `project release` on a unit with nothing to release (`ppg:staging:common` after § 8) | Error naming the units below it |
 | `project release` on a bundled child (`ppg:staging:18:containers`) | Error: not a unit root, names the unit it belongs to |
 | Unit member without a mirror | Hard error (unchanged) |
 | Mirror repository left without any path | Hard error in the mirror writer |
@@ -224,7 +276,8 @@ No one-off step.
 
 pytest, no OBS traffic (listing and delete calls stubbed):
 
-- unit membership for a major, `extras`, `tde` and `common`;
+- unit membership for a major, `extras`, `tde`, `common:tools` and
+  `common:upgrade` with its nested `extras`; empty unit rejected;
 - release directory and id derivation for nested units, including the
   per-unit counter and counter mode;
 - mirror writer: `subproject:` paths dropped, order of the rest kept,
