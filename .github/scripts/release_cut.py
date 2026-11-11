@@ -37,6 +37,9 @@ def check_units(units: list[str], known: dict[str, dict]) -> list[str]:
             errors.append(f"{unit}: repeated")
             continue
         seen.add(unit)
+        if unit.startswith("-"):
+            errors.append(f"{unit}: not a release unit root")
+            continue
         if unit not in known:
             errors.append(f"{unit}: not a release unit root")
     return errors

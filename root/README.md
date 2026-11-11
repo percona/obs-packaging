@@ -170,7 +170,7 @@ The command fetches the source project's build topology from OBS, diffs package
 versions against the previous release to generate `CHANGELOG.md`, and commits
 everything. See `docs/PERCONA_OBS_TOOL.md` for the full workflow.
 
-Releasing is two hops. When the release PR is opened, `obs-release-pr.yml` populates a
+Releasing is two hops. When the `obs-sync` label is added to the release PR (retry: remove and re-add), `obs-release-pr.yml` populates a
 per-PR **pre-release** OBS project tree (`<pr_rootprj>:pr-<N>:<release project>`, e.g.
 `…:pr-<N>:ppg:releases:18`) from staging with `sync prerelease`, lists what the merge would
 delete from the release project (`sync release --dry-run`) in the PR comment, and runs every QA lane the release mirrors declare

@@ -164,6 +164,7 @@ def test_project_for_tag(tmp_path):
         ("release", "pull_request", "reopened", "", True, True),
         ("release", "pull_request", "synchronize", "", True, True),
         ("release", "pull_request", "labeled", "obs-sync", True, True),
+        ("release", "pull_request", "labeled", "obs-sync", False, False),
         ("release", "pull_request", "labeled", "qa-release", True, False),
         ("release", "pull_request", "labeled", "qa-release", False, False),
         ("release", "workflow_dispatch", "", "", False, True),
