@@ -25,7 +25,12 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .common import REPO_ROOT, find_packages, find_projects
+from .common import (
+    BUNDLED_SUBPROJECTS,
+    REPO_ROOT,
+    find_packages,
+    is_shared_source_dir,
+)
 from .project_config import (
     RepositoryFilter,
     package_in_slice,
@@ -40,6 +45,81 @@ _LOCAL_AGGREGATE_RE = re.compile(r"^\$\{OBS_ROOTPRJ\}:(.+)$")
 class ReleaseScope:
     whole_projects: list[str] = field(default_factory=list)
     packages: dict[str, set[str]] = field(default_factory=dict)
+
+
+def release_unit_members(
+    source_path: Path, source_project_id: str
+) -> "list[tuple[str, Path]]":
+    """[(project_id, path)] of a release unit: its root, then the bundled
+    children (``containers``, ``tarballs``) that are OBS projects."""
+    members = [(source_project_id, source_path)]
+    for name in BUNDLED_SUBPROJECTS:
+        child = source_path / name
+        if (child / "project.yaml").is_file():
+            members.append((f"{source_project_id}:{name}", child))
+    return members
+
+
+def unit_packages(source_path: Path, source_project_id: str):
+    """Yield (project_id, package_path) for every package of a release unit."""
+    for project_id, path in release_unit_members(source_path, source_project_id):
+        yield from find_packages(path, project_id, recursive=False)
+
+
+def bundled_parent(project_id: str) -> "str | None":
+    """The unit root a bundled child belongs to, or None for a unit root."""
+    parent, _, name = project_id.rpartition(":")
+    return parent if name in BUNDLED_SUBPROJECTS and parent else None
+
+
+def nested_unit_roots(source_path: Path, source_project_id: str) -> "list[str]":
+    """Direct child projects that are release units of their own."""
+    return [
+        f"{source_project_id}:{child.name}"
+        for child in sorted(source_path.iterdir())
+        if child.is_dir()
+        and child.name not in BUNDLED_SUBPROJECTS
+        and not is_shared_source_dir(child)
+        and (child / "project.yaml").is_file()
+    ]
+
+
+@dataclass(frozen=True)
+class ReleaseLocation:
+    product: str
+    major: str  # third component of the source id: "18", "common"
+    top: str  # release directory name of that component (--release-name)
+    unit_path: "tuple[str, ...]"  # components below it: ("extras",), ()
+    release_dir: Path
+    release_project: str
+
+    @property
+    def id_prefix(self) -> str:
+        """PG-mode id prefix: "" for a major, "extras-" for 18:extras."""
+        return "".join(f"{p}-" for p in self.unit_path)
+
+    @property
+    def counter_name(self) -> str:
+        """Counter-mode id stem: "common", "common-upgrade-extras"."""
+        return "-".join((self.top, *self.unit_path))
+
+
+def release_location(
+    project_id: str, release_name: "str | None" = None
+) -> ReleaseLocation:
+    """Where a staging unit root is released to (spec § 2)."""
+    parts = project_id.split(":")
+    product, major, unit_path = parts[0], parts[2], tuple(parts[3:])
+    top = release_name or major
+    rel = (top, *unit_path)
+    return ReleaseLocation(
+        product=product,
+        major=major,
+        top=top,
+        unit_path=unit_path,
+        release_dir=REPO_ROOT.joinpath(product, "releases", *rel),
+        release_project=":".join((product, "releases", *rel)),
+    )
 
 
 def _local_aggregates(aggregate_file: Path) -> "list[tuple[str, str]]":
@@ -81,7 +161,7 @@ def tree_has_server_package(source_path: Path) -> bool:
     """
     return any(
         _SERVER_PKG_RE.match(pkg_path.name)
-        for _, pkg_path in find_packages(source_path, "")
+        for _, pkg_path in unit_packages(source_path, "")
     )
 
 
@@ -92,11 +172,10 @@ def collect_release_scope(
     env_vars: "dict[str, str] | None",
 ) -> ReleaseScope:
     scope = ReleaseScope()
-    own_ids = {source_project_id}
-    for sub_id, _ in find_projects(source_path, source_project_id):
-        own_ids.add(sub_id)
+    members = release_unit_members(source_path, source_project_id)
+    own_ids = {pid for pid, _ in members}
 
-    for _, pkg_path in find_packages(source_path, source_project_id):
+    for _, pkg_path in unit_packages(source_path, source_project_id):
         agg_file = pkg_path / "obs" / "_aggregate"
         if not agg_file.is_file():
             continue
@@ -114,7 +193,7 @@ def collect_release_scope(
     # stay aggregate-scoped (spec Decision 3).  Only a cross-version parent
     # (no server package) freezes its image projects' path sources whole.
     if not tree_has_server_package(source_path):
-        for _, project_path in find_projects(source_path, source_project_id):
+        for _, project_path in members:
             if not has_container_images(project_path):
                 continue
             cfg = resolve_project_config(

@@ -127,6 +127,11 @@ def resolve_project_path(project: str) -> Path:
 # from that subproject's macros.yaml chain.
 SHARED_SOURCE_DIRNAME = "_shared"
 
+# Subprojects released together with their parent project: a release unit is
+# a staging project plus its direct children with these names.  Every other
+# subproject is the root of its own release unit.
+BUNDLED_SUBPROJECTS = ("containers", "tarballs")
+
 
 def is_shared_source_dir(path: Path) -> bool:
     """Return True if *path* is a ``_shared/`` source library directory."""

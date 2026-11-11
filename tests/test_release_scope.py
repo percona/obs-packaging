@@ -115,16 +115,16 @@ def test_symlinked_shared_package_is_followed(tmp_path, monkeypatch):
 def test_subproject_aggregates_included_and_self_sources_skipped(tmp_path, monkeypatch):
     root = _mk_root(tmp_path, monkeypatch)
     src = root / "ppg/staging/17"
-    (src / "extras").mkdir(parents=True)
+    (src / "containers").mkdir(parents=True)
     (src / "project.yaml").write_text("title: S\n")
-    (src / "extras" / "project.yaml").write_text("title: E\n")
+    (src / "containers" / "project.yaml").write_text("title: E\n")
     _pkg(
-        src / "extras" / "ydiff",
+        src / "containers" / "ydiff",
         {"_aggregate": _AGG.format(prj="ppg:common:deps", pkg="ydiff")},
     )
     _pkg(
         src / "self",
-        {"_aggregate": _AGG.format(prj="ppg:staging:17:extras", pkg="ydiff")},
+        {"_aggregate": _AGG.format(prj="ppg:staging:17:containers", pkg="ydiff")},
     )
     _pkg(root / "ppg/common/deps/ydiff", {"_service": "<services/>"})
     scope = rs.collect_release_scope(src, "ppg:staging:17", "isv:percona", {})
@@ -388,13 +388,19 @@ def test_common_parent_collects_paths_from_image_subprojects(tmp_path, monkeypat
         _image_project_yaml(["ppg:staging:17", "ppg:staging:common:tools"])
     )
     _pkg(src / "tools" / "containers" / "percona-pgbouncer", {"Dockerfile": "FROM x\n"})
+    # the bundled containers subproject belongs to the common unit; the
+    # tools:containers image project belongs to the tools unit
     scope = rs.collect_release_scope(src, "ppg:staging:common", "isv:percona", {})
     assert scope.whole_projects == [
         "isv:percona:ppg:staging:18",
         "isv:percona:ppg:common:deps",
-        "isv:percona:ppg:staging:17",
     ]
     assert scope.packages == {}
+    tools = rs.collect_release_scope(
+        src / "tools", "ppg:staging:common:tools", "isv:percona", {}
+    )
+    assert tools.whole_projects == ["isv:percona:ppg:staging:17"]
+    assert tools.packages == {}
 
 
 def test_major_with_image_subproject_keeps_aggregate_only_scope(tmp_path, monkeypatch):
@@ -412,3 +418,93 @@ def test_major_with_image_subproject_keeps_aggregate_only_scope(tmp_path, monkey
     _pkg(src / "containers" / "upgrade", {"Dockerfile": "FROM x\n"})
     scope = rs.collect_release_scope(src, "ppg:staging:17", "isv:percona", {})
     assert scope.whole_projects == []
+
+
+def _unit_tree(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    src = root / "ppg/staging/18"
+    for sub in ("", "containers", "tarballs", "extras", "extras/containers", "tde"):
+        d = src / sub
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "project.yaml").write_text("title: x\n")
+    (src / "containers" / "ubi9").mkdir()
+    (src / "containers" / "ubi9" / "project.yaml").write_text("title: x\n")
+    for pkg in ("percona-pgvector", "extras/percona-postgresql", "containers/img"):
+        (src / pkg / "obs").mkdir(parents=True)
+    monkeypatch.setattr(common, "REPO_ROOT", root)
+    monkeypatch.setattr(rs, "REPO_ROOT", root)
+    return root, src
+
+
+def test_release_unit_members_main(tmp_path, monkeypatch):
+    _, src = _unit_tree(tmp_path, monkeypatch)
+    ids = [i for i, _ in rs.release_unit_members(src, "ppg:staging:18")]
+    assert ids == [
+        "ppg:staging:18",
+        "ppg:staging:18:containers",
+        "ppg:staging:18:tarballs",
+    ]
+
+
+def test_release_unit_members_nested_and_bare(tmp_path, monkeypatch):
+    _, src = _unit_tree(tmp_path, monkeypatch)
+    ids = [
+        i for i, _ in rs.release_unit_members(src / "extras", "ppg:staging:18:extras")
+    ]
+    assert ids == ["ppg:staging:18:extras", "ppg:staging:18:extras:containers"]
+    ids = [i for i, _ in rs.release_unit_members(src / "tde", "ppg:staging:18:tde")]
+    assert ids == ["ppg:staging:18:tde"]
+
+
+def test_unit_packages_and_server_package_are_unit_scoped(tmp_path, monkeypatch):
+    _, src = _unit_tree(tmp_path, monkeypatch)
+    names = sorted(p.name for _, p in rs.unit_packages(src, "ppg:staging:18"))
+    assert names == ["img", "percona-pgvector"]
+    # the server package lives in extras only: the main unit has none
+    assert rs.tree_has_server_package(src) is False
+    assert rs.tree_has_server_package(src / "extras") is True
+
+
+def test_bundled_parent_and_nested_unit_roots(tmp_path, monkeypatch):
+    _, src = _unit_tree(tmp_path, monkeypatch)
+    assert rs.bundled_parent("ppg:staging:18:containers") == "ppg:staging:18"
+    assert rs.bundled_parent("ppg:staging:18:extras") is None
+    assert rs.nested_unit_roots(src, "ppg:staging:18") == [
+        "ppg:staging:18:extras",
+        "ppg:staging:18:tde",
+    ]
+
+
+@pytest.mark.parametrize(
+    "project,release_name,rel,relprj,prefix,counter",
+    [
+        ("ppg:staging:18", None, "ppg/releases/18", "ppg:releases:18", "", "18"),
+        (
+            "ppg:staging:18:extras",
+            None,
+            "ppg/releases/18/extras",
+            "ppg:releases:18:extras",
+            "extras-",
+            "18-extras",
+        ),
+        (
+            "ppg:staging:common:upgrade:extras",
+            None,
+            "ppg/releases/common/upgrade/extras",
+            "ppg:releases:common:upgrade:extras",
+            "upgrade-extras-",
+            "common-upgrade-extras",
+        ),
+        ("ppg:staging:18", "lts", "ppg/releases/lts", "ppg:releases:lts", "", "lts"),
+    ],
+)
+def test_release_location(
+    tmp_path, monkeypatch, project, release_name, rel, relprj, prefix, counter
+):
+    root, _ = _unit_tree(tmp_path, monkeypatch)
+    loc = rs.release_location(project, release_name)
+    assert loc.release_dir == root / rel
+    assert loc.release_project == relprj
+    assert loc.id_prefix == prefix
+    assert loc.counter_name == counter
+    assert loc.major == project.split(":")[2]
