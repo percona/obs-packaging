@@ -225,16 +225,27 @@ def test_outside_slice_only_for_own_images():
     named_own = {
         "pipeline": "p",
         "parameters": {
-            "R": {"image": "i", "repository": "ubi10", "project": "ppg:staging:18:containers"}
+            "R": {
+                "image": "i",
+                "repository": "ubi10",
+                "project": "ppg:staging:18:containers",
+            }
         },
     }
     other = {
         "pipeline": "p",
         "parameters": {
-            "R": {"image": "i", "repository": "ubi8", "project": "ppg:staging:17:containers"}
+            "R": {
+                "image": "i",
+                "repository": "ubi8",
+                "project": "ppg:staging:17:containers",
+            }
         },
     }
-    in_slice = {"pipeline": "p", "parameters": {"R": {"image": "i", "repository": "ubi9"}}}
+    in_slice = {
+        "pipeline": "p",
+        "parameters": {"R": {"image": "i", "repository": "ubi9"}},
+    }
     assert r.outside_slice(own, "ppg:staging:18:containers") == "ubi8"
     assert r.outside_slice(named_own, "ppg:staging:18:containers") == "ubi10"
     assert r.outside_slice(other, "ppg:staging:18:containers") is None
