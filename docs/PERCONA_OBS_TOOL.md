@@ -1041,12 +1041,14 @@ of its own and is released separately, by the same rule at any depth.
 | `project release ppg:staging:18` | `18`, `18:containers`, `18:tarballs` | `ppg:releases:18` | `ppg/18.6-N` |
 | `project release ppg:staging:18:extras` | `18:extras`, `18:extras:containers` | `ppg:releases:18:extras` | `ppg/extras-18.6-N` |
 | `project release ppg:staging:16:tde` | `16:tde` | `ppg:releases:16:tde` | `ppg/tde-16.15-N` |
-| `project release ppg:staging:common` | `common`, `common:containers` | `ppg:releases:common` | `ppg/common-N` |
+| `project release ppg:staging:common:upgrade` | `common:upgrade`, `common:upgrade:containers` | `ppg:releases:common:upgrade` | `ppg/common-upgrade-N` |
+| `project release ppg:staging:common:upgrade:extras` | `common:upgrade:extras`, `common:upgrade:extras:containers` | `ppg:releases:common:upgrade:extras` | `ppg/common-upgrade-extras-N` |
 | `project release ppg:staging:common:tools` | `common:tools`, `common:tools:containers` | `ppg:releases:common:tools` | `ppg/common-tools-N` |
 
 The units under `ppg:staging` today are `14`, `15`, `16`, `16:extras`,
-`16:tde`, `17`, `17:extras`, `18`, `18:extras`, `19`, `common`,
-`common:extras` and `common:tools`.
+`16:tde`, `17`, `17:extras`, `18`, `18:extras`, `19`, `common:tools`,
+`common:upgrade` and `common:upgrade:extras`. `ppg:staging:common` holds no
+packages and is not a unit.
 
 Each unit has its own `release.yaml` and `CHANGELOG.md` in
 `root/ppg/releases/<…>/`, mirroring the path below `staging`. A nested unit
@@ -1291,8 +1293,8 @@ error. `project release <source-project>` does the following:
      A nested unit's tags carry its path (`ppg/extras-17.9-1`); its first release
      continues the parent's numbering (see Release units).
    - If no `percona-postgresql` / `percona-postgresqlNN` package directory exists in the
-     release unit (read from git; e.g. `ppg/staging/common`), a plain counter
-     `<release dir path joined with ->-N` is used instead (tag `ppg/common-<N>`,
+     release unit (read from git; e.g. `ppg/staging/common/tools`), a plain counter
+     `<release dir path joined with ->-N` is used instead (tag `ppg/common-upgrade-<N>`,
      `ppg/common-tools-<N>`). A PG major whose OBS listing is transiently empty still fails with the old error (use `--release-id` to override), so an OBS blip can never produce a counter tag for a major.
 2. **Resolves the source commit** — the head SHA of the last `sync-main.yml` run on
    `main` whose sync jobs succeeded (`gh api`), or `--source-commit <sha>`. It must be

@@ -141,9 +141,9 @@ def _obs_by_major(monkeypatch):
 @pytest.mark.parametrize(
     "project,pipeline",
     [
-        ("ppg:staging:common:containers", "docker-server-parallel-upgrade"),
+        ("ppg:staging:common:upgrade:containers", "docker-server-parallel-upgrade"),
         (
-            "ppg:staging:common:extras:containers",
+            "ppg:staging:common:upgrade:extras:containers",
             "docker-server-parallel-custom-upgrade",
         ),
     ],
@@ -192,7 +192,7 @@ def test_mirror_lookup_keeps_projects_outside_the_mirror(monkeypatch):
     monkeypatch.setattr(cmd_qa, "_own_package_versions", own)
     monkeypatch.setattr(cmd_qa, "_builds_artifacts", lambda structure: False)
     lookup = _lookup()
-    lookup.mirror = ("ppg:releases:common", "ppg:staging:common")
+    lookup.mirror = ("ppg:releases:common:upgrade", "ppg:staging:common:upgrade")
     cmd_qa._package_versions("ppg:staging:16:containers", lookup)
-    cmd_qa._package_versions("ppg:releases:common:containers", lookup)
-    assert seen == ["ppg:staging:16:containers", "ppg:staging:common:containers"]
+    cmd_qa._package_versions("ppg:releases:common:upgrade:containers", lookup)
+    assert seen == ["ppg:staging:16:containers", "ppg:staging:common:upgrade:containers"]
