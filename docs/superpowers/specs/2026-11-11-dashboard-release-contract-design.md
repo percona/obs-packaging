@@ -238,7 +238,10 @@ project of the PR:
   "removals": ["package python3-six", "project ppg:releases:18:old"]}]
 ```
 
-- `outcome` is `success` or `failure`.
+- `outcome` is `success`, `failure` or `skipped`. `skipped`: the instance's
+  slice holds no package of the release unit (it lives on another
+  instance); nothing was populated there, the `prerelease` project does not
+  exist on it, and it is not a failure.
 - `removals` lists what hop 2 would delete, one string per item, prefixed
   `package ` or `project ` (the dry-run lines, as today).
 - Fields may be added; these five keep their names and meaning.

@@ -96,6 +96,7 @@ from .release_scope import (
     release_location,
     release_unit_members,
     tree_has_server_package,
+    unit_members_in_slice,
     unit_packages,
 )
 from .release_record import (
@@ -2748,14 +2749,9 @@ def _also_instance(
         )
     also_env = {**_load_profile_env(also_name), **auto_rootprj_env(also_rootprj)}
     also_filter = _load_profile_filter(also_name)
-    in_slice = [
-        member
-        for member, path in release_unit_members(source_path, project)
-        if any(
-            package_in_slice(pkg_path, also_env, repo_filter=also_filter)
-            for _, pkg_path in find_packages(path, member, recursive=False)
-        )
-    ]
+    in_slice = unit_members_in_slice(
+        source_path, project, also_env, repo_filter=also_filter
+    )
     if not in_slice:
         _print_same(
             f"also: {also_name} skipped ({project} has no package in its slice)"

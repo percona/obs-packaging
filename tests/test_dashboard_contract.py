@@ -8,7 +8,7 @@ from pathlib import Path
 
 import yaml
 
-from percona_obs import cmd_qa
+from percona_obs import cmd_qa, cmd_sync
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS = ROOT / ".github" / "workflows"
@@ -60,6 +60,17 @@ def test_populate_report_artifact_and_format():
         "{project: $p, prerelease: $pre, outcome: $o, source_commit: $s, removals: $r}"
         in text
     )
+
+
+def test_populate_report_outcomes():
+    # success | failure | skipped (unit not in the instance's slice); the
+    # skip is the tool's exit code, never a log match.
+    text = _text("obs-release-pr.yml")
+    for outcome in ("outcome=success", "outcome=failure", "outcome=skipped"):
+        assert outcome in text
+    assert "--check-slice" in text
+    assert cmd_sync.OUT_OF_SLICE_EXIT == 3
+    assert '[ "$slice_rc" = 3 ]' in text
 
 
 def test_release_pr_label():

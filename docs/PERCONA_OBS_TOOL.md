@@ -1550,6 +1550,13 @@ children). Run with the PR profile; `--branch-from` names the production profile
 ./percona-obs -P pr-12 sync prerelease ppg:releases:18 --branch-from main
 ```
 
+A release unit can live on one instance only (`ppg:staging:16:tde` has no UBI repository;
+`ppg:staging:18:extras` builds only for UBI). When the profile's slice holds no package of
+the unit, `sync prerelease` and `sync release` print `skipped: <project> ...` and exit 0
+without touching OBS. `sync prerelease --check-slice` only answers that question: exit 0
+when the slice holds the unit, 3 when it does not (the release PR workflow turns 3 into
+`outcome: "skipped"` in the populate report).
+
 Steps: (1) require a `source_commit` on the last `release.yaml` entry; (2) **record
 check** — the freeze-scope paths (source tree, its `macros.yaml` chain,
 `root/<product>/releases/<major>/release.yaml`, plus the unit's own `release.yaml` for a
@@ -1773,7 +1780,7 @@ object per release project of the PR:
   "removals": ["package python3-six", "project ppg:releases:18:old"]}]
 ```
 
-`outcome` is `success` or `failure`; `removals` lists what hop 2 would delete,
+`outcome` is `success`, `failure` or `skipped`. `skipped` means the instance's slice holds no package of the release unit (the unit lives on another instance): nothing was populated there, the `prerelease` project does not exist on it, and it is not a failure; `removals` lists what hop 2 would delete,
 each string prefixed `package ` or `project `. Fields may be added; these five
 keep their names and meaning.
 

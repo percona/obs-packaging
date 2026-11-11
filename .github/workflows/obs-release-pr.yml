@@ -221,7 +221,14 @@ jobs:
           echo '[]' > /tmp/prerelease-report.json
           for proj in $(jq -r '.[]' <<<"$RELEASE_PROJECTS"); do
             echo "== sync prerelease ${proj} (${OBS_INSTANCE})"
-            if venv/bin/python -u -m percona_obs -P "pr-${PR_NUMBER}" sync prerelease "$proj" \
+            # Exit 3 = this instance's slice holds no package of the unit
+            # (it lives on another instance): nothing to populate or dry-run.
+            slice_rc=0
+            venv/bin/python -u -m percona_obs -P "pr-${PR_NUMBER}" sync prerelease "$proj" \
+              --branch-from main --check-slice || slice_rc=$?
+            if [ "$slice_rc" = 3 ]; then
+              outcome=skipped
+            elif venv/bin/python -u -m percona_obs -P "pr-${PR_NUMBER}" sync prerelease "$proj" \
                  --branch-from main --synced-commit "$SYNCED"; then
               outcome=success
             else

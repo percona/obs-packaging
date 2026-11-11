@@ -428,6 +428,15 @@ def build_parser() -> argparse.ArgumentParser:
         dest="dry_run",
         help="Run the record check, mirror/changelog/tag checks and the green check only.",
     )
+    sync_prerelease_parser.add_argument(
+        "--check-slice",
+        action="store_true",
+        default=False,
+        dest="check_slice",
+        help="Only tell whether this instance's slice holds a package of the "
+        "release unit: exit 0 if it does, 3 if not (the populate is then a "
+        "no-op).  No OBS traffic.",
+    )
     sync_prerelease_parser.set_defaults(func=cmd_sync_prerelease)
 
     build_parser_ = subparsers.add_parser(
