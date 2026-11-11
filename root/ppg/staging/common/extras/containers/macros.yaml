@@ -3,12 +3,14 @@
 # to a single staging/<V>). PG_MAJOR_VERSION is the upgrade *target* (the newest supported
 # version); older source versions are installed via a hardcoded shell loop in the
 # Dockerfile, expanded by percona-obs's {{FOR}} block templating (see
-# percona_obs/common.py expand_for_blocks). Bump PG_MAJOR_VERSION/PG_MINOR_VERSION and
-# extend that loop whenever a new PG major version becomes the target.
+# percona_obs/common.py expand_for_blocks). Bump PG_MAJOR_VERSION, point
+# PG_MINOR_VERSION at the matching root PG_<major>_MINOR_VERSION and extend that loop
+# whenever a new PG major version becomes the target. The minor itself follows
+# root/macros.yaml, so a minor bump needs no change here.
 # PPG_RELEASE is computed by percona-obs, not declared: it is one plus the number
 # of PG_VERSION releases already listed in root/ppg/releases/<major>/release.yaml,
 # so it resets to 1 on its own when PG_MINOR_VERSION is bumped.  Declare it here
 # only if this project needs its own pinned counter.
 - PG_MAJOR_VERSION: 18
-- PG_MINOR_VERSION: 6
+- PG_MINOR_VERSION: %!{PG_18_MINOR_VERSION}
 - PG_VERSION: %!{PG_MAJOR_VERSION}.%!{PG_MINOR_VERSION}
