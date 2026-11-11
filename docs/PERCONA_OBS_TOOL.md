@@ -156,7 +156,7 @@ PR that touches `root/`: `--offline` together with `project config --offline` fo
 `--no-scm-validate` with the instance credentials for PRs from branches of the repository itself.
 
 `sync release -P <profile>` releases the subprojects that instance holds; `project release` always
-generates the full, instance-agnostic release tree.
+generates the unit's full, instance-agnostic release tree.
 
 CI: the repository variable `OBS_INSTANCES` is a JSON list, one object per instance —
 `{"name": "boo", "apiurl": "…", "rootprj": "isv:percona", "pr_rootprj": "isv:percona:pr",
@@ -1023,27 +1023,85 @@ are silently excluded from the output.
 
 ## Releasing packages
 
-A release captures a point-in-time snapshot of a source OBS project by copying
-its built binaries into a dedicated release project. The source project is `ppg:staging:<V>`
-— the full, tag-built package set (see [root/README.md](../root/README.md) for the
+A release captures a point-in-time snapshot of a **release unit** (below) by copying
+its built binaries into a dedicated release project. The source is a `ppg:staging:…`
+project — the tag-built package set (see [root/README.md](../root/README.md) for the
 devel/staging/releases tier layout). Release IDs include the PG minor version and a
 counter (e.g. `17.9-1`, `17.9-2`, `17.10-1`). A single OBS release project
 (`ppg:releases:17`) covers all minor versions for a PG major.
 
-A release is two hops. Hop 1 copies staging into a per-PR **pre-release** project tree
-(`<pr_rootprj>:pr-<N>:<product>:releases:<major>`) when the release PR is opened, so QA runs
+### Release units
+
+A release covers one **release unit**: a staging project plus its direct
+children named `containers` and `tarballs`. Every other subproject is a unit
+of its own and is released separately, by the same rule at any depth.
+
+| Command | Releases | Release project | Tag |
+|---|---|---|---|
+| `project release ppg:staging:18` | `18`, `18:containers`, `18:tarballs` | `ppg:releases:18` | `ppg/18.6-N` |
+| `project release ppg:staging:18:extras` | `18:extras`, `18:extras:containers` | `ppg:releases:18:extras` | `ppg/extras-18.6-N` |
+| `project release ppg:staging:16:tde` | `16:tde` | `ppg:releases:16:tde` | `ppg/tde-16.15-N` |
+| `project release ppg:staging:common` | `common`, `common:containers` | `ppg:releases:common` | `ppg/common-N` |
+| `project release ppg:staging:common:tools` | `common:tools`, `common:tools:containers` | `ppg:releases:common:tools` | `ppg/common-tools-N` |
+
+The units under `ppg:staging` today are `14`, `15`, `16`, `16:extras`,
+`16:tde`, `17`, `17:extras`, `18`, `18:extras`, `19`, `common`,
+`common:extras` and `common:tools`.
+
+Each unit has its own `release.yaml` and `CHANGELOG.md` in
+`root/ppg/releases/<…>/`, mirroring the path below `staging`. A nested unit
+does not need its parent to be released and is not compared with it.
+`project release` refuses a bundled child (`…:containers`, naming its unit
+root) and a project with nothing to release (naming the units below it).
+`--release-name` renames the top directory only (`releases/<name>/extras/`).
+
+`N` is the unit's own counter per PostgreSQL minor: the highest `N` among the
+unit's own tags for that minor, plus one. The first release of a nested unit
+that has no tags of its own continues the numbering of the parent's record
+(the parent's tag count for that minor, plus one), since the unit used to ship
+with it; otherwise it starts at 1. A unit without a server package uses a
+plain counter named after its release directory (`common-tools-1`).
+`PPG_RELEASE` (image tags) follows the same record: for a project or package
+inside a nested unit of a PG major it is read from that unit's `release.yaml`
+once that file lists a tag, and from the major's record before that; for the
+main unit and for `common/*` it is the major's record, as before.
+
+Release mirrors carry no `subproject:` repository paths: release projects
+never build, so they depend on no other project of the root. `project:`
+paths are kept in order, and a repository left with no path at all fails
+`project release`. The mirror writer never touches another unit's directory.
+
+After every copy of the unit is verified, `sync release` prunes the release
+project: it deletes the packages its source project no longer has, in the
+top project and in each of `containers` and `tarballs` (the source is the
+pre-release for `--from`, staging for the single hop), and the subprojects
+that have no mirror `project.yaml`. Only direct children of the release
+project and anything inside its `containers` and `tarballs` subtrees are
+judged; a non-bundled child that has a mirror is another unit and is left
+alone. Deletions run deepest first. Nothing is pruned when the copy was not
+verified (`--verify-timeout 0`, with a warning), when a source listing fails,
+or when the source lists no packages while the target still has some; the
+last two abort the release. `--dry-run` (on both hops) prints the deletions
+and deletes nothing; it exits non-zero on the empty-source guard. The release
+PR comment lists them under "Removed from the release on merge". To retire a
+nested unit, `git rm` its release directory: the parent's next release
+deletes the OBS project.
+
+A release is two hops. Hop 1 copies the unit from staging into a per-PR **pre-release** project tree
+(`<pr_rootprj>:pr-<N>:<release project>`, e.g. `…:pr-<N>:ppg:releases:18`) when the release PR is opened, so QA runs
 against exactly the binaries that will ship. Hop 2, after merge, copies the pre-release into
 the release project. Hop 2 never touches staging; hop 1 freezes it only for the copy.
 
 The process is PR-based:
 
-1. **`project release`** — auto-derives the release ID from OBS, regenerates the full
+1. **`project release`** — auto-derives the release ID from OBS, regenerates the unit's
    `releases/<name>/` mirror tree from staging's current config, updates `release.yaml`
    and `CHANGELOG.md`, and commits locally. Pushing the branch and opening the review
    PR remain manual steps.
 2. **PR populates the pre-release and runs QA** — `obs-release-pr.yml` (release-only PRs
-   only) runs `sync prerelease <project> --branch-from main` on every OBS instance, posts a
-   per-instance comment listing the pre-release projects. With the `qa-release` label on
+   only) runs `sync prerelease <project> --branch-from main` on every OBS instance, then
+   `sync release --from <pre-release> --dry-run` to list what hop 2 would delete, and posts a
+   per-instance comment listing the pre-release projects and those removals. With the `qa-release` label on
    the PR it then runs every QA lane the release mirrors declare against them (the reusable
    `qa-fanout.yml`; check names are prefixed `Release / OBS QA / …`). Adding the label
    later runs QA alone against the already-populated pre-release.
@@ -1059,13 +1117,14 @@ The process is PR-based:
    e.g. `ppg/17.9-1`) with `GITHUB_TOKEN` and dispatches `obs-release.yml` **once** with
    `pr_number` and all the tags.
 5. **`obs-release.yml`** — its sole trigger is `workflow_dispatch`; per instance it runs
-   `sync release <project> --from <pr_rootprj>:pr-<N>:<project>` for every tag, then creates
+   `sync release <project> --from <pr_rootprj>:pr-<N>:<project>` for every tag (the release
+   project is looked up from the tag), then creates
    the GitHub releases (changelog section as notes) and finally deletes the pre-release.
 
 > **Constraint:** a release PR must change **only** files under `root/*/releases/`.
 > `obs-release-pr.yml` fails a PR that mixes release and other `root/` changes, and fails
 > when an older open PR already changes the same `release.yaml` (one in-flight release PR per
-> major). A release PR that changes no `release.yaml` is rejected too.
+> release unit). A release PR that changes no `release.yaml` is rejected too.
 
 ### The `PPG_RELEASE` counter
 
@@ -1073,7 +1132,11 @@ The process is PR-based:
 what the container image tags are built from. It is **computed, never declared**:
 `load_macros` sets it to one plus the number of tags in
 `root/<product>/releases/<major>/release.yaml` that belong to the project's current
-`PG_VERSION`.
+`PG_VERSION`. For a project or package inside a nested release unit of a PG major
+(`18:extras`, `16:tde`), the counter follows the unit: it is read from that
+unit's own `release.yaml` (`releases/18/extras/release.yaml`) once the file lists a
+tag, and from the major's record until then. The pre-release record check of a
+nested unit watches both the unit's record and the major's.
 
 Two consequences follow, and both are deliberate:
 
@@ -1174,6 +1237,12 @@ version; only an issue before the first migration release.
 # Fully automatic — both release-name and release-id derived from OBS
 ./percona-obs -P local project release ppg:staging:17
 
+# A nested release unit, released on its own (tag ppg/extras-17.9-N)
+./percona-obs -P local project release ppg:staging:17:extras
+
+# The cross-version tools unit (tag ppg/common-tools-N)
+./percona-obs -P local project release ppg:staging:common:tools
+
 # Override release-name only
 ./percona-obs -P local project release ppg:staging:17 --release-name 17
 
@@ -1202,17 +1271,21 @@ refreshes an open release). The command
 also needs `gh` (logged in, with network access) on every run unless `--source-commit` is
 passed, because it resolves the last synced `main` commit through the GitHub API.
 
-`source-project` must be a `staging`-tier project — any other tier is rejected with an
+`source-project` must be the root of a release unit (see above) in the `staging` tier —
+any other tier, a bundled child or a project with no packages is rejected with an
 error. `project release <source-project>` does the following:
 
 1. **Auto-derives `release-id`** (if not given with `--release-id`):
    - Queries OBS for the built version of `percona-postgresql<major>` in the source project.
    - Extracts `MAJOR.MINOR` (e.g. `17.9` from `17.9.0-1.1`).
-   - Counts existing entries in `release.yaml` whose tag matches `/<MAJOR.MINOR>-*`
+   - Takes the highest `N` among the unit's own `release.yaml` tags for `MAJOR.MINOR`
      and appends the next counter (e.g. `17.9-1`, or `17.9-2` if `17.9-1` already exists).
-   - If no `percona-postgresql` / `percona-postgresqlNN` package directory exists anywhere
-     under the source tree (read from git; e.g. `ppg/staging/common`), a plain counter
-     `<name>-N` is used instead (tag `ppg/common-<N>`). A PG major whose OBS listing is transiently empty still fails with the old error (use `--release-id` to override), so an OBS blip can never produce a counter tag for a major.
+     A nested unit's tags carry its path (`ppg/extras-17.9-1`); its first release
+     continues the parent's numbering (see Release units).
+   - If no `percona-postgresql` / `percona-postgresqlNN` package directory exists in the
+     release unit (read from git; e.g. `ppg/staging/common`), a plain counter
+     `<release dir path joined with ->-N` is used instead (tag `ppg/common-<N>`,
+     `ppg/common-tools-<N>`). A PG major whose OBS listing is transiently empty still fails with the old error (use `--release-id` to override), so an OBS blip can never produce a counter tag for a major.
 2. **Resolves the source commit** — the head SHA of the last `sync-main.yml` run on
    `main` whose sync jobs succeeded (`gh api`), or `--source-commit <sha>`. It must be
    an ancestor of HEAD. It is recorded in `release.yaml` so the release names the
@@ -1222,12 +1295,13 @@ error. `project release <source-project>` does the following:
    `CHANGELOG.md` section for that id is replaced and `source_commit` is updated. Only
    when the tag exists is the next id derived and appended (`--release-id` always wins).
 4. **Fetches** the source project's repository topology from OBS.
-5. **Regenerates the full mirror tree**, on every release, not just the first: the
-   top-level `project.yaml` plus one nested mirror directory per staging subproject
-   (`containers/`, `extras/`, `extras/containers/`, `tarballs/`). All mirrors get
-   `build: false`, `publish:` flags are carried over, and subproject paths — including
-   intra-project sibling paths — are rewritten to the release namespace. A mirror
-   directory whose staging source no longer exists is **deleted**. Each mirror also carries
+5. **Regenerates the unit's mirror tree**, on every release, not just the first: the
+   top-level `project.yaml` plus one nested mirror directory per bundled child
+   (`containers/`, `tarballs/`). All mirrors get
+   `build: false`, `publish:` flags are carried over, and `subproject:` repository paths
+   are dropped (`project:` paths stay). A `containers/` or `tarballs/` mirror
+   directory whose staging source no longer exists is **deleted**; other units' directories
+   are never touched. Each mirror also carries
    its staging project's `qa:` entries (macros rendered, project references rewritten to the
    release project), plus the `qa:` entries of its direct packages' `package.yaml` as
    project-level entries named `<package>.<segment>` (segment = the entry's `name` or its
@@ -1235,8 +1309,9 @@ error. `project release <source-project>` does the following:
    name becomes the check-name segment); a duplicate name fails the cut. Copied package lanes
    get `name: <pkg>.<segment>` and `package: <pkg>`; versions are computed at `qa run`
    from the pre-release.
-6. **Builds `CHANGELOG.md`** — compares built package versions from the top-level staging
-   project, `extras`, and `tarballs` against the release OBS project (for updates) and
+6. **Builds `CHANGELOG.md`** — compares built package versions from the unit's top-level staging
+   project and its `tarballs` against the release OBS project (for updates; the baseline is
+   read from the release project whenever it exists on OBS) and
    generates entries with upstream URLs. Container images are listed per flavor (`ubi8`
    and `ubi9` as distinct entries); the previous-release image diff is queried from
    whichever project actually holds the previous release's images, producing real
@@ -1249,7 +1324,7 @@ error. `project release <source-project>` does the following:
 8. **Commits** the generated files locally with `git commit -s`. Pushing the branch and
    opening the PR remain manual steps — `project release` does not do either.
 
-The git tag (e.g. `ppg/17.9-1`) is created automatically by `obs-pr-cleanup.yml`, on the
+The git tag (e.g. `ppg/17.9-1`, `ppg/extras-17.9-1`) is created automatically by `obs-pr-cleanup.yml`, on the
 **merge commit**, once the release PR is merged. That tag is then passed as input when
 `obs-pr-cleanup.yml` dispatches `obs-release.yml` — pushing a tag does not trigger
 anything by itself.
@@ -1327,7 +1402,7 @@ scan produces nothing (e.g. `--no-cve-scan`, or no packages changed).
 ### Step 2 — CI ships the release
 
 Release-only PRs are handled by `obs-release-pr.yml` (triggered on open/synchronize/reopen
-and on adding the `qa-release` label, of a PR that changes a `root/*/releases/*/release.yaml` (PRs touching only mirrors or
+and on adding the `qa-release` label, of a PR that changes a `root/*/releases/**/release.yaml`, at any depth (PRs touching only mirrors or
 READMEs under `releases/` are skipped with a notice), or by `workflow_dispatch` with a
 `pr_number`); `obs-pr-check.yml` gates them out and needs no label for this. Its jobs:
 
@@ -1340,7 +1415,11 @@ READMEs under `releases/` are skipped with a notice), or by `workflow_dispatch` 
   instance succeeded (the run may still be polling builds). Release PRs must come from a
   branch of the repository itself; fork PRs are refused. Runs
   `sync prerelease <project> --branch-from main --synced-commit <sha>` for
-  each release project, uploads the `prerelease-report-<instance>` artifact and posts a
+  each release project, then `sync release <project> --from <pre-release> --dry-run` with
+  the `main` profile; the deletions it prints go into the report (`removals`) and a
+  "Removed from the release on merge" list in the PR comment. A failing dry-run (the
+  record guards, an empty source) marks that project's populate failed, since hop 2 would
+  fail the same way. Uploads the `prerelease-report-<instance>` artifact and posts a
   per-instance PR comment.
 - `qa` — calls `qa-fanout.yml` when the PR carries the `qa-release` label: after every
   populate leg succeeded, or on its own when the run was triggered by adding the label
@@ -1351,19 +1430,20 @@ On merge:
 1. `sync-main.yml` runs `sync push` normally (releases/ directories are excluded from
    traversal). It creates no tag and is not paused.
 2. `obs-pr-cleanup.yml`, on close of the merged release PR, tags `merge_commit_sha` with
-   `GITHUB_TOKEN` (e.g. `ppg/17.9-1`) and dispatches `obs-release.yml` once via
+   `GITHUB_TOKEN` (one tag per changed `release.yaml`, at any depth; e.g. `ppg/17.9-1`) and dispatches `obs-release.yml` once via
    `gh workflow run obs-release.yml --ref main -f pr_number=<N> -f tags="<tag> …"`. A
    tag-creation or dispatch API error fails the job; only a genuine "tag already exists"
    response is tolerated, and such a tag is dispatched only when it already points at the
    merge commit (a re-run after a partial failure). The PR's OBS project tree is kept (it is the copy source) and
    deleted by `obs-release.yml`.
 3. `obs-release.yml`'s **sole trigger** is `workflow_dispatch` (inputs `pr_number`,
-   `tags`; pushing a tag by hand is inert). Per instance it derives each release project
-   from its tag (`ppg/17.9-1` → `ppg:releases:17`) and runs `sync release --from` the
+   `tags`; pushing a tag by hand is inert). Per instance it looks up each release project
+   from its tag (`release_pr.py project-for-tag`: the `release.yaml` whose last entry is that
+   tag, e.g. `ppg/extras-17.9-1` → `ppg:releases:17:extras`) and runs `sync release --from` the
    pre-release. Each leg serializes on its own `obs-release-<name>` concurrency group
    (hop 2 writes only `:releases:` projects, so it does not share sync-main's group).
 4. `finalize` creates (or updates the notes of) one GitHub release per tag from its
-   `CHANGELOG.md` section. If any copy failed it instead fails with an `::error::` and the
+   `CHANGELOG.md` section (found through the same lookup). If any copy failed it instead fails with an `::error::` and the
    pre-release is kept.
 5. `delete` removes the pre-release project tree on every instance, only after every copy
    and the GitHub releases succeeded.
@@ -1426,7 +1506,8 @@ OBS deb repos are flat: `<arch>/Packages.gz` never exists, so its 404 is expecte
 
 ### `sync prerelease` — hop 1 (staging → PR pre-release)
 
-Run with the PR profile; `--branch-from` names the production profile holding staging:
+Copies the members of the release unit (the project and its `containers` / `tarballs`
+children). Run with the PR profile; `--branch-from` names the production profile holding staging:
 
 ```sh
 ./percona-obs -P pr-12 sync prerelease ppg:releases:18 --branch-from main
@@ -1434,7 +1515,8 @@ Run with the PR profile; `--branch-from` names the production profile holding st
 
 Steps: (1) require a `source_commit` on the last `release.yaml` entry; (2) **record
 check** — the freeze-scope paths (source tree, its `macros.yaml` chain,
-`root/<product>/releases/<major>/release.yaml` — `PPG_RELEASE` is computed from it, so
+`root/<product>/releases/<major>/release.yaml`, plus the unit's own `release.yaml` for a
+nested unit — `PPG_RELEASE` is computed from them, so
 a merged release refuses a repopulate — every whole-frozen project, every
 aggregate-frozen package) must be identical between
 `source_commit` and the last synced `main` (`--synced-commit`, else `gh api`), or it
@@ -1492,8 +1574,11 @@ No freeze, no git divergence check. The last `release.yaml` entry must have a
 `source_commit` and the pre-release description's marker must equal it; a missing or
 different marker, or an entry without `source_commit`, is refused (`--force` skips both
 checks). Then the release project meta is applied from the mirrors, `release_id: <id>` is
-appended to each project description and binaries are copied with `osc release`. Known limitation: `--dry-run` together with `--from` still only runs
-the staging-side dry-run checks.
+appended to each project description and binaries are copied with `osc release`. Once every
+copy of the unit is verified, the release project is pruned (see Release units): packages
+the pre-release no longer has and subprojects with no mirror are deleted, deepest first.
+`--dry-run` together with `--from` prints those deletions and changes nothing; it exits
+non-zero when the pre-release lists no packages while the release project still has some.
 
 ### Running `sync release` manually
 
@@ -1507,7 +1592,7 @@ Flags:
 
 | Flag | Default | Effect |
 |---|---|---|
-| `--dry-run` | off | Read-only: checks that every staging subproject has a mirror, the `CHANGELOG.md` section for the release ID exists, the tag does not already exist, the source OBS project is reachable, and every staging package currently reports `succeeded`. Does not freeze, release, or write anything. |
+| `--dry-run` | off | Read-only: checks that every bundled child of the unit has a mirror, the `CHANGELOG.md` section for the release ID exists, the tag does not already exist, the source OBS project is reachable, and every staging package currently reports `succeeded`; prints the packages and subprojects the prune would delete. Does not freeze, release, or write anything. |
 | `--force` | off | Skips the divergence (tag) check entirely. |
 | `--skip-tag-check` | off | Skips only the `git diff <tag>..HEAD` check — use when the tag doesn't exist locally yet. |
 | `--no-freeze` | off | Skips the drain/freeze/restore sequence (§ below) — for recovery scenarios where staging is already known idle. |
@@ -1521,8 +1606,8 @@ Flags:
    - Checks that no files under the source project have changed since the release tag
      (`git diff <tag>..HEAD`). This check runs on both the first-release and update paths.
      Pass `--skip-tag-check` when the tag doesn't exist locally.
-2. **Mirror check** — a staging subproject with no corresponding local mirror directory
-   is a **hard error** (never silently skipped).
+2. **Mirror check** — a bundled child of the unit (`containers`, `tarballs`) with no
+   corresponding local mirror directory is a **hard error** (never silently skipped).
 3. **Applies the release project config** — the top-level release project meta is
    re-applied on the update path too, not just on first creation, and this happens
    *before* the freeze sequence below. Release targets are added only for repos
@@ -1540,18 +1625,19 @@ Flags:
       **Freeze scope.** Before `osc release` the command drains and green-checks, then
       build-disables for the duration of the copy:
 
-      - the release source project and its subprojects (whole);
+      - the release unit's projects: the source project and its `containers` / `tarballs`
+        children (whole);
       - every local aggregate source referenced by an `obs/_aggregate` under the
         source tree — `ppg:staging:common:tools`, `ppg:common:deps` — restricted to the
         aggregated packages (package `_meta` build disable);
-      - for a `common` release (a source without a server package), every image-holding
-        project under the source: the `subproject:` entries of its repository paths (whole),
+      - for a unit without a server package (`common`, `common:tools`), every image-holding
+        project of the unit: the `subproject:` entries of its repository paths (whole),
         since an image may consume any package of them; per-major releases freeze only the
         aggregated packages.
 
       `--dry-run` prints the extra sources as `+ <project>  (whole)` or
       `+ <project>  (<pkg>, …)` and includes them in the green check.
-   4. **Release** — `osc release` for the top-level project and every subproject.
+   4. **Release** — `osc release` for the top-level project and every bundled child.
    5. **Verify** — still inside the freeze window, polls (bounded by
       `--verify-timeout`) until each released repo holds binaries.
    6. **Restore** — in a `finally` (so it still runs even if verify times out or
@@ -1561,8 +1647,10 @@ Flags:
       made inside the freeze window (the hop's own release targets, added and removed
       around `osc release`) are kept, not rolled back to the pre-freeze snapshot. If the
       current meta cannot be read, the full snapshot is restored instead.
-5. Release-tier OBS projects with no local mirror are reported loudly as orphans;
-   deletion is never automatic — run `sync delete` manually.
+5. **Prune** — after every copy is verified and before publishing resumes, the release
+   project is pruned as described in Release units: packages and subprojects the source
+   no longer has are deleted, deepest first, inside this unit only. It is skipped with
+   `--verify-timeout 0`, and aborts rather than delete on a failed or empty source listing.
 
 Skip all divergence checks:
 
@@ -1576,26 +1664,32 @@ Skip all divergence checks:
 root/
 └── ppg/
     └── releases/
-        └── 17/                     # one directory per PG major version
-            ├── release.yaml        # releases: list of tags
-            ├── project.yaml        # ppg:releases:17 (builds disabled)
-            ├── CHANGELOG.md        # keep-a-changelog, all releases
-            ├── containers/         # nested, mirrors staging's containers/ subproject
-            │   └── project.yaml    # builds disabled, paths → release project
-            ├── extras/
-            │   ├── project.yaml
-            │   └── containers/
-            │       └── project.yaml
-            └── tarballs/
-                └── project.yaml
+        ├── 17/                     # the release unit ppg:staging:17
+        │   ├── release.yaml        # releases: list of tags
+        │   ├── project.yaml        # ppg:releases:17 (builds disabled)
+        │   ├── CHANGELOG.md        # keep-a-changelog, all releases
+        │   ├── containers/         # bundled: mirrors staging's containers/ subproject
+        │   │   └── project.yaml    # builds disabled
+        │   ├── tarballs/           # bundled
+        │   │   └── project.yaml
+        │   └── extras/             # the unit ppg:staging:17:extras, released on its own
+        │       ├── release.yaml
+        │       ├── project.yaml
+        │       ├── CHANGELOG.md
+        │       └── containers/
+        │           └── project.yaml
+        └── common/                 # the unit ppg:staging:common
+            └── tools/              # the unit ppg:staging:common:tools
 ```
 
-Subproject mirrors are nested directories, never colon-named — `containers:ubi9/`
-describes only the pre-restructure layout and no longer reflects reality.
-`project release` **regenerates the entire mirror tree from staging's current
-config on every release**, not just the first: mirrors for subprojects that still
-exist in staging are refreshed in place, and mirror directories whose staging
-source no longer exists are deleted.
+Every unit has its own `release.yaml`. A nested directory that has a `project.yaml`
+but no `release.yaml` yet is a unit that has not been released on its own; its
+first `project release` creates the record. Subproject
+mirrors are nested directories, never colon-named. `project release` **regenerates the
+unit's mirror tree from staging's current config on every release**, not just the
+first: the unit's top mirror and its `containers/` and `tarballs/` mirrors are
+refreshed in place, a `containers/` or `tarballs/` mirror whose staging source no longer
+exists is deleted, and no other unit's directory is touched.
 
 The `releases/` directory is excluded from `sync push` traversal — release
 directories (identified by `release.yaml`) are never synced to OBS as source

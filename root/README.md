@@ -59,28 +59,50 @@ Each product directory contains:
 
 ### `releases/`
 
-Release definitions. One subdirectory per PG major version contains `release.yaml`,
-`project.yaml`, `CHANGELOG.md`, and a subproject directory per source subproject.
+Release definitions. A release covers one **release unit**: a staging project plus its
+direct children named `containers` and `tarballs`; every other subproject is a unit of its
+own and is released separately (see "Release units" in
+[`docs/PERCONA_OBS_TOOL.md`](../docs/PERCONA_OBS_TOOL.md)). The directory of a unit
+mirrors its path below `staging` and contains `release.yaml`, `project.yaml`,
+`CHANGELOG.md`, and a mirror directory per bundled child. For example:
+
+| Release unit | Release directory | Release project | Tag |
+|---|---|---|---|
+| `ppg:staging:18` (+ `18:containers`, `18:tarballs`) | `releases/18/` | `ppg:releases:18` | `ppg/18.6-N` |
+| `ppg:staging:18:extras` (+ `18:extras:containers`) | `releases/18/extras/` | `ppg:releases:18:extras` | `ppg/extras-18.6-N` |
+| `ppg:staging:16:tde` | `releases/16/tde/` | `ppg:releases:16:tde` | `ppg/tde-16.15-N` |
+| `ppg:staging:common` (+ `common:containers`) | `releases/common/` | `ppg:releases:common` | `ppg/common-N` |
+| `ppg:staging:common:tools` (+ `common:tools:containers`) | `releases/common/tools/` | `ppg:releases:common:tools` | `ppg/common-tools-N` |
 
 ```
 releases/
-└── 17/                         # one directory per PG major version
+└── 17/                         # the release unit ppg:staging:17
     ├── release.yaml            # list of release tags
     ├── project.yaml            # ppg:releases:17 OBS project (builds disabled)
-    ├── CHANGELOG.md            # keep-a-changelog, all releases for this major
-    ├── containers/             # nested dir, one per source subproject (never colon-named)
+    ├── CHANGELOG.md            # keep-a-changelog, all releases of this unit
+    ├── containers/             # bundled child (nested dir, never colon-named)
     │   └── project.yaml        # builds disabled; binaries copied via osc release
-    ├── extras/
-    │   ├── project.yaml
-    │   └── containers/
-    │       └── project.yaml
-    └── tarballs/
-        └── project.yaml
+    ├── tarballs/               # bundled child
+    │   └── project.yaml
+    └── extras/                 # the release unit ppg:staging:17:extras, with its own
+        ├── release.yaml        # release.yaml and CHANGELOG.md
+        ├── project.yaml
+        ├── CHANGELOG.md
+        └── containers/
+            └── project.yaml
 ```
 
-`project release` regenerates this entire mirror tree from staging's current config on
-every release (not only the first): mirrors are refreshed in place, and any mirror
-directory whose staging source no longer exists is deleted.
+`project release` regenerates the unit's mirror tree from staging's current config on
+every release (not only the first): the unit's mirrors are refreshed in place, a
+`containers/` or `tarballs/` mirror whose staging source no longer exists is deleted, and
+another unit's directory is never touched. Mirrors carry no `subproject:` repository paths
+(release projects never build, so they depend on no other project of the root); `project:`
+paths are kept.
+
+`sync release` prunes the release project after the copy: packages the source no longer has
+and subprojects without a mirror directory are deleted, inside the unit only. To retire a
+nested unit, `git rm` its release directory; the parent's next release deletes the OBS
+project. See "Release units" in `docs/PERCONA_OBS_TOOL.md` for the guards.
 
 The `release.yaml` format:
 
@@ -100,28 +122,35 @@ releases:
 | `releases` | List of git tags, one per release event. The last entry is always current. |
 
 Release IDs follow the pattern `MAJOR.MINOR-N` where `N` is the release counter
-for that minor version (resets to 1 when the minor version changes).
+for that minor version (resets to 1 when the minor version changes). A nested unit
+prefixes its path (`extras-18.6-N`) and keeps its own counter; its first release continues the
+parent's numbering.
 
 `PPG_RELEASE` is **not** declared in any `macros.yaml`. `percona-obs` computes it as
 one plus the number of releases already listed for the project's `PG_VERSION` in
 `root/<product>/releases/<major>/release.yaml`, so it resets to 1 by itself whenever
-`PG_MINOR_VERSION` is bumped. Declare it only to pin a project to its own counter —
+`PG_MINOR_VERSION` is bumped. For a project inside a nested unit of a PG major
+(`staging/18/extras`, `staging/16/tde`) the counter follows the unit: it is read from
+`releases/<major>/<unit>/release.yaml` once that file lists a tag, from the major's record
+before that. Declare it only to pin a project to its own counter —
 `ppg/staging/common/containers` and `ppg/staging/common/extras/containers` do not do this: they
 declare `PG_VERSION` as the upgrade target ahead of the rest of `staging/18`, so they
 simply track `staging/18`'s computed counter rather than having one of their own.
 
-The cross-version projects under `ppg/staging/common` are released as one unit.
-When no `percona-postgresql` / `percona-postgresqlNN` package exists anywhere under
-the source tree (e.g. `ppg/staging/common`), `project release` uses a plain counter
+The cross-version projects under `ppg/staging/common` are released as three units:
+`common` (with `common/containers`), `common:extras` and `common:tools`.
+When no `percona-postgresql` / `percona-postgresqlNN` package exists in the release unit
+(e.g. `ppg/staging/common`), `project release` uses a plain counter
 instead (read from git, not from OBS):
 `./percona-obs -P <profile> project release ppg:staging:common` writes
-`root/ppg/releases/common/` and tags `ppg/common-<N>`; `obs-release.yml`
-maps that tag shape to `ppg:releases:common`. A PG major whose OBS listing is transiently empty still fails with the old error (use `--release-id` to override), so an OBS blip can never produce a counter tag for a major.
+`root/ppg/releases/common/` and tags `ppg/common-<N>`; `ppg:staging:common:tools` writes
+`root/ppg/releases/common/tools/` and tags `ppg/common-tools-<N>`. `obs-release.yml`
+finds the release project by looking the tag up in the `release.yaml` files. A PG major whose OBS listing is transiently empty still fails with the old error (use `--release-id` to override), so an OBS blip can never produce a counter tag for a major.
 
 #### Cutting a release
 
 Use the `project release` command — it auto-derives the release ID from OBS,
-regenerates the full mirror tree above, and commits everything locally. It does
+regenerates the unit's mirror tree above, and commits everything locally. It does
 **not** push a branch or open the PR; that remains a manual step:
 
 ```sh
@@ -130,6 +159,9 @@ regenerates the full mirror tree above, and commits everything locally. It does
 
 # Override release ID explicitly
 ./percona-obs -P <profile> project release ppg:staging:17 --release-id 17.9-1
+
+# A nested release unit is released on its own
+./percona-obs -P <profile> project release ppg:staging:17:extras
 ```
 
 The command fetches the source project's build topology from OBS, diffs package
@@ -137,11 +169,12 @@ versions against the previous release to generate `CHANGELOG.md`, and commits
 everything. See `docs/PERCONA_OBS_TOOL.md` for the full workflow.
 
 Releasing is two hops. When the release PR is opened, `obs-release-pr.yml` populates a
-per-PR **pre-release** OBS project tree (`<pr_rootprj>:pr-<N>:<product>:releases:<major>`)
-from staging with `sync prerelease` and runs every QA lane the release mirrors declare
+per-PR **pre-release** OBS project tree (`<pr_rootprj>:pr-<N>:<release project>`, e.g.
+`…:pr-<N>:ppg:releases:18`) from staging with `sync prerelease`, lists what the merge would
+delete from the release project (`sync release --dry-run`) in the PR comment, and runs every QA lane the release mirrors declare
 against it, so the releases tier is populated from the pre-release and never directly from
 staging. Once the release PR is merged, `obs-pr-cleanup.yml` tags the **merge commit**
-(e.g. `ppg/17.9-1`) and dispatches `obs-release.yml` once (its only trigger is
+(one per changed `release.yaml`, e.g. `ppg/17.9-1`, `ppg/extras-17.9-1`) and dispatches `obs-release.yml` once (its only trigger is
 `workflow_dispatch` — pushing a tag by hand does nothing). `obs-release.yml` copies the
 pre-release into the OBS release project, creates the GitHub release(s) and deletes the
 pre-release.
@@ -428,12 +461,15 @@ The image subprojects are `common/containers` (upgrade image, moved from
 images, moved from `_shared/containers`). `devel/common` is created only when a devel
 package or image needs it.
 
-The release unit is `ppg:releases:common`, tagged `ppg/common-<N>` and cut with
-`project release ppg:staging:common`. `sync release` freezes the aggregated packages
-of `ppg:staging:common:tools` (and of `ppg:common:deps`) package-scoped for per-major
-releases; for a `common` release every image-holding subproject's path `subproject:`
-entries (the majors, `ppg:common:deps`) are frozen whole; per-major releases freeze only
-the aggregated packages. See
+The release units under `common` are `common` (the top project and `common/containers`,
+`ppg:releases:common`, tag `ppg/common-<N>`), `common:extras` (with
+`common/extras/containers`, `ppg:releases:common:extras`) and `common:tools` (with
+`common/tools/containers`, `ppg:releases:common:tools`, tag `ppg/common-tools-<N>`), each
+cut with `project release ppg:staging:common[:extras|:tools]`. `sync release` freezes the
+aggregated packages of `ppg:staging:common:tools` (and of `ppg:common:deps`)
+package-scoped for per-major releases; for a unit without a server package every
+image-holding project's path `subproject:` entries (the majors, `ppg:common:deps`)
+are frozen whole; per-major releases freeze only the aggregated packages. See
 `docs/PERCONA_OBS_TOOL.md`.
 
 ### `devel/<major-version>/`
