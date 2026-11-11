@@ -59,7 +59,7 @@ from .project_config import (
     project_in_slice,
     resolve_project_config,
 )
-from .cmd_profile import _load_profile, _load_profile_env
+from .cmd_profile import _load_profile, _load_profile_env, _load_profile_filter
 from .obs_api import (
     _decode_obs_response,
     _detect_obs_container_info,
@@ -2706,6 +2706,47 @@ def cmd_project_release_units(args: argparse.Namespace) -> None:
     sys.stdout.write(json.dumps(list_release_units(), indent=2) + "\n")
 
 
+def _also_instance(
+    also_name: str, source_path: Path, project: str
+) -> "tuple[str, str] | None":
+    """(apiurl, rootprj) of an ``--also-profile`` instance, or None to skip it.
+
+    An instance whose slice holds no member of the release unit never gets
+    the unit's projects (``ppg:staging:16:tde`` has no UBI repository, so the
+    UBI-only instance does not carry it): it has nothing for the CHANGELOG
+    and is skipped.  A member inside the slice that is missing on OBS is an
+    error (wrong profile or missing credentials).
+    """
+    also_profile = _load_profile(also_name)
+    also_apiurl = also_profile.get("apiurl")
+    also_rootprj = also_profile.get("rootprj")
+    if not also_apiurl or not also_rootprj:
+        raise SystemExit(
+            f"error: --also-profile {also_name}: profile must set both "
+            "apiurl and rootprj"
+        )
+    also_env = {**_load_profile_env(also_name), **auto_rootprj_env(also_rootprj)}
+    also_filter = _load_profile_filter(also_name)
+    in_slice = [
+        member
+        for member, path in release_unit_members(source_path, project)
+        if project_in_slice(path, also_env, repo_filter=also_filter)
+    ]
+    if not in_slice:
+        _print_same(
+            f"also: {also_name} skipped ({project} has no repository in its slice)"
+        )
+        return None
+    if not _obs_project_exists(also_apiurl, f"{also_rootprj}:{in_slice[0]}"):
+        raise SystemExit(
+            f"error: --also-profile {also_name}: project "
+            f"{also_rootprj}:{in_slice[0]} not found on {also_apiurl} "
+            "(missing credentials in oscrc, or wrong profile)"
+        )
+    _print_same(f"also: {also_name} ({also_apiurl})")
+    return also_apiurl, also_rootprj
+
+
 def cmd_project_release(args: argparse.Namespace) -> None:
     """Create or update a release: release.yaml, CHANGELOG.md, project.yaml, commit, and open a PR."""
     parts = args.project.split(":")
@@ -2839,22 +2880,9 @@ def cmd_project_release(args: argparse.Namespace) -> None:
 
     instances: list[tuple[str, str]] = [(apiurl, args.rootprj)]
     for also_name in getattr(args, "also_profiles", None) or []:
-        also_profile = _load_profile(also_name)
-        also_apiurl = also_profile.get("apiurl")
-        also_rootprj = also_profile.get("rootprj")
-        if not also_apiurl or not also_rootprj:
-            raise SystemExit(
-                f"error: --also-profile {also_name}: profile must set both "
-                "apiurl and rootprj"
-            )
-        if not _obs_project_exists(also_apiurl, f"{also_rootprj}:{args.project}"):
-            raise SystemExit(
-                f"error: --also-profile {also_name}: project "
-                f"{also_rootprj}:{args.project} not found on {also_apiurl} "
-                "(missing credentials in oscrc, or wrong profile)"
-            )
-        _print_same(f"also: {also_name} ({also_apiurl})")
-        instances.append((also_apiurl, also_rootprj))
+        also_instance = _also_instance(also_name, source_path, args.project)
+        if also_instance:
+            instances.append(also_instance)
 
     obs_data = _merge_release_obs_data(
         [

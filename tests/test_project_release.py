@@ -1691,3 +1691,79 @@ def test_release_parser_accepts_yes():
 
     ns = build_parser().parse_args(["project", "release", "ppg:staging:18", "--yes"])
     assert ns.yes is True
+
+
+# --- --also-profile instance selection --------------------------------------
+
+
+def _also_setup(monkeypatch, in_slice, existing):
+    """Patch the profile, slice and OBS lookups of ``_also_instance``.
+
+    *in_slice*: directory names (unit members) inside the profile's slice;
+    *existing*: OBS project names that exist on the instance.
+    """
+    queried: list[str] = []
+    monkeypatch.setattr(
+        cmd_project,
+        "_load_profile",
+        lambda name: {"apiurl": "http://labs", "rootprj": "L"},
+    )
+    monkeypatch.setattr(cmd_project, "_load_profile_env", lambda name: {})
+    monkeypatch.setattr(cmd_project, "_load_profile_filter", lambda name: "FILTER")
+
+    def fake_in_slice(path, env, repo_filter=None):
+        assert repo_filter == "FILTER"
+        return path.name in in_slice
+
+    def fake_exists(apiurl, project):
+        queried.append(project)
+        return project in existing
+
+    monkeypatch.setattr(cmd_project, "project_in_slice", fake_in_slice)
+    monkeypatch.setattr(cmd_project, "_obs_project_exists", fake_exists)
+    return queried
+
+
+def test_also_instance_skipped_when_unit_out_of_slice(tmp_path, monkeypatch, capsys):
+    _staging_tree(tmp_path)
+    queried = _also_setup(monkeypatch, in_slice=set(), existing=set())
+    src = tmp_path / "root/ppg/staging/17"
+    assert cmd_project._also_instance("labs", src, "ppg:staging:17") is None
+    assert queried == []
+    assert "also: labs skipped" in capsys.readouterr().out
+
+
+def test_also_instance_in_slice_and_present(tmp_path, monkeypatch):
+    _staging_tree(tmp_path)
+    queried = _also_setup(
+        monkeypatch, in_slice={"17", "containers"}, existing={"L:ppg:staging:17"}
+    )
+    src = tmp_path / "root/ppg/staging/17"
+    assert cmd_project._also_instance("labs", src, "ppg:staging:17") == (
+        "http://labs",
+        "L",
+    )
+    assert queried == ["L:ppg:staging:17"]
+
+
+def test_also_instance_in_slice_but_missing_is_an_error(tmp_path, monkeypatch):
+    _staging_tree(tmp_path)
+    _also_setup(monkeypatch, in_slice={"17"}, existing=set())
+    src = tmp_path / "root/ppg/staging/17"
+    with pytest.raises(SystemExit, match="L:ppg:staging:17 not found on http://labs"):
+        cmd_project._also_instance("labs", src, "ppg:staging:17")
+
+
+def test_also_instance_only_bundled_child_in_slice(tmp_path, monkeypatch):
+    _staging_tree(tmp_path)
+    queried = _also_setup(
+        monkeypatch,
+        in_slice={"containers"},
+        existing={"L:ppg:staging:17:containers"},
+    )
+    src = tmp_path / "root/ppg/staging/17"
+    assert cmd_project._also_instance("labs", src, "ppg:staging:17") == (
+        "http://labs",
+        "L",
+    )
+    assert queried == ["L:ppg:staging:17:containers"]
