@@ -141,7 +141,8 @@ jobs:
           read -r -a UNIT_LIST <<<"$UNITS"
           for unit in "${UNIT_LIST[@]}"; do
             echo "== project release ${unit}"
-            venv/bin/python -u -m percona_obs -P main project release "$unit" --yes "${also[@]}"
+            venv/bin/python -u -m percona_obs -P main project release "$unit" --yes "${also[@]}" \
+              || { echo "::error::${unit}: project release failed"; exit 1; }
           done
 
       - name: Squash into one commit and summarize
