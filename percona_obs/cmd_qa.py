@@ -34,6 +34,7 @@ from .common import (
     REPO_ROOT,
     _load_project_config_with_inheritance,
     find_packages,
+    github_annotation,
     get_default_repository_filter,
     load_macros,
     load_project_yaml,
@@ -939,6 +940,18 @@ def _trigger_combos(
     return queue_urls
 
 
+_jenkins_notice_emitted = False
+
+
+def _emit_jenkins_notice(project: str, build_url: str) -> None:
+    """Annotate the first Jenkins build started by this process (once)."""
+    global _jenkins_notice_emitted
+    if _jenkins_notice_emitted:
+        return
+    _jenkins_notice_emitted = True
+    github_annotation("notice", f"{project} {build_url}", title="Jenkins build")
+
+
 def _wait_and_record(
     cfg: JenkinsConfig,
     state: RunState,
@@ -989,6 +1002,7 @@ def _wait_and_record(
             save_state(state)
             build_urls[label] = build_url
             print(_col(_CYAN, f"  > {display} started: {build_url}"))
+            _emit_jenkins_notice(state.project, build_url)
 
     # Phase 2: wait for each build to reach a terminal state.
     if not build_urls:
