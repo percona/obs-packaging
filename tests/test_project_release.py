@@ -1625,3 +1625,46 @@ def test_project_release_refuses_empty_unit(tmp_path, monkeypatch):
         SystemExit, match="nothing to release.*ppg:staging:common:tools"
     ):
         cmd_project.cmd_project_release(_release_args("ppg:staging:common"))
+
+
+def test_shipped_tags_drops_open_last_entry():
+    tags = ["ppg/18.6-1", "ppg/18.6-2"]
+    assert cmd_project._shipped_tags(tags, lambda t: t != "ppg/18.6-2") == [
+        "ppg/18.6-1"
+    ]
+
+
+def test_shipped_tags_keeps_existing_last_entry():
+    tags = ["ppg/18.6-1", "ppg/18.6-2"]
+    assert cmd_project._shipped_tags(tags, lambda t: True) == tags
+
+
+def test_shipped_tags_empty():
+    assert cmd_project._shipped_tags([], lambda t: pytest.fail("no lookup")) == []
+
+
+_PARENT = ["ppg/18.5-1", "ppg/18.6-1", "ppg/18.6-2"]
+
+
+def test_first_nested_id_allowed_above_parent_count():
+    cmd_project._check_first_nested_release_id("extras-18.6-3", "extras-", [], _PARENT)
+
+
+def test_first_nested_id_refused_when_reusing_parent_number():
+    with pytest.raises(SystemExit, match="lowest allowed id is extras-18.6-3"):
+        cmd_project._check_first_nested_release_id(
+            "extras-18.6-2", "extras-", [], _PARENT
+        )
+
+
+def test_first_nested_id_other_shape_left_alone():
+    cmd_project._check_first_nested_release_id("extras-hotfix", "extras-", [], _PARENT)
+    cmd_project._check_first_nested_release_id("18.6-1", "extras-", [], _PARENT)
+
+
+def test_first_nested_id_without_parent_record_or_with_own_tags():
+    cmd_project._check_first_nested_release_id("extras-18.6-1", "extras-", [], None)
+    cmd_project._check_first_nested_release_id(
+        "extras-18.6-1", "extras-", ["ppg/extras-18.5-1"], _PARENT
+    )
+    cmd_project._check_first_nested_release_id("18.6-1", "", [], _PARENT)

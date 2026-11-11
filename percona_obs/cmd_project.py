@@ -2316,8 +2316,9 @@ def _derive_release_id(
 ) -> str:
     """Return the next release id for a source project.
 
-    PG mode (a ``percona-postgresql[<major>]`` package is built): ``MAJOR.MINOR-N``
-    where N counts existing releases of that minor.  Counter mode (no server
+    PG mode (a ``percona-postgresql[<major>]`` package is built):
+    ``<prefix>MAJOR.MINOR-N`` where N is the highest own N of that minor + 1
+    (see below for a unit without tags).  Counter mode (no server
     package - no percona-postgresql* package directory anywhere under the source tree, such as ``ppg:staging:common``):
     ``<release_name>-N`` where N is one plus the number of existing releases.
     The major-suffixed server package name uses *major* (the PG major of
@@ -2436,6 +2437,45 @@ def _resolve_source_commit(override: "str | None", repo_url: str) -> str:
             "rebase the release branch on main (and fetch) first"
         )
     return sha
+
+
+def _shipped_tags(
+    tags: "list[str]", tag_exists: "Callable[[str], bool]"
+) -> "list[str]":
+    """*tags* without a trailing open entry (a tag not created yet).
+
+    Only the last entry of a record can be open: ``project release`` refreshes
+    it in place until its tag exists."""
+    if tags and not tag_exists(tags[-1]):
+        return tags[:-1]
+    return tags
+
+
+def _check_first_nested_release_id(
+    explicit_id: str,
+    prefix: str,
+    existing_releases: "list[str]",
+    parent_releases: "list[str] | None",
+) -> None:
+    """Refuse an explicit first id of a nested unit that reuses a number the
+    unit already shipped bundled with its parent.
+
+    Applies only to a nested unit (*prefix* set) without own tags whose
+    parent has a record, and only to ids shaped ``<prefix><MAJOR.MINOR>-<N>``:
+    N must exceed the parent's shipped tags of that minor."""
+    if not prefix or existing_releases or parent_releases is None:
+        return
+    m = re.fullmatch(re.escape(prefix) + r"(\d+\.\d+)-(\d+)", explicit_id)
+    if not m:
+        return
+    major_minor, n = m.group(1), int(m.group(2))
+    shipped = sum(1 for t in parent_releases if f"/{major_minor}-" in t)
+    if n <= shipped:
+        raise SystemExit(
+            f"error: --release-id {explicit_id} reuses a number already shipped "
+            f"with the parent release; the lowest allowed id is "
+            f"{prefix}{major_minor}-{shipped + 1}"
+        )
 
 
 def _plan_release_entries(
@@ -2722,14 +2762,27 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         )
 
     repo_url = release_env.get("PERCONA_OBS_PACKAGING_REPO", "")
+
+    def tag_exists(t: str) -> bool:
+        return _tag_exists_locally(t) or (
+            bool(repo_url) and _tag_exists_on_remote(repo_url, t)
+        )
+
+    if parent_releases is not None:
+        # The parent may have been cut on this branch first: its open entry
+        # is not shipped yet and must not count (staging images number from main).
+        parent_releases = _shipped_tags(parent_releases, tag_exists)
+    if args.release_id:
+        _check_first_nested_release_id(
+            args.release_id, loc.id_prefix, existing_releases, parent_releases
+        )
     release_id, new_entries, prev_release_id = _plan_release_entries(
         existing_entries,
         args.release_id or None,
         _derive,
         product,
         source_commit,
-        lambda t: _tag_exists_locally(t)
-        or (bool(repo_url) and _tag_exists_on_remote(repo_url, t)),
+        tag_exists,
     )
     tag = f"{product}/{release_id}"
     is_refresh = bool(existing_entries) and existing_entries[-1].tag == tag

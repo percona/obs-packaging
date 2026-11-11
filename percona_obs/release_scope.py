@@ -72,15 +72,25 @@ def bundled_parent(project_id: str) -> "str | None":
     return parent if name in BUNDLED_SUBPROJECTS and parent else None
 
 
-def nested_unit_roots(source_path: Path, source_project_id: str) -> "list[str]":
-    """Direct child projects that are release units of their own."""
+def nested_unit_dirs(source_path: Path) -> "list[Path]":
+    """Directories of the direct child projects that are release units of
+    their own (non-bundled children with a ``project.yaml``)."""
+    if not source_path.is_dir():
+        return []
     return [
-        f"{source_project_id}:{child.name}"
+        child
         for child in sorted(source_path.iterdir())
         if child.is_dir()
         and child.name not in BUNDLED_SUBPROJECTS
         and not is_shared_source_dir(child)
         and (child / "project.yaml").is_file()
+    ]
+
+
+def nested_unit_roots(source_path: Path, source_project_id: str) -> "list[str]":
+    """Direct child projects that are release units of their own."""
+    return [
+        f"{source_project_id}:{child.name}" for child in nested_unit_dirs(source_path)
     ]
 
 
@@ -152,7 +162,7 @@ _SERVER_PKG_RE = re.compile(r"^percona-postgresql\d*$")
 
 
 def tree_has_server_package(source_path: Path) -> bool:
-    """True when the source project or any subproject holds the server package.
+    """True when the release unit holds the server package.
 
     Decides the release-id mode of ``project release`` from the git tree:
     a PG major carries ``percona-postgresql`` (or ``percona-postgresqlNN``)

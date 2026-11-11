@@ -931,10 +931,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         dest="release_id",
         help="Release ID (e.g. 17.9-1). Determines the git tag suffix. "
-        "Defaults to auto-derived from OBS: MAJOR.MINOR-N where N counts "
-        "existing releases of the same minor version; for projects without a "
-        "percona-postgresql package (no percona-postgresql* package directory anywhere under the source tree, e.g. ppg:staging:common) a plain "
-        "counter <name>-N.",
+        "Defaults to auto-derived from OBS: [<prefix>]MAJOR.MINOR-N where N is "
+        "the highest own N of that minor + 1 (prefix for nested units, e.g. "
+        "extras-18.6-3; a nested unit's first release continues after the "
+        "parent's shipped releases of that minor, and an explicit first id "
+        "below that is refused); for units without a percona-postgresql "
+        "package (e.g. ppg:staging:common) a plain counter <name>-N.",
     )
     project_release_parser.add_argument(
         "--no-cve-scan",

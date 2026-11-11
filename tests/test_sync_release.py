@@ -696,6 +696,35 @@ def test_from_prerelease_release_prunes(tmp_path, monkeypatch):
     assert got == [True]
 
 
+def test_from_prerelease_force_does_not_prune(tmp_path, monkeypatch, capsys):
+    rel = _bare_tag_setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(cmd_sync, "apply_mirror_meta", lambda *a, **k: None)
+    got = []
+    monkeypatch.setattr(
+        cmd_sync, "release_tree", lambda *a, **k: got.append(k.get("prune"))
+    )
+    cmd_sync.cmd_sync_release(_args_from(rel, force=True))
+    assert got == [False]
+    out = capsys.readouterr().out
+    assert (
+        "warning: --force: pre-release provenance not checked, "
+        "home:Admin:ppg:releases:17 not pruned"
+    ) in out
+
+
+def test_from_prerelease_force_dry_run_skips_prune(tmp_path, monkeypatch, capsys):
+    rel = _bare_tag_setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda apiurl, prj: True)
+    monkeypatch.setattr(
+        cmd_sync, "prune_release_tree", lambda *a, **k: pytest.fail("no prune")
+    )
+    monkeypatch.setattr(
+        cmd_sync, "release_tree", lambda *a, **k: pytest.fail("no write")
+    )
+    cmd_sync.cmd_sync_release(_args_from(rel, force=True, dry_run=True))
+    assert "not pruned" in capsys.readouterr().out
+
+
 def test_single_hop_release_writes_release_id_before_each_copy(tmp_path, monkeypatch):
     src, rel = _mk_tree(tmp_path, monkeypatch)
     (rel / "tarballs").mkdir()
