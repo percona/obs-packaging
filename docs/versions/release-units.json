@@ -1,0 +1,124 @@
+[
+  {
+    "unit": "ppg:staging:14",
+    "members": [
+      "ppg:staging:14",
+      "ppg:staging:14:containers",
+      "ppg:staging:14:tarballs"
+    ],
+    "release_project": "ppg:releases:14",
+    "release_dir": "root/ppg/releases/14"
+  },
+  {
+    "unit": "ppg:staging:15",
+    "members": [
+      "ppg:staging:15",
+      "ppg:staging:15:containers",
+      "ppg:staging:15:tarballs"
+    ],
+    "release_project": "ppg:releases:15",
+    "release_dir": "root/ppg/releases/15"
+  },
+  {
+    "unit": "ppg:staging:16",
+    "members": [
+      "ppg:staging:16",
+      "ppg:staging:16:containers",
+      "ppg:staging:16:tarballs"
+    ],
+    "release_project": "ppg:releases:16",
+    "release_dir": "root/ppg/releases/16"
+  },
+  {
+    "unit": "ppg:staging:16:extras",
+    "members": [
+      "ppg:staging:16:extras",
+      "ppg:staging:16:extras:containers"
+    ],
+    "release_project": "ppg:releases:16:extras",
+    "release_dir": "root/ppg/releases/16/extras"
+  },
+  {
+    "unit": "ppg:staging:16:tde",
+    "members": [
+      "ppg:staging:16:tde"
+    ],
+    "release_project": "ppg:releases:16:tde",
+    "release_dir": "root/ppg/releases/16/tde"
+  },
+  {
+    "unit": "ppg:staging:17",
+    "members": [
+      "ppg:staging:17",
+      "ppg:staging:17:containers",
+      "ppg:staging:17:tarballs"
+    ],
+    "release_project": "ppg:releases:17",
+    "release_dir": "root/ppg/releases/17"
+  },
+  {
+    "unit": "ppg:staging:17:extras",
+    "members": [
+      "ppg:staging:17:extras",
+      "ppg:staging:17:extras:containers"
+    ],
+    "release_project": "ppg:releases:17:extras",
+    "release_dir": "root/ppg/releases/17/extras"
+  },
+  {
+    "unit": "ppg:staging:18",
+    "members": [
+      "ppg:staging:18",
+      "ppg:staging:18:containers",
+      "ppg:staging:18:tarballs"
+    ],
+    "release_project": "ppg:releases:18",
+    "release_dir": "root/ppg/releases/18"
+  },
+  {
+    "unit": "ppg:staging:18:extras",
+    "members": [
+      "ppg:staging:18:extras",
+      "ppg:staging:18:extras:containers"
+    ],
+    "release_project": "ppg:releases:18:extras",
+    "release_dir": "root/ppg/releases/18/extras"
+  },
+  {
+    "unit": "ppg:staging:19",
+    "members": [
+      "ppg:staging:19",
+      "ppg:staging:19:containers",
+      "ppg:staging:19:tarballs"
+    ],
+    "release_project": "ppg:releases:19",
+    "release_dir": "root/ppg/releases/19"
+  },
+  {
+    "unit": "ppg:staging:common:tools",
+    "members": [
+      "ppg:staging:common:tools",
+      "ppg:staging:common:tools:containers"
+    ],
+    "release_project": "ppg:releases:common:tools",
+    "release_dir": "root/ppg/releases/common/tools"
+  },
+  {
+    "unit": "ppg:staging:common:upgrade",
+    "members": [
+      "ppg:staging:common:upgrade",
+      "ppg:staging:common:upgrade:containers"
+    ],
+    "release_project": "ppg:releases:common:upgrade",
+    "release_dir": "root/ppg/releases/common/upgrade"
+  },
+  {
+    "unit": "ppg:staging:common:upgrade:extras",
+    "members": [
+      "ppg:staging:common:upgrade:extras",
+      "ppg:staging:common:upgrade:extras:containers"
+    ],
+    "release_project": "ppg:releases:common:upgrade:extras",
+    "release_dir": "root/ppg/releases/common/upgrade/extras"
+  }
+]

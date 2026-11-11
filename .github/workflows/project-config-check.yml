@@ -38,6 +38,7 @@ on:
       - 'root/**'
       - 'percona_obs/**'
       - 'requirements.txt'
+      - 'docs/versions/release-units.json'
       - '.github/workflows/project-config-check.yml'
 
 concurrency:
@@ -110,6 +111,14 @@ jobs:
 
       - name: Verify project configuration
         run: venv/bin/python -m percona_obs -P main project verify --offline
+
+      # Git-only and instance-agnostic: run once, not per matrix leg.
+      - name: Check docs/versions/release-units.json is current
+        if: strategy.job-index == 0
+        run: |
+          venv/bin/python -m percona_obs project release-units \
+            | diff -u docs/versions/release-units.json - \
+            || { echo "::error file=docs/versions/release-units.json::out of date; run: percona-obs project release-units > docs/versions/release-units.json"; exit 1; }
 
       - name: Upload rendered project config
         if: always()

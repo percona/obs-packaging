@@ -94,6 +94,41 @@ def nested_unit_roots(source_path: Path, source_project_id: str) -> "list[str]":
     ]
 
 
+def list_release_units(root: Path = REPO_ROOT) -> "list[dict]":
+    """Every releasable staging unit of the tree (git only), sorted by unit.
+
+    A unit is a staging project (at any depth below ``<product>/staging``)
+    that holds packages in itself or in its bundled children.  Namespace
+    roots without packages (``ppg:staging``, ``ppg:staging:common``) are not
+    units, but are descended into.  A unit that was never released is listed.
+    """
+    units: "list[dict]" = []
+
+    def walk(path: Path, project_id: str) -> None:
+        for child in nested_unit_dirs(path):
+            child_id = f"{project_id}:{child.name}"
+            if any(True for _ in unit_packages(child, child_id)):
+                release_project = release_location(child_id).release_project
+                units.append(
+                    {
+                        "unit": child_id,
+                        "members": [
+                            m for m, _ in release_unit_members(child, child_id)
+                        ],
+                        "release_project": release_project,
+                        "release_dir": "root/" + release_project.replace(":", "/"),
+                    }
+                )
+            walk(child, child_id)
+
+    if root.is_dir():
+        for product in sorted(root.iterdir()):
+            staging = product / "staging"
+            if product.is_dir() and staging.is_dir():
+                walk(staging, f"{product.name}:staging")
+    return sorted(units, key=lambda u: u["unit"])
+
+
 @dataclass(frozen=True)
 class ReleaseLocation:
     product: str

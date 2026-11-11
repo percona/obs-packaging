@@ -1057,6 +1057,14 @@ does not need its parent to be released and is not compared with it.
 root) and a project with nothing to release (naming the units below it).
 `--release-name` renames the top directory only (`releases/<name>/extras/`).
 
+`project release-units` prints every releasable unit as JSON (`unit`, `members`,
+`release_project`, `release_dir`, sorted by `unit`). It reads the git tree only and
+needs no profile. A unit that was never released is listed; namespace roots without
+packages (`ppg:staging`, `ppg:staging:common`) and bundled children are not. The
+output is committed as `docs/versions/release-units.json` for external readers
+(the dashboard); the `Project Config Check` workflow fails when it is out of date:
+`percona-obs project release-units > docs/versions/release-units.json`.
+
 `N` is the unit's own counter per PostgreSQL minor: the highest `N` among the
 unit's own tags for that minor, plus one. The first release of a nested unit
 that has no tags of its own continues the numbering of the parent's record
