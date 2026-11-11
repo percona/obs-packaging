@@ -5,8 +5,4 @@
 - PGAUDIT_VERSION: 1.7.1
 - CONTAINER_PG_EXTRA_COMPONENTS: percona-pg-telemetry%!{PG_MAJOR_VERSION}
 - PG_SOURCE_GIT_URL: https://github.com/postgres/postgres.git
-# Upstream has not tagged this minor yet: build the release stamp commit at
-# the tip of the stable branch. Switch back to the tag
-# (REL_%!{PG_MAJOR_VERSION}_%!{PG_MINOR_VERSION}) once it exists; same commit,
-# so the switch uploads identical sources and rebuilds nothing.
-- PG_SOURCE_GIT_REVISION: REL_%!{PG_MAJOR_VERSION}_STABLE
+- PG_SOURCE_GIT_REVISION: REL_%!{PG_MAJOR_VERSION}_%!{PG_MINOR_VERSION}
