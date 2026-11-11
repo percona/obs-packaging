@@ -2,8 +2,8 @@ title: Percona Container Images for PostgreSQL — shared across versions
 description: |
   This project contains container images shared across all Percona Distribution for PostgreSQL
   major versions (currently 14-18), such as the major-version upgrade image. It is not tied to
-  a single staging/<V>, so its OBS project is ppg:staging:common:containers and its released counterpart is
-  ppg:releases:common rather than a per-version releases/<V> subproject.
+  a single staging/<V>, so its OBS project is ppg:staging:common:upgrade:containers and its released counterpart is
+  ppg:releases:common:upgrade:containers rather than a per-version releases/<V> subproject.
   We currently build our images based on UBI-8, UBI-9 and UBI-10 base containers.
 
 # This project's repository set and build configuration are unrelated to its

@@ -71,7 +71,8 @@ mirrors its path below `staging` and contains `release.yaml`, `project.yaml`,
 | `ppg:staging:18` (+ `18:containers`, `18:tarballs`) | `releases/18/` | `ppg:releases:18` | `ppg/18.6-N` |
 | `ppg:staging:18:extras` (+ `18:extras:containers`) | `releases/18/extras/` | `ppg:releases:18:extras` | `ppg/extras-18.6-N` |
 | `ppg:staging:16:tde` | `releases/16/tde/` | `ppg:releases:16:tde` | `ppg/tde-16.15-N` |
-| `ppg:staging:common` (+ `common:containers`) | `releases/common/` | `ppg:releases:common` | `ppg/common-N` |
+| `ppg:staging:common:upgrade` (+ `common:upgrade:containers`) | `releases/common/upgrade/` | `ppg:releases:common:upgrade` | `ppg/common-upgrade-N` |
+| `ppg:staging:common:upgrade:extras` (+ `common:upgrade:extras:containers`) | `releases/common/upgrade/extras/` | `ppg:releases:common:upgrade:extras` | `ppg/common-upgrade-extras-N` |
 | `ppg:staging:common:tools` (+ `common:tools:containers`) | `releases/common/tools/` | `ppg:releases:common:tools` | `ppg/common-tools-N` |
 
 ```
@@ -133,18 +134,19 @@ one plus the number of releases already listed for the project's `PG_VERSION` in
 (`staging/18/extras`, `staging/16/tde`) the counter follows the unit: it is read from
 `releases/<major>/<unit>/release.yaml` once that file lists a tag, from the major's record
 before that. Declare it only to pin a project to its own counter —
-`ppg/staging/common/containers` and `ppg/staging/common/extras/containers` do not do this: they
+`ppg/staging/common/upgrade/containers` and `ppg/staging/common/upgrade/extras/containers` do not do this: they
 declare `PG_VERSION` as the upgrade target ahead of the rest of `staging/18`, so they
 simply track `staging/18`'s computed counter rather than having one of their own.
 
 The cross-version projects under `ppg/staging/common` are released as three units:
-`common` (with `common/containers`), `common:extras` and `common:tools`.
+`common:tools`, `common:upgrade` and `common:upgrade:extras`, each with its `containers`
+child. `ppg:staging:common` itself holds no packages and is not a release unit.
 When no `percona-postgresql` / `percona-postgresqlNN` package exists in the release unit
-(e.g. `ppg/staging/common`), `project release` uses a plain counter
+(e.g. `ppg/staging/common/tools`), `project release` uses a plain counter
 instead (read from git, not from OBS):
-`./percona-obs -P <profile> project release ppg:staging:common` writes
-`root/ppg/releases/common/` and tags `ppg/common-<N>`; `ppg:staging:common:tools` writes
-`root/ppg/releases/common/tools/` and tags `ppg/common-tools-<N>`. `obs-release.yml`
+`./percona-obs -P <profile> project release ppg:staging:common:tools` writes
+`root/ppg/releases/common/tools/` and tags `ppg/common-tools-<N>`; `ppg:staging:common:upgrade`
+writes `root/ppg/releases/common/upgrade/` and tags `ppg/common-upgrade-<N>`. `obs-release.yml`
 finds the release project by looking the tag up in the `release.yaml` files. A PG major whose OBS listing is transiently empty still fails with the old error (use `--release-id` to override), so an OBS blip can never produce a counter tag for a major.
 
 #### Cutting a release
@@ -455,17 +457,22 @@ component moves here the majors list an equal-version build with a lower counter
 than the one they built themselves. Nothing breaks (same bytes, same version); the
 next upstream bump supersedes it.
 
-The image subprojects are `common/containers` (upgrade image, moved from
-`staging/containers`), `common/extras/containers` (moved from
-`staging/extras/containers`) and `common/tools/containers` (the pgbouncer/pgbackrest
-images, moved from `_shared/containers`). `devel/common` is created only when a devel
+The image subprojects are `common/upgrade/containers` (the major-version upgrade
+image), `common/upgrade/extras/containers` (the custom upgrade image) and
+`common/tools/containers` (the pgbouncer/pgbackrest images). `common/upgrade` and
+`common/upgrade/extras` hold no packages; they keep the inherited repositories so that
+the projects exist on OBS, because each is the root of a release unit. `devel/common` is created only when a devel
 package or image needs it.
 
-The release units under `common` are `common` (the top project and `common/containers`,
-`ppg:releases:common`, tag `ppg/common-<N>`), `common:extras` (with
-`common/extras/containers`, `ppg:releases:common:extras`) and `common:tools` (with
-`common/tools/containers`, `ppg:releases:common:tools`, tag `ppg/common-tools-<N>`), each
-cut with `project release ppg:staging:common[:extras|:tools]`. `sync release` freezes the
+The release units under `common` are `common:tools` (with `common/tools/containers`,
+`ppg:releases:common:tools`, tag `ppg/common-tools-<N>`), `common:upgrade` (with
+`common/upgrade/containers`, `ppg:releases:common:upgrade`, tag `ppg/common-upgrade-<N>`)
+and `common:upgrade:extras` (with `common/upgrade/extras/containers`,
+`ppg:releases:common:upgrade:extras`, tag `ppg/common-upgrade-extras-<N>`), each cut with
+`project release ppg:staging:common:<unit>`. `ppg:staging:common` is not a release unit:
+`project release` refuses it and names the three. `releases/common/release.yaml` records
+`ppg/common-1`, the last release cut for `common` as a whole, and stays as the marker
+that keeps `sync push` out of `releases/common/`. `sync release` freezes the
 aggregated packages of `ppg:staging:common:tools` (and of `ppg:common:deps`)
 package-scoped for per-major releases; for a unit without a server package every
 image-holding project's path `subproject:` entries (the majors, `ppg:common:deps`)

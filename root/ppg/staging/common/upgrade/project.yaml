@@ -1,0 +1,14 @@
+title: Percona Distribution for PostgreSQL — Staging cross-version upgrade images
+description: |
+  Parent of the cross-version upgrade image projects
+  (ppg:staging:common:upgrade:containers and
+  ppg:staging:common:upgrade:extras:containers). It holds no buildable
+  packages.
+# The root of the release unit ppg:staging:common:upgrade (this project plus
+# its containers child).  A release copies a unit root like any other project,
+# so it must exist on OBS: a project without repositories is never created.
+# Hence no repositories-inherit / project-config-inherit / debuginfo opt-outs:
+# like ppg:staging:common, this package-less project renders the inherited
+# repositories.  The subprojects.yaml next to this file (a symlink to the
+# tier's) hands the same configuration on to extras/, the root of the next
+# release unit.

@@ -3,8 +3,8 @@ description: |
   This project contains container images shared across the Percona Distribution for
   PostgreSQL major versions that ship the "extras" package set (currently 16-18), such as
   the custom major-version upgrade image that bundles those extra extensions. It is not tied
-  to a single staging/<V>, so its OBS project is ppg:staging:common:extras:containers and its released
-  counterpart is ppg:releases:common rather than a per-version releases/<V>/extras subproject.
+  to a single staging/<V>, so its OBS project is ppg:staging:common:upgrade:extras:containers and its released
+  counterpart is ppg:releases:common:upgrade:extras:containers rather than a per-version releases/<V>/extras subproject.
   We currently build these images based on UBI-9 only, matching the per-version
   extras/containers projects (there is no UBI-8 variant of the extras/custom images).
 

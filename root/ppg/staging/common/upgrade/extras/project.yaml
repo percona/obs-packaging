@@ -1,0 +1,8 @@
+title: Percona Distribution for PostgreSQL — Staging cross-version custom upgrade images
+description: |
+  Parent of the cross-version custom upgrade image project
+  (ppg:staging:common:upgrade:extras:containers). It holds no buildable
+  packages.
+# The root of the release unit ppg:staging:common:upgrade:extras (this project
+# plus its containers child).  Like ../project.yaml it keeps the inherited
+# repositories so that the project exists on OBS and can be released.

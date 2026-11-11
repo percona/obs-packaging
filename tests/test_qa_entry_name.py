@@ -247,7 +247,7 @@ def test_container_projects_name_all_lanes():
     repo_root = Path(__file__).resolve().parent.parent / "root"
     for rel in (
         "ppg/staging/_shared/containers/project.yaml",
-        "ppg/staging/common/containers/project.yaml",
+        "ppg/staging/common/upgrade/containers/project.yaml",
         "ppg/staging/common/tools/containers/project.yaml",
     ):
         text = (repo_root / rel).read_text(encoding="utf-8")
