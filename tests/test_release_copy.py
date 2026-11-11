@@ -179,69 +179,6 @@ def test_warn_orphans(monkeypatch, capsys):
     assert "T:containers:ubi9" in out and "sync delete" in out
 
 
-def test_apply_mirror_meta_forwards_branch_redirection(monkeypatch, tmp_path):
-    seen = []
-    monkeypatch.setattr(
-        rc,
-        "_apply_project_config",
-        lambda *a, **k: seen.append(
-            (
-                k.get("branch_rootprj"),
-                k.get("active_projects"),
-                k.get("branch_fallbacks"),
-            )
-        )
-        or (False, True),
-    )
-    monkeypatch.setattr(rc, "_disable_project_builds", lambda *a, **k: None)
-    rc.apply_mirror_meta(
-        "http://obs",
-        "PR:T",
-        tmp_path,
-        "PR",
-        {},
-        branch_rootprj="prod",
-        active_projects={"PR:T", "PR:T:containers"},
-        branch_fallbacks=False,
-    )
-    assert seen == [("prod", {"PR:T", "PR:T:containers"}, False)]
-    assert seen[0][2] is False
-
-
-def test_release_tree_forwards_branch_redirection_to_subprojects(monkeypatch, tmp_path):
-    seen = []
-    monkeypatch.setattr(
-        rc,
-        "apply_mirror_meta",
-        lambda apiurl, prj, path, rootprj, env, **k: seen.append(
-            (
-                prj,
-                k.get("branch_rootprj"),
-                k.get("active_projects"),
-                k.get("branch_fallbacks"),
-            )
-        ),
-    )
-    monkeypatch.setattr(rc, "copy_project_binaries", lambda *a, **k: None)
-    monkeypatch.setattr(rc, "warn_orphans", lambda *a, **k: None)
-    monkeypatch.setattr(rc, "set_project_publish", lambda *a, **k: None)
-    rc.release_tree(
-        "http://obs",
-        "S",
-        "PR:T",
-        [("containers", tmp_path)],
-        "PR",
-        {},
-        top_mirror_path=tmp_path,
-        verify_timeout=0,
-        branch_rootprj="prod",
-        active_projects={"PR:T", "PR:T:containers"},
-        branch_fallbacks=False,
-    )
-    assert seen == [("PR:T:containers", "prod", {"PR:T", "PR:T:containers"}, False)]
-    assert seen[0][3] is False
-
-
 def test_release_tree_writes_release_id_before_each_copy(monkeypatch, tmp_path):
     calls = []
     _stub_obs(monkeypatch, calls)

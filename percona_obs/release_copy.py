@@ -120,18 +120,10 @@ def apply_mirror_meta(
     env_vars: "dict[str, str]",
     *,
     publish_override: "dict[str, bool] | bool | None" = None,
-    branch_rootprj: "str | None" = None,
-    active_projects: "set[str] | None" = None,
-    branch_fallbacks: bool = True,
 ) -> None:
     """Create or update *target_obs_project* from the mirror project.yaml and
-    make sure builds are disabled.  Two passes when OBS stripped paths.
-
-    ``branch_rootprj``/``active_projects`` enable the same path redirection
-    ``sync push --branch-from`` uses: a ``subproject:`` path whose project is
-    not in ``active_projects`` is rewritten to ``<branch_rootprj>:<subproject>``
-    (hop 1: the pre-release tree is the active set, production is the branch
-    root).
+    make sure builds are disabled.  Two passes when OBS stripped a path to a
+    project it does not know.
     """
     paths_stripped, _ = _apply_project_config(
         apiurl,
@@ -140,9 +132,6 @@ def apply_mirror_meta(
         rootprj,
         env_vars=env_vars,
         publish_override=publish_override,
-        branch_rootprj=branch_rootprj,
-        active_projects=active_projects,
-        branch_fallbacks=branch_fallbacks,
     )
     if paths_stripped:
         _apply_project_config(
@@ -152,9 +141,6 @@ def apply_mirror_meta(
             rootprj,
             env_vars=env_vars,
             publish_override=publish_override,
-            branch_rootprj=branch_rootprj,
-            active_projects=active_projects,
-            branch_fallbacks=branch_fallbacks,
         )
     _disable_project_builds(apiurl, target_obs_project)
 
@@ -231,9 +217,6 @@ def release_tree(
     top_mirror_path: Path,
     publish_override: "dict[str, bool] | bool | None" = None,
     verify_timeout: int = 600,
-    branch_rootprj: "str | None" = None,
-    active_projects: "set[str] | None" = None,
-    branch_fallbacks: bool = True,
     release_id: "str | None" = None,
 ) -> None:
     """Copy the top project and every (subproject, mirror) pair, then verify.
@@ -278,9 +261,6 @@ def release_tree(
             rootprj,
             env_vars,
             publish_override=False,
-            branch_rootprj=branch_rootprj,
-            active_projects=active_projects,
-            branch_fallbacks=branch_fallbacks,
         )
         held.append(
             (target_sub, mirror_publish_flags(mirror_path, env_vars, publish_override))

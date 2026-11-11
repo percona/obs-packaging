@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 import percona_obs.cmd_project as cmd_project
-from percona_obs.cmd_project import _rewrite_subproject_paths, _write_release_tree
+from percona_obs.cmd_project import _strip_internal_paths, _write_release_tree
 
 
 def _staging_tree(tmp_path: Path) -> Path:
@@ -27,6 +27,7 @@ def _staging_tree(tmp_path: Path) -> Path:
                                 "subproject": "common:containers:ubi9",
                                 "repository": "images",
                             },
+                            {"project": "RedHat:UBI-9", "repository": "standard"},
                         ],
                         "archs": ["x86_64"],
                     },
@@ -47,6 +48,7 @@ def _staging_tree(tmp_path: Path) -> Path:
                                 "subproject": "ppg:staging:17:tarballs",
                                 "repository": "RockyLinux_9",
                             },
+                            {"project": "RockyLinux:9", "repository": "devel"},
                         ],
                         "archs": ["x86_64"],
                     },
@@ -55,25 +57,6 @@ def _staging_tree(tmp_path: Path) -> Path:
         )
     )
     return src
-
-
-def test_rewrite_keeps_self_references():
-    repos = [
-        {
-            "name": "ssl3",
-            "paths": [
-                {
-                    "subproject": "ppg:staging:17:tarballs",
-                    "repository": "RockyLinux_9",
-                }
-            ],
-            "archs": ["x86_64"],
-        }
-    ]
-    out = _rewrite_subproject_paths(repos, "ppg:staging:17", "ppg:releases:17")
-    assert out[0]["paths"] == [
-        {"subproject": "ppg:releases:17:tarballs", "repository": "RockyLinux_9"}
-    ]
 
 
 def test_write_release_tree_creates_all_mirrors_and_deletes_stale(
@@ -102,10 +85,9 @@ def test_write_release_tree_creates_all_mirrors_and_deletes_stale(
     tarballs = yaml.safe_load((rel / "tarballs" / "project.yaml").read_text())
     assert tarballs["build"] is False
     assert tarballs["publish"] == {"RockyLinux_9": False}  # publish carried over
-    assert (
-        tarballs["repositories"][0]["paths"][0]["subproject"]
-        == "ppg:releases:17:tarballs"
-    )
+    assert tarballs["repositories"][0]["paths"] == [
+        {"project": "RockyLinux:9", "repository": "devel"}
+    ]
     assert len(written) == 3
 
 
@@ -120,9 +102,10 @@ def test_write_release_tree_deletes_nested_stale_dirs_without_crashing(
     # child dirname ("zzz_nested") is chosen to sort *after* "project.yaml"
     # so "oldsub/project.yaml" < "oldsub/zzz_nested/project.yaml" — the parent
     # is processed (and rmtree'd) before the child is reached.
-    (rel / "oldsub" / "zzz_nested").mkdir(parents=True)
-    (rel / "oldsub" / "project.yaml").write_text("build: false\n")
-    (rel / "oldsub" / "zzz_nested" / "project.yaml").write_text("build: false\n")
+    old = rel / "containers" / "oldsub"
+    (old / "zzz_nested").mkdir(parents=True)
+    (old / "project.yaml").write_text("build: false\n")
+    (old / "zzz_nested" / "project.yaml").write_text("build: false\n")
 
     written = _write_release_tree(
         rel,
@@ -134,11 +117,83 @@ def test_write_release_tree_deletes_nested_stale_dirs_without_crashing(
         "17",
     )
 
-    assert not (rel / "oldsub").exists()  # whole stale branch removed, no crash
+    assert not (rel / "containers" / "oldsub").exists()  # whole stale branch removed
     # expected sibling mirrors survive untouched
     assert (rel / "containers" / "project.yaml").is_file()
     assert (rel / "tarballs" / "project.yaml").is_file()
     assert len(written) == 3
+
+
+def test_strip_internal_paths_keeps_external_in_order():
+    repos = [
+        {
+            "name": "UBI_9",
+            "paths": [
+                {"subproject": "ppg:common:deps", "repository": "UBI_9"},
+                {"project": "Fedora:EPEL:9", "repository": "standard"},
+                {"subproject": "ppg:staging:18", "repository": "UBI_9"},
+                {"project": "RedHat:UBI-9", "repository": "standard"},
+            ],
+            "archs": ["x86_64"],
+        }
+    ]
+    out = _strip_internal_paths(repos, "ppg:staging:18:extras")
+    assert out[0]["paths"] == [
+        {"project": "Fedora:EPEL:9", "repository": "standard"},
+        {"project": "RedHat:UBI-9", "repository": "standard"},
+    ]
+    assert out[0]["archs"] == ["x86_64"]
+    assert "subproject" in repos[0]["paths"][0]  # input not mutated
+
+
+def test_strip_internal_paths_rejects_pathless_repo():
+    repos = [
+        {"name": "ssl3", "paths": [{"subproject": "ppg:staging:18", "repository": "x"}]}
+    ]
+    with pytest.raises(SystemExit, match="ppg:staging:18:tarballs.*ssl3"):
+        _strip_internal_paths(repos, "ppg:staging:18:tarballs")
+
+
+def test_write_release_tree_leaves_nested_unit_mirror_alone(tmp_path, monkeypatch):
+    src = _staging_tree(tmp_path)
+    (src / "extras" / "containers").mkdir(parents=True)
+    (src / "extras" / "project.yaml").write_text("repositories: []\n")
+    (src / "extras" / "containers" / "project.yaml").write_text("repositories: []\n")
+    monkeypatch.setattr(cmd_project, "_REPO_DIR", tmp_path)
+    rel = tmp_path / "root/ppg/releases/17"
+    (rel / "extras" / "containers").mkdir(parents=True)
+    (rel / "extras" / "project.yaml").write_text("keep: me\n")
+    (rel / "extras" / "containers" / "project.yaml").write_text("keep: me\n")
+    (rel / "containers" / "ubi9").mkdir(parents=True)
+    (rel / "containers" / "ubi9" / "project.yaml").write_text("stale: true\n")
+    _write_release_tree(
+        rel, {"repositories": []}, src, "ppg:staging:17", "ppg:releases:17", "ppg", "17"
+    )
+    assert (rel / "extras" / "project.yaml").read_text() == "keep: me\n"
+    assert (rel / "extras" / "containers" / "project.yaml").read_text() == "keep: me\n"
+    assert not (rel / "containers" / "ubi9").exists()
+    assert (rel / "containers" / "project.yaml").is_file()
+    for name in ("containers", "tarballs"):
+        data = yaml.safe_load((rel / name / "project.yaml").read_text())
+        for repo in data["repositories"]:
+            assert all("subproject" not in p for p in repo["paths"])
+
+
+def test_write_release_tree_removes_bundled_mirror_whose_source_is_gone(
+    tmp_path, monkeypatch
+):
+    src = _staging_tree(tmp_path)
+    import shutil
+
+    shutil.rmtree(src / "tarballs")
+    monkeypatch.setattr(cmd_project, "_REPO_DIR", tmp_path)
+    rel = tmp_path / "root/ppg/releases/17"
+    (rel / "tarballs").mkdir(parents=True)
+    (rel / "tarballs" / "project.yaml").write_text("stale: true\n")
+    _write_release_tree(
+        rel, {"repositories": []}, src, "ppg:staging:17", "ppg:releases:17", "ppg", "17"
+    )
+    assert not (rel / "tarballs").exists()
 
 
 def test_tier_validation_rejects_devel(monkeypatch):
@@ -544,7 +599,7 @@ def test_write_release_tree_materializes_delta_source(tmp_path, monkeypatch):
     import percona_obs.common as common
 
     root = tmp_path / "root"
-    (root / "ppg/staging/17/extras").mkdir(parents=True)
+    (root / "ppg/staging/17/containers").mkdir(parents=True)
     (root / "macros.yaml").write_text("- X: 1\n")
     (root / "project.yaml").write_text(
         yaml.dump(
@@ -575,7 +630,7 @@ def test_write_release_tree_materializes_delta_source(tmp_path, monkeypatch):
         )
     )
     (root / "ppg/staging/17/project.yaml").write_text("title: S17\n")
-    (root / "ppg/staging/17/extras/project.yaml").write_text(
+    (root / "ppg/staging/17/containers/project.yaml").write_text(
         yaml.dump(
             {
                 "repositories": [
@@ -601,18 +656,14 @@ def test_write_release_tree_materializes_delta_source(tmp_path, monkeypatch):
         "ppg",
         "17",
     )
-    extras = yaml.safe_load((rel / "extras" / "project.yaml").read_text())
+    containers = yaml.safe_load((rel / "containers" / "project.yaml").read_text())
     paths = [
         (p.get("subproject") or p.get("project"), p["repository"])
-        for p in extras["repositories"][0]["paths"]
+        for p in containers["repositories"][0]["paths"]
     ]
-    assert paths == [
-        ("ppg:releases:17", "UBI_9"),
-        ("ppg:common:deps", "UBI_9"),
-        ("ext:UBI-9", "standard"),
-    ]
-    assert extras["repositories"][0]["archs"] == ["x86_64"]
-    assert "Prefer: shared" in extras["project-config"]
+    assert paths == [("ext:UBI-9", "standard")]
+    assert containers["repositories"][0]["archs"] == ["x86_64"]
+    assert "Prefer: shared" in containers["project-config"]
 
 
 def test_write_release_tree_ignores_the_process_default_filter(tmp_path, monkeypatch):
@@ -621,20 +672,28 @@ def test_write_release_tree_ignores_the_process_default_filter(tmp_path, monkeyp
     from percona_obs.project_config import RepositoryFilter
 
     root = tmp_path / "root"
-    (root / "ppg/staging/17/extras").mkdir(parents=True)
+    (root / "ppg/staging/17/containers").mkdir(parents=True)
     (root / "macros.yaml").write_text("- X: 1\n")
     (root / "project.yaml").write_text(
         yaml.dump(
             {
                 "repositories": [
-                    {"name": "UBI_9", "paths": [], "archs": ["x86_64"]},
-                    {"name": "RockyLinux_9", "paths": [], "archs": ["x86_64"]},
+                    {
+                        "name": "UBI_9",
+                        "paths": [{"project": "ext:UBI-9", "repository": "standard"}],
+                        "archs": ["x86_64"],
+                    },
+                    {
+                        "name": "RockyLinux_9",
+                        "paths": [{"project": "ext:Rocky-9", "repository": "standard"}],
+                        "archs": ["x86_64"],
+                    },
                 ]
             }
         )
     )
     (root / "ppg/staging/17/project.yaml").write_text("title: S17\n")
-    (root / "ppg/staging/17/extras/project.yaml").write_text("title: E\n")
+    (root / "ppg/staging/17/containers/project.yaml").write_text("title: E\n")
     monkeypatch.setattr(common, "REPO_ROOT", root)
     monkeypatch.setattr(cmd_project, "_REPO_DIR", tmp_path)
     common.set_default_repository_filter(RepositoryFilter(exclude_repos=("UBI_*",)))
@@ -651,8 +710,8 @@ def test_write_release_tree_ignores_the_process_default_filter(tmp_path, monkeyp
         )
     finally:
         common.set_default_repository_filter(None)
-    extras = yaml.safe_load((rel / "extras" / "project.yaml").read_text())
-    assert [r["name"] for r in extras["repositories"]] == ["UBI_9", "RockyLinux_9"]
+    containers = yaml.safe_load((rel / "containers" / "project.yaml").read_text())
+    assert [r["name"] for r in containers["repositories"]] == ["UBI_9", "RockyLinux_9"]
 
 
 def test_derive_release_id_pg_mode():
