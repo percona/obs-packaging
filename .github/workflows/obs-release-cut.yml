@@ -44,6 +44,8 @@ jobs:
         run: |
           [[ "$BRANCH" =~ ^release/[A-Za-z0-9._-]+$ ]] \
             || { echo "::error::branch '$BRANCH' must match release/[A-Za-z0-9._-]+"; exit 1; }
+          git check-ref-format "refs/heads/$BRANCH" \
+            || { echo "::error::branch '$BRANCH' is not a valid git ref name"; exit 1; }
 
       - uses: actions/checkout@v4
         with:
@@ -55,7 +57,7 @@ jobs:
         shell: bash
         run: |
           read -r -a UNIT_LIST <<<"$UNITS"
-          python3 .github/scripts/release_cut.py check "${UNIT_LIST[@]}"
+          python3 .github/scripts/release_cut.py check -- "${UNIT_LIST[@]}"
 
       - uses: ./.github/actions/obs-setup
         with:
@@ -75,15 +77,19 @@ jobs:
           SECRETS: ${{ toJSON(secrets) }}
         run: |
           python3 - <<'PYEOF'
-          import configparser, json, os, pathlib
+          import configparser, json, os, pathlib, sys
           secrets = json.loads(os.environ["SECRETS"])
           p = pathlib.Path.home() / ".config" / "osc" / "oscrc"
           c = configparser.RawConfigParser()
           c.read(p)
           for inst in json.loads(os.environ["OBS_INSTANCES"])[1:]:
+              key = f"OBS_PASSWORD_{inst['name']}".upper()
+              if key not in secrets:
+                  print(f"::error::missing secret {key} for instance {inst['name']}")
+                  sys.exit(1)
               c[inst["apiurl"]] = {
                   "user": inst.get("user") or os.environ["OBS_USER"],
-                  "pass": secrets[f"OBS_PASSWORD_{inst['name']}".upper()],
+                  "pass": secrets[key],
               }
           with open(p, "w") as f:
               c.write(f)
@@ -152,7 +158,7 @@ jobs:
           BASE=$(cat "$RUNNER_TEMP/base")
           read -r -a UNIT_LIST <<<"$UNITS"
           SUBJECT=$(venv/bin/python .github/scripts/release_cut.py summarize \
-            --out "$RUNNER_TEMP/changelogs.json" "${UNIT_LIST[@]}")
+            --out /tmp/changelogs.json -- "${UNIT_LIST[@]}")
           git reset --soft "$BASE"
           git commit -s -m "$SUBJECT"
           [ "$(git rev-list --count "${BASE}..HEAD")" = 1 ] \
@@ -172,5 +178,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: generated-changelogs
-          path: ${{ runner.temp }}/changelogs.json
+          path: /tmp/changelogs.json
+          if-no-files-found: error
           retention-days: 30

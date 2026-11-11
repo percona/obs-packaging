@@ -1106,7 +1106,7 @@ nested unit, `git rm` its release directory: the parent's next release
 deletes the OBS project.
 
 A release is two hops. Hop 1 copies the unit from staging into a per-PR **pre-release** project tree
-(`<pr_rootprj>:pr-<N>:<release project>`, e.g. `…:pr-<N>:ppg:releases:18`) when the release PR is opened, so QA runs
+(`<pr_rootprj>:pr-<N>:<release project>`, e.g. `…:pr-<N>:ppg:releases:18`) when the `obs-sync` label is added to the release PR, so QA runs
 against exactly the binaries that will ship. Hop 2, after merge, copies the pre-release into
 the release project. Hop 2 never touches staging; hop 1 freezes it only for the copy.
 
@@ -1128,7 +1128,7 @@ The process is PR-based:
 2. **PR populates the pre-release and runs QA** — `obs-release-pr.yml` (release-only PRs
    only) populates only when the PR carries the `obs-sync` label (a hand-opened release PR
    needs it too; adding the label starts the sync, and a retry is remove-then-add, or
-   `workflow_dispatch`, which always populates). Without the label `resolve` still
+   `workflow_dispatch`, which always populates). A PR opened with `obs-sync` already on it gets an `opened` and a `labeled` event, so it may populate twice; add the label after opening. Without the label `resolve` still
    classifies the PR and posts a notice, and nothing is populated. The populate runs `sync prerelease <project> --branch-from main` on every OBS instance, then
    `sync release --from <pre-release> --dry-run` to list what hop 2 would delete, and posts a
    per-instance comment listing the pre-release projects and those removals. With the `qa-release` label on
@@ -1432,7 +1432,7 @@ scan produces nothing (e.g. `--no-cve-scan`, or no packages changed).
 ### Step 2 — CI ships the release
 
 Release-only PRs are handled by `obs-release-pr.yml` (triggered on open/synchronize/reopen
-and on adding the `qa-release` label, of a PR that changes a `root/*/releases/**/release.yaml`, at any depth (PRs touching only mirrors or
+and on adding the `obs-sync` or `qa-release` label, of a PR that changes a `root/*/releases/**/release.yaml`, at any depth (PRs touching only mirrors or
 READMEs under `releases/` are skipped with a notice), or by `workflow_dispatch` with a
 `pr_number`); `obs-pr-check.yml` gates them out and needs no label for this. Its jobs:
 
@@ -1750,7 +1750,12 @@ The release dashboard reads these names; they are pinned by
 | QA lane jobs | name starts with `Release / OBS QA / ` |
 | Hop-2 jobs | `Release to OBS (<instance>)`, `Publish GitHub releases and delete the pre-release`, `Delete the pre-release (<instance>)` |
 | Populate report artifact | `prerelease-report-<instance>` |
+| Cut run name | `Cut <branch>` (`run-name` of `obs-release-cut.yml`) |
+| Cut artifact | `generated-changelogs` |
+| Jenkins annotation title | `Jenkins build` |
 | Unit list file | `docs/versions/release-units.json` |
+
+Each QA lane job emits one `::notice title=Jenkins build::<release project> <build_url>` annotation for the first Jenkins build it starts (only under GitHub Actions); the dashboard reads the build URL from it.
 
 The `prerelease-report-<instance>` artifact is one JSON file, a list with one
 object per release project of the PR:

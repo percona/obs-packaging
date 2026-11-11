@@ -29,6 +29,9 @@ Never let the rehearsal PR leave a state that ships: finish with the Cleanup pha
 
 ## Populate
 
+Populate starts when the `obs-sync` label is added to the PR (retry: remove and re-add); add it after opening the PR, since a PR opened with the label already on gets `opened` and `labeled` events and may populate twice.
+
+- [ ] Add the `obs-sync` label to the PR. Expect: the "OBS Release PR" run starts.
 - [ ] Open the PR's Checks tab, workflow "OBS Release PR". Expect: job `Resolve release PR` green (release-only, no conflicting PR, non-empty), then one job `Populate pre-release (<instance>)` per instance, serialized per instance; `obs-pr-check` does not run the sync for this PR.
 - [ ] Read the PR comment headed "## OBS Release PR — ✅ Pre-release populated (<instance>)" and download artifact `prerelease-report-<instance>` (`gh run download <run-id> -n prerelease-report-<instance>`). Expect: one comment per instance listing the pre-release projects (`ppg:releases:18` among them); the report lists no failed package.
 - [ ] Open `<web>/project/show/<pr_rootprj>:pr-N:ppg:releases:18` and check the project description. Expect: project exists, binaries present for the staging package set, description ends with `source_commit: <sha>` equal to the entry in `release.yaml`.

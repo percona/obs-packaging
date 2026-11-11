@@ -26,6 +26,13 @@ def test_check_units():
         "ppg:staging:18:containers: not a release unit root"
     ]
     assert m.check_units(["a", "b"], {"a": {}, "b": {}}) == []
+    assert m.check_units(["--help"], {"a": {}}) == ["--help: not a release unit root"]
+
+
+def test_check_cli_rejects_option_like_token(capsys):
+    m = _load()
+    assert m.main(["check", "--", "--help"]) == 1
+    assert "::error::--help: not a release unit root" in capsys.readouterr().out
 
 
 _LOG = "# h\n\n## [18.6-10] - d\n\nA\n\n## [18.6-1] - d\n\nB\n"

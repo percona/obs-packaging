@@ -225,6 +225,7 @@ jobs:
                  --branch-from main --synced-commit "$SYNCED"; then
               outcome=success
             else
+              echo "::error::${proj}: sync prerelease failed (${OBS_INSTANCE}); see the log"
               outcome=failure; rc=1
             fi
             SRC=$(venv/bin/python -c "import sys, yaml; from percona_obs.release_record import current_release; e=current_release(yaml.safe_load(open('root/'+sys.argv[1].replace(':','/')+'/release.yaml'))); print((e and e.source_commit) or '')" "$proj")

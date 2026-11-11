@@ -129,3 +129,19 @@ def test_release_cut_workflow():
 def test_release_cut_annotates_a_failed_unit():
     text = _text("obs-release-cut.yml")
     assert "::error::${unit}: project release failed" in text
+
+
+def test_release_cut_hardening():
+    text = _text("obs-release-cut.yml")
+    assert 'release_cut.py check -- "${UNIT_LIST[@]}"' in text
+    assert "--out /tmp/changelogs.json -- " in text
+    assert "if-no-files-found: error" in text
+    assert "git check-ref-format" in text
+    assert "::error::missing secret" in text
+
+
+def test_populate_annotates_a_failed_prerelease_sync():
+    assert (
+        "::error::${proj}: sync prerelease failed (${OBS_INSTANCE}); see the log"
+        in _text("obs-release-pr.yml")
+    )
