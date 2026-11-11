@@ -59,6 +59,7 @@ from .common import (
 from .release_copy import (
     apply_mirror_meta,
     collect_release_subprojects,
+    mirror_subproject_pairs,
     release_tree,
 )
 from .github_api import last_synced_head_sha, repo_slug_from_url
@@ -2535,22 +2536,6 @@ def _run_frozen(
             restore_builds(apiurl, snapshots)
 
 
-def _mirror_subproject_pairs(
-    release_path: Path, release_project_id: str
-) -> "list[tuple[str, Path]]":
-    """(subproject_name, mirror_path) for every in-slice subproject of the
-    release mirror tree (hop 2 copies what the mirror declares, not staging)."""
-    pairs: list[tuple[str, Path]] = []
-    for sub_id, sub_path in find_projects(release_path, release_project_id):
-        if sub_id == release_project_id:
-            continue
-        if not (sub_path / "project.yaml").is_file():
-            continue
-        if project_in_slice(sub_path):
-            pairs.append((sub_id[len(release_project_id) + 1 :], sub_path))
-    return pairs
-
-
 def cmd_sync_release(args) -> None:
     """Release packages from an OBS source project to a release target.
 
@@ -2614,7 +2599,7 @@ def cmd_sync_release(args) -> None:
                     f"{entry.source_commit or '<none>'}; repopulate the pre-release "
                     "or cut a new release"
                 )
-        mirror_pairs = _mirror_subproject_pairs(release_path, args.project)
+        mirror_pairs = mirror_subproject_pairs(release_path)
         if getattr(args, "dry_run", False):
             for name, _ in mirror_pairs:
                 _print_same(f"+ {release_obs_project}:{name}")

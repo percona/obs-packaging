@@ -547,10 +547,8 @@ def test_mirror_subproject_pairs(tmp_path, monkeypatch):
     (rel / "tarballs").mkdir()
     (rel / "tarballs" / "project.yaml").write_text("build: false\n")
     (rel / "empty").mkdir()  # no project.yaml: ignored
-    monkeypatch.setattr(
-        cmd_sync, "project_in_slice", lambda p, *a, **k: p.name != "tarballs"
-    )
-    pairs = cmd_sync._mirror_subproject_pairs(rel, "ppg:releases:17")
+    monkeypatch.setattr(rc, "project_in_slice", lambda p, *a, **k: p.name != "tarballs")
+    pairs = rc.mirror_subproject_pairs(rel)
     assert [(n, p.name) for n, p in pairs] == [("containers", "containers")]
 
 
@@ -625,3 +623,26 @@ def test_single_hop_release_writes_release_id_before_each_copy(tmp_path, monkeyp
         "release_id",
         rid,
     ) in events
+
+
+def test_collect_ignores_non_bundled_subprojects(tmp_path, monkeypatch):
+    src, rel = _mk_tree(tmp_path, monkeypatch)
+    (src / "extras").mkdir()
+    (src / "extras" / "project.yaml").write_text(
+        "repositories-inherit: false\n" + _REPO_YAML.format(name="UBI_9")
+    )
+    monkeypatch.setattr(rc, "resolve_project_path", lambda pid: src)
+    pairs, missing = collect_release_subprojects("ppg:staging:17", rel)
+    assert [name for name, _ in pairs] == ["containers"]
+    assert missing == ["tarballs"]
+
+
+def test_mirror_pairs_are_bundled_children_only(tmp_path, monkeypatch):
+    _, rel = _mk_tree(tmp_path, monkeypatch)
+    (rel / "extras" / "containers").mkdir(parents=True)
+    for d in (rel / "extras", rel / "extras" / "containers"):
+        (d / "project.yaml").write_text(
+            "build: false\n" + _REPO_YAML.format(name="ubi9")
+        )
+    pairs = rc.mirror_subproject_pairs(rel)
+    assert [name for name, _ in pairs] == ["containers"]

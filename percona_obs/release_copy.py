@@ -18,10 +18,10 @@ from pathlib import Path
 
 from .common import (
     _REPO_DIR,
+    BUNDLED_SUBPROJECTS,
     _load_project_config_with_inheritance,
     _print_ok,
     _print_pending,
-    find_projects,
     resolve_project_path,
 )
 from .obs_api import (
@@ -37,6 +37,7 @@ from .obs_api import (
 )
 from .project_config import project_in_slice
 from .release_freeze import verify_release_landed
+from .release_scope import release_unit_members
 
 _OSC_BIN = os.path.join(os.path.dirname(sys.executable), "osc")
 
@@ -45,11 +46,11 @@ def collect_release_subprojects(
     source_project_id: str,
     release_path: Path,
 ) -> "tuple[list[tuple[str, Path]], list[str]]":
-    """Map source subprojects to their release-mirror directories.
+    """Map bundled children of the release unit to their release-mirror directories.
 
     Returns (pairs, missing):
-      pairs   — [(subproject_name, release_sub_path)] for every source
-                subproject whose mirror project.yaml exists.
+      pairs   — [(subproject_name, release_sub_path)] for every bundled
+                child whose mirror project.yaml exists.
       missing — subproject names with no mirror project.yaml.  Full-snapshot
                 releases require a mirror for every subproject; callers must
                 treat a non-empty list as a hard error.
@@ -60,11 +61,9 @@ def collect_release_subprojects(
     source_path = resolve_project_path(source_project_id)
     pairs: list[tuple[str, Path]] = []
     missing: list[str] = []
-    for sub_obs_id, sub_path in find_projects(source_path, source_project_id):
-        if sub_obs_id == source_project_id:
-            continue
-        if not (sub_path / "project.yaml").is_file():
-            continue  # intermediate directory, not a real OBS project
+    for sub_obs_id, sub_path in release_unit_members(source_path, source_project_id)[
+        1:
+    ]:
         subproject_name = sub_obs_id[len(source_project_id) + 1 :]
         release_sub_path = release_path / Path(*subproject_name.split(":"))
         if (release_sub_path / "project.yaml").is_file():
@@ -75,6 +74,17 @@ def collect_release_subprojects(
             missing.append(subproject_name)
         # else: source out of slice too; a missing mirror is irrelevant here
     return pairs, missing
+
+
+def mirror_subproject_pairs(release_path: Path) -> "list[tuple[str, Path]]":
+    """(name, mirror_path) for the in-slice bundled children of a release
+    mirror directory (hop 2 copies what the mirror declares, not staging)."""
+    pairs: list[tuple[str, Path]] = []
+    for name in BUNDLED_SUBPROJECTS:
+        sub_path = release_path / name
+        if (sub_path / "project.yaml").is_file() and project_in_slice(sub_path):
+            pairs.append((name, sub_path))
+    return pairs
 
 
 def filter_release_repo_names(
