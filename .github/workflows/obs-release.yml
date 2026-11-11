@@ -170,12 +170,16 @@ jobs:
           set -euo pipefail
           read -r -a TAG_LIST <<<"$TAGS_IN"
           for TAG in "${TAG_LIST[@]}"; do
-            PRODUCT="${TAG%%/*}"; VERSION="${TAG#*/}"
-            case "$VERSION" in
-              [0-9]*) MAJOR="${VERSION%%.*}" ;;
-              *)      MAJOR="${VERSION%-*}" ;;
-            esac
-            CHANGELOG="root/${PRODUCT}/releases/${MAJOR}/CHANGELOG.md"
+            VERSION="${TAG#*/}"
+            # The tag is a label: the release unit directory (and so its
+            # CHANGELOG.md) comes from the release.yaml that lists it last.
+            # finalize has no obs-setup, so use the image's venv directly.
+            CHANGELOG=""
+            if PROJECT=$(/opt/obs-tools/venv/bin/python .github/scripts/release_pr.py project-for-tag "$TAG"); then
+              CHANGELOG="root/${PROJECT//://}/CHANGELOG.md"
+            else
+              echo "::warning::no release.yaml lists ${TAG}; GitHub release notes will be empty"
+            fi
             BODY=$(python3 -c \
               "import re,sys; content=open(sys.argv[2]).read(); m=re.search(r'(## \['+re.escape(sys.argv[1])+r'\].*?)(?=\n## \[|\Z)',content,re.DOTALL); print(m.group(1).strip() if m else '')" \
               "$VERSION" "$CHANGELOG" 2>/dev/null || true)
