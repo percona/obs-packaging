@@ -327,7 +327,10 @@ def resolve_macros(sources: list[tuple[Path, str]]) -> dict[str, str]:
 # value at the historical commit instead of seeing the name appear out of
 # nowhere.
 def compute_ppg_release(
-    product: str, pg_version: str, release_yaml_text: "str | None"
+    product: str,
+    pg_version: str,
+    release_yaml_text: "str | None",
+    unit_prefix: str = "",
 ) -> str:
     """Return the counter of the NEXT release of *pg_version*, as a string.
 
@@ -338,6 +341,11 @@ def compute_ppg_release(
     version has never been released", which is 1.  That is what makes the
     counter reset by itself when PG_MINOR_VERSION is bumped: the new
     PG_VERSION matches no existing tag.
+
+    With *unit_prefix* (a nested release unit, e.g. ``extras-``) the tags are
+    ``<product>/<unit_prefix><pg_version>-<n>`` and the counter is one more
+    than the highest ``n``: a nested unit's first tag continues its parent's
+    numbering, so its tags do not start at 1.
     """
     if not release_yaml_text:
         return "1"
@@ -353,8 +361,31 @@ def compute_ppg_release(
         tags = release_tags(data)
     except SystemExit:
         return "1"
-    prefix = f"{product}/{pg_version}-"
-    return str(sum(1 for t in tags if t.startswith(prefix)) + 1)
+    prefix = f"{product}/{unit_prefix}{pg_version}-"
+    if not unit_prefix:
+        return str(sum(1 for t in tags if t.startswith(prefix)) + 1)
+    numbers = [
+        int(t[len(prefix) :])
+        for t in tags
+        if t.startswith(prefix) and t[len(prefix) :].isdigit()
+    ]
+    return str(max(numbers, default=0) + 1)
+
+
+def _has_release_tags(release_yaml_text: str) -> bool:
+    """True when *release_yaml_text* parses and records at least one tag."""
+    try:
+        data = yaml.safe_load(release_yaml_text) or {}
+    except yaml.YAMLError:
+        return False
+    if not isinstance(data, dict):
+        return False
+    from .release_record import release_tags  # local: release_record is leaf
+
+    try:
+        return bool(release_tags(data))
+    except SystemExit:
+        return False
 
 
 def _read_worktree_file(path: Path) -> "str | None":
@@ -375,6 +406,37 @@ def _is_source_package(package_path: Path) -> bool:
     )
 
 
+def _nested_unit_record(
+    root: Path,
+    parts: "tuple[str, ...]",
+    major: str,
+    read_file: "Callable[[Path], str | None]",
+) -> "tuple[Path, str] | None":
+    """(release.yaml path, tag prefix) of the nested release unit that holds
+    the project or package at *parts* (``<product>/<tier>/<major>/…``), or
+    None when it belongs to the major's own unit or is not under a major.
+
+    The unit is the leading run of path components below the major that are
+    projects and not bundled children: ``18/extras/containers/img`` →
+    ``extras``.
+    """
+    if len(parts) < 4 or parts[2] != major:
+        return None
+    unit: list[str] = []
+    for seg in parts[3:]:
+        if seg in BUNDLED_SUBPROJECTS:
+            break
+        if read_file(root.joinpath(*parts[:3], *unit, seg, "project.yaml")) is None:
+            break
+        unit.append(seg)
+    if not unit:
+        return None
+    return (
+        root.joinpath(parts[0], "releases", major, *unit, "release.yaml"),
+        "".join(f"{u}-" for u in unit),
+    )
+
+
 def inject_computed_macros(
     macros: dict[str, str],
     project_path: Path,
@@ -391,7 +453,9 @@ def inject_computed_macros(
     commit — see ``git_utils._macros_changed_since``.  *repo_root* defaults to
     the module global and exists so tests can point at a fixture tree.
 
-    ``PPG_RELEASE`` needs ``PG_VERSION`` in the chain.  Packages whose
+    ``PPG_RELEASE`` needs ``PG_VERSION`` in the chain.  Inside a nested
+    release unit of a PG major the counter comes from that unit's record
+    (``releases/<major>/<unit>/release.yaml``) once it exists.  Packages whose
     ``obs/_service`` upstream version renders to a concrete string get the
     seeded floor + 1; source packages (a spec or dsc present) with no
     derivable version get 1; projects, aggregates, images, tarballs and
@@ -415,10 +479,21 @@ def inject_computed_macros(
         major = pg_version.split(".", 1)[0].strip()
         if major:
             release_file = root / product / "releases" / major / "release.yaml"
+            text = read_file(release_file)
+            unit_prefix = ""
+            nested = _nested_unit_record(root, parts, major, read_file)
+            if nested is not None:
+                # Until the unit has a record of its own it is released with
+                # its parent and shares the parent's counter.  A record with
+                # no tag yet counts as none: project release then continues
+                # the parent's count too (cmd_project._derive_release_id).
+                nested_text = read_file(nested[0])
+                if nested_text is not None and _has_release_tags(nested_text):
+                    text, unit_prefix = nested_text, nested[1]
             macros = {
                 **macros,
                 "PPG_RELEASE": compute_ppg_release(
-                    product, pg_version, read_file(release_file)
+                    product, pg_version, text, unit_prefix
                 ),
             }
 

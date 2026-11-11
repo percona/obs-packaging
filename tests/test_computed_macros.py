@@ -359,3 +359,74 @@ def test_every_seed_package_still_derives_a_version():
             package,
             derived,
         )
+
+
+def _nested_tree(tmp_path: Path, nested_record: "str | None") -> Path:
+    root = _tree(tmp_path)
+    extras = root / "ppg" / "staging" / "18" / "extras"
+    (extras / "containers" / "img").mkdir(parents=True)
+    (root / "ppg" / "staging" / "18" / "project.yaml").write_text("title: m\n")
+    (extras / "project.yaml").write_text("title: e\n")
+    (extras / "containers" / "project.yaml").write_text("title: c\n")
+    if nested_record is not None:
+        rel = root / "ppg" / "releases" / "18" / "extras"
+        rel.mkdir(parents=True)
+        (rel / "release.yaml").write_text(nested_record)
+    return root
+
+
+def _ppg_release(root: Path, rel_path: str) -> str:
+    macros = {"PG_MAJOR_VERSION": "18", "PG_VERSION": "18.4"}
+    out = inject_computed_macros(
+        macros, root / rel_path, common._read_worktree_file, repo_root=root
+    )
+    return out["PPG_RELEASE"]
+
+
+def test_ppg_release_nested_unit_uses_own_record(tmp_path):
+    root = _nested_tree(
+        tmp_path,
+        "project: ppg:staging:18:extras\nreleases:\n- ppg/extras-18.4-6\n- ppg/extras-18.3-9\n",
+    )
+    assert _ppg_release(root, "ppg/staging/18/extras/containers/img") == "7"
+    assert _ppg_release(root, "ppg/staging/18/extras/containers") == "7"
+    assert _ppg_release(root, "ppg/staging/18/extras") == "7"
+
+
+def test_ppg_release_nested_unit_new_version_is_one(tmp_path):
+    root = _nested_tree(
+        tmp_path, "project: ppg:staging:18:extras\nreleases:\n- ppg/extras-18.3-9\n"
+    )
+    assert _ppg_release(root, "ppg/staging/18/extras/containers/img") == "1"
+
+
+def test_ppg_release_nested_unit_without_record_uses_main(tmp_path):
+    root = _nested_tree(tmp_path, None)
+    # main record: ppg/18.4-1 → next is 2
+    assert _ppg_release(root, "ppg/staging/18/extras/containers/img") == "2"
+
+
+def test_ppg_release_nested_unit_tagless_record_uses_main(tmp_path):
+    # project release continues the parent's count while the unit's record
+    # holds no tag at all (cmd_project._derive_release_id), so must we.
+    root = _nested_tree(tmp_path, "project: ppg:staging:18:extras\nreleases: []\n")
+    assert _ppg_release(root, "ppg/staging/18/extras/containers/img") == "2"
+
+
+def test_ppg_release_main_and_common_projects_unchanged(tmp_path):
+    root = _nested_tree(
+        tmp_path, "project: ppg:staging:18:extras\nreleases:\n- ppg/extras-18.4-6\n"
+    )
+    (root / "ppg/staging/18/containers/img").mkdir(parents=True)
+    (root / "ppg/staging/18/containers/project.yaml").write_text("title: c\n")
+    up = root / "ppg/staging/common/upgrade/containers/img"
+    up.mkdir(parents=True)
+    for d in (
+        "ppg/staging/common",
+        "ppg/staging/common/upgrade",
+        "ppg/staging/common/upgrade/containers",
+    ):
+        (root / d / "project.yaml").write_text("title: x\n")
+    assert _ppg_release(root, "ppg/staging/18/containers/img") == "2"
+    assert _ppg_release(root, "ppg/staging/18") == "2"
+    assert _ppg_release(root, "ppg/staging/common/upgrade/containers/img") == "2"
