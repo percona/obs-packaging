@@ -23,7 +23,7 @@ Required env vars (set by the workflow):
 Reads (when present):
   /tmp/prerelease-report.json Release PR only (path overridable via
                               PRERELEASE_REPORT): JSON list of
-                              {project, prerelease, outcome, source_commit}
+                              {project, prerelease, outcome, source_commit, removals?}
                               written by obs-release-pr.yml.
   /tmp/sync-output.txt        Raw `sync push` output (parsed for counts).
   /tmp/obs-build-details.json Per-repo build status counts written by
@@ -52,7 +52,7 @@ def render_prerelease_comment(
     """Markdown for a release PR: one row per pre-release project.
 
     ``report`` is the list written by obs-release-pr.yml:
-    ``[{project, prerelease, outcome, source_commit}]``.
+    ``[{project, prerelease, outcome, source_commit, removals?}]``.
     """
     if not report:
         heading = "## OBS Release PR — ⚠️ no pre-release populated" + suffix
@@ -79,6 +79,14 @@ def render_prerelease_comment(
             f"| `{r.get('project', '')}` | [{pre}]({web_url}/project/show/{pre}) "
             f"| {icon} {outcome} | `{commit}` |"
         )
+    removals = [(r.get("project", ""), x) for r in report for x in r.get("removals") or []]
+    if removals:
+        lines += [
+            "",
+            "**Removed from the release on merge** (no longer in the pre-release):",
+            "",
+        ]
+        lines += [f"- `{project}`: `{item}`" for project, item in removals]
     lines += [
         "",
         f"Repopulate without a push: `gh workflow run obs-release-pr.yml -f pr_number={pr_number}`",

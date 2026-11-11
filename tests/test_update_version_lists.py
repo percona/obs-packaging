@@ -36,3 +36,13 @@ def test_latest_release_id_string_entries(tmp_path, monkeypatch):
 def test_latest_release_id_mapping_entry(tmp_path, monkeypatch):
     y = "releases:\n- ppg/18.4-1\n- tag: ppg/18.6-1\n  source_commit: abc\n"
     assert _latest(tmp_path, monkeypatch, y) == "18.6-1"
+
+
+def test_latest_release_id_nested_unit(tmp_path, monkeypatch):
+    m = _load()
+    rel = tmp_path / "ppg/releases/18/extras"
+    rel.mkdir(parents=True)
+    (rel / "release.yaml").write_text("releases:\n- ppg/extras-18.6-6\n")
+    monkeypatch.setattr(m, "ROOT_DIR", tmp_path)
+    assert m.get_latest_release_id("ppg:releases:18:extras") == "extras-18.6-6"
+    assert m.get_latest_release_id("ppg:releases:18") == "—"

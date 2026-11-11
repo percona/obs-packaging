@@ -58,3 +58,32 @@ def test_render_success_and_empty():
     assert "⚠️ no pre-release populated" in m.render_prerelease_comment(
         "<!-- m -->", "", [], "https://obs", "r", "t", "7", "o/r"
     )
+
+
+def test_prerelease_comment_lists_removals():
+    m = _load()
+    report = [
+        {
+            "project": "ppg:releases:18",
+            "prerelease": "PR:pr-7:ppg:releases:18",
+            "outcome": "success",
+            "source_commit": "a" * 40,
+            "removals": ["package  isv:percona:ppg:releases:18/percona-pgpool-II"],
+        },
+    ]
+    out = m.render_prerelease_comment(
+        "<!-- m -->", "", report, "https://obs", "https://run", "now", "7", "o/r"
+    )
+    assert "Removed from the release on merge" in out
+    assert "`package  isv:percona:ppg:releases:18/percona-pgpool-II`" in out
+
+
+def test_prerelease_comment_without_removals_has_no_section():
+    m = _load()
+    report = [
+        {"project": "p", "prerelease": "x", "outcome": "success", "source_commit": ""}
+    ]
+    out = m.render_prerelease_comment(
+        "<!-- m -->", "", report, "https://obs", "https://run", "now", "7", "o/r"
+    )
+    assert "Removed from the release" not in out

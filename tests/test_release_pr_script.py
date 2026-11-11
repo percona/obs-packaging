@@ -125,3 +125,31 @@ def test_cli_classify_push_reads_head_sha(tmp_path, monkeypatch):
     monkeypatch.setattr(mod.subprocess, "run", fake_run)
     mod._cli_classify(201, False, "old")
     assert "kind=changelog" in out_file.read_text()
+
+
+def test_nested_release_yaml_is_a_release_file():
+    m = _load()
+    files = [
+        "root/ppg/releases/18/extras/release.yaml",
+        "root/ppg/releases/18/extras/CHANGELOG.md",
+    ]
+    kind, yamls = m.classify_files(files)
+    assert (kind, yamls) == ("release", ["root/ppg/releases/18/extras/release.yaml"])
+    assert m.release_projects(yamls) == ["ppg:releases:18:extras"]
+    assert m.changelog_only(["root/ppg/releases/common/upgrade/extras/CHANGELOG.md"])
+
+
+def test_project_for_tag(tmp_path):
+    m = _load()
+    rel = tmp_path / "root/ppg/releases/18"
+    (rel / "extras").mkdir(parents=True)
+    (rel / "release.yaml").write_text(
+        "project: ppg:staging:18\nreleases:\n- ppg/18.6-5\n"
+    )
+    (rel / "extras" / "release.yaml").write_text(
+        "project: ppg:staging:18:extras\n"
+        "releases:\n- {tag: ppg/extras-18.6-6, source_commit: abc}\n"
+    )
+    assert m.project_for_tag("ppg/extras-18.6-6", tmp_path) == "ppg:releases:18:extras"
+    assert m.project_for_tag("ppg/18.6-5", tmp_path) == "ppg:releases:18"
+    assert m.project_for_tag("ppg/18.6-4", tmp_path) is None

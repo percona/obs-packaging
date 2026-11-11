@@ -26,7 +26,7 @@ on:
     branches: [main]
     # A release PR always changes a release.yaml; mirror/README-only edits
     # under releases/ are not releases.
-    paths: ['root/*/releases/*/release.yaml']
+    paths: ['root/*/releases/**/release.yaml']
     types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
     inputs:
@@ -211,8 +211,26 @@ jobs:
               outcome=failure; rc=1
             fi
             SRC=$(venv/bin/python -c "import sys, yaml; from percona_obs.release_record import current_release; e=current_release(yaml.safe_load(open('root/'+sys.argv[1].replace(':','/')+'/release.yaml'))); print((e and e.source_commit) or '')" "$proj")
-            jq -c --arg p "$proj" --arg o "$outcome" --arg s "$SRC" --arg pre "${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}:${proj}" \
-              '. + [{project: $p, prerelease: $pre, outcome: $o, source_commit: $s}]' \
+            REMOVALS='[]'
+            if [ "$outcome" = success ]; then
+              # What hop 2 will delete from the release project: its dry-run
+              # prints one "  - package ..." / "  - project ..." line per
+              # deletion.  A dry-run that fails (e.g. the record guards) would
+              # fail hop 2 the same way after merge, so fail the project now.
+              if venv/bin/python -u -m percona_obs -P main sync release "$proj" \
+                   --from "${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}:${proj}" --dry-run \
+                   > /tmp/release-dryrun.txt 2>&1; then
+                REMOVALS=$(tr -d '\r' < /tmp/release-dryrun.txt | sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g' \
+                  | sed -nE 's/^[[:space:]]*- ((package|project)[[:space:]].*)$/\1/p' \
+                  | jq -R . | jq -cs .)
+              else
+                cat /tmp/release-dryrun.txt
+                echo "::error::sync release --dry-run failed for ${proj}; hop 2 would fail the same way"
+                outcome=failure; rc=1
+              fi
+            fi
+            jq -c --arg p "$proj" --arg o "$outcome" --arg s "$SRC" --arg pre "${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}:${proj}" --argjson r "$REMOVALS" \
+              '. + [{project: $p, prerelease: $pre, outcome: $o, source_commit: $s, removals: $r}]' \
               /tmp/prerelease-report.json > /tmp/prerelease-report.tmp && mv /tmp/prerelease-report.tmp /tmp/prerelease-report.json
           done
           cat /tmp/prerelease-report.json
