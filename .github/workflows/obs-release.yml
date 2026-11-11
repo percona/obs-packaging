@@ -46,8 +46,8 @@ jobs:
           FIRST=""
           read -r -a TAG_LIST <<<"$TAGS_IN"
           for TAG in "${TAG_LIST[@]}"; do
-            echo "$TAG" | grep -Eq '^[a-z0-9-]+/([0-9]+(\.[0-9]+)+|[a-z][a-z0-9]*)-[0-9]+$' \
-              || { echo "::error::tag '$TAG' does not match <product>/<major.minor-N> or <product>/<name-N>"; exit 1; }
+            echo "$TAG" | grep -Eq '^[a-z0-9-]+/[a-z0-9]+([.-][a-z0-9]+)*-[0-9]+$' \
+              || { echo "::error::tag '$TAG' does not match <product>/<id>-<N>"; exit 1; }
             FIRST="${FIRST:-$TAG}"
           done
           [ -n "$FIRST" ] || { echo "::error::tags is empty"; exit 1; }
@@ -119,7 +119,7 @@ jobs:
             "${env_args[@]}" \
             profile create main "${args[@]}"
 
-      # Tag ppg/17.9-1   → ppg:releases:17 ; tag ppg/common-3 → ppg:releases:common
+      # Tag -> release project: looked up in the tree (release_pr.py project-for-tag).
       - name: Release every tag from the pre-release
         shell: bash
         env:
@@ -128,12 +128,9 @@ jobs:
           set -euo pipefail
           read -r -a TAG_LIST <<<"$TAGS_IN"
           for TAG in "${TAG_LIST[@]}"; do
-            PRODUCT="${TAG%%/*}"; VERSION="${TAG#*/}"
-            case "$VERSION" in
-              [0-9]*) MAJOR="${VERSION%%.*}" ;;
-              *)      MAJOR="${VERSION%-*}" ;;
-            esac
-            PROJECT="${PRODUCT}:releases:${MAJOR}"
+            # The tag is a label; the release project is the directory of the
+            # release.yaml that lists it last.
+            PROJECT=$(venv/bin/python .github/scripts/release_pr.py project-for-tag "$TAG")
             FROM="${OBS_PR_ROOTPRJ}:pr-${PR_NUMBER}:${PROJECT}"
             echo "== sync release ${PROJECT} --from ${FROM}  (${TAG})"
             venv/bin/python -m percona_obs -P main sync release "$PROJECT" --from "$FROM"

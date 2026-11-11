@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Pure helpers for obs-release-pr.yml, plus a CLI used by its `resolve` job.
 
-CLI:  release_pr.py classify <pr_number> [--strict] [--since <sha>]
+CLI:  release_pr.py project-for-tag <tag>   prints the release project for a tag
+      release_pr.py classify <pr_number> [--strict] [--since <sha>]
 Reads the PR's changed files and every open PR's files through `gh`, and
 appends to $GITHUB_OUTPUT: kind=release|changelog|none, release_files=<json>,
 release_projects=<json>.  With --since (the pre-push head of a synchronize
@@ -21,9 +22,10 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 
-_RELEASE_YAML_RE = re.compile(r"^root/[^/]+/releases/[^/]+/release\.yaml$")
-_CHANGELOG_RE = re.compile(r"^root/[^/]+/releases/[^/]+/CHANGELOG\.md$")
+_RELEASE_YAML_RE = re.compile(r"^root/[^/]+/releases/(?:[^/]+/)+release\.yaml$")
+_CHANGELOG_RE = re.compile(r"^root/[^/]+/releases/(?:[^/]+/)+CHANGELOG\.md$")
 
 
 def classify_files(paths: list[str]) -> tuple[str, list[str]]:
@@ -102,6 +104,27 @@ def _push_files(repo: str, since: str, head: str) -> list[str] | None:
     return json.loads(r.stdout or "null")
 
 
+def project_for_tag(tag: str, repo_dir: "Path | str" = ".") -> "str | None":
+    """Release project whose release.yaml lists *tag* last, read from the tree.
+
+    The tag is only a label: ``ppg/extras-18.6-6`` does not say which
+    directory holds its record.
+    """
+    import yaml
+
+    root = Path(repo_dir) / "root"
+    for record in sorted(root.glob("*/releases/**/release.yaml")):
+        data = yaml.safe_load(record.read_text(encoding="utf-8")) or {}
+        releases = data.get("releases") or []
+        if not releases:
+            continue
+        last = releases[-1]
+        last_tag = last.get("tag", "") if isinstance(last, dict) else str(last)
+        if last_tag == tag:
+            return ":".join(record.parent.relative_to(root).parts)
+    return None
+
+
 def _cli_classify(pr_number: int, strict: bool, since: str | None = None) -> None:
     repo = os.environ["GITHUB_REPOSITORY"]
     files = [f["path"] for f in _gh_json(["pr", "view", str(pr_number), "-R", repo, "--json", "files", "--jq", ".files"])]
@@ -142,7 +165,13 @@ if __name__ == "__main__":
         i = argv.index("--since")
         since = argv[i + 1] if i + 1 < len(argv) else ""
         del argv[i : i + 2]
-    if len(argv) == 2 and argv[0] == "classify":
+    if len(argv) == 2 and argv[0] == "project-for-tag":
+        project = project_for_tag(argv[1])
+        if project is None:
+            print(f"::error::no release.yaml lists {argv[1]} as its last entry")
+            sys.exit(1)
+        print(project)
+    elif len(argv) == 2 and argv[0] == "classify":
         _cli_classify(int(argv[1]), "--strict" in sys.argv[1:], since or None)
     else:
         print(__doc__)

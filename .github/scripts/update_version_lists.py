@@ -138,7 +138,7 @@ def is_release_project(project_id: str) -> bool:
 def get_latest_release_id(project_id: str) -> str:
     """Return the latest release-id from release.yaml for a release project.
 
-    Reads root/<product>/releases/<major>/release.yaml, takes the last entry
+    Reads root/<product>/releases/<major>[/<unit>…]/release.yaml, takes the last entry
     in the ``releases`` list (e.g. ``ppg/17.9-1``), and strips the
     ``<product>/`` prefix to return just the release-id (e.g. ``17.9-1``).
     Returns ``—`` if the file is absent or the list is empty.
@@ -148,8 +148,8 @@ def get_latest_release_id(project_id: str) -> str:
     parts = project_id.split(":")  # ["ppg", "releases", "17"]
     if len(parts) < 3 or parts[1] != "releases":
         return "—"
-    product, major = parts[0], parts[2]
-    release_yaml = ROOT_DIR / product / "releases" / major / "release.yaml"
+    product = parts[0]
+    release_yaml = ROOT_DIR.joinpath(product, "releases", *parts[2:], "release.yaml")
     if not release_yaml.exists():
         return "—"
     data = yaml.safe_load(release_yaml.read_text(encoding="utf-8"))

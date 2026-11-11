@@ -97,7 +97,7 @@ jobs:
         run: |
           set -euo pipefail
           FILES=$(gh pr view "$PR_NUMBER" --json files \
-            --jq '.files[].path | select(test("^root/[^/]+/releases/[^/]+/release\\.yaml$"))' | sort -u)
+            --jq '.files[].path | select(test("^root/[^/]+/releases/([^/]+/)+release\\.yaml$"))' | sort -u)
           [ -z "$FILES" ] && { echo "No release.yaml changed; nothing to tag."; exit 0; }
           TAGS=""
           while IFS= read -r release_file; do
