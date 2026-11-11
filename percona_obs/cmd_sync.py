@@ -2859,7 +2859,7 @@ def cmd_sync_prerelease(args) -> None:
     source_obs_project = f"{source_rootprj}:{source_project_id}"
     prerelease_obs_project = f"{args.rootprj}:{args.project}"
     source_path = resolve_project_path(source_project_id)
-    # Mirror paths are rewritten to the PR root through ${OBS_ROOTPRJ}.
+    # Env for rendering the mirrors on the PR root.
     shared_env_vars = {**env_vars, **auto_rootprj_env(args.rootprj)}
     # The freeze scope lives on the production root.
     source_env_vars = {**env_vars, **auto_rootprj_env(source_rootprj)}
@@ -2959,13 +2959,6 @@ def cmd_sync_prerelease(args) -> None:
     for obs_name in sorted(stale_tree, key=lambda n: n.count(":"), reverse=True):
         _delete_obs_project(apiurl, obs_name, dry_run=False, recursive=True)
 
-    # Repository paths to projects outside the pre-release tree (e.g.
-    # common:containers:ubi9) are redirected to the source root, as
-    # `sync push --branch-from` does; otherwise OBS strips them.
-    prerelease_tree = {prerelease_obs_project} | {
-        f"{prerelease_obs_project}:{name}" for name, _ in subproject_pairs
-    }
-
     # Top-level pre-release meta from the mirror, publish forced on once the copy has landed (spec §1; release_tree holds it until then).
     apply_mirror_meta(
         apiurl,
@@ -2974,9 +2967,6 @@ def cmd_sync_prerelease(args) -> None:
         args.rootprj,
         shared_env_vars,
         publish_override=True,
-        branch_rootprj=source_rootprj,
-        active_projects=prerelease_tree,
-        branch_fallbacks=False,
     )
 
     _run_frozen(
@@ -2995,9 +2985,6 @@ def cmd_sync_prerelease(args) -> None:
             top_mirror_path=release_path,
             publish_override=True,
             verify_timeout=args.verify_timeout,
-            branch_rootprj=source_rootprj,
-            active_projects=prerelease_tree,
-            branch_fallbacks=False,
             release_id=release_id,
         ),
     )

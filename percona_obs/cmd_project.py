@@ -18,6 +18,7 @@ import osc.core
 import yaml
 
 from .common import (
+    BUNDLED_SUBPROJECTS,
     REPO_ROOT,
     _BOLD,
     _DIM,
@@ -86,7 +87,11 @@ from .obs_versions import (
     first_versrel,
     project_binary_versions,
 )
-from .release_scope import has_container_images, tree_has_server_package
+from .release_scope import (
+    has_container_images,
+    release_unit_members,
+    tree_has_server_package,
+)
 from .release_record import ReleaseEntry, dump_release_entry, parse_release_entries
 from .github_api import last_synced_head_sha, repo_slug_from_url
 from .services import _git_head_sha, _git_tag_for_sha
@@ -1624,48 +1629,25 @@ def cmd_project_versions(args) -> None:
         print(yaml.dump(records, default_flow_style=False, allow_unicode=True), end="")
 
 
-def _rewrite_subproject_paths(
-    repos: list[dict],
-    source_project_id: str,
-    release_project_id: str,
-) -> list[dict]:
-    """Rewrite subproject: path entries for a release subproject yaml.
+def _strip_internal_paths(repos: list[dict], project_id: str) -> list[dict]:
+    """Drop ``subproject:`` paths from the repositories of a release mirror.
 
-    Rules applied to each path entry:
-      subproject == source_project_id             →  release_project_id
-      subproject starts with source_project_id:   →  prefix replaced with
-          release_project_id (self- and sibling-references included: the
-          release snapshot keeps the same intra-project topology, e.g. the
-          tarballs ssl repos consuming the project's own RockyLinux repos)
-      everything else (project:, external)        →  unchanged
+    Release projects never build, so paths into other projects of the same
+    root are unused; without them a release project needs no other release
+    project to exist.  ``project:`` paths (base distros) stay, in order: OBS
+    takes the repository's base configuration and publish type from them.
     """
     result = []
     for repo in repos:
-        new_paths = []
-        for path_entry in repo.get("paths", []):
-            subprj = path_entry.get("subproject")
-            if subprj is not None:
-                if subprj == source_project_id:
-                    repo_name = path_entry.get("repository")
-                    new_paths.append(
-                        {"subproject": release_project_id, "repository": repo_name}
-                    )
-                    continue
-                elif subprj.startswith(source_project_id + ":"):
-                    tail = subprj[len(source_project_id) :]
-                    rewritten = release_project_id + tail
-                    path_entry = {**path_entry, "subproject": rewritten}
-            new_paths.append(path_entry)
-        result.append({**repo, "paths": new_paths})
+        kept = [p for p in repo.get("paths", []) if "subproject" not in p]
+        if not kept:
+            raise SystemExit(
+                f"error: {project_id}: repository '{repo.get('name')}' has only "
+                "subproject: paths; a release mirror needs at least one "
+                "project: path (the base distribution)"
+            )
+        result.append({**repo, "paths": kept})
     return result
-
-
-def _is_relative_to(child: Path, parent: Path) -> bool:
-    try:
-        child.relative_to(parent)
-        return True
-    except ValueError:
-        return False
 
 
 def _rewrite_qa_project_refs(
@@ -1765,9 +1747,9 @@ def _write_release_tree(
 ) -> "list[str]":
     """(Re)generate the release mirror tree from the staging source tree.
 
-    Writes release_dir/project.yaml and one nested mirror dir per source
-    subproject, and deletes stale mirror dirs whose source subproject no
-    longer exists.  Returns repo-relative paths of files written (deletions
+    Writes release_dir/project.yaml and one nested mirror dir per bundled
+    child of the unit (containers, tarballs), and deletes stale mirror dirs
+    below those children.  Never touches another release unit's directory.  Returns repo-relative paths of files written (deletions
     are staged by the caller via git add -A on release_dir).
 
     The source subproject is read through the resolver, so a delta-style
@@ -1786,19 +1768,15 @@ def _write_release_tree(
     written.append(str(project_file.relative_to(_REPO_DIR)))
 
     expected_dirs: set[Path] = set()
-    for sub_obs_id, sub_path in find_projects(source_path, source_project_id):
-        if sub_obs_id == source_project_id:
-            continue
-        if not (sub_path / "project.yaml").is_file():
-            continue
+    for sub_obs_id, sub_path in release_unit_members(source_path, source_project_id)[
+        1:
+    ]:
         subproject_name = sub_obs_id[len(source_project_id) + 1 :]
         source_sub_config = _load_project_config_with_inheritance(
             sub_path, repo_filter=RepositoryFilter.EMPTY
         )
-        rewritten_repos = _rewrite_subproject_paths(
-            source_sub_config.get("repositories", []),
-            source_project_id,
-            release_project,
+        rewritten_repos = _strip_internal_paths(
+            source_sub_config.get("repositories", []), sub_obs_id
         )
         sub_data: dict = {
             "title": f"{product} releases {release_name} — {subproject_name}",
@@ -1830,15 +1808,15 @@ def _write_release_tree(
         _print_create(str(release_sub_file.relative_to(_REPO_DIR)))
         written.append(str(release_sub_file.relative_to(_REPO_DIR)))
 
-    # Delete stale mirrors (e.g. the pre-restructure containers/ubi9).
+    # Stale mirrors live under the bundled children only (a removed
+    # tarballs/, the pre-restructure containers/ubi9).  Every other
+    # directory below release_dir is another release unit's mirror.
     stale = [
         p.parent
-        for p in sorted(release_dir.rglob("project.yaml"))
-        if p.parent != release_dir
-        and p.parent not in expected_dirs
-        and not any(
-            e == p.parent or _is_relative_to(e, p.parent) for e in expected_dirs
-        )
+        for name in BUNDLED_SUBPROJECTS
+        if (release_dir / name).is_dir()
+        for p in sorted((release_dir / name).rglob("project.yaml"))
+        if p.parent not in expected_dirs
     ]
     for d in stale:
         if not d.exists():
@@ -2809,7 +2787,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             "This project is read-only — do not add or edit packages directly.\n"
         ),
         "build": False,
-        "repositories": source_repos,
+        "repositories": _strip_internal_paths(source_repos, args.project),
     }
     if source_debuginfo:
         project_data["debuginfo"] = source_debuginfo
