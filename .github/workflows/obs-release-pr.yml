@@ -223,6 +223,7 @@ jobs:
                 REMOVALS=$(tr -d '\r' < /tmp/release-dryrun.txt | sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g' \
                   | sed -nE 's/^[[:space:]]*- ((package|project)[[:space:]].*)$/\1/p' \
                   | jq -R . | jq -cs .)
+                [ -n "$REMOVALS" ] || REMOVALS='[]'
               else
                 cat /tmp/release-dryrun.txt
                 echo "::error::sync release --dry-run failed for ${proj}; hop 2 would fail the same way"

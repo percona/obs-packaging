@@ -168,7 +168,10 @@ if __name__ == "__main__":
     if len(argv) == 2 and argv[0] == "project-for-tag":
         project = project_for_tag(argv[1])
         if project is None:
-            print(f"::error::no release.yaml lists {argv[1]} as its last entry")
+            print(
+                f"::error::no release.yaml lists {argv[1]} as its last entry",
+                file=sys.stderr,
+            )
             sys.exit(1)
         print(project)
     elif len(argv) == 2 and argv[0] == "classify":
