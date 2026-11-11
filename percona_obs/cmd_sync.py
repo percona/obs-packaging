@@ -2692,6 +2692,15 @@ def cmd_sync_release(args) -> None:
             for f in failures:
                 print(f"  ✗ {f}", file=sys.stderr)
             raise SystemExit("error: release dry-run failed")
+        if _obs_project_exists(apiurl, release_obs_project):
+            prune_release_tree(
+                apiurl,
+                source_obs_project,
+                release_obs_project,
+                subproject_pairs,
+                release_path,
+                dry_run=True,
+            )
         _print_ok(
             f"release dry-run passed for {tag}  (release_id: {release_id})  (dry run)"
         )

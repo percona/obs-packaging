@@ -275,12 +275,78 @@ def test_stale_subprojects_keeps_projects_with_a_mirror(tmp_path, monkeypatch):
     deleted = _stub_listing(
         monkeypatch,
         {"S": {"a"}, "T": {"a"}, "S:containers": {"i"}, "T:containers": {"i"}},
-        {"T:containers", "T:extras", "T:extras:containers", "T:old", "T:old:ubi9"},
+        {
+            "T:containers",
+            "T:extras",
+            "T:extras:containers",
+            "T:old",
+            "T:old:ubi9",
+            "T:old:ubi9:x",
+        },
     )
     rc.prune_release_tree(
         "http://obs", "S", "T", [("containers", top / "containers")], top
     )
-    assert deleted == [("prj", "T:old", False, True)]
+    assert deleted == [
+        ("prj", "T:old:ubi9:x", False, True),
+        ("prj", "T:old:ubi9", False, True),
+        ("prj", "T:old", False, True),
+    ]
+
+
+def test_stale_subprojects_never_enter_another_unit(tmp_path, monkeypatch):
+    # extras/old has no mirror, but extras is another unit: not ours to judge.
+    top = _mirror(tmp_path, "extras")
+    deleted = _stub_listing(
+        monkeypatch,
+        {"S": {"a"}, "T": {"a"}},
+        {"T:extras", "T:extras:old", "T:extras:containers"},
+    )
+    rc.prune_release_tree("http://obs", "S", "T", [], top)
+    assert deleted == []
+
+
+def test_stale_subprojects_inside_a_bundled_child(tmp_path, monkeypatch):
+    top = _mirror(tmp_path, "containers")
+    deleted = _stub_listing(
+        monkeypatch,
+        {"S": {"a"}, "T": {"a"}, "S:containers": {"i"}, "T:containers": {"i"}},
+        {"T:containers", "T:containers:ubi9"},
+    )
+    rc.prune_release_tree(
+        "http://obs", "S", "T", [("containers", top / "containers")], top
+    )
+    assert deleted == [("prj", "T:containers:ubi9", False, True)]
+
+
+def test_stale_subprojects_retired_unit_goes_deepest_first(tmp_path, monkeypatch):
+    top = _mirror(tmp_path)
+    deleted = _stub_listing(
+        monkeypatch, {"S": {"a"}, "T": {"a"}}, {"T:tde", "T:tde:sub"}
+    )
+    rc.prune_release_tree("http://obs", "S", "T", [], top)
+    assert deleted == [("prj", "T:tde:sub", False, True), ("prj", "T:tde", False, True)]
+
+
+def test_prune_refuses_mirror_without_project_yaml(tmp_path, monkeypatch):
+    listed = []
+    monkeypatch.setattr(
+        rc,
+        "_fetch_obs_package_names_or_fail",
+        lambda a, p: listed.append(p) or set(),
+    )
+    monkeypatch.setattr(
+        rc, "_fetch_obs_package_names", lambda a, p: listed.append(p) or set()
+    )
+    monkeypatch.setattr(
+        rc, "_fetch_obs_subproject_names", lambda a, p: listed.append(p) or set()
+    )
+    fail = lambda *a, **k: pytest.fail("no delete")
+    monkeypatch.setattr(rc, "_delete_obs_package", fail)
+    monkeypatch.setattr(rc, "_delete_obs_project", fail)
+    with pytest.raises(SystemExit, match=str(tmp_path)):
+        rc.prune_release_tree("http://obs", "S", "T", [], tmp_path)
+    assert listed == []
 
 
 def test_prune_refuses_empty_source_with_packages_in_target(tmp_path, monkeypatch):

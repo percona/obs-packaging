@@ -35,6 +35,7 @@ def _mk_tree(tmp_path: Path, monkeypatch=None):
     (src / "project.yaml").write_text("title: S\n")
     rel = root / "ppg/releases/17"
     (rel / "containers").mkdir(parents=True)
+    (rel / "project.yaml").write_text("build: false\n")
     (rel / "containers" / "project.yaml").write_text(
         "build: false\n" + _REPO_YAML.format(name="ubi9")
     )
@@ -361,7 +362,44 @@ def test_dry_run_passes_when_clean(tmp_path, monkeypatch, capsys):
         "run",
         lambda *a, **k: type("R", (), {"returncode": 1, "stdout": "", "stderr": ""})(),
     )
+    monkeypatch.setattr(cmd_sync, "prune_release_tree", lambda *a, **k: None)
     cmd_sync.cmd_sync_release(_dry_run_args())
+    assert "dry-run passed" in capsys.readouterr().out
+
+
+def test_dry_run_lists_prune_when_release_project_exists(tmp_path, monkeypatch, capsys):
+    src, rel = _mk_tree(tmp_path, monkeypatch)
+    (rel / "tarballs").mkdir()
+    (rel / "tarballs" / "project.yaml").write_text(
+        "build: false\n" + _REPO_YAML.format(name="ssl3")
+    )
+    (rel / "CHANGELOG.md").write_text("# Changelog\n\n## [17.11-1] - 2026-09-03\n")
+    _patch_dry_run_common(monkeypatch, tmp_path, src, rel)
+    monkeypatch.setattr(cmd_sync, "_obs_project_exists", lambda a, p: True)
+    monkeypatch.setattr(cmd_sync, "assert_all_green", lambda a, p, **k: [])
+    monkeypatch.setattr(
+        cmd_sync.subprocess,
+        "run",
+        lambda *a, **k: type("R", (), {"returncode": 1, "stdout": "", "stderr": ""})(),
+    )
+    seen = []
+    monkeypatch.setattr(
+        cmd_sync,
+        "prune_release_tree",
+        lambda apiurl, s, t, pairs, top, **k: seen.append(
+            (s, t, [n for n, _ in pairs], top, k.get("dry_run"))
+        ),
+    )
+    cmd_sync.cmd_sync_release(_dry_run_args())
+    assert seen == [
+        (
+            "home:Admin:ppg:staging:17",
+            "home:Admin:ppg:releases:17",
+            ["containers", "tarballs"],
+            rel,
+            True,
+        )
+    ]
     assert "dry-run passed" in capsys.readouterr().out
 
 

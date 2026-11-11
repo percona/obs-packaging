@@ -195,22 +195,35 @@ def _stale_packages(apiurl: str, source: str, target: str) -> "list[str]":
 def _stale_subprojects(
     apiurl: str, target_obs_project: str, top_mirror_path: Path
 ) -> "list[str]":
-    """Target subprojects with no mirror project.yaml in the local release
-    tree, outermost only (a recursive delete takes their children along).
+    """Target subprojects to delete, deepest first.
 
-    Another release unit below this one keeps its mirror directory, so it is
-    never stale here.
+    Only this unit's own subtree is judged:
+
+    - a direct child of the target is stale when it has no mirror
+      ``project.yaml`` (a retired unit or a removed bundled child); its whole
+      OBS subtree goes with it;
+    - inside a bundled child (``containers``, ``tarballs``) a subproject is
+      stale when it, or an ancestor below the bundled child, has no mirror
+      ``project.yaml`` at the same relative path.
+
+    Below a non-bundled direct child that has a mirror lives another release
+    unit, which is never touched here whatever its own mirror state.
     """
     prefix_len = len(target_obs_project) + 1
+
+    def has_mirror(parts: "list[str]") -> bool:
+        return (top_mirror_path.joinpath(*parts) / "project.yaml").is_file()
+
     stale: list[str] = []
-    for obs_sub in sorted(_fetch_obs_subproject_names(apiurl, target_obs_project)):
+    for obs_sub in _fetch_obs_subproject_names(apiurl, target_obs_project):
         rel = obs_sub[prefix_len:].split(":")
-        if (top_mirror_path.joinpath(*rel) / "project.yaml").is_file():
-            continue
-        if any(obs_sub.startswith(s + ":") for s in stale):
-            continue
-        stale.append(obs_sub)
-    return stale
+        if not has_mirror(rel[:1]):
+            stale.append(obs_sub)
+        elif rel[0] in BUNDLED_SUBPROJECTS and any(
+            not has_mirror(rel[:depth]) for depth in range(2, len(rel) + 1)
+        ):
+            stale.append(obs_sub)
+    return sorted(stale, key=lambda name: (-name.count(":"), name))
 
 
 def prune_release_tree(
@@ -225,7 +238,16 @@ def prune_release_tree(
     """Delete what left the release: target packages the source no longer
     has (top project and every pair) and target subprojects without a
     mirror.  All listings are read before the first delete, so a refused
-    listing deletes nothing."""
+    listing deletes nothing.
+
+    Refuses to run when *top_mirror_path* holds no ``project.yaml``: a wrong
+    path would make every target subproject look stale.
+    """
+    if not (top_mirror_path / "project.yaml").is_file():
+        raise SystemExit(
+            f"error: no project.yaml in release mirror {top_mirror_path}; "
+            "refusing to prune"
+        )
     members = [(source_obs_project, target_obs_project)] + [
         (f"{source_obs_project}:{name}", f"{target_obs_project}:{name}")
         for name, _ in pairs
