@@ -45,6 +45,7 @@ def test_render_failure_when_any_project_failed():
         in out
     )
     assert "9e9d9738c0ff" in out and "9e9d9738c0ffee1234567890" not in out
+    assert "remove and re-add the `obs-sync` label" in out
     assert "gh workflow run obs-release-pr.yml -f pr_number=7" in out
     assert "https://run" in out
 

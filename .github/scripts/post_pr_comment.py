@@ -89,7 +89,7 @@ def render_prerelease_comment(
         lines += [f"- `{project}`: `{item}`" for project, item in removals]
     lines += [
         "",
-        f"Repopulate without a push: `gh workflow run obs-release-pr.yml -f pr_number={pr_number}`",
+        f"Repopulate: remove and re-add the `obs-sync` label, or `gh workflow run obs-release-pr.yml -f pr_number={pr_number}`",
         f"Details: [workflow run]({run_url}).",
         "",
         f"> _Updated: {timestamp}_",

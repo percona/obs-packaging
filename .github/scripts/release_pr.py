@@ -5,7 +5,8 @@ CLI:  release_pr.py project-for-tag <tag>   prints the release project for a tag
       release_pr.py classify <pr_number> [--strict] [--since <sha>]
 Reads the PR's changed files and every open PR's files through `gh`, and
 appends to $GITHUB_OUTPUT: kind=release|changelog|none, release_files=<json>,
-release_projects=<json>.  With --since (the pre-push head of a synchronize
+release_projects=<json>, populate=true|false (label-gated: see should_populate; env EVENT_NAME,
+EVENT_ACTION, EVENT_LABEL, RUN_SYNC).  With --since (the pre-push head of a synchronize
 event), a push that changed only release CHANGELOG.md files is kind=changelog:
 the changelog is not part of the OBS tree, so the pre-release already
 populated for the previous head stands and populate is skipped.  A PR that changes no release.yaml is not a release
@@ -81,6 +82,25 @@ def decide(kind: str, release_files: list[str], strict: bool) -> tuple[str, str 
     return "release", None
 
 
+def should_populate(
+    kind: str, event_name: str, action: str, label: str, run_sync: bool
+) -> bool:
+    """Whether the pre-release populate runs for this event (spec § 2).
+
+    Only a release PR populates.  workflow_dispatch is the operator's explicit
+    request.  Otherwise the PR must carry the `obs-sync` label, and a `labeled`
+    event must be that label being added (any other label, e.g. `qa-release`,
+    runs QA only).
+    """
+    if kind != "release":
+        return False
+    if event_name == "workflow_dispatch":
+        return True
+    if action == "labeled":
+        return label == "obs-sync" and run_sync
+    return run_sync
+
+
 def prerelease_project(pr_rootprj: str, pr_number: int | str, project: str) -> str:
     return f"{pr_rootprj}:pr-{pr_number}:{project}"
 
@@ -127,6 +147,10 @@ def project_for_tag(tag: str, repo_dir: "Path | str" = ".") -> "str | None":
 
 def _cli_classify(pr_number: int, strict: bool, since: str | None = None) -> None:
     repo = os.environ["GITHUB_REPOSITORY"]
+    event_name = os.environ.get("EVENT_NAME", "")
+    action = os.environ.get("EVENT_ACTION", "")
+    label = os.environ.get("EVENT_LABEL", "")
+    run_sync = os.environ.get("RUN_SYNC", "") == "true"
     files = [f["path"] for f in _gh_json(["pr", "view", str(pr_number), "-R", repo, "--json", "files", "--jq", ".files"])]
     kind, release_files = classify_files(files)
     kind, err = decide(kind, release_files, strict)
@@ -136,7 +160,7 @@ def _cli_classify(pr_number: int, strict: bool, since: str | None = None) -> Non
     if kind == "none":
         print("::notice::not a release PR (no release.yaml changed); nothing to populate")
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-            fh.write("kind=none\nrelease_files=[]\nrelease_projects=[]\n")
+            fh.write("kind=none\nrelease_files=[]\nrelease_projects=[]\npopulate=false\n")
         return
     open_prs = _gh_json(["pr", "list", "-R", repo, "--state", "open", "--limit", "200", "--json", "number,files"])
     open_prs = [{"number": p["number"], "files": [f["path"] for f in p.get("files") or []]} for p in open_prs]
@@ -152,8 +176,12 @@ def _cli_classify(pr_number: int, strict: bool, since: str | None = None) -> Non
         if pushed is not None and changelog_only(pushed):
             print("::notice::this push changed only release CHANGELOG.md files; the pre-release populated for the previous head stands (populate skipped)")
             kind = "changelog"
+    populate = should_populate(kind, event_name, action, label, run_sync)
+    if kind == "release" and event_name != "workflow_dispatch" and not run_sync:
+        print("::notice::pre-release sync not started: add the obs-sync label to this PR")
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
         fh.write(f"kind={kind}\n")
+        fh.write(f"populate={'true' if populate else 'false'}\n")
         fh.write(f"release_files={json.dumps(release_files)}\n")
         fh.write(f"release_projects={json.dumps(release_projects(release_files))}\n")
 

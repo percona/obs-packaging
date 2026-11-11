@@ -1117,7 +1117,10 @@ The process is PR-based:
    and `CHANGELOG.md`, and commits locally. Pushing the branch and opening the review
    PR remain manual steps.
 2. **PR populates the pre-release and runs QA** — `obs-release-pr.yml` (release-only PRs
-   only) runs `sync prerelease <project> --branch-from main` on every OBS instance, then
+   only) populates only when the PR carries the `obs-sync` label (a hand-opened release PR
+   needs it too; adding the label starts the sync, and a retry is remove-then-add, or
+   `workflow_dispatch`, which always populates). Without the label `resolve` still
+   classifies the PR and posts a notice, and nothing is populated. The populate runs `sync prerelease <project> --branch-from main` on every OBS instance, then
    `sync release --from <pre-release> --dry-run` to list what hop 2 would delete, and posts a
    per-instance comment listing the pre-release projects and those removals. With the `qa-release` label on
    the PR it then runs every QA lane the release mirrors declare against them (the reusable
@@ -1427,7 +1430,9 @@ READMEs under `releases/` are skipped with a notice), or by `workflow_dispatch` 
 - `resolve` — classifies the PR with `.github/scripts/release_pr.py classify`: release-only
   check and the one-in-flight-per-release-unit guard; a PR with no `release.yaml` change is skipped
   (`kind=none`; `--strict` on `workflow_dispatch` fails instead).
-- `populate` — one leg per `OBS_INSTANCES` entry, serialized on the instance's
+- `populate` — runs only when `resolve` outputs `populate=true`: the PR carries `obs-sync`
+  (a `labeled` event must be that label; `qa-release` alone runs QA only) or the run is a
+  `workflow_dispatch`. One leg per `OBS_INSTANCES` entry, serialized on the instance's
   `sync-main-sync-<name>` concurrency group (never cancelled; no overlap with a staging
   upload). `<sha>` is the head of the newest `sync-main` run whose upload leg for this
   instance succeeded (the run may still be polling builds). Release PRs must come from a

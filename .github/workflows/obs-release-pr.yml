@@ -17,12 +17,17 @@ name: OBS Release PR
 # serializes on the instance's "sync-main-sync-<name>" group so it never
 # overlaps a staging upload.  A second push queues behind the first.
 #
+# Populate is label-gated: it runs only while the PR carries `obs-sync` (or on
+# workflow_dispatch, the operator's explicit request).  Adding the label starts
+# it; retry is remove-then-add.  `unlabeled` must stay unsubscribed (removing
+# the label must not start anything).  `resolve` still classifies and guards
+# every opened/synchronize/reopened event, labelled or not.
 # Repopulate without a push: workflow_dispatch with the PR number.
 # A push that changes only release CHANGELOG.md files does not repopulate:
 # the changelog never reaches OBS, so the previous populate stands.
 #
-# Release QA is gated on the `qa-release` label: populate always runs, QA
-# only when the label is on the PR.  Adding the label later runs QA alone
+# Release QA is gated on the `qa-release` label: QA only when the label is on
+# the PR.  Adding the label later runs QA alone
 # against the already-populated pre-release (no repopulate).
 
 on:
@@ -46,7 +51,7 @@ jobs:
   resolve:
     name: Resolve release PR
     # Any other label is not ours: skip the whole run.
-    if: github.event.action != 'labeled' || github.event.label.name == 'qa-release'
+    if: github.event.action != 'labeled' || github.event.label.name == 'qa-release' || github.event.label.name == 'obs-sync'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -56,6 +61,8 @@ jobs:
       head_sha:         ${{ steps.ctx.outputs.head_sha }}
       clone_url:        ${{ steps.ctx.outputs.clone_url }}
       run_qa:           ${{ steps.ctx.outputs.run_qa }}
+      run_sync:         ${{ steps.ctx.outputs.run_sync }}
+      populate:         ${{ steps.classify.outputs.populate }}
       kind:             ${{ steps.classify.outputs.kind }}
       release_files:    ${{ steps.classify.outputs.release_files }}
       release_projects: ${{ steps.classify.outputs.release_projects }}
@@ -82,6 +89,7 @@ jobs:
             echo "head_sha=$(echo "$DATA" | jq -r '.head.sha')"
             echo "clone_url=$(echo "$DATA" | jq -r '.head.repo.clone_url')"
             echo "run_qa=$(echo "$DATA" | jq -r '[.labels[].name] | index("qa-release") != null')"
+            echo "run_sync=$(echo "$DATA" | jq -r '[.labels[].name] | index("obs-sync") != null')"
           } >> "$GITHUB_OUTPUT"
           if [ "$STATE" != "open" ] && [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "::notice::PR #${PR} is ${STATE}; populating anyway; a merged release PR is refused by the record check (main's release.yaml changed at the merge): cut a new release instead"
@@ -92,6 +100,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ steps.ctx.outputs.pr_number }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_LABEL: ${{ github.event.label.name }}
+          RUN_SYNC: ${{ steps.ctx.outputs.run_sync }}
           STRICT: ${{ github.event_name == 'workflow_dispatch' && '--strict' || '' }}
           # A push that only edits release CHANGELOG.md files keeps the
           # populated pre-release (kind=changelog, populate and QA skipped).
@@ -102,8 +114,8 @@ jobs:
     # Dashboard contract (docs/superpowers/specs/2026-11-11-dashboard-release-contract-design.md § 4): do not rename.
     name: Populate pre-release (${{ matrix.instance.name }})
     needs: [resolve]
-    # Adding the qa-release label runs QA only, against the existing populate.
-    if: needs.resolve.outputs.kind == 'release' && github.event.action != 'labeled'
+    # Label-gated (resolve decides): obs-sync present, or workflow_dispatch.
+    if: needs.resolve.outputs.populate == 'true'
     runs-on: ubuntu-latest
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     timeout-minutes: 180
