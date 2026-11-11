@@ -31,7 +31,9 @@ qa:
 @pytest.fixture(autouse=True)
 def _no_repo_listing(monkeypatch):
     """Repository lists are unknown (narrow nothing) unless a test sets them."""
-    monkeypatch.setattr(cmd_qa, "_fetch_obs_project_repository_names", lambda a, p: set())
+    monkeypatch.setattr(
+        cmd_qa, "_fetch_obs_project_repository_names", lambda a, p: set()
+    )
 
 
 def _tree(tmp_path, monkeypatch, qa_text=_QA) -> Path:
