@@ -88,3 +88,31 @@ def test_prerelease_comment_without_removals_has_no_section():
         "<!-- m -->", "", report, "https://obs", "https://run", "now", "7", "o/r"
     )
     assert "Removed from the release" not in out
+
+
+def test_render_skipped_project_is_not_a_failure():
+    m = _load()
+    report = [
+        _REPORT[0],
+        {
+            "project": "ppg:releases:16:tde",
+            "prerelease": "isv:percona:PR:pr-7:ppg:releases:16:tde",
+            "outcome": "skipped",
+            "source_commit": "9e9d9738c0ffee1234567890",
+        },
+    ]
+    out = m.render_prerelease_comment(
+        "<!-- m -->", " (labs)", report, "https://obs", "https://run", "now", "7", "o/r"
+    )
+    assert "✅ Pre-release populated (labs)" in out
+    assert "| `ppg:releases:16:tde` | not on this instance | ➖ skipped |" in out
+    assert "project/show/isv:percona:PR:pr-7:ppg:releases:16:tde" not in out
+
+
+def test_render_all_skipped():
+    m = _load()
+    report = [{"project": "p", "prerelease": "x", "outcome": "skipped"}]
+    out = m.render_prerelease_comment(
+        "<!-- m -->", " (labs)", report, "https://obs", "https://run", "now", "7", "o/r"
+    )
+    assert "➖ nothing to populate on this instance (labs)" in out

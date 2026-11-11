@@ -66,6 +66,32 @@ def unit_packages(source_path: Path, source_project_id: str):
         yield from find_packages(path, project_id, recursive=False)
 
 
+def unit_members_in_slice(
+    source_path: Path,
+    source_project_id: str,
+    env_vars: "dict[str, str] | None" = None,
+    repo_filter: "RepositoryFilter | None" = None,
+) -> "list[str]":
+    """Project ids of the unit members that hold a package of the slice
+    (*repo_filter*, default the active one).
+
+    Empty when the instance does not carry the unit at all: instances hold
+    disjoint slices, and a unit can live on one of them only
+    (``ppg:staging:16:tde`` has no UBI repository; ``ppg:staging:18:extras``
+    builds only for UBI).  Packages decide, not repositories: a package-less
+    unit root keeps repositories on an instance that carries none of the
+    unit's packages, and is not created there.
+    """
+    return [
+        member
+        for member, path in release_unit_members(source_path, source_project_id)
+        if any(
+            package_in_slice(pkg_path, env_vars, repo_filter=repo_filter)
+            for _, pkg_path in find_packages(path, member, recursive=False)
+        )
+    ]
+
+
 def bundled_parent(project_id: str) -> "str | None":
     """The unit root a bundled child belongs to, or None for a unit root."""
     parent, _, name = project_id.rpartition(":")

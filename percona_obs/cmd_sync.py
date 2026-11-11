@@ -115,7 +115,12 @@ from .obs_api import (
     read_project_description_marker,
     set_project_description_markers,
 )
-from .release_scope import collect_release_scope, nested_unit_dirs
+from .release_scope import (
+    collect_release_scope,
+    nested_unit_dirs,
+    unit_members_in_slice,
+    unit_packages,
+)
 from .release_freeze import (
     assert_all_green,
     freeze_builds,
@@ -2559,6 +2564,34 @@ def _run_frozen(
             restore_builds(apiurl, snapshots)
 
 
+OUT_OF_SLICE_EXIT = 3
+
+
+def _unit_out_of_slice(
+    project: str, source_project_id: str, env_vars: "dict[str, str]"
+) -> bool:
+    """True (after saying so) when this instance carries nothing of the unit.
+
+    Instances hold disjoint slices and a release unit can live on one of
+    them only; the others have nothing to copy for it.  Decided from the
+    tree with the active profile's slice: no OBS traffic.
+    """
+    source_path = resolve_project_path(source_project_id)
+    # A unit without any package in the tree is not sliced away: leave it to
+    # the regular checks.
+    if (
+        not source_path.is_dir()
+        or not any(unit_packages(source_path, source_project_id))
+        or unit_members_in_slice(source_path, source_project_id, env_vars)
+    ):
+        return False
+    _print_same(
+        f"skipped: {project} ({source_project_id} has no package in this "
+        "instance's slice)"
+    )
+    return True
+
+
 def cmd_sync_release(args) -> None:
     """Release packages from an OBS source project to a release target.
 
@@ -2598,6 +2631,9 @@ def cmd_sync_release(args) -> None:
         **env_vars,
         **auto_rootprj_env(args.rootprj),
     }
+
+    if _unit_out_of_slice(args.project, source_project_id, shared_env_vars):
+        return
 
     from_project: "str | None" = getattr(args, "from_project", None)
     if from_project:
@@ -2945,6 +2981,15 @@ def cmd_sync_prerelease(args) -> None:
     shared_env_vars = {**env_vars, **auto_rootprj_env(args.rootprj)}
     # The freeze scope lives on the production root.
     source_env_vars = {**env_vars, **auto_rootprj_env(source_rootprj)}
+
+    out_of_slice = _unit_out_of_slice(args.project, source_project_id, source_env_vars)
+    if getattr(args, "check_slice", False):
+        if out_of_slice:
+            sys.exit(OUT_OF_SLICE_EXIT)
+        _print_same(f"in slice: {args.project}")
+        return
+    if out_of_slice:
+        return
 
     subproject_pairs, missing_mirrors = collect_release_subprojects(
         source_project_id, release_path

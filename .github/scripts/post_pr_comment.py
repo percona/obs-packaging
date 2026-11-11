@@ -52,11 +52,14 @@ def render_prerelease_comment(
     """Markdown for a release PR: one row per pre-release project.
 
     ``report`` is the list written by obs-release-pr.yml:
-    ``[{project, prerelease, outcome, source_commit, removals?}]``.
+    ``[{project, prerelease, outcome, source_commit, removals?}]``; ``outcome``
+    is ``success``, ``failure`` or ``skipped`` (unit not on this instance).
     """
     if not report:
         heading = "## OBS Release PR — ⚠️ no pre-release populated" + suffix
-    elif all(r.get("outcome") == "success" for r in report):
+    elif all(r.get("outcome") == "skipped" for r in report):
+        heading = "## OBS Release PR — ➖ nothing to populate on this instance" + suffix
+    elif all(r.get("outcome") in ("success", "skipped") for r in report):
         heading = "## OBS Release PR — ✅ Pre-release populated" + suffix
     else:
         heading = "## OBS Release PR — ❌ Pre-release population failed" + suffix
@@ -73,13 +76,21 @@ def render_prerelease_comment(
     for r in report:
         pre = r.get("prerelease", "")
         outcome = r.get("outcome", "")
-        icon = {"success": "✅", "failure": "❌"}.get(outcome, "⚠️")
+        icon = {"success": "✅", "failure": "❌", "skipped": "➖"}.get(outcome, "⚠️")
         commit = (r.get("source_commit") or "")[:12]
-        lines.append(
-            f"| `{r.get('project', '')}` | [{pre}]({web_url}/project/show/{pre}) "
-            f"| {icon} {outcome} | `{commit}` |"
+        # skipped: the instance's slice holds no package of the unit, so the
+        # pre-release project does not exist there.
+        link = (
+            "not on this instance"
+            if outcome == "skipped"
+            else f"[{pre}]({web_url}/project/show/{pre})"
         )
-    removals = [(r.get("project", ""), x) for r in report for x in r.get("removals") or []]
+        lines.append(
+            f"| `{r.get('project', '')}` | {link} | {icon} {outcome} | `{commit}` |"
+        )
+    removals = [
+        (r.get("project", ""), x) for r in report for x in r.get("removals") or []
+    ]
     if removals:
         lines += [
             "",

@@ -432,3 +432,79 @@ def test_tag_check_ignores_nested_unit(tmp_path, monkeypatch):
     commit("pkg/x")
     with pytest.raises(SystemExit, match="diverged"):
         cmd_sync._check_source_unchanged_since_tag("ppg:staging:18", "t1", args)
+
+
+# --- a unit this instance's slice does not hold ------------------------------
+
+
+def _unit_tree(tmp_path, monkeypatch):
+    """_tree_with_record plus one package in the unit root (RockyLinux_9) and
+    one in containers (ubi9)."""
+    src, rel = _tree_with_record(tmp_path, monkeypatch)
+    (src / "percona-postgresql" / "obs").mkdir(parents=True)
+    (src / "containers" / "img" / "obs").mkdir(parents=True)
+    return src, rel
+
+
+def _slice(monkeypatch, **kw):
+    import percona_obs.common as common
+    from percona_obs.project_config import RepositoryFilter
+
+    monkeypatch.setattr(common, "_default_repository_filter", RepositoryFilter(**kw))
+
+
+def test_unit_members_in_slice(tmp_path, monkeypatch):
+    from percona_obs.project_config import RepositoryFilter
+    from percona_obs.release_scope import unit_members_in_slice
+
+    src, _ = _unit_tree(tmp_path, monkeypatch)
+    members = lambda **kw: unit_members_in_slice(
+        src, "ppg:staging:17", {}, repo_filter=RepositoryFilter(**kw)
+    )
+    assert members() == ["ppg:staging:17", "ppg:staging:17:containers"]
+    assert members(include_repos=("ubi*",)) == ["ppg:staging:17:containers"]
+    assert members(include_repos=("Debian_*",)) == []
+
+
+def test_prerelease_skips_a_unit_out_of_slice(tmp_path, monkeypatch, capsys):
+    src, rel = _unit_tree(tmp_path, monkeypatch)
+    calls = []
+    _wire(monkeypatch, src, rel, calls)
+    _slice(monkeypatch, include_repos=("Debian_*",))
+    cmd_sync.cmd_sync_prerelease(_Args())
+    assert calls == []
+    assert "skipped: ppg:releases:17" in capsys.readouterr().out
+
+
+def test_prerelease_check_slice_exit_codes(tmp_path, monkeypatch, capsys):
+    src, rel = _unit_tree(tmp_path, monkeypatch)
+    calls = []
+    _wire(monkeypatch, src, rel, calls)
+    cmd_sync.cmd_sync_prerelease(_Args(check_slice=True))
+    assert "in slice: ppg:releases:17" in capsys.readouterr().out
+    _slice(monkeypatch, include_repos=("Debian_*",))
+    with pytest.raises(SystemExit) as exc:
+        cmd_sync.cmd_sync_prerelease(_Args(check_slice=True))
+    assert exc.value.code == cmd_sync.OUT_OF_SLICE_EXIT == 3
+    assert calls == []
+
+
+def test_release_from_skips_a_unit_out_of_slice(tmp_path, monkeypatch, capsys):
+    src, rel = _unit_tree(tmp_path, monkeypatch)
+    calls = []
+    _wire(monkeypatch, src, rel, calls)
+    monkeypatch.setattr(
+        cmd_sync,
+        "read_project_description_marker",
+        lambda *a, **k: pytest.fail("no OBS lookup for a skipped unit"),
+    )
+    _slice(monkeypatch, include_repos=("Debian_*",))
+    cmd_sync.cmd_sync_release(
+        _Args(
+            rootprj="home:Admin",
+            from_project="home:Admin:PR:pr-5:ppg:releases:17",
+            skip_tag_check=False,
+        )
+    )
+    assert calls == []
+    assert "skipped: ppg:releases:17" in capsys.readouterr().out

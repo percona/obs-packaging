@@ -1712,19 +1712,19 @@ def _also_setup(tmp_path, monkeypatch, in_slice, existing):
     monkeypatch.setattr(cmd_project, "_load_profile_env", lambda name: {})
     monkeypatch.setattr(cmd_project, "_load_profile_filter", lambda name: "FILTER")
 
-    def fake_in_slice(pkg_path, env, repo_filter=None):
+    def fake_members(source_path, project, env, repo_filter=None):
         assert repo_filter == "FILTER"
-        return pkg_path.parent.name in in_slice
+        return [
+            m
+            for m, path in cmd_project.release_unit_members(source_path, project)
+            if path.name in in_slice
+        ]
 
     def fake_exists(apiurl, project):
         queried.append(project)
         return project in existing
 
-    for member in ("", "containers", "tarballs"):
-        (tmp_path / "root/ppg/staging/17" / member / "pkg" / "obs").mkdir(
-            parents=True, exist_ok=True
-        )
-    monkeypatch.setattr(cmd_project, "package_in_slice", fake_in_slice)
+    monkeypatch.setattr(cmd_project, "unit_members_in_slice", fake_members)
     monkeypatch.setattr(cmd_project, "_obs_project_exists", fake_exists)
     return queried
 
