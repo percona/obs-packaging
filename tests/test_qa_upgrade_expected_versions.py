@@ -195,4 +195,7 @@ def test_mirror_lookup_keeps_projects_outside_the_mirror(monkeypatch):
     lookup.mirror = ("ppg:releases:common:upgrade", "ppg:staging:common:upgrade")
     cmd_qa._package_versions("ppg:staging:16:containers", lookup)
     cmd_qa._package_versions("ppg:releases:common:upgrade:containers", lookup)
-    assert seen == ["ppg:staging:16:containers", "ppg:staging:common:upgrade:containers"]
+    assert seen == [
+        "ppg:staging:16:containers",
+        "ppg:staging:common:upgrade:containers",
+    ]

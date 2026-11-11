@@ -285,8 +285,18 @@ UNSCHEDULED = {"19"}  # in development: on demand only, see the schedule file
         ("ppg:staging:17", "server", "18", False),
         ("ppg:staging:common:tools:containers", "ubi9-pgbouncer-pg17", "17", True),
         ("ppg:staging:common:tools:containers", "ubi9-pgbouncer-pg17", "18", False),
-        ("ppg:staging:common:upgrade:containers", "ubi9-16-to-17", "17", True),  # into 17
-        ("ppg:staging:common:upgrade:containers", "ubi9-16-to-17", "16", False),  # not from 16
+        (
+            "ppg:staging:common:upgrade:containers",
+            "ubi9-16-to-17",
+            "17",
+            True,
+        ),  # into 17
+        (
+            "ppg:staging:common:upgrade:containers",
+            "ubi9-16-to-17",
+            "16",
+            False,
+        ),  # not from 16
         ("ppg:staging:common:upgrade:extras:containers", "ubi9-17-to-18", "18", True),
         ("ppg:staging:common:upgrade:containers", None, "17", False),
         # a major's own project belongs to that major only, whatever the name
@@ -525,7 +535,9 @@ def test_release_snapshots_and_unhosted_projects_are_skipped(monkeypatch, capsys
 
 def test_major_filter_applies_per_instance(monkeypatch):
     m = _load()
-    _fake_tree(m, monkeypatch, ["ppg:staging:common:upgrade:containers", "ppg:staging:18"])
+    _fake_tree(
+        m, monkeypatch, ["ppg:staging:common:upgrade:containers", "ppg:staging:18"]
+    )
     matrix = m.matrix_per_instance(json.dumps(INSTANCES), Path("root"), "ci", "17")
     # only the upgrade into 17 from the shared project; nothing from PG 18
     assert [(c["project"], c["name"]) for c in matrix] == [
