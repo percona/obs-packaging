@@ -108,7 +108,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         sections, ids = summarize(REPO_DIR, args.units)
     except ValueError as e:
-        print(f"::error::{e}")
+        # stderr: the workflow captures stdout as the commit subject, and the
+        # runner parses workflow commands on stderr too.
+        print(f"::error::{e}", file=sys.stderr)
         return 1
     Path(args.out).write_text(json.dumps(sections, indent=2) + "\n", encoding="utf-8")
     print("release: " + ", ".join(ids))

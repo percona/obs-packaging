@@ -124,3 +124,8 @@ def test_release_cut_workflow():
         "Push the release branch"
     )
     assert "gh pr create" not in _text("obs-release-cut.yml")
+
+
+def test_release_cut_annotates_a_failed_unit():
+    text = _text("obs-release-cut.yml")
+    assert "::error::${unit}: project release failed" in text

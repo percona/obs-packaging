@@ -100,4 +100,6 @@ def test_summarize_missing_section_fails(tmp_path, monkeypatch, capsys):
     (tmp_path / "r/18/CHANGELOG.md").write_text("# c\n")
     monkeypatch.setattr(m, "REPO_DIR", tmp_path)
     assert m.main(["summarize", "--out", str(tmp_path / "o.json"), "u1"]) == 1
-    assert capsys.readouterr().out.startswith("::error::u1:")
+    captured = capsys.readouterr()
+    assert captured.out == ""  # stdout is captured as the commit subject
+    assert captured.err.startswith("::error::u1:")
