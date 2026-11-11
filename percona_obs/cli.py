@@ -914,7 +914,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     project_release_parser.add_argument(
         "project",
-        help="Source project to release from (colon notation, e.g. ppg:17).",
+        help="Staging release unit to release (e.g. ppg:staging:18, ppg:staging:18:extras).",
     )
     project_release_parser.add_argument(
         "--release-name",
@@ -922,7 +922,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         dest="release_name",
         help="Release name (e.g. 17). Directory under releases/ and suffix of the OBS release project. "
-        "Defaults to the last component of the source project (e.g. ppg:17 → 17).",
+        "Defaults to the last component of the source project (e.g. ppg:17 → 17)."
+        " For a nested unit it renames the top directory only (releases/<name>/<unit>).",
     )
     project_release_parser.add_argument(
         "--release-id",
