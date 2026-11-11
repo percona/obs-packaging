@@ -1720,6 +1720,39 @@ The `releases/` directory is excluded from `sync push` traversal — release
 directories (identified by `release.yaml`) are never synced to OBS as source
 projects.
 
+### Populate report format and stable names (release dashboard contract)
+
+The release dashboard reads these names; they are pinned by
+`tests/test_dashboard_contract.py` (spec:
+`docs/superpowers/specs/2026-11-11-dashboard-release-contract-design.md` § 4).
+
+| What | Value |
+|---|---|
+| Workflow files | `obs-release-cut.yml`, `obs-release-pr.yml`, `obs-release.yml` |
+| Labels | `obs-sync`, `qa-release` |
+| Final sync run name | `Release PR #<pr_number>` (`run-name` of `obs-release.yml`) |
+| Populate job | `Populate pre-release (<instance>)` |
+| CDN wait job | `Wait for download CDN (<instance>)` |
+| QA lane jobs | name starts with `Release / OBS QA / ` |
+| Hop-2 jobs | `Release to OBS (<instance>)`, `Publish GitHub releases and delete the pre-release`, `Delete the pre-release (<instance>)` |
+| Populate report artifact | `prerelease-report-<instance>` |
+| Unit list file | `docs/versions/release-units.json` |
+
+The `prerelease-report-<instance>` artifact is one JSON file, a list with one
+object per release project of the PR:
+
+```json
+[{"project": "ppg:releases:18",
+  "prerelease": "isv:percona:PR:pr-415:ppg:releases:18",
+  "outcome": "success",
+  "source_commit": "9e9d973...",
+  "removals": ["package python3-six", "project ppg:releases:18:old"]}]
+```
+
+`outcome` is `success` or `failure`; `removals` lists what hop 2 would delete,
+each string prefixed `package ` or `project `. Fields may be added; these five
+keep their names and meaning.
+
 ### Non-release PR: copying binaries to production on merge
 
 `sync release-pr` still exists, but no workflow invokes it anymore — it is a

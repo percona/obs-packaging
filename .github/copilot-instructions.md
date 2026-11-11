@@ -1188,6 +1188,8 @@ Permissions: `contents: write` (tag creation), `actions: write` (dispatch + cach
 
 **Required repository config**: as Workflow 5's QA part (`OBS_INSTANCES`, `OBS_USER`, `JENKINS_URL`, `JENKINS_USER`; `OBS_PASSWORD_<NAME>`, `JENKINS_API_TOKEN`).
 
+**Dashboard contract**: the workflow file names, the `qa-release`/`obs-sync` labels, the job names of `obs-release-pr.yml` / `obs-release.yml`, the `prerelease-report-<instance>` artifact and `obs-release.yml`'s `run-name` (`Release PR #<N>`) are read by an external release dashboard and pinned by `tests/test_dashboard_contract.py`; do not rename them (see `docs/PERCONA_OBS_TOOL.md`, "Populate report format and stable names").
+
 ### Workflow 8 — `obs-release.yml` (hop 2: copy the pre-release into the release project)
 
 **Trigger**: `workflow_dispatch` only (a pushed tag is inert). Inputs: `pr_number` (the merged release PR) and `tags` (space-separated release tags that PR created). Dispatched by `obs-pr-cleanup.yml`; manual recovery is `gh workflow run obs-release.yml -f pr_number=N -f tags="ppg/17.12-1 ppg/18.7-1"` and is idempotent.
