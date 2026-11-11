@@ -66,6 +66,19 @@ def test_release_pr_label():
     assert "'qa-release'" in _text("obs-release-pr.yml")
 
 
+def test_release_pr_sync_gate():
+    # PyYAML loads the bare `on:` key as True; `unlabeled` must stay unsubscribed.
+    assert PR[True]["pull_request"]["types"] == [
+        "opened",
+        "synchronize",
+        "reopened",
+        "labeled",
+    ]
+    resolve_if = PR["jobs"]["resolve"]["if"]
+    assert "'obs-sync'" in resolve_if and "'qa-release'" in resolve_if
+    assert PR["jobs"]["populate"]["if"] == "needs.resolve.outputs.populate == 'true'"
+
+
 def test_obs_release_names():
     assert REL["run-name"] == "Release PR #${{ inputs.pr_number }}"
     jobs = REL["jobs"]

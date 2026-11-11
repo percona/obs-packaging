@@ -1,6 +1,7 @@
 """Pure helpers of the release-PR workflow (.github/scripts/release_pr.py)."""
 
 import importlib.util
+import pytest
 from pathlib import Path
 
 _SCRIPTS = Path(__file__).parent.parent / ".github/scripts"
@@ -153,3 +154,91 @@ def test_project_for_tag(tmp_path):
     assert m.project_for_tag("ppg/extras-18.6-6", tmp_path) == "ppg:releases:18:extras"
     assert m.project_for_tag("ppg/18.6-5", tmp_path) == "ppg:releases:18"
     assert m.project_for_tag("ppg/18.6-4", tmp_path) is None
+
+
+@pytest.mark.parametrize(
+    "kind,event,action,label,run_sync,want",
+    [
+        ("release", "pull_request", "opened", "", False, False),
+        ("release", "pull_request", "synchronize", "", False, False),
+        ("release", "pull_request", "reopened", "", True, True),
+        ("release", "pull_request", "synchronize", "", True, True),
+        ("release", "pull_request", "labeled", "obs-sync", True, True),
+        ("release", "pull_request", "labeled", "qa-release", True, False),
+        ("release", "pull_request", "labeled", "qa-release", False, False),
+        ("release", "workflow_dispatch", "", "", False, True),
+        ("changelog", "pull_request", "synchronize", "", True, False),
+        ("none", "workflow_dispatch", "", "", True, False),
+    ],
+)
+def test_should_populate(kind, event, action, label, run_sync, want):
+    assert _load().should_populate(kind, event, action, label, run_sync) is want
+
+
+def _run_classify(tmp_path, monkeypatch, files, env, since=None, strict=False):
+    import json
+    import subprocess
+
+    mod = _load()
+
+    def fake_run(cmd, capture_output=True, text=True):
+        args = cmd[1:]
+        if args[:2] == ["pr", "view"] and "files" in args:
+            out = json.dumps(files)
+        elif args[:2] == ["pr", "list"]:
+            out = "[]"
+        elif args[:2] == ["pr", "view"] and "headRefOid" in args:
+            out = json.dumps({"headRefOid": "abc123"})
+        elif args[0] == "api":
+            out = json.dumps(["root/ppg/releases/17/CHANGELOG.md"])
+        else:
+            raise AssertionError(cmd)
+        return subprocess.CompletedProcess(cmd, 0, out, "")
+
+    out_file = tmp_path / "out"
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out_file))
+    for k in ("EVENT_NAME", "EVENT_ACTION", "EVENT_LABEL", "RUN_SYNC"):
+        monkeypatch.delenv(k, raising=False)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    mod._cli_classify(201, strict, since)
+    return out_file.read_text()
+
+
+_REL = [{"path": "root/ppg/releases/17/release.yaml"}]
+
+
+def test_cli_classify_writes_populate(tmp_path, monkeypatch, capsys):
+    env = {"EVENT_NAME": "pull_request", "EVENT_ACTION": "opened", "RUN_SYNC": "true"}
+    out = _run_classify(tmp_path, monkeypatch, _REL, env)
+    assert "kind=release" in out and "populate=true" in out
+    assert "not started" not in capsys.readouterr().out
+
+
+def test_cli_classify_unlabelled_notice(tmp_path, monkeypatch, capsys):
+    env = {"EVENT_NAME": "pull_request", "EVENT_ACTION": "opened", "RUN_SYNC": "false"}
+    out = _run_classify(tmp_path, monkeypatch, _REL, env)
+    assert "populate=false" in out
+    assert (
+        "::notice::pre-release sync not started: add the obs-sync label to this PR"
+        in capsys.readouterr().out
+    )
+
+
+def test_cli_classify_changelog_push_not_populated(tmp_path, monkeypatch):
+    env = {
+        "EVENT_NAME": "pull_request",
+        "EVENT_ACTION": "synchronize",
+        "RUN_SYNC": "true",
+    }
+    out = _run_classify(tmp_path, monkeypatch, _REL, env, since="old")
+    assert "kind=changelog" in out and "populate=false" in out
+
+
+def test_cli_classify_none_writes_populate_false(tmp_path, monkeypatch):
+    out = _run_classify(
+        tmp_path, monkeypatch, [{"path": "README.md"}], {"RUN_SYNC": "true"}
+    )
+    assert "kind=none" in out and "populate=false" in out
