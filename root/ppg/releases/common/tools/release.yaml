@@ -1,0 +1,5 @@
+project: ppg:staging:common:tools
+releases:
+- source_commit: 23f7988814eb0fd7fc2a6b3bc9a7eaf49bf0deca
+  tag: ppg/common-tools-1
+repository: ${PERCONA_OBS_PACKAGING_REPO}
