@@ -23,14 +23,14 @@ Depends:
 Breaks:
  postgresql-client-common (<< 277),
  percona-postgresql-client-common (<< 277),
- postgresql-common (<< 294),
+ postgresql-common (<< 1:294~),
  percona-postgresql-common (<< 277),
  postgresql-server-dev-all (<< 277),
  percona-postgresql-server-dev-all (<< 277)
 Replaces:
  postgresql-client-common (<< 277),
  percona-postgresql-client-common (<< 277),
- postgresql-common (<< 294),
+ postgresql-common (<< 1:294~),
  percona-postgresql-common (<< 277),
  postgresql-server-dev-all (<< 277),
  percona-postgresql-server-dev-all (<< 277)
