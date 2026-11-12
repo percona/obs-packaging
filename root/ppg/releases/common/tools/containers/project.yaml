@@ -1,5 +1,5 @@
 build: false
-description: 'Tools:containers subproject for ppg:releases:common.
+description: 'Containers subproject for ppg:releases:common:tools.
 
   Builds are disabled; binaries are copied via osc release.
 
@@ -107,6 +107,16 @@ project-config: '# --- from root/ppg/staging/common/tools/containers/project.yam
 
   BuildFlags: dockerarg:UBI_BASE=registry.access.redhat.com/ubi9/ubi-minimal:latest
 
+  # TEMPORARY (2026-11-11): UBI 9 appstream ships netavark 3:1.17.2 requiring
+
+  # aardvark-dns >= 3:1.17, but only aardvark-dns 2:1.17.1 is published, so
+
+  # the podman build environment is unresolvable.  Build-env only; drop once
+
+  # Red Hat publishes the matching aardvark-dns.
+
+  Ignore: netavark:aardvark-dns
+
 
   %endif
 
@@ -164,7 +174,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:14:containers
       repository: ubi8
-    SERVER_VERSION: '14.24'
+    SERVER_VERSION: '14.25'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -181,7 +191,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:15:containers
       repository: ubi8
-    SERVER_VERSION: '15.19'
+    SERVER_VERSION: '15.20'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -198,7 +208,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:16:containers
       repository: ubi8
-    SERVER_VERSION: '16.15'
+    SERVER_VERSION: '16.16'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -215,7 +225,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:17:containers
       repository: ubi8
-    SERVER_VERSION: '17.11'
+    SERVER_VERSION: '17.12'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -232,7 +242,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:18:containers
       repository: ubi8
-    SERVER_VERSION: '18.6'
+    SERVER_VERSION: '18.7'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -266,7 +276,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:14:containers
       repository: ubi8
-    SERVER_VERSION: '14.24'
+    SERVER_VERSION: '14.25'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -283,7 +293,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:15:containers
       repository: ubi8
-    SERVER_VERSION: '15.19'
+    SERVER_VERSION: '15.20'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -300,7 +310,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:16:containers
       repository: ubi8
-    SERVER_VERSION: '16.15'
+    SERVER_VERSION: '16.16'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -317,7 +327,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:17:containers
       repository: ubi8
-    SERVER_VERSION: '17.11'
+    SERVER_VERSION: '17.12'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -334,7 +344,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:18:containers
       repository: ubi8
-    SERVER_VERSION: '18.6'
+    SERVER_VERSION: '18.7'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -368,7 +378,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:14:containers
       repository: ubi9
-    SERVER_VERSION: '14.24'
+    SERVER_VERSION: '14.25'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -385,7 +395,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:15:containers
       repository: ubi9
-    SERVER_VERSION: '15.19'
+    SERVER_VERSION: '15.20'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -402,7 +412,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:16:containers
       repository: ubi9
-    SERVER_VERSION: '16.15'
+    SERVER_VERSION: '16.16'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -419,7 +429,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:17:containers
       repository: ubi9
-    SERVER_VERSION: '17.11'
+    SERVER_VERSION: '17.12'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -436,7 +446,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:18:containers
       repository: ubi9
-    SERVER_VERSION: '18.6'
+    SERVER_VERSION: '18.7'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -470,7 +480,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:14:containers
       repository: ubi9
-    SERVER_VERSION: '14.24'
+    SERVER_VERSION: '14.25'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -487,7 +497,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:15:containers
       repository: ubi9
-    SERVER_VERSION: '15.19'
+    SERVER_VERSION: '15.20'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -504,7 +514,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:16:containers
       repository: ubi9
-    SERVER_VERSION: '16.15'
+    SERVER_VERSION: '16.16'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -521,7 +531,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:17:containers
       repository: ubi9
-    SERVER_VERSION: '17.11'
+    SERVER_VERSION: '17.12'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -538,7 +548,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:18:containers
       repository: ubi9
-    SERVER_VERSION: '18.6'
+    SERVER_VERSION: '18.7'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -572,7 +582,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:14:containers
       repository: ubi10
-    SERVER_VERSION: '14.24'
+    SERVER_VERSION: '14.25'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -589,7 +599,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:15:containers
       repository: ubi10
-    SERVER_VERSION: '15.19'
+    SERVER_VERSION: '15.20'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -606,7 +616,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:16:containers
       repository: ubi10
-    SERVER_VERSION: '16.15'
+    SERVER_VERSION: '16.16'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -623,7 +633,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:17:containers
       repository: ubi10
-    SERVER_VERSION: '17.11'
+    SERVER_VERSION: '17.12'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -640,7 +650,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:18:containers
       repository: ubi10
-    SERVER_VERSION: '18.6'
+    SERVER_VERSION: '18.7'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -674,7 +684,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:14:containers
       repository: ubi10
-    SERVER_VERSION: '14.24'
+    SERVER_VERSION: '14.25'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -691,7 +701,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:15:containers
       repository: ubi10
-    SERVER_VERSION: '15.19'
+    SERVER_VERSION: '15.20'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -708,7 +718,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:16:containers
       repository: ubi10
-    SERVER_VERSION: '16.15'
+    SERVER_VERSION: '16.16'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -725,7 +735,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:17:containers
       repository: ubi10
-    SERVER_VERSION: '17.11'
+    SERVER_VERSION: '17.12'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -742,7 +752,7 @@ qa:
       image: percona-distribution-postgresql
       project: ppg:staging:18:containers
       repository: ubi10
-    SERVER_VERSION: '18.6'
+    SERVER_VERSION: '18.7'
     TESTING_BRANCH: main
     WITH_TDE: false
   pipeline: docker-component-parallel
@@ -771,22 +781,6 @@ repositories:
   paths:
   - project: RedHat:UBI:Registry
     repository: images
-  - repository: UBI_8
-    subproject: ppg:releases:common:tools
-  - repository: UBI_8
-    subproject: ppg:staging:18
-  - repository: UBI_8
-    subproject: ppg:staging:17
-  - repository: UBI_8
-    subproject: ppg:staging:16
-  - repository: UBI_8
-    subproject: ppg:staging:15
-  - repository: UBI_8
-    subproject: ppg:staging:14
-  - repository: UBI_8
-    subproject: ppg:common:deps
-  - repository: UBI_8
-    subproject: common:containers:ubi8
   - project: Fedora:EPEL:8
     repository: standard
   - project: RedHat:UBI-8
@@ -806,24 +800,6 @@ repositories:
   paths:
   - project: RedHat:UBI:Registry
     repository: images
-  - repository: UBI_9
-    subproject: ppg:releases:common:tools
-  - repository: UBI_9
-    subproject: ppg:staging:18
-  - repository: UBI_9
-    subproject: ppg:staging:17
-  - repository: UBI_9
-    subproject: ppg:staging:16
-  - repository: UBI_9
-    subproject: ppg:staging:15
-  - repository: UBI_9
-    subproject: ppg:staging:14
-  - repository: UBI_9
-    subproject: ppg:common:deps
-  - repository: UBI_9
-    subproject: ppg:common:deps:pgadmin
-  - repository: UBI_9
-    subproject: common:containers:ubi9
   - project: Fedora:EPEL:9
     repository: standard
   - project: RedHat:UBI-9
@@ -835,24 +811,8 @@ repositories:
   paths:
   - project: RedHat:UBI:Registry
     repository: images
-  - repository: UBI_10
-    subproject: ppg:releases:common:tools
-  - repository: UBI_10
-    subproject: ppg:staging:18
-  - repository: UBI_10
-    subproject: ppg:staging:17
-  - repository: UBI_10
-    subproject: ppg:staging:16
-  - repository: UBI_10
-    subproject: ppg:staging:15
-  - repository: UBI_10
-    subproject: ppg:staging:14
-  - repository: UBI_10
-    subproject: ppg:common:deps
-  - repository: UBI_10
-    subproject: common:containers:ubi10
   - project: Fedora:EPEL:10
     repository: standard
   - project: RedHat:UBI-10
     repository: standard
-title: ppg releases common — tools:containers
+title: ppg releases common:tools — containers
