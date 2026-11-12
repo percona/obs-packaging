@@ -1882,6 +1882,10 @@ def _container_changelog_label(
     return f"{sub.replace(':', '/')}/{flavor}"
 
 
+# Threads of the per-package OBS lookups of a release cut.
+_FETCH_WORKERS = 8
+
+
 def _fetch_subproject_container_pkgs(
     apiurl: str,
     obs_project: str,
@@ -1899,9 +1903,11 @@ def _fetch_subproject_container_pkgs(
     if not pkg_names:
         return result
     pkg_repo_archs = _fetch_all_pkg_repo_archs(apiurl, obs_project)
-    for pkg in pkg_names:
+
+    def _image(pkg: str) -> "list[tuple[str, dict[str, str]]]":
         if _detect_obs_container_info(apiurl, obs_project, pkg) is None:
-            continue
+            return []
+        found = []
         for repo, arch in pkg_repo_archs.get(pkg, []):
             pkgs = _fetch_build_container_packages(
                 apiurl, obs_project, repo, arch, pkg, rootprj
@@ -1910,7 +1916,14 @@ def _fetch_subproject_container_pkgs(
                 label = _container_changelog_label(
                     obs_project, repo, parent_obs_project
                 )
-                result[f"{pkg} ({label})"] = pkgs
+                found.append((f"{pkg} ({label})", pkgs))
+        return found
+
+    # One image at a time is a serial chain of requests; map() keeps the
+    # package order, so the result does not depend on completion order.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=_FETCH_WORKERS) as pool:
+        for found in pool.map(_image, pkg_names):
+            result.update(found)
     return result
 
 
@@ -1997,8 +2010,8 @@ def _fetch_project_pkg_versions(apiurl: str, obs_project: str) -> "dict[str, str
         return {}
     pkg_archs = _fetch_all_pkg_archs(apiurl, obs_project)
     pkg_repo_archs = _fetch_all_pkg_repo_archs(apiurl, obs_project)
-    result: dict[str, str] = {}
-    for pkg in pkg_names:
+
+    def _versrel(pkg: str) -> "str | None":
         # Preferred (repo, arch) first, then the package's other repos: in a
         # release project every repo is "disabled", so the preferred one may
         # be a repo the package never built in (gdal38 only builds on
@@ -2009,9 +2022,15 @@ def _fetch_project_pkg_versions(apiurl: str, obs_project: str) -> "dict[str, str
         for repo, arch in candidates:
             versrel = _fetch_pkg_versrel(apiurl, obs_project, repo, arch, pkg)
             if versrel:
-                result[pkg] = versrel
-                break
-    return result
+                return versrel
+        return None
+
+    # One request per package: serial, a project of 60 packages takes a
+    # minute on a distant instance.  The HTTP throttle is shared by the
+    # threads, so the request rate stays under its limit.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=_FETCH_WORKERS) as pool:
+        versrels = list(pool.map(_versrel, pkg_names))
+    return {pkg: v for pkg, v in zip(pkg_names, versrels) if v}
 
 
 def _pkg_service(pkg_dir: Path) -> "Path | None":
@@ -2649,6 +2668,33 @@ def _collect_release_obs_data(
     )
 
 
+def _collect_release_obs_data_all(
+    instances: "list[tuple[str, str]]",
+    source_project_id: str,
+    release_project_id: str,
+    noncontainer_subs: "list[str]",
+    container_subs: "list[str]",
+) -> "list[_ReleaseObsData]":
+    """``_collect_release_obs_data`` of every (apiurl, rootprj), the instances
+    queried at the same time; the result keeps the order of *instances*."""
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=max(1, len(instances))
+    ) as pool:
+        return list(
+            pool.map(
+                lambda inst: _collect_release_obs_data(
+                    inst[0],
+                    inst[1],
+                    source_project_id,
+                    release_project_id,
+                    noncontainer_subs,
+                    container_subs,
+                ),
+                instances,
+            )
+        )
+
+
 def _merge_release_obs_data(parts: "list[_ReleaseObsData]") -> _ReleaseObsData:
     """Union per-instance CHANGELOG inputs.
 
@@ -2907,17 +2953,9 @@ def cmd_project_release(args: argparse.Namespace) -> None:
             noncontainer_subs.append(subproject_name)
 
     obs_data = _merge_release_obs_data(
-        [
-            _collect_release_obs_data(
-                inst_apiurl,
-                inst_rootprj,
-                args.project,
-                release_project,
-                noncontainer_subs,
-                container_subs,
-            )
-            for inst_apiurl, inst_rootprj in instances
-        ]
+        _collect_release_obs_data_all(
+            instances, args.project, release_project, noncontainer_subs, container_subs
+        )
     )
     source_versions = obs_data.source_versions
     release_versions = obs_data.release_versions

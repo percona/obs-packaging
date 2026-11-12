@@ -1816,3 +1816,92 @@ def test_server_package_instance_without_server_is_the_main_instance(monkeypatch
         "common",
     )
     assert got == ("http://boo", "B:ppg:staging:common:upgrade", {})
+
+
+# --- concurrent CHANGELOG lookups -------------------------------------------
+
+
+def test_fetch_project_pkg_versions_independent_of_completion_order(monkeypatch):
+    import time
+
+    names = [f"pkg{i:02d}" for i in range(20)]
+    monkeypatch.setattr(
+        cmd_project, "_fetch_obs_package_names", lambda a, p: set(names)
+    )
+    monkeypatch.setattr(
+        cmd_project,
+        "_fetch_all_pkg_archs",
+        lambda a, p: {n: ("R", "x86_64") for n in names},
+    )
+    monkeypatch.setattr(cmd_project, "_fetch_all_pkg_repo_archs", lambda a, p: {})
+
+    def versrel(a, p, repo, arch, pkg):
+        # the first packages answer last
+        time.sleep(0.002 * (20 - int(pkg[3:])))
+        return None if pkg == "pkg07" else f"1.{int(pkg[3:])}-1"
+
+    monkeypatch.setattr(cmd_project, "_fetch_pkg_versrel", versrel)
+    got = cmd_project._fetch_project_pkg_versions("http://obs", "prj")
+    assert list(got) == [n for n in names if n != "pkg07"]
+    assert got["pkg19"] == "1.19-1" and "pkg07" not in got
+
+
+def test_fetch_subproject_container_pkgs_keeps_package_order(monkeypatch):
+    import time
+
+    monkeypatch.setattr(
+        cmd_project,
+        "_fetch_obs_package_names",
+        lambda a, p: {"img-a", "img-b", "notimg"},
+    )
+    monkeypatch.setattr(
+        cmd_project,
+        "_fetch_all_pkg_repo_archs",
+        lambda a, p: {n: [("ubi9", "x86_64")] for n in ("img-a", "img-b", "notimg")},
+    )
+    monkeypatch.setattr(
+        cmd_project,
+        "_detect_obs_container_info",
+        lambda a, p, pkg: None if pkg == "notimg" else object(),
+    )
+
+    def packages(a, p, repo, arch, pkg, rootprj):
+        time.sleep(0.02 if pkg == "img-a" else 0)
+        return {"pg": pkg}
+
+    monkeypatch.setattr(cmd_project, "_fetch_build_container_packages", packages)
+    monkeypatch.setattr(
+        cmd_project, "_container_changelog_label", lambda prj, repo, parent: repo
+    )
+    got = cmd_project._fetch_subproject_container_pkgs("http://obs", "prj", "R")
+    assert list(got.items()) == [
+        ("img-a (ubi9)", {"pg": "img-a"}),
+        ("img-b (ubi9)", {"pg": "img-b"}),
+    ]
+
+
+def test_collect_release_obs_data_all_keeps_instance_order(monkeypatch):
+    import time
+
+    def collect(apiurl, rootprj, *a):
+        time.sleep(0.03 if apiurl == "http://boo" else 0)
+        return _obs_data(source_versions={"from": apiurl})
+
+    monkeypatch.setattr(cmd_project, "_collect_release_obs_data", collect)
+    parts = cmd_project._collect_release_obs_data_all(
+        [("http://boo", "B"), ("http://labs", "L")], "p", "r", [], []
+    )
+    assert [p.source_versions["from"] for p in parts] == ["http://boo", "http://labs"]
+
+
+def test_collect_release_obs_data_all_propagates_a_failure(monkeypatch):
+    def collect(apiurl, rootprj, *a):
+        if apiurl == "http://labs":
+            raise SystemExit("error: container image keys collide")
+        return _obs_data()
+
+    monkeypatch.setattr(cmd_project, "_collect_release_obs_data", collect)
+    with pytest.raises(SystemExit, match="collide"):
+        cmd_project._collect_release_obs_data_all(
+            [("http://boo", "B"), ("http://labs", "L")], "p", "r", [], []
+        )
