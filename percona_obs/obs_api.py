@@ -1,5 +1,6 @@
 import copy
 import hashlib
+import time
 import urllib.error
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -1322,6 +1323,38 @@ def read_project_description_marker(
     return None
 
 
+# Waits between the attempts to see a project OBS just accepted.
+_CREATE_VISIBLE_DELAYS = (2, 4, 8)
+
+
+def _await_created_project(
+    apiurl: str, obs_project_name: str, meta: str
+) -> "tuple[str, bool]":
+    """Return (project config, paths_stripped) of a project that was just
+    created but answered 404 on its config read.
+
+    Each attempt waits, writes the meta again (a no-op when the project is
+    there, a re-create when a late delete removed it) and reads the config.
+    Exits when the project stays invisible.
+    """
+    for delay in _CREATE_VISIBLE_DELAYS:
+        logger.warning(
+            f"project not visible after create, retrying in {delay}s: "
+            f"{obs_project_name}"
+        )
+        time.sleep(delay)
+        stripped = _edit_project_meta(apiurl, obs_project_name, meta, force=False)
+        try:
+            conf = _decode_obs_response(
+                osc.core.show_project_conf(apiurl, obs_project_name)
+            )
+            return conf, stripped
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                _obs_api_error(e, f"fetching project config for {obs_project_name}")
+    raise SystemExit(f"error: project {obs_project_name} not visible after create")
+
+
 def _apply_project_config(
     apiurl: str,
     obs_project_name: str,
@@ -1402,6 +1435,7 @@ def _apply_project_config(
     # --- project meta ---
     logger.debug(f"  meta XML:\n{meta}")
     current = b""
+    meta_to_upload = meta
     project_meta_exists = True
     paths_stripped = False
     project_changed = False
@@ -1457,10 +1491,18 @@ def _apply_project_config(
             osc.core.show_project_conf(apiurl, obs_project_name)
         )
     except urllib.error.HTTPError as e:
-        if e.code == 404:
-            project_conf_exists = False
-        else:
+        if e.code != 404:
             _obs_api_error(e, f"fetching project config for {obs_project_name}")
+        if not project_meta_exists and not dry_run:
+            # A project that exists always answers the config read.  A 404
+            # right after the create means OBS lost the project (a delete
+            # issued just before finished late) or does not show it yet.
+            current_conf, stripped = _await_created_project(
+                apiurl, obs_project_name, meta_to_upload
+            )
+            paths_stripped = paths_stripped or stripped
+        else:
+            project_conf_exists = False
 
     if not project_conf_exists:
         logger.debug(f"creating project config: {obs_project_name}")

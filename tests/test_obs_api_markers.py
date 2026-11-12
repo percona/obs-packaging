@@ -202,3 +202,87 @@ def test_set_project_publish_inserts_before_build_and_drops(monkeypatch):
     pushed2 = _capture_publish(monkeypatch, pushed["meta"])
     obs_api.set_project_publish("http://obs", "P", None)
     assert obs_api.ET.fromstring(pushed2["meta"]).find("publish") is None
+
+
+def _http_404():
+    import urllib.error
+
+    return urllib.error.HTTPError("http://obs", 404, "Not Found", {}, None)  # type: ignore[arg-type]
+
+
+def _created_project(monkeypatch, conf_answers):
+    """Drive _apply_project_config through a create; *conf_answers* are the
+    successive results of the config read (an exception instance is raised)."""
+    calls = {"meta": 0, "conf_writes": 0, "sleeps": []}
+
+    def show_meta(a, p):
+        raise _http_404()
+
+    def edit_meta(a, p, meta, force):
+        calls["meta"] += 1
+        return False
+
+    answers = iter(conf_answers)
+
+    def show_conf(a, p):
+        answer = next(answers)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    def osc_edit_meta(**kwargs):
+        calls["conf_writes"] += 1
+
+    monkeypatch.setattr(
+        obs_api,
+        "_load_project_config_with_inheritance",
+        lambda p, e: {"title": "t", "repositories": [], "project-config": "x"},
+    )
+    monkeypatch.setattr(obs_api, "build_project_meta", lambda *a, **k: "<project/>")
+    monkeypatch.setattr(obs_api.osc.core, "show_project_meta", show_meta)
+    monkeypatch.setattr(obs_api, "_edit_project_meta", edit_meta)
+    monkeypatch.setattr(
+        obs_api, "_fetch_root_project_managed_elements", lambda a, r: []
+    )
+    monkeypatch.setattr(obs_api, "_inject_obs_managed_elements", lambda m, e: m)
+    monkeypatch.setattr(obs_api.osc.core, "show_project_conf", show_conf)
+    monkeypatch.setattr(obs_api.osc.core, "edit_meta", osc_edit_meta)
+    monkeypatch.setattr(obs_api.time, "sleep", calls["sleeps"].append)
+    return calls
+
+
+def test_created_project_invisible_once_is_recreated(monkeypatch, tmp_path):
+    calls = _created_project(monkeypatch, [_http_404(), ""])
+    obs_api._apply_project_config("http://obs", "root:P", tmp_path, "root")
+    assert calls["meta"] == 2  # the create and one re-write
+    assert calls["sleeps"] == [2]
+    assert calls["conf_writes"] == 1
+
+
+def test_created_project_never_visible_fails(monkeypatch, tmp_path):
+    import pytest
+
+    calls = _created_project(monkeypatch, [_http_404()] * 4)
+    with pytest.raises(SystemExit, match="root:P not visible after create"):
+        obs_api._apply_project_config("http://obs", "root:P", tmp_path, "root")
+    assert calls["sleeps"] == [2, 4, 8]
+    assert calls["conf_writes"] == 0
+
+
+def test_created_project_visible_does_not_retry(monkeypatch, tmp_path):
+    calls = _created_project(monkeypatch, [""])
+    obs_api._apply_project_config("http://obs", "root:P", tmp_path, "root")
+    assert calls["meta"] == 1
+    assert calls["sleeps"] == []
+
+
+def test_existing_project_without_config_does_not_retry(monkeypatch, tmp_path):
+    calls = _created_project(monkeypatch, [_http_404()])
+    monkeypatch.setattr(
+        obs_api.osc.core, "show_project_meta", lambda a, p: "<project/>"
+    )
+    monkeypatch.setattr(obs_api, "_project_meta_subset_equal", lambda c, m: True)
+    obs_api._apply_project_config("http://obs", "root:P", tmp_path, "root")
+    assert calls["meta"] == 0
+    assert calls["sleeps"] == []
+    assert calls["conf_writes"] == 1
