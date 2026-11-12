@@ -12,6 +12,52 @@ debuginfo:
   RockyLinux_9.6: true
   openSUSE_Tumbleweed: true
   openSUSE_Leap_16: true
+# QA: the same server tests as ppg:staging:%!{PG_MAJOR_VERSION} (see its
+# project.yaml), pointed at this project's packages.  No debian-12 platforms:
+# this project has no Debian_12 repository.  No upgrade lane: there is no
+# released tde build of this major to upgrade from yet.
+qa:
+  - name: server
+    pipeline: ppg-multiOS-parallel
+    parameters:
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}:tde
+      VERSION: ppg-%!{PG_VERSION}
+      PLATFORMS:
+        - debian-13
+        - debian-13-arm
+        - ubuntu-jammy
+        - ubuntu-jammy-arm
+        - ubuntu-noble
+        - ubuntu-noble-arm
+        - ubuntu-resolute
+        - ubuntu-resolute-arm
+        - rocky-8
+        - rocky-8-arm
+        - rocky-9
+        - rocky-9-arm
+        - rocky-10
+        - rocky-10-arm
+        - ol-8
+        - ol-8-arm
+        - ol-9
+        - ol-9-arm
+        - ol-10
+        - ol-10-arm
+        - rhel-8
+        - rhel-8-arm
+        - rhel-9
+        - rhel-9-arm
+        - rhel-10
+        - rhel-10-arm
+      TESTING_BRANCH: main
+      SCENARIO:
+        - pg-%!{PG_MAJOR_VERSION}
+        - pg-%!{PG_MAJOR_VERSION}-meta-server
+        - pg-%!{PG_MAJOR_VERSION}-meta-ha
+    matrix:
+      - SCENARIO
+
 repositories:
   - name: RockyLinux_8
     paths:
