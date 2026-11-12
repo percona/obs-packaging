@@ -13,6 +13,12 @@ else
 endif
 SUPPORTED_VERSIONS := %!{PG_MAJOR_VERSION}
 DEFAULT_VER := %!{PG_MAJOR_VERSION}
+# Each major builds its own metapackages (percona-postgresql, -all, ...)
+# that depend on that major only, so put the major first in their version
+# like upstream ($(DEFAULT_VER)+$${source:Version}): a newer major's repo
+# then always sorts higher on a major upgrade. Epoch 2 keeps them above the
+# already-released 1:<p-common> versions.
+META_VERSION := 2:$(DEFAULT_VER)+$(DEB_VERSION_UPSTREAM_REVISION)
 
 #py2#PYTHON2_PACKAGE=postgresql-plpython-$v
 
@@ -61,18 +67,18 @@ override_dh_installsystemd:
 	dh_installsysusers
 
 override_dh_gencontrol:
-	dh_gencontrol -ppercona-postgresql-server-dev-all -- -Vserver-dev-all-depends="$(foreach v,$(SUPPORTED_VERSIONS),percona-postgresql-server-dev-$v,)"
+	dh_gencontrol -ppercona-postgresql-server-dev-all -- -v'$(META_VERSION)' -Vserver-dev-all-depends="$(foreach v,$(SUPPORTED_VERSIONS),percona-postgresql-server-dev-$v,)"
 
 	# the versionless metapackages need to have version numbers which match
 	# the server version, not the p-common version
 	dh_gencontrol -ppercona-postgresql -ppercona-postgresql-client -ppercona-postgresql-doc -ppercona-postgresql-contrib -ppercona-postgresql-all -- \
-		-Vdefault-version="$(DEFAULT_VER)" -v'$${source:Version}' \
+		-Vdefault-version="$(DEFAULT_VER)" -v'$(META_VERSION)' \
 		-Vpostgresql-all-depends="$(foreach v,$(SUPPORTED_VERSIONS),percona-postgresql-contrib-$v,percona-postgresql-plperl-$v,$(if $(filter 8.% 9.% 10 11, $v), $(PYTHON2_PACKAGE)),percona-postgresql-plpython3-$v,percona-postgresql-pltcl-$v,)"
 
 	dh_gencontrol -ppostgresql-client-common -- \
 		-Vpgdg:Depends="$(PGDG_DEPENDS)"
 
-	dh_gencontrol -ppercona-postgresql-all -- \
+	dh_gencontrol -ppercona-postgresql-all -- -v'$(META_VERSION)' \
 		-Vpostgresql-all-depends="$(foreach v,$(SUPPORTED_VERSIONS),percona-postgresql-contrib-$v,percona-postgresql-plperl-$v,$(if $(filter 8.% 9.% 10 11, $v), $(PYTHON2_PACKAGE)),percona-postgresql-plpython3-$v,percona-postgresql-pltcl-$v,)"
 
 	dh_gencontrol --remaining-packages
