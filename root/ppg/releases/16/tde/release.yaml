@@ -1,0 +1,5 @@
+project: ppg:staging:16:tde
+releases:
+- source_commit: d306f5506d90ec79a79a683e9186bc588668c0a0
+  tag: ppg/tde-16.16-1
+repository: ${PERCONA_OBS_PACKAGING_REPO}
