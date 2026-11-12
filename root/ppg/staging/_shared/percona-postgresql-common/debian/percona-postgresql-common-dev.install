@@ -1,2 +1,3 @@
+debian/minor_versions etc/postgresql-common
 debian/supported-versions usr/share/postgresql-common
 

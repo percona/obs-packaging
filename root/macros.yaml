@@ -112,7 +112,7 @@
 # PostGIS 3.7 split these two extensions out of its tree; only PG 19 has them.
 - ADDRESS_STANDARDIZER_VERSION: 3.7.0
 - POSTGIS_TIGER_GEOCODER_VERSION: 2025.2
-- POSTGRESQL_COMMON_VERSION: 293
+- POSTGRESQL_COMMON_VERSION: 294
 - PSYCOPG2_VERSION: 2.9.13
 
 # Keep _VERSION and _TAG macros in sync for consistency.

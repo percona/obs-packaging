@@ -1,0 +1,2 @@
+u postgres - "PostgreSQL administrator" /var/lib/postgresql /bin/bash
+m postgres ssl-cert

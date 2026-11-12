@@ -1,0 +1,11 @@
+# This file is used by pg_buildext to map PostgreSQL major versions to the
+# minimum minor versions that extension packages built against the server
+# should depend on.
+
+20 20~~devel
+19 19~rc2
+18 18.7
+17 17.12
+16 16.16
+15 15.20
+14 14.25
