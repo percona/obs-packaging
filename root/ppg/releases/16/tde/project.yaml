@@ -4,9 +4,11 @@ debuginfo:
   RockyLinux_9.6: true
   openSUSE_Leap_16: true
   openSUSE_Tumbleweed: true
-description: 'Tde subproject for ppg:releases:16.
+description: 'Release project for ppg:staging:16:tde (OBS project ppg:releases:16:tde).
 
-  Builds are disabled; binaries are copied via osc release.
+  Binaries are populated by osc release and builds are disabled.
+
+  This project is read-only — do not add or edit packages directly.
 
   '
 project-config: '# --- from root/ppg/staging/16/tde/project.yaml ---
@@ -237,21 +239,54 @@ project-config: '# --- from root/ppg/staging/16/tde/project.yaml ---
 
   Release: <CI_CNT>.<B_CNT> spec:<CI_CNT>.<B_CNT>%%{?dist}
 
-  %endif
-
-  '
+  %endif'
+qa:
+- matrix:
+  - SCENARIO
+  name: server
+  parameters:
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:16:tde
+    PLATFORMS:
+    - debian-13
+    - debian-13-arm
+    - ubuntu-jammy
+    - ubuntu-jammy-arm
+    - ubuntu-noble
+    - ubuntu-noble-arm
+    - ubuntu-resolute
+    - ubuntu-resolute-arm
+    - rocky-8
+    - rocky-8-arm
+    - rocky-9
+    - rocky-9-arm
+    - rocky-10
+    - rocky-10-arm
+    - ol-8
+    - ol-8-arm
+    - ol-9
+    - ol-9-arm
+    - ol-10
+    - ol-10-arm
+    - rhel-8
+    - rhel-8-arm
+    - rhel-9
+    - rhel-9-arm
+    - rhel-10
+    - rhel-10-arm
+    SCENARIO:
+    - pg-16
+    - pg-16-meta-server
+    - pg-16-meta-ha
+    TESTING_BRANCH: main
+    USE_OBS_REPO: true
+    VERSION: ppg-16.16
+  pipeline: ppg-multiOS-parallel
 repositories:
 - archs:
   - x86_64
   - aarch64
   name: RockyLinux_8
   paths:
-  - repository: RockyLinux_8
-    subproject: ppg:common:deps
-  - repository: RockyLinux_8
-    subproject: common:deps:build
-  - repository: RockyLinux_8
-    subproject: ppg:releases:16
   - project: Fedora:EPEL:8
     repository: standard
   - project: RockyLinux:8
@@ -265,12 +300,6 @@ repositories:
   - aarch64
   name: RockyLinux_9
   paths:
-  - repository: RockyLinux_9
-    subproject: ppg:common:deps
-  - repository: RockyLinux_9
-    subproject: common:deps:build
-  - repository: RockyLinux_9
-    subproject: ppg:releases:16
   - project: Fedora:EPEL:9
     repository: standard
   - project: RockyLinux:9
@@ -280,25 +309,15 @@ repositories:
   - aarch64
   name: RockyLinux_9.6
   paths:
-  - repository: RockyLinux_9.6
-    subproject: ppg:common:deps
-  - repository: RockyLinux_9.6
-    subproject: common:deps:build
-  - repository: RockyLinux_9.6
-    subproject: ppg:releases:16
   - project: Fedora:EPEL:9
     repository: standard
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9.6
+  - project: RockyLinux:9.6
     repository: standard
 - archs:
   - x86_64
   - aarch64
   name: RockyLinux_10
   paths:
-  - repository: RockyLinux_10
-    subproject: common:deps:build
-  - repository: RockyLinux_10
-    subproject: ppg:releases:16
   - project: Fedora:EPEL:10
     repository: standard
   - project: RockyLinux:10
@@ -308,77 +327,41 @@ repositories:
   - aarch64
   name: Debian_13
   paths:
-  - repository: Debian_13
-    subproject: ppg:common:deps
-  - repository: Debian_13
-    subproject: common:deps:build
-  - repository: Debian_13
-    subproject: ppg:releases:16
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}Debian:13
+  - project: Debian:13
     repository: standard
 - archs:
   - x86_64
   - aarch64
   name: Ubuntu_22.04
   paths:
-  - repository: Ubuntu_22.04
-    subproject: ppg:common:deps
-  - repository: Ubuntu_22.04
-    subproject: common:deps:build
-  - repository: Ubuntu_22.04
-    subproject: ppg:releases:16
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:22.04
+  - project: Ubuntu:22.04
     repository: universe
 - archs:
   - x86_64
   - aarch64
   name: Ubuntu_24.04
   paths:
-  - repository: Ubuntu_24.04
-    subproject: ppg:common:deps
-  - repository: Ubuntu_24.04
-    subproject: common:deps:build
-  - repository: Ubuntu_24.04
-    subproject: ppg:releases:16
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:24.04
+  - project: Ubuntu:24.04
     repository: universe
 - archs:
   - x86_64
   - aarch64
   name: Ubuntu_26.04
   paths:
-  - repository: Ubuntu_26.04
-    subproject: ppg:common:deps
-  - repository: Ubuntu_26.04
-    subproject: common:deps:build
-  - repository: Ubuntu_26.04
-    subproject: ppg:releases:16
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}Ubuntu:26.04
+  - project: Ubuntu:26.04
     repository: universe
 - archs:
   - x86_64
   - aarch64
   name: openSUSE_Tumbleweed
   paths:
-  - repository: openSUSE_Tumbleweed
-    subproject: ppg:common:deps
-  - repository: openSUSE_Tumbleweed
-    subproject: common:deps:build
-  - repository: openSUSE_Tumbleweed
-    subproject: ppg:releases:16
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Tumbleweed
+  - project: openSUSE:Tumbleweed
     repository: standard
 - archs:
   - x86_64
   - aarch64
   name: openSUSE_Leap_16
   paths:
-  - repository: openSUSE_Leap_16
-    subproject: ppg:common:deps
-  - repository: openSUSE_Leap_16
-    subproject: common:deps:build
-  - repository: openSUSE_Leap_16
-    subproject: ppg:releases:16
-  - project: ${REMOTE_OBS_ORG_INTERCONNECT}openSUSE:Leap:16.0
+  - project: openSUSE:Leap:16.0
     repository: standard
-title: ppg releases 16 — tde
+title: ppg releases 16:tde
