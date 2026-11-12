@@ -18,6 +18,7 @@ packages are waited on, checked and build-frozen.
 
 import time
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 
 import osc.connection
 import osc.core
@@ -149,6 +150,10 @@ def assert_all_green(
     return problems
 
 
+# Threads of the per-package freeze and restore.
+_PACKAGE_WORKERS = 8
+
+
 def _disabled_meta(raw: str) -> str:
     root = ET.fromstring(raw)
     for build_elem in root.findall("build"):
@@ -191,33 +196,49 @@ def freeze_packages(
 
     Mirrors freeze_builds at package granularity (aggregate sources such as
     ppg:staging:common:tools and ppg:common:deps are shared with other releases, so
-    the whole project must not be frozen).  Partial failure restores what
-    was already frozen before re-raising.
+    the whole project must not be frozen).  The packages are frozen
+    concurrently and every one is tried; if any fails, those that were
+    frozen are restored and the first failure (in package order) is raised.
     """
+    targets = [(prj, pkg) for prj in sorted(packages) for pkg in sorted(packages[prj])]
+
+    def _freeze(target: "tuple[str, str]") -> str:
+        prj, pkg = target
+        raw = _decode_obs_response(osc.core.show_package_meta(apiurl, prj, pkg))
+        osc.core.edit_meta(
+            metatype="pkg",
+            path_args=(prj, pkg),
+            data=[_disabled_meta(raw)],
+            force=True,
+            apiurl=apiurl,
+        )
+        _print_update(f"{prj}/{pkg}  (builds frozen)")
+        return raw
+
+    # One read and one write per package: serial, the ~40 aggregated packages
+    # of a major take minutes on a distant instance.  Every package is tried;
+    # the HTTP throttle is shared by the threads.
     snapshots: dict[tuple[str, str], str] = {}
-    try:
-        for prj in sorted(packages):
-            for pkg in sorted(packages[prj]):
-                raw = _decode_obs_response(osc.core.show_package_meta(apiurl, prj, pkg))
-                osc.core.edit_meta(
-                    metatype="pkg",
-                    path_args=(prj, pkg),
-                    data=[_disabled_meta(raw)],
-                    force=True,
-                    apiurl=apiurl,
-                )
-                snapshots[(prj, pkg)] = raw
-                _print_update(f"{prj}/{pkg}  (builds frozen)")
-    except Exception:
+    failure: "BaseException | None" = None
+    with ThreadPoolExecutor(max_workers=_PACKAGE_WORKERS) as pool:
+        futures = [pool.submit(_freeze, target) for target in targets]
+        for target, future in zip(targets, futures):
+            try:
+                snapshots[target] = future.result()
+            except Exception as exc:
+                failure = failure or exc
+    if failure is not None:
         if snapshots:
             restore_packages(apiurl, snapshots)
-        raise
+        raise failure
     return snapshots
 
 
 def restore_packages(apiurl: str, snapshots: "dict[tuple[str, str], str]") -> None:
     """Restore the snapshotted ``<build>`` flags on each package.  Never raises."""
-    for (prj, pkg), snapshot in snapshots.items():
+
+    def _restore(item: "tuple[tuple[str, str], str]") -> None:
+        (prj, pkg), snapshot = item
         try:
             meta = _meta_to_restore(
                 lambda: osc.core.show_package_meta(apiurl, prj, pkg), snapshot
@@ -235,6 +256,9 @@ def restore_packages(apiurl: str, snapshots: "dict[tuple[str, str], str]") -> No
                 f"warning: failed to restore build flags on {prj}/{pkg}: {exc}",
                 flush=True,
             )
+
+    with ThreadPoolExecutor(max_workers=_PACKAGE_WORKERS) as pool:
+        list(pool.map(_restore, snapshots.items()))
 
 
 def freeze_builds(apiurl: str, obs_projects: "list[str]") -> "dict[str, str]":

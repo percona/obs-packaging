@@ -319,3 +319,68 @@ def test_freeze_packages_restores_on_partial_failure(monkeypatch):
     # a was frozen then restored
     assert edits[0][0] == ("deps", "a") and "<disable" in edits[0][1]
     assert edits[-1][0] == ("deps", "a") and "<build" not in edits[-1][1]
+
+
+def _many_packages(monkeypatch, failing=()):
+    """20 packages in two projects; freeze/restore edits are recorded."""
+    import threading
+    import time
+
+    names = [f"p{i:02d}" for i in range(10)]
+    packages = {"deps": set(names), "tools": set(names)}
+    edits = []
+    lock = threading.Lock()
+
+    def fake_show(api, prj, pkg):
+        # the first packages answer last
+        time.sleep(0.001 * (10 - int(pkg[1:])))
+        return [f'<package name="{pkg}" project="{prj}"/>'.encode()]
+
+    def fake_edit(metatype, path_args, data, force, apiurl):
+        if path_args in failing and "<disable" in data[0]:
+            raise RuntimeError(f"boom {path_args}")
+        with lock:
+            edits.append((path_args, "<disable" in data[0]))
+
+    monkeypatch.setattr(rf.osc.core, "show_package_meta", fake_show)
+    monkeypatch.setattr(
+        rf, "_decode_obs_response", lambda data: b"".join(data).decode()
+    )
+    monkeypatch.setattr(rf.osc.core, "edit_meta", fake_edit)
+    return packages, edits
+
+
+def test_freeze_packages_concurrent_freezes_all_in_package_order(monkeypatch):
+    packages, edits = _many_packages(monkeypatch)
+    snaps = rf.freeze_packages("http://obs", packages)
+    expected = [(prj, f"p{i:02d}") for prj in ("deps", "tools") for i in range(10)]
+    assert list(snaps) == expected
+    assert sorted(edits) == sorted((t, True) for t in expected)
+    assert snaps[("tools", "p03")] == '<package name="p03" project="tools"/>'
+
+
+def test_freeze_packages_concurrent_failure_restores_every_frozen_one(monkeypatch):
+    failing = {("deps", "p04"), ("tools", "p07")}
+    packages, edits = _many_packages(monkeypatch, failing)
+    with pytest.raises(RuntimeError, match=r"boom \('deps', 'p04'\)"):
+        rf.freeze_packages("http://obs", packages)
+    frozen = {t for t, disabled in edits if disabled}
+    restored = {t for t, disabled in edits if not disabled}
+    assert len(frozen) == 18 and not frozen & failing
+    assert restored == frozen
+
+
+def test_restore_packages_continues_after_a_failure(monkeypatch, capsys):
+    packages, edits = _many_packages(monkeypatch)
+    snaps = rf.freeze_packages("http://obs", packages)
+    del edits[:]
+
+    def fake_edit(metatype, path_args, data, force, apiurl):
+        if path_args == ("deps", "p00"):
+            raise RuntimeError("nope")
+        edits.append(path_args)
+
+    monkeypatch.setattr(rf.osc.core, "edit_meta", fake_edit)
+    rf.restore_packages("http://obs", snaps)
+    assert len(edits) == 19
+    assert "failed to restore build flags on deps/p00" in capsys.readouterr().out
