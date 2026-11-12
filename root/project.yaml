@@ -234,3 +234,19 @@ project-config: |
   %if "%_repository" == "RockyLinux_8" || "%_repository" == "RockyLinux_9" || "%_repository" == "RockyLinux_9.6" || "%_repository" == "RockyLinux_10" || "%_repository" == "UBI_8" || "%_repository" == "UBI_9" || "%_repository" == "UBI_10"
   Release: <CI_CNT>.<B_CNT> spec:<CI_CNT>.<B_CNT>%%{?dist}
   %endif
+
+  # An arch-independent binary (noarch.rpm, _all.deb) and the source RPM are
+  # built once per architecture with different bytes, and OBS publishes one
+  # copy under a single file name.  Which copy wins depends on which
+  # architecture's scheduler fills its publish directory first after
+  # publishing resumes (a release copy holds and resumes it), and the choice
+  # then sticks.  A repopulate can therefore swap the bytes behind an
+  # unchanged URL, and download CDNs keep serving the old bytes: dnf/apt fail
+  # with "Cannot download" / "File has unexpected size".
+  # Never hand the aarch64 copy to the publisher, so the published one is
+  # always the x86_64 build.  aarch64 still builds these packages for its own
+  # dependents.  OBS honours a single PublishFilter line per configuration:
+  # add patterns to this line, never a second line.
+  %ifarch aarch64
+  PublishFilter: \.noarch\.rpm$ \.src\.rpm$ _all\.deb$
+  %endif
