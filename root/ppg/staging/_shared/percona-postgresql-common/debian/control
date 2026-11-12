@@ -6,6 +6,7 @@ Build-Depends:
  debhelper (>= 9),
  debhelper (>= 10.1) | dh-systemd (>= 1.19),
  libreadline-dev,
+# dh-sequence-installsysusers,
 
 Package: percona-postgresql-common
 Architecture: all
@@ -22,14 +23,14 @@ Depends:
 Breaks:
  postgresql-client-common (<< 277),
  percona-postgresql-client-common (<< 277),
- postgresql-common (<< 277),
+ postgresql-common (<< 294),
  percona-postgresql-common (<< 277),
  postgresql-server-dev-all (<< 277),
  percona-postgresql-server-dev-all (<< 277)
 Replaces:
  postgresql-client-common (<< 277),
  percona-postgresql-client-common (<< 277),
- postgresql-common (<< 277),
+ postgresql-common (<< 294),
  percona-postgresql-common (<< 277),
  postgresql-server-dev-all (<< 277),
  percona-postgresql-server-dev-all (<< 277)
@@ -59,9 +60,10 @@ Package: postgresql-common
 Architecture: all
 Multi-Arch: foreign
 Depends:
- adduser,
  debconf (>= 0.5.00) | debconf-2.0,
  libjson-perl,
+ systemd | systemd-standalone-sysusers | systemd-sysusers,
+ systemd | systemd-standalone-tmpfiles | systemd-tmpfiles,
  sysvinit-utils (>= 3.05-4~) | lsb-base (>= 3.0-3),
  perl (>= 5.14),
  percona-postgresql-client-common | postgresql-client-common,

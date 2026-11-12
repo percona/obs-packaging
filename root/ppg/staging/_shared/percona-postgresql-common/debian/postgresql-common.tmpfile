@@ -1,4 +1,8 @@
-# Directory for PostgreSQL sockets, lockfiles and stats tempfiles
-d /run/postgresql 2775 postgres postgres - -
+# Directory for PostgreSQL sockets and lockfiles
+d /run/postgresql 2775 postgres postgres
 # Log directory
-d /var/log/postgresql 1775 root postgres - -
+d /var/log/postgresql 2775 postgres postgres
+# Data directory
+d /var/lib/postgresql 0755 postgres postgres
+# Config directory
+z /etc/postgresql 0755 postgres postgres
