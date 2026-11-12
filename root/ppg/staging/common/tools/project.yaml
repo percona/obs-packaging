@@ -31,3 +31,11 @@ project-config: |
   # obs-tools image pins the same major for npm_lockfile — bump both together.
   ExpandFlags: module:nodejs:22
   %endif
+  # An arch-independent binary (noarch.rpm, _all.deb) is built once per arch
+  # with different bytes and published under one name.  Publish the x86_64
+  # copy only, so the published bytes never change under an unchanged name.
+  # aarch64 still builds them for its own dependents.  OBS honours a single
+  # PublishFilter line: add patterns to this one, do not add a second line.
+  %ifarch aarch64
+  PublishFilter: \.noarch\.rpm$ _all\.deb$
+  %endif
