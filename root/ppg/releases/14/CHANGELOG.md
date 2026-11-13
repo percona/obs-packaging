@@ -4,6 +4,241 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [14.25-1] - 2026-11-13
+
+### Added
+
+### Changed
+- percona-credcheck: update upstream version 6.0 (https://github.com/HexaCluster/credcheck/releases/tag/v6.0)
+- percona-pgaudit_set_user: update upstream version 4.3.0 (https://github.com/pgaudit/set_user/releases/tag/REL4_3_0)
+- percona-pgpool-II: update upstream version 4.7.3 (https://github.com/pgpool/pgpool2/releases/tag/V4_7_3)
+- percona-postgresql: update upstream version 14.25 (https://github.com/postgres/postgres/releases/tag/REL_14_25)
+- percona-postgresql-common: update upstream version 294 (https://salsa.debian.org/postgresql/postgresql-common.git)
+- percona-ppg-server: update upstream version 14.25
+- percona-ppg-server-ha: update upstream version 14.25
+- percona-psql (tarballs): update upstream version 14.25 (https://github.com/postgres/postgres/releases/tag/REL_14_25)
+- percona-distribution-postgresql (ubi10) [container image]: update image 14.24-1 → 14.25-1
+  - updated: percona-credcheck14 5.0-5.1.el10 -> 6.0-1.2.el10
+  - updated: percona-pg-telemetry14 1.2.0-4.5.el10 -> 1.2.0-4.6.el10
+  - updated: percona-pg_cron_14 1.6.8-3.5.el10 -> 1.6.8-4.2.el10
+  - updated: percona-pg_repack14 1.5.3-7.3.el10 -> 1.5.3-8.2.el10
+  - updated: percona-pg_stat_monitor14 2.4.0-3.1.el10 -> 2.4.0-3.2.el10
+  - updated: percona-pgaudit14 1.6.3-8.5.el10 -> 1.6.3-9.2.el10
+  - updated: percona-pgaudit14_set_user 4.2.0-5.5.el10 -> 4.3.0-2.2.el10
+  - updated: percona-pgbackrest 2.60.0-4.1.el10 -> 2.60.0-4.2.el10
+  - updated: percona-pgvector_14 0.8.7-2.5.el10 -> 0.8.7-3.2.el10
+  - updated: percona-pgvector_14-llvmjit 0.8.7-2.5.el10 -> 0.8.7-3.2.el10
+  - updated: percona-postgresql-client-common 293-5.1.el10 -> 294-4.1.el10
+  - updated: percona-postgresql-common 293-5.1.el10 -> 294-4.1.el10
+  - updated: percona-postgresql14 14.24-6.2.el10 -> 14.25-1.1.el10
+  - updated: percona-postgresql14-contrib 14.24-6.2.el10 -> 14.25-1.1.el10
+  - updated: percona-postgresql14-libs 14.24-6.2.el10 -> 14.25-1.1.el10
+  - updated: percona-postgresql14-llvmjit 14.24-6.2.el10 -> 14.25-1.1.el10
+  - updated: percona-postgresql14-server 14.24-6.2.el10 -> 14.25-1.1.el10
+  - updated: percona-wal2json14 2.7-2.5.el10 -> 2.7-3.2.el10
+  - updated: python3.12-psycopg2 2.9.13-5.3.el10 -> 2.9.13-5.4.el10
+- percona-distribution-postgresql (ubi8) [container image]: update image 14.24-1 → 14.25-1
+  - updated: curl 8.23.0-3.1.el8 -> 8.23.0-3.2.el8
+  - updated: gosu 1.19-5.3.el8 -> 1.19-5.4.el8
+  - updated: libcurl 8.23.0-3.1.el8 -> 8.23.0-3.2.el8
+  - updated: llvm 21.1.8-1.6.el8 -> 21.1.8-1.8.el8
+  - updated: llvm-filesystem 21.1.8-1.6.el8 -> 21.1.8-1.8.el8
+  - updated: llvm-libs 21.1.8-1.6.el8 -> 21.1.8-1.8.el8
+  - updated: percona-credcheck14 5.0-5.1.el8 -> 6.0-1.3.el8
+  - updated: percona-patroni 4.1.5-6.1.el8 -> 4.1.5-6.2.el8
+  - updated: percona-patroni-etcd 4.1.5-6.1.el8 -> 4.1.5-6.2.el8
+  - updated: percona-pg-telemetry14 1.2.0-4.5.el8 -> 1.2.0-4.7.el8
+  - updated: percona-pg_cron_14 1.6.8-3.5.el8 -> 1.6.8-4.3.el8
+  - updated: percona-pg_repack14 1.5.3-7.2.el8 -> 1.5.3-8.3.el8
+  - updated: percona-pg_stat_monitor14 2.4.0-3.1.el8 -> 2.4.0-3.3.el8
+  - updated: percona-pgaudit14 1.6.3-8.5.el8 -> 1.6.3-9.3.el8
+  - updated: percona-pgaudit14_set_user 4.2.0-5.5.el8 -> 4.3.0-2.3.el8
+  - updated: percona-pgbackrest 2.60.0-4.1.el8 -> 2.60.0-4.3.el8
+  - updated: percona-pgvector_14 0.8.7-2.5.el8 -> 0.8.7-3.3.el8
+  - updated: percona-pgvector_14-llvmjit 0.8.7-2.5.el8 -> 0.8.7-3.3.el8
+  - updated: percona-postgresql-client-common 293-5.1.el8 -> 294-4.1.el8
+  - updated: percona-postgresql-common 293-5.1.el8 -> 294-4.1.el8
+  - updated: percona-postgresql14 14.24-6.1.el8 -> 14.25-1.1.el8
+  - updated: percona-postgresql14-contrib 14.24-6.1.el8 -> 14.25-1.1.el8
+  - updated: percona-postgresql14-libs 14.24-6.1.el8 -> 14.25-1.1.el8
+  - updated: percona-postgresql14-llvmjit 14.24-6.1.el8 -> 14.25-1.1.el8
+  - updated: percona-postgresql14-server 14.24-6.1.el8 -> 14.25-1.1.el8
+  - updated: percona-wal2json14 2.7-2.4.el8 -> 2.7-3.3.el8
+  - updated: perl-IO-Socket-SSL 2.066-1.6.el8 -> 2.066-1.8.el8
+  - updated: perl-JSON 4.03-1.24.el8 -> 4.03-1.25.el8
+  - updated: perl-Mozilla-CA 20160104-1.7.el8 -> 20160104-1.9.el8
+  - updated: perl-Net-SSLeay 1.88-1.20.el8 -> 1.88-1.23.el8
+  - updated: python3-ydiff 1.4.2-4.2.el8 -> 1.4.2-4.3.el8
+  - updated: python3.12-click 8.1.7-3.1.el8 -> 8.1.7-3.2.el8
+  - updated: python3.12-dateutil 2.9.0.post0-3.1.el8 -> 2.9.0.post0-3.2.el8
+  - updated: python3.12-dns 2.9.0-3.1.el8 -> 2.9.0-3.2.el8
+  - updated: python3.12-etcd 0.4.5-3.1.el8 -> 0.4.5-3.2.el8
+  - updated: python3.12-prettytable 3.4.0-3.1.el8 -> 3.4.0-3.2.el8
+  - updated: python3.12-psutil 6.1.1-3.1.el8 -> 6.1.1-3.2.el8
+  - updated: python3.12-psycopg2 2.9.13-5.2.el8 -> 2.9.13-5.4.el8
+  - updated: python3.12-six 1.17.0-3.1.el8 -> 1.17.0-3.2.el8
+  - updated: python3.12-systemd 235-2.2.el8 -> 235-2.3.el8
+  - updated: python3.12-wcwidth 0.2.13-3.1.el8 -> 0.2.13-3.2.el8
+- percona-distribution-postgresql (ubi9) [container image]: update image 14.24-1 → 14.25-1
+  - updated: percona-credcheck14 5.0-5.1.el9 -> 6.0-1.3.el9
+  - updated: percona-pg-telemetry14 1.2.0-4.4.el9 -> 1.2.0-4.6.el9
+  - updated: percona-pg_cron_14 1.6.8-3.4.el9 -> 1.6.8-4.3.el9
+  - updated: percona-pg_repack14 1.5.3-7.3.el9 -> 1.5.3-8.3.el9
+  - updated: percona-pg_stat_monitor14 2.4.0-3.1.el9 -> 2.4.0-3.3.el9
+  - updated: percona-pgaudit14 1.6.3-8.4.el9 -> 1.6.3-9.3.el9
+  - updated: percona-pgaudit14_set_user 4.2.0-5.4.el9 -> 4.3.0-2.3.el9
+  - updated: percona-pgbackrest 2.60.0-4.1.el9 -> 2.60.0-4.3.el9
+  - updated: percona-pgvector_14 0.8.7-2.4.el9 -> 0.8.7-3.3.el9
+  - updated: percona-pgvector_14-llvmjit 0.8.7-2.4.el9 -> 0.8.7-3.3.el9
+  - updated: percona-postgresql-client-common 293-5.1.el9 -> 294-4.1.el9
+  - updated: percona-postgresql-common 293-5.1.el9 -> 294-4.1.el9
+  - updated: percona-postgresql14 14.24-6.2.el9 -> 14.25-1.1.el9
+  - updated: percona-postgresql14-contrib 14.24-6.2.el9 -> 14.25-1.1.el9
+  - updated: percona-postgresql14-libs 14.24-6.2.el9 -> 14.25-1.1.el9
+  - updated: percona-postgresql14-llvmjit 14.24-6.2.el9 -> 14.25-1.1.el9
+  - updated: percona-postgresql14-server 14.24-6.2.el9 -> 14.25-1.1.el9
+  - updated: percona-wal2json14 2.7-2.4.el9 -> 2.7-3.3.el9
+  - updated: python3.12-psycopg2 2.9.13-5.3.el9 -> 2.9.13-5.5.el9
+- percona-distribution-postgresql-with-postgis (ubi10) [container image]: update image 14.24-1 → 14.25-1
+  - updated: gdal313-libs 3.13.3-3.8.el10 -> 3.13.3-3.9.el10
+  - updated: percona-credcheck14 5.0-5.1.el10 -> 6.0-1.2.el10
+  - updated: percona-pg-telemetry14 1.2.0-4.5.el10 -> 1.2.0-4.6.el10
+  - updated: percona-pg_cron_14 1.6.8-3.5.el10 -> 1.6.8-4.2.el10
+  - updated: percona-pg_repack14 1.5.3-7.3.el10 -> 1.5.3-8.2.el10
+  - updated: percona-pg_stat_monitor14 2.4.0-3.1.el10 -> 2.4.0-3.2.el10
+  - updated: percona-pgaudit14 1.6.3-8.5.el10 -> 1.6.3-9.2.el10
+  - updated: percona-pgaudit14_set_user 4.2.0-5.5.el10 -> 4.3.0-2.2.el10
+  - updated: percona-pgbackrest 2.60.0-4.1.el10 -> 2.60.0-4.2.el10
+  - updated: percona-pgvector_14 0.8.7-2.5.el10 -> 0.8.7-3.2.el10
+  - updated: percona-pgvector_14-llvmjit 0.8.7-2.5.el10 -> 0.8.7-3.2.el10
+  - updated: percona-postgis35_14 3.5.7-4.8.el10 -> 3.5.7-5.3.el10
+  - updated: percona-postgis35_14-client 3.5.7-4.8.el10 -> 3.5.7-5.3.el10
+  - updated: percona-postgis35_14-gui 3.5.7-4.8.el10 -> 3.5.7-5.3.el10
+  - updated: percona-postgis35_14-llvmjit 3.5.7-4.8.el10 -> 3.5.7-5.3.el10
+  - updated: percona-postgis35_14-utils 3.5.7-4.8.el10 -> 3.5.7-5.3.el10
+  - updated: percona-postgresql-client-common 293-5.1.el10 -> 294-4.1.el10
+  - updated: percona-postgresql-common 293-5.1.el10 -> 294-4.1.el10
+  - updated: percona-postgresql14 14.24-6.2.el10 -> 14.25-1.1.el10
+  - updated: percona-postgresql14-contrib 14.24-6.2.el10 -> 14.25-1.1.el10
+  - updated: percona-postgresql14-libs 14.24-6.2.el10 -> 14.25-1.1.el10
+  - updated: percona-postgresql14-llvmjit 14.24-6.2.el10 -> 14.25-1.1.el10
+  - updated: percona-postgresql14-server 14.24-6.2.el10 -> 14.25-1.1.el10
+  - updated: percona-wal2json14 2.7-2.5.el10 -> 2.7-3.2.el10
+  - updated: python3.12-psycopg2 2.9.13-5.3.el10 -> 2.9.13-5.4.el10
+- percona-distribution-postgresql-with-postgis (ubi8) [container image]: update image 14.24-1 → 14.25-1
+  - updated: SFCGAL 2.3.0-3.1.el8 -> 2.3.0-3.2.el8
+  - updated: blas 3.9.0-2.2.el8 -> 3.9.0-2.3.el8
+  - updated: curl 8.23.0-3.1.el8 -> 8.23.0-3.2.el8
+  - updated: gdal38-libs 3.8.5-4.8.el8 -> 3.8.5-4.10.el8
+  - updated: geos315 3.15.0-2.2.el8 -> 3.15.0-2.3.el8
+  - updated: gosu 1.19-5.3.el8 -> 1.19-5.4.el8
+  - updated: lapack 3.9.0-2.2.el8 -> 3.9.0-2.3.el8
+  - updated: libcurl 8.23.0-3.1.el8 -> 8.23.0-3.2.el8
+  - updated: libgeotiff17 1.7.4-2.5.el8 -> 1.7.4-2.6.el8
+  - updated: librttopo 1.1.0-46.2.el8 -> 1.1.0-46.3.el8
+  - updated: libspatialite50 5.1.0-2.5.el8 -> 5.1.0-2.6.el8
+  - updated: llvm 21.1.8-1.6.el8 -> 21.1.8-1.8.el8
+  - updated: llvm-filesystem 21.1.8-1.6.el8 -> 21.1.8-1.8.el8
+  - updated: llvm-libs 21.1.8-1.6.el8 -> 21.1.8-1.8.el8
+  - updated: percona-credcheck14 5.0-5.1.el8 -> 6.0-1.3.el8
+  - updated: percona-patroni 4.1.5-6.1.el8 -> 4.1.5-6.2.el8
+  - updated: percona-patroni-etcd 4.1.5-6.1.el8 -> 4.1.5-6.2.el8
+  - updated: percona-pg-telemetry14 1.2.0-4.5.el8 -> 1.2.0-4.7.el8
+  - updated: percona-pg_cron_14 1.6.8-3.5.el8 -> 1.6.8-4.3.el8
+  - updated: percona-pg_repack14 1.5.3-7.2.el8 -> 1.5.3-8.3.el8
+  - updated: percona-pg_stat_monitor14 2.4.0-3.1.el8 -> 2.4.0-3.3.el8
+  - updated: percona-pgaudit14 1.6.3-8.5.el8 -> 1.6.3-9.3.el8
+  - updated: percona-pgaudit14_set_user 4.2.0-5.5.el8 -> 4.3.0-2.3.el8
+  - updated: percona-pgbackrest 2.60.0-4.1.el8 -> 2.60.0-4.3.el8
+  - updated: percona-pgvector_14 0.8.7-2.5.el8 -> 0.8.7-3.3.el8
+  - updated: percona-pgvector_14-llvmjit 0.8.7-2.5.el8 -> 0.8.7-3.3.el8
+  - updated: percona-postgis35_14 3.5.7-4.9.el8 -> 3.5.7-5.4.el8
+  - updated: percona-postgis35_14-client 3.5.7-4.9.el8 -> 3.5.7-5.4.el8
+  - updated: percona-postgis35_14-gui 3.5.7-4.9.el8 -> 3.5.7-5.4.el8
+  - updated: percona-postgis35_14-llvmjit 3.5.7-4.9.el8 -> 3.5.7-5.4.el8
+  - updated: percona-postgis35_14-utils 3.5.7-4.9.el8 -> 3.5.7-5.4.el8
+  - updated: percona-postgresql-client-common 293-5.1.el8 -> 294-4.1.el8
+  - updated: percona-postgresql-common 293-5.1.el8 -> 294-4.1.el8
+  - updated: percona-postgresql14 14.24-6.1.el8 -> 14.25-1.1.el8
+  - updated: percona-postgresql14-contrib 14.24-6.1.el8 -> 14.25-1.1.el8
+  - updated: percona-postgresql14-libs 14.24-6.1.el8 -> 14.25-1.1.el8
+  - updated: percona-postgresql14-llvmjit 14.24-6.1.el8 -> 14.25-1.1.el8
+  - updated: percona-postgresql14-server 14.24-6.1.el8 -> 14.25-1.1.el8
+  - updated: percona-wal2json14 2.7-2.4.el8 -> 2.7-3.3.el8
+  - updated: perl-DBD-Pg 3.7.4-1.18.el8 -> 3.7.4-1.21.el8
+  - updated: perl-IO-Socket-SSL 2.066-1.6.el8 -> 2.066-1.8.el8
+  - updated: perl-JSON 4.03-1.24.el8 -> 4.03-1.25.el8
+  - updated: perl-Mozilla-CA 20160104-1.7.el8 -> 20160104-1.9.el8
+  - updated: perl-Net-SSLeay 1.88-1.20.el8 -> 1.88-1.23.el8
+  - updated: proj96 9.6.2-3.4.el8 -> 9.6.2-3.5.el8
+  - updated: python3-ydiff 1.4.2-4.2.el8 -> 1.4.2-4.3.el8
+  - updated: python3.12-click 8.1.7-3.1.el8 -> 8.1.7-3.2.el8
+  - updated: python3.12-dateutil 2.9.0.post0-3.1.el8 -> 2.9.0.post0-3.2.el8
+  - updated: python3.12-dns 2.9.0-3.1.el8 -> 2.9.0-3.2.el8
+  - updated: python3.12-etcd 0.4.5-3.1.el8 -> 0.4.5-3.2.el8
+  - updated: python3.12-prettytable 3.4.0-3.1.el8 -> 3.4.0-3.2.el8
+  - updated: python3.12-psutil 6.1.1-3.1.el8 -> 6.1.1-3.2.el8
+  - updated: python3.12-psycopg2 2.9.13-5.2.el8 -> 2.9.13-5.4.el8
+  - updated: python3.12-six 1.17.0-3.1.el8 -> 1.17.0-3.2.el8
+  - updated: python3.12-systemd 235-2.2.el8 -> 235-2.3.el8
+  - updated: python3.12-wcwidth 0.2.13-3.1.el8 -> 0.2.13-3.2.el8
+- percona-distribution-postgresql-with-postgis (ubi9) [container image]: update image 14.24-1 → 14.25-1
+  - updated: gdal313-libs 3.13.3-3.9.el9 -> 3.13.3-3.11.el9
+  - updated: percona-credcheck14 5.0-5.1.el9 -> 6.0-1.3.el9
+  - updated: percona-pg-telemetry14 1.2.0-4.4.el9 -> 1.2.0-4.6.el9
+  - updated: percona-pg_cron_14 1.6.8-3.4.el9 -> 1.6.8-4.3.el9
+  - updated: percona-pg_repack14 1.5.3-7.3.el9 -> 1.5.3-8.3.el9
+  - updated: percona-pg_stat_monitor14 2.4.0-3.1.el9 -> 2.4.0-3.3.el9
+  - updated: percona-pgaudit14 1.6.3-8.4.el9 -> 1.6.3-9.3.el9
+  - updated: percona-pgaudit14_set_user 4.2.0-5.4.el9 -> 4.3.0-2.3.el9
+  - updated: percona-pgbackrest 2.60.0-4.1.el9 -> 2.60.0-4.3.el9
+  - updated: percona-pgvector_14 0.8.7-2.4.el9 -> 0.8.7-3.3.el9
+  - updated: percona-pgvector_14-llvmjit 0.8.7-2.4.el9 -> 0.8.7-3.3.el9
+  - updated: percona-postgis35_14 3.5.7-4.8.el9 -> 3.5.7-5.4.el9
+  - updated: percona-postgis35_14-client 3.5.7-4.8.el9 -> 3.5.7-5.4.el9
+  - updated: percona-postgis35_14-gui 3.5.7-4.8.el9 -> 3.5.7-5.4.el9
+  - updated: percona-postgis35_14-llvmjit 3.5.7-4.8.el9 -> 3.5.7-5.4.el9
+  - updated: percona-postgis35_14-utils 3.5.7-4.8.el9 -> 3.5.7-5.4.el9
+  - updated: percona-postgresql-client-common 293-5.1.el9 -> 294-4.1.el9
+  - updated: percona-postgresql-common 293-5.1.el9 -> 294-4.1.el9
+  - updated: percona-postgresql14 14.24-6.2.el9 -> 14.25-1.1.el9
+  - updated: percona-postgresql14-contrib 14.24-6.2.el9 -> 14.25-1.1.el9
+  - updated: percona-postgresql14-libs 14.24-6.2.el9 -> 14.25-1.1.el9
+  - updated: percona-postgresql14-llvmjit 14.24-6.2.el9 -> 14.25-1.1.el9
+  - updated: percona-postgresql14-server 14.24-6.2.el9 -> 14.25-1.1.el9
+  - updated: percona-wal2json14 2.7-2.4.el9 -> 2.7-3.3.el9
+  - updated: python3.12-psycopg2 2.9.13-5.3.el9 -> 2.9.13-5.5.el9
+
+### Security
+- percona-pgpool-II: 4.7.2→4.7.3 fixes CVE-2026-92867, CVE-2026-92868, CVE-2026-92869,
+  CVE-2026-92870, CVE-2026-92871, CVE-2026-92872, CVE-2026-92873
+  (https://github.com/pgpool/pgpool2/releases)
+- percona-postgresql: PostgreSQL 14.25 fixes 41 CVEs
+  (https://www.postgresql.org/docs/release/14.25/): CVE-2026-116303, CVE-2026-116304,
+  CVE-2026-116306, CVE-2026-116307, CVE-2026-116308, CVE-2026-116309, CVE-2026-116311,
+  CVE-2026-116314, CVE-2026-116315, CVE-2026-116316, CVE-2026-116317, CVE-2026-116319,
+  CVE-2026-116320, CVE-2026-116321, CVE-2026-116323, CVE-2026-116326, CVE-2026-116327,
+  CVE-2026-116330, CVE-2026-116331, CVE-2026-116332, CVE-2026-116335, CVE-2026-116336,
+  CVE-2026-120139, CVE-2026-120141, CVE-2026-120143, CVE-2026-120145, CVE-2026-120146,
+  CVE-2026-120147, CVE-2026-120148, CVE-2026-120149, CVE-2026-120150, CVE-2026-120151,
+  CVE-2026-120153, CVE-2026-120154, CVE-2026-14661, CVE-2026-16237, CVE-2026-16240, CVE-2026-18447,
+  CVE-2026-6460, CVE-2026-6464, CVE-2026-6467
+- percona-psql (tarballs): PostgreSQL 14.25 fixes 41 CVEs
+  (https://www.postgresql.org/docs/release/14.25/): CVE-2026-116303, CVE-2026-116304,
+  CVE-2026-116306, CVE-2026-116307, CVE-2026-116308, CVE-2026-116309, CVE-2026-116311,
+  CVE-2026-116314, CVE-2026-116315, CVE-2026-116316, CVE-2026-116317, CVE-2026-116319,
+  CVE-2026-116320, CVE-2026-116321, CVE-2026-116323, CVE-2026-116326, CVE-2026-116327,
+  CVE-2026-116330, CVE-2026-116331, CVE-2026-116332, CVE-2026-116335, CVE-2026-116336,
+  CVE-2026-120139, CVE-2026-120141, CVE-2026-120143, CVE-2026-120145, CVE-2026-120146,
+  CVE-2026-120147, CVE-2026-120148, CVE-2026-120149, CVE-2026-120150, CVE-2026-120151,
+  CVE-2026-120153, CVE-2026-120154, CVE-2026-14661, CVE-2026-16237, CVE-2026-16240, CVE-2026-18447,
+  CVE-2026-6460, CVE-2026-6464, CVE-2026-6467
+- No CVE fixes mentioned upstream for: percona-credcheck, percona-pgaudit_set_user (release notes and commit logs scanned for the version range).
+- Not scanned: percona-postgresql-common (no scanner for salsa.debian.org)
+- Not scanned: percona-ppg-server (no scanner for unknown upstream)
+- Not scanned: percona-ppg-server-ha (no scanner for unknown upstream)
+- UBI base-image package CVEs are not covered by this scan.
+
 ## [14.24-1] - 2026-11-06
 
 ### Added
