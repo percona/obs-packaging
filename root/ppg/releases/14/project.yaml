@@ -78,15 +78,17 @@ project-config: '# --- from root/project.yaml ---
   %endif
 
 
-  %if "%_repository" == "UBI_10"
+  %if "%_repository" == "UBI_9" || "%_repository" == "UBI_10"
 
   # RHEL 10 appstream ships llvm-libs 21 and EPEL 10 ships llvm21-libs; both
 
   # provide libLLVM.so.21.1, so OBS reports "have choice" for rust (seen on
 
-  # common:deps:build/cargo-pgrx-*). Prefer the distro package, as the
+  # common:deps:build/cargo-pgrx-*). UBI 9 appstream moved to llvm-libs 21
 
-  # RockyLinux_9.6 block above does.
+  # too (2026-11), clashing with EPEL 9''s llvm21-libs for annobin. Prefer
+
+  # the distro package, as the RockyLinux_9.6 block above does.
 
   Prefer: llvm-libs
 
@@ -215,6 +217,37 @@ project-config: '# --- from root/project.yaml ---
   || "%_repository" == "UBI_9" || "%_repository" == "UBI_10"
 
   Release: <CI_CNT>.<B_CNT> spec:<CI_CNT>.<B_CNT>%%{?dist}
+
+  %endif
+
+
+  # An arch-independent binary (noarch.rpm, _all.deb) and the source RPM are
+
+  # built once per architecture with different bytes, and OBS publishes one
+
+  # copy under a single file name.  Which copy wins depends on which
+
+  # architecture''s scheduler fills its publish directory first after
+
+  # publishing resumes (a release copy holds and resumes it), and the choice
+
+  # then sticks.  A repopulate can therefore swap the bytes behind an
+
+  # unchanged URL, and download CDNs keep serving the old bytes: dnf/apt fail
+
+  # with "Cannot download" / "File has unexpected size".
+
+  # Never hand the aarch64 copy to the publisher, so the published one is
+
+  # always the x86_64 build.  aarch64 still builds these packages for its own
+
+  # dependents.  OBS honours a single PublishFilter line per configuration:
+
+  # add patterns to this line, never a second line.
+
+  %ifarch aarch64
+
+  PublishFilter: \.noarch\.rpm$ \.src\.rpm$ _all\.deb$
 
   %endif
 
@@ -385,7 +418,7 @@ qa:
     - pg-14-meta-ha
     TESTING_BRANCH: main
     USE_OBS_REPO: true
-    VERSION: ppg-14.24
+    VERSION: ppg-14.25
   pipeline: ppg-multiOS-parallel
 - matrix:
   - SCENARIO
@@ -399,17 +432,17 @@ qa:
     - pg-14-major-upgrade
     TESTING_BRANCH: main
     USE_OBS_REPO: true
-    VERSION: ppg-14.24
+    VERSION: ppg-14.25
   pipeline: ppg-upgrade-parallel
 - name: percona-credcheck.credcheck
   package: percona-credcheck
   parameters:
-    COMPONENT_REF: v5.0
+    COMPONENT_REF: v6.0
     OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:14
     PRODUCT: credcheck
     TEST_BRANCH: main
     USE_OBS_REPO: true
-    VERSION: ppg-14.24
+    VERSION: ppg-14.25
   pipeline: component-generic-parallel
 - name: percona-patroni.patroni
   package: percona-patroni
@@ -418,7 +451,7 @@ qa:
     PRODUCT: patroni
     TEST_BRANCH: main
     USE_OBS_REPO: true
-    VERSION: ppg-14.24
+    VERSION: ppg-14.25
   pipeline: component-generic-parallel
 - name: percona-pg_repack.pg_repack
   package: percona-pg_repack
@@ -428,7 +461,7 @@ qa:
     PRODUCT: pg_repack
     TEST_BRANCH: main
     USE_OBS_REPO: true
-    VERSION: ppg-14.24
+    VERSION: ppg-14.25
   pipeline: component-generic-parallel
 - name: percona-pg_stat_monitor.pg_stat_monitor
   package: percona-pg_stat_monitor
@@ -468,7 +501,7 @@ qa:
     - rhel-10-arm
     TESTING_BRANCH: main
     USE_OBS_REPO: true
-    VERSION: ppg-14.24
+    VERSION: ppg-14.25
   pipeline: pgsm-parallel
 - name: percona-pgaudit.pg_audit
   package: percona-pgaudit
@@ -478,17 +511,17 @@ qa:
     PRODUCT: pg_audit
     TEST_BRANCH: main
     USE_OBS_REPO: true
-    VERSION: ppg-14.24
+    VERSION: ppg-14.25
   pipeline: component-generic-parallel
 - name: percona-pgaudit_set_user.pgaudit13_set_user
   package: percona-pgaudit_set_user
   parameters:
-    COMPONENT_REF: REL4_2_0
+    COMPONENT_REF: REL4_3_0
     OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:14
     PRODUCT: pgaudit13_set_user
     TEST_BRANCH: main
     USE_OBS_REPO: true
-    VERSION: ppg-14.24
+    VERSION: ppg-14.25
   pipeline: component-generic-parallel
 - name: percona-pgbackrest.pgbackrest
   package: percona-pgbackrest
@@ -498,7 +531,7 @@ qa:
     PRODUCT: pgbackrest
     TEST_BRANCH: main
     USE_OBS_REPO: true
-    VERSION: ppg-14.24
+    VERSION: ppg-14.25
   pipeline: component-generic-parallel
 - name: percona-pgbadger.pgbadger
   package: percona-pgbadger
@@ -508,7 +541,7 @@ qa:
     PRODUCT: pgbadger
     TEST_BRANCH: main
     USE_OBS_REPO: true
-    VERSION: ppg-14.24
+    VERSION: ppg-14.25
   pipeline: component-generic-parallel
 - name: percona-pgbouncer.pgbouncer
   package: percona-pgbouncer
@@ -518,7 +551,7 @@ qa:
     PRODUCT: pgbouncer
     TEST_BRANCH: main
     USE_OBS_REPO: true
-    VERSION: ppg-14.24
+    VERSION: ppg-14.25
   pipeline: component-generic-parallel
 - name: percona-pgpool-II.pgpool
   package: percona-pgpool-II
@@ -527,7 +560,7 @@ qa:
     PRODUCT: pgpool
     TEST_BRANCH: main
     USE_OBS_REPO: true
-    VERSION: ppg-14.24
+    VERSION: ppg-14.25
   pipeline: component-generic-parallel
 - name: percona-pgvector.pgvector
   package: percona-pgvector
@@ -537,7 +570,7 @@ qa:
     PRODUCT: pgvector
     TEST_BRANCH: main
     USE_OBS_REPO: true
-    VERSION: ppg-14.24
+    VERSION: ppg-14.25
   pipeline: component-generic-parallel
 - name: percona-postgis.postgis
   package: percona-postgis
@@ -547,7 +580,7 @@ qa:
     PRODUCT: postgis
     TEST_BRANCH: main
     USE_OBS_REPO: true
-    VERSION: ppg-14.24
+    VERSION: ppg-14.25
   pipeline: component-generic-parallel
 - name: percona-wal2json.wal2json
   package: percona-wal2json
@@ -557,7 +590,7 @@ qa:
     PRODUCT: wal2json
     TEST_BRANCH: main
     USE_OBS_REPO: true
-    VERSION: ppg-14.24
+    VERSION: ppg-14.25
   pipeline: component-generic-parallel
 repositories:
 - archs:
@@ -565,10 +598,6 @@ repositories:
   - aarch64
   name: RockyLinux_8
   paths:
-  - repository: RockyLinux_8
-    subproject: ppg:common:deps
-  - repository: RockyLinux_8
-    subproject: common:deps:build
   - project: Fedora:EPEL:8
     repository: standard
   - project: RockyLinux:8
@@ -582,10 +611,6 @@ repositories:
   - aarch64
   name: RockyLinux_9
   paths:
-  - repository: RockyLinux_9
-    subproject: ppg:common:deps
-  - repository: RockyLinux_9
-    subproject: common:deps:build
   - project: Fedora:EPEL:9
     repository: standard
   - project: RockyLinux:9
@@ -595,10 +620,6 @@ repositories:
   - aarch64
   name: RockyLinux_9.6
   paths:
-  - repository: RockyLinux_9.6
-    subproject: ppg:common:deps
-  - repository: RockyLinux_9.6
-    subproject: common:deps:build
   - project: Fedora:EPEL:9
     repository: standard
   - project: RockyLinux:9.6
@@ -608,10 +629,6 @@ repositories:
   - aarch64
   name: RockyLinux_10
   paths:
-  - repository: RockyLinux_10
-    subproject: ppg:common:deps
-  - repository: RockyLinux_10
-    subproject: common:deps:build
   - project: Fedora:EPEL:10
     repository: standard
   - project: RockyLinux:10
@@ -621,10 +638,6 @@ repositories:
   - aarch64
   name: UBI_9
   paths:
-  - repository: UBI_9
-    subproject: ppg:common:deps
-  - repository: UBI_9
-    subproject: common:deps:build
   - project: Fedora:EPEL:9
     repository: standard
   - project: RedHat:UBI-9
@@ -636,10 +649,6 @@ repositories:
   - aarch64
   name: UBI_10
   paths:
-  - repository: UBI_10
-    subproject: ppg:common:deps
-  - repository: UBI_10
-    subproject: common:deps:build
   - project: Fedora:EPEL:10
     repository: standard
   - project: RedHat:UBI-10
@@ -651,10 +660,6 @@ repositories:
   - aarch64
   name: UBI_8
   paths:
-  - repository: UBI_8
-    subproject: ppg:common:deps
-  - repository: UBI_8
-    subproject: common:deps:build
   - project: Fedora:EPEL:8
     repository: standard
   - project: RedHat:UBI-8
@@ -670,10 +675,6 @@ repositories:
   - aarch64
   name: Debian_12
   paths:
-  - repository: Debian_12
-    subproject: ppg:common:deps
-  - repository: Debian_12
-    subproject: common:deps:build
   - project: Debian:12
     repository: standard
 - archs:
@@ -681,10 +682,6 @@ repositories:
   - aarch64
   name: Debian_13
   paths:
-  - repository: Debian_13
-    subproject: ppg:common:deps
-  - repository: Debian_13
-    subproject: common:deps:build
   - project: Debian:13
     repository: standard
 - archs:
@@ -692,10 +689,6 @@ repositories:
   - aarch64
   name: Ubuntu_22.04
   paths:
-  - repository: Ubuntu_22.04
-    subproject: ppg:common:deps
-  - repository: Ubuntu_22.04
-    subproject: common:deps:build
   - project: Ubuntu:22.04
     repository: universe
 - archs:
@@ -703,10 +696,6 @@ repositories:
   - aarch64
   name: Ubuntu_24.04
   paths:
-  - repository: Ubuntu_24.04
-    subproject: ppg:common:deps
-  - repository: Ubuntu_24.04
-    subproject: common:deps:build
   - project: Ubuntu:24.04
     repository: universe
 - archs:
@@ -714,10 +703,6 @@ repositories:
   - aarch64
   name: Ubuntu_26.04
   paths:
-  - repository: Ubuntu_26.04
-    subproject: ppg:common:deps
-  - repository: Ubuntu_26.04
-    subproject: common:deps:build
   - project: Ubuntu:26.04
     repository: universe
 - archs:
@@ -725,10 +710,6 @@ repositories:
   - aarch64
   name: openSUSE_Tumbleweed
   paths:
-  - repository: openSUSE_Tumbleweed
-    subproject: ppg:common:deps
-  - repository: openSUSE_Tumbleweed
-    subproject: common:deps:build
   - project: openSUSE:Tumbleweed
     repository: standard
 - archs:
@@ -736,10 +717,6 @@ repositories:
   - aarch64
   name: openSUSE_Leap_16
   paths:
-  - repository: openSUSE_Leap_16
-    subproject: ppg:common:deps
-  - repository: openSUSE_Leap_16
-    subproject: common:deps:build
   - project: openSUSE:Leap:16.0
     repository: standard
 title: ppg releases 14
