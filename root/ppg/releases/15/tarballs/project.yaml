@@ -351,7 +351,7 @@ qa:
     SSL_VERSION: '1'
     TARBALL_URL: ''
     TESTING_BRANCH: main
-    VERSION: ppg-15.19
+    VERSION: ppg-15.20
   pipeline: tarball-parallel-ssl1
 - name: ssl3
   parameters:
@@ -359,7 +359,7 @@ qa:
     SSL_VERSION: '3'
     TARBALL_URL: ''
     TESTING_BRANCH: main
-    VERSION: ppg-15.19
+    VERSION: ppg-15.20
   pipeline: tarball-parallel-ssl3
 - name: ssl3.5
   parameters:
@@ -367,7 +367,7 @@ qa:
     SSL_VERSION: '3.5'
     TARBALL_URL: ''
     TESTING_BRANCH: main
-    VERSION: ppg-15.19
+    VERSION: ppg-15.20
   pipeline: tarball-parallel-ssl35
 repositories:
 - archs:
@@ -375,12 +375,6 @@ repositories:
   - aarch64
   name: RockyLinux_8
   paths:
-  - repository: RockyLinux_8
-    subproject: ppg:releases:15
-  - repository: RockyLinux_8
-    subproject: ppg:common:deps:tarballs
-  - repository: RockyLinux_8
-    subproject: ppg:common:deps
   - project: Fedora:EPEL:8
     repository: standard
   - project: RockyLinux:8
@@ -394,12 +388,6 @@ repositories:
   - aarch64
   name: RockyLinux_9.6
   paths:
-  - repository: RockyLinux_9.6
-    subproject: ppg:releases:15
-  - repository: RockyLinux_9.6
-    subproject: ppg:common:deps:tarballs
-  - repository: RockyLinux_9.6
-    subproject: ppg:common:deps
   - project: Fedora:EPEL:9
     repository: standard
   - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9.6
@@ -409,12 +397,6 @@ repositories:
   - aarch64
   name: RockyLinux_9
   paths:
-  - repository: RockyLinux_9
-    subproject: ppg:releases:15
-  - repository: RockyLinux_9
-    subproject: ppg:common:deps:tarballs
-  - repository: RockyLinux_9
-    subproject: ppg:common:deps
   - project: Fedora:EPEL:9
     repository: standard
   - project: RockyLinux:9
@@ -424,14 +406,6 @@ repositories:
   - aarch64
   name: ssl1.1
   paths:
-  - repository: RockyLinux_8
-    subproject: ppg:releases:15:tarballs
-  - repository: RockyLinux_8
-    subproject: ppg:releases:15
-  - repository: RockyLinux_8
-    subproject: ppg:common:deps:tarballs
-  - repository: RockyLinux_8
-    subproject: ppg:common:deps
   - project: Fedora:EPEL:8
     repository: standard
   - project: RockyLinux:8
@@ -445,14 +419,6 @@ repositories:
   - aarch64
   name: ssl3
   paths:
-  - repository: RockyLinux_9.6
-    subproject: ppg:releases:15:tarballs
-  - repository: RockyLinux_9.6
-    subproject: ppg:releases:15
-  - repository: RockyLinux_9.6
-    subproject: ppg:common:deps:tarballs
-  - repository: RockyLinux_9.6
-    subproject: ppg:common:deps
   - project: Fedora:EPEL:9
     repository: standard
   - project: ${REMOTE_OBS_ORG_INTERCONNECT}RockyLinux:9.6
@@ -462,14 +428,6 @@ repositories:
   - aarch64
   name: ssl3.5
   paths:
-  - repository: RockyLinux_9
-    subproject: ppg:releases:15:tarballs
-  - repository: RockyLinux_9
-    subproject: ppg:releases:15
-  - repository: RockyLinux_9
-    subproject: ppg:common:deps:tarballs
-  - repository: RockyLinux_9
-    subproject: ppg:common:deps
   - project: Fedora:EPEL:9
     repository: standard
   - project: RockyLinux:9
