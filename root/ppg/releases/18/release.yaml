@@ -12,4 +12,6 @@ releases:
   tag: ppg/18.6-4
 - source_commit: a8474209f56c6cda43e412b5c91fb6a07269eb22
   tag: ppg/18.6-5
+- source_commit: cac7c154c87eda439604c455a3d187815fb5e8de
+  tag: ppg/18.7-1
 repository: ${PERCONA_OBS_PACKAGING_REPO}
