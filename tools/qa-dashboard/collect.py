@@ -38,7 +38,7 @@ NIGHTLY = "obs-nightly-qa.yml"
 # Only the nightly: manual OBS QA Run runs test whatever someone picked, so
 # they would distort each major's history, status and counts.
 WORKFLOWS = (NIGHTLY,)
-CACHE_VERSION = 2
+CACHE_VERSION = 3
 JENKINS_CACHE_VERSION = 2
 JENKINS_WORKERS = 8  # builds asked at the same time  # bump when what is kept per Jenkins build changes  # bump when the cached run format changes: re-read once
 MAJORS = ("14", "15", "16", "17", "18", "19")
@@ -218,6 +218,17 @@ def is_queued(run: dict[str, Any]) -> bool:
     return run.get("status") in QUEUED_STATUSES
 
 
+def has_results(run: dict[str, Any]) -> bool:
+    """Finished, or a re-run (queued or running) of a finished attempt."""
+    if run.get("status") == "completed":
+        return True
+    return (
+        (run.get("attempt") or 1) > 1
+        and bool(run.get("builds"))
+        and bool(run.get("finished_at"))
+    )
+
+
 def _is_failed(build: dict[str, Any]) -> bool:
     return build.get("result") not in OK_RESULTS
 
@@ -264,7 +275,9 @@ def build_dashboard(
         if not mruns:
             majors_out.append({"major": m, "status": "none", "runs": []})
             continue
-        completed = [r for r in mruns if r["status"] == "completed"]
+        # Runs with results: finished ones, and re-runs still queued or running,
+        # whose earlier attempt's results stand until the re-run replaces them.
+        completed = [r for r in mruns if has_results(r)]
         shown = mruns[:RUNS_SHOWN]
         current = mruns[0]
         last = completed[0] if completed else None
@@ -279,20 +292,32 @@ def build_dashboard(
 
         failing = [b for b in (last["builds"] if last else []) if _is_failed(b)]
         new = [b for b in failing if not match_known(b, m, known)]
-        if current["status"] != "completed":
-            status = "queued" if is_queued(current) else "running"
-            jobs = current.get("qa_jobs") or {}
+        # Every unfinished run of this major, not just the newest: a nightly
+        # started by hand can run while the scheduled one waits behind it.
+        unfinished = [r for r in mruns if r["status"] != "completed"]
+        active = None  # the running one, for the row's progress
+        for r in unfinished:
+            jobs = r.get("qa_jobs") or {}
             live = {
                 "major": m,
-                "url": current["url"],
+                "url": r["url"],
                 # the current attempt: a re-run's own start, not the first one's
-                "since": current.get("attempt_started_at") or current["started_at"],
-                "rerun": (current.get("attempt") or 1) > 1,
+                "since": r.get("attempt_started_at") or r["started_at"],
+                "rerun": (r.get("attempt") or 1) > 1,
+                "github_status": r.get("status", ""),
                 "done": jobs.get("done", 0),
                 "total": jobs.get("total", 0),
                 "failing": jobs.get("failed", 0),
             }
-            (queued if status == "queued" else running).append(live)
+            if is_queued(r):
+                queued.append(live)
+            else:
+                running.append(live)
+                active = active or r
+        if active is not None:
+            status = "running"
+        elif unfinished:
+            status = "queued"
         else:
             status = "fail" if new else ("known" if failing else "pass")
 
@@ -326,7 +351,7 @@ def build_dashboard(
             ],
         }
         if status == "running":
-            jobs = current.get("qa_jobs") or {}
+            jobs = active.get("qa_jobs") or {}
             major_row["progress"] = f"{jobs.get('done', 0)} / {jobs.get('total', 0)}"
             major_row["total"] = jobs.get("total", 0) or major_row["total"]
         majors_out.append(major_row)
@@ -598,6 +623,22 @@ def _reports_from_zip(data: bytes) -> list[dict[str, Any]]:
     return out
 
 
+def get_all(gh: Any, path: str, key: str, per_page: int = 100) -> list[Any]:
+    """Every item of a paginated GitHub list, not just the first page: a
+    nightly re-run several times has well over 100 artifacts, and the newest
+    (the re-runs' results) are not on the first page."""
+    items: list[Any] = []
+    for page in range(1, 51):  # up to 5,000 items
+        suffix = f"?per_page={per_page}" + (f"&page={page}" if page > 1 else "")
+        data = gh.get(path + suffix)
+        batch = data.get(key, [])
+        items += batch
+        total = data.get("total_count")
+        if len(batch) < per_page or (total is not None and len(items) >= total):
+            break
+    return items
+
+
 def scheduled_major(created_at: str, schedule: dict[str, Any]) -> str | None:
     """The major the nightly schedule runs on that UTC weekday."""
     when = parse_time(created_at)
@@ -622,6 +663,7 @@ def collect_runs(
     cache_dir: Path,
     per_workflow: int = 40,
     schedule: dict[str, Any] | None = None,
+    quiet: bool = False,
 ) -> list[dict[str, Any]]:
     cache_dir.mkdir(parents=True, exist_ok=True)
     if schedule is None:
@@ -632,7 +674,8 @@ def collect_runs(
     for wf in WORKFLOWS:
         listing = gh.get(f"actions/workflows/{wf}/runs?per_page={per_workflow}")
         found = listing.get("workflow_runs", [])
-        log(f"{wf}: {len(found)} runs")
+        if not quiet:
+            log(f"{wf}: {len(found)} runs")
         for i, r in enumerate(found, 1):
             cached = cache_dir / f"run-{r['id']}.json"
             attempt = r.get("run_attempt") or 1
@@ -647,9 +690,7 @@ def collect_runs(
                         runs.append(run_cached)
                     continue
             builds = []
-            artifacts = gh.get(f"actions/runs/{r['id']}/artifacts?per_page=100").get(
-                "artifacts", []
-            )
+            artifacts = get_all(gh, f"actions/runs/{r['id']}/artifacts", "artifacts")
             # One qa-report-<job index> per QA job; a re-run of the job uploads
             # another one with the same name: only the newest (the job's final
             # result) counts.
@@ -697,9 +738,7 @@ def collect_runs(
                 "builds": builds,
             }
             if r["status"] != "completed":
-                jobs = gh.get(f"actions/runs/{r['id']}/jobs?per_page=100").get(
-                    "jobs", []
-                )
+                jobs = get_all(gh, f"actions/runs/{r['id']}/jobs", "jobs")
                 qa = [j for j in jobs if j["name"].startswith(QA_JOB_PREFIX)]
                 run["qa_jobs"] = {
                     "total": len(qa),
@@ -720,9 +759,10 @@ def collect_runs(
                 run["running_majors"] = sorted(majors_seen)
             else:
                 cached.write_text(json.dumps(run))  # finished: never fetched again
-            log(
-                f"  [{i}/{len(found)}] run {r['id']} ({r['status']}): {len(builds)} build reports"
-            )
+            if not quiet:
+                log(
+                    f"  [{i}/{len(found)}] run {r['id']} ({r['status']}): {len(builds)} build reports"
+                )
             if builds or r["status"] != "completed":
                 runs.append(run)
     runs.sort(key=lambda x: x["started_at"], reverse=True)
@@ -828,6 +868,10 @@ def main(argv: list[str] | None = None) -> int:
             runs,
             cache,
         )
+        # Jenkins can take minutes: re-read the runs (finished ones come from
+        # the cache) so the statuses are as fresh as the time we report
+        runs = collect_runs(GitHub(args.repo, token), cache, quiet=True)
+        now = dt.datetime.now(dt.timezone.utc)
         data = build_dashboard(runs, known, now, info)
     Path(args.out).write_text(json.dumps(data, indent=1))
     print(

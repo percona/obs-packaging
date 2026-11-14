@@ -87,9 +87,13 @@
       h += '<section class="queued" aria-label="Runs waiting to start"><span class="label">Queued</span>' +
         data.queued.map(function (q) {
           return '<span>' + link(q.url, 'PG ' + esc(q.major) + ' nightly' + (q.rerun ? ' (re-run)' : '')) +
-            ' <span class="muted">· waiting ' + esc(duration(q.since)) + '</span></span>';
+            ' <span class="muted">· waiting ' + esc(duration(q.since)) +
+            (q.github_status ? ' · GitHub: ' + esc(q.github_status) : '') + '</span></span>';
         }).join('') +
-        '<span class="muted" style="font-size:13px">Nightlies run one at a time: these start when the running one ends.</span></section>';
+        '<span class="muted" style="font-size:13px">' + ((data.running || []).length
+          ? 'Nightlies run one at a time: these start when the running one ends.'
+          : 'Nothing is running, so GitHub hasn\'t started these yet: usually no runner is free. Open a run to see why.') +
+        '</span></section>';
     }
     h += '<section class="card" aria-labelledby="majors-title"><div class="card-head"><h2 id="majors-title">Majors</h2>' +
       '<span>Last 5 runs: oldest → newest (nightly and manual)</span></div><div class="scroll"><div class="grid-majors">' +
