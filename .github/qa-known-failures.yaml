@@ -1,0 +1,29 @@
+# Known QA failures, for the QA dashboard (tools/qa-dashboard).
+#
+# A failed build matching an entry shows as KNOWN (amber) with the entry's
+# ticket and title, instead of NEW (red). Remove the entry once the ticket is
+# fixed: if the failure comes back, it shows as new again.
+#
+#   ticket:    where it is tracked (required); links to Jira
+#   url:       the ticket's link, if not Jira (optional)
+#   title:     what is broken, in a few words
+#   major:     PG major, or a list of majors (optional: all majors)
+#   pipeline:  regular expression on the Jenkins job name
+#   label:     regular expression on the build's combo label or SCENARIO
+#              (optional: every build of that job)
+
+- ticket: PG-2883
+  title: "Minor upgrade · OS postgresql18-server conflict on EL 10.2"
+  major: 18
+  pipeline: "^ppg-upgrade-parallel$"
+  label: "minor-upgrade"
+
+- ticket: PG-2886
+  title: "pg_tde_archive_decrypt output not decrypted (Debian 13 x86-64)"
+  major: 17
+  pipeline: "^tde-core-parallel$"
+
+- ticket: PG-2914
+  title: "repack-check fails on PostgreSQL pg_attver in attoptions"
+  major: 16
+  pipeline: "^component-generic-parallel$"
