@@ -49,7 +49,13 @@ class State:
         with self.lock:
             data = dict(
                 self.data
-                or {"majors": [], "failures": [], "details": {}, "running": None}
+                or {
+                    "majors": [],
+                    "failures": [],
+                    "details": {},
+                    "running": [],
+                    "queued": [],
+                }
             )
             data["error"] = self.error
         return json.dumps(data).encode()
@@ -78,7 +84,12 @@ def live_source(
         jenkins.available = use_jenkins  # retry Jenkins at every refresh
         runs = collect.collect_runs(gh, cache_dir)
         info = collect.collect_build_info(jenkins, runs, cache_dir)
+        # The Jenkins step can take minutes: re-read the runs (finished ones
+        # come from the cache) so run statuses are as fresh as "updated ... ago"
+        collect.log("Re-reading run statuses before publishing...")
+        runs = collect.collect_runs(gh, cache_dir, quiet=True)
         now = dt.datetime.now(dt.timezone.utc)
+        collect.log(f"Refreshed at {now:%H:%M:%S} UTC")
         return collect.build_dashboard(runs, collect.load_known(known_path), now, info)
 
     return source
@@ -116,6 +127,13 @@ def make_handler(state: State) -> type[SimpleHTTPRequestHandler]:
                 self.wfile.write(body)
                 return
             super().do_GET()
+
+        def end_headers(self) -> None:
+            # The page's files: browsers must check for a new version on every
+            # load, or an updated app.js meets a cached old one.
+            if self.path.split("?")[0] != "/data.json":
+                self.send_header("Cache-Control", "no-cache")
+            super().end_headers()
 
         def log_message(self, fmt: str, *args: Any) -> None:
             pass

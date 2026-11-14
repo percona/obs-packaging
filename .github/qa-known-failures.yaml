@@ -11,6 +11,9 @@
 #   pipeline:  regular expression on the Jenkins job name
 #   label:     regular expression on the build's combo label or SCENARIO
 #              (optional: every build of that job)
+#   params:    regular expression per Jenkins parameter, all must match
+#              (optional), e.g. PRODUCT: "^pg_repack$" for one component of
+#              component-generic-parallel, which runs all of them
 
 - ticket: PG-2883
   title: "Minor upgrade · OS postgresql18-server conflict on EL 10.2"
@@ -25,5 +28,9 @@
 
 - ticket: PG-2914
   title: "repack-check fails on PostgreSQL pg_attver in attoptions"
-  major: 16
+  # PostgreSQL's November releases (14.25, 15.20, 16.16, 17.12, 18.7) all
+  # add pg_attver; only pg_repack's tests are affected
+  major: [14, 15, 16, 17, 18]
   pipeline: "^component-generic-parallel$"
+  params:
+    PRODUCT: "^pg_repack$"

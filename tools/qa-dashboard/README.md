@@ -10,10 +10,12 @@ An internal web page showing the state of PPG's OBS QA at a glance:
 - **Major detail** (`#pg18`): summary, run times of the last 5 runs, and
   failing builds with the platforms that failed.
 
-Data comes from GitHub Actions (the *OBS Nightly QA* and *OBS QA Run*
-workflows and their `qa-report-*` artifacts) and Jenkins (build durations,
-failing platforms), refreshed every 10 minutes. Known failures are listed in
-[`.github/qa-known-failures.yaml`](../../.github/qa-known-failures.yaml).
+Data comes from GitHub Actions: the *OBS Nightly QA* workflow's runs, scheduled or
+started by hand, and their `qa-report-*` artifacts (*OBS QA Run* runs are left
+out). Jenkins adds build durations and which platforms failed. Finished runs and
+Jenkins builds are cached in `.cache/`; a running nightly's reports are kept
+there too, so each is downloaded once. Data is refreshed every 10 minutes. Known failures
+are listed in [`.github/qa-known-failures.yaml`](../../.github/qa-known-failures.yaml).
 
 ## Try it (demo data, no tokens)
 

@@ -1,7 +1,9 @@
 """Tests for the QA dashboard (tools/qa-dashboard)."""
 
 import datetime as dt
+import io
 import json
+import pathlib
 import re
 import sys
 import threading
@@ -258,6 +260,7 @@ def test_server_serves_page_and_demo_data():
             assert "PPG Nightly QA" in r.read().decode()
         with urllib.request.urlopen(base + "/app.js") as r:
             assert r.status == 200
+            assert r.headers["Cache-Control"] == "no-cache"  # never a stale script
         with urllib.request.urlopen(base + "/data.json") as r:
             assert r.headers["Cache-Control"] == "no-store"
             data = json.load(r)
@@ -657,6 +660,7 @@ def test_queued_rerun_is_not_running():
     assert [(q["major"], q["rerun"], q["since"]) for q in data["queued"]] == [
         ("15", True, "2026-11-11T05:50:00Z")
     ]
+    assert data["queued"][0]["github_status"] == "queued"
     pg15row = next(m for m in data["majors"] if m["major"] == "15")
     assert pg15row["status"] == "queued" and "progress" not in pg15row
     assert pg15row["runs"][-1]["kind"] == "queued"
@@ -695,3 +699,588 @@ def test_queued_scheduled_run_gets_its_major_from_the_schedule(tmp_path):
     assert runs[0]["running_majors"] == ["15"]
     data = collect.build_dashboard(runs, [], NOW)
     assert [q["major"] for q in data["queued"]] == ["15"] and data["running"] == []
+
+
+def test_rerun_keeps_its_earlier_results_while_queued():
+    """Re-running the failed jobs of PG 15's 10 Nov nightly: until the re-run
+    finishes, that nightly's results are still PG 15's latest."""
+    older = run(1, 3, [build("tde-parallel", VERSION="ppg-15.20")])
+    rerun = run(
+        2,
+        10,
+        [
+            build("tde-parallel", "FAILURE", VERSION="ppg-15.20"),
+            build("pgsm-parallel", VERSION="ppg-15.20"),
+        ],
+    )
+    rerun.update(status="queued", attempt=2, attempt_started_at="2026-11-11T05:50:00Z")
+    pg15 = next(
+        m
+        for m in collect.build_dashboard([rerun, older], [], NOW)["majors"]
+        if m["major"] == "15"
+    )
+    assert pg15["status"] == "queued"
+    assert (pg15["last_run"], pg15["failing"], pg15["total"]) == (
+        "Tue 10 Nov",
+        1,
+        2,
+    )  # not 3 Nov
+    assert [r["kind"] for r in pg15["runs"]] == ["pass", "queued"]
+
+
+def test_all_artifact_pages_are_read(tmp_path):
+    """Like run 43044888795: re-run 4 times, over 100 artifacts; the passing
+    re-run reports are on page 2, the first attempts' failures on page 1."""
+
+    class ManyAttempts:
+        def __init__(self):
+            self.calls = []
+            arts = [
+                {
+                    "name": f"qa-report-{i}",
+                    "created_at": "2026-11-11T16:00:00Z",
+                    "archive_download_url": f"ok{i}",
+                }
+                for i in range(53)
+            ]
+            # earlier attempts: job 0..3 failed before Jenkins (no result), re-uploaded many times
+            arts += [
+                {
+                    "name": f"qa-report-{i % 4}",
+                    "created_at": f"2026-11-11T16:{10 + n:02d}:00Z",
+                    "archive_download_url": f"none{i % 4}",
+                }
+                for n, i in enumerate(range(73))
+            ]
+            # the last attempt: jobs 0..3 pass
+            arts += [
+                {
+                    "name": f"qa-report-{i}",
+                    "created_at": "2026-11-12T09:00:00Z",
+                    "archive_download_url": f"ok{i}",
+                }
+                for i in range(4)
+            ]
+            self.arts = arts  # 130 artifacts
+
+        def get(self, path):
+            self.calls.append(path)
+            if "/workflows/" in path:
+                return {
+                    "workflow_runs": [
+                        {
+                            "id": 43044888795,
+                            "html_url": "u",
+                            "event": "schedule",
+                            "status": "completed",
+                            "run_attempt": 5,
+                            "created_at": "2026-11-11T15:05:47Z",
+                            "run_started_at": "2026-11-12T08:30:00Z",
+                            "updated_at": "2026-11-12T09:10:00Z",
+                        }
+                    ]
+                }
+            if path.endswith("/attempts/1"):
+                return {
+                    "run_started_at": "2026-11-11T15:05:47Z",
+                    "updated_at": "2026-11-11T16:20:00Z",
+                }
+            if "/artifacts?per_page=100" in path:
+                page = int(path.split("&page=")[1]) if "&page=" in path else 1
+                return {
+                    "total_count": len(self.arts),
+                    "artifacts": self.arts[(page - 1) * 100 : page * 100],
+                }
+            raise AssertionError(path)
+
+        def download(self, url):
+            ok = url.startswith("ok")
+            return _zip(
+                {
+                    "pipeline": "job" + url.lstrip("oknone"),
+                    "combos": [
+                        {
+                            "label": "default",
+                            "params": {"VERSION": "ppg-18.7"},
+                            "result": "SUCCESS" if ok else None,
+                            "build_url": f"https://j/{url}/" if ok else None,
+                        }
+                    ],
+                }
+            )
+
+    gh = ManyAttempts()
+    runs = collect.collect_runs(gh, tmp_path)
+    assert [c for c in gh.calls if "&page=2" in c]  # the second page was read
+    assert len(runs[0]["builds"]) == 53
+    assert all(
+        b["result"] == "SUCCESS" for b in runs[0]["builds"]
+    )  # not the old 'None' reports
+    pg18 = next(
+        m
+        for m in collect.build_dashboard(runs, [], NOW)["majors"]
+        if m["major"] == "18"
+    )
+    assert (pg18["status"], pg18["failing"], pg18["total"]) == ("pass", 0, 53)
+
+
+def test_running_major_with_a_newer_queued_run():
+    """PG 19's nightly runs while a newer PG 19 nightly waits behind it: the
+    major is running, and both runs are shown."""
+    done = run(1, 7, [build("tde-parallel", VERSION="ppg-19.0")])
+    running = run(2, 13, [], status="in_progress")
+    running.update(
+        started_at="2026-11-14T02:00:00Z",
+        attempt_started_at="2026-11-14T02:00:00Z",
+        running_majors=["19"],
+        qa_jobs={"total": 45, "done": 12, "failed": 1},
+    )
+    waiting = run(3, 13, [], status="queued")
+    waiting.update(
+        started_at="2026-11-14T03:05:00Z",
+        attempt_started_at="2026-11-14T03:05:00Z",
+        running_majors=["19"],
+    )
+    data = collect.build_dashboard([waiting, running, done], [], NOW)
+    pg19 = next(m for m in data["majors"] if m["major"] == "19")
+    assert pg19["status"] == "running" and pg19["progress"] == "12 / 45"
+    assert [(r["major"], r["done"]) for r in data["running"]] == [("19", 12)]
+    assert [q["major"] for q in data["queued"]] == ["19"]
+
+
+def test_status_is_read_again_after_the_slow_jenkins_step(tmp_path, monkeypatch):
+    """PG 19's scheduled nightly is queued at 02:00 UTC, while a refresh reads
+    the runs; it starts while Jenkins is being asked about builds. The
+    published status must be 'running', not the stale 'queued'."""
+    import serve
+
+    state = {"status": "queued"}
+
+    class FakeGitHub:
+        def __init__(self, *a):
+            pass
+
+        def get(self, path):
+            if "/workflows/" in path:
+                return {
+                    "workflow_runs": [
+                        {
+                            "id": 77,
+                            "html_url": "u/77",
+                            "event": "schedule",
+                            "status": state["status"],
+                            "created_at": "2026-11-14T02:00:00Z",
+                            "run_started_at": "2026-11-14T02:00:00Z",
+                            "updated_at": "2026-11-14T02:01:00Z",
+                        }
+                    ]
+                }
+            if "/artifacts" in path:
+                return {"artifacts": []}
+            if "/jobs" in path:
+                return {
+                    "jobs": [
+                        {
+                            "name": "OBS QA / ppg:staging:19 / server",
+                            "status": (
+                                "in_progress"
+                                if state["status"] == "in_progress"
+                                else "queued"
+                            ),
+                        }
+                    ]
+                }
+            raise AssertionError(path)
+
+    class SlowJenkins:
+        available = True
+
+        def __init__(self, *a, **k):
+            pass
+
+    def jenkins_step(jenkins, runs, cache_dir):
+        state["status"] = "in_progress"  # the run starts meanwhile
+        return {}
+
+    monkeypatch.setattr(collect, "GitHub", FakeGitHub)
+    monkeypatch.setattr(collect, "Jenkins", SlowJenkins)
+    monkeypatch.setattr(collect, "collect_build_info", jenkins_step)
+    data = serve.live_source("x/y", tmp_path, tmp_path / "none.yaml")()
+    pg19 = next(m for m in data["majors"] if m["major"] == "19")
+    assert (
+        pg19["status"] == "running"
+        and [r["major"] for r in data["running"]] == ["19"]
+        and data["queued"] == []
+    )
+
+
+def test_builds_without_a_result_are_not_run_not_failing():
+    """PG 19's nightly: 26 SUCCESS, 13 FAILURE and 6 builds with no Jenkins
+    result (scenarios that don't run yet). GitHub shows 13 failing jobs."""
+    builds = (
+        [build("pgsm-parallel", VERSION="ppg-19.0") for _ in range(26)]
+        + [
+            build(
+                "docker-server-parallel",
+                "FAILURE",
+                f"WITH_POSTGIS={i % 2 == 0}",
+                VERSION="ppg-19.0",
+            )
+            for i in range(13)
+        ]
+        + [
+            dict(
+                build(
+                    "ppg-multiOS-parallel", None, f"IO_METHOD={io}", VERSION="ppg-19.0"
+                ),
+                build_url=None,
+            )
+            for io in ("worker", "sync", "io_uring") * 2
+        ]
+    )
+    data = collect.build_dashboard([run(1, 14, builds)], [], NOW)
+    pg19 = next(m for m in data["majors"] if m["major"] == "19")
+    assert (pg19["failing"], pg19["total"], pg19["not_run"]) == (13, 39, 6)
+    assert data["details"]["19"]["not_run"] == 6
+    assert (
+        len([f for f in data["failures"] if f["major"] == "19"]) == 13
+    )  # not-run builds aren't failures
+
+
+def test_a_running_nightlys_reports_are_downloaded_once(tmp_path):
+    """Every read of a running nightly used to download all its reports again
+    (~50, twice per refresh). Each artifact is now downloaded once."""
+
+    class Nightly:
+        def __init__(self):
+            self.status, self.arts, self.downloads = "in_progress", 3, []
+
+        def get(self, path):
+            if "/workflows/" in path:
+                return {
+                    "workflow_runs": [
+                        {
+                            "id": 9,
+                            "html_url": "u/9",
+                            "event": "schedule",
+                            "status": self.status,
+                            "created_at": "2026-11-14T02:00:00Z",
+                            "run_started_at": "2026-11-14T02:00:00Z",
+                            "updated_at": "2026-11-14T03:00:00Z",
+                        }
+                    ]
+                }
+            if "/artifacts" in path:
+                return {
+                    "artifacts": [
+                        {
+                            "id": 100 + i,
+                            "name": f"qa-report-{i}",
+                            "created_at": "2026-11-14T02:30:00Z",
+                            "archive_download_url": f"zip{i}",
+                        }
+                        for i in range(self.arts)
+                    ]
+                }
+            if "/jobs" in path:
+                return {
+                    "jobs": [
+                        {
+                            "name": "OBS QA / ppg:staging:19 / server",
+                            "status": "in_progress",
+                        }
+                    ]
+                }
+            raise AssertionError(path)
+
+        def download(self, url):
+            self.downloads.append(url)
+            return _zip(
+                {
+                    "pipeline": "p",
+                    "combos": [
+                        {
+                            "label": "default",
+                            "params": {"VERSION": "ppg-19.0"},
+                            "result": "SUCCESS",
+                        }
+                    ],
+                }
+            )
+
+    gh = Nightly()
+    collect.collect_runs(gh, tmp_path)
+    collect.collect_runs(gh, tmp_path)  # the second read of the same refresh
+    assert sorted(gh.downloads) == ["zip0", "zip1", "zip2"]  # once each
+    gh.arts = 4  # a job finishes and uploads its report
+    runs = collect.collect_runs(gh, tmp_path)
+    assert gh.downloads.count("zip3") == 1 and len(runs[0]["builds"]) == 4
+    gh.status = "completed"  # the nightly ends: cached as a whole, kept reports dropped
+    collect.collect_runs(gh, tmp_path)
+    assert (tmp_path / "run-9.json").is_file() and not (
+        tmp_path / "run-9-artifacts"
+    ).exists()
+
+
+JENKINS_500 = (
+    "Jenkins https://pg.cd.percona.com/job/ppg-multiOS-parallel/buildWithParameters: HTTP 500:\n"
+    '<!DOCTYPE html><html data-disable-sticky="false"><head resURL="/static/bd8c26a7">'
+)
+
+
+def _zip_with_job(report, job):
+    import io as _io
+    import zipfile as _zf
+
+    buf = _io.BytesIO()
+    with _zf.ZipFile(buf, "w") as z:
+        z.writestr("qa-report.json", json.dumps(report))
+        if job:
+            z.writestr("qa-job.txt", job)
+    return buf.getvalue()
+
+
+def test_error_is_one_readable_line():
+    assert collect._short_error(JENKINS_500) == (
+        "Jenkins https://pg.cd.percona.com/job/ppg-multiOS-parallel/buildWithParameters: HTTP 500"
+    )
+    assert collect._short_error(None) == ""
+    assert (
+        collect._short_error("<html>only a page</html>")
+        == "Jenkins answered with an error page"
+    )
+
+
+def test_not_run_builds_link_to_their_github_job(tmp_path):
+    """PG 19: Jenkins refused SCENARIO=pg-19-meta-server (HTTP 500). The
+    major's page lists the build with the error and a link to its job."""
+
+    class Run:
+        def __init__(self):
+            self.job_calls = 0
+
+        def get(self, path):
+            if "/workflows/" in path:
+                return {
+                    "workflow_runs": [
+                        {
+                            "id": 5,
+                            "html_url": "https://gh/runs/5",
+                            "event": "schedule",
+                            "status": "completed",
+                            "created_at": "2026-11-14T02:00:00Z",
+                            "run_started_at": "2026-11-14T02:00:00Z",
+                            "updated_at": "2026-11-14T04:00:00Z",
+                        }
+                    ]
+                }
+            if "/artifacts" in path:
+                return {
+                    "artifacts": [
+                        {
+                            "id": i,
+                            "name": f"qa-report-{i}",
+                            "created_at": "2026-11-14T03:00:00Z",
+                            "archive_download_url": f"zip{i}",
+                        }
+                        for i in range(3)
+                    ]
+                }
+            if "/jobs" in path:
+                self.job_calls += 1
+                return {
+                    "jobs": [
+                        {
+                            "name": "OBS QA / ppg:staging:19 / server",
+                            "html_url": "https://gh/runs/5/job/77",
+                        },
+                        {
+                            "name": "OBS QA / ppg:staging:19 / upgrade",
+                            "html_url": "https://gh/runs/5/job/78",
+                        },
+                    ]
+                }
+            raise AssertionError(path)
+
+        def download(self, url):
+            if url == "zip0":  # the server lane: one combo Jenkins refused
+                return _zip_with_job(
+                    {
+                        "pipeline": "ppg-multiOS-parallel",
+                        "combos": [
+                            {
+                                "label": "IO_METHOD=sync,SCENARIO=pg-19-meta-server",
+                                "params": {"VERSION": "ppg-19.0"},
+                                "result": None,
+                                "error": JENKINS_500,
+                            }
+                        ],
+                    },
+                    "OBS QA / ppg:staging:19 / server",
+                )
+            if url == "zip1":  # an older report: no job name
+                return _zip(
+                    {
+                        "pipeline": "tde-parallel",
+                        "combos": [
+                            {
+                                "label": "default",
+                                "params": {"VERSION": "ppg-19.0"},
+                                "result": None,
+                            }
+                        ],
+                    }
+                )
+            return _zip(
+                {
+                    "pipeline": "pgsm-parallel",
+                    "combos": [
+                        {
+                            "label": "default",
+                            "params": {"VERSION": "ppg-19.0"},
+                            "result": "SUCCESS",
+                        }
+                    ],
+                }
+            )
+
+    gh = Run()
+    runs = collect.collect_runs(gh, tmp_path)
+    assert gh.job_calls == 1
+    collect.collect_runs(gh, tmp_path)  # finished and cached: no more calls
+    assert gh.job_calls == 1
+    details = collect.build_dashboard(runs, [], NOW)["details"]["19"]
+    assert details["not_run"] == 2
+    exact, fallback = sorted(details["not_run_builds"], key=lambda b: b["pipeline"])
+    assert exact == {
+        "label": "IO_METHOD=sync,SCENARIO=pg-19-meta-server",
+        "pipeline": "ppg-multiOS-parallel",
+        "error": "Jenkins https://pg.cd.percona.com/job/ppg-multiOS-parallel/buildWithParameters: HTTP 500",
+        "job_url": "https://gh/runs/5/job/77",
+        "exact_job": True,
+    }
+    assert fallback["job_url"] == "https://gh/runs/5" and not fallback["exact_job"]
+    assert fallback["error"] == "No result recorded"
+
+
+def _github_answers(monkeypatch, answers):
+    """GitHub answers each request with the next item: an HTTP code (error)
+    or a dict (JSON body). Returns the list of requested URLs."""
+    import email.message
+    import urllib.error
+    import urllib.request
+
+    calls = []
+
+    class Body(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_urlopen(req, timeout=None):
+        calls.append(req.full_url)
+        answer = answers.pop(0)
+        if isinstance(answer, tuple):
+            code, headers = answer
+        elif isinstance(answer, int):
+            code, headers = answer, {}
+        else:
+            return Body(json.dumps(answer).encode())
+        msg = email.message.Message()
+        for k, v in headers.items():
+            msg[k] = v
+        raise urllib.error.HTTPError(req.full_url, code, "error", msg, None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(collect.time, "sleep", lambda s: None)
+    return calls
+
+
+def test_github_502_is_retried(monkeypatch):
+    calls = _github_answers(monkeypatch, [502, 503, {"ok": 1}])
+    assert collect.GitHub("p/o", "t").get("actions/runs/1/jobs") == {"ok": 1}
+    assert len(calls) == 3
+
+
+def test_github_failing_for_good_names_the_request(monkeypatch):
+    _github_answers(monkeypatch, [502, 502, 502])
+    with pytest.raises(
+        collect.GitHubError,
+        match=r"GET actions/runs/1/jobs failed after 3 attempt\(s\): HTTP Error 502",
+    ):
+        collect.GitHub("p/o", "t").get("actions/runs/1/jobs")
+
+
+def test_github_404_is_not_retried(monkeypatch):
+    calls = _github_answers(monkeypatch, [404])
+    with pytest.raises(collect.GitHubError, match="after 1 attempt"):
+        collect.GitHub("p/o", "t").get("actions/runs/1")
+    assert len(calls) == 1
+
+
+def test_github_rate_limit_says_when_it_resets(monkeypatch):
+    _github_answers(
+        monkeypatch,
+        [(403, {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1794630600"})],
+    )
+    with pytest.raises(
+        collect.GitHubError,
+        match=r"rate limit reached for this token; it resets at \d\d:\d\d UTC",
+    ):
+        collect.GitHub("p/o", "t").get("actions/runs/1")
+
+
+def test_known_failure_can_match_one_component():
+    """PG-2914 (pg_repack's repack-check, PostgreSQL's pg_attver) affects every
+    major, in component-generic-parallel, which runs all components under the
+    label 'default': only pg_repack's failure is known."""
+    known = [
+        {
+            "ticket": "PG-2914",
+            "title": "repack-check",
+            "major": [14, 15, 16, 17, 18],
+            "pipeline": "^component-generic-parallel$",
+            "params": {"PRODUCT": "^pg_repack$"},
+        }
+    ]
+    repack = build(
+        "component-generic-parallel", "FAILURE", PRODUCT="pg_repack", VERSION="ppg-18.7"
+    )
+    backrest = build(
+        "component-generic-parallel",
+        "FAILURE",
+        PRODUCT="pgbackrest",
+        VERSION="ppg-18.7",
+    )
+    assert collect.match_known(repack, "18", known)["ticket"] == "PG-2914"
+    assert (
+        collect.match_known(backrest, "18", known) is None
+    )  # a real new failure stays new
+    assert (
+        collect.match_known(
+            dict(repack, params={"PRODUCT": "pg_repack", "VERSION": "ppg-19.0"}),
+            "19",
+            known,
+        )
+        is None
+    )
+
+
+def test_the_real_pg_2914_entry_covers_pg_18():
+    known = collect.load_known(
+        pathlib.Path(__file__).resolve().parents[1]
+        / ".github"
+        / "qa-known-failures.yaml"
+    )
+    for major in ("14", "15", "16", "17", "18"):
+        repack = build(
+            "component-generic-parallel",
+            "FAILURE",
+            PRODUCT="pg_repack",
+            VERSION=f"ppg-{major}.0",
+        )
+        assert (collect.match_known(repack, major, known) or {}).get(
+            "ticket"
+        ) == "PG-2914", major

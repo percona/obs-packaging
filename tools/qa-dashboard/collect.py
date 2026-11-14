@@ -25,8 +25,10 @@ import io
 import json
 import os
 import re
+import shutil
 import statistics
 import sys
+import time
 import urllib.error
 import urllib.request
 import zipfile
@@ -38,7 +40,7 @@ NIGHTLY = "obs-nightly-qa.yml"
 # Only the nightly: manual OBS QA Run runs test whatever someone picked, so
 # they would distort each major's history, status and counts.
 WORKFLOWS = (NIGHTLY,)
-CACHE_VERSION = 2
+CACHE_VERSION = 4
 JENKINS_CACHE_VERSION = 2
 JENKINS_WORKERS = 8  # builds asked at the same time  # bump when what is kept per Jenkins build changes  # bump when the cached run format changes: re-read once
 MAJORS = ("14", "15", "16", "17", "18", "19")
@@ -185,8 +187,10 @@ def match_known(
     build: dict[str, Any], major: str, known: list[dict[str, Any]]
 ) -> dict[str, Any] | None:
     """The known-failures entry covering this failed build, if any. An entry
-    matches on major (optional), Jenkins job (regex) and combo label or
-    scenario (regex, optional)."""
+    matches on major (optional), Jenkins job (regex), combo label or
+    scenario (regex, optional) and Jenkins parameters (regex per parameter,
+    optional: e.g. PRODUCT for the component jobs, which run every component
+    under the label 'default')."""
     label = build.get("label") or ""
     scenario = str(build["params"].get("SCENARIO") or "")
     for entry in known:
@@ -199,6 +203,12 @@ def match_known(
             continue
         pattern = entry.get("label")
         if pattern and not re.search(str(pattern), f"{label} {scenario}"):
+            continue
+        wanted = entry.get("params") or {}
+        if any(
+            not re.search(str(regex), str(build["params"].get(name, "")))
+            for name, regex in wanted.items()
+        ):
             continue
         return entry
     return None
@@ -218,8 +228,25 @@ def is_queued(run: dict[str, Any]) -> bool:
     return run.get("status") in QUEUED_STATUSES
 
 
+def has_results(run: dict[str, Any]) -> bool:
+    """Finished, or a re-run (queued or running) of a finished attempt."""
+    if run.get("status") == "completed":
+        return True
+    return (
+        (run.get("attempt") or 1) > 1
+        and bool(run.get("builds"))
+        and bool(run.get("finished_at"))
+    )
+
+
+def _not_run(build: dict[str, Any]) -> bool:
+    """No Jenkins result: the build wasn't run (e.g. a scenario that skips
+    itself) or its result wasn't recorded. Its GitHub job passes."""
+    return build.get("result") is None
+
+
 def _is_failed(build: dict[str, Any]) -> bool:
-    return build.get("result") not in OK_RESULTS
+    return not _not_run(build) and build.get("result") not in OK_RESULTS
 
 
 def build_dashboard(
@@ -264,9 +291,10 @@ def build_dashboard(
         if not mruns:
             majors_out.append({"major": m, "status": "none", "runs": []})
             continue
-        completed = [r for r in mruns if r["status"] == "completed"]
+        # Runs with results: finished ones, and re-runs still queued or running,
+        # whose earlier attempt's results stand until the re-run replaces them.
+        completed = [r for r in mruns if has_results(r)]
         shown = mruns[:RUNS_SHOWN]
-        current = mruns[0]
         last = completed[0] if completed else None
         durations = [
             (parse_time(r["finished_at"]) - parse_time(r["started_at"])).total_seconds()
@@ -279,20 +307,32 @@ def build_dashboard(
 
         failing = [b for b in (last["builds"] if last else []) if _is_failed(b)]
         new = [b for b in failing if not match_known(b, m, known)]
-        if current["status"] != "completed":
-            status = "queued" if is_queued(current) else "running"
-            jobs = current.get("qa_jobs") or {}
+        # Every unfinished run of this major, not just the newest: a nightly
+        # started by hand can run while the scheduled one waits behind it.
+        unfinished = [r for r in mruns if r["status"] != "completed"]
+        active = None  # the running one, for the row's progress
+        for r in unfinished:
+            jobs = r.get("qa_jobs") or {}
             live = {
                 "major": m,
-                "url": current["url"],
+                "url": r["url"],
                 # the current attempt: a re-run's own start, not the first one's
-                "since": current.get("attempt_started_at") or current["started_at"],
-                "rerun": (current.get("attempt") or 1) > 1,
+                "since": r.get("attempt_started_at") or r["started_at"],
+                "rerun": (r.get("attempt") or 1) > 1,
+                "github_status": r.get("status", ""),
                 "done": jobs.get("done", 0),
                 "total": jobs.get("total", 0),
                 "failing": jobs.get("failed", 0),
             }
-            (queued if status == "queued" else running).append(live)
+            if is_queued(r):
+                queued.append(live)
+            else:
+                running.append(live)
+                active = active or r
+        if active is not None:
+            status = "running"
+        elif unfinished:
+            status = "queued"
         else:
             status = "fail" if new else ("known" if failing else "pass")
 
@@ -304,7 +344,9 @@ def build_dashboard(
             "status": status,
             "failing": len(failing),
             "new": len(new),
-            "total": len(last["builds"]) if last else 0,
+            # builds that ran; the ones without a result are counted apart
+            "total": len([b for b in last["builds"] if not _not_run(b)]) if last else 0,
+            "not_run": len([b for b in last["builds"] if _not_run(b)]) if last else 0,
             "last_run": fmt_date(started(last)) if last else "–",
             "last_run_url": last["url"] if last else "",
             "runtime": fmt_duration(last_duration),
@@ -326,7 +368,7 @@ def build_dashboard(
             ],
         }
         if status == "running":
-            jobs = current.get("qa_jobs") or {}
+            jobs = active.get("qa_jobs") or {}
             major_row["progress"] = f"{jobs.get('done', 0)} / {jobs.get('total', 0)}"
             major_row["total"] = jobs.get("total", 0) or major_row["total"]
         majors_out.append(major_row)
@@ -447,6 +489,19 @@ def build_dashboard(
                 {f["ticket"] for f in detail_failing if f["ticket"]}
             ),
             "total": major_row["total"],
+            "not_run": major_row["not_run"],
+            "not_run_builds": [
+                {
+                    "label": b.get("label") or "default",
+                    "pipeline": b["pipeline"],
+                    "error": b.get("error") or "No result recorded",
+                    # the job when its report names it, else the run
+                    "job_url": b.get("job_url") or (last["url"] if last else ""),
+                    "exact_job": bool(b.get("job_url")),
+                }
+                for b in (last["builds"] if last else [])
+                if _not_run(b)
+            ],
             "runtime": major_row["runtime"],
             "median": major_row["median"],
             "slow": slow,
@@ -480,7 +535,15 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+class GitHubError(Exception):
+    """A GitHub request that failed for good (after retries), with what it was."""
+
+
 class GitHub:
+    # waits between attempts: GitHub answers 502/503 now and then, and one
+    # failed request must not throw a whole refresh away
+    RETRY_DELAYS = (2, 5)
+
     def __init__(self, repo: str, token: str | None) -> None:
         self.repo = repo
         self.token = token
@@ -499,23 +562,62 @@ class GitHub:
             if path.startswith("http")
             else f"https://api.github.com/repos/{self.repo}/{path}"
         )
-        with urllib.request.urlopen(self._request(url), timeout=60) as resp:
-            return json.load(resp)
+
+        def fetch() -> Any:
+            with urllib.request.urlopen(self._request(url), timeout=60) as resp:
+                return json.load(resp)
+
+        return self._retrying(fetch, f"GET {path}")
 
     def download(self, url: str) -> bytes:
-        # The archive URL redirects to storage that must not get our token.
-        opener = urllib.request.build_opener(_NoRedirect)
-        try:
-            with opener.open(self._request(url), timeout=120) as resp:
-                return resp.read()
-        except urllib.error.HTTPError as err:
-            location = err.headers.get("Location")
-            if err.code in (301, 302, 303, 307, 308) and location:
-                with urllib.request.urlopen(
-                    self._request(location, auth=False), timeout=120
-                ) as resp:
+        def fetch() -> bytes:
+            # The archive URL redirects to storage that must not get our token.
+            opener = urllib.request.build_opener(_NoRedirect)
+            try:
+                with opener.open(self._request(url), timeout=120) as resp:
                     return resp.read()
-            raise
+            except urllib.error.HTTPError as err:
+                location = err.headers.get("Location")
+                if err.code in (301, 302, 303, 307, 308) and location:
+                    with urllib.request.urlopen(
+                        self._request(location, auth=False), timeout=120
+                    ) as resp:
+                        return resp.read()
+                raise
+
+        return self._retrying(fetch, "download of a QA report")
+
+    def _retrying(self, fetch: Any, what: str) -> Any:
+        """Run fetch, retrying what may pass on a second try: server errors,
+        429, timeouts and dropped connections. Others (404...) fail at once."""
+        for attempt, delay in enumerate((*self.RETRY_DELAYS, None), 1):
+            try:
+                return fetch()
+            except urllib.error.HTTPError as err:
+                if err.code == 403 and err.headers.get("X-RateLimit-Remaining") == "0":
+                    reset = err.headers.get("X-RateLimit-Reset", "")
+                    when = (
+                        dt.datetime.fromtimestamp(int(reset), dt.timezone.utc).strftime(
+                            "%H:%M UTC"
+                        )
+                        if reset.isdigit()
+                        else "later"
+                    )
+                    raise GitHubError(
+                        f"GitHub rate limit reached for this token; it resets at {when}"
+                    ) from err
+                if delay is None or not (err.code >= 500 or err.code == 429):
+                    raise GitHubError(
+                        f"GitHub {what} failed after {attempt} attempt(s): {err}"
+                    ) from err
+            except (urllib.error.URLError, TimeoutError, ConnectionError) as err:
+                if delay is None:
+                    raise GitHubError(
+                        f"GitHub {what} failed after {attempt} attempts: {err}"
+                    ) from err
+            log(f"  GitHub {what}: attempt {attempt} failed, retrying in {delay}s")
+            time.sleep(delay)
+        raise AssertionError("unreachable")
 
 
 class Jenkins:
@@ -592,10 +694,61 @@ class Jenkins:
 def _reports_from_zip(data: bytes) -> list[dict[str, Any]]:
     out = []
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
-        for name in zf.namelist():
+        names = zf.namelist()
+        # the GitHub job's name (its matrix status_context), written by the
+        # workflow next to the report: links a build to its job
+        job = next(
+            (zf.read(n).decode().strip() for n in names if n.endswith("qa-job.txt")), ""
+        )
+        for name in names:
             if name.endswith(".json"):
-                out.append(json.loads(zf.read(name)))
+                report = json.loads(zf.read(name))
+                if job:
+                    report["job"] = job
+                out.append(report)
     return out
+
+
+def _short_error(error: str | None) -> str:
+    """A build's error as one readable line: Jenkins answers errors with an
+    HTML page, so keep the text before it."""
+    if not error:
+        return ""
+    text = error.split("<", 1)[0].strip().rstrip(":").strip()
+    return (text or "Jenkins answered with an error page")[:300]
+
+
+def _artifact_reports(
+    gh: Any, artifact: dict[str, Any], folder: Path
+) -> list[dict[str, Any]]:
+    """An artifact's QA reports. GitHub never changes an uploaded artifact, so
+    each is downloaded once and kept (by id) while its run is unfinished:
+    otherwise every refresh downloaded a running nightly's ~50 reports again."""
+    art_id = artifact.get("id")
+    path = folder / f"{art_id}.json"
+    if art_id is not None and path.is_file():
+        return json.loads(path.read_text())
+    reports = _reports_from_zip(gh.download(artifact["archive_download_url"]))
+    if art_id is not None:
+        folder.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(reports))
+    return reports
+
+
+def get_all(gh: Any, path: str, key: str, per_page: int = 100) -> list[Any]:
+    """Every item of a paginated GitHub list, not just the first page: a
+    nightly re-run several times has well over 100 artifacts, and the newest
+    (the re-runs' results) are not on the first page."""
+    items: list[Any] = []
+    for page in range(1, 51):  # up to 5,000 items
+        suffix = f"?per_page={per_page}" + (f"&page={page}" if page > 1 else "")
+        data = gh.get(path + suffix)
+        batch = data.get(key, [])
+        items += batch
+        total = data.get("total_count")
+        if len(batch) < per_page or (total is not None and len(items) >= total):
+            break
+    return items
 
 
 def scheduled_major(created_at: str, schedule: dict[str, Any]) -> str | None:
@@ -622,6 +775,7 @@ def collect_runs(
     cache_dir: Path,
     per_workflow: int = 40,
     schedule: dict[str, Any] | None = None,
+    quiet: bool = False,
 ) -> list[dict[str, Any]]:
     cache_dir.mkdir(parents=True, exist_ok=True)
     if schedule is None:
@@ -632,7 +786,8 @@ def collect_runs(
     for wf in WORKFLOWS:
         listing = gh.get(f"actions/workflows/{wf}/runs?per_page={per_workflow}")
         found = listing.get("workflow_runs", [])
-        log(f"{wf}: {len(found)} runs")
+        if not quiet:
+            log(f"{wf}: {len(found)} runs")
         for i, r in enumerate(found, 1):
             cached = cache_dir / f"run-{r['id']}.json"
             attempt = r.get("run_attempt") or 1
@@ -647,9 +802,7 @@ def collect_runs(
                         runs.append(run_cached)
                     continue
             builds = []
-            artifacts = gh.get(f"actions/runs/{r['id']}/artifacts?per_page=100").get(
-                "artifacts", []
-            )
+            artifacts = get_all(gh, f"actions/runs/{r['id']}/artifacts", "artifacts")
             # One qa-report-<job index> per QA job; a re-run of the job uploads
             # another one with the same name: only the newest (the job's final
             # result) counts.
@@ -662,7 +815,9 @@ def collect_runs(
                     ):
                         latest[a["name"]] = a
             for a in latest.values():
-                for report in _reports_from_zip(gh.download(a["archive_download_url"])):
+                for report in _artifact_reports(
+                    gh, a, cache_dir / f"run-{r['id']}-artifacts"
+                ):
                     for c in report.get("combos", []):
                         builds.append(
                             {
@@ -671,8 +826,20 @@ def collect_runs(
                                 "params": c.get("params") or {},
                                 "result": c.get("result"),
                                 "build_url": c.get("build_url"),
+                                "error": _short_error(c.get("error")),
+                                "job": report.get("job", ""),
                             }
                         )
+            if any(_not_run(b) for b in builds):
+                # link each build that didn't run to its GitHub job, where the
+                # error is (one call, only for runs that have such builds)
+                job_urls = {
+                    j["name"]: j.get("html_url", "")
+                    for j in get_all(gh, f"actions/runs/{r['id']}/jobs", "jobs")
+                }
+                for b in builds:
+                    if _not_run(b):
+                        b["job_url"] = job_urls.get(b.get("job", ""), "")
             started = r.get("run_started_at") or r["created_at"]
             finished = r["updated_at"] if r["status"] == "completed" else None
             if attempt > 1:
@@ -697,9 +864,7 @@ def collect_runs(
                 "builds": builds,
             }
             if r["status"] != "completed":
-                jobs = gh.get(f"actions/runs/{r['id']}/jobs?per_page=100").get(
-                    "jobs", []
-                )
+                jobs = get_all(gh, f"actions/runs/{r['id']}/jobs", "jobs")
                 qa = [j for j in jobs if j["name"].startswith(QA_JOB_PREFIX)]
                 run["qa_jobs"] = {
                     "total": len(qa),
@@ -720,9 +885,14 @@ def collect_runs(
                 run["running_majors"] = sorted(majors_seen)
             else:
                 cached.write_text(json.dumps(run))  # finished: never fetched again
-            log(
-                f"  [{i}/{len(found)}] run {r['id']} ({r['status']}): {len(builds)} build reports"
-            )
+                # its reports, kept while it ran, are in the run file now
+                shutil.rmtree(
+                    cache_dir / f"run-{r['id']}-artifacts", ignore_errors=True
+                )
+            if not quiet:
+                log(
+                    f"  [{i}/{len(found)}] run {r['id']} ({r['status']}): {len(builds)} build reports"
+                )
             if builds or r["status"] != "completed":
                 runs.append(run)
     runs.sort(key=lambda x: x["started_at"], reverse=True)
@@ -828,6 +998,11 @@ def main(argv: list[str] | None = None) -> int:
             runs,
             cache,
         )
+        # Jenkins can take minutes: re-read the runs (finished ones come from
+        # the cache) so the statuses are as fresh as the time we report
+        log("Re-reading run statuses before publishing...")
+        runs = collect_runs(GitHub(args.repo, token), cache, quiet=True)
+        now = dt.datetime.now(dt.timezone.utc)
         data = build_dashboard(runs, known, now, info)
     Path(args.out).write_text(json.dumps(data, indent=1))
     print(

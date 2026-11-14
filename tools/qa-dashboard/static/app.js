@@ -55,6 +55,13 @@
     return '<span class="chip none">No runs yet</span>';
   }
 
+  // builds that didn't run (no Jenkins result), linking to the list on the major's page
+  function notRunChip(m) {
+    if (!m.not_run) return '';
+    return '<a class="chip notrun" href="#pg' + esc(m.major) + '" title="Builds Jenkins never ran: see why on the PG ' +
+      esc(m.major) + ' page">◌ ' + esc(m.not_run) + ' not run</a>';
+  }
+
   // KNOWN · PG-1234, linking to the ticket
   function knownBadge(f) {
     var text = 'KNOWN · ' + esc(f.ticket);
@@ -87,9 +94,13 @@
       h += '<section class="queued" aria-label="Runs waiting to start"><span class="label">Queued</span>' +
         data.queued.map(function (q) {
           return '<span>' + link(q.url, 'PG ' + esc(q.major) + ' nightly' + (q.rerun ? ' (re-run)' : '')) +
-            ' <span class="muted">· waiting ' + esc(duration(q.since)) + '</span></span>';
+            ' <span class="muted">· waiting ' + esc(duration(q.since)) +
+            (q.github_status ? ' · GitHub: ' + esc(q.github_status) : '') + '</span></span>';
         }).join('') +
-        '<span class="muted" style="font-size:13px">Nightlies run one at a time: these start when the running one ends.</span></section>';
+        '<span class="muted" style="font-size:13px">' + ((data.running || []).length
+          ? 'Nightlies run one at a time: these start when the running one ends.'
+          : 'Nothing is running, so GitHub hasn\'t started these yet: usually no runner is free. Open a run to see why.') +
+        '</span></section>';
     }
     h += '<section class="card" aria-labelledby="majors-title"><div class="card-head"><h2 id="majors-title">Majors</h2>' +
       '<span>Last 5 runs: oldest → newest (nightly and manual)</span></div><div class="scroll"><div class="grid-majors">' +
@@ -97,7 +108,7 @@
     data.majors.forEach(function (m) {
       var cells = [
         '<span class="major-name">PG ' + esc(m.major) + '</span>',
-        '<div>' + statusChip(m) + '</div>',
+        '<div class="status-cell">' + statusChip(m) + notRunChip(m) + '</div>',
         '<span class="mono">' + (m.runs.length ? esc(m.failing) + ' / ' + esc(m.total) : '–') + '</span>',
         '<span>' + (m.last_run_url ? link(m.last_run_url, esc(m.last_run)) : esc(m.last_run || '–')) + '</span>',
         '<div class="stack"><span class="mono">' + esc(m.runtime || '–') + '</span>' +
@@ -145,7 +156,8 @@
     var known = d.known_tickets.length ? ' · ' + (d.failing - d.new) + ' known (' + d.known_tickets.map(esc).join(', ') + ')' : '';
     h += '<section class="summary" aria-label="Summary">' +
       '<div class="card"><span class="small-label">Failing (last run)</span><span class="big" style="color:' + (d.failing ? 'var(--fail)' : 'var(--pass-ink)') + '">' +
-        esc(d.failing) + ' / ' + esc(d.total) + '</span><span class="muted" style="font-size:13px">' + esc(d.new) + ' new' + known + '</span></div>' +
+        esc(d.failing) + ' / ' + esc(d.total) + '</span><span class="muted" style="font-size:13px">' + esc(d.new) + ' new' + known +
+        (d.not_run ? ' · ' + esc(d.not_run) + ' not run' : '') + '</span></div>' +
       '<div class="card"><span class="small-label">Last run</span><span class="mid">' + esc(d.last_run) + '</span><span class="muted" style="font-size:13px">' + esc(d.last_run_window) + '</span></div>' +
       '<div class="card"><span class="small-label">Run time</span><span class="big">' + esc(d.runtime) + '</span>' +
         (d.slow ? '<span class="slow">+' + esc(d.slow_pct) + '% vs median ' + esc(d.median) + '</span>' : '<span class="muted" style="font-size:13px">median ' + esc(d.median) + '</span>') + '</div>' +
@@ -178,7 +190,18 @@
       h += '<span class="muted" style="font-size:13px">' + esc(f.platform_note) + '</span>';
       h += '</article>';
     });
-    return h + '</section>';
+    h += '</section>';
+    if ((d.not_run_builds || []).length) {
+      h += '<section class="card" aria-labelledby="nr-title"><h2 id="nr-title">Not run (' + esc(d.not_run_builds.length) + ')</h2>' +
+        '<p class="muted" style="margin:0 0 12px;font-size:14px">Builds of the last run that Jenkins never ran. Their GitHub jobs passed, so GitHub doesn\u2019t show them as failing.</p>';
+      d.not_run_builds.forEach(function (b) {
+        h += '<div class="fb"><div class="fb-head"><b>' + esc(b.pipeline) + ' · ' + esc(b.label) + '</b>' +
+          link(b.job_url, b.exact_job ? 'GitHub job →' : 'GitHub run →') + '</div>' +
+          '<span class="muted mono" style="font-size:13px">' + esc(b.error) + '</span></div>';
+      });
+      h += '</section>';
+    }
+    return h;
   }
 
   function render() {
