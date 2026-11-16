@@ -1284,3 +1284,84 @@ def test_the_real_pg_2914_entry_covers_pg_18():
         assert (collect.match_known(repack, major, known) or {}).get(
             "ticket"
         ) == "PG-2914", major
+
+
+def _live_github(run_status, attempt=1, jobs=(), attempt_jobs=None):
+    """A GitHub stub with one unfinished PG 19 run."""
+
+    class G:
+        calls = []
+
+        def get(self, path):
+            G.calls.append(path)
+            if "/workflows/" in path:
+                return {
+                    "workflow_runs": [
+                        {
+                            "id": 63,
+                            "html_url": "u/63",
+                            "event": "workflow_dispatch",
+                            "status": run_status,
+                            "run_attempt": attempt,
+                            "created_at": "2026-11-16T14:51:20Z",
+                            "run_started_at": "2026-11-16T14:51:20Z",
+                            "updated_at": "2026-11-16T15:30:00Z",
+                        }
+                    ]
+                }
+            if "/artifacts" in path:
+                return {"artifacts": []}
+            if "/attempts/" in path and path.split("?")[0].endswith("/jobs"):
+                return {"jobs": list(attempt_jobs if attempt_jobs is not None else jobs)}
+            if "/jobs" in path:
+                return {"jobs": list(jobs)}
+            if "/attempts/1" in path:
+                return {"run_started_at": "2026-11-16T14:51:20Z"}
+            raise AssertionError(path)
+
+    return G()
+
+
+def _job(status, started="2026-11-16T15:05:00Z", name="OBS QA / ppg:staging:19 / server"):
+    return {"name": name, "status": status, "started_at": started}
+
+
+def test_run_reported_queued_while_its_jobs_run_is_running(tmp_path):
+    """GitHub can report a run as "queued" again while it works (its jobs in
+    progress done, the next ones waiting for a runner). Started jobs make it
+    running, timed from its first job, not from when GitHub created it."""
+    gh = _live_github(
+        "queued",
+        jobs=[
+            _job("completed", "2026-11-16T15:05:00Z"),
+            _job("in_progress", "2026-11-16T15:20:00Z", "OBS QA / ppg:staging:19 / pg_tde"),
+            _job("queued", None, "OBS QA / ppg:staging:19 / upgrade"),
+        ],
+    )
+    data = collect.build_dashboard(collect.collect_runs(gh, tmp_path), [], NOW)
+    pg19 = next(m for m in data["majors"] if m["major"] == "19")
+    assert pg19["status"] == "running" and data["queued"] == []
+    assert [(r["major"], r["since"]) for r in data["running"]] == [("19", "2026-11-16T15:05:00Z")]
+    assert pg19["runs"][-1]["kind"] == "running"
+
+
+def test_run_with_no_started_job_stays_queued(tmp_path):
+    gh = _live_github("queued", jobs=[_job("queued", None)])
+    data = collect.build_dashboard(collect.collect_runs(gh, tmp_path), [], NOW)
+    assert [q["major"] for q in data["queued"]] == ["19"] and data["running"] == []
+    assert data["queued"][0]["since"] == "2026-11-16T14:51:20Z"
+
+
+def test_queued_rerun_ignores_the_earlier_attempts_finished_jobs(tmp_path):
+    """A re-run of failed jobs keeps attempt 1's finished jobs in the run's job
+    list; only the re-run's own jobs say whether it has started."""
+    gh = _live_github(
+        "queued",
+        attempt=2,
+        jobs=[_job("completed", "2026-11-16T02:05:00Z"), _job("queued", None)],
+        attempt_jobs=[_job("queued", None)],
+    )
+    runs = collect.collect_runs(gh, tmp_path)
+    assert any("/attempts/2/jobs" in c for c in gh.calls)
+    assert runs[0]["jobs_started"] is False
+    assert collect.is_queued(runs[0])

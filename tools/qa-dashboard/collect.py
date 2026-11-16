@@ -224,7 +224,14 @@ QUEUED_STATUSES = ("queued", "waiting", "requested", "pending")
 
 def is_queued(run: dict[str, Any]) -> bool:
     """Not started yet: GitHub queues a nightly (or a re-run of one) while
-    another nightly runs."""
+    another nightly runs.
+
+    The run's own status is not enough: GitHub can report a run that has been
+    working for a while as "queued" again, whenever its jobs in progress have
+    finished and the next ones wait for a runner. A run counts as queued only
+    while none of its current attempt's jobs has started."""
+    if run.get("jobs_started"):
+        return False
     return run.get("status") in QUEUED_STATUSES
 
 
@@ -316,8 +323,12 @@ def build_dashboard(
             live = {
                 "major": m,
                 "url": r["url"],
-                # the current attempt: a re-run's own start, not the first one's
-                "since": r.get("attempt_started_at") or r["started_at"],
+                # the current attempt: a re-run's own start, not the first one's;
+                # for a running one, when its first job started (a run can wait
+                # for a runner well after GitHub created it)
+                "since": (
+                    None if is_queued(r) else r.get("jobs_started_at")
+                ) or r.get("attempt_started_at") or r["started_at"],
                 "rerun": (r.get("attempt") or 1) > 1,
                 "github_status": r.get("status", ""),
                 "done": jobs.get("done", 0),
@@ -865,6 +876,21 @@ def collect_runs(
             }
             if r["status"] != "completed":
                 jobs = get_all(gh, f"actions/runs/{r['id']}/jobs", "jobs")
+                # Has the current attempt started? Its own jobs only: the run's
+                # job list also holds the earlier attempt's finished jobs that a
+                # re-run of failed jobs leaves in place.
+                attempt_jobs = (
+                    get_all(gh, f"actions/runs/{r['id']}/attempts/{attempt}/jobs", "jobs")
+                    if attempt > 1
+                    else jobs
+                )
+                begun = [
+                    j for j in attempt_jobs if j.get("status") in ("in_progress", "completed")
+                ]
+                run["jobs_started"] = bool(begun)
+                run["jobs_started_at"] = min(
+                    (j["started_at"] for j in begun if j.get("started_at")), default=None
+                )
                 qa = [j for j in jobs if j["name"].startswith(QA_JOB_PREFIX)]
                 run["qa_jobs"] = {
                     "total": len(qa),
