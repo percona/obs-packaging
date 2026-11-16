@@ -82,6 +82,13 @@ fi
 
 [ "$DPKG_MAINTSCRIPT_PACKAGE" ] && db_stop
 
+# debhelper 14.5 and 13.24.2 place systemd-tmpfiles before systemd-sysusers so
+# tmpfiles cannot use the postgres user. Call sysusers manually first. (#1153884)
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+   systemd-sysusers ${DPKG_ROOT:+--root="$DPKG_ROOT"} postgresql-common.conf
+fi
+
+
 #DEBHELPER#
 
 if [ "$1" = configure ]; then
