@@ -17,8 +17,8 @@
 # pg_tde has no PG 19 tag yet: build upstream main under a pre-release
 # version that sorts below the next real release. Drop both lines once a
 # PG 19 tag exists so the root PG_TDE_VERSION applies.
-- PG_TDE_REVISION: main
-- PG_TDE_VERSION: 2.3.0~dev
+- PG_TDE_REVISION: release-2.3
+- PG_TDE_VERSION: 2.3.0
 
 - PG_STAT_MONITOR_VERSION: 2.4.1
 - PG_STAT_MONITOR_REF: release-2.4.1
