@@ -124,7 +124,7 @@
 - H3_PG_VERSION: 4.5.0
 - HLL_VERSION: 2.21
 - IP4R_VERSION: 2.4.3
-- PG_ANONYMIZER_VERSION: 3.2.3
+- PG_ANONYMIZER_VERSION: 3.3.2
 - PG_PARTMAN_VERSION: 5.5.0
 # Keep _VERSION and _TAG macros in sync for consistency.
 - PG_SIMILARITY_VERSION: 1.0
@@ -135,7 +135,7 @@
 - PGROUTING_VERSION: %!{PGROUTING_MAJOR_VERSION}.%!{PGROUTING_MINOR_VERSION}
 - PGVECTORSCALE_VERSION: 0.9.1
 - RUM_VERSION: 1.3.15
-- TIMESCALEDB_VERSION: 2.30.2
+- TIMESCALEDB_VERSION: 2.32.0
 
 # ppg:common:deps package versions that are also stamped into the package's
 # debian.dsc (with the epoch Percona Repo uses), so both stay in step.
