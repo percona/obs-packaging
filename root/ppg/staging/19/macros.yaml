@@ -21,7 +21,7 @@
 - PG_TDE_VERSION: 2.3.0
 
 - PG_STAT_MONITOR_VERSION: 2.4.1
-- PG_STAT_MONITOR_REF: release-2.4.1
+- PG_STAT_MONITOR_REF: 2.4.1
 
 # PostGIS 3.7 split address_standardizer and postgis_tiger_geocoder out of its
 # tree into their own packages; bundle them wherever PostGIS itself ships.
