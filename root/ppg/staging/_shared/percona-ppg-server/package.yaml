@@ -1,1 +1,47 @@
 description: Percona PPG Server %!{PG_MAJOR_VERSION} metapackage
+
+# Package tests of this metapackage, with every platform the server lane
+# tests. Here rather than in the project file, so they run only for majors
+# that ship it (PG 19 doesn't). IO_METHOD: the I/O methods to test, per major
+# (QA_IO_METHODS: [worker] up to PG 17, which ignore it; all three from 18).
+qa:
+  name: meta-server
+  pipeline: ppg-multiOS-parallel
+  parameters:
+    USE_OBS_REPO: true
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+    VERSION: ppg-%!{PG_VERSION}
+    PLATFORMS:
+      - debian-12
+      - debian-12-arm
+      - debian-13
+      - debian-13-arm
+      - ubuntu-jammy
+      - ubuntu-jammy-arm
+      - ubuntu-noble
+      - ubuntu-noble-arm
+      - ubuntu-resolute
+      - ubuntu-resolute-arm
+      - rocky-8
+      - rocky-8-arm
+      - rocky-9
+      - rocky-9-arm
+      - rocky-10
+      - rocky-10-arm
+      - ol-8
+      - ol-8-arm
+      - ol-9
+      - ol-9-arm
+      - ol-10
+      - ol-10-arm
+      - rhel-8
+      - rhel-8-arm
+      - rhel-9
+      - rhel-9-arm
+      - rhel-10
+      - rhel-10-arm
+    TESTING_BRANCH: main
+    IO_METHOD: %!{QA_IO_METHODS}
+    SCENARIO: pg-%!{PG_MAJOR_VERSION}-meta-server
+  matrix:
+    - IO_METHOD

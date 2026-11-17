@@ -13,3 +13,5 @@
 
 - TARBALL_PG_EXTRA_COMPONENTS: percona-pg_tde%!{PG_MAJOR_VERSION} percona-pg_oidc_validator%!{PG_MAJOR_VERSION}
 - CONTAINER_PG_EXTRA_COMPONENTS: percona-pg_tde%!{PG_MAJOR_VERSION} percona-pg_oidc_validator%!{PG_MAJOR_VERSION}
+# the metapackages package tests: every io_method (see ../macros.yaml)
+- QA_IO_METHODS: [worker, sync, io_uring]
