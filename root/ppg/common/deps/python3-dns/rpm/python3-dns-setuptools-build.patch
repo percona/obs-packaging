@@ -1,8 +1,8 @@
 --- pyproject.toml.old
 +++ pyproject.toml
-@@ -1,12 +1,8 @@
+@@ -1,13 +1,8 @@
 -[build-system]
--requires = ["uv_build>=0.9.21,<0.13.0"]
+-requires = ["uv_build>=0.9.21,<0.14.0"]
 -build-backend = "uv_build"
 -
  [project]
@@ -10,6 +10,7 @@
  description = "DNS toolkit"
  authors = [{ name = "Bob Halley", email = "halley@dnspython.org" }]
 -license = "ISC"
+-license-files = ["LICENSE"]
 +license = { text = "ISC" }
  classifiers = [
      "Development Status :: 5 - Production/Stable",
