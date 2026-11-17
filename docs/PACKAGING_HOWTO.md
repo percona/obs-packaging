@@ -668,6 +668,64 @@ version before assuming this.
 
 ---
 
+## Finding Which Packages Need a CVE Bump (obs-dashboard API)
+
+The obs-dashboard (`https://dashboard.obs.pg.labs.percona.com`) scans the container images
+built on the labs OBS instance once a day and exposes the HIGH/CRITICAL findings as JSON. Use it
+to decide which packages need a version bump.
+
+```sh
+# Every image with open findings under a project subtree
+curl -s 'https://dashboard.obs.pg.labs.percona.com/api/cve/findings?project=ppg:staging'
+
+# All scans of one image package (also lists clean images)
+curl -s 'https://dashboard.obs.pg.labs.percona.com/api/cve/scans?project=ppg:staging:common:tools:containers&package=percona-pgadmin4'
+```
+
+`project` is the OBS project **without** the root prefix (`isv:percona:`); `findings` matches
+the whole subtree below it. The response is one entry per image × repository × arch:
+
+| Field | Meaning |
+|---|---|
+| `project`, `package`, `repo`, `arch` | The OBS image build that was scanned |
+| `image_ref` | Registry reference of the scanned image |
+| `scanned_at` | Time of the last scan |
+| `cve_since` | When the current findings first showed up for this image |
+| `critical_count`, `high_count` | Number of findings per severity |
+| `findings[]` | `id` (CVE/GHSA), `pkg`, `installed`, `fixed`, `severity`, `title` |
+
+The same package shows up in many images, so collapse the list to one line per
+package/version before triaging:
+
+```sh
+curl -s 'https://dashboard.obs.pg.labs.percona.com/api/cve/findings?project=ppg:staging' |
+  jq -r '[.[] | {img: "\(.project)/\(.package)/\(.repo)"} + .findings[]]
+         | group_by([.pkg, .installed])[]
+         | "\(.[0].pkg) \(.[0].installed) -> \(.[0].fixed)  cves=\([.[].id] | unique | length)  images=\([.[].img] | unique | length)"'
+```
+
+Then map each line to its owner:
+
+- **`installed` is a plain upstream version** (e.g. `dnspython 2.9.0`, `pillow 12.3.0`): a
+  language library packaged in this repository. Find it with `grep -ril <name> root/` (Python
+  libraries live under `root/ppg/common/deps/` as `python3-<name>`), bump the `revision` in its
+  `obs/_service` to a tag at or above `fixed`, add a spec `%changelog` entry, and name the
+  CVE/GHSA ids in the commit message so `project release` picks them up for the CHANGELOG
+  Security section.
+- **`installed` carries a distro release** (e.g. `krb5-libs 1.21.1-10.el9_8.1`): the package
+  comes from the UBI base image or the UBI repositories, not from this tree. Nothing to bump —
+  check that the `fixed` build is on the UBI CDN
+  (`https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/<arch>/baseos/os/`); once it is
+  there and mirrored to labs, a rebuild of the images picks it up. If it is not there yet, wait
+  for Red Hat.
+- **`installed` is a Percona build** (`percona-*`, PostgreSQL extensions): bump the package
+  under `root/ppg/staging/` as usual.
+
+After the fix is merged and the images are rebuilt, the next daily scan drops the finding;
+re-run the query to confirm.
+
+---
+
 ## Sharing One Package Source Across PG Majors
 
 If the packaging for a package is identical in every `staging/<V>/` except for the PG major
