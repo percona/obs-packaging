@@ -38,9 +38,9 @@ authenticated messages and EDNS0.
 %prep
 %setup -n %{srcname}-%{version}
 # dnspython 2.9 builds with uv_build, which isn't available for python3.12 on EL8/9.
-# Patch0 drops the uv_build build-system and turns the PEP 639 license string back into
-# a table (EL setuptools predates 77 and rejects the string); add a minimal setup.py for
-# the setuptools build below.
+# Patch0 drops the uv_build build-system, turns the PEP 639 license string back into a
+# table and drops license-files (EL setuptools predates 77 and rejects both); add
+# a minimal setup.py for the setuptools build below.
 %patch -P 0 -p0
 cat > setup.py <<'EOF'
 from setuptools import setup, find_packages
@@ -61,6 +61,9 @@ find %{buildroot}%{python3_sitelib} -mindepth 1 -type d | sed "s|%{buildroot}||"
 %dir %{python3_sitelib}/dns/__pycache__
 
 %changelog
+* Tue Nov 17 2026 Percona Build/Release Team <eng-build@percona.com> - 2.9.2-1
+- Update to dnspython 2.9.2 (fixes CVE-2026-128089)
+
 * Wed Oct 28 2026 Percona Build/Release Team <eng-build@percona.com> - 2.9.0-1
 - Update to dnspython 2.9.0 (fixes CVE-2026-114605)
 
