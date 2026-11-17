@@ -437,8 +437,8 @@ Requires:	%{name} >= %{version}-%{release}
 %if 0%{?suse_version} == 1500
 Requires:	llvm17-devel clang17-devel
 %endif
-%if 0%{?suse_version} == 1600
-Requires:	llvm19-devel clang19-devel
+%if 0%{?suse_version} >= 1600
+Requires:	llvm-devel clang-devel
 %endif
 %if 0%{?fedora} || 0%{?rhel}
 Requires:	llvm-devel >= 19.0 clang-devel >= 19.0
@@ -504,9 +504,6 @@ Summary:        Just-in-time compilation support for PostgreSQL
 Requires:       %{name}-server >= %{version}-%{release}
 %if 0%{?suse_version} == 1500
 Requires:        libLLVM17
-%endif
-%if 0%{?suse_version} == 1600
-Requires:        libLLVM19
 %endif
 %if 0%{?fedora} || 0%{?rhel}
 Requires:       llvm => 19

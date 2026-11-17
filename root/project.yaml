@@ -188,6 +188,15 @@ project-config: |
   Prefer: libcurl4t64
   %endif
 
+  %if "%_repository" == "openSUSE_Leap_16"
+  # openSUSE:Backports:SLE-16.0 ships LLVM 21 and shadows the SLFO llvm/clang
+  # meta packages and clang-tools, but the Leap prjconf still lists only the
+  # SLFO compilers (clang15 clang17 clang19) as /usr/bin/clang providers, so
+  # clang-tools 21 is unresolvable ("have choice for /usr/bin/clang"). A
+  # FileProvides line replaces the inherited one for the same path.
+  FileProvides: /usr/bin/clang clang21
+  %endif
+
   %if "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository" == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04"
   Prefer: golang-1.26
   %endif

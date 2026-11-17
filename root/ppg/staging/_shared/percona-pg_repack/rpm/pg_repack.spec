@@ -107,12 +107,8 @@ Requires:       %{name}%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
 BuildRequires:  llvm17-devel clang17-devel
 Requires:       llvm17
 %endif
-%if 0%{?suse_version} == 1600
-BuildRequires:  llvm19-devel clang19-devel
-Requires:       llvm19
-%endif
-%if 0%{?suse_version} > 1600
-BuildRequires:        llvm-devel clang-devel
+%if 0%{?suse_version} >= 1600
+BuildRequires:  llvm-devel clang-devel
 %endif
 %if 0%{?amzn}
 BuildRequires:  llvm-devel >= 15.0 clang-devel >= 15.0
