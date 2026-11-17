@@ -13,6 +13,10 @@ License:        PostgreSQL
 URL:            https://github.com/timescale/pgvectorscale
 Source0:        %{sname}-%{version}.tar.gz
 Source1:    vendor.tar.gz
+# clang 22 fix for the vendored bindgen 0.71.1 (backport from 0.72.1).
+# Drop it, and the checksum reset in %%prep, once upstream moves to a pgrx
+# that pulls bindgen >= 0.72.1.
+Patch0:     bindgen-0.71.1-clang22.patch
 Packager:       Percona Development Team <https://jira.percona.com>
 Vendor:         Percona, LLC
 
@@ -30,6 +34,10 @@ pgvectorscale enhances pgvector with scalable indexing and storage.
 
 %prep
 %autosetup -p1 -a1 -n %{sname}-%{version}
+# Patch0 edits a vendored crate: cargo rejects it unless the per-file
+# checksums are cleared.
+jq -c '.files = {}' vendor/bindgen-0.71.1/.cargo-checksum.json > .cargo-checksum.json.new
+mv .cargo-checksum.json.new vendor/bindgen-0.71.1/.cargo-checksum.json
 
 %build
 cd pgvectorscale

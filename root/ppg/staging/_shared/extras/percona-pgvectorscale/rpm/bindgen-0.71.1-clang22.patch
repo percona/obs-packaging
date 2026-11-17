@@ -1,0 +1,34 @@
+bindgen 0.71.1: follow a type's definition, as clang 22 no longer does
+
+clang 22 makes clang_getTypeDeclaration() return the forward declaration
+of a struct where older releases returned its definition, so bindgen
+emitted opaque structs (a lone `_address` field) for the PostgreSQL
+headers and pgrx-pg-sys failed to compile.
+
+Backport of the fix released in bindgen 0.72.1:
+https://github.com/rust-lang/rust-bindgen/issues/3278
+https://github.com/rust-lang/rust-bindgen/commit/2e06749639
+
+pgrx-bindgen 0.16.1 requires bindgen ^0.71.1, so the fixed release cannot
+be vendored. Drop this patch once pgvectorscale moves to a pgrx that
+pulls bindgen >= 0.72.1.
+
+--- a/vendor/bindgen-0.71.1/clang.rs
++++ b/vendor/bindgen-0.71.1/clang.rs
+@@ -1213,11 +1213,11 @@
+ 
+     /// Get a cursor pointing to this type's declaration.
+     pub(crate) fn declaration(&self) -> Cursor {
+-        unsafe {
+-            Cursor {
+-                x: clang_getTypeDeclaration(self.x),
+-            }
+-        }
++        let decl = Cursor {
++            x: unsafe { clang_getTypeDeclaration(self.x) },
++        };
++        // Prior to clang 22, the declaration pointed to the definition.
++        decl.definition().unwrap_or(decl)
+     }
+ 
+     /// Get the canonical declaration of this type, if it is available.
