@@ -500,9 +500,6 @@ Requires:       %{name}-server >= %{version}-%{release}
 %if 0%{?suse_version} == 1500
 Requires:	libLLVM17
 %endif
-%if 0%{?suse_version} == 1600
-Requires:	libLLVM19
-%endif
 %if 0%{?fedora} || 0%{?rhel}
 Requires:	llvm >= 19
 %endif
@@ -665,8 +662,8 @@ source /opt/rh/gcc-toolset-%{gts_version}/enable
 %if 0%{?fedora} || 0%{?rhel}
 export CLANG=%{_bindir}/clang LLVM_CONFIG=%{_bindir}/llvm-config
 %endif
-# On openSUSE, llvm-config is not at a stable path (llvm19-devel provides
-# /usr/lib/llvm19/bin/llvm-config, not /usr/bin/llvm-config-19). Let PG's
+# On openSUSE, llvm-config is not at a stable path (llvmNN-devel provides
+# /usr/lib/llvmNN/bin/llvm-config, not /usr/bin/llvm-config-NN). Let PG's
 # configure locate a working llvm-config via PATH by not exporting it here.
 
 # PERCONA: steer --with-python explicitly at the 3.12 interpreter on EL8/EL9

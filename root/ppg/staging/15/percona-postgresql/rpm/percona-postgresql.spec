@@ -202,10 +202,7 @@ BuildRequires:        llvm6-devel clang6-devel
 %if 0%{?suse_version} >= 1500 && 0%{?suse_version} < 1600
 BuildRequires:        llvm17-devel clang17-devel clang17 llvm17
 %endif
-%if 0%{?suse_version} == 1600
-BuildRequires:        llvm19-devel clang19-devel clang19 llvm19
-%endif
-%if 0%{?suse_version} > 1600
+%if 0%{?suse_version} >= 1600
 BuildRequires:        llvm-devel clang-devel
 %endif
 %if 0%{?fedora} || 0%{?rhel} >= 8
@@ -504,10 +501,7 @@ Requires:        llvm6-devel clang6-devel
 %if 0%{?suse_version} == 1500
 Requires:        llvm17-devel clang17-devel
 %endif
-%if 0%{?suse_version} == 1600
-Requires:        llvm19-devel clang19-devel
-%endif
-%if 0%{?suse_version} > 1600
+%if 0%{?suse_version} >= 1600
 Requires:        llvm-devel clang-devel
 %endif
 %if 0%{?fedora} || 0%{?rhel} >= 8
@@ -586,9 +580,6 @@ Requires:        llvm
 %endif
 %if 0%{?suse_version} == 1500
 Requires:        libLLVM17
-%endif
-%if 0%{?suse_version} == 1600
-Requires:        libLLVM19
 %endif
 %if 0%{?fedora} || 0%{?rhel} >= 8
 Requires:        llvm >= 19.0
@@ -786,13 +777,10 @@ export CLANG=%{_bindir}/clang LLVM_CONFIG=%{_bindir}/llvm-config
 %if 0%{?suse_version} >= 1500 && 0%{?suse_version} < 1600
 export CLANG=%{_bindir}/clang-17
 %endif
-%if 0%{?suse_version} == 1600
-export CLANG=%{_bindir}/clang-19
-%endif
-# On openSUSE, llvm-config is not at a stable path (llvm19-devel provides
-# /usr/lib/llvm19/bin/llvm-config, not /usr/bin/llvm-config). Let PG's
+# On openSUSE, llvm-config is not at a stable path (llvmNN-devel provides
+# /usr/lib/llvmNN/bin/llvm-config, not /usr/bin/llvm-config). Let PG's
 # configure locate a working llvm-config via PATH by not exporting it here.
-# Tumbleweed (suse_version > 1600) uses unversioned llvm-devel/clang-devel.
+# Leap 16 and Tumbleweed (suse_version >= 1600) use unversioned llvm-devel/clang-devel.
 
 %if 0%{?gts_version}
 	source /opt/rh/gcc-toolset-14/enable
