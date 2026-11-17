@@ -17,3 +17,6 @@
 # majors that ship pg_tde / pg_oidc_validator override it in their own
 # macros.yaml.
 - TARBALL_PG_EXTRA_COMPONENTS:
+# I/O methods the metapackages' package tests run with (their package.yaml):
+# PG 18 and later test all three; earlier majors ignore IO_METHOD, so one.
+- QA_IO_METHODS: [worker]

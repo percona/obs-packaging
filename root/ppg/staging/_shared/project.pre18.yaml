@@ -75,10 +75,10 @@ qa:
         - rhel-10
         - rhel-10-arm
       TESTING_BRANCH: main
+      # The meta scenarios (pg-<major>-meta-server, -meta-ha) are in the meta
+      # packages' package.yaml: they run only for majors that ship them.
       SCENARIO:
         - pg-%!{PG_MAJOR_VERSION}
-        - pg-%!{PG_MAJOR_VERSION}-meta-server
-        - pg-%!{PG_MAJOR_VERSION}-meta-ha
     matrix:
       - SCENARIO
   # Package upgrades into this major: minor (latest released N.x -> this
