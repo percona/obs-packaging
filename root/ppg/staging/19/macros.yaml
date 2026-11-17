@@ -1,23 +1,22 @@
 - PG_MAJOR_VERSION: 19
 - PG_MINOR_VERSION: %!{PG_19_MINOR_VERSION}
 - PERCONA_PG_PATCH_VERSION: %!{PG_19_PERCONA_PATCH_VERSION}
-- PG_VERSION_SUFFIX: ~rc2
 - PG_VERSION: %!{PG_MAJOR_VERSION}.%!{PG_MINOR_VERSION}
 
 - PG_SOURCE_GIT_URL: https://github.com/percona/postgres.git
-- PG_SOURCE_GIT_REVISION: PSP-19rc2
-- PG_PACKAGE_VERSION: %!{PG_VERSION}.%!{PERCONA_PG_PATCH_VERSION}%!{PG_VERSION_SUFFIX}
+- PG_SOURCE_GIT_REVISION: PSP-%!{PG_VERSION}.%!{PERCONA_PG_PATCH_VERSION}
+- PG_PACKAGE_VERSION: %!{PG_VERSION}.%!{PERCONA_PG_PATCH_VERSION}
 
 - PPG_IMAGE_VERSION: %!{PG_VERSION}.%!{PERCONA_PG_PATCH_VERSION}
 
 # PG19-specific component versions; everything else inherits root/macros.yaml.
-- PGAUDIT_VERSION: 19rc1
+- PGAUDIT_VERSION: 19.0
 - POSTGIS_VERSION: 3.7.0
 - POSTGIS_RPM_MAJOR: 37
 # pg_tde has no PG 19 tag yet: build upstream main under a pre-release
 # version that sorts below the next real release. Drop both lines once a
 # PG 19 tag exists so the root PG_TDE_VERSION applies.
-- PG_TDE_REVISION: release-2.3
+- PG_TDE_REVISION: 2.3.0
 - PG_TDE_VERSION: 2.3.0
 
 - PG_STAT_MONITOR_VERSION: 2.4.1
