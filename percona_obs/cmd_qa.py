@@ -20,6 +20,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from . import common
 from .common import (
     _BOLD,
     _CYAN,
@@ -62,9 +63,13 @@ from .obs_api import (
 from .qa_images import (
     ImageDecision,
     ImageResolver,
+    ProjectDecision,
     is_image_ref,
+    is_project_ref,
     resolve_entry_images,
+    resolve_entry_projects,
     validate_image_ref,
+    validate_project_ref,
 )
 from .qa_state import (
     Attempt,
@@ -120,15 +125,36 @@ def _image_resolver(
     )
 
 
+def _release_counterpart(project: str) -> str:
+    """The release project mirroring staging *project* (``ppg:staging:17`` ->
+    ``ppg:releases:17``), or *project* itself when no release unit mirrors it."""
+    root = common.REPO_ROOT
+    best = ("", project)
+    for record in root.glob("*/releases/**/release.yaml"):
+        staging = (load_yaml_with_env(record, {}) or {}).get("project")
+        if not isinstance(staging, str) or not staging:
+            continue
+        if project == staging or project.startswith(staging + ":"):
+            if len(staging) > len(best[0]):
+                release = ":".join(record.parent.relative_to(root).parts)
+                best = (staging, release + project[len(staging) :])
+    return best[1]
+
+
 def _resolve_lane_images(
     lanes: list[Lane], project: str, resolver: ImageResolver
-) -> list[ImageDecision]:
-    """Render every image reference of every lane in place; return the decisions.
+) -> "list[ImageDecision | ProjectDecision]":
+    """Render every image and project reference of every lane in place;
+    return the decisions.
 
     Entries outside the OBS project's repository slice are dropped first
     (see :meth:`ImageResolver.outside_slice`), each named on stderr.
     """
-    decisions: list[ImageDecision] = []
+    # A release mirror's lanes name other units by their staging project; in
+    # the root under test those are the release projects.
+    in_mirror = _mirror_source(project) is not None
+    candidate_of = _release_counterpart if in_mirror else (lambda p: p)
+    decisions: "list[ImageDecision | ProjectDecision]" = []
     for lane in lanes:
         kept: list[dict[str, Any]] = []
         for entry in lane.entries:
@@ -144,6 +170,7 @@ def _resolve_lane_images(
             )
         lane.entries = kept
         for entry in lane.entries:
+            decisions.extend(resolve_entry_projects(entry, resolver, candidate_of))
             # Resolution replaces each reference with a registry path; keep
             # the projects the images come from for EXPECTED_VERSIONS.
             entry["_image_projects"] = _image_projects(entry)
@@ -163,12 +190,27 @@ def _image_projects(entry: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def _print_image_decisions(decisions: list[ImageDecision]) -> None:
-    """One stderr line per image reference: which rootprj it got, and why.
+def _print_image_decisions(
+    decisions: "list[ImageDecision | ProjectDecision]",
+) -> None:
+    """One stderr line per image or project reference: which rootprj it got,
+    and why.
 
     Goes to stderr so `qa show --json` stays machine-readable; CI forwards it.
     """
     for d in decisions:
+        if isinstance(d, ProjectDecision):
+            if d.reason == "present":
+                why = f"present in {d.obs_project}"
+            elif d.reason == "fallback":
+                why = f"fallback: not in {d.obs_project}"
+            else:
+                why = "no fallback configured"
+            print(
+                f"  project {d.project} → {d.param} = {d.value}  [{d.reason}: {why}]",
+                file=sys.stderr,
+            )
+            continue
         if d.reason == "present":
             why = f"present in {d.obs_project}"
         elif d.reason == "fallback":
@@ -314,11 +356,15 @@ def _validate_qa(qa: Any, project: str) -> None:
         raise SystemExit(f"error: {project}: qa.parameters must be a non-empty mapping")
     for pname, pvalue in parameters.items():
         if isinstance(pvalue, dict):
+            if is_project_ref(pvalue):
+                validate_project_ref(pvalue, project, pname)
+                continue
             if not is_image_ref(pvalue):
                 raise SystemExit(
                     f"error: {project}: qa.parameters.{pname}: a mapping value must "
                     "be an image reference (image: <package>, repository: <repo>"
-                    "[, project: <project>])"
+                    "[, project: <project>]) or a project reference "
+                    "(project: <project>)"
                 )
             validate_image_ref(pvalue, project, pname)
         elif isinstance(pvalue, list) and any(isinstance(x, dict) for x in pvalue):

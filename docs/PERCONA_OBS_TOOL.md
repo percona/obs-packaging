@@ -746,6 +746,8 @@ qa:
       image: percona-pgbouncer          #   OBS package name of the image (required)
       repository: ubi9                  #   OBS repository = last path segment (required)
       project: ppg:staging:18:containers   # defaults to the lane's project
+    PROJECT_PARAM:                      # project reference: rendered to an OBS project name
+      project: ppg:staging:17           #   rootprj-relative project (the only key)
   matrix:                               # optional, list[str]
     - LIST_PARAM
 ```
@@ -757,7 +759,7 @@ discovered on disk from the project's direct package directories (symlinks into
 `_shared/` are followed and `%!{...}` macros resolve from the link's location,
 so one block under `_shared/<pkg>/package.yaml` renders per major), without
 descending into subprojects. The package's `obs/_link`, if any, is irrelevant.
-The tool calls OBS from `qa show` / `qa run` only to resolve image references when `image-fallback-rootprj` is set (one package and one repository listing per project).
+The tool calls OBS from `qa show` / `qa run` only to resolve image and project references when `image-fallback-rootprj` is set (one package and one repository listing per project).
 
 ```yaml
 # root/ppg/staging/_shared/pg_tde/package.yaml
@@ -814,6 +816,32 @@ When only `-with-postgis` was promoted, both combos test the fallback (productio
 When only the plain image was promoted, the lane resolves to the PR root and the
 `WITH_POSTGIS=true` combo pulls a `-with-postgis` image that does not exist there, so it
 fails.
+
+#### Project references
+
+A parameter whose value is a mapping with only a `project:` key names another
+OBS project, relative to the root project, and is rendered to its full name.
+The major-upgrade lanes use it for the project the upgrade starts from:
+
+```yaml
+FROM_OBS_PROJECT:
+  project: ppg:staging:%!{PG_PREV_MAJOR_VERSION}
+```
+
+Which root the project is taken from follows the image-reference rule:
+
+| Run | Looked up in the root under test | Rendered |
+|---|---|---|
+| no `image-fallback-rootprj` (main, nightly) | nothing (OBS is not queried) | `<rootprj>:ppg:staging:17` |
+| PR | `<PR root>:ppg:staging:17` | that project when it holds packages, else `<fallback root>:ppg:staging:17` |
+| release PR (lane of a release mirror) | `<PR root>:ppg:releases:17` | that pre-release when the PR cuts that unit too, else `<fallback root>:ppg:staging:17` |
+
+In a release mirror the reference keeps naming the staging project (the cut
+rewrites only references to the unit's own project); the tool looks up its
+release counterpart, the unit whose `release.yaml` `project:` names it. The
+fallback is always the project as written, under the fallback root. `qa show`
+/ `qa run` print one `project <id> → <PARAM> = <value>  [<reason>]` line per
+reference on stderr.
 
 #### Status contexts
 
