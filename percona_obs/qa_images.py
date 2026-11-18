@@ -25,6 +25,18 @@ failed) narrows nothing.
 
 Resolution is keyed on the value, never on the parameter name: pipelines
 name their parameters differently (``REPOSITORY``, ``OLD_DOCKER_REPOSITORY``).
+
+A mapping with only a ``project:`` key is a *project reference*: it names
+another OBS project (rootprj-relative) and renders to its full name::
+
+    FROM_OBS_PROJECT:
+      project: ppg:staging:17
+
+The project is taken from the root under test when it exists there (holds at
+least one package), else from the fallback root.  In a release mirror the
+project looked up in the root under test is the release counterpart
+(``ppg:releases:17``), so a release PR that cuts both units tests them
+together, and one that does not falls back to staging.
 """
 
 from __future__ import annotations
@@ -58,6 +70,25 @@ def validate_image_ref(value: dict[str, Any], where: str, param: str) -> None:
         raise SystemExit(f"{prefix}: project must be a non-empty string when set")
 
 
+def is_project_ref(value: Any) -> bool:
+    """True for a mapping carrying ``project`` and no ``image``."""
+    return isinstance(value, dict) and "project" in value and "image" not in value
+
+
+def validate_project_ref(value: dict[str, Any], where: str, param: str) -> None:
+    """Reject a malformed project reference with a message naming *where*/*param*."""
+    prefix = f"error: {where}: qa.parameters.{param}"
+    unknown = sorted(set(value) - {"project"})
+    if unknown:
+        raise SystemExit(
+            f"{prefix}: unknown key(s) {', '.join(unknown)}; a project reference "
+            "takes only project"
+        )
+    project = value.get("project")
+    if not isinstance(project, str) or not project:
+        raise SystemExit(f"{prefix}: project must be a non-empty string")
+
+
 def _as_path(obs_name: str) -> str:
     """``isv:percona:PR:pr-1`` → ``isv/percona/pr/pr-1`` (OBS registry path form)."""
     return obs_name.replace(":", "/").lower()
@@ -82,6 +113,17 @@ class ImageDecision:
     rootprj: str  # the root project used in ``value``
     reason: str  # "no-fallback" | "present" | "fallback" | "fallback-repo"
     value: str  # rendered registry path
+
+
+@dataclasses.dataclass(frozen=True)
+class ProjectDecision:
+    """Which OBS project one project reference was rendered to, and why."""
+
+    param: str
+    project: str  # colon notation, without rootprj, as written
+    obs_project: str  # the project that was (or would have been) listed
+    reason: str  # "no-fallback" | "present" | "fallback"
+    value: str  # rendered full OBS project name
 
 
 class ImageResolver:
@@ -160,6 +202,46 @@ class ImageResolver:
             reason=reason,
             value=registry_path(self.registry, rootprj, project, ref["repository"]),
         )
+
+    def decide_project(
+        self, param: str, project: str, candidate: str
+    ) -> ProjectDecision:
+        """Render a project reference: *candidate* (the project as it is named
+        in the root under test) when it holds packages there, else *project*
+        under the fallback root."""
+        obs_project = f"{self.rootprj}:{candidate}"
+        if self.fallback_rootprj is None:
+            value, reason = obs_project, "no-fallback"
+        elif self._packages(obs_project):
+            value, reason = obs_project, "present"
+        else:
+            value, reason = f"{self.fallback_rootprj}:{project}", "fallback"
+        return ProjectDecision(
+            param=param,
+            project=project,
+            obs_project=obs_project,
+            reason=reason,
+            value=value,
+        )
+
+
+def resolve_entry_projects(
+    entry: dict[str, Any],
+    resolver: ImageResolver,
+    candidate_of: Callable[[str], str],
+) -> list[ProjectDecision]:
+    """Replace every project reference in ``entry["parameters"]`` with its
+    full OBS project name.  *candidate_of(project)* names the project as it
+    appears in the root under test.  Mutates *entry* in place."""
+    decisions: list[ProjectDecision] = []
+    params: dict[str, Any] = entry.get("parameters") or {}
+    for name, value in list(params.items()):
+        if is_project_ref(value):
+            project: str = value["project"]
+            decision = resolver.decide_project(name, project, candidate_of(project))
+            params[name] = decision.value
+            decisions.append(decision)
+    return decisions
 
 
 def resolve_entry_images(
