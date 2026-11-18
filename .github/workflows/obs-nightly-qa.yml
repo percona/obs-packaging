@@ -214,13 +214,23 @@ jobs:
             ${{ matrix.package_filter }} \
             ${{ matrix.axis_filters }}
 
+      # The job's own name, next to its report: lets the QA dashboard link a
+      # build that didn't run to this job, where the error is.
+      - name: Record the job name for the QA report
+        if: always()
+        env:
+          JOB_NAME: ${{ matrix.status_context }}
+        run: printf '%s' "$JOB_NAME" > /tmp/qa-job.txt
+
       # Upload the per-combo report so the aggregate job can build the badge.
       - name: Upload QA report artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: qa-report-${{ strategy.job-index }}
-          path: /tmp/qa-report.json
+          path: |
+            /tmp/qa-report.json
+            /tmp/qa-job.txt
           if-no-files-found: ignore
 
   # ──────────────────────────────────────────────────────────────────────────

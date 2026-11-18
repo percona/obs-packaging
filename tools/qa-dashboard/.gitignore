@@ -1,0 +1,4 @@
+# written by collect.py / serve.py at run time
+.cache/
+data.json
+__pycache__/
