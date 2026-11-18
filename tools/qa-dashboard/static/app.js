@@ -103,7 +103,7 @@
         '</span></section>';
     }
     h += '<section class="card" aria-labelledby="majors-title"><div class="card-head"><h2 id="majors-title">Majors</h2>' +
-      '<span>Last 5 runs: oldest → newest (nightly and manual)</span></div><div class="scroll"><div class="grid-majors">' +
+      '<span>Last 5 runs: newest → oldest (nightly and manual)</span></div><div class="scroll"><div class="grid-majors">' +
       ['Major', 'Status', 'Failing', 'Last run', 'Run time', 'Last 5 runs', ''].map(function (t) { return '<span class="grid-head">' + t + '</span>'; }).join('');
     data.majors.forEach(function (m) {
       var cells = [
@@ -114,7 +114,8 @@
         '<div class="stack"><span class="mono">' + esc(m.runtime || '–') + '</span>' +
           (m.slow ? '<span class="slow">+' + esc(m.slow_pct) + '% vs median ' + esc(m.median) + '</span>'
                   : (m.median && m.median !== '–' ? '<span class="muted" style="font-size:12px">median ' + esc(m.median) + '</span>' : '')) + '</div>',
-        '<div class="runs">' + m.runs.map(runSquare).join('') + '</div>',
+        // newest first: the data is oldest first (chronological)
+        '<div class="runs">' + m.runs.slice().reverse().map(runSquare).join('') + '</div>',
         m.runs.length ? '<a class="details-link" href="#pg' + esc(m.major) + '">Details →</a>' : '<span></span>'
       ];
       h += cells.map(function (c) { return c.replace(/^<(\w+)( class="([^"]*)")?/, function (_, tag, __, cls) { return '<' + tag + ' class="grid-row ' + (cls || '') + '"'; }); }).join('');
