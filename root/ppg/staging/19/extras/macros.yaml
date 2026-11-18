@@ -1,0 +1,15 @@
+- PPG_IMAGE_VERSION: %!{PG_VERSION}
+- CONTAINER_PG_EXTRA_COMPONENTS: percona-pg_oidc_validator%!{PG_MAJOR_VERSION}
+
+# The custom image runs the community server: build it from the upstream
+# postgres tree at the release tag, not the Percona fork staging:19 uses,
+# and version it as plain PG_VERSION (as the 16-18 extras servers do).
+- PG_SOURCE_GIT_URL: https://github.com/postgres/postgres.git
+- PG_SOURCE_GIT_REVISION: REL_%!{PG_MAJOR_VERSION}_%!{PG_MINOR_VERSION}
+- PG_PACKAGE_VERSION: %!{PG_VERSION}
+
+# timescaledb and pgvectorscale are built here on trial: upstream does not
+# declare PG 19 support yet (timescaledb's CMakeLists rejects PG > 18;
+# pgvectorscale has no pg19 pgrx feature).  If they fail to build, drop the
+# two package links and set CUSTOM_IMAGE_EXTRA_COMPONENTS empty here so the
+# custom image stops installing them.

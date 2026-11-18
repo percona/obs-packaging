@@ -96,7 +96,7 @@ RUN microdnf install -y \
         %!{CONTAINER_POSTGIS_EXTRA_COMPONENTS} \
         percona-wal2json${PPG_MAJOR_VERSION} \
         percona-pg_cron_${PPG_MAJOR_VERSION} \
-        percona-timescaledb_${PPG_MAJOR_VERSION} \
+        %!{CUSTOM_IMAGE_EXTRA_COMPONENTS} \
         percona-h3-pg_${PPG_MAJOR_VERSION} \
         percona-pg_similarity_${PPG_MAJOR_VERSION} \
         percona-rum_${PPG_MAJOR_VERSION} \
@@ -106,7 +106,6 @@ RUN microdnf install -y \
         percona-postgresql_anonymizer_${PPG_MAJOR_VERSION} \
         percona-pg_partman_${PPG_MAJOR_VERSION} \
         percona-pgrouting_${PPG_MAJOR_VERSION} \
-        percona-pgvectorscale_${PPG_MAJOR_VERSION} \
         percona-patroni
 
 # The perl metapackage drags in perl-Archive-Tar and perl-IO-Compress, which

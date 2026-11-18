@@ -1,0 +1,343 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: PostgreSQL
+Source: https://www.postgresql.org/ftp/source/
+
+### PostgreSQL copyrights ###
+
+Files: *
+Copyright:
+ Portions Copyright (c) 1996-2026, PostgreSQL Global Development Group
+ Portions Copyright (c) 1994, The Regents of the University of California
+ Alexander Lakhin <exclusion@gmail.com>
+ Andrew Gierth
+ Associazione Culturale ITPUG
+ Board of Trustees of the University of Illinois
+ Damien Miller
+ Eric P. Allman
+ Hideaki Ohno
+ Internet Systems Consortium
+ Jens Schweikhardt
+ Kenneth Albanowski
+ Marcus Holland-Moritz
+ Paul Marquess
+ PhiloSoft Design
+ Satoshi Nagayasu
+ SKC, Inc
+ SRA, Inc
+ Tatsuo Ishii
+ toczek
+ Todd C. Miller
+ Ulf Adams
+ University of Illinois at Urbana-Champaign
+ Zilong Tan
+License: PostgreSQL
+
+Files: src/backend/jit/llvm/SectionMemoryManager.*
+ src/include/jit/SectionMemoryManager.h
+Copyright: 2003-2017 University of Illinois at Urbana-Champaign.
+License: APACHE-2-LLVM-EXCEPTIONS
+ On Debian systems the full text of the Apache Software License 2.0 can be
+ found in the `/usr/share/common-licenses/Apache-2.0' file.
+ .
+ ---- LLVM Exceptions to the Apache 2.0 License ----
+ .
+ As an exception, if, as a result of your compiling your source code, portions
+ of this Software are embedded into an Object form of such source code, you
+ may redistribute such embedded portions in such Object form without complying
+ with the conditions of Sections 4(a), 4(b) and 4(d) of the License.
+ .
+ In addition, if you combine or link compiled forms of this Software with
+ software that is licensed under the GPLv2 ("Combined Software") and if a
+ court of competent jurisdiction determines that the patent provision (Section
+ 3), the indemnity provision (Section 9) or other Section of the License
+ conflicts with the conditions of the GPLv2, you may retroactively and
+ prospectively choose to deem waived or otherwise exclude such Section(s) of
+ the License, but only in their entirety and only with respect to the Combined
+ Software.
+
+Files: src/backend/regex/*
+Copyright:
+ Copyright (c) 2013-2022, PostgreSQL Global Development Group
+ Copyright (c) 1998, 1999 Henry Spencer.  All rights reserved.
+ Copyright (c) 1998 Sun Microsystems, Inc.
+ Copyright (c) 1998, 1999 by Scriptics Corporation.
+License: PostgreSQL and Custom-regex and Tcl
+
+Files: src/backend/snowball/libstemmer/* src/include/snowball/libstemmer/*
+Copyright: Copyright (c) 2001, Dr Martin Porter,
+           Copyright (c) 2002, Richard Boulton.
+License: BSD-3-Clause
+Comment:
+ This module uses the word stemming code developed by the Snowball project,
+ http://snowballstem.org which is released by them under a BSD-style license.
+ Postgres' files under src/backend/snowball/libstemmer/ and
+ src/include/snowball/libstemmer/ are taken directly from the Snowball files,
+ with only some minor adjustments of file inclusions.
+ See src/backend/snowball/README for details.
+
+Files: src/backend/utils/mb/Unicode/*.txt
+Copyright:
+ earthian@tama.or.jp
+ I'O
+ Project X0213
+License: Custom-Unicode
+ You can use, modify, distribute this table freely.
+
+Files: src/backend/optimizer/geqo/*
+Copyright: Darrell L. Whitley
+License: Custom-Whitley
+ Permission is hereby granted to copy all or any part of
+ this program for free distribution.   The author's name
+ and this copyright notice must be included in any copy.
+
+Files: src/bin/pg_dump/*
+Copyright: Portions Copyright (c) 2000, Philip Warner
+License: Custom-pg_dump
+ Rights are granted to use this software in any way so long as this notice is
+ not removed.  The author is not responsible for loss or damages that may
+ result from its use.
+
+Files: src/common/d2s* src/common/f2s* src/common/ryu_common.h
+ src/include/common/shortest_dec.h
+Copyright:
+ PostgreSQL Global Development Group
+ Ulf Adams
+License: Apache-2.0 or BSL-1.0
+
+Files:
+ src/common/sha2.c
+ src/include/common/sha2.h
+Copyright: Copyright (c) 2000-2001, Aaron D. Gifford
+License: BSD-3-Clause
+
+### contrib copyrights ###
+
+Files: contrib/fuzzystrmatch/dmetaphone.c
+Copyright: Copyright 2000, Maurice Aubrey <maurice@hevanet.com>
+           Copyright 2003, North Carolina State Highway Patrol
+License: double-metaphone
+ This module is free software; you may redistribute it and/or
+ modify it under the same terms as Perl itself.
+ .
+ All rights reserved.
+ .
+ Permission to use, copy, modify, and distribute this software and its
+ documentation for any purpose, without fee, and without a written agreement
+ is hereby granted, provided that the above copyright notice and this
+ paragraph and the following two paragraphs appear in all copies.
+ .
+ IN NO EVENT SHALL THE NORTH CAROLINA STATE HIGHWAY PATROL BE LIABLE TO ANY
+ PARTY FOR DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES,
+ INCLUDING LOST PROFITS, ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS
+ DOCUMENTATION, EVEN IF THE NORTH CAROLINA STATE HIGHWAY PATROL HAS BEEN
+ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ .
+ THE NORTH CAROLINA STATE HIGHWAY PATROL SPECIFICALLY DISCLAIMS ANY
+ WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.  THE SOFTWARE PROVIDED
+ HEREUNDER IS ON AN "AS IS" BASIS, AND THE NORTH CAROLINA STATE HIGHWAY PATROL
+ HAS NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR
+ MODIFICATIONS.
+ .
+ The license of Perl is:
+ .
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of either:
+ .
+ a) the GNU General Public License as published by the Free Software
+    Foundation; either version 1, or (at your option) any later
+    version, or
+ .
+ b) the "Artistic License" which comes with Perl.
+ .
+ On Debian GNU/Linux systems, the complete text of the GNU General
+ Public License version 1 can be found in
+ `/usr/share/common-licenses/GPL-1' and the Artistic Licence in
+ `/usr/share/common-licenses/Artistic'.
+
+Files:
+ contrib/pgcrypto/crypt-des.c
+Copyright: Copyright (c) 1994 David Burren
+           Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
+License: BSD-3-clause
+
+Files:
+ contrib/pgcrypto/mbuf.*
+ contrib/pgcrypto/openssl.c
+ contrib/pgcrypto/pgcrypto.*
+ contrib/pgcrypto/pgp*
+ contrib/pgcrypto/px*
+Copyright: Copyright (c) 2001, 2005 Marko Kreen
+License: BSD-2-clause
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
+ 1. Redistributions of source code must retain the above copyright
+        notice, this list of conditions and the following disclaimer.
+ 2. Redistributions in binary form must reproduce the above copyright
+        notice, this list of conditions and the following disclaimer in the
+        documentation and/or other materials provided with the distribution.
+ .
+ THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ SUCH DAMAGE.
+
+### licenses ###
+
+License: PostgreSQL
+ Permission to use, copy, modify, and distribute this software and its
+ documentation for any purpose, without fee, and without a written agreement
+ is hereby granted, provided that the above copyright notice and this
+ paragraph and the following two paragraphs appear in all copies.
+ .
+ IN NO EVENT SHALL THE UNIVERSITY OF CALIFORNIA BE LIABLE TO ANY PARTY FOR
+ DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING
+ LOST PROFITS, ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS
+ DOCUMENTATION, EVEN IF THE UNIVERSITY OF CALIFORNIA HAS BEEN ADVISED OF THE
+ POSSIBILITY OF SUCH DAMAGE.
+ .
+ THE UNIVERSITY OF CALIFORNIA SPECIFICALLY DISCLAIMS ANY WARRANTIES,
+ INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ AND FITNESS FOR A PARTICULAR PURPOSE.  THE SOFTWARE PROVIDED HEREUNDER IS
+ ON AN "AS IS" BASIS, AND THE UNIVERSITY OF CALIFORNIA HAS NO OBLIGATIONS TO
+ PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+
+License: Apache-2.0
+ The contents of this file may be used under the terms of the Apache
+ License, Version 2.0.
+ .
+ On Debian systems the full text of the Apache Software License 2.0 can be
+ found in the `/usr/share/common-licenses/Apache-2.0' file.
+
+License: BSD-3-Clause
+ All rights reserved.
+ .
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions are met:
+ .
+ 1. Redistributions of source code must retain the above copyright notice, this
+ list of conditions and the following disclaimer.
+ .
+ 2. Redistributions in binary form must reproduce the above copyright notice,
+ this list of conditions and the following disclaimer in the documentation
+ and/or other materials provided with the distribution.
+ .
+ 3. Neither the name of the copyright holder nor the names of its contributors
+ may be used to endorse or promote products derived from this software without
+ specific prior written permission.
+ .
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License: BSL-1.0
+ Distributed under the Boost Software License, Version 1.0.
+ .
+ Boost Software License - Version 1.0 - August 17th, 2003
+ .
+ Permission is hereby granted, free of charge, to any person or
+ organization obtaining a copy of the software and accompanying
+ documentation covered by this license (the "Software") to use,
+ reproduce, display, distribute, execute, and transmit the
+ Software, and to prepare derivative works of the Software, and
+ to permit third-parties to whom the Software is furnished to do
+ so, all subject to the following:
+ .
+ The copyright notices in the Software and this entire statement,
+ including the above license grant, this restriction and the
+ following disclaimer, must be included in all copies of the
+ Software, in whole or in part, and all derivative works of the
+ Software, unless such copies or derivative works are solely in
+ the form of machine-executable object code generated by a source
+ language processor.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE AND
+ NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR
+ ANYONE DISTRIBUTING THE SOFTWARE BE LIABLE FOR ANY DAMAGES OR
+ OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR OTHERWISE, ARISING
+ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ OTHER DEALINGS IN THE SOFTWARE.
+
+License: Custom-regex
+ Development of this software was funded, in part, by Cray Research Inc.,
+ UUNET Communications Services Inc., Sun Microsystems Inc., and Scriptics
+ Corporation, none of whom are responsible for the results.  The author
+ thanks all of them.
+ .
+ Redistribution and use in source and binary forms -- with or without
+ modification -- are permitted for any purpose, provided that
+ redistributions in source form retain this entire copyright notice and
+ indicate the origin and nature of any modifications.
+ .
+ I'd appreciate being given credit for this package in the documentation
+ of software which uses it, but that is not a requirement.
+ .
+ THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL
+ HENRY SPENCER BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+ OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License: Tcl
+ This software is copyrighted by the Regents of the University of
+ California, Sun Microsystems, Inc., Scriptics Corporation, ActiveState
+ Corporation and other parties.  The following terms apply to all files
+ associated with the software unless explicitly disclaimed in
+ individual files.
+ .
+ The authors hereby grant permission to use, copy, modify, distribute,
+ and license this software and its documentation for any purpose, provided
+ that existing copyright notices are retained in all copies and that this
+ notice is included verbatim in any distributions. No written agreement,
+ license, or royalty fee is required for any of the authorized uses.
+ Modifications to this software may be copyrighted by their authors
+ and need not follow the licensing terms described here, provided that
+ the new terms are clearly indicated on the first page of each file where
+ they apply.
+ .
+ IN NO EVENT SHALL THE AUTHORS OR DISTRIBUTORS BE LIABLE TO ANY PARTY
+ FOR DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES
+ ARISING OUT OF THE USE OF THIS SOFTWARE, ITS DOCUMENTATION, OR ANY
+ DERIVATIVES THEREOF, EVEN IF THE AUTHORS HAVE BEEN ADVISED OF THE
+ POSSIBILITY OF SUCH DAMAGE.
+ .
+ THE AUTHORS AND DISTRIBUTORS SPECIFICALLY DISCLAIM ANY WARRANTIES,
+ INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.  THIS SOFTWARE
+ IS PROVIDED ON AN "AS IS" BASIS, AND THE AUTHORS AND DISTRIBUTORS HAVE
+ NO OBLIGATION TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR
+ MODIFICATIONS.
+ .
+ GOVERNMENT USE: If you are acquiring this software on behalf of the
+ U.S. government, the Government shall have only "Restricted Rights"
+ in the software and related documentation as defined in the Federal
+ Acquisition Regulations (FARs) in Clause 52.227.19 (c) (2).  If you
+ are acquiring the software on behalf of the Department of Defense, the
+ software shall be classified as "Commercial Computer Software" and the
+ Government shall have only "Restricted Rights" as defined in Clause
+ 252.227-7013 (c) (1) of DFARs.  Notwithstanding the foregoing, the
+ authors grant the U.S. Government and others acting in its behalf
+ permission to use and distribute the software in accordance with the
+ terms specified in this license.
