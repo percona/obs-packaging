@@ -15,12 +15,6 @@
 #              (optional), e.g. PRODUCT: "^pg_repack$" for one component of
 #              component-generic-parallel, which runs all of them
 
-- ticket: PG-2883
-  title: "Minor upgrade · OS postgresql18-server conflict on EL 10.2"
-  major: 18
-  pipeline: "^ppg-upgrade-parallel$"
-  label: "minor-upgrade"
-
 - ticket: PG-2886
   title: "pg_tde_archive_decrypt output not decrypted (Debian 13 x86-64)"
   major: 17
@@ -30,7 +24,7 @@
   title: "repack-check fails on PostgreSQL pg_attver in attoptions"
   # PostgreSQL's November releases (14.25, 15.20, 16.16, 17.12, 18.7) all
   # add pg_attver; only pg_repack's tests are affected
-  major: [14, 15, 16, 17, 18]
+  major: [14, 15, 16, 17, 18, 19]
   pipeline: "^component-generic-parallel$"
   params:
     PRODUCT: "^pg_repack$"
