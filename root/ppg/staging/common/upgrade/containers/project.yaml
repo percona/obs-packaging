@@ -194,7 +194,7 @@ qa:
       NEW_SERVER_VERSION: "15.%!{PG_15_MINOR_VERSION}"
       OLD_VERSION_DOCKER_TAG: "14"
       NEW_VERSION_DOCKER_TAG: "15"
-      UPGRADE_DOCKER_TAG: "19-18-17-16-15-14"
+      UPGRADE_DOCKER_TAG: "19-18-17-16-15"
       TESTING_BRANCH: main
       REPOSITORY:
         image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
@@ -224,7 +224,7 @@ qa:
       NEW_SERVER_VERSION: "16.%!{PG_16_MINOR_VERSION}"
       OLD_VERSION_DOCKER_TAG: "15"
       NEW_VERSION_DOCKER_TAG: "16"
-      UPGRADE_DOCKER_TAG: "19-18-17-16-15-14"
+      UPGRADE_DOCKER_TAG: "19-18-17-16-15"
       TESTING_BRANCH: main
       REPOSITORY:
         image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
@@ -254,7 +254,7 @@ qa:
       NEW_SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
       OLD_VERSION_DOCKER_TAG: "16"
       NEW_VERSION_DOCKER_TAG: "17"
-      UPGRADE_DOCKER_TAG: "19-18-17-16-15-14"
+      UPGRADE_DOCKER_TAG: "19-18-17-16-15"
       TESTING_BRANCH: main
       REPOSITORY:
         image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
@@ -284,7 +284,7 @@ qa:
       NEW_SERVER_VERSION: "18.%!{PG_18_MINOR_VERSION}"
       OLD_VERSION_DOCKER_TAG: "17"
       NEW_VERSION_DOCKER_TAG: "18"
-      UPGRADE_DOCKER_TAG: "19-18-17-16-15-14"
+      UPGRADE_DOCKER_TAG: "19-18-17-16-15"
       TESTING_BRANCH: main
       REPOSITORY:
         image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
@@ -314,7 +314,7 @@ qa:
       NEW_SERVER_VERSION: "15.%!{PG_15_MINOR_VERSION}"
       OLD_VERSION_DOCKER_TAG: "14"
       NEW_VERSION_DOCKER_TAG: "15"
-      UPGRADE_DOCKER_TAG: "19-18-17-16-15-14"
+      UPGRADE_DOCKER_TAG: "19-18-17-16-15"
       TESTING_BRANCH: main
       REPOSITORY:
         image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
@@ -344,7 +344,7 @@ qa:
       NEW_SERVER_VERSION: "16.%!{PG_16_MINOR_VERSION}"
       OLD_VERSION_DOCKER_TAG: "15"
       NEW_VERSION_DOCKER_TAG: "16"
-      UPGRADE_DOCKER_TAG: "19-18-17-16-15-14"
+      UPGRADE_DOCKER_TAG: "19-18-17-16-15"
       TESTING_BRANCH: main
       REPOSITORY:
         image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
@@ -374,7 +374,7 @@ qa:
       NEW_SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
       OLD_VERSION_DOCKER_TAG: "16"
       NEW_VERSION_DOCKER_TAG: "17"
-      UPGRADE_DOCKER_TAG: "19-18-17-16-15-14"
+      UPGRADE_DOCKER_TAG: "19-18-17-16-15"
       TESTING_BRANCH: main
       REPOSITORY:
         image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
@@ -404,7 +404,7 @@ qa:
       NEW_SERVER_VERSION: "18.%!{PG_18_MINOR_VERSION}"
       OLD_VERSION_DOCKER_TAG: "17"
       NEW_VERSION_DOCKER_TAG: "18"
-      UPGRADE_DOCKER_TAG: "19-18-17-16-15-14"
+      UPGRADE_DOCKER_TAG: "19-18-17-16-15"
       TESTING_BRANCH: main
       REPOSITORY:
         image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
@@ -434,7 +434,7 @@ qa:
       NEW_SERVER_VERSION: "15.%!{PG_15_MINOR_VERSION}"
       OLD_VERSION_DOCKER_TAG: "14"
       NEW_VERSION_DOCKER_TAG: "15"
-      UPGRADE_DOCKER_TAG: "19-18-17-16-15-14"
+      UPGRADE_DOCKER_TAG: "19-18-17-16-15"
       TESTING_BRANCH: main
       REPOSITORY:
         image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
@@ -464,7 +464,7 @@ qa:
       NEW_SERVER_VERSION: "16.%!{PG_16_MINOR_VERSION}"
       OLD_VERSION_DOCKER_TAG: "15"
       NEW_VERSION_DOCKER_TAG: "16"
-      UPGRADE_DOCKER_TAG: "19-18-17-16-15-14"
+      UPGRADE_DOCKER_TAG: "19-18-17-16-15"
       TESTING_BRANCH: main
       REPOSITORY:
         image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
@@ -494,7 +494,7 @@ qa:
       NEW_SERVER_VERSION: "17.%!{PG_17_MINOR_VERSION}"
       OLD_VERSION_DOCKER_TAG: "16"
       NEW_VERSION_DOCKER_TAG: "17"
-      UPGRADE_DOCKER_TAG: "19-18-17-16-15-14"
+      UPGRADE_DOCKER_TAG: "19-18-17-16-15"
       TESTING_BRANCH: main
       REPOSITORY:
         image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
@@ -524,7 +524,7 @@ qa:
       NEW_SERVER_VERSION: "18.%!{PG_18_MINOR_VERSION}"
       OLD_VERSION_DOCKER_TAG: "17"
       NEW_VERSION_DOCKER_TAG: "18"
-      UPGRADE_DOCKER_TAG: "19-18-17-16-15-14"
+      UPGRADE_DOCKER_TAG: "19-18-17-16-15"
       TESTING_BRANCH: main
       REPOSITORY:
         image: percona-distribution-postgresql   # names the plain image only; see "Image references" in docs
