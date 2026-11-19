@@ -35,7 +35,7 @@ Requires:	openssl-libs >= 1.1.1k
 BuildRequires:	openssl-devel
 %endif
 
-%if 0%{?fedora} >= 41 || 0%{?rhel} >= 8
+%if 0%{?fedora} >= 41 || 0%{?rhel} >= 9
 BuildRequires:	c-ares-devel >= 1.13
 Requires:	c-ares >= 1.13
 %endif
@@ -99,12 +99,16 @@ sed -i.fedora \
  -e '/BININSTALL/s|-s||' \
  configure
 
+# RHEL 8 ships c-ares 1.13, which ignores ARES_OPT_RESOLVCONF (added in
+# c-ares 1.15), so the resolv_conf setting would be silently ignored there.
+# Use libevent's evdns on RHEL 8 only, and c-ares everywhere else (including
+# SUSE), as PGDG does.
 %configure \
         --datadir=%{_datadir} \
-%if 0%{?rhel} >= 8
-        --with-cares --disable-evdns \
-%else
+%if 0%{?rhel} == 8
         --without-cares \
+%else
+        --with-cares --disable-evdns \
 %endif
         --with-systemd \
         --with-ldap \
