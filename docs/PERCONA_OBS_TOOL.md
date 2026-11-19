@@ -588,10 +588,10 @@ any superseded runs' ranges too.
 
 ### CI runner selection
 
-Every workflow job selects its runner through a repository variable: `CI_RUNNER` (jobs
-default to `obs-ci`, the self-hosted runners) and `CI_RUNNER_LARGE` (`obs-ci-large`, used
-only by the `build` job of `build-obs-image.yml`). Deleting both variables returns all
-jobs to GitHub-hosted `ubuntu-latest`. `tests/test_workflow_runners.py` fails if a job
+Every workflow job selects its runner through a repository variable: `CI_RUNNER` is set
+to the label of the self-hosted pool (`obs-ci`), and `CI_RUNNER_LARGE` to `obs-ci-large`
+(used only by the obs-tools image build). With a variable unset or deleted, its jobs run
+on GitHub-hosted `ubuntu-latest`. `tests/test_workflow_runners.py` fails if a job
 hardcodes its `runs-on`.
 
 ---

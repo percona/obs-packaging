@@ -18,12 +18,18 @@ LARGE_JOBS = {("build-obs-image.yml", "build")}
 
 def test_every_job_uses_the_runner_variable():
     bad = []
-    for path in sorted(WORKFLOWS.glob("*.yml")):
+    seen_large = set()
+    files = sorted([*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")])
+    assert files, "no workflow files found"
+    for path in files:
         jobs = yaml.safe_load(path.read_text())["jobs"]
         for name, job in jobs.items():
             if "uses" in job:
                 continue
+            if (path.name, name) in LARGE_JOBS:
+                seen_large.add((path.name, name))
             want = LARGE if (path.name, name) in LARGE_JOBS else SMALL
             if job.get("runs-on") != want:
                 bad.append(f"{path.name}:{name}")
+    assert seen_large == LARGE_JOBS, f"large jobs missing: {LARGE_JOBS - seen_large}"
     assert not bad, f"jobs not using the runner variable: {bad}"
