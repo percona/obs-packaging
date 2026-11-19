@@ -1,0 +1,39 @@
+{
+ "planPath": "docs/superpowers/plans/2026-11-19-self-hosted-runners.md",
+ "tasks": [
+  {
+   "id": 0,
+   "subject": "Task 1: Guard test",
+   "status": "completed",
+   "description": "**Goal:** A pytest that fails when any workflow job hardcodes its runner.\n\n**Files:**\n- Create: `tests/test_workflow_runners.py`\n- Modify: `.github/workflows/python-tests.yml` (add `'.github/workflows/**'` to `on.pull_request.paths`, replacing the single `python-tests.yml` entry)\n\n**Acceptance Criteria:**\n- [ ] The test fails on the unchanged tree, naming offending `file:job` pairs.\n- [ ] `python-tests` runs on any PR that touches a workflow file.\n\n**Verify:** `venv/bin/python -m pytest tests/test_workflow_runners.py -q` \u2192 1 failed, listing 32 jobs.\n\n```json:metadata\n{\"files\": [\"tests/test_workflow_runners.py\", \".github/workflows/python-tests.yml\"], \"verifyCommand\": \"venv/bin/python -m pytest tests/test_workflow_runners.py -q\", \"modelTier\": \"mechanical\", \"acceptanceCriteria\": [\"The test fails on the unchanged tree, naming offending `file:job` pairs.\", \"`python-tests` runs on any PR that touches a workflow file.\"]}\n```"
+  },
+  {
+   "id": 1,
+   "subject": "Task 2: Switch all jobs to the variable",
+   "status": "completed",
+   "description": "**Goal:** All 32 jobs select their runner through the variable.\n\n**Files:**\n- Modify: all 14 files in `.github/workflows/*.yml` (32 `runs-on: ubuntu-latest` lines)\n- Modify: `docs/PERCONA_OBS_TOOL.md` or the CI section of `.github/copilot-instructions.md`, whichever already describes CI: add three lines on the two variables and how to return to hosted runners.\n\n**Acceptance Criteria:**\n- [ ] `grep -c \"runs-on: ubuntu-latest\" .github/workflows/*.yml` sums to 0.\n- [ ] Guard test passes.\n- [ ] The diff touches only `runs-on` lines in workflow files.\n\n**Verify:** `venv/bin/python -m pytest tests -q` \u2192 all pass; `venv/bin/black --check percona_obs/ tests/` and `venv/bin/pyright` \u2192 clean.\n\n```json:metadata\n{\"files\": [\".github/workflows/*.yml\"], \"verifyCommand\": \"venv/bin/python -m pytest tests -q && venv/bin/black --check percona_obs/ tests/ && venv/bin/pyright\", \"modelTier\": \"mechanical\", \"acceptanceCriteria\": [\"`grep -c \\\"runs-on: ubuntu-latest\\\" .github/workflows/*.yml` sums to 0.\", \"Guard test passes.\", \"The diff touches only `runs-on` lines in workflow files.\"]}\n```",
+   "blockedBy": [
+    0
+   ]
+  },
+  {
+   "id": 2,
+   "subject": "Task 3: Canary on the pull request",
+   "status": "pending",
+   "description": "**Goal:** Prove a plain job and a container job pass on the pool before `main` changes.\n\n> **USER-ORDERED GATE \u2014 NON-SKIPPABLE.** This task was requested by the user in the current conversation. It MUST NOT be closed by walking around it, by declaring it \"verified inline\", or by substituting a cheaper check. Close only after every item in `acceptanceCriteria` has been re-validated independently, with output captured.\n\n**Files:** none.\n\n**Acceptance Criteria:**\n- [ ] Fork approval policy reads `all_external_contributors`.\n- [ ] At least 30 `obs-ci` runners are online.\n- [ ] On the PR, `python-tests` and `project-config-check` each ran on a runner whose name is not GitHub-hosted, and passed.\n- [ ] `main` workflows still ran on hosted runners meanwhile.\n\n**Verify:** `gh run view <run-id> --json jobs --jq '.jobs[] | [.name, .conclusion, .runnerName] | @tsv'` for both PR runs \u2192 `success`, runner name from the pool.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"gh run view <run-id> --json jobs --jq '.jobs[] | [.name, .conclusion, .runnerName] | @tsv'\", \"modelTier\": \"standard\", \"userGate\": true, \"tags\": [\"user-gate\"], \"acceptanceCriteria\": [\"Fork approval policy reads `all_external_contributors`.\", \"At least 30 `obs-ci` runners are online.\", \"On the PR, `python-tests` and `project-config-check` each ran on a runner whose name is not GitHub-hosted, and passed.\", \"`main` workflows still ran on hosted runners meanwhile.\"]}\n```",
+   "blockedBy": [
+    1
+   ]
+  },
+  {
+   "id": 3,
+   "subject": "Task 4: Merge and switch the large runner",
+   "status": "pending",
+   "description": "**Goal:** `main` runs on the pool, including the image build.\n\n**Files:** none.\n\n**Acceptance Criteria:**\n- [ ] PR merged by the owner.\n- [ ] `gh variable set CI_RUNNER_LARGE --body obs-ci-large` done.\n- [ ] One `build-obs-image` run on `main` (`gh workflow run build-obs-image.yml`) succeeded on an `obs-ci-large` runner.\n- [ ] The next scheduled `sync-main` and `obs-stale-cleanup` runs succeeded on the pool.\n\n**Verify:** same `gh run view` query as Task 3 for each run.\n\n**Rollback at any time:** `gh variable delete CI_RUNNER` and `gh variable delete CI_RUNNER_LARGE`. No commit needed.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"gh run view <run-id> --json jobs --jq '.jobs[] | [.name, .conclusion, .runnerName] | @tsv'\", \"modelTier\": \"standard\", \"acceptanceCriteria\": [\"PR merged by the owner.\", \"`gh variable set CI_RUNNER_LARGE --body obs-ci-large` done.\", \"One `build-obs-image` run on `main` (`gh workflow run build-obs-image.yml`) succeeded on an `obs-ci-large` runner.\", \"The next scheduled `sync-main` and `obs-stale-cleanup` runs succeeded on the pool.\"]}\n```",
+   "blockedBy": [
+    2
+   ]
+  }
+ ],
+ "lastUpdated": "2026-11-19T23:51:39.051821+00:00"
+}
