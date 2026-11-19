@@ -2,4 +2,6 @@ project: ppg:staging:common:upgrade
 releases:
 - source_commit: 7ca2506036f481ad19d1ebab2669243e225d6dbf
   tag: ppg/common-upgrade-1
+- source_commit: 3d8b3662044cbc7019c8fe8dce1c8a7e1a89d435
+  tag: ppg/common-upgrade-2
 repository: ${PERCONA_OBS_PACKAGING_REPO}
