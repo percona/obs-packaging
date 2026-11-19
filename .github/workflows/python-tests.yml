@@ -19,7 +19,7 @@ on:
       - 'root/**/debian/rules'
       - 'requirements.txt'
       - 'pyrightconfig.json'
-      - '.github/workflows/python-tests.yml'
+      - '.github/workflows/**'
 
 concurrency:
   group: python-tests-pr-${{ github.event.number }}
