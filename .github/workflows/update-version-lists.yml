@@ -18,7 +18,7 @@ jobs:
     # against direct pushes. Re-enable once a PR-based or badges-branch
     # publishing path is in place.
     if: false
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     permissions:
       contents: write

@@ -66,7 +66,7 @@ on:
 jobs:
   sync:
     name: percona-obs sync push (${{ matrix.instance.name }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     strategy:
       fail-fast: false
@@ -247,7 +247,7 @@ jobs:
   poll:
     name: Wait for OBS builds (${{ matrix.instance.name }})
     needs: sync
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     timeout-minutes: 360
     strategy:

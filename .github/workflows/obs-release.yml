@@ -36,7 +36,7 @@ permissions: {}
 jobs:
   validate:
     name: Validate inputs
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     outputs:
       first_tag: ${{ steps.v.outputs.first_tag }}
     steps:
@@ -65,7 +65,7 @@ jobs:
     # Dashboard contract (docs/superpowers/specs/2026-11-11-dashboard-release-contract-design.md § 4): do not rename.
     name: Release to OBS (${{ matrix.instance.name }})
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     strategy:
       fail-fast: false
@@ -150,7 +150,7 @@ jobs:
     name: Publish GitHub releases and delete the pre-release
     needs: [validate, release]
     if: always() && needs.validate.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     permissions:
       contents: write
@@ -206,7 +206,7 @@ jobs:
     name: Delete the pre-release (${{ matrix.instance.name }})
     needs: [validate, release, finalize]
     if: needs.release.result == 'success' && needs.finalize.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     strategy:
       fail-fast: false

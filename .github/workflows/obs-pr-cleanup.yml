@@ -37,7 +37,7 @@ on:
 jobs:
   release-dispatch:
     name: Tag release and dispatch obs-release
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     outputs:
       is_release_pr: ${{ steps.detect.outputs.is_release_pr }}
@@ -168,7 +168,7 @@ jobs:
     name: Delete PR OBS project (${{ matrix.instance.name }})
     needs: [release-dispatch]
     if: ${{ always() && !(github.event.pull_request.merged == true && needs.release-dispatch.outputs.is_release_pr != 'false') }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     strategy:
       fail-fast: false

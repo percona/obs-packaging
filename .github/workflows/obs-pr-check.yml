@@ -74,7 +74,7 @@ jobs:
       github.event.label.name == 'obs-sync' ||
       github.event.label.name == 'qa-packages' ||
       github.event.label.name == 'qa-containers'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     permissions:
       pull-requests: read
     outputs:
@@ -136,7 +136,7 @@ jobs:
   sync:
     name: Sync packages to OBS (${{ matrix.instance.name }})
     needs: [resolve]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     strategy:
       fail-fast: false
@@ -427,7 +427,7 @@ jobs:
     # the build job for every instance.  Accepted trade-off -- a per-leg gate
     # would need per-instance job outputs, which a matrix job cannot express.
     if: needs.sync.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     # Backstop only: the poll is meant to end when every monitored build is
     # terminal.  Stated explicitly (it matches the GitHub default) so the

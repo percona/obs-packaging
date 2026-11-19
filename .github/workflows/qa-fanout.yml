@@ -40,7 +40,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   detect-qa-matrix:
     name: Detect QA matrix (${{ matrix.instance.name }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     strategy:
       fail-fast: false
@@ -160,7 +160,7 @@ jobs:
     name: Merge QA matrix
     needs: [detect-qa-matrix]
     if: '!cancelled() && needs.detect-qa-matrix.result == ''success'''
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
 
     outputs:
       has_matrix: ${{ steps.merge.outputs.has_matrix }}
@@ -247,7 +247,7 @@ jobs:
     name: ${{ matrix.status_context }}
     needs: [merge-qa-matrix]
     if: '!cancelled() && needs.merge-qa-matrix.outputs.has_matrix == ''true'''
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     permissions:
       packages: read

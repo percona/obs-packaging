@@ -28,7 +28,7 @@ permissions: {}
 jobs:
   cut:
     name: Cut release
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     timeout-minutes: 60
     permissions:
