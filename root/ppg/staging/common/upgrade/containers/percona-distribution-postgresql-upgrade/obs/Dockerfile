@@ -1,9 +1,9 @@
 #!UseOBSRepositories
-#!BuildVersion: 19.%!{PG_19_MINOR_VERSION}-18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-14.%!{PG_14_MINOR_VERSION}
-#!BuildTag: percona-distribution-postgresql-upgrade:19-18-17-16-15-14-<RELEASE>
-#!BuildTag: percona-distribution-postgresql-upgrade:19.%!{PG_19_MINOR_VERSION}-18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-14.%!{PG_14_MINOR_VERSION}-<RELEASE>
-#!BuildTag: percona-distribution-postgresql-upgrade:19-18-17-16-15-14
-#!BuildTag: percona-distribution-postgresql-upgrade:19.%!{PG_19_MINOR_VERSION}-18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-14.%!{PG_14_MINOR_VERSION}
+#!BuildVersion: 19.%!{PG_19_MINOR_VERSION}-18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}
+#!BuildTag: percona-distribution-postgresql-upgrade:19-18-17-16-15-<RELEASE>
+#!BuildTag: percona-distribution-postgresql-upgrade:19.%!{PG_19_MINOR_VERSION}-18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-<RELEASE>
+#!BuildTag: percona-distribution-postgresql-upgrade:19-18-17-16-15
+#!BuildTag: percona-distribution-postgresql-upgrade:19.%!{PG_19_MINOR_VERSION}-18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}
 
 ARG UBI_BASE=%!{UBI9_BASE_IMAGE}
 FROM $UBI_BASE
