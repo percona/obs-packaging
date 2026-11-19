@@ -27,7 +27,7 @@ on:
 jobs:
   build:
     name: Build and push obs-tools image
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER_LARGE || 'ubuntu-latest' }}
     permissions:
       contents: read
       packages: write

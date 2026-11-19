@@ -30,7 +30,7 @@ env:
 jobs:
   warn:
     name: Warn about stale PR builds
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: read
       pull-requests: write
@@ -121,7 +121,7 @@ jobs:
   # One leg per OBS instance: each holds its own PR projects and credentials.
   delete:
     name: Delete stale PR projects (${{ matrix.instance.name }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     strategy:
       fail-fast: false

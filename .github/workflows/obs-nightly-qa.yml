@@ -35,7 +35,7 @@ jobs:
   # successful run (.github/scripts/nightly_plan.py).
   plan:
     name: Plan tonight's QA
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     permissions:
       actions: read
       contents: read
@@ -60,7 +60,7 @@ jobs:
     name: Detect QA matrix
     needs: plan
     if: needs.plan.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     permissions:
       packages: read
@@ -139,7 +139,7 @@ jobs:
   qa:
     name: ${{ matrix.status_context }}
     needs: detect
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
     if: needs.detect.outputs.has_matrix == 'true'
     permissions:
@@ -231,7 +231,7 @@ jobs:
   aggregate:
     name: Aggregate QA badges
     needs: [detect, qa]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     # Disabled: QA status is now surfaced by an external web dashboard, so we
     # no longer publish qa-badge-*.json to the badges branch nor rewrite the
     # README QA column (the latter pushes directly to main, blocked once main
