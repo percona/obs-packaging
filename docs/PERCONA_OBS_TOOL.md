@@ -1263,6 +1263,12 @@ A project that needs its own pinned counter can still declare `PPG_RELEASE` in i
 `prevmajorversion` and the extras upgrade QA job use it). Declare it explicitly only
 to override the arithmetic.
 
+`OBS_PROJECT_TIER` is the tier directory a project or package is synced from
+(`root/<product>/<tier>/…` → `devel`, `staging`). It is taken from the path as given,
+so a devel package that is a symlink into the staging tree renders `devel`. Shared
+files use it wherever they name their own tier's projects, e.g.
+`${OBS_ROOTPRJ}:ppg:%!{OBS_PROJECT_TIER}:common:tools` in an `obs/_aggregate`.
+
 ### The `PKG_REVISION` floor
 
 `PKG_REVISION` is a tool-computed macro, like `PPG_RELEASE` and `PG_PREV_MAJOR_VERSION`. It renders into every spec
