@@ -22,8 +22,11 @@
 - QA_IO_METHODS: [worker]
 
 # How a package shared with the devel tier (root/ppg/devel/ links into this
-# tier's sources) derives its version; root/ppg/devel/macros.yaml overrides
-# both.  Staging builds a tag, so the version is the tag itself and the
-# Debian files keep the version and revision rendered into them.
-- SCM_VERSIONFORMAT: @PARENT_TAG@
+# tier's sources) gets its version; root/ppg/devel/macros.yaml overrides
+# both.  In staging the version is the one pinned by the package's _VERSION
+# macro (the "version" param of obs_scm): the versionformat is empty, which
+# obs_scm ignores, and the Debian files keep the version and revision
+# rendered into them.  Devel sets a format, which takes precedence over the
+# pinned version.
+- SCM_VERSIONFORMAT:
 - SET_VERSION_DEB_MODE: disabled

@@ -7,7 +7,7 @@ qa:
     pipeline: tde-core-parallel
     parameters:
       USE_OBS_REPO: true
-      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:%!{OBS_PROJECT_TIER}:%!{PG_MAJOR_VERSION}
       VERSION: ppg-%!{PG_VERSION}
       INSTALL_FROM_PACKAGES: true
       TEST_SUITE: All
@@ -48,7 +48,7 @@ qa:
     pipeline: tde-auxiliary-parallel
     parameters:
       USE_OBS_REPO: true
-      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:%!{OBS_PROJECT_TIER}:%!{PG_MAJOR_VERSION}
       VERSION: ppg-%!{PG_VERSION}
       INSTALL_FROM_PACKAGES: true
       PLATFORMS:
@@ -92,7 +92,7 @@ qa:
     pipeline: tde-parallel
     parameters:
       USE_OBS_REPO: true
-      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:%!{OBS_PROJECT_TIER}:%!{PG_MAJOR_VERSION}
       VERSION: ppg-%!{PG_VERSION}
       TDE_BRANCH: "%!{PG_TDE_REVISION}"
       PLATFORMS:
@@ -141,7 +141,7 @@ qa:
       FROM_VERSION: ''
       FROM_REPO: release
       TO_VERSION: ppg-%!{PG_VERSION}
-      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:%!{OBS_PROJECT_TIER}:%!{PG_MAJOR_VERSION}
       TESTING_BRANCH: main
 
   # pg_tde-only upgrade: the same server version, released pg_tde upgraded to
@@ -154,5 +154,5 @@ qa:
       FROM_VERSION: ''
       FROM_REPO: release
       TO_VERSION: ppg-%!{PG_VERSION}
-      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:%!{OBS_PROJECT_TIER}:%!{PG_MAJOR_VERSION}
       TESTING_BRANCH: main

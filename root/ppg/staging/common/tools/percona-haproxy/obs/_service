@@ -3,6 +3,7 @@
     <param name="url">https://git.haproxy.org/git/haproxy-2.8.git/</param>
     <param name="scm">git</param>
     <param name="revision">%!{HAPROXY_REF}</param>
+    <param name="version">%!{HAPROXY_VERSION}</param>
     <param name="versionformat">%!{SCM_VERSIONFORMAT}</param>
     <param name="versionrewrite-pattern">v(.*)</param>
     <param name="filename">percona-haproxy</param>

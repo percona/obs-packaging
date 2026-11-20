@@ -2,8 +2,9 @@
   <service name="obs_scm">
     <param name="url">https://github.com/psycopg/psycopg2.git</param>
     <param name="scm">git</param>
-    <param name="revision">%!{PSYCOPG2_VERSION}</param>
+    <param name="revision">%!{PSYCOPG2_REF}</param>
     <param name="version">%!{PSYCOPG2_VERSION}</param>
+    <param name="versionformat">%!{SCM_VERSIONFORMAT}</param>
     <param name="filename">psycopg2</param>
   </service>
   <service mode="buildtime" name="tar" />
@@ -14,4 +15,5 @@
   <service mode="buildtime" name="set_version">
     <param name="file">python-psycopg2.spec</param>
   </service>
+  <service mode="%!{SET_VERSION_DEB_MODE}" name="set_version" />
 </services>

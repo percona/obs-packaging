@@ -4,6 +4,7 @@
     <param name="scm">git</param>
     <param name="revision">%!{PG_STAT_MONITOR_REF}</param>
     <param name="version">%!{PG_STAT_MONITOR_VERSION}</param>
+    <param name="versionformat">%!{SCM_VERSIONFORMAT}</param>
     <param name="filename">percona-pg_stat_monitor</param>
   </service>
   <service mode="buildtime" name="tar" />
@@ -14,5 +15,8 @@
   <service mode="buildtime" name="set_version">
     <param name="basename">percona-pg_stat_monitor</param>
     <param name="file">percona-pg_stat_monitor.spec</param>
+  </service>
+  <service mode="%!{SET_VERSION_DEB_MODE}" name="set_version">
+    <param name="basename">percona-pg_stat_monitor</param>
   </service>
 </services>

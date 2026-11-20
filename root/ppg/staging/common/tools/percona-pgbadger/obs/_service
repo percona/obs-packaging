@@ -3,6 +3,7 @@
     <param name="url">https://github.com/darold/pgbadger.git</param>
     <param name="scm">git</param>
     <param name="revision">%!{PGBADGER_REF}</param>
+    <param name="version">%!{PGBADGER_VERSION}</param>
     <param name="versionformat">%!{SCM_VERSIONFORMAT}</param>
     <param name="versionrewrite-pattern">v(.*)</param>
     <param name="filename">percona-pgbadger</param>

@@ -43,10 +43,12 @@
 # this file, so a bump here lands in devel and staging at once.  A tier or major
 # that needs a different version overrides the macro in its own macros.yaml.
 #
-# Some components pin their git checkout through a separate _TAG macro.  The
-# derived ones (%!{X_VERSION} references) are expanded where they are declared,
-# so a per-major override of the _VERSION must also redefine the matching _TAG,
-# or the checkout and the stamped version will disagree.
+# Components shared with the devel tier pin their git checkout through a
+# separate _REF macro (some older ones are still called _TAG), which
+# root/ppg/devel/macros.yaml overrides with the upstream development branch.
+# The derived ones (%!{X_VERSION} references) are expanded where they are
+# declared, so a per-major override of the _VERSION must also redefine the
+# matching _REF/_TAG, or the checkout and the stamped version will disagree.
 
 # Core package versions
 - CREDCHECK_VERSION: 6.0
@@ -56,7 +58,7 @@
 - HAPROXY_REF: v%!{HAPROXY_VERSION}
 - PATRONI_VERSION: 4.1.5
 - PATRONI_REF: v%!{PATRONI_VERSION}
-- PGAUDIT_SET_USER_TAG: REL4_3_0
+- PGAUDIT_SET_USER_REF: REL4_3_0
 - PGAUDIT_SET_USER_VERSION: 4.3.0
 - PGBACKREST_VERSION: 2.60.1
 - PGBACKREST_REF: release/%!{PGBACKREST_VERSION}
@@ -67,17 +69,21 @@
 - PGBOUNCER_VERSION: 1.26.1
 - PGBOUNCER_REF: pgbouncer_1_26_1
 
-# Keep _VERSION and _TAG macros in sync for consistency.
+# Keep _VERSION and _REF macros in sync for consistency.
 - PGPOOL_VERSION: 4.7.3
-- PGPOOL_TAG: V4_7_3
+- PGPOOL_REF: V4_7_3
 
 - PGVECTOR_VERSION: 0.8.7
+- PGVECTOR_REF: v%!{PGVECTOR_VERSION}
 - PG_CRON_VERSION: 1.6.8
+- PG_CRON_REF: v%!{PG_CRON_VERSION}
 - PG_GATHER_VERSION: 33
+- PG_GATHER_REF: v%!{PG_GATHER_VERSION}
 - PG_OIDC_VALIDATOR_VERSION: 1.1.0
+- PG_OIDC_VALIDATOR_REF: %!{PG_OIDC_VALIDATOR_VERSION}
 
 - PG_REPACK_VERSION: 1.5.3
-- PG_REPACK_TAG: ver_%!{PG_REPACK_VERSION}
+- PG_REPACK_REF: ver_%!{PG_REPACK_VERSION}
 
 # PG_STAT_MONITOR_REF is the git ref obs/_service and the QA suite check out.
 # 2.4.1 is not tagged yet, so it tracks the release branch; switch it back
@@ -118,10 +124,11 @@
 - POSTGIS_TIGER_GEOCODER_VERSION: 2025.2
 - POSTGRESQL_COMMON_VERSION: 297
 - PSYCOPG2_VERSION: 2.9.13
+- PSYCOPG2_REF: %!{PSYCOPG2_VERSION}
 
-# Keep _VERSION and _TAG macros in sync for consistency.
+# Keep _VERSION and _REF macros in sync for consistency.
 - WAL2JSON_VERSION: 2.7
-- WAL2JSON_TAG: wal2json_2_7
+- WAL2JSON_REF: wal2json_2_7
 
 # Extension (extras) versions
 - H3_VERSION: 4.5.0

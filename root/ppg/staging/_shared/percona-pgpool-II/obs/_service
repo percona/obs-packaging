@@ -2,8 +2,11 @@
   <service name="obs_scm">
     <param name="url">https://github.com/pgpool/pgpool2.git</param>
     <param name="scm">git</param>
-    <param name="revision">%!{PGPOOL_TAG}</param>
+    <param name="revision">%!{PGPOOL_REF}</param>
     <param name="version">%!{PGPOOL_VERSION}</param>
+    <param name="versionformat">%!{SCM_VERSIONFORMAT}</param>
+    <param name="versionrewrite-pattern">V(\d+)_(\d+)_(\d+)(_[A-Z0-9]+)?</param>
+    <param name="versionrewrite-replacement">\1.\2.\3</param>
     <param name="filename">pgpool2</param>
   </service>
   <service mode="buildtime" name="tar" />
@@ -14,4 +17,5 @@
   <service mode="buildtime" name="set_version">
     <param name="file">percona-pgpool-II.spec</param>
   </service>
+  <service mode="%!{SET_VERSION_DEB_MODE}" name="set_version" />
 </services>

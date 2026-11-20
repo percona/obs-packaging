@@ -3,6 +3,7 @@
     <param name="url">https://github.com/pgbouncer/pgbouncer.git</param>
     <param name="scm">git</param>
     <param name="revision">%!{PGBOUNCER_REF}</param>
+    <param name="version">%!{PGBOUNCER_VERSION}</param>
     <param name="versionformat">%!{SCM_VERSIONFORMAT}</param>
     <param name="versionrewrite-pattern">pgbouncer_(\d+)_(\d+)_(\d+)</param>
     <param name="versionrewrite-replacement">\1.\2.\3</param>
