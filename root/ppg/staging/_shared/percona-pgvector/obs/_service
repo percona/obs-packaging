@@ -2,9 +2,11 @@
   <service name="obs_scm">
     <param name="url">https://github.com/pgvector/pgvector.git</param>
     <param name="scm">git</param>
-    <param name="revision">v%!{PGVECTOR_VERSION}</param>
-    <param name="versionformat">@PARENT_TAG@</param>
+    <param name="revision">%!{PGVECTOR_REF}</param>
+    <param name="version">%!{PGVECTOR_VERSION}</param>
+    <param name="versionformat">%!{SCM_VERSIONFORMAT}</param>
     <param name="versionrewrite-pattern">v(.*)</param>
+    <param name="versionrewrite-replacement">\1</param>
     <param name="filename">percona-pgvector_%!{PG_MAJOR_VERSION}</param>
   </service>
   <service mode="buildtime" name="tar" />
@@ -15,5 +17,8 @@
   <service mode="buildtime" name="set_version">
     <param name="basename">percona-pgvector_%!{PG_MAJOR_VERSION}</param>
     <param name="file">percona-pgvector.spec</param>
+  </service>
+  <service mode="%!{SET_VERSION_DEB_MODE}" name="set_version">
+    <param name="basename">percona-pgvector_%!{PG_MAJOR_VERSION}</param>
   </service>
 </services>

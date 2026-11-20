@@ -4,6 +4,7 @@
     <param name="scm">git</param>
     <param name="revision">%!{PG_TDE_REVISION}</param>
     <param name="version">%!{PG_TDE_VERSION}</param>
+    <param name="versionformat">%!{SCM_VERSIONFORMAT}</param>
     <param name="submodules">enable</param>
     <param name="filename">percona-pg_tde%!{PG_MAJOR_VERSION}</param>
   </service>
@@ -15,5 +16,8 @@
   <service mode="buildtime" name="set_version">
     <param name="basename">percona-pg_tde%!{PG_MAJOR_VERSION}</param>
     <param name="file">pg_tde.spec</param>
+  </service>
+  <service mode="%!{SET_VERSION_DEB_MODE}" name="set_version">
+    <param name="basename">percona-pg_tde%!{PG_MAJOR_VERSION}</param>
   </service>
 </services>

@@ -3,8 +3,9 @@
 # and differs only in what these macros render into obs/_service.
 
 # Devel builds a branch: the version is the nearest tag plus the commit
-# offset, and the second set_version step stamps it on the Debian files
-# (staging keeps that step disabled).
+# offset (a set versionformat overrides the version staging pins), and the
+# second set_version step stamps it on the Debian files (staging keeps that
+# step disabled).
 - SCM_VERSIONFORMAT: @PARENT_TAG@+@TAG_OFFSET@
 - SET_VERSION_DEB_MODE: buildtime
 
@@ -14,3 +15,14 @@
 - PGBACKREST_REF: main
 - PGBADGER_REF: master
 - PGBOUNCER_REF: master
+- PGAUDIT_SET_USER_REF: main
+- PGPOOL_REF: master
+- PGVECTOR_REF: master
+- PG_CRON_REF: main
+- PG_GATHER_REF: main
+- PG_OIDC_VALIDATOR_REF: main
+- PG_REPACK_REF: master
+- PG_STAT_MONITOR_REF: main
+- PG_TDE_REVISION: main
+- PSYCOPG2_REF: master
+- WAL2JSON_REF: master

@@ -6,7 +6,7 @@ qa:
     pipeline: pgsm-parallel
     parameters:
       USE_OBS_REPO: true
-      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:%!{OBS_PROJECT_TIER}:%!{PG_MAJOR_VERSION}
       VERSION: ppg-%!{PG_VERSION}
       PGSM_PACKAGE_INSTALL: true
       PGSM_REPO: https://github.com/percona/pg_stat_monitor.git
