@@ -1,3 +1,0 @@
-Depends: @, postgresql
-Tests: version suite
-Restrictions: allow-stderr
