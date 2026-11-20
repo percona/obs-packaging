@@ -350,6 +350,27 @@ def _read_obsinfo_commit(workdir: Path, filename_prefix: str) -> str | None:
     return None
 
 
+def _manual_cache_key(
+    commit_hash: str, manual_svcs: list[ET.Element], obs_dir: Path
+) -> str:
+    """Cache key of the manual-service outputs of one package at one commit.
+
+    The upstream commit alone is not enough: the outputs also depend on how
+    the manual services are configured and on the package's own ``obs/`` files
+    they may consume (a script run by ``source_script``).  Any of those
+    changing must not restore the previous outputs.
+    """
+    digest = hashlib.sha256()
+    for svc in manual_svcs:
+        digest.update(svc.get("name", "").encode())
+        digest.update(_service_params_cache_key(svc).encode())
+    for src in sorted(obs_dir.iterdir()):
+        if src.is_file() and src.name != "_service":
+            digest.update(src.name.encode())
+            digest.update(hashlib.sha256(src.read_bytes()).digest())
+    return f"{commit_hash}-{digest.hexdigest()[:16]}"
+
+
 def _cache_entry_lookup(entry: Path) -> list[str] | None:
     """Return the filenames cached under *entry*, or None on miss.
 
@@ -1035,19 +1056,20 @@ def _run_local_services(
     # like go_modules) can be restored from cache.  Phase 3 (buildtime
     # services) is always re-run since it's fast and deterministic.
     commit_hash: str | None = None
+    manual_entry = _SVC_CACHE_DIR
     manual_artifacts: list[str] = []
     if cache:
         upstream_filename = _find_upstream_obs_scm_filename(svc_root, service_file)
         if upstream_filename:
             commit_hash = _read_obsinfo_commit(workdir, upstream_filename)
             if commit_hash:
-                cached_names = _cache_entry_lookup(_SVC_CACHE_DIR / commit_hash)
+                manual_entry = _SVC_CACHE_DIR / _manual_cache_key(
+                    commit_hash, manual_svcs, obs_dir
+                )
+                cached_names = _cache_entry_lookup(manual_entry)
                 if cached_names is not None:
                     for art_name in cached_names:
-                        shutil.copy2(
-                            _SVC_CACHE_DIR / commit_hash / art_name,
-                            workdir / art_name,
-                        )
+                        shutil.copy2(manual_entry / art_name, workdir / art_name)
                     for svc in manual_svcs:
                         _print_same(
                             f"service {svc.get('name', '?')}  {pkg_label}  (cached)"
@@ -1065,9 +1087,7 @@ def _run_local_services(
         # Cache manual artifacts only (vendor tarballs etc.).
         if cache and commit_hash and manual_artifacts:
             try:
-                _cache_entry_store(
-                    _SVC_CACHE_DIR / commit_hash, workdir, manual_artifacts
-                )
+                _cache_entry_store(manual_entry, workdir, manual_artifacts)
             except Exception as exc:
                 logger.warning(f"cache store failed: {exc}")
 

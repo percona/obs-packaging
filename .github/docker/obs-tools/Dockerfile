@@ -34,10 +34,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 # build-essential: C compiler/headers for any pip packages that compile C extensions
 # libssl3t64/libzstd1: runtime libs the cargo_vendor binary links against
 # cpio: percona-obs extracts obs_scm .obscpio archives locally, and the
-#       npm_lockfile service unpacks them before running npm
+#       npm_lockfile and source_script services unpack them
+# bubblewrap: source_script runs a package's script in a sandbox (no network,
+#       read-only filesystem) where the container allows one; without it the
+#       script still runs, with a cleared environment only
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
-        ca-certificates curl gnupg git jq sudo cpio \
+        ca-certificates curl gnupg git jq sudo cpio bubblewrap \
         python3 python3-venv python3-pip \
         libarchive13t64 build-essential perl wget \
         libssl3t64 libzstd1 \
@@ -117,6 +120,12 @@ RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
 # Stdlib-only Python; its #!/usr/bin/env python3 resolves to the venv below.
 COPY --chmod=755 tools/obs-services/npm_lockfile /usr/lib/obs/service/npm_lockfile
 COPY --chmod=644 tools/obs-services/npm_lockfile.service /usr/lib/obs/service/npm_lockfile.service
+
+# source_script — repo-owned service that runs a package's own script on the
+# obs_scm checkout to build the source tarball.  Stdlib-only Python as well;
+# what a script needs beyond that is installed for the package that brings it.
+COPY --chmod=755 tools/obs-services/source_script /usr/lib/obs/service/source_script
+COPY --chmod=644 tools/obs-services/source_script.service /usr/lib/obs/service/source_script.service
 
 # Python venv with all percona-obs dependencies
 # Baked at /opt/obs-tools/venv; obs-setup symlinks $GITHUB_WORKSPACE/venv here

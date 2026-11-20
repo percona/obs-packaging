@@ -19,6 +19,7 @@ dependency vendoring):
 | `download_url` | `obs-service-download_url` | `obs-service-download_url` |
 | `node_modules` | `obs-service-node-modules` (openSUSE:Tools repo) | `obs-service-node_modules` (openSUSE:Tools repo) |
 | `npm_lockfile` | this repo — `tools/obs-services/` (see its README) | same |
+| `source_script` | this repo — `tools/obs-services/` (see its README) | same |
 
 `node_modules` and `npm_lockfile` additionally need `npm` (Node.js ≥ 18; the CI image
 uses 22) and `cpio` on `PATH`.
@@ -282,6 +283,33 @@ removes entries unused for 7 days, and in CI additionally by the `actions/cache`
 `set_version` at build time. A `sync push --dry-run` of that package runs the whole chain
 locally and takes several minutes (it downloads every npm tarball once; later runs hit the
 service cache).
+
+### Building the source tarball with a package script (`source_script`)
+
+Some upstreams release a tarball that is not their git tree: a "dist" step bakes in
+generated code or rendered documentation. To build such a package from git, run that step
+with the repo-owned `source_script` service, after `obs_scm`:
+
+```xml
+<service name="obs_scm"> ... </service>
+<service name="source_script" mode="manual">
+  <param name="archive">percona-foo*.obscpio</param>
+  <param name="script">dist.sh</param>
+</service>
+```
+
+`script` is a file in the package's `obs/` directory. It runs in the unpacked checkout with
+a cleared environment — `SRC_DIR`, `OUT_DIR`, `NAME`, `VERSION`, `COMMIT`,
+`SOURCE_DATE_EPOCH` (commit time), plus `PATH` and a scratch `HOME` — and, where `bwrap` can
+create a sandbox, without network and with the rest of the filesystem read-only. It must
+leave exactly one directory in `OUT_DIR`; the service packs it into
+`<name>-<version>.tar.gz` (or `output`) with sorted entries, the commit time as every mtime
+and no owner, so the same commit and script give the same bytes. Leave out the `tar` and
+`recompress` services: this tarball is the source. Add `package-meta` `yes` to `obs_scm`
+when the script needs the git history.
+
+Outputs of manual services are cached per upstream commit, manual-service parameters and
+the contents of the package's other `obs/` files, so editing the script reruns it.
 
 Two rules in `percona-obs` make this work:
 

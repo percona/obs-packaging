@@ -1,0 +1,360 @@
+#!/usr/bin/env python3
+"""OBS source service: build a source tarball by running a package's script.
+
+Some upstreams publish a release tarball that is not their git tree: generated
+code, rendered documentation or a trimmed file set is baked in by a "dist"
+step.  This service runs that step on the checkout ``obs_scm`` produced, so a
+package can build from git and still hand OBS the distribution layout.
+
+Declared ``mode="manual"`` after ``obs_scm`` in ``_service``::
+
+    <service name="source_script" mode="manual">
+      <param name="archive">percona-foo*.obscpio</param>
+      <param name="script">dist.sh</param>
+    </service>
+
+``script`` is a file of the package's ``obs/`` directory (percona-obs copies
+those into the service work directory).  It runs with the unpacked checkout as
+its current directory and this environment, and nothing else of the caller's:
+
+    SRC_DIR            the unpacked checkout
+    OUT_DIR            empty directory the script fills
+    NAME, VERSION      from the archive's .obsinfo
+    COMMIT             upstream commit of the checkout
+    SOURCE_DATE_EPOCH  commit time, for anything that stamps a date
+    PATH, HOME, LANG, LC_ALL, TZ   PATH as inherited, HOME a scratch directory
+
+The script must leave exactly one directory in ``OUT_DIR``.  The service packs
+it into ``<name>-<version>.tar.gz`` (or ``--output``) reproducibly: sorted
+entries, every mtime set to the commit time, no owner, normalised modes and no
+gzip timestamp, so the same commit and script always give the same bytes.
+
+When bubblewrap can create a sandbox the script also runs without network,
+with the rest of the filesystem read-only and with the usual credential
+locations of the home directory hidden.  Where it cannot (some CI
+containers) the script runs with the cleared environment only, and a note is
+printed on stderr.
+
+Only the Python standard library is used; ``cpio`` and ``bwrap`` are external.
+"""
+
+import argparse
+import glob
+import gzip
+import os
+import shutil
+import stat
+import subprocess
+import sys
+import tarfile
+import tempfile
+from pathlib import Path
+
+CPIO_SUFFIX = ".obscpio"
+OBSINFO_SUFFIX = ".obsinfo"
+OUTPUT_SUFFIX = ".tar.gz"
+# Variables of the caller's environment the script may see.  Everything else
+# (tokens, OBS credentials, CI context) is dropped.
+ENV_PASSTHROUGH = ("PATH",)
+# Where credentials usually live under the caller's home directory.  The
+# sandbox shows these empty; the rest of the home stays readable because
+# tools on PATH (a virtualenv, say) may be installed there.
+HOME_SECRETS = (
+    ".config",
+    ".ssh",
+    ".gnupg",
+    ".aws",
+    ".docker",
+    ".kube",
+    ".netrc",
+    ".oscrc",
+    ".git-credentials",
+)
+
+
+def die(message: str) -> None:
+    """Print a one-line cause on stderr and exit 1 (the OBS service contract)."""
+    print(f"source_script: {message}", file=sys.stderr)
+    sys.exit(1)
+
+
+def resolve_archive(pattern: str) -> Path:
+    """Return the single file matching *pattern* (relative to cwd)."""
+    matches = sorted(p for p in glob.glob(pattern) if os.path.isfile(p))
+    if not matches:
+        die(f"no file matches --archive {pattern!r} in {os.getcwd()}")
+    if len(matches) > 1:
+        die(f"--archive {pattern!r} matches {len(matches)} files: {matches}")
+    return Path(matches[0])
+
+
+def resolve_script(name: str) -> Path:
+    """Return the script *name*, which must be a plain file name in cwd."""
+    if not name or os.sep in name or name in (".", ".."):
+        die(f"--script {name!r} must be a file name in the package's obs/ directory")
+    script = Path(name)
+    if not script.is_file():
+        die(f"--script {name!r} not found in {os.getcwd()}")
+    return script
+
+
+def read_obsinfo(archive: Path) -> dict[str, str]:
+    """Return the fields of the .obsinfo that describes *archive*.
+
+    obs_scm writes ``<filename>.obsinfo`` next to ``<filename>-<version>.obscpio``;
+    the one whose ``name`` prefixes the archive's file name is the match.
+    """
+    for candidate in sorted(Path(".").glob(f"*{OBSINFO_SUFFIX}")):
+        fields: dict[str, str] = {}
+        for line in candidate.read_text("utf-8").splitlines():
+            key, sep, value = line.partition(":")
+            if sep:
+                fields[key.strip()] = value.strip()
+        name = fields.get("name", "")
+        if name and archive.name.startswith(f"{name}-"):
+            missing = [k for k in ("version", "mtime", "commit") if not fields.get(k)]
+            if missing:
+                die(f"{candidate.name} lacks {', '.join(missing)}")
+            if not fields["mtime"].isdigit():
+                die(f"{candidate.name}: mtime {fields['mtime']!r} is not a timestamp")
+            return fields
+    die(f"no {OBSINFO_SUFFIX} file in {os.getcwd()} describes {archive.name}")
+    raise AssertionError  # unreachable: die() exits
+
+
+def unpack(archive: Path, dest: Path) -> Path:
+    """Unpack *archive* into *dest*; return its single top-level directory."""
+    if archive.name.endswith(CPIO_SUFFIX):
+        with archive.open("rb") as fh:
+            try:
+                result = subprocess.run(
+                    [
+                        "cpio",
+                        "--extract",
+                        "--make-directories",
+                        "--unconditional",
+                        "--quiet",
+                        "--no-absolute-filenames",
+                    ],
+                    stdin=fh,
+                    cwd=dest,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+            except FileNotFoundError:
+                die("cpio not found in PATH (install cpio)")
+        if result.returncode != 0:
+            die(f"cpio extract of {archive.name} failed: {result.stderr.strip()}")
+    else:
+        try:
+            with tarfile.open(archive) as tar:
+                # The 'data' filter (PEP 706) refuses absolute paths and
+                # traversal; available on every Python we run on (>= 3.11.4).
+                kwargs = {"filter": "data"} if hasattr(tarfile, "data_filter") else {}
+                tar.extractall(dest, **kwargs)
+        except (tarfile.TarError, OSError) as exc:
+            die(f"cannot unpack {archive.name}: {exc}")
+
+    entries = list(dest.iterdir())
+    if len(entries) != 1 or not entries[0].is_dir():
+        names = sorted(e.name for e in entries)
+        die(f"{archive.name}: expected exactly one top-level directory, found {names}")
+    return entries[0]
+
+
+def script_env(
+    src: Path, out: Path, home: Path, info: dict[str, str]
+) -> dict[str, str]:
+    """The complete environment the script runs with."""
+    env = {k: os.environ[k] for k in ENV_PASSTHROUGH if k in os.environ}
+    env.update(
+        SRC_DIR=str(src),
+        OUT_DIR=str(out),
+        NAME=info["name"],
+        VERSION=info["version"],
+        COMMIT=info["commit"],
+        SOURCE_DATE_EPOCH=info["mtime"],
+        HOME=str(home),
+        LANG="C.UTF-8",
+        LC_ALL="C.UTF-8",
+        TZ="UTC",
+    )
+    return env
+
+
+def sandbox_prefix(work: Path) -> list[str]:
+    """bwrap command line that confines a command to *work*, or [] if unusable.
+
+    No network, the filesystem read-only except *work*, and /tmp and the
+    credential locations of the caller's home (HOME_SECRETS) shown empty.
+    *work* is bound last so it stays visible when it lives under one of them.
+    """
+    bwrap = shutil.which("bwrap")
+    if bwrap is None:
+        return []
+    prefix = [
+        bwrap,
+        "--unshare-net",
+        "--unshare-pid",
+        "--die-with-parent",
+        "--ro-bind",
+        "/",
+        "/",
+        "--dev",
+        "/dev",
+        "--proc",
+        "/proc",
+        "--tmpfs",
+        "/tmp",
+    ]
+    for name in HOME_SECRETS:
+        secret = Path(os.path.expanduser("~")) / name
+        if secret.is_dir():
+            prefix += ["--tmpfs", str(secret)]
+        elif secret.exists():
+            prefix += ["--ro-bind", "/dev/null", str(secret)]
+    prefix += ["--bind", str(work), str(work)]
+    try:
+        probe = subprocess.run([*prefix, "true"], capture_output=True)
+    except OSError:
+        return []
+    return prefix if probe.returncode == 0 else []
+
+
+def run_script(script: Path, src: Path, env: dict[str, str], work: Path) -> None:
+    """Run *script* in *src*; its output goes to stderr for diagnosability."""
+    prefix = sandbox_prefix(work)
+    if not prefix:
+        print(
+            "source_script: no usable bwrap sandbox; running the script with a "
+            "cleared environment only",
+            file=sys.stderr,
+        )
+    cmd = [*prefix, str(script)]
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=src,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    except OSError as exc:
+        die(f"cannot run {script.name}: {exc} (does it start with a #! line?)")
+    if result.returncode != 0:
+        tail = "\n".join(
+            [line for line in result.stdout.splitlines() if line.strip()][-15:]
+        )
+        message = f"{script.name} exited with {result.returncode}"
+        if tail:
+            message += f"; last output:\n{tail}"
+        die(message)
+
+
+def single_output_dir(out: Path, script_name: str) -> Path:
+    """Return the one directory *script_name* left in *out*."""
+    entries = sorted(out.iterdir())
+    if len(entries) != 1 or not entries[0].is_dir() or entries[0].is_symlink():
+        names = [e.name for e in entries]
+        die(f"{script_name} must leave exactly one directory in OUT_DIR, found {names}")
+    if not any(entries[0].iterdir()):
+        die(f"{script_name} left an empty directory {entries[0].name!r} in OUT_DIR")
+    return entries[0]
+
+
+def pack(tree: Path, dest: Path, mtime: int) -> None:
+    """Write *tree* to the gzipped tarball *dest*, byte-for-byte reproducibly."""
+
+    def normalise(info: tarfile.TarInfo) -> tarfile.TarInfo:
+        info.mtime = mtime
+        info.uid = info.gid = 0
+        info.uname = info.gname = ""
+        if info.isdir() or (info.isfile() and info.mode & stat.S_IXUSR):
+            info.mode = 0o755
+        elif info.isfile():
+            info.mode = 0o644
+        return info
+
+    paths = [tree]
+    for dirpath, dirnames, filenames in os.walk(tree):
+        dirnames.sort()
+        paths += [Path(dirpath) / n for n in sorted(dirnames + filenames)]
+    paths.sort()
+
+    try:
+        with dest.open("wb") as raw:
+            # filename="" and mtime=0 keep the gzip header free of anything local
+            with gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as gz:
+                with tarfile.open(
+                    fileobj=gz, mode="w", format=tarfile.GNU_FORMAT
+                ) as tar:
+                    for path in paths:
+                        tar.add(
+                            path,
+                            arcname=str(path.relative_to(tree.parent)),
+                            recursive=False,
+                            filter=normalise,
+                        )
+    except (tarfile.TarError, OSError) as exc:
+        die(f"cannot write {dest.name}: {exc}")
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="source_script",
+        description="Build a source tarball by running a script on a checkout.",
+    )
+    parser.add_argument(
+        "--archive",
+        required=True,
+        help="glob matching the obs_scm source archive (.obscpio or tar); "
+        "exactly one file must match",
+    )
+    parser.add_argument(
+        "--script",
+        required=True,
+        help="script file from the package's obs/ directory; needs a #! line",
+    )
+    parser.add_argument(
+        "--output",
+        default="",
+        help=f"tarball file name (default: <name>-<version>{OUTPUT_SUFFIX})",
+    )
+    parser.add_argument("--outdir", required=True, help="output directory (OBS)")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str]) -> int:
+    args = parse_args(argv)
+    outdir = Path(args.outdir)
+    if not outdir.is_dir():
+        die(f"--outdir {args.outdir!r} is not a directory")
+
+    archive = resolve_archive(args.archive)
+    script = resolve_script(args.script)
+    info = read_obsinfo(archive)
+    output = args.output or f"{info['name']}-{info['version']}{OUTPUT_SUFFIX}"
+    if os.sep in output or not output.endswith(OUTPUT_SUFFIX):
+        die(f"--output {output!r} must be a file name ending in {OUTPUT_SUFFIX}")
+
+    work = Path(tempfile.mkdtemp(prefix="source_script-"))
+    try:
+        for sub in ("src", "out", "home"):
+            (work / sub).mkdir()
+        runnable = work / script.name
+        shutil.copyfile(script, runnable)
+        runnable.chmod(0o755)
+
+        src = unpack(archive, work / "src")
+        env = script_env(src, work / "out", work / "home", info)
+        run_script(runnable, src, env, work)
+        tree = single_output_dir(work / "out", script.name)
+        pack(tree, outdir / output, int(info["mtime"]))
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

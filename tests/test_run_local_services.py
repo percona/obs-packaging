@@ -10,6 +10,7 @@ archives may be extracted.
 
 import shutil
 import stat
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -118,7 +119,12 @@ def test_manual_obscpio_kept_and_obs_scm_obscpio_extracted(fake_services):
 def test_manual_obscpio_kept_on_cache_hit(fake_services):
     bindir, obs_dir, cache_dir = fake_services
     commit = "0123456789abcdef0123456789abcdef01234567"
-    entry = cache_dir / "services" / commit
+    manual = [
+        svc
+        for svc in ET.fromstring(SERVICE_XML).findall("service")
+        if svc.get("mode") == "manual"
+    ]
+    entry = cache_dir / "services" / services._manual_cache_key(commit, manual, obs_dir)
     entry.mkdir(parents=True)
     (entry / "bar.obscpio").write_bytes(b"CACHED-CPIO-BYTES")
     (entry / "bar.spec.inc").write_text("Source10000: cached\n")
@@ -189,3 +195,21 @@ def test_spec_release_survives_set_version(set_version_pkg):
         workdir / "norelease.spec"
     ).read_text() == "Name:           bar\nVersion:        1.0\n"
     shutil.rmtree(workdir, ignore_errors=True)
+
+
+def test_manual_services_rerun_when_a_package_file_they_may_read_changes(
+    fake_services,
+):
+    # The outputs of a manual service depend on the package's own obs/ files
+    # too (a script run by source_script), not only on the upstream commit.
+    bindir, obs_dir, _ = fake_services
+    shutil.rmtree(_run_local_services(obs_dir, cache=True), ignore_errors=True)
+
+    _install(bindir, "fake_manual", FAIL_IF_RUN)
+    # Same commit, same package files: restored from the cache, not rerun
+    shutil.rmtree(_run_local_services(obs_dir, cache=True), ignore_errors=True)
+
+    (obs_dir / "dist.sh").write_text("#!/bin/sh\n")
+    with pytest.raises(SystemExit) as exc:
+        _run_local_services(obs_dir, cache=True)
+    assert "manual service must not run on a cache hit" in str(exc.value)

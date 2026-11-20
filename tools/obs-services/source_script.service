@@ -1,0 +1,23 @@
+<service name="source_script">
+  <summary>Build a source tarball by running a package's script on a checkout</summary>
+  <description>
+    Unpacks the obs_scm source archive, runs a script from the package's obs/
+    directory in the checkout with a cleared environment (SRC_DIR, OUT_DIR,
+    NAME, VERSION, COMMIT, SOURCE_DATE_EPOCH), and packs the single directory
+    the script leaves in OUT_DIR into a reproducible .tar.gz. For upstreams
+    whose release tarball is produced by a "dist" step rather than being the
+    git tree. Run with mode="manual" after obs_scm; leave out the tar and
+    recompress services, the tarball this service writes is the source.
+  </description>
+  <parameter name="archive">
+    <description>Glob matching the obs_scm source archive (.obscpio or tar). Exactly one file must match, and its .obsinfo must be present.</description>
+    <required/>
+  </parameter>
+  <parameter name="script">
+    <description>Script file from the package's obs/ directory. Needs a #! line.</description>
+    <required/>
+  </parameter>
+  <parameter name="output">
+    <description>Tarball file name. Default: "name-version.tar.gz" from the archive's .obsinfo.</description>
+  </parameter>
+</service>
