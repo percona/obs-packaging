@@ -3,13 +3,14 @@
 # This file is distributed under the same license as the postgresql-common package.
 #
 # Martin Bagge <brother@persilja.net>, 2009, 2023
+# Jonatan Nyberg, 2026 (AI-assisted update).
 msgid ""
 msgstr ""
 "Project-Id-Version: postgresql-common\n"
 "Report-Msgid-Bugs-To: postgresql-common@packages.debian.org\n"
 "POT-Creation-Date: 2025-01-20 11:27+0100\n"
-"PO-Revision-Date: 2023-12-20 22:12+0100\n"
-"Last-Translator: Martin Bagge <brother@persilja.net>\n"
+"PO-Revision-Date: 2026-11-14 11:35+0000\n"
+"Last-Translator: Jonatan Nyberg\n"
 "Language-Team: Swedish <debian-l10n-swedish@lists.debian.org>\n"
 "Language: sv\n"
 "MIME-Version: 1.0\n"
@@ -20,7 +21,7 @@ msgstr ""
 #. Description
 #: ../postgresql.templates:1001
 msgid "Upgrade PostgreSQL cluster ${oldversion}/main to ${newversion}?"
-msgstr ""
+msgstr "Ska PostgreSQL-klustret ${oldversion}/main uppgraderas till ${newversion}?"
 
 #. Type: boolean
 #. Description
@@ -30,6 +31,9 @@ msgid ""
 "version ${newversion}, this will be attempted now. (If no automated cluster "
 "upgrades are desired, uninstall the \"postgresql\" meta package.)"
 msgstr ""
+"PostgreSQL-databasklustret ${oldversion}/main kan uppgraderas till version "
+"${newversion}. Ett försök till uppgradering görs nu. (Avinstallera metapaketet "
+"\"postgresql\" om du inte vill ha automatiska klusteruppgraderingar.)"
 
 #. Type: boolean
 #. Description
@@ -37,6 +41,7 @@ msgstr ""
 msgid ""
 "Alternatively, the cluster can later be upgraded by running the command:"
 msgstr ""
+"Alternativt kan klustret uppgraderas senare genom att köra kommandot:"
 
 #. Type: boolean
 #. Description
@@ -45,12 +50,14 @@ msgid ""
 "Once the upgraded cluster has been validated to work, drop the old cluster "
 "using the command:"
 msgstr ""
+"När du har kontrollerat att det uppgraderade klustret fungerar tar du bort "
+"det gamla klustret med kommandot:"
 
 #. Type: note
 #. Description
 #: ../postgresql.templates:2001
 msgid "PostgreSQL upgrade of cluster ${oldversion}/main failed"
-msgstr ""
+msgstr "Uppgraderingen av PostgreSQL-klustret ${oldversion}/main misslyckades"
 
 #. Type: note
 #. Description
@@ -59,6 +66,9 @@ msgid ""
 "The automated upgrade of PostgreSQL cluster ${oldversion}/main to version $"
 "{newversion} failed. Please investigate the situation and re-run the command:"
 msgstr ""
+"Den automatiska uppgraderingen av PostgreSQL-klustret ${oldversion}/main "
+"till version ${newversion} misslyckades. Undersök problemet och kör kommandot "
+"igen:"
 
 #. Type: boolean
 #. Description
