@@ -62,10 +62,9 @@
 - PGBADGER_VERSION: 13.3
 - PGBADGER_REF: v%!{PGBADGER_VERSION}
 
-# Keep _VERSION and _TAG macros in sync for consistency.
+# Keep _VERSION and _REF macros in sync for consistency.
 - PGBOUNCER_VERSION: 1.26.1
-- PGBOUNCER_TAG: pgbouncer_1_26_1
-- PGBOUNCER_REF: %!{PGBOUNCER_TAG}
+- PGBOUNCER_REF: pgbouncer_1_26_1
 
 # Keep _VERSION and _TAG macros in sync for consistency.
 - PGPOOL_VERSION: 4.7.3
