@@ -458,9 +458,13 @@ def inject_computed_macros(
 ) -> dict[str, str]:
     """Return *macros* plus the tool-computed entries, without mutating it.
 
-    Three entries: ``PG_PREV_MAJOR_VERSION`` (the major before
-    ``PG_MAJOR_VERSION``), ``PPG_RELEASE`` (see ``compute_ppg_release``) and
-    ``PKG_REVISION`` (see ``pkg_version.compute_pkg_revision``).  *read_file*
+    Four entries: ``PG_PREV_MAJOR_VERSION`` (the major before
+    ``PG_MAJOR_VERSION``), ``OBS_PROJECT_TIER`` (the tier directory the project
+    or package is synced from: ``<product>/<tier>/…`` → ``devel``, ``staging``;
+    taken from the path as given, so a package symlinked from another tier
+    renders with the tier of the link), ``PPG_RELEASE`` (see
+    ``compute_ppg_release``) and ``PKG_REVISION`` (see
+    ``pkg_version.compute_pkg_revision``).  *read_file*
     returns a repo file's contents or None; callers pass a working-tree reader
     or a git-revision reader so the identical value can be computed at any
     commit — see ``git_utils._macros_changed_since``.  *repo_root* defaults to
@@ -485,6 +489,9 @@ def inject_computed_macros(
         return macros
     if not parts:
         return macros
+    tier = next(iter(parts[1:2]), None)
+    if tier is not None and "OBS_PROJECT_TIER" not in macros:
+        macros = {**macros, "OBS_PROJECT_TIER": tier}
 
     pg_version = macros.get("PG_VERSION")
     if pg_version and "PPG_RELEASE" not in macros:

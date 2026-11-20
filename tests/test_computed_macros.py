@@ -430,3 +430,34 @@ def test_ppg_release_main_and_common_projects_unchanged(tmp_path):
     assert _ppg_release(root, "ppg/staging/18/containers/img") == "2"
     assert _ppg_release(root, "ppg/staging/18") == "2"
     assert _ppg_release(root, "ppg/staging/common/upgrade/containers/img") == "2"
+
+
+def test_project_tier_is_the_second_path_segment(tmp_path):
+    root = tmp_path / "root"
+    macros = inject_computed_macros(
+        {}, root / "ppg" / "devel" / "19" / "pkg", lambda _p: None, repo_root=root
+    )
+    assert macros["OBS_PROJECT_TIER"] == "devel"
+
+
+def test_project_tier_follows_the_link_not_its_target(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    shared = root / "ppg" / "staging" / "_shared" / "pkg"
+    shared.mkdir(parents=True)
+    devel = root / "ppg" / "devel" / "19"
+    devel.mkdir(parents=True)
+    (devel / "pkg").symlink_to("../../staging/_shared/pkg")
+    monkeypatch.setattr(common, "REPO_ROOT", root)
+    assert common.load_macros(devel / "pkg")["OBS_PROJECT_TIER"] == "devel"
+    assert common.load_macros(shared)["OBS_PROJECT_TIER"] == "staging"
+
+
+def test_project_tier_explicit_declaration_wins(tmp_path):
+    root = tmp_path / "root"
+    macros = inject_computed_macros(
+        {"OBS_PROJECT_TIER": "staging"},
+        root / "ppg" / "devel" / "19",
+        lambda _p: None,
+        repo_root=root,
+    )
+    assert macros["OBS_PROJECT_TIER"] == "staging"
