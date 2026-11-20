@@ -77,3 +77,56 @@ def test_unscoped_empty_result_set_keeps_waiting():
 
 def test_unscoped_terminal_once_results_exist_and_settle():
     assert builds_are_terminal(total=12, still_building=0, pending=0, scoped=False)
+
+
+# --- scope_poll_projects ------------------------------------------------------
+
+from percona_obs.common import scope_poll_projects  # noqa: E402
+
+PR = "root:PR:pr-9"
+STAGING, DEVEL_TOOLS = f"{PR}:ppg:staging:19", f"{PR}:ppg:devel:common:tools"
+KNOWN = {PR, f"{PR}:ppg:staging", STAGING, f"{PR}:ppg:devel:common", DEVEL_TOOLS}
+
+
+def test_scope_without_a_report_is_the_whole_tree():
+    discovered = {STAGING, DEVEL_TOOLS}
+    assert scope_poll_projects(discovered, KNOWN, None, None) == (
+        discovered,
+        discovered,
+        set(),
+    )
+
+
+def test_scope_report_naming_the_package_less_root_is_trusted():
+    # The first sync of a PR creates its root project and reports it; the root
+    # holds no packages, which used to read as naming drift and drop the report.
+    discovered = {STAGING, DEVEL_TOOLS}
+    all_projects, monitored, stray = scope_poll_projects(
+        discovered, KNOWN, {PR, DEVEL_TOOLS}, None
+    )
+    assert stray == set()
+    assert monitored == {DEVEL_TOOLS}
+    assert all_projects == discovered
+
+
+def test_scope_report_naming_an_undeclared_project_falls_back_to_the_tree():
+    discovered = {STAGING, DEVEL_TOOLS}
+    _all, monitored, stray = scope_poll_projects(
+        discovered, KNOWN, {f"{PR}:ppg:renamed"}, None
+    )
+    assert stray == {f"{PR}:ppg:renamed"}
+    assert monitored == discovered
+
+
+def test_scope_drops_projects_the_pr_did_not_create():
+    # Report dropped, and only the devel project exists on OBS: the staging
+    # project must not be polled, or the poll waits for results that never come.
+    all_projects, monitored, _stray = scope_poll_projects(
+        {STAGING, DEVEL_TOOLS}, KNOWN, None, {PR, DEVEL_TOOLS}
+    )
+    assert all_projects == monitored == {DEVEL_TOOLS}
+
+
+def test_scope_is_empty_when_the_pr_created_nothing_to_poll():
+    all_projects, monitored, _stray = scope_poll_projects({STAGING}, KNOWN, None, {PR})
+    assert all_projects == monitored == set()

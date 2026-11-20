@@ -36,6 +36,11 @@ OBS_REPO_FILTER         JSON object with the instance's slice (include_repos,
                         packages out of the slice are never polled.
 OBS_DISCOVER_ONLY       When set, print the monitored project list and exit 0
                         (offline self-test of the discovery/slice logic)
+OBS_PR_PROJECT          When set, OBS_ROOTPRJ is the project of one pull
+                        request: the poll reports on what that PR built and
+                        on nothing else.  Devel projects are monitored like
+                        any other, and projects the PR did not create on OBS
+                        are left out instead of being waited for.
 """
 
 import json
@@ -47,13 +52,16 @@ import time
 import osc.conf
 
 from percona_obs.cmd_build import _fetch_build_results
+from percona_obs.obs_api import list_obs_projects
 from percona_obs.common import (
     REPO_ROOT,
     builds_are_terminal,
     find_packages,
+    find_projects,
     load_project_yaml,
     next_poll_interval,
     pending_upload_results,
+    scope_poll_projects,
     set_default_repository_filter,
 )
 from percona_obs.http_throttle import install as _install_http_throttle
@@ -83,6 +91,8 @@ scope_project = os.environ.get("OBS_SCOPE_PROJECT", "")
 repo_filter = RepositoryFilter.from_env_json(os.environ.get("OBS_REPO_FILTER", ""))
 set_default_repository_filter(repo_filter)
 discover_only = bool(os.environ.get("OBS_DISCOVER_ONLY"))
+# OBS_ROOTPRJ is a pull request's own project (see the module docstring).
+pr_project = bool(os.environ.get("OBS_PR_PROJECT"))
 
 # ---------------------------------------------------------------------------
 # Initialise osc (reads credentials from ~/.config/osc/oscrc)
@@ -113,10 +123,25 @@ else:
     scope_obs = root_obs
 
 # Devel projects build unreleased branches and are expected to fail; they
-# must not gate sync-main (PG-2518 D-decision).  But when the operator
-# explicitly scopes the run to a devel project, monitoring it is the whole
-# point — only apply the devel skip when the scope itself is not devel.
+# must not gate sync-main (PG-2518 D-decision).  A pull request is different:
+# what it builds in devel is what it is being checked for.  So is a run the
+# operator explicitly scopes to a devel project.  The devel skip applies to
+# neither.
 scope_is_devel = "devel" in scope_project.split(":") if scope_project else False
+monitor_devel = pr_project or scope_is_devel
+
+
+def _in_rootprj(obs_name: str) -> str:
+    """*obs_name* under the polled root project.
+
+    When rootprj differs from root_obs (e.g. a PR-specific project like
+    home:Admin:percona:pr-1 vs the canonical home:Admin:percona), substitute
+    the root_obs prefix so builds are fetched from the correct project.
+    """
+    if rootprj != root_obs and obs_name.startswith(root_obs):
+        return rootprj + obs_name[len(root_obs) :]
+    return obs_name
+
 
 obs_projects: set[str] = set()
 _slice_cache: dict = {}
@@ -134,22 +159,32 @@ for obs_project, package_path in find_packages(scope_path, scope_obs):
     ):
         continue
     project_config = load_project_yaml(package_path.parent / "project.yaml")
-    obs_name = project_config.get("name") or obs_project
-    # When rootprj differs from root_obs (e.g. a PR-specific project like
-    # home:Admin:percona:pr-1 vs the canonical home:Admin:percona), substitute
-    # the root_obs prefix so builds are fetched from the correct project.
-    if rootprj != root_obs and obs_name.startswith(root_obs):
-        obs_name = rootprj + obs_name[len(root_obs) :]
-    # Skip devel projects (expected build failures) unless explicitly scoped.
-    if not scope_is_devel and "devel" in obs_name.split(":"):
+    obs_name = _in_rootprj(project_config.get("name") or obs_project)
+    # Skip devel projects (expected build failures) unless they are monitored.
+    if not monitor_devel and "devel" in obs_name.split(":"):
         continue
     obs_projects.add(obs_name)
+
+# Every project the tree declares, with or without packages: the sync report
+# also names package-less ones (the root project of a new PR, ppg:staging, …)
+# when it creates or reconfigures them.
+known_projects = {
+    _in_rootprj(name) for name, _path in find_projects(scope_path, scope_obs)
+}
+
+# A pull request creates only the projects it changes.  The rest of the tree
+# does not exist under its root project and has nothing to report, so it must
+# not be polled — or waited for.  None (listing failed) leaves the set as is.
+existing_projects: "set[str] | None" = None
+if pr_project and not discover_only:
+    existing_projects = list_obs_projects(apiurl, rootprj)
+    if existing_projects is None:
+        print(f"WARNING: could not list the projects of {rootprj}", flush=True)
 
 # When a sync report is available, scope monitoring to the projects the sync
 # actually touched (committed uploads or meta/prjconf changes).  The full
 # discovered tree is kept for the badge snapshot and the final cascade sweep.
 # A corrupt, stale, or drifted report fails OPEN: full-tree polling as before.
-all_projects = set(obs_projects)
 touched: "set[str] | None" = None
 if sync_report_path and os.path.isfile(sync_report_path):
     report = {}
@@ -189,25 +224,25 @@ if sync_report_path and os.path.isfile(sync_report_path):
                     flush=True,
                 )
                 touched = None
-    # Naming-drift guard: a non-devel report project that discovery does not
-    # know about means the report and checkout disagree on project naming —
-    # scoping would silently drop builds, so fall back to the full tree.
-    if touched is not None:
-        stray = {
-            t for t in touched if "devel" not in t.split(":") and t not in all_projects
-        }
-        if stray:
-            print(
-                f"WARNING: sync report names unknown project(s) "
-                f"{', '.join(sorted(stray))}; polling full tree",
-                flush=True,
-            )
-            touched = None
+# Naming-drift guard: a report project the tree does not declare means the
+# report and checkout disagree on project naming — scoping would silently drop
+# builds, so fall back to the full tree.
+all_projects, obs_projects, stray = scope_poll_projects(
+    obs_projects, known_projects, touched, existing_projects
+)
+if stray:
+    print(
+        f"WARNING: sync report names unknown project(s) "
+        f"{', '.join(sorted(stray))}; polling full tree",
+        flush=True,
+    )
+    touched = None
+if existing_projects is not None:
+    print(f"{len(all_projects)} of the tree's projects exist in {rootprj}")
 if touched is not None:
-    obs_projects = obs_projects & touched
     print(
         f"Sync report: {len(touched)} project(s) touched, "
-        f"monitoring {len(obs_projects)} after devel filter"
+        f"monitoring {len(obs_projects)}"
     )
 
 # Packages this sync uploaded, as "project/package".  A build is only complete
