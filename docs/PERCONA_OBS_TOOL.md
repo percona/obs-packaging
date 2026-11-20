@@ -560,6 +560,12 @@ finishing with one full-tree sweep to adopt cross-project rebuild cascades.
 mismatch) report. The report is also written in `--dry-run` (it reflects the
 computed would-be changes).
 
+The PR check runs the poll with `OBS_PR_PROJECT` set: `OBS_ROOTPRJ` is then one pull
+request's own project, and the poll reports on what that PR built and nothing else.
+Devel projects are monitored (and gate the check) like any other, and projects the PR
+did not create on OBS are left out rather than waited for. `sync-main` does not set it:
+there devel projects are not monitored, since they build unreleased branches.
+
 ### Client-side HTTP pacing and retry
 
 All osc HTTP requests made by `percona-obs` are paced client-side: a shared

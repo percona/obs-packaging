@@ -964,6 +964,36 @@ def pending_upload_results(
     return {u for u in expected if u.rsplit("/", 1)[0] in projects} - reported
 
 
+def scope_poll_projects(
+    discovered: set[str],
+    known: set[str],
+    touched: "set[str] | None",
+    existing: "set[str] | None",
+) -> tuple[set[str], set[str], set[str]]:
+    """Decide which projects a build poll looks at.
+
+    *discovered* are the projects of the local tree that hold packages to
+    poll, *known* every project the tree declares (package-less ones
+    included), *touched* the projects the sync report says may rebuild (None
+    without a usable report) and *existing* the projects that exist on OBS
+    under the polled root (None when the poll is not limited to them).
+
+    Returns ``(all_projects, monitored, stray)``.  *all_projects* is the full
+    tree to sweep: *discovered*, limited to *existing* when given — a project
+    that does not exist has no result and would be waited for in vain.
+    *stray* are report projects the tree does not declare; when there are any
+    the report is not trusted and *monitored* is the full tree.  Otherwise
+    *monitored* is the part of the tree the report touched.
+    """
+    all_projects = discovered if existing is None else discovered & existing
+    if touched is None:
+        return all_projects, set(all_projects), set()
+    stray = touched - known
+    if stray:
+        return all_projects, set(all_projects), stray
+    return all_projects, all_projects & touched, set()
+
+
 def builds_are_terminal(
     total: int, still_building: int, pending: int, scoped: bool
 ) -> bool:

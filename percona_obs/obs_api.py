@@ -73,6 +73,18 @@ def _obs_project_exists(apiurl: str, obs_project_name: str) -> bool:
         return False
 
 
+def list_obs_projects(apiurl: str, rootprj: str) -> "set[str] | None":
+    """Names of the OBS projects at or below *rootprj*; None when the query fails."""
+    match = f"@name='{rootprj}' or starts-with(@name,'{rootprj}:')"
+    url = osc.core.makeurl(apiurl, ["search", "project", "id"], {"match": match})
+    try:
+        root = ET.fromstring(osc.connection.http_GET(url).read())
+    except Exception as exc:
+        logger.debug(f"listing projects under {rootprj} failed: {exc}")
+        return None
+    return {el.get("name", "") for el in root.findall("project")} - {""}
+
+
 def _fetch_obs_package_latest_comment(
     apiurl: str, obs_project_name: str, package_name: str
 ) -> str | None:

@@ -497,6 +497,9 @@ jobs:
           OBS_ROOTPRJ: ${{ matrix.instance.pr_rootprj }}:pr-${{ needs.resolve.outputs.pr_number }}
           OBS_REPO_FILTER: ${{ toJSON(matrix.instance) }}
           OBS_SYNC_REPORT: /tmp/sync-report.json
+          # The PR's own project: devel builds gate too, and projects this PR
+          # did not create are not polled.
+          OBS_PR_PROJECT: '1'
           PYTHONPATH: ${{ github.workspace }}
         run: venv/bin/python .github/scripts/poll_obs_builds.py
 
