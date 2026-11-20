@@ -1123,7 +1123,7 @@ of its own and is released separately, by the same rule at any depth.
 | `project release ppg:staging:common:tools` | `common:tools`, `common:tools:containers` | `ppg:releases:common:tools` | `ppg/common-tools-N` |
 
 The units under `ppg:staging` today are `14`, `15`, `16`, `16:extras`,
-`16:tde`, `17`, `17:extras`, `18`, `18:extras`, `19`, `common:tools`,
+`16:tde`, `17`, `17:extras`, `18`, `18:extras`, `19`, `19:extras`, `common:tools`,
 `common:upgrade` and `common:upgrade:extras`. `ppg:staging:common` holds no
 packages and is not a unit.
 
