@@ -1,0 +1,4 @@
+title: Percona Distribution for PostgreSQL — Devel cross-version projects
+description: |
+  Container project for the cross-version subprojects of the devel tier
+  (ppg:devel:common:tools). It holds no buildable packages.

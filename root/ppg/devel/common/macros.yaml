@@ -1,0 +1,4 @@
+# The major whose devel project is on the repository path of
+# ppg:devel:common:tools; see root/ppg/staging/common/macros.yaml for why it
+# is defined at this level.
+- PG_MAJOR_VERSION: 19

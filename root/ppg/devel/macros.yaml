@@ -1,0 +1,15 @@
+# Macros common to every project under ppg/devel.  Devel links to the staging
+# packaging (root/ppg/staging/_shared/<pkg>, root/ppg/staging/common/tools/<pkg>)
+# and differs only in what these macros render into obs/_service.
+
+# Devel builds a branch: the version is the nearest tag plus the commit
+# offset, and the second set_version step stamps it on the Debian files
+# (staging keeps that step disabled).
+- SCM_VERSIONFORMAT: @PARENT_TAG@+@TAG_OFFSET@
+- SET_VERSION_DEB_MODE: buildtime
+
+# Upstream development branch of each component (staging: a release tag).
+- HAPROXY_REF: master
+- PATRONI_REF: master
+- PGBADGER_REF: master
+- PGBOUNCER_REF: master
