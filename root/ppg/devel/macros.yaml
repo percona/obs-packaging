@@ -24,5 +24,6 @@
 - PG_REPACK_REF: master
 - PG_STAT_MONITOR_REF: main
 - PG_TDE_REVISION: main
+- POSTGRESQL_COMMON_REF: master
 - PSYCOPG2_REF: master
 - WAL2JSON_REF: master
