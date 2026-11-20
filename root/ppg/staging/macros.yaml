@@ -20,3 +20,10 @@
 # I/O methods the metapackages' package tests run with (their package.yaml):
 # PG 18 and later test all three; earlier majors ignore IO_METHOD, so one.
 - QA_IO_METHODS: [worker]
+
+# How a package shared with the devel tier (root/ppg/devel/ links into this
+# tier's sources) derives its version; root/ppg/devel/macros.yaml overrides
+# both.  Staging builds a tag, so the version is the tag itself and the
+# Debian files keep the version and revision rendered into them.
+- SCM_VERSIONFORMAT: @PARENT_TAG@
+- SET_VERSION_DEB_MODE: disabled

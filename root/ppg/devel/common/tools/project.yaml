@@ -1,0 +1,10 @@
+title: Percona Distribution for PostgreSQL — PG-independent tools (devel)
+description: |
+  The PG-independent tools of ppg:staging:common:tools, built once from their
+  upstream development branches and pulled into every ppg:devel:<V> through
+  the same obs/_aggregate files staging uses.  Every package here is a link
+  to root/ppg/staging/common/tools/<pkg>.
+
+path-prefix:
+  - subproject: ppg:%!{OBS_PROJECT_TIER}:%!{PG_MAJOR_VERSION}
+    repository: "%_repository"

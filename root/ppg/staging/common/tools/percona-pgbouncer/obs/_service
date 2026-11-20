@@ -2,8 +2,10 @@
   <service name="obs_scm">
     <param name="url">https://github.com/pgbouncer/pgbouncer.git</param>
     <param name="scm">git</param>
-    <param name="revision">%!{PGBOUNCER_TAG}</param>
-    <param name="version">%!{PGBOUNCER_VERSION}</param>
+    <param name="revision">%!{PGBOUNCER_REF}</param>
+    <param name="versionformat">%!{SCM_VERSIONFORMAT}</param>
+    <param name="versionrewrite-pattern">pgbouncer_(\d+)_(\d+)_(\d+)</param>
+    <param name="versionrewrite-replacement">\1.\2.\3</param>
     <param name="filename">percona-pgbouncer</param>
   </service>
   <service mode="buildtime" name="tar" />
@@ -14,4 +16,5 @@
   <service mode="buildtime" name="set_version">
     <param name="file">percona-pgbouncer.spec</param>
   </service>
+  <service mode="%!{SET_VERSION_DEB_MODE}" name="set_version" />
 </services>
