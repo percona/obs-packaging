@@ -1,16 +1,32 @@
 <services>
-  <!-- Upstream's release asset is a meson dist tarball: it ships the
-       generated sources and the rendered docs (doc/html/*,
-       doc/man/pgbackrest.1.txt). Since 2.60.0 (upstream a8c1a58) the doc
-       build reads the git history, so building from a tag checkout would
-       need .git in the source; the dist tarball needs neither doc.py nor
-       the code generator. -->
-  <service name="download_url">
-    <param name="url">https://github.com/pgbackrest/pgbackrest/releases/download/release/%!{PGBACKREST_VERSION}/pgbackrest-%!{PGBACKREST_VERSION}.tar.gz</param>
-    <param name="filename">percona-pgbackrest-%!{PGBACKREST_VERSION}.tar.gz</param>
+  <!-- Upstream's release asset is not the git tree: "meson dist" bakes the
+       generated sources, the rendered docs (doc/html/*,
+       doc/man/pgbackrest.1.txt) and a "dist" marker into it, and the
+       packaging builds from that layout.  dist.sh reproduces it from the
+       checkout, so every tier builds from git: a release tag in staging
+       (the result matches upstream's asset), the main branch in devel. -->
+  <service name="obs_scm">
+    <param name="url">https://github.com/pgbackrest/pgbackrest.git</param>
+    <param name="scm">git</param>
+    <param name="revision">%!{PGBACKREST_REF}</param>
+    <param name="versionformat">%!{SCM_VERSIONFORMAT}</param>
+    <param name="versionrewrite-pattern">release/(.*)</param>
+    <param name="versionrewrite-replacement">\1</param>
+    <param name="filename">percona-pgbackrest</param>
+    <!-- The doc build (release notes) reads the git history and the
+         release/* tags since upstream a8c1a58; dist.sh needs .git. -->
+    <param name="package-meta">yes</param>
+  </service>
+  <!-- Writes percona-pgbackrest-<version>.tar.gz; no tar/recompress step. -->
+  <service name="source_script" mode="manual">
+    <param name="archive">percona-pgbackrest*.obscpio</param>
+    <param name="script">dist.sh</param>
   </service>
   <service mode="buildtime" name="set_version">
     <param name="basename">percona-pgbackrest</param>
     <param name="file">pgbackrest.spec</param>
+  </service>
+  <service mode="%!{SET_VERSION_DEB_MODE}" name="set_version">
+    <param name="basename">percona-pgbackrest</param>
   </service>
 </services>

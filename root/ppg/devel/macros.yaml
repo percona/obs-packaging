@@ -11,5 +11,6 @@
 # Upstream development branch of each component (staging: a release tag).
 - HAPROXY_REF: master
 - PATRONI_REF: master
+- PGBACKREST_REF: main
 - PGBADGER_REF: master
 - PGBOUNCER_REF: master
