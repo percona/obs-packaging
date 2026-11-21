@@ -1,0 +1,103 @@
+# Package dependency QA: the "Package deps" job of OBS Nightly QA.
+# How it works and how to read the report: docs/package-dependency-qa.md
+#
+# Three checks per staging project (isv:percona:ppg:staging:<major>):
+#   1. parity              - RPM and Debian packages depend on the same Percona packages
+#   2. server_dependency   - every server extension depends on its PostgreSQL server package
+#   3. installable         - every package installs on every OS we ship for
+#
+# A finding fails the job unless it is listed under that check's "allowed"
+# with a reason. Only list INTENDED behaviour there, never a bug waiting for
+# a fix (a bug should stay red until it is fixed). Every field may be "*".
+
+# OBS repository (folder) names checked for every major. A repository the
+# project does not publish is skipped and shown as "not published".
+repos:
+  rpm: [RockyLinux_8, RockyLinux_9, RockyLinux_10]
+  deb: [Debian_12, Debian_13, Ubuntu_22.04, Ubuntu_24.04, Ubuntu_26.04]
+
+# ---------------------------------------------------------------------------
+# 1. Parity: for each package, which OTHER Percona packages it depends on,
+#    RPM vs Debian. Names are normalised: lowercase, letters and digits only,
+#    PG major removed (percona-pg_tde17 and percona-pg-tde17 -> perconapgtde).
+parity:
+  # RPM:Debian repository pairs. A difference seen in every pair is a format
+  # difference; one seen in a single pair is specific to that distribution.
+  pairs:
+    - RockyLinux_9:Debian_12
+    - RockyLinux_8:Debian_12
+    - RockyLinux_10:Debian_12
+    - RockyLinux_9:Debian_13
+    - RockyLinux_9:Ubuntu_22.04
+    - RockyLinux_9:Ubuntu_24.04
+    - RockyLinux_9:Ubuntu_26.04
+
+  # The same product under different package names in the two formats.
+  aliases:
+    perconapostgis35: perconapostgis        # RPM percona-postgis35_<m>, Debian percona-postgis
+    perconapostgis37: perconapostgis        # PG 19: PostGIS 3.7
+    perconapgpooliipg: perconapgpool2       # RPM percona-pgpool-II-pg<m>, Debian percona-pgpool2
+
+  # Intended differences. source/dep are normalised names; kind is hard
+  # (Requires/Depends) or weak (Recommends); only_in is rpm or deb.
+  allowed:
+    - source: "*"
+      dep: perconapostgresqlcommon
+      kind: hard
+      only_in: deb
+      reason: >-
+        Debian packages use postgresql-common (pg_wrapper, pg_ctlcluster,
+        /var/log/postgresql); RPM packages have no equivalent framework.
+    - source: perconapostgresqlcommon
+      dep: perconapostgresql
+      kind: hard
+      only_in: deb
+      reason: >-
+        On Debian the metapackages (percona-postgresql, -client, -contrib,
+        -server-dev-all) are built from postgresql-common and depend on the
+        versioned server packages. RPM uses percona-ppg-server instead.
+
+# ---------------------------------------------------------------------------
+# 2. Server dependency: a package that ships a server extension must depend
+#    (directly, or through another package in the same repository) on the
+#    server package of its major:
+#      RPM:    percona-postgresql<major>-server
+#      Debian: percona-postgresql-<major>
+#    Checked packages: names that contain the major as a number of its own
+#    (percona-pg_tde17, percona-postgresql-17-pgaudit, percona-pgvector_17),
+#    except the patterns below. {major} is replaced by the PG major.
+server_dependency:
+  exclude:
+    - '(debuginfo|debugsource|dbgsym)$'              # debug symbols
+    - '-(client|doc|docs|devel|libs|utils|gui)(-|$)' # client tools, docs, headers, libraries
+    - 'server-dev'                                   # Debian headers
+    - '^percona-postgresql{major}$'                  # RPM client package
+    - '^percona-pgpool-II-pg{major}$'                # pgpool itself is a proxy; its -extensions are checked
+    - '^percona-ppg-'                                # metapackages (they are checked by the meta-package QA)
+  allowed: []
+  #  - package: percona-example17
+  #    repo: "*"
+  #    reason: ...
+
+# ---------------------------------------------------------------------------
+# 3. Installable: every package (amd64) can be installed on its OS from the
+#    OS repositories plus the OBS repository. Simulated in throw-away
+#    containers, nothing is really installed.
+#      EL:     dnf repoclosure with EPEL and CRB/PowerTools enabled (what the
+#              install docs ask for). Also run without them: packages that
+#              need EPEL/CRB are listed as information, not as failures.
+#      Debian/Ubuntu: apt-get install --simulate for every package.
+installable:
+  images:
+    RockyLinux_8: docker.io/rockylinux/rockylinux:8
+    RockyLinux_9: docker.io/rockylinux/rockylinux:9
+    RockyLinux_10: docker.io/rockylinux/rockylinux:10
+    Debian_12: docker.io/library/debian:12
+    Debian_13: docker.io/library/debian:13
+    Ubuntu_22.04: docker.io/library/ubuntu:22.04
+    Ubuntu_24.04: docker.io/library/ubuntu:24.04
+    Ubuntu_26.04: docker.io/library/ubuntu:26.04
+  allowed: []
+  #  - package: percona-example        # regular expression on the package name
+  #    repo: "*"
+  #    reason: ...

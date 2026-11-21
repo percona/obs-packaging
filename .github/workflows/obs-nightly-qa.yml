@@ -43,6 +43,7 @@ jobs:
       run: ${{ steps.plan.outputs.run }}
       major: ${{ steps.plan.outputs.major }}
       marker: ${{ steps.plan.outputs.marker }}
+      majors: ${{ steps.majors.outputs.majors }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,6 +56,19 @@ jobs:
           INPUT_MAJOR: ${{ github.event.inputs.major }}
           GH_TOKEN: ${{ github.token }}
         run: python3 .github/scripts/nightly_plan.py
+      # The plan's major as a JSON list, for jobs with one job per major
+      # (package-deps). An empty major means all majors in the schedule.
+      - name: Majors
+        id: majors
+        env:
+          MAJOR: ${{ steps.plan.outputs.major }}
+        run: |
+          if [ -n "$MAJOR" ]; then
+            echo "majors=[\"$MAJOR\"]" >> "$GITHUB_OUTPUT"
+          else
+            echo "majors=$(grep -oE '^[a-z]{3}: *[0-9]+' .github/nightly-qa-schedule.yml |
+              awk '{print $2}' | sort -un | jq -Rsc 'split("\n") | map(select(length > 0))')" >> "$GITHUB_OUTPUT"
+          fi
 
   detect:
     name: Detect QA matrix
@@ -131,6 +145,83 @@ jobs:
         with:
           name: ${{ needs.plan.outputs.marker }}
           path: /tmp/nightly-major.txt
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # package-deps: dependency QA of each staging major, read straight from the
+  # OBS repositories (no Jenkins, no OBS login): RPM vs Debian parity, every
+  # extension depends on its server, every package installs on every OS.
+  # One job per major; it fails when a check finds something that is not
+  # allowlisted in .github/package-deps-qa.yaml. docs/package-dependency-qa.md
+  # explains the checks and how to read the job summary.
+  # ──────────────────────────────────────────────────────────────────────────
+  package-deps:
+    name: Package deps / ppg:staging:${{ matrix.major }}
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
+    # The install check runs throw-away containers: the runner needs Docker.
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        major: ${{ fromJSON(needs.plan.outputs.majors) }}
+    env:
+      PROJECT: ${{ vars.OBS_ROOTPRJ || 'isv:percona' }}:ppg:staging:${{ matrix.major }}
+      OBS_DOWNLOAD_URL: ${{ vars.OBS_DOWNLOAD_URL || 'https://download.opensuse.org' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --quiet pyyaml
+
+      - name: 1. RPM and Debian packages depend on the same packages
+        id: parity
+        continue-on-error: true
+        run: |
+          mkdir -p out
+          python3 .github/scripts/package_dep_parity.py --project "$PROJECT" \
+            --base-url "$OBS_DOWNLOAD_URL" --json out/parity.json \
+            --summary "$GITHUB_STEP_SUMMARY" --strict
+
+      - name: 2. Every extension depends on its server
+        id: server
+        continue-on-error: true
+        run: |
+          python3 .github/scripts/package_server_dep.py --project "$PROJECT" \
+            --base-url "$OBS_DOWNLOAD_URL" --json out/server-dependency.json \
+            --summary "$GITHUB_STEP_SUMMARY" --strict
+
+      - name: 3. Every package installs on every OS
+        id: installable
+        continue-on-error: true
+        run: |
+          python3 .github/scripts/package_installable.py --project "$PROJECT" \
+            --base-url "$OBS_DOWNLOAD_URL" --jobs 4 --json out/installable.json \
+            --summary "$GITHUB_STEP_SUMMARY" --strict
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: package-deps-${{ matrix.major }}
+          path: out/
+          if-no-files-found: ignore
+
+      - name: Result
+        if: always()
+        env:
+          PARITY: ${{ steps.parity.outcome }}
+          SERVER: ${{ steps.server.outcome }}
+          INSTALLABLE: ${{ steps.installable.outcome }}
+        run: |
+          echo "1. parity: $PARITY   2. server dependency: $SERVER   3. installable: $INSTALLABLE"
+          for o in "$PARITY" "$SERVER" "$INSTALLABLE"; do
+            [ "$o" = success ] || { echo "::error::Package deps found problems for PG ${{ matrix.major }}; see the job summary."; exit 1; }
+          done
 
   # ──────────────────────────────────────────────────────────────────────────
   # qa: trigger Jenkins for each matrix combo (in parallel) and upload the
