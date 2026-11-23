@@ -89,8 +89,6 @@ Comparing the previous release with the one being cut, per package:
   - PG-2955 percona-pgaudit<N>-llvmjit is not installable on EL8/9/10 ([#310](https://github.com/percona/obs-packaging/pull/310))
 - percona-pgbackrest: 2.60.0-4 → 2.60.0-5
   - no package-level commits (shared macro or tooling change)
-- percona-distribution-postgresql (ubi8) [container image]: update image 17.12-1 → 17.12-2
-  - repackaged: percona-pgaudit17 17.2-1 → 17.2-2
 ```
 
 Rules:
@@ -99,9 +97,13 @@ Rules:
   build counter and dist suffix are not printed.
 - Container image entries: each installed package is classified with the same
   table. `added:`/`removed:`/version `updated:` items go in the image's entry
-  under Version updates; `repackaged:` items go in a separate entry for the
-  same image under Packaging updates. An image with neither gets no entry.
-  Version items print upstream versions only (`5.0 → 6.0`).
+  under Version updates. Repackaged and rebuilt packages of an image are not
+  listed, and an image with no version item gets no entry. Version items print
+  upstream versions only (`5.0 → 6.0`).
+  (Changed 2026-11-23 after the first dry run: the original design listed
+  `repackaged:` items per image under Packaging updates. They duplicated the
+  top-level packaging entries without the reason and made up about half of the
+  section, so they were dropped.)
 - A subsection with no entries is omitted. If both are empty, `### Changed`
   holds the single line
   `- Rebuild only: no version or packaging changes.`
