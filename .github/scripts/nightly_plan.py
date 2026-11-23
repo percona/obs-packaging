@@ -2,7 +2,9 @@
 """Plan tonight's OBS Nightly QA: which major, and whether to run at all.
 
 Used by .github/workflows/obs-nightly-qa.yml (job ``plan``). Writes ``run``
-(true/false) and ``major`` (a major, or empty for all) to $GITHUB_OUTPUT.
+(true/false), ``major`` (a major, or empty for all) and ``majors`` (the same as
+a JSON list, every scheduled major for "all": one job per major) to
+$GITHUB_OUTPUT.
 
 - The major is the manual input (``today`` = the schedule), or the major that
   .github/nightly-qa-schedule.yml lists for today's UTC weekday.
@@ -53,6 +55,12 @@ def resolve_major(input_major: str, weekday: str, schedule: dict[str, str]) -> t
     if not major:
         return False, "", f"nothing scheduled for {day}"
     return True, major, f"scheduled for {day}: PG {major}"
+
+
+def majors_json(major: str, schedule: dict[str, str]) -> str:
+    """``major`` as a JSON list; all scheduled majors (sorted) when it is empty."""
+    majors = [major] if major else sorted(set(schedule.values()), key=int)
+    return json.dumps(majors, separators=(",", ":"))
 
 
 def marker(major: str) -> str:
@@ -108,6 +116,7 @@ def main() -> None:
     print(reason)
     with open(os.environ["GITHUB_OUTPUT"], "a") as f:
         f.write(f"run={'true' if run else 'false'}\nmajor={major}\nmarker={marker(major)}\n")
+        f.write(f"majors={majors_json(major, schedule)}\n")
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
             f.write(f"### Nightly QA: {('PG ' + major) if major else 'all majors'}\n{reason}\n")

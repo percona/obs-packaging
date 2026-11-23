@@ -31,6 +31,7 @@ import importlib.util
 import json
 import re
 import sys
+from collections import deque
 from pathlib import Path
 
 try:
@@ -65,41 +66,41 @@ def is_candidate(name: str, major: str, exclude: list) -> bool:
 
 
 def reaches_server(binaries: list, fmt: str, major: str) -> dict:
-    """{binary name: True/False}: does it lead to the server package?"""
-    by_name = {b.name: b for b in binaries}
-    provider = {}
+    """{binary name: True/False}: does it lead to the server package?
+
+    A reverse breadth-first search from the server over the "is required by"
+    edges: every package found depends on the server, directly or through
+    other packages of the repository. Any alternative of an "a | b" group is
+    an edge. Dependency cycles (the PG 17 server requires pg_tde, pg_tde would
+    require the server) need no special handling, and the result does not
+    depend on the order of the packages."""
+    provider: dict = {}
     for b in binaries:
         for p in b.provides:
             provider.setdefault(p, set()).add(b.name)
+    required_by: dict = {}
+    for b in binaries:
+        for alts in b.hard:
+            for a in alts:
+                for target in provider.get(a, ()):
+                    required_by.setdefault(target, set()).add(b.name)
     server = server_package(fmt, major)
-    memo: dict = {}
-
-    def walk(name: str, seen: frozenset) -> bool:
-        if name == server:
-            return True
-        if name in memo:
-            return memo[name]
-        if name in seen or name not in by_name:
-            return False
-        seen = seen | {name}
-        ok = False
-        for alts in by_name[name].hard:
-            # an "a | b" group counts when any alternative leads to the server
-            if any(walk(t, seen) for a in alts for t in sorted(provider.get(a, ()))):
-                ok = True
-                break
-        memo[name] = ok
-        return ok
-
-    return {b.name: walk(b.name, frozenset()) for b in binaries}
+    reached, queue = {server}, deque([server])
+    while queue:
+        for dependant in required_by.get(queue.popleft(), ()):
+            if dependant not in reached:
+                reached.add(dependant)
+                queue.append(dependant)
+    return {b.name: b.name in reached for b in binaries}
 
 
-def check(binaries: list, fmt: str, major: str, exclude: list) -> list:
-    """Names of candidate packages that do not lead to the server package.
-    Empty if the repository has no server package of this major."""
+def check(binaries: list, fmt: str, major: str, exclude: list) -> list | None:
+    """Names of candidate packages that do not lead to the server package, or
+    None when the repository has no server package of this major (nothing
+    can be checked: the caller reports the repository as not checked)."""
     names = {b.name for b in binaries}
     if server_package(fmt, major) not in names:
-        return []
+        return None
     reach = reaches_server(binaries, fmt, major)
     return sorted(n for n in names
                   if n != server_package(fmt, major) and is_candidate(n, major, exclude) and not reach[n])
@@ -116,12 +117,17 @@ def allowed(package: str, repo: str, major: str, allowlist: list) -> dict | None
     return None
 
 
+NOTHING_CHECKED = "**Nothing was checked**: no repository could be read (see \"Not checked\" above). This is an error, not a pass."
+
+
 def report_markdown(project: str, major: str, per_repo: dict, missing: dict, allowlist: list) -> tuple:
     rows: dict = {}
     for repo, pkgs in per_repo.items():
         for p in pkgs:
             rows.setdefault(p, []).append(repo)
-    new = {p: r for p, r in rows.items() if not any(allowed(p, x, major, allowlist) for x in r)}
+    # hidden only when every repository it was found in is allowlisted: an entry
+    # scoped to one repository must not hide the finding in the others
+    new = {p: r for p, r in rows.items() if not all(allowed(p, x, major, allowlist) for x in r)}
     lines = ["### 2. Extensions depend on their server: `%s`" % project, "",
              "%d repositories checked; **%d package(s) do not depend on the PG %s server**, %d allowlisted." %
              (len(per_repo), len(new), major, len(rows) - len(new)), ""]
@@ -133,7 +139,9 @@ def report_markdown(project: str, major: str, per_repo: dict, missing: dict, all
             lines.append("| %s | %s |" % (p, ", ".join(repos)))
         lines.append("")
     if missing:
-        lines.append("Not checked (repository not published): " + ", ".join(sorted(missing)) + "\n")
+        lines.append("Not checked: " + ", ".join("%s (%s)" % (r, why) for r, why in sorted(missing.items())) + "\n")
+    if not per_repo:
+        lines.append("%s\n" % NOTHING_CHECKED)
     return "\n".join(lines), new
 
 
@@ -160,6 +168,10 @@ def main(argv=None) -> int:
     deb_repos = args.deb_repos.split(",") if args.deb_repos else list(repos_cfg.get("deb") or ["Debian_12"])
     exclude = list(section.get("exclude") or [])
     allowlist = list(section.get("allowed") or [])
+    for i, e in enumerate(allowlist, 1):
+        # an entry without "package" (only a reason, or a typo) would allow everything
+        if "package" not in (e or {}):
+            ap.error('server_dependency allowlist entry %d has no package (use "*" for any): %r' % (i, e))
 
     per_repo, missing = {}, {}
     for fmt, repos in (("rpm", rpm_repos), ("deb", deb_repos)):
@@ -170,7 +182,11 @@ def main(argv=None) -> int:
             except SystemExit as e:
                 missing[repo] = str(e)
                 continue
-            per_repo[repo] = check(binaries, fmt, major, exclude)
+            found = check(binaries, fmt, major, exclude)
+            if found is None:
+                missing[repo] = "no %s package in the repository" % server_package(fmt, major)
+            else:
+                per_repo[repo] = found
     md, new = report_markdown(args.project, major, per_repo, missing, allowlist)
     print(md)
     if args.summary:
@@ -179,6 +195,8 @@ def main(argv=None) -> int:
     if args.json:
         Path(args.json).write_text(json.dumps({"per_repo": per_repo, "missing": missing, "new": new},
                                               indent=2, sort_keys=True))
+    if not per_repo:
+        return 2  # nothing checked is an error, in report-only mode too
     return 1 if (args.strict and new) else 0
 
 

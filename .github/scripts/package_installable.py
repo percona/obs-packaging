@@ -28,6 +28,9 @@ import json
 import re
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -60,9 +63,11 @@ fi
 # the install docs disable the distribution's postgresql module on EL8
 [ "$EL" = 8 ] && dnf -y -q module disable postgresql >/dev/null 2>&1
 printf "[obs]\nname=obs\nbaseurl=%s\nenabled=1\ngpgcheck=0\n" "$URL" > /etc/yum.repos.d/obs.repo
-dnf -q makecache >/dev/null 2>&1 || { echo "RESULT not-published checked=0"; exit 0; }
+# the OBS repository was found published before the container started, so a
+# failure here (ours, or a Rocky/EPEL mirror) is a failure, not "not published"
+dnf -q makecache >/tmp/makecache.log 2>&1 || { tail -3 /tmp/makecache.log | sed "s/^/    /"; echo "RESULT repo-unreachable checked=0"; exit 0; }
 n=$(dnf -q repoquery --repo obs --latest-limit 1 --arch x86_64,noarch --qf "%{name}" 2>/dev/null | sort -u | wc -l)
-[ "$n" -eq 0 ] && { echo "RESULT not-published checked=0"; exit 0; }
+[ "$n" -eq 0 ] && { echo "RESULT no-packages checked=0"; exit 0; }
 dnf -q repoclosure --check obs --newest --arch x86_64 --arch noarch 2>&1
 echo "RESULT ok checked=$n"
 '''
@@ -74,7 +79,7 @@ export DEBIAN_FRONTEND=noninteractive
 { apt-get update -qq && apt-get install -y -qq ca-certificates curl gnupg xz-utils; } >/dev/null 2>&1 ||
   { echo "RESULT base-setup-failed checked=0"; exit 0; }
 curl -fsSL "$URL/Release.key" | gpg --dearmor -o /usr/share/keyrings/obs.gpg 2>/dev/null ||
-  { echo "RESULT not-published checked=0"; exit 0; }
+  { echo "RESULT repo-unreachable checked=0"; exit 0; }
 echo "deb [signed-by=/usr/share/keyrings/obs.gpg] $URL/ /" > /etc/apt/sources.list.d/obs.list
 apt-get update -qq >/dev/null 2>&1
 { curl -fsSL "$URL/Packages.gz" | gzip -dc || curl -fsSL "$URL/Packages.xz" | xz -dc; } > /tmp/P 2>/dev/null
@@ -82,7 +87,7 @@ awk '/^Package:/{p=$2} /^Architecture:/{a=$2}
      /^$/{if(p!=""&&(a=="amd64"||a=="all"))print p; p="";a=""}
      END{if(p!=""&&(a=="amd64"||a=="all"))print p}' /tmp/P | sort -u > /tmp/pkgs
 n=$(wc -l < /tmp/pkgs)
-[ "$n" -eq 0 ] && { echo "RESULT not-published checked=0"; exit 0; }
+[ "$n" -eq 0 ] && { echo "RESULT no-packages checked=0"; exit 0; }
 while read -r p; do
   if ! out=$(apt-get install -s -qq "$p" 2>&1); then
     echo "package: $p"
@@ -125,7 +130,8 @@ def package_name(nevra: str) -> str:
 
 
 def run_container(docker: str, image: str, script: str, env: dict, timeout: int = 3600) -> str:
-    cmd = [docker, "run", "--rm", "--pull=missing"]
+    # the image was pulled once at the start of the run (pull_images)
+    cmd = [docker, "run", "--rm", "--pull=never"]
     for k, v in env.items():
         cmd += ["-e", "%s=%s" % (k, v)]
     cmd += [image, "bash", "-c", script]
@@ -136,9 +142,55 @@ def run_container(docker: str, image: str, script: str, env: dict, timeout: int 
         return "RESULT timeout checked=0"
 
 
+def is_el(repo: str) -> bool:
+    return repo.startswith(("RockyLinux_", "RHEL_", "AlmaLinux_", "OracleLinux_"))
+
+
+def obs_repo_state(repo: str, url: str, attempts: int = 3) -> str:
+    """"published", "not-published" (the index file is a 404: the project does
+    not build for this OS) or "obs-unreachable" (anything else: a failure)."""
+    index = url + ("/repodata/repomd.xml" if is_el(repo) else "/Release")
+    for i in range(attempts):
+        try:
+            with urllib.request.urlopen(index, timeout=60):
+                return "published"
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return "not-published"
+        except (urllib.error.URLError, TimeoutError, ConnectionError):
+            pass
+        if i < attempts - 1:
+            time.sleep(5 * (i + 1))
+    return "obs-unreachable"
+
+
+def pull_images(docker: str, images: list, attempts: int = 3) -> dict:
+    """Pull each image once per run, newest version: {image: error or ""}.
+    One pull per image (not per container) also keeps Docker Hub's anonymous
+    rate limit in check when several majors run at once."""
+    errors = {}
+    for image in sorted(set(images)):
+        err = ""
+        for i in range(attempts):
+            p = subprocess.run([docker, "pull", "-q", image], capture_output=True, text=True)
+            err = "" if p.returncode == 0 else (p.stderr.strip().splitlines() or ["pull failed"])[-1]
+            if not err:
+                break
+            time.sleep(10 * (i + 1))
+        errors[image] = err
+    return errors
+
+
+def empty_result(status: str, why: str = "") -> dict:
+    return {"status": status, "checked": 0, "failures": {}, "needs_epel": {}, "why": why}
+
+
 def check_repo(repo: str, url: str, image: str, docker: str) -> dict:
     """One repository: {"status", "checked", "failures", "needs_epel"}."""
-    if repo.startswith(("RockyLinux_", "RHEL_", "AlmaLinux_", "OracleLinux_")):
+    state = obs_repo_state(repo, url)
+    if state != "published":
+        return empty_result(state)
+    if is_el(repo):
         el = repo.rsplit("_", 1)[1].split(".")[0]
         full = parse_output(run_container(docker, image, EL_SCRIPT, {"URL": url + "/", "EL": el, "WITH_EPEL": 1}))
         base = parse_output(run_container(docker, image, EL_SCRIPT, {"URL": url + "/", "EL": el, "WITH_EPEL": 0}))
@@ -146,6 +198,16 @@ def check_repo(repo: str, url: str, image: str, docker: str) -> dict:
         return {"status": full[0], "checked": full[1], "failures": full[2], "needs_epel": needs}
     status, checked, failures = parse_output(run_container(docker, image, DEB_SCRIPT, {"URL": url}))
     return {"status": status, "checked": checked, "failures": failures, "needs_epel": {}}
+
+
+def check_allowlist(entries, path: str) -> list:
+    """The allowlist, refusing entries without "package" (use "*" for any): an
+    entry with only a reason, or a typo, would otherwise allow everything."""
+    entries = list(entries or [])
+    for i, e in enumerate(entries, 1):
+        if "package" not in (e or {}):
+            raise SystemExit('%s: installable allowlist entry %d has no package (use "*" for any): %r' % (path, i, e))
+    return entries
 
 
 def allowed(package: str, repo: str, major: str, allowlist: list) -> dict | None:
@@ -185,10 +247,13 @@ def report_markdown(project: str, major: str, results: dict, allowlist: list) ->
             lines.append("| %s | %s | %s |" % (p, ", ".join(v["repos"]), why.replace("|", "\\|")))
         lines.append("")
     if broken:
-        lines.append("**Could not check** (counts as a failure): " +
-                     ", ".join("%s (%s)" % (k, v) for k, v in sorted(broken.items())) + "\n")
+        lines.append("**Could not check** (a failure with --strict): " +
+                     ", ".join("%s (%s%s)" % (k, v, (": " + results[k]["why"]) if results[k].get("why") else "")
+                               for k, v in sorted(broken.items())) + "\n")
     if unpublished:
         lines.append("Not published: " + ", ".join(unpublished) + "\n")
+    if not checked:
+        lines.append("**Nothing was checked**: no repository could be checked. This is an error, not a pass.\n")
     if needs:
         lines += ["<details><summary>Information: %d package(s) install on EL only with EPEL and CRB/PowerTools "
                   "enabled (the install docs must say so)</summary>" % len(needs), "",
@@ -224,17 +289,23 @@ def main(argv=None) -> int:
     if unknown:
         ap.error("no container image for %s; add it under installable.images" % ", ".join(unknown))
 
+    pulled = pull_images(args.docker, [images[r] for r in repos])
     with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
         futures = {r: pool.submit(check_repo, r, repo_url(args.base_url, args.project, r), images[r], args.docker)
-                   for r in repos}
+                   for r in repos if not pulled.get(images[r])}
         results = {r: f.result() for r, f in futures.items()}
-    md, new, broken = report_markdown(args.project, major, results, list(section.get("allowed") or []))
+    for r in repos:
+        if pulled.get(images[r]):
+            results[r] = empty_result("image-pull-failed", pulled[images[r]])
+    md, new, broken = report_markdown(args.project, major, results, check_allowlist(section.get("allowed"), args.config))
     print(md)
     if args.summary:
         with open(args.summary, "a") as f:
             f.write(md + "\n")
     if args.json:
         Path(args.json).write_text(json.dumps(results, indent=2, sort_keys=True, default=sorted))
+    if not any(r["status"] == "ok" for r in results.values()):
+        return 2  # nothing checked is an error, in report-only mode too
     return 1 if (args.strict and (new or broken)) else 0
 
 

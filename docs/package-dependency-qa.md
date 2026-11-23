@@ -102,23 +102,37 @@ Open the job and look at its **Summary**. There is one section per check:
 - **3.** A table of packages that cannot be installed, with what is missing.
   Below it is the "needs EPEL/CRB" list, collapsed.
 
-The job is **red** when any check finds something that is not allowlisted.
 The raw results (JSON) are attached to the run as the `package-deps-<major>`
 artifact.
 
-## What to do when it is red
+## Report-only for now, strict later
+
+For now the job is **report-only**: findings are listed in the summary, but
+the job stays green. This is on purpose. Nightly QA skips a major when nothing
+changed since its last *successful* run, so a job that is red every night
+would make the full Jenkins QA run every night. Once the current findings are
+fixed or allowlisted, set the repository variable `PACKAGE_DEPS_STRICT` to
+`true`. From then on, a finding that is not allowlisted makes the job red.
+
+One thing is red in both modes: a check that **checked nothing**. For
+example, no repository could be read, or the server package is missing from
+every repository. That is a broken run, not a pass, and the summary says
+"Nothing was checked".
+
+## What to do with a finding
 
 1. **Is it a real bug?** In most cases yes. File a ticket for the build team,
-   and paste the row from the summary. Leave the job red until the fix
-   reaches OBS. Red is the reminder.
+   and paste the row from the summary. Don't allowlist it: once the job is
+   strict, red is the reminder until the fix reaches OBS.
 2. **Is it intended?** For example, Debian packages depend on
    `postgresql-common` and RPM packages do not, by design. Add an entry under
    that check's `allowed:` list in `.github/package-deps-qa.yaml`, **with a
    reason**. Never allowlist a bug just to make the job green.
-3. **Could not check / not published?** "Not published" means the project
-   does not build for that OS (for example, no Debian 12 for PG 16 tde). That
-   is fine. "Could not check" means the container or the download failed.
-   Re-run the job.
+3. **Not checked?** The summary lists each repository it could not check,
+   with the reason. "Not published" or "no … package in the repository" means
+   the project does not build that for this OS (for example, no Debian 12 for
+   PG 16 tde). That is fine. "Could not check" means the container or the
+   download failed. Re-run the job.
 
 ## Run it yourself
 
@@ -131,9 +145,10 @@ python3 .github/scripts/package_server_dep.py  --project $P     # 2, about a min
 python3 .github/scripts/package_installable.py --project $P     # 3, about 30 minutes
 ```
 
-Each one prints the same report that the nightly job shows. Add `--strict`
-to get exit code 1 on findings, and `--repos RockyLinux_9,Debian_12` (for
-check 3) to try fewer OSes.
+Each one prints the same report that the nightly job shows. The exit code
+is 0, or 2 when it checked nothing. Add `--strict` to get exit code 1 on
+findings, and `--repos RockyLinux_9,Debian_12` (for check 3) to try fewer
+OSes.
 
 ## Limits
 

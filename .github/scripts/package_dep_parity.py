@@ -180,7 +180,12 @@ def load_rpm_repo(url: str) -> list:
     for data in root.findall("r:data", RPM_NS):
         if data.get("type") == "primary":
             href = data.find("r:location", RPM_NS).get("href")
-            return parse_rpm_primary(decompress(fetch(url + href), href))
+            primary = fetch(url + href)
+            if primary is None:
+                # repomd.xml names a primary file that is not there (yet): OBS is
+                # republishing, or the mirror we were sent to is behind
+                raise SystemExit("no %s at %s (repository is being republished?)" % (href, url))
+            return parse_rpm_primary(decompress(primary, href))
     raise SystemExit("no primary metadata in %srepodata/repomd.xml" % url)
 
 
@@ -275,8 +280,17 @@ def load_config(path: str | None) -> tuple:
     if isinstance(data, dict) and "parity" in data:   # .github/package-deps-qa.yaml
         data = data["parity"] or {}
     if isinstance(data, dict):
-        return dict(data.get("aliases") or {}), list(data.get("allowed") or [])
-    return {}, list(data)
+        aliases, entries = dict(data.get("aliases") or {}), list(data.get("allowed") or [])
+    else:
+        aliases, entries = {}, list(data)
+    for i, e in enumerate(entries, 1):
+        # an entry without source/dep (only a reason, or a typo such as
+        # "sources:") would otherwise allow every difference
+        missing = [k for k in ("source", "dep") if k not in (e or {})]
+        if missing:
+            raise SystemExit("%s: parity allowlist entry %d has no %s (use \"*\" for any): %r"
+                             % (path, i, " or ".join(missing), e))
+    return aliases, entries
 
 
 def load_allowlist(path: str | None) -> list:
@@ -333,6 +347,9 @@ def merge_results(per_pair: dict) -> list:
     return sorted(rows.values(), key=lambda r: (r["source"], r["kind"], r["dep"]))
 
 
+NOTHING_CHECKED = "**Nothing was checked**: no repository could be read (see \"Not checked\" above). This is an error, not a pass."
+
+
 def report_pairs_markdown(project: str, per_pair: dict, missing: dict, major: str, allowlist: list) -> tuple:
     rows = merge_results(per_pair)
     new = [r for r in rows if not allowed(r, major, allowlist)]
@@ -354,6 +371,8 @@ def report_pairs_markdown(project: str, per_pair: dict, missing: dict, major: st
     if missing:
         lines.append("Not compared (repository not published): " +
                      ", ".join("%s (%s)" % (p, why) for p, why in sorted(missing.items())) + "\n")
+    if not per_pair:
+        lines.append("%s\n" % NOTHING_CHECKED)
     return "\n".join(lines), new, rows
 
 
@@ -387,6 +406,8 @@ def main_pairs(args, major: str) -> int:
     if args.json:
         Path(args.json).write_text(json.dumps({"pairs": per_pair, "missing": missing, "differences": rows,
                                                "new": new}, indent=2, sort_keys=True))
+    if not per_pair:
+        return 2  # nothing compared is an error, in report-only mode too
     return 1 if (args.strict and new) else 0
 
 
@@ -394,8 +415,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--project", default="", help="OBS project, e.g. isv:percona:ppg:staging:17")
     ap.add_argument("--major", default="", help="PG major (removed from names before comparing), e.g. 17")
-    ap.add_argument("--rpm-repo", default="RockyLinux_9")
-    ap.add_argument("--deb-repo", default="Debian_12")
+    ap.add_argument("--rpm-repo", default=None, help="one RPM repository (default RockyLinux_9)")
+    ap.add_argument("--deb-repo", default=None, help="one Debian repository (default Debian_12)")
     ap.add_argument("--base-url", default="https://download.opensuse.org")
     ap.add_argument("--rpm-url", help="RPM repository address (directory with repodata/) instead of an OBS "
                                       "project, e.g. https://repo.percona.com/ppg-17.10/yum/release/9/RPMS/x86_64/")
@@ -412,8 +433,10 @@ def main(argv=None) -> int:
         ap.error("give --project, or both --rpm-url and --deb-url")
     major = args.major or (re.search(r":(1[0-9])(?::|$)", args.project) or [None, ""])[1]
     if args.pairs or (args.project and not args.rpm_url and _config_pairs(args.allowlist)
-                      and "--rpm-repo" not in (argv or sys.argv) and "--deb-repo" not in (argv or sys.argv)):
+                      and args.rpm_repo is None and args.deb_repo is None):
         return main_pairs(args, major)
+    args.rpm_repo = args.rpm_repo or "RockyLinux_9"
+    args.deb_repo = args.deb_repo or "Debian_12"
     rpm_url = args.rpm_url.rstrip("/") + "/" if args.rpm_url else repo_url(args.base_url, args.project, args.rpm_repo)
     deb_url = args.deb_url.rstrip("/") + "/" if args.deb_url else repo_url(args.base_url, args.project, args.deb_repo)
     label = args.project or "%s vs %s" % (rpm_url, deb_url)
