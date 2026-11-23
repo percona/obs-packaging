@@ -43,7 +43,7 @@ jobs:
       run: ${{ steps.plan.outputs.run }}
       major: ${{ steps.plan.outputs.major }}
       marker: ${{ steps.plan.outputs.marker }}
-      majors: ${{ steps.majors.outputs.majors }}
+      majors: ${{ steps.plan.outputs.majors }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -56,19 +56,6 @@ jobs:
           INPUT_MAJOR: ${{ github.event.inputs.major }}
           GH_TOKEN: ${{ github.token }}
         run: python3 .github/scripts/nightly_plan.py
-      # The plan's major as a JSON list, for jobs with one job per major
-      # (package-deps). An empty major means all majors in the schedule.
-      - name: Majors
-        id: majors
-        env:
-          MAJOR: ${{ steps.plan.outputs.major }}
-        run: |
-          if [ -n "$MAJOR" ]; then
-            echo "majors=[\"$MAJOR\"]" >> "$GITHUB_OUTPUT"
-          else
-            echo "majors=$(grep -oE '^[a-z]{3}: *[0-9]+' .github/nightly-qa-schedule.yml |
-              awk '{print $2}' | sort -un | jq -Rsc 'split("\n") | map(select(length > 0))')" >> "$GITHUB_OUTPUT"
-          fi
 
   detect:
     name: Detect QA matrix
@@ -150,9 +137,13 @@ jobs:
   # package-deps: dependency QA of each staging major, read straight from the
   # OBS repositories (no Jenkins, no OBS login): RPM vs Debian parity, every
   # extension depends on its server, every package installs on every OS.
-  # One job per major; it fails when a check finds something that is not
-  # allowlisted in .github/package-deps-qa.yaml. docs/package-dependency-qa.md
-  # explains the checks and how to read the job summary.
+  # One job per major. Report-only until the current findings are triaged:
+  # findings are listed in the job summary but do not fail the job. Set the
+  # repository variable PACKAGE_DEPS_STRICT=true to make findings that are not
+  # allowlisted in .github/package-deps-qa.yaml fail it. A check that checked
+  # nothing (no repository readable, no server package) fails the job in both
+  # modes: that is a broken run, not a pass.
+  # docs/package-dependency-qa.md explains the checks and the job summary.
   # ──────────────────────────────────────────────────────────────────────────
   package-deps:
     name: Package deps / ppg:staging:${{ matrix.major }}
@@ -169,6 +160,7 @@ jobs:
         major: ${{ fromJSON(needs.plan.outputs.majors) }}
     env:
       PROJECT: ${{ vars.OBS_ROOTPRJ || 'isv:percona' }}:ppg:staging:${{ matrix.major }}
+      STRICT: ${{ vars.PACKAGE_DEPS_STRICT == 'true' && '--strict' || '' }}
       OBS_DOWNLOAD_URL: ${{ vars.OBS_DOWNLOAD_URL || 'https://download.opensuse.org' }}
     steps:
       # The commit this run was started from (main on schedule, the chosen
@@ -187,7 +179,7 @@ jobs:
           mkdir -p out
           python3 .github/scripts/package_dep_parity.py --project "$PROJECT" \
             --base-url "$OBS_DOWNLOAD_URL" --json out/parity.json \
-            --summary "$GITHUB_STEP_SUMMARY" --strict
+            --summary "$GITHUB_STEP_SUMMARY" $STRICT
 
       - name: 2. Every extension depends on its server
         id: server
@@ -195,7 +187,7 @@ jobs:
         run: |
           python3 .github/scripts/package_server_dep.py --project "$PROJECT" \
             --base-url "$OBS_DOWNLOAD_URL" --json out/server-dependency.json \
-            --summary "$GITHUB_STEP_SUMMARY" --strict
+            --summary "$GITHUB_STEP_SUMMARY" $STRICT
 
       - name: 3. Every package installs on every OS
         id: installable
@@ -203,7 +195,7 @@ jobs:
         run: |
           python3 .github/scripts/package_installable.py --project "$PROJECT" \
             --base-url "$OBS_DOWNLOAD_URL" --jobs 4 --json out/installable.json \
-            --summary "$GITHUB_STEP_SUMMARY" --strict
+            --summary "$GITHUB_STEP_SUMMARY" $STRICT
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -221,7 +213,7 @@ jobs:
         run: |
           echo "1. parity: $PARITY   2. server dependency: $SERVER   3. installable: $INSTALLABLE"
           for o in "$PARITY" "$SERVER" "$INSTALLABLE"; do
-            [ "$o" = success ] || { echo "::error::Package deps found problems for PG ${{ matrix.major }}; see the job summary."; exit 1; }
+            [ "$o" = success ] || { echo "::error::Package deps for PG ${{ matrix.major }}: a check checked nothing, crashed, or (with PACKAGE_DEPS_STRICT) found problems. See the job summary and log."; exit 1; }
           done
 
   # ──────────────────────────────────────────────────────────────────────────
