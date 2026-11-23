@@ -8,6 +8,10 @@
 # step disabled).
 - SCM_VERSIONFORMAT: @PARENT_TAG@+@TAG_OFFSET@
 - SET_VERSION_DEB_MODE: buildtime
+# The buildtime set_version step writes the version without the epoch staging
+# pins, so the relations percona-postgresql-common declares on its own
+# postgresql-common must not carry one either.
+- POSTGRESQL_COMMON_DEB_EPOCH:
 
 # Upstream development branch of each component (staging: a release tag).
 - HAPROXY_REF: master
