@@ -76,10 +76,20 @@ server_dependency:
     - '^percona-postgresql{major}$'                  # RPM client package
     - '^percona-pgpool-II-pg{major}$'                # pgpool itself is a proxy; its -extensions are checked
     - '^percona-ppg-'                                # metapackages (they are checked by the meta-package QA)
-  allowed: []
-  #  - package: percona-example17
-  #    repo: "*"
-  #    reason: ...
+  # package is a regular expression on the full package name.
+  allowed:
+    - package: 'percona-pg-telemetry1[0-9]'
+      repo: "*"
+      reason: >-
+        Intended: pg-telemetry must not pull in the server (it is a weak
+        dependency of the server, not the other way round). Neither Debian
+        nor RPM has a server dependency.
+    - package: 'percona-postgresql-1[0-9]-postgis-3-scripts'
+      repo: "*"
+      reason: >-
+        SQL scripts only. Installed as a dependency of
+        percona-postgresql-<major>-postgis-3, which depends on the server
+        (the same as Debian's own packaging).
 
 # ---------------------------------------------------------------------------
 # 3. Installable: every package (amd64) can be installed on its OS from the
