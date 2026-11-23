@@ -14,6 +14,7 @@ Build-Depends:
  libxslt1-dev,
  mawk,
  percona-postgresql-server-dev-all (>= 153~),
+ percona-postgresql-%!{PG_MAJOR_VERSION},
  zlib1g-dev,
 Debtransform-Release: 1
 Debtransform-Files-Tar: debian.tar.gz

@@ -31,6 +31,8 @@
 
 %global sname patroni
 
+%{!?runselftest:%global runselftest 0}
+
 Summary:        A Template for PostgreSQL HA with ZooKeeper, etcd or Consul
 Name:           percona-patroni
 Version:        1.0.0
@@ -43,7 +45,32 @@ URL:            https://github.com/zalando/%{sname}
 
 BuildRequires:  python%{python3_pkgversion}-setuptools
 BuildRequires:  python%{python3_pkgversion}-devel
-BuildRequires:  systemd-rpm-macros
+BuildRequires:	python%{python3_pkgversion}-pip
+
+%if %runselftest
+BuildRequires:	%{python3_pkgprefix}-ydiff %{python3_pkgprefix}-py-consul
+BuildRequires:	%{python3_pkgprefix}-etcd
+%if 0%{?fedora} || 0%{?rhel} >= 10
+BuildRequires:	python3-pytest python3-click python3-cryptography python3-psutil
+BuildRequires:	python3-prettytable python3-pyyaml python3-urllib3
+BuildRequires:	python3-psycopg2 python3-dateutil python3-requests
+BuildRequires:	python3-boto3 python3-dns python3-kazoo
+%endif
+%if 0%{?rhel} && 0%{?rhel} <= 9
+BuildRequires:	python%{python3_pkgversion}-pytest python%{python3_pkgversion}-click
+BuildRequires:	python%{python3_pkgversion}-cryptography python%{python3_pkgversion}-psutil
+BuildRequires:	python%{python3_pkgversion}-prettytable python%{python3_pkgversion}-pyyaml
+BuildRequires:	python%{python3_pkgversion}-urllib3 python%{python3_pkgversion}-psycopg2
+BuildRequires:	python%{python3_pkgversion}-dateutil python%{python3_pkgversion}-requests
+BuildRequires:	python%{python3_pkgversion}-boto3 python%{python3_pkgversion}-dns
+BuildRequires:	python%{python3_pkgversion}-kazoo python%{python3_pkgversion}-six
+BuildRequires:	python%{python3_pkgversion}-wcwidth
+%endif
+%if 0%{?rhel} == 8
+# botocore needs it, but does not pull it in
+BuildRequires:	python%{python3_pkgversion}-jmespath
+%endif
+%endif
 
 Requires:       %{python3_pkgprefix}-six
 Requires:       %{python3_pkgprefix}-dateutil
@@ -206,6 +233,23 @@ Meta package to pull zookeeper related dependencies for patroni
 
 # We don't need to ship this file, per upstream:
 %{__rm} -f %{buildroot}%{_bindir}/patroni_wale_restore
+
+%check
+%if %runselftest
+# The Raft tests need pysyncobj, which is not packaged.
+ignore="--ignore=tests/test_raft.py --ignore=tests/test_raft_controller.py"
+# The validator tests bind to ::1, so they cannot pass in a build environment
+# without IPv6, such as a mock chroot.
+if ! %{__ospython} -c 'import socket; socket.socket(socket.AF_INET6).bind(("::1", 0))' 2>/dev/null; then
+        ignore="$ignore --ignore=tests/test_validator.py"
+fi
+%if 0%{?rhel} == 9
+# botocore cannot be imported on RHEL 9, as there is no jmespath for
+# Python 3.12 there.
+ignore="$ignore --ignore=tests/test_aws.py"
+%endif
+%{__ospython} -m pytest tests -p no:cacheprovider $ignore
+%endif
 
 %post
 %{__mkdir} -p /var/log/patroni

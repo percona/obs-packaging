@@ -1,4 +1,5 @@
 %global pgmajor %!{PG_MAJOR_VERSION}
+%define pgminorversion %!{PG_VERSION}
 
 %if 0%{?rhel} >= 8 && 0%{?rhel} <= 9
 %global gts_version 14
@@ -27,7 +28,17 @@ Source0:        %{name}-%{version}.tar.gz
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
 %endif
 
-BuildRequires:  percona-postgresql%{pgmajorversion}-devel
+%if 0%{?pgminorversion:1}
+# pgminorversion is the PostgreSQL minor release that the build servers
+# build against (global/Makefile.global): require at least that one, at
+# build time and at runtime.
+# The other postgresqlNN-* dependencies need no version here: the PostgreSQL
+# subpackages require each other's exact version-release (all of them pin
+# the client package, which pins -libs), so the server, contrib etc. follow
+# -devel at build time and -libs at runtime.
+BuildRequires:  percona-postgresql%{pgmajorversion}-devel >= %{pgminorversion}
+Requires:	percona-postgresql%{pgmajorversion}-libs >= %{pgminorversion}
+%endif
 BuildRequires:  libcurl-devel >= 8.23.0
 BuildRequires:  openssl-devel
 BuildRequires:  krb5-devel
@@ -36,7 +47,7 @@ BuildRequires:  gcc-c++
 BuildRequires:  libstdc++-static
 %endif
 
-Requires:       percona-postgresql%{pgmajorversion}
+Requires:       percona-postgresql%{pgmajorversion} percona-postgresql%{pgmajorversion}-server
 Requires:       libcurl
 Requires:       openssl-libs
 

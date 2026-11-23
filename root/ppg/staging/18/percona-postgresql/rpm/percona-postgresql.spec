@@ -45,7 +45,6 @@
 %{!?uuid:%global uuid 1}
 %{!?xml:%global xml 1}
 %{!?sdt:%global sdt 1}
-%{!?llvm:%global llvm 1}
 %{!?selinux:%global selinux 1}
 
 
@@ -441,6 +440,7 @@ includes HTML version of the documentation.
 Summary:        Contributed source and binaries distributed with PostgreSQL
 Requires:       %{name} >= %{version}-%{release}
 Requires:       %{name}-libs >= %{version}-%{release}
+Requires:       %{name}-server >= %{version}-%{release}
 Provides:       postgresql-contrib >= %{version}-%{release}
 Provides:       %{vname}-contrib = %{epoch}:%{version}-%{release}
 Provides:       %{sname}-contrib = %{epoch}:%{version}-%{release}
@@ -456,7 +456,6 @@ included in the PostgreSQL distribution.
 
 %package devel
 Summary:        PostgreSQL development header files and libraries
-Requires:       %{name} >= %{version}-%{release}
 Requires:       %{name} >= %{version}-%{release}
 Requires:       %{name}-libs >= %{version}-%{release}
 

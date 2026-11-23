@@ -1,5 +1,6 @@
 %global short_name      pgpool-II
 %global pgmajorversion  %!{PG_MAJOR_VERSION}
+%define pgminorversion %!{PG_VERSION}
 
 %if 0%{?rhel} >= 8 && 0%{?rhel} <= 9
 %global gts_version 14
@@ -10,6 +11,8 @@
 %global _varlogdir      %{_localstatedir}/log/pgpool
 %global _varlibdir      %{_localstatedir}/lib/pgpool
 
+%{!?runselftest:%global runselftest 0}
+
 # EL-10 and Fedora >= 44: ship a local SELinux policy module that lets
 # sshd_session_t search/read the postgres user's home dir (postgresql_db_t),
 # so that SSH pubkey auth via ~/.ssh/authorized_keys works for the failover
@@ -18,6 +21,15 @@
 %global sshd_selinux 1
 %else
 %global sshd_selinux 0
+%endif
+
+# On RHEL 10, libmemcached comes from pgdg-libmemcached-awesome (EPEL is not
+# needed), which does not provide its sonames; it is found through the rpath:
+%if 0%{?rhel} == 10
+%global __requires_exclude ^lib(hashkit|memcached|memcachedutil)\\.so
+%global memcached_dir %{pgdg_libmemcachedinstdir}
+%else
+%global memcached_dir %{_includedir}/libmemcached
 %endif
 
 # pcp_* tools are all the same binary (hardlinked); suppress duplicate build-id errors
@@ -31,12 +43,28 @@ License:        BSD
 URL:            https://www.pgpool.net/
 Source0:        pgpool2-%{version}.tar.gz
 Source1:        pgpool-II-sshd-selinux.te
+Source2:		    pgpool-II.sysconfig
+Source6:		    pgpool-II-sysusers.conf
+Source7:		    pgpool-II-tmpfiles.d
+Source8:		    pgpool-II-check.sh
+Source9:		    pgpool-II.service
 Patch0:         pgpool_socket_dir.patch
 Patch1:         pcp_unix_domain_path.patch
 Patch2:         pgpool_log.patch
 Patch3:         pgpool.conf.sample.patch
 
-BuildRequires:  percona-postgresql%{pgmajorversion}-devel
+%if 0%{?pgminorversion:1}
+# pgminorversion is the PostgreSQL minor release that the build servers
+# build against (global/Makefile.global): require at least that one, at
+# build time and at runtime.
+# The other postgresqlNN-* dependencies need no version here: the PostgreSQL
+# subpackages require each other's exact version-release (all of them pin
+# the client package, which pins -libs), so the server, contrib etc. follow
+# -devel at build time and -libs at runtime.
+BuildRequires:	percona-postgresql%{pgmajorversion}-devel >= %{pgminorversion}
+Requires:	percona-postgresql%{pgmajorversion}-libs >= %{pgminorversion}
+%endif
+
 BuildRequires:  bison flex
 BuildRequires:  pam-devel
 BuildRequires:  openssl-devel
@@ -62,11 +90,21 @@ BuildRequires:  libmemcached-awesome-devel
 %else
 BuildRequires:  libmemcached-devel
 %endif
+%if %runselftest
+BuildRequires:	percona-postgresql%{pgmajorversion}-server percona-postgresql%{pgmajorversion}-contrib
+BuildRequires:	pgdg-srpm-macros >= 2.0.0 openssl iputils
+%if 0%{?suse_version}
+BuildRequires:	procps
+%else
+BuildRequires:	procps-ng
+%endif
+%endif
 BuildRequires:  systemd
 %if %sshd_selinux
 BuildRequires:  selinux-policy-devel
 %endif
 Requires:       percona-postgresql%{pgmajorversion} >= %{pgmajorversion}
+Requires:       percona-postgresql%{pgmajorversion}-server
 %if 0%{?rhel}
 Requires(post):   systemd-sysv
 %endif
@@ -75,9 +113,14 @@ Requires(preun):  systemd
 Requires(postun): systemd
 
 %description
-pgpool-II is a middleware that works between PostgreSQL servers and a
-PostgreSQL database client. It provides connection pooling, replication,
-load balancing, and limiting of exceeding connections.
+Pgpool-II is a middleware that works between PostgreSQL servers and a
+PostgreSQL database client. It provides the following features:
+ * Connection Pooling
+ * Replication
+ * Load Balancing
+ * Limiting Exceeding Connections
+ * Watchdog
+ * In Memory Query Cache
 
 %package devel
 Summary:        Development headers and libraries for pgpool-II
@@ -93,6 +136,13 @@ Requires:       %{name} = %{version}-%{release}
 %description extensions
 PostgreSQL extensions (pgpool-recovery, pgpool_adm) for use with pgpool-II.
 
+%package -n %{name}-pcp
+Summary:	PCP (Pgpool Control Protocol) files of Pgpool.
+
+%description -n %{name}-pcp
+PCP (Pgpool Control Protocol) files of Pgpool, shared across
+multiple Pgpool installations.
+
 %prep
 %setup -q -n pgpool2-%{version}
 %patch -P 0 -p0
@@ -103,6 +153,13 @@ PostgreSQL extensions (pgpool-recovery, pgpool_adm) for use with pgpool-II.
 %build
 %if 0%{?gts_version}
 source /opt/rh/gcc-toolset-%{gts_version}/enable
+%endif
+# We need this flag on SLES so that pgpool can find libmemched.
+# Otherwise, we get "libmemcached.so: undefined reference to `pthread_once'" error.
+%if 0%{?suse_version}
+%if 0%{?suse_version} >= 1500
+	export LDFLAGS='-lpthread'
+%endif
 %endif
 libtoolize
 autoreconf --force --install
@@ -117,8 +174,20 @@ autoreconf --force --install
     --disable-static \
     --disable-rpath
 make -C src/parser gram.h gram_minimal.h
+export PATH=%{pghome}/bin/:$PATH
 make %{?_smp_mflags}
 make %{?_smp_mflags} -C doc
+make %{?_smp_mflags} -C src/sql/pgpool_adm
+make %{?_smp_mflags} -C src/sql/pgpool-recovery
+
+%check
+%if %runselftest
+%pgdg_check_init
+PGDG_PGINSTDIR=%{pghome}
+PGPOOL_PREFIX=%{_prefix} PGPOOL_BINDIR=%{_bindir} PGPOOL_LIBDIR=%{_libdir}
+PGPOOL_CONFDIR=%{_sysconfdir}/%{name}
+. %{SOURCE8}
+%endif
 
 %install
 %if 0%{?gts_version}
@@ -136,6 +205,16 @@ install -d %{buildroot}%{_mandir}/man1
 install doc/src/sgml/man1/*.1 %{buildroot}%{_mandir}/man1
 install -d %{buildroot}%{_mandir}/man8
 install doc/src/sgml/man8/*.8 %{buildroot}%{_mandir}/man8
+
+%{__install} -d %{buildroot}%{_unitdir}
+%{__install} -m 755 %{SOURCE9} %{buildroot}%{_unitdir}/pgpool-II.service
+
+%{__install} -d %{buildroot}%{_sysconfdir}/sysconfig
+%{__install} -m 644 %{SOURCE2} %{buildroot}%{_sysconfdir}/sysconfig/pgpool
+%{__install} -m 0644 -D %{SOURCE6} %{buildroot}%{_sysusersdir}/pgpool-II.conf
+
+%{__mkdir} -p %{buildroot}/%{_tmpfilesdir}
+%{__install} -m 0644 %{SOURCE7} %{buildroot}/%{_tmpfilesdir}/%{name}.conf
 
 # config directories
 install -d %{buildroot}%{_datadir}/%{short_name}
@@ -162,26 +241,6 @@ cp %{buildroot}%{_sysconfdir}/%{short_name}/pool_hba.conf.sample \
 touch %{buildroot}%{_sysconfdir}/%{short_name}/pool_passwd
 touch %{buildroot}%{_sysconfdir}/%{short_name}/pgpool_node_id
 
-# systemd service
-install -d %{buildroot}%{_unitdir}
-install -m 644 src/redhat/pgpool.service %{buildroot}%{_unitdir}/pgpool.service
-
-# tmpfiles.d — runtime dir /run/pgpool
-install -d -m 755 %{buildroot}%{_varrundir}
-mkdir -p %{buildroot}%{_tmpfilesdir}
-install -m 0644 src/redhat/pgpool_tmpfiles.d \
-    %{buildroot}%{_tmpfilesdir}/%{name}.conf
-
-# sysconfig
-install -d %{buildroot}%{_sysconfdir}/sysconfig
-install -m 644 src/redhat/pgpool_rhel.sysconfig \
-    %{buildroot}%{_sysconfdir}/sysconfig/pgpool
-
-# sudoers.d — allow postgres to run ip/arping for watchdog VIP
-install -d %{buildroot}%{_sysconfdir}/sudoers.d
-install -m 0440 src/redhat/pgpool_sudoers.d \
-    %{buildroot}%{_sysconfdir}/sudoers.d/pgpool
-
 %if %sshd_selinux
 checkmodule -M -m -o pgpool_II_sshd_fix.mod %{SOURCE1}
 semodule_package -o pgpool_II_sshd_fix.pp -m pgpool_II_sshd_fix.mod
@@ -200,14 +259,11 @@ find %{buildroot}%{_mandir} -type f -exec chmod 644 {} \;
 rm -f %{buildroot}%{_libdir}/libpgpoolpcp.{a,la}
 
 %pre
-%{?suse_version:%service_add_pre pgpool.service}
-groupadd -g 26 -o -r postgres >/dev/null 2>&1 || :
-useradd -M -g postgres -o -r -d /var/lib/pgsql -s /bin/bash \
-        -c "PostgreSQL Server" -u 26 postgres >/dev/null 2>&1 || :
+%sysusers_create_package %{name} %SOURCE6
 
 %post
 /sbin/ldconfig
-%systemd_post pgpool.service
+%systemd_post pgpool-II.service
 systemd-tmpfiles --create %{_tmpfilesdir}/%{name}.conf 2>/dev/null || :
 %if %sshd_selinux
 %{_sbindir}/selinuxenabled 2>/dev/null && \
@@ -215,11 +271,11 @@ systemd-tmpfiles --create %{_tmpfilesdir}/%{name}.conf 2>/dev/null || :
 %endif
 
 %preun
-%systemd_preun pgpool.service
+%systemd_preun pgpool-II.service
 
 %postun
 /sbin/ldconfig
-%systemd_postun_with_restart pgpool.service
+%systemd_postun_with_restart pgpool-II.service
 %if %sshd_selinux
 if [ $1 -eq 0 ] ; then
 	# Package removal, not upgrade
@@ -233,37 +289,19 @@ fi
 %license COPYING
 %dir %{_datadir}/%{short_name}
 %{_bindir}/pgpool
-%{_bindir}/pcp_attach_node
-%{_bindir}/pcp_detach_node
-%{_bindir}/pcp_node_count
-%{_bindir}/pcp_node_info
-%{_bindir}/pcp_pool_status
-%{_bindir}/pcp_proc_count
-%{_bindir}/pcp_proc_info
-%{_bindir}/pcp_promote_node
-%{_bindir}/pcp_stop_pgpool
-%{_bindir}/pcp_recovery_node
-%{_bindir}/pcp_watchdog_info
-%{_bindir}/pcp_reload_config
-%{_bindir}/pcp_health_check_stats
-%{_bindir}/pcp_log_rotate
-%{_bindir}/pcp_invalidate_query_cache
 %{_bindir}/pg_md5
 %{_bindir}/pg_enc
 %{_bindir}/pgpool_setup
 %{_bindir}/watchdog_setup
 %{_bindir}/pgproto
-%{_bindir}/wd_cli
 %{_mandir}/man8/*.8*
 %{_mandir}/man1/*.1*
 %{_datadir}/%{short_name}/insert_lock.sql
 %{_datadir}/%{short_name}/pgpool.pam
-%{_libdir}/libpgpoolpcp.so.*
+%{_sysconfdir}/pgpool-II/*.sample*
+%{_sysusersdir}/pgpool-II.conf
 %{_tmpfilesdir}/%{name}.conf
-%ghost %dir /run/pgpool
-%dir %attr(0750,root,root) %{_sysconfdir}/sudoers.d
-%{_sysconfdir}/sudoers.d/pgpool
-%{_unitdir}/pgpool.service
+%{_unitdir}/pgpool-II.service
 %if %sshd_selinux
 %{_datadir}/selinux/packages/pgpool_II_sshd_fix.pp
 %endif
@@ -272,7 +310,6 @@ fi
 %defattr(600,postgres,postgres,-)
 %dir %{_sysconfdir}/%{short_name}
 %{_sysconfdir}/%{short_name}/pgpool.conf.sample
-%{_sysconfdir}/%{short_name}/pcp.conf.sample
 %{_sysconfdir}/%{short_name}/pool_hba.conf.sample
 %defattr(755,postgres,postgres,-)
 %{_sysconfdir}/%{short_name}/sample_scripts/
@@ -289,19 +326,18 @@ fi
 %{_includedir}/pcp.h
 %{_includedir}/pool_process_reporting.h
 %{_includedir}/pool_type.h
-%{_libdir}/libpgpoolpcp.so
 
 %files extensions
 %ghost %dir %{pghome}/lib
 %ghost %dir %{pghome}/share
 %ghost %dir %{pghome}/share/extension
-%{pghome}/share/extension/pgpool-recovery.sql
-%{pghome}/share/extension/pgpool_recovery*.sql
-%{pghome}/share/extension/pgpool_recovery.control
+%{pghome}/lib/pgpool_adm.so
 %{pghome}/lib/pgpool-recovery.so
 %{pghome}/share/extension/pgpool_adm*.sql
 %{pghome}/share/extension/pgpool_adm.control
-%{pghome}/lib/pgpool_adm.so
+%{pghome}/share/extension/pgpool-recovery.sql
+%{pghome}/share/extension/pgpool_recovery*.sql
+%{pghome}/share/extension/pgpool_recovery.control
 %ghost %dir %{pghome}/lib/bitcode
 %dir %{pghome}/lib/bitcode/pgpool-recovery
 %dir %{pghome}/lib/bitcode/pgpool_adm
@@ -309,6 +345,25 @@ fi
 %{pghome}/lib/bitcode/pgpool-recovery/pgpool-recovery.bc
 %{pghome}/lib/bitcode/pgpool_adm.index.bc
 %{pghome}/lib/bitcode/pgpool_adm/pgpool_adm.bc
+
+%files -n %{name}-pcp
+%{_bindir}/pcp_attach_node
+%{_bindir}/pcp_detach_node
+%{_bindir}/pcp_health_check_stats
+%{_bindir}/pcp_invalidate_query_cache
+%{_bindir}/pcp_log_rotate
+%{_bindir}/pcp_node_count
+%{_bindir}/pcp_node_info
+%{_bindir}/pcp_pool_status
+%{_bindir}/pcp_proc_count
+%{_bindir}/pcp_proc_info
+%{_bindir}/pcp_promote_node
+%{_bindir}/pcp_recovery_node
+%{_bindir}/pcp_reload_config
+%{_bindir}/pcp_stop_pgpool
+%{_bindir}/pcp_watchdog_info
+%{_bindir}/wd_cli
+%{_libdir}/libpgpoolpcp.so*
 
 %changelog
 * %!{FILE_MODIFY_DATE} Percona Development Team <info@percona.com> - %!{PGPOOL_VERSION}-1

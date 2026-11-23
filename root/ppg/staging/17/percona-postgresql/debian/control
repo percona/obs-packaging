@@ -151,7 +151,6 @@ Depends:
  ssl-cert,
  tzdata,
  curl,
- percona-pg-tde%!{PG_MAJOR_VERSION},
  ${misc:Depends},
  ${shlibs:Depends}
 Provides: percona-postgresql-contrib-%!{PG_MAJOR_VERSION}, postgresql-contrib-%!{PG_MAJOR_VERSION} (= ${binary:Version}), postgresql-%!{PG_MAJOR_VERSION} (= ${binary:Version}),
