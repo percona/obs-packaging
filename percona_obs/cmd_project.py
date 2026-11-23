@@ -108,6 +108,7 @@ from .release_record import (
 from .github_api import last_synced_head_sha, repo_slug_from_url
 from .services import _git_head_sha, _git_tag_for_sha
 from .pkg_version import extract_version_from_service
+from .release_changes import classify_change, split_versrel
 
 _YAML_FILENAMES = {"project.yaml", "package.yaml"}
 _OBS_FILENAMES = {"_service", "_aggregate", "_link"}
@@ -2161,6 +2162,27 @@ def _build_changed_packages(
     return changed
 
 
+def _packaging_changed_keys(
+    source_versions: "dict[str, str]",
+    release_versions: "dict[str, str] | None",
+) -> "list[str]":
+    """Sorted keys present in both dicts whose change is a packaging update."""
+    if not release_versions:
+        return []
+    return sorted(
+        pkg
+        for pkg, src_ver in source_versions.items()
+        if pkg in release_versions
+        and classify_change(release_versions[pkg], src_ver) == "packaging"
+    )
+
+
+def _version_counter(versrel: str) -> str:
+    """Render ``<upstream version>-<source-commit counter>`` of a versrel."""
+    version, counter = split_versrel(versrel)
+    return version if counter is None else f"{version}-{counter}"
+
+
 def _build_changelog_section(
     release_id: str,
     source_versions: "dict[str, str]",
@@ -2171,11 +2193,13 @@ def _build_changelog_section(
     release_container_pkgs: "dict[str, dict[str, str]] | None" = None,
     prev_release_id: str | None = None,
     security_lines: "list[str] | None" = None,
+    packaging_notes: "dict[str, list[str]] | None" = None,
 ) -> str:
     """Build a keep-a-changelog section for a release."""
     today = datetime.date.today().isoformat()
     added: list[str] = []
-    changed: list[str] = []
+    version_updates: list[str] = []
+    packaging_updates: list[str] = []
     removed: list[str] = []
 
     all_pkgs = set(source_versions.keys())
@@ -2228,8 +2252,19 @@ def _build_changelog_section(
 
         if release_versions is None or rel_ver is None:
             added.append(f"- {pkg}: add upstream version {pkg_version}{url_str}")
-        elif src_ver.split("-")[0] != rel_ver.split("-")[0]:
-            changed.append(f"- {pkg}: update upstream version {pkg_version}{url_str}")
+        else:
+            kind = classify_change(rel_ver, src_ver)
+            if kind == "version":
+                version_updates.append(
+                    f"- {pkg}: update upstream version {pkg_version}{url_str}"
+                )
+            elif kind == "packaging":
+                entry = (
+                    f"- {pkg}: {_version_counter(rel_ver)} → "
+                    f"{_version_counter(src_ver)}"
+                )
+                notes = (packaging_notes or {}).get(pkg, [])
+                packaging_updates.append("\n".join([entry, *notes]))
 
     # Container image entries.
     if source_container_pkgs is not None:
@@ -2255,33 +2290,51 @@ def _build_changelog_section(
                 # Container changed — diff installed package lists.
                 added_pkgs = sorted(p for p in src_pkgs if p not in rel_pkgs)
                 removed_pkgs = sorted(p for p in rel_pkgs if p not in src_pkgs)
-                updated_pkgs = sorted(
-                    p for p in src_pkgs if p in rel_pkgs and src_pkgs[p] != rel_pkgs[p]
-                )
-                if not added_pkgs and not removed_pkgs and not updated_pkgs:
-                    continue
+                common_pkgs = [p for p in sorted(src_pkgs) if p in rel_pkgs]
+                kinds = {
+                    p: classify_change(rel_pkgs[p], src_pkgs[p]) for p in common_pkgs
+                }
+                version_pkgs = [p for p in common_pkgs if kinds[p] == "version"]
+                repackaged_pkgs = [p for p in common_pkgs if kinds[p] == "packaging"]
                 prev_ver = prev_release_id or "?"
-                entry_lines = [
+                header = (
                     f"- {ctr} [container image]: update image {prev_ver} → {release_id}"
-                ]
+                )
+                version_lines: list[str] = []
                 for p in added_pkgs:
-                    entry_lines.append(f"  - added: {p} {src_pkgs[p]}")
-                for p in updated_pkgs:
-                    entry_lines.append(
-                        f"  - updated: {p} {rel_pkgs[p]} -> {src_pkgs[p]}"
-                    )
+                    version_lines.append(f"  - added: {p} {src_pkgs[p]}")
+                for p in version_pkgs:
+                    old_v = split_versrel(rel_pkgs[p])[0]
+                    new_v = split_versrel(src_pkgs[p])[0]
+                    version_lines.append(f"  - updated: {p} {old_v} → {new_v}")
                 for p in removed_pkgs:
-                    entry_lines.append(f"  - removed: {p}")
-                changed.append("\n".join(entry_lines))
+                    version_lines.append(f"  - removed: {p}")
+                if version_lines:
+                    version_updates.append("\n".join([header, *version_lines]))
+                if repackaged_pkgs:
+                    packaging_lines = [
+                        f"  - repackaged: {p} {_version_counter(rel_pkgs[p])} → "
+                        f"{_version_counter(src_pkgs[p])}"
+                        for p in repackaged_pkgs
+                    ]
+                    packaging_updates.append("\n".join([header, *packaging_lines]))
 
+    todo = "<!-- TODO: fill in manually -->"
     if not source_versions:
-        todo = "<!-- TODO: fill in manually -->"
         added = [todo]
-        changed = [todo]
 
     lines: list[str] = [f"## [{release_id}] - {today}", ""]
     lines += ["### Added"] + added + [""]
-    lines += ["### Changed"] + changed + [""]
+    lines += ["### Changed"]
+    if not source_versions:
+        lines += [todo, ""]
+    elif version_updates or packaging_updates:
+        if version_updates:
+            lines += ["#### Version updates"] + version_updates + [""]
+        if packaging_updates:
+            lines += ["#### Packaging updates"] + packaging_updates + [""]
+    else:
+        lines += ["- Rebuild only: no version or packaging changes.", ""]
     if removed:
         lines += ["### Removed"] + removed + [""]
     if security_lines:

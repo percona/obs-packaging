@@ -1905,3 +1905,98 @@ def test_collect_release_obs_data_all_propagates_a_failure(monkeypatch):
         cmd_project._collect_release_obs_data_all(
             [("http://boo", "B"), ("http://labs", "L")], "p", "r", [], []
         )
+
+
+def test_changelog_splits_version_and_packaging_updates(tmp_path):
+    section = cmd_project._build_changelog_section(
+        "17.12-2",
+        {
+            "percona-credcheck": "6.0-1.2",
+            "percona-pgaudit": "17.2-2.1",
+            "etcd": "3.5.35-4.2",
+        },
+        {
+            "percona-credcheck": "5.0-5.1",
+            "percona-pgaudit": "17.2-1.4",
+            "etcd": "3.5.35-4.1",
+        },
+        tmp_path,
+        packaging_notes={
+            "percona-pgaudit": ["  - PG-2955 fix ([#310](https://x/pull/310))"]
+        },
+    )
+    changed = section.split("### Changed")[1]
+    assert changed.index("#### Version updates") < changed.index(
+        "#### Packaging updates"
+    )
+    assert "- percona-credcheck: update upstream version 6.0" in changed
+    assert (
+        "- percona-pgaudit: 17.2-1 → 17.2-2\n"
+        "  - PG-2955 fix ([#310](https://x/pull/310))"
+    ) in changed
+    assert "etcd" not in section
+
+
+def test_changelog_packaging_line_without_notes(tmp_path):
+    section = cmd_project._build_changelog_section(
+        "17.12-2", {"etcd": "3.5.35-5.1"}, {"etcd": "3.5.35-4.9"}, tmp_path
+    )
+    assert "#### Version updates" not in section
+    assert "#### Packaging updates\n- etcd: 3.5.35-4 → 3.5.35-5\n" in section
+
+
+def test_changelog_rebuild_only(tmp_path):
+    section = cmd_project._build_changelog_section(
+        "17.11-4",
+        {"etcd": "3.5.35-4.2"},
+        {"etcd": "3.5.35-4.1"},
+        tmp_path,
+        source_container_pkgs={"img (ubi9)": {"gosu": "1.19-4.4.el9"}},
+        release_container_pkgs={"img (ubi9)": {"gosu": "1.19-4.3.el9"}},
+        prev_release_id="17.11-3",
+    )
+    assert "### Changed\n- Rebuild only: no version or packaging changes.\n" in section
+    assert "img (ubi9)" not in section
+    assert "####" not in section
+
+
+def test_changelog_container_entries_split_by_kind(tmp_path):
+    section = cmd_project._build_changelog_section(
+        "17.12-1",
+        {"percona-postgresql": "17.12-1.1"},
+        {"percona-postgresql": "17.11-8.3"},
+        tmp_path,
+        source_container_pkgs={
+            "img (ubi9)": {
+                "percona-credcheck17": "6.0-1.3.el9",
+                "percona-pgaudit17": "17.1-6.3.el9",
+                "gosu": "1.19-5.4.el9",
+                "curl": "8.23.0-3.1.el9",
+            }
+        },
+        release_container_pkgs={
+            "img (ubi9)": {
+                "percona-credcheck17": "5.0-5.1.el9",
+                "percona-pgaudit17": "17.1-5.7.el9",
+                "gosu": "1.19-5.3.el9",
+                "llvm": "21.1.8-1.6.el9",
+            }
+        },
+        prev_release_id="17.11-5",
+    )
+    version, packaging = section.split("#### Packaging updates")
+    header = "- img (ubi9) [container image]: update image 17.11-5 → 17.12-1"
+    assert header in version and header in packaging
+    assert "  - added: curl 8.23.0-3.1.el9" in version
+    assert "  - updated: percona-credcheck17 5.0 → 6.0" in version
+    assert "  - removed: llvm" in version
+    assert "  - repackaged: percona-pgaudit17 17.1-5 → 17.1-6" in packaging
+    assert "gosu" not in section
+
+
+def test_packaging_changed_keys():
+    assert cmd_project._packaging_changed_keys(
+        {"a": "1.0-2.1", "b": "2.0-1.1", "c": "1.0-1.2", "new": "1.0-1.1"},
+        {"a": "1.0-1.9", "b": "1.0-1.1", "c": "1.0-1.1"},
+    ) == ["a"]
+    assert cmd_project._packaging_changed_keys({"a": "1.0-2.1"}, None) == []
