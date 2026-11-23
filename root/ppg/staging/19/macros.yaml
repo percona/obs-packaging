@@ -11,6 +11,7 @@
 
 # PG19-specific component versions; everything else inherits root/macros.yaml.
 - PGAUDIT_VERSION: 19.0
+- PGAUDIT_REF: %!{PGAUDIT_VERSION}
 - POSTGIS_VERSION: 3.7.0
 - POSTGIS_RPM_MAJOR: 37
 # pg_tde has no PG 19 tag yet: build upstream main under a pre-release

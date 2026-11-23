@@ -9,4 +9,7 @@
 - PG_PACKAGE_VERSION: %!{PG_VERSION}.%!{PERCONA_PG_PATCH_VERSION}%!{PG_VERSION_SUFFIX}
 
 # devel:19-only components; everything else inherits root/macros.yaml.
-- PGAUDIT_VERSION: 18.0
+# pgAudit keeps one branch per PostgreSQL major (its main moves on to the next
+# major), so devel:19 follows the PG 19 branch rather than main.
+- PGAUDIT_VERSION: 19.0
+- PGAUDIT_REF: REL_19_STABLE
