@@ -33,6 +33,7 @@ Depends:
  ${misc:Depends},
  ${postgresql:Depends},
  ${shlibs:Depends},
+ percona-postgresql-%!{PG_MAJOR_VERSION},
 Replaces: percona-postgresql-%!{PG_MAJOR_VERSION} (<< 2:%!{PG_MAJOR_VERSION}.7)
 Breaks: percona-postgresql-%!{PG_MAJOR_VERSION} (<< 2:%!{PG_MAJOR_VERSION}.7)
 Description: pg_tde is a PostgreSQL extension enabling transparent data encryption.

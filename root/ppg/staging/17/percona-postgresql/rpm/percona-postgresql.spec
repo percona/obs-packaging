@@ -337,7 +337,6 @@ Requires(pre):  /usr/sbin/useradd /usr/sbin/groupadd
 %endif
 Requires:        util-linux
 Recommends:     percona-pg-telemetry%{pgmajorversion}
-Requires:       percona-pg_tde%{pgmajorversion}
 # for /sbin/ldconfig
 Requires(post):         glibc
 Requires(postun):       glibc
@@ -397,6 +396,7 @@ Summary:        Contributed source and binaries distributed with PostgreSQL
 Group:          Productivity/Databases/Tools
 Requires:       %{name} >= %{version}-%{release}
 Requires:       %{name}-libs >= %{version}-%{release}
+Requires:       %{name}-server >= %{version}-%{release}
 Provides:       postgresql-contrib >= %{version}-%{release}
 Provides:       %{vname}-contrib = %{epoch}:%{version}-%{release}
 Provides:       %{sname}-contrib = %{epoch}:%{version}-%{release}
@@ -418,7 +418,6 @@ included in the PostgreSQL distribution.
 %package devel
 Summary:        PostgreSQL development header files and libraries
 Group:          Development/Libraries/C and C++
-Requires:       %{name} >= %{version}-%{release}
 Requires:       %{name} >= %{version}-%{release}
 Requires:       %{name}-libs >= %{version}-%{release}
 %if %icu

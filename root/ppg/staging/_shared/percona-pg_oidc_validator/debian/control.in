@@ -23,5 +23,6 @@ Depends:
  ${misc:Depends},
  ${postgresql:Depends},
  ${shlibs:Depends},
+ percona-postgresql-%!{PG_MAJOR_VERSION},
 Description: pg-oidc-validator is a PostgreSQL extension.
  It is an OAuth validator library for PostgreSQL %!{PG_MAJOR_VERSION}.

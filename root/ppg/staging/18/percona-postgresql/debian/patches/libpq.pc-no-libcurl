@@ -1,3 +1,39 @@
+Description: libpq.pc: Drop libcurl from Requires.private
+ PostgreSQL 18 added libcurl to PKG_CONFIG_REQUIRES_PRIVATE in
+ src/interfaces/libpq/Makefile, because clients linking libpq.a statically
+ get libpq-oauth, and libpq-oauth needs libcurl. pkgconf, however, resolves
+ Requires.private even for --cflags and gives up if any listed module has no
+ .pc file:
+ .
+   Package 'libcurl', required by 'libpq', not found
+ .
+ libpq-dev depends on libssl-dev but not on libcurl4-openssl-dev, so
+ "pkg-config --cflags libpq" exits non-zero and prints nothing. Programs
+ that use it to locate libpq-fe.h then fail to build even though the headers
+ need nothing from libcurl; the autopkgtests of hoel and rust-pq-sys are two
+ examples. "pkg-config --libs libpq" still works, since private dependencies
+ are not expanded when linking dynamically.
+ .
+ The alternatives discussed on pgsql-hackers were to make libpq-dev depend
+ on libcurl4-openssl-dev, or to have every libpq consumer build-depend on it
+ itself. Both pull an otherwise unrelated development package into the
+ dependency chain and make pkgconf emit libcurl's include flags as well.
+ .
+ Upstream follows the pkg-config FAQ, which recommends Requires.private for
+ private dependencies precisely so that --libs --static works, and there was
+ no agreement on the semantics of the proposed Requires.internal. The thread
+ "libcurl in libpq.pc" ends with the issue being left to distributions to
+ work around:
+ https://postgr.es/m/aCHScGj9_dAo-gOM@msg.df7cb.de/
+ .
+ Since all libpq users in Debian link dynamically, drop libcurl from
+ Requires.private and add -lcurl to the private link flags instead:
+ --cflags now succeeds without libcurl4-openssl-dev, and static linkers
+ still get -lcurl from --libs --static, or a meaningful "libcurl not found"
+ from their own linker if it is missing.
+Author: Christoph Berg <myon@debian.org>
+Forwarded: not-needed
+
 --- a/src/interfaces/libpq/Makefile
 +++ b/src/interfaces/libpq/Makefile
 @@ -110,10 +110,7 @@ $(call add_to_list,PKG_CONFIG_REQUIRES_P

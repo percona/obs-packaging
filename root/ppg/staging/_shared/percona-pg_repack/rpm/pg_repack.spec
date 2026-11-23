@@ -1,4 +1,5 @@
 %define pg_version %!{PG_MAJOR_VERSION}
+%define pgminorversion %!{PG_VERSION}
 %define pg_name percona-postgresql%{pg_version}
 
 %if 0%{?rhel} >= 8 && 0%{?rhel} <= 9
@@ -40,7 +41,17 @@ URL:            https://github.com/reorg/pg_repack/
 Packager:       Percona Development Team <https://jira.percona.com>
 Vendor:         Percona, LLC
 
-BuildRequires:  %{pg_name}-devel, %{pg_name}
+%if 0%{?pgminorversion:1}
+# pgminorversion is the PostgreSQL minor release that the build servers
+# build against (global/Makefile.global): require at least that one, at
+# build time and at runtime.
+# The other postgresqlNN-* dependencies need no version here: the PostgreSQL
+# subpackages require each other's exact version-release (all of them pin
+# the client package, which pins -libs), so the server, contrib etc. follow
+# -devel at build time and -libs at runtime.
+BuildRequires:  %{pg_name}-devel >= %{pgminorversion}, %{pg_name} >= %{pgminorversion}
+Requires:	%{pg_name}-libs >= %{pgminorversion}
+%endif
 %if %{pg_version} >= 19
 BuildRequires:  %{pg_name}-static
 %endif
@@ -83,7 +94,7 @@ Requires:        openssl-libs >= 1.1.1k
 BuildRequires:        openssl-devel
 %endif
 
-Requires:       postgresql%{pgmajorversion}
+Requires:       percona-postgresql%{pgmajorversion}
 Requires(post):         %{_sbindir}/update-alternatives
 Requires(postun):       %{_sbindir}/update-alternatives
 %if %runselftest
@@ -126,6 +137,14 @@ This package provides JIT support for pg_repack
 %prep
 %setup -q -n %{sname}-%{version}
 %patch -P 0 -p0
+# Since the November 2026 minor releases (CVE-2026-6460), PostgreSQL 14-18
+# store a "pg_attver=N" column version in pg_attribute.attoptions, so the
+# column options check of the repack-check test sees it. Leave it out of the
+# query, in both the test and its expected outputs, so that the test still
+# checks that pg_repack keeps the column options, on old and new minors:
+sed -i "s/^SELECT attname, nullif(attstattarget, -1) as attstattarget, attoptions$/SELECT attname, nullif(attstattarget, -1) as attstattarget, nullif(array(SELECT o FROM unnest(attoptions) o WHERE o NOT LIKE 'pg_attver=%%'), '{}') AS attoptions/" \
+	regress/sql/repack-check.sql regress/expected/repack-check*.out
+test $(grep -l "pg_attver=" regress/sql/repack-check.sql regress/expected/repack-check*.out | wc -l) -eq 5
 
 %build
 %if 0%{?gts_version}

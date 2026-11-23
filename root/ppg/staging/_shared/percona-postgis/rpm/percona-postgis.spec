@@ -4,6 +4,7 @@
 %global postgisminorversion 5
 %global postgissomajorversion 3
 %define pgmajorversion %!{PG_MAJOR_VERSION}
+%define pgminorversion %!{PG_VERSION}
 
 %if 0%{?rhel} >= 8 && 0%{?rhel} <= 9
 %global gts_version 14
@@ -78,6 +79,18 @@ Source4:	%{sname}%{postgissomajorversion}-filter-requires-perl-Pg.sh
 Patch0:		postgis35-3.5.7-geos315-backport.patch
 
 URL:		https://www.postgis.net/
+
+%if 0%{?pgminorversion:1}
+# pgminorversion is the PostgreSQL minor release that the build servers
+# build against (global/Makefile.global): require at least that one, at
+# build time and at runtime.
+# The other postgresqlNN-* dependencies need no version here: the PostgreSQL
+# subpackages require each other's exact version-release (all of them pin
+# the client package, which pins -libs), so the server, contrib etc. follow
+# -devel at build time and -libs at runtime.
+BuildRequires:	percona-postgresql%{pgmajorversion}-devel >= %{pgminorversion}
+Requires:	percona-postgresql%{pgmajorversion}-libs >= %{pgminorversion}
+%endif
 
 BuildRequires:	percona-postgresql%{pgmajorversion}-devel libxml2 libxslt autoconf automake libtool gmp-devel pcre2-devel gcc gcc-c++
 %if 0%{?gts_version}

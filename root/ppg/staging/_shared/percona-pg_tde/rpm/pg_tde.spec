@@ -34,10 +34,13 @@ URL:            https://github.com/percona/pg_tde
 Source0:        %{sname}-%{version}.tar.gz
 
 BuildRequires:  %{pg_name}-devel chrpath openssl-devel libcurl-devel >= 8.23.0 zlib-devel libzstd-devel libxml2-devel libxslt-devel libselinux-devel pam-devel krb5-devel readline-devel meson cmake
+Requires:	%{pg_name}-server %{pg_name}-libs
 # meson links the client tools against PostgreSQL's static helper libraries
 # (libpgport.a, libpgcommon.a, libpgfeutils.a). The server packaging ships
 # libpgfeutils.a (and on PG 19 all three) in the -static subpackage.
+%if %{pg_version} >= 17
 BuildRequires:  %{pg_name}-static
+%endif
 %if 0%{?gts_version}
 BuildRequires:  gcc-toolset-%{gts_version}-gcc gcc-toolset-%{gts_version}-gcc-c++ gcc-toolset-%{gts_version}-annobin-plugin-gcc
 %endif
