@@ -144,3 +144,34 @@ def test_gh_failure_is_reported(monkeypatch):
     monkeypatch.setattr(gha.subprocess, "run", lambda *a, **k: R())
     with pytest.raises(SystemExit, match="not logged in"):
         gha._gh_api_json("repos/x/y")
+
+
+def test_commit_pull_request_prefers_merged(monkeypatch):
+    calls = []
+
+    def fake(path):
+        calls.append(path)
+        return [
+            {
+                "number": 7,
+                "html_url": "https://github.com/o/r/pull/7",
+                "merged_at": None,
+            },
+            {
+                "number": 9,
+                "html_url": "https://github.com/o/r/pull/9",
+                "merged_at": "2026-11-20T10:00:00Z",
+            },
+        ]
+
+    monkeypatch.setattr(gha, "_gh_api_json", fake)
+    assert gha.commit_pull_request("o/r", "abc") == (
+        9,
+        "https://github.com/o/r/pull/9",
+    )
+    assert calls == ["repos/o/r/commits/abc/pulls"]
+
+
+def test_commit_pull_request_none(monkeypatch):
+    monkeypatch.setattr(gha, "_gh_api_json", lambda path: [])
+    assert gha.commit_pull_request("o/r", "abc") is None
