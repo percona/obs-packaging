@@ -51,7 +51,12 @@ PrLookup = Callable[[str], "tuple[int, str] | None"]
 def packaging_commits(
     prev_commit: str, new_commit: str, paths: "list[str]", run_git: RunGit
 ) -> "list[CommitRef]":
-    """Non-merge commits in ``prev_commit..new_commit`` touching ``paths``, oldest first."""
+    """Non-merge commits in ``prev_commit..new_commit`` touching ``paths``, oldest first.
+
+    Commits whose subject starts with ``devel:`` are left out: they change the
+    devel tier, which shares the staging packaging directories, and say nothing
+    about the release.
+    """
     out = run_git(
         [
             "log",
@@ -68,6 +73,8 @@ def packaging_commits(
         if not record.strip():
             continue
         sha, _, subject = record.strip().partition("\x00")
+        if subject.startswith("devel:"):
+            continue
         commits.append(CommitRef(sha, subject))
     return commits
 
