@@ -1,0 +1,5 @@
+project: ppg:staging:common:upgrade:extras
+releases:
+- source_commit: 6367f90849ced78a0076fee5db6e8d2081d25b37
+  tag: ppg/common-upgrade-extras-1
+repository: ${PERCONA_OBS_PACKAGING_REPO}
