@@ -11,7 +11,7 @@ import sys
 import urllib.error
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -2183,14 +2183,21 @@ def _build_changed_packages(
 def _packaging_changed_keys(
     source_versions: "dict[str, str]",
     release_versions: "dict[str, str] | None",
+    version_only_keys: "set[str] | None" = None,
 ) -> "list[str]":
-    """Sorted keys present in both dicts whose change is a packaging update."""
+    """Sorted keys present in both dicts whose change is a packaging update.
+
+    Keys in ``version_only_keys`` are skipped: their revision counters come
+    from different OBS instances and are not comparable.
+    """
     if not release_versions:
         return []
+    skip = version_only_keys or set()
     return sorted(
         pkg
         for pkg, src_ver in source_versions.items()
         if pkg in release_versions
+        and pkg not in skip
         and classify_change(release_versions[pkg], src_ver) == "packaging"
     )
 
@@ -2262,11 +2269,12 @@ def _packaging_notes(
             commits = packaging_commits(prev_commit, new_commit, paths, git)
         except Exception as exc:
             print(
-                f"warning: {key}: could not list packaging commits: {exc}",
+                f"warning: git log failed: {exc}; "
+                "packaging updates are listed without commits",
                 file=sys.stderr,
                 flush=True,
             )
-            continue
+            break
         if not commits:
             notes[key] = [
                 "  - no package-level commits (shared macro or tooling change)"
@@ -2308,8 +2316,14 @@ def _build_changelog_section(
     prev_release_id: str | None = None,
     security_lines: "list[str] | None" = None,
     packaging_notes: "dict[str, list[str]] | None" = None,
+    version_only_keys: "set[str] | None" = None,
 ) -> str:
-    """Build a keep-a-changelog section for a release."""
+    """Build a keep-a-changelog section for a release.
+
+    For keys in ``version_only_keys`` (previous release on another OBS
+    instance) a packaging classification is treated as a rebuild.
+    """
+    version_only = version_only_keys or set()
     today = datetime.date.today().isoformat()
     added: list[str] = []
     version_updates: list[str] = []
@@ -2372,7 +2386,7 @@ def _build_changelog_section(
                 version_updates.append(
                     f"- {pkg}: update upstream version {pkg_version}{url_str}"
                 )
-            elif kind == "packaging":
+            elif kind == "packaging" and pkg not in version_only:
                 entry = (
                     f"- {pkg}: {_version_counter(rel_ver)} → "
                     f"{_version_counter(src_ver)}"
@@ -2409,7 +2423,11 @@ def _build_changelog_section(
                     p: classify_change(rel_pkgs[p], src_pkgs[p]) for p in common_pkgs
                 }
                 version_pkgs = [p for p in common_pkgs if kinds[p] == "version"]
-                repackaged_pkgs = [p for p in common_pkgs if kinds[p] == "packaging"]
+                repackaged_pkgs = (
+                    []
+                    if ctr in version_only
+                    else [p for p in common_pkgs if kinds[p] == "packaging"]
+                )
                 prev_ver = prev_release_id or "?"
                 header = (
                     f"- {ctr} [container image]: update image {prev_ver} → {release_id}"
@@ -2755,6 +2773,9 @@ class _ReleaseObsData:
     release_versions: "dict[str, str] | None"
     source_container_pkgs: dict[str, dict[str, str]]
     release_container_pkgs: dict[str, dict[str, str]]
+    # Keys whose previous release came from another instance than their source.
+    cross_instance_versions: "set[str]" = field(default_factory=set)
+    cross_instance_containers: "set[str]" = field(default_factory=set)
 
 
 def _collect_release_obs_data(
@@ -2879,11 +2900,16 @@ def _merge_release_obs_data(parts: "list[_ReleaseObsData]") -> _ReleaseObsData:
     (unlike the within-instance ``_merge_container_pkgs`` check).
     ``release_versions`` stays ``None`` only when no instance has the release
     project.
+
+    The revision counter counts source commits on one instance, so counters
+    from two instances are not comparable.  Keys whose release value did not
+    come from the owner instance are returned in ``cross_instance_*`` so the
+    changelog reports only their version changes.
     """
 
     def _paired(
         sources: "list[dict[str, Any]]", releases: "list[dict[str, Any] | None]"
-    ) -> "tuple[dict[str, Any], dict[str, Any]]":
+    ) -> "tuple[dict[str, Any], dict[str, Any], set[str]]":
         merged_src: dict[str, Any] = {}
         owner: dict[str, int] = {}
         for i, src in enumerate(sources):
@@ -2895,16 +2921,19 @@ def _merge_release_obs_data(parts: "list[_ReleaseObsData]") -> _ReleaseObsData:
         for rel in releases:
             for k, v in (rel or {}).items():
                 merged_rel.setdefault(k, v)
+        cross: set[str] = set()
         for k, i in owner.items():
             owner_rel = releases[i]
             if owner_rel is not None and k in owner_rel:
                 merged_rel[k] = owner_rel[k]
-        return merged_src, merged_rel
+            elif k in merged_rel:
+                cross.add(k)
+        return merged_src, merged_rel, cross
 
-    source_versions, release_versions = _paired(
+    source_versions, release_versions, cross_versions = _paired(
         [p.source_versions for p in parts], [p.release_versions for p in parts]
     )
-    source_container_pkgs, release_container_pkgs = _paired(
+    source_container_pkgs, release_container_pkgs, cross_containers = _paired(
         [p.source_container_pkgs for p in parts],
         [p.release_container_pkgs for p in parts],
     )
@@ -2914,6 +2943,8 @@ def _merge_release_obs_data(parts: "list[_ReleaseObsData]") -> _ReleaseObsData:
         release_versions=None if all_none else release_versions,
         source_container_pkgs=source_container_pkgs,
         release_container_pkgs=release_container_pkgs,
+        cross_instance_versions=cross_versions,
+        cross_instance_containers=cross_containers,
     )
 
 
@@ -3216,13 +3247,40 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         security_lines = [*(security_lines or []), *image_lines] or None
 
     _print_pending("collecting packaging commits for CHANGELOG")
-    packaging_notes = _packaging_notes(
-        _packaging_changed_keys(source_versions, release_versions),
-        source_path,
-        _previous_source_commit(new_entries),
-        source_commit,
-        repo_slug_from_url(repo_url) if repo_url else None,
+    version_only_keys = (
+        obs_data.cross_instance_versions | obs_data.cross_instance_containers
     )
+    if version_only_keys:
+        print(
+            f"warning: {len(version_only_keys)} package(s)/image(s) have their "
+            "previous release on another OBS instance; revision counters are "
+            "not comparable there, only version changes are reported for them",
+            file=sys.stderr,
+            flush=True,
+        )
+    repo_slug: "str | None" = None
+    if repo_url:
+        try:
+            repo_slug = repo_slug_from_url(repo_url)
+        except SystemExit:
+            repo_slug = None
+    try:
+        packaging_notes = _packaging_notes(
+            _packaging_changed_keys(
+                source_versions, release_versions, version_only_keys
+            ),
+            source_path,
+            _previous_source_commit(new_entries),
+            source_commit,
+            repo_slug,
+        )
+    except Exception as exc:  # belt and braces: notes must never kill a cut
+        print(
+            f"warning: packaging commit lookup failed: {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
+        packaging_notes = None
     changelog_section = _build_changelog_section(
         release_id,
         source_versions,
@@ -3233,6 +3291,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         prev_release_id=prev_release_id,
         security_lines=security_lines,
         packaging_notes=packaging_notes,
+        version_only_keys=version_only_keys,
     )
 
     # Build release.yaml content.
