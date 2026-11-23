@@ -278,3 +278,23 @@ def test_allowlist_entry_without_package_is_refused(tmp_path, monkeypatch):
                 "Debian_12",
             ]
         )
+
+
+def test_configured_allowlist_covers_the_intended_cases_only():
+    cfg = yaml.safe_load((ROOT / ".github" / "package-deps-qa.yaml").read_text())
+    allow = cfg["server_dependency"]["allowed"]
+    assert all(e.get("reason") for e in allow)
+    for pkg, repo in [
+        ("percona-pg-telemetry17", "RockyLinux_9"),
+        ("percona-pg-telemetry14", "Debian_12"),
+        ("percona-postgresql-17-postgis-3-scripts", "Ubuntu_24.04"),
+    ]:
+        assert psd.allowed(pkg, repo, "17", allow), pkg
+    # real bugs stay visible
+    for pkg in [
+        "percona-pg_tde17",
+        "percona-pg-tde17",
+        "percona-pg_stat_monitor17",
+        "percona-postgresql-17-postgis-3",
+    ]:
+        assert not psd.allowed(pkg, "Debian_12", "17", allow), pkg
