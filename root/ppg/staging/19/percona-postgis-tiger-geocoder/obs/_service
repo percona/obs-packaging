@@ -2,8 +2,9 @@
   <service name="obs_scm">
     <param name="url">https://git.osgeo.org/gitea/postgis/postgis_tiger_geocoder.git</param>
     <param name="scm">git</param>
-    <param name="revision">%!{POSTGIS_TIGER_GEOCODER_VERSION}</param>
+    <param name="revision">%!{POSTGIS_TIGER_GEOCODER_REF}</param>
     <param name="version">%!{POSTGIS_TIGER_GEOCODER_VERSION}</param>
+    <param name="versionformat">%!{SCM_VERSIONFORMAT}</param>
     <param name="filename">percona-postgis-tiger-geocoder%!{PG_MAJOR_VERSION}</param>
   </service>
   <service mode="buildtime" name="tar" />
@@ -14,5 +15,8 @@
   <service mode="buildtime" name="set_version">
     <param name="basename">percona-postgis-tiger-geocoder%!{PG_MAJOR_VERSION}</param>
     <param name="file">percona-postgis-tiger-geocoder.spec</param>
+  </service>
+  <service mode="%!{SET_VERSION_DEB_MODE}" name="set_version">
+    <param name="basename">percona-postgis-tiger-geocoder%!{PG_MAJOR_VERSION}</param>
   </service>
 </services>

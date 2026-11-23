@@ -14,6 +14,7 @@
 - POSTGRESQL_COMMON_DEB_EPOCH:
 
 # Upstream development branch of each component (staging: a release tag).
+- ADDRESS_STANDARDIZER_REF: main
 - HAPROXY_REF: master
 - PATRONI_REF: master
 - PGBACKREST_REF: main
@@ -29,5 +30,6 @@
 - PG_STAT_MONITOR_REF: main
 - PG_TDE_REVISION: main
 - POSTGRESQL_COMMON_REF: master
+- POSTGIS_TIGER_GEOCODER_REF: main
 - PSYCOPG2_REF: master
 - WAL2JSON_REF: master
