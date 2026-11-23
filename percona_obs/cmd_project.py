@@ -81,7 +81,7 @@ from .cmd_build import (
     _fetch_pkg_versrel,
     _fetch_versrel_from_history,
 )
-from .cve_scan import ChangedPackage, scan_release_cves
+from .cve_scan import ChangedPackage, _default_run_git, scan_release_cves
 from .obs_versions import (
     VersionConflict,
     agreed_version,
@@ -105,10 +105,21 @@ from .release_record import (
     parse_release_entries,
     release_tags,
 )
-from .github_api import last_synced_head_sha, repo_slug_from_url
+from .github_api import (
+    commit_pull_request,
+    last_synced_head_sha,
+    repo_slug_from_url,
+)
 from .services import _git_head_sha, _git_tag_for_sha
 from .pkg_version import extract_version_from_service
-from .release_changes import classify_change, split_versrel
+from .release_changes import (
+    PrLookup,
+    RunGit,
+    classify_change,
+    commit_line,
+    packaging_commits,
+    split_versrel,
+)
 
 _YAML_FILENAMES = {"project.yaml", "package.yaml"}
 _OBS_FILENAMES = {"_service", "_aggregate", "_link"}
@@ -2177,6 +2188,102 @@ def _packaging_changed_keys(
     )
 
 
+def _previous_source_commit(new_entries: "list[ReleaseEntry]") -> "str | None":
+    """``source_commit`` of the entry before the one being written, if any."""
+    if len(new_entries) < 2:
+        return None
+    return new_entries[-2].source_commit
+
+
+def _packaging_notes(
+    keys: "list[str]",
+    source_path: Path,
+    prev_commit: "str | None",
+    new_commit: str,
+    repo_slug: "str | None",
+    *,
+    run_git: "RunGit | None" = None,
+    pr_lookup: "PrLookup | None" = None,
+) -> "dict[str, list[str]] | None":
+    """Changelog sub-items (packaging commits) for each packaging-class key.
+
+    Returns None when there is no previous source commit to diff against.
+    """
+    if not prev_commit:
+        return None
+    git = run_git or _default_run_git
+    lookup: "PrLookup | None" = pr_lookup
+    if lookup is None and repo_slug is not None:
+        slug = repo_slug
+
+        def default_lookup(sha: str) -> "tuple[int, str] | None":
+            return commit_pull_request(slug, sha)
+
+        lookup = default_lookup
+
+    cache: "dict[str, tuple[int, str] | None]" = {}
+
+    def cached_lookup(sha: str) -> "tuple[int, str] | None":
+        nonlocal lookup
+        if sha not in cache:
+            assert lookup is not None
+            cache[sha] = lookup(sha)
+        return cache[sha]
+
+    def rel(path: Path) -> str:
+        try:
+            return path.relative_to(_REPO_DIR).as_posix()
+        except ValueError:
+            return path.resolve().relative_to(_REPO_DIR.resolve()).as_posix()
+
+    notes: "dict[str, list[str]]" = {}
+    for key in keys:
+        pkg, sub = _split_changelog_key(key)
+        pkg_dir = (
+            source_path / Path(*sub.split(":")) / pkg
+            if sub is not None
+            else source_path / pkg
+        )
+        paths = [rel(pkg_dir)]
+        try:
+            resolved = rel(pkg_dir.resolve()) if pkg_dir.exists() else paths[0]
+        except ValueError:
+            resolved = paths[0]
+        if resolved not in paths:
+            paths.append(resolved)
+        try:
+            commits = packaging_commits(prev_commit, new_commit, paths, git)
+        except Exception as exc:
+            print(
+                f"warning: {key}: could not list packaging commits: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            continue
+        if not commits:
+            notes[key] = [
+                "  - no package-level commits (shared macro or tooling change)"
+            ]
+            continue
+        lines: "list[str]" = []
+        for commit in commits:
+            try:
+                lines.append(
+                    commit_line(commit, repo_slug, cached_lookup if lookup else None)
+                )
+            except (Exception, SystemExit) as exc:
+                print(
+                    f"warning: pull request lookup failed: {exc}; "
+                    "commits are listed without links",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                lookup = None
+                lines.append(commit_line(commit, repo_slug, None))
+        notes[key] = lines
+    return notes
+
+
 def _version_counter(versrel: str) -> str:
     """Render ``<upstream version>-<source-commit counter>`` of a versrel."""
     version, counter = split_versrel(versrel)
@@ -2333,8 +2440,12 @@ def _build_changelog_section(
             lines += ["#### Version updates"] + version_updates + [""]
         if packaging_updates:
             lines += ["#### Packaging updates"] + packaging_updates + [""]
-    else:
+    elif not added and not removed:
         lines += ["- Rebuild only: no version or packaging changes.", ""]
+    else:
+        # Added/Removed only: leave Changed empty.  Nothing following it means
+        # the section ends with the heading and a blank line.
+        lines += [""] if removed or security_lines else ["", ""]
     if removed:
         lines += ["### Removed"] + removed + [""]
     if security_lines:
@@ -3033,6 +3144,14 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         except Exception as exc:  # belt and braces: the scan must never kill a cut
             print(f"warning: CVE scan failed: {exc}", flush=True)
 
+    _print_pending("collecting packaging commits for CHANGELOG")
+    packaging_notes = _packaging_notes(
+        _packaging_changed_keys(source_versions, release_versions),
+        source_path,
+        _previous_source_commit(new_entries),
+        source_commit,
+        repo_slug_from_url(repo_url) if repo_url else None,
+    )
     changelog_section = _build_changelog_section(
         release_id,
         source_versions,
@@ -3042,6 +3161,7 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         release_container_pkgs=release_container_pkgs or None,
         prev_release_id=prev_release_id,
         security_lines=security_lines,
+        packaging_notes=packaging_notes,
     )
 
     # Build release.yaml content.

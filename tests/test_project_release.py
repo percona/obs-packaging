@@ -2000,3 +2000,105 @@ def test_packaging_changed_keys():
         {"a": "1.0-1.9", "b": "1.0-1.1", "c": "1.0-1.1"},
     ) == ["a"]
     assert cmd_project._packaging_changed_keys({"a": "1.0-2.1"}, None) == []
+
+
+def test_changelog_no_rebuild_only_line_when_packages_added(tmp_path):
+    section = cmd_project._build_changelog_section(
+        "17.12-1", {"newpkg": "1.0-1.1"}, {}, tmp_path
+    )
+    assert "- newpkg: add upstream version 1.0" in section
+    assert "Rebuild only" not in section
+    assert "### Changed\n\n" in section
+
+
+def _notes_tree(tmp_path, monkeypatch):
+    monkeypatch.setattr(cmd_project, "_REPO_DIR", tmp_path)
+    src = tmp_path / "root" / "ppg" / "staging" / "17"
+    (tmp_path / "root" / "ppg" / "_shared" / "percona-pgaudit").mkdir(parents=True)
+    src.mkdir(parents=True)
+    (src / "percona-pgaudit").symlink_to("../../_shared/percona-pgaudit")
+    (src / "extras" / "h3").mkdir(parents=True)
+    return src
+
+
+def test_packaging_notes_paths_and_lines(tmp_path, monkeypatch):
+    src = _notes_tree(tmp_path, monkeypatch)
+    calls = []
+
+    def run_git(args):
+        calls.append(args)
+        return (
+            ("a" * 40 + "\x00fix it\x1e")
+            if "root/ppg/_shared/percona-pgaudit" in args
+            else ""
+        )
+
+    notes = cmd_project._packaging_notes(
+        ["h3 (extras)", "percona-pgaudit"],
+        src,
+        "PREV",
+        "NEW",
+        "o/r",
+        run_git=run_git,
+        pr_lookup=lambda sha: (5, "https://github.com/o/r/pull/5"),
+    )
+    assert notes == {
+        "h3 (extras)": [
+            "  - no package-level commits (shared macro or tooling change)"
+        ],
+        "percona-pgaudit": ["  - fix it ([#5](https://github.com/o/r/pull/5))"],
+    }
+    assert calls[0][-2:] == ["--", "root/ppg/staging/17/extras/h3"]
+    assert calls[1][-3:] == [
+        "--",
+        "root/ppg/staging/17/percona-pgaudit",
+        "root/ppg/_shared/percona-pgaudit",
+    ]
+    assert calls[0][4] == "PREV..NEW"
+
+
+def test_packaging_notes_none_without_previous_commit(tmp_path, monkeypatch):
+    src = _notes_tree(tmp_path, monkeypatch)
+    assert (
+        cmd_project._packaging_notes(["percona-pgaudit"], src, None, "NEW", "o/r")
+        is None
+    )
+
+
+def test_packaging_notes_lookup_failure_warns_once(tmp_path, monkeypatch, capsys):
+    src = _notes_tree(tmp_path, monkeypatch)
+    lookups = []
+
+    def boom(sha):
+        lookups.append(sha)
+        raise SystemExit("error: gh api failed")
+
+    notes = cmd_project._packaging_notes(
+        ["percona-pgaudit"],
+        src,
+        "PREV",
+        "NEW",
+        "o/r",
+        run_git=lambda args: "a" * 40 + "\x00one\x1e" + "b" * 40 + "\x00two\x1e",
+        pr_lookup=boom,
+    )
+    assert notes == {"percona-pgaudit": ["  - one", "  - two"]}
+    assert len(lookups) == 1
+    assert capsys.readouterr().err.count("warning:") == 1
+
+
+def test_previous_source_commit_on_refresh():
+    from percona_obs.release_record import ReleaseEntry
+
+    entries = [
+        ReleaseEntry("ppg/17.12-1", "aaa"),
+        ReleaseEntry("ppg/17.12-2", "bbb"),  # the open entry being refreshed
+    ]
+    assert cmd_project._previous_source_commit(entries) == "aaa"
+    assert cmd_project._previous_source_commit(entries[:1]) is None
+    assert (
+        cmd_project._previous_source_commit(
+            [ReleaseEntry("ppg/17.11-1"), ReleaseEntry("ppg/17.12-1", "ccc")]
+        )
+        is None
+    )
