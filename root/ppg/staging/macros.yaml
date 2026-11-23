@@ -30,3 +30,7 @@
 # pinned version.
 - SCM_VERSIONFORMAT:
 - SET_VERSION_DEB_MODE: disabled
+# Epoch prefix of the percona-postgresql-common binaries, used in the
+# relations that package declares on its own postgresql-common.  Devel
+# empties it: the buildtime set_version step there drops the epoch.
+- POSTGRESQL_COMMON_DEB_EPOCH: 1:
