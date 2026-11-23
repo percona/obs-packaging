@@ -444,7 +444,6 @@ def scan_release_cves(
     *,
     fetcher: "_Fetcher | None" = None,
     run_git: "_RunGit | None" = None,
-    has_container_images: bool = False,
 ) -> ScanResult:
     """Best-effort CVE scan across changed packages + the Go toolchain delta.
 
@@ -511,7 +510,5 @@ def scan_release_cves(
         )
     for key, reason in unscanned:
         lines.append(f"- Not scanned: {key} ({reason})")
-    if has_container_images:
-        lines.append("- UBI base-image package CVEs are not covered by this scan.")
 
     return ScanResult(lines=lines, clean=clean, unscanned=unscanned)

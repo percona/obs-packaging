@@ -2102,3 +2102,100 @@ def test_previous_source_commit_on_refresh():
         )
         is None
     )
+
+
+def _dash_fetcher(by_project):
+    import json
+    from urllib.parse import parse_qs, urlparse
+
+    seen = []
+
+    def fetcher(url):
+        q = parse_qs(urlparse(url).query)
+        seen.append((q["project"][0], q["package"][0]))
+        return json.dumps(by_project.get(q["project"][0], []))
+
+    return fetcher, seen
+
+
+_FINDING = {
+    "id": "CVE-1",
+    "pkg": "zlib",
+    "installed": "1.2-1.el9",
+    "fixed": "",
+    "severity": "HIGH",
+}
+_PKGS = {"img (ubi9)": {"gosu": "1.19-5.4.el9"}}
+
+
+def test_image_cve_security_lines_diff(capsys):
+    fetcher, seen = _dash_fetcher(
+        {
+            "ppg:releases:17:containers": [
+                {"repo": "ubi9", "arch": "x86_64", "findings": [_FINDING]}
+            ],
+            "ppg:staging:17:containers": [
+                {"repo": "ubi9", "arch": "x86_64", "scanned_at": "2026-11-23T11:09:04Z"}
+            ],
+        }
+    )
+    lines = cmd_project._image_cve_security_lines(
+        "ppg:staging:17",
+        "ppg:releases:17",
+        ["containers"],
+        _PKGS,
+        _PKGS,
+        "https://dash.example",
+        fetcher=fetcher,
+    )
+    assert lines == [
+        "- img (ubi9) [container image]: fixes 1 HIGH CVE\n  - zlib 1.2-1.el9: CVE-1"
+    ]
+    assert sorted(seen) == [
+        ("ppg:releases:17:containers", "img"),
+        ("ppg:staging:17:containers", "img"),
+    ]
+    assert "2026-11-23T11:09:04Z" in capsys.readouterr().out
+
+
+def test_image_cve_security_lines_url_unset():
+    assert cmd_project._image_cve_security_lines(
+        "ppg:staging:17", "ppg:releases:17", ["containers"], _PKGS, _PKGS, None
+    ) == ["- Container image CVEs not scanned (OBS_DASHBOARD_URL not set)."]
+
+
+def test_image_cve_security_lines_no_common_images_no_request():
+    def fetcher(url):
+        raise AssertionError("no request expected")
+
+    assert (
+        cmd_project._image_cve_security_lines(
+            "ppg:staging:17",
+            "ppg:releases:17",
+            ["containers"],
+            _PKGS,
+            {},
+            "https://dash.example",
+            fetcher=fetcher,
+        )
+        == []
+    )
+
+
+def test_image_cve_security_lines_dashboard_error(capsys):
+    def fetcher(url):
+        raise OSError("connection refused")
+
+    lines = cmd_project._image_cve_security_lines(
+        "ppg:staging:17",
+        "ppg:releases:17",
+        ["containers"],
+        _PKGS,
+        _PKGS,
+        "https://dash.example",
+        fetcher=fetcher,
+    )
+    assert lines == [
+        "- Container image CVEs not scanned (dashboard error: connection refused)"
+    ]
+    assert "warning:" in capsys.readouterr().err

@@ -3,6 +3,7 @@ import concurrent.futures
 import datetime
 import json
 import difflib
+import os
 import re
 import shutil
 import subprocess
@@ -81,7 +82,13 @@ from .cmd_build import (
     _fetch_pkg_versrel,
     _fetch_versrel_from_history,
 )
-from .cve_scan import ChangedPackage, _default_run_git, scan_release_cves
+from .cve_scan import (
+    ChangedPackage,
+    _default_fetcher,
+    _default_run_git,
+    scan_release_cves,
+)
+from .image_cves import Fetcher, Finding, fetch_scans, findings_by_repo, image_cve_lines
 from .obs_versions import (
     VersionConflict,
     agreed_version,
@@ -2910,6 +2917,60 @@ def _merge_release_obs_data(parts: "list[_ReleaseObsData]") -> _ReleaseObsData:
     )
 
 
+def _image_cve_security_lines(
+    source_project: str,
+    release_project: str,
+    container_subs: "list[str]",
+    source_container_pkgs: "dict[str, dict[str, str]]",
+    release_container_pkgs: "dict[str, dict[str, str]]",
+    dashboard_url: "str | None",
+    *,
+    fetcher: "Fetcher | None" = None,
+) -> "list[str]":
+    """Security entries for container images, from obs-dashboard CVE scans.
+
+    Projects are named without the instance root.  Only images present on
+    both sides are compared.  Any dashboard failure yields a single
+    "not scanned" line instead of raising.
+    """
+    keys = sorted(set(source_container_pkgs) & set(release_container_pkgs))
+    if not keys:
+        return []
+    if not dashboard_url:
+        return ["- Container image CVEs not scanned (OBS_DASHBOARD_URL not set)."]
+    fetch = fetcher or _default_fetcher
+    image_pkgs = sorted({k.rsplit(" (", 1)[0] for k in keys})
+
+    def collect(project: str, announce: bool) -> "dict[str, set[Finding]]":
+        found: "dict[str, set[Finding]]" = {}
+        for sub in container_subs:
+            sub_project = f"{project}:{sub}"
+            for pkg in image_pkgs:
+                rows = fetch_scans(dashboard_url, sub_project, pkg, fetch)
+                for repo, findings in findings_by_repo(rows).items():
+                    label = _container_changelog_label(sub_project, repo, project)
+                    found.setdefault(f"{pkg} ({label})", set()).update(findings)
+                if announce:
+                    for row in rows:
+                        label = _container_changelog_label(
+                            sub_project, row.get("repo", ""), project
+                        )
+                        print(
+                            f"  scan: {pkg} ({label}) {row.get('arch', '')} "
+                            f"scanned_at {row.get('scanned_at', '')}",
+                            flush=True,
+                        )
+        return found
+
+    try:
+        previous = collect(release_project, False)
+        candidate = collect(source_project, True)
+    except Exception as exc:
+        print(f"warning: container image CVE scan failed: {exc}", file=sys.stderr)
+        return [f"- Container image CVEs not scanned (dashboard error: {exc})"]
+    return image_cve_lines(keys, previous, candidate, source_container_pkgs)
+
+
 def cmd_project_release_units(args: argparse.Namespace) -> None:
     """Print every releasable staging unit as JSON (git tree only)."""
     sys.stdout.write(json.dumps(list_release_units(), indent=2) + "\n")
@@ -3133,14 +3194,26 @@ def cmd_project_release(args: argparse.Namespace) -> None:
                 source_versions, release_versions, source_path
             )
             scan_result = scan_release_cves(
-                changed_pkgs,
-                source_path,
-                prev_tag_for_scan,
-                has_container_images=bool(container_subs),
+                changed_pkgs, source_path, prev_tag_for_scan
             )
             security_lines = scan_result.lines or None
         except Exception as exc:  # belt and braces: the scan must never kill a cut
             print(f"warning: CVE scan failed: {exc}", flush=True)
+        _print_pending("scanning container images for fixed CVEs")
+        try:
+            image_lines = _image_cve_security_lines(
+                args.project,
+                release_project,
+                container_subs,
+                source_container_pkgs,
+                release_container_pkgs,
+                release_env.get("OBS_DASHBOARD_URL")
+                or os.environ.get("OBS_DASHBOARD_URL"),
+            )
+        except Exception as exc:  # belt and braces: the scan must never kill a cut
+            print(f"warning: container image CVE scan failed: {exc}", flush=True)
+            image_lines = []
+        security_lines = [*(security_lines or []), *image_lines] or None
 
     _print_pending("collecting packaging commits for CHANGELOG")
     packaging_notes = _packaging_notes(
