@@ -134,6 +134,9 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          # obs-dashboard base URL: `project release` reads the container image
+          # CVE scans from it for the CHANGELOG Security section.
+          OBS_DASHBOARD_URL: ${{ vars.OBS_DASHBOARD_URL || 'https://dashboard.obs.pg.labs.percona.com' }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
