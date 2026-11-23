@@ -1456,8 +1456,23 @@ error. `project release <source-project>` does the following:
    release number), each with the packaging commits that touched it. Packages that were only
    rebuilt are not listed. The commits come from
    `git log <previous source_commit>..<source_commit>` limited to the package's source
-   directory, and each is linked to its pull request through `gh`. An empty section is left as
-   a single blank entry. Container image CVE fixes are listed under `### Security` (see below).
+   directory, and each is linked to its pull request through `gh`. When a release changes
+   nothing at all (no added, removed, version or packaging entries), `### Changed` holds the
+   single line `- Rebuild only: no version or packaging changes.`; when only packages or
+   images were added or removed, `### Changed` is left empty.
+
+   A container image can appear in both subsections: `added:` / `updated:` / `removed:` items
+   under Version updates, and `repackaged:` items under Packaging updates; an image whose
+   packages were only rebuilt gets no entry. A packaging update with no commit touching the
+   package directory in the range carries `- no package-level commits (shared macro or
+   tooling change)`. When the previous release entry in `release.yaml` has no
+   `source_commit`, packaging lines carry the counter change only, without commits.
+
+   With `--also-profile`, a package or image whose previous release lives on another OBS
+   instance is compared by upstream version only, because revision counters are per
+   instance; the cut prints a warning saying how many such packages and images there are.
+
+   Container image CVE fixes are listed under `### Security` (see below).
 
    ```markdown
    ### Changed

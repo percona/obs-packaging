@@ -2199,3 +2199,74 @@ def test_image_cve_security_lines_dashboard_error(capsys):
         "- Container image CVEs not scanned (dashboard error: connection refused)"
     ]
     assert "warning:" in capsys.readouterr().err
+
+
+def test_merge_release_obs_data_marks_cross_instance_keys():
+    boo = cmd_project._ReleaseObsData(
+        source_versions={"a": "1.0-2.1"},
+        release_versions={"a": "1.0-1.1", "h3": "4.5.0-9.1"},
+        source_container_pkgs={},
+        release_container_pkgs={"img (ubi9)": {"gosu": "1.19-9.1.el9"}},
+    )
+    labs = cmd_project._ReleaseObsData(
+        source_versions={"h3": "4.5.0-2.1"},
+        release_versions=None,
+        source_container_pkgs={"img (ubi9)": {"gosu": "1.19-2.1.el9"}},
+        release_container_pkgs={},
+    )
+    merged = cmd_project._merge_release_obs_data([boo, labs])
+    assert merged.cross_instance_versions == {"h3"}
+    assert merged.cross_instance_containers == {"img (ubi9)"}
+
+
+def test_changelog_version_only_keys_skip_counter_comparison(tmp_path):
+    section = cmd_project._build_changelog_section(
+        "17.12-2",
+        {"h3": "4.5.0-2.1", "etcd": "3.5.36-1.1", "a": "1.0-2.1"},
+        {"h3": "4.5.0-9.1", "etcd": "3.5.35-7.1", "a": "1.0-1.1"},
+        tmp_path,
+        source_container_pkgs={
+            "img (ubi9)": {"gosu": "1.19-2.1.el9", "curl": "8.24.0-1.1.el9"}
+        },
+        release_container_pkgs={
+            "img (ubi9)": {"gosu": "1.19-9.1.el9", "curl": "8.23.0-3.1.el9"}
+        },
+        prev_release_id="17.12-1",
+        version_only_keys={"h3", "etcd", "img (ubi9)"},
+    )
+    assert "- etcd: update upstream version 3.5.36" in section
+    assert "h3" not in section
+    assert "- a: 1.0-1 → 1.0-2" in section
+    assert "  - updated: curl 8.23.0 → 8.24.0" in section
+    assert "gosu" not in section
+    assert "repackaged" not in section
+
+
+def test_packaging_changed_keys_excludes_version_only():
+    assert cmd_project._packaging_changed_keys(
+        {"a": "1.0-2.1", "b": "1.0-2.1"},
+        {"a": "1.0-1.1", "b": "1.0-1.1"},
+        {"b"},
+    ) == ["a"]
+
+
+def test_packaging_notes_git_failure_warns_once(tmp_path, monkeypatch, capsys):
+    src = _notes_tree(tmp_path, monkeypatch)
+    calls = []
+
+    def run_git(args):
+        calls.append(args)
+        raise RuntimeError("bad revision PREV")
+
+    notes = cmd_project._packaging_notes(
+        ["h3 (extras)", "percona-pgaudit"],
+        src,
+        "PREV",
+        "NEW",
+        "o/r",
+        run_git=run_git,
+        pr_lookup=lambda sha: None,
+    )
+    assert notes == {}
+    assert len(calls) == 1
+    assert capsys.readouterr().err.count("warning:") == 1
