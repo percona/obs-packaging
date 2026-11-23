@@ -1,0 +1,5 @@
+project: ppg:staging:18:extras
+releases:
+- source_commit: 1982a48bab0a660989f1eb0501666d8c691fb4e7
+  tag: ppg/extras-18.7-2
+repository: ${PERCONA_OBS_PACKAGING_REPO}
