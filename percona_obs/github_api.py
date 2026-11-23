@@ -78,3 +78,12 @@ def last_synced_head_sha(
         f"with successful sync jobs{leg} in the last {max_runs} runs; "
         "pass --source-commit explicitly"
     )
+
+
+def commit_pull_request(repo_slug: str, sha: str) -> "tuple[int, str] | None":
+    """Return ``(number, url)`` of the PR a commit landed through, or None."""
+    pulls = _gh_api_json(f"repos/{repo_slug}/commits/{sha}/pulls")
+    if not pulls:
+        return None
+    pr = next((p for p in pulls if p.get("merged_at")), pulls[0])
+    return pr["number"], pr["html_url"]

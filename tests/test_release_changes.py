@@ -1,5 +1,11 @@
 import pytest
-from percona_obs.release_changes import classify_change, split_versrel
+from percona_obs.release_changes import (
+    CommitRef,
+    classify_change,
+    commit_line,
+    packaging_commits,
+    split_versrel,
+)
 
 
 @pytest.mark.parametrize(
@@ -37,3 +43,54 @@ def test_split_versrel(versrel, expected):
 )
 def test_classify_change(old, new, kind):
     assert classify_change(old, new) == kind
+
+
+def test_packaging_commits_parses_git_log():
+    seen = []
+
+    def run_git(args):
+        seen.append(args)
+        return "a" * 40 + "\x00first\x1e\n" + "b" * 40 + "\x00second\x1e\n"
+
+    commits = packaging_commits("P", "N", ["root/x/pkg", "root/_shared/pkg"], run_git)
+    assert commits == [CommitRef("a" * 40, "first"), CommitRef("b" * 40, "second")]
+    assert seen == [
+        [
+            "log",
+            "--no-merges",
+            "--reverse",
+            "--format=%H%x00%s%x1e",
+            "P..N",
+            "--",
+            "root/x/pkg",
+            "root/_shared/pkg",
+        ]
+    ]
+
+
+def test_packaging_commits_empty_output():
+    assert packaging_commits("P", "N", ["p"], lambda args: "") == []
+
+
+def test_commit_line_with_pr():
+    c = CommitRef("a" * 40, "PG-2955 percona-pgaudit<N>-llvmjit is not installable")
+    line = commit_line(c, "o/r", lambda sha: (310, "https://github.com/o/r/pull/310"))
+    assert line == (
+        "  - PG-2955 percona-pgaudit\\<N>-llvmjit is not installable "
+        "([#310](https://github.com/o/r/pull/310))"
+    )
+
+
+def test_commit_line_without_pr_links_commit():
+    c = CommitRef("abcdef1234" + "0" * 30, "direct push")
+    assert commit_line(c, "o/r", lambda sha: None) == (
+        "  - direct push ([abcdef1](https://github.com/o/r/commit/abcdef1234"
+        + "0" * 30
+        + "))"
+    )
+
+
+def test_commit_line_lookup_disabled():
+    c = CommitRef("a" * 40, "subject")
+    assert commit_line(c, "o/r", None) == "  - subject"
+    assert commit_line(c, None, lambda sha: (1, "u")) == "  - subject"
