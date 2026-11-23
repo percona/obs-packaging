@@ -3,12 +3,17 @@
 A ``versrel`` string is ``<upstream version>-<release>``.  The release holds
 a source-commit counter followed by OBS build counters: RPM ``4.2.el9``,
 deb ``7.5`` or ``6+7.3.bookworm`` (the text after ``+`` is the counter).
+openSUSE Leap puts a distribution tag first: ``lp160.3.1`` has counter ``3``.
 """
 
+import re
 from dataclasses import dataclass
 from typing import Callable, Literal
 
 ChangeKind = Literal["version", "packaging", "rebuild"]
+
+# openSUSE Leap / Backports release prefix (``lp160.``, ``bp160.``).
+_SUSE_DIST_PREFIX_RE = re.compile(r"^(?:lp|bp)\d+\.")
 
 
 def split_versrel(versrel: str) -> "tuple[str, str | None]":
@@ -18,6 +23,7 @@ def split_versrel(versrel: str) -> "tuple[str, str | None]":
         return version, None
     if "+" in release:
         release = release.rsplit("+", 1)[1]
+    release = _SUSE_DIST_PREFIX_RE.sub("", release)
     return version, release.split(".")[0]
 
 
