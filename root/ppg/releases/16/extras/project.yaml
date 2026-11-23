@@ -1,7 +1,9 @@
 build: false
-description: 'Extras subproject for ppg:releases:16.
+description: 'Release project for ppg:staging:16:extras (OBS project ppg:releases:16:extras).
 
-  Builds are disabled; binaries are copied via osc release.
+  Binaries are populated by osc release and builds are disabled.
+
+  This project is read-only — do not add or edit packages directly.
 
   '
 project-config: '# --- from root/project.yaml ---
@@ -69,15 +71,17 @@ project-config: '# --- from root/project.yaml ---
   %endif
 
 
-  %if "%_repository" == "UBI_10"
+  %if "%_repository" == "UBI_9" || "%_repository" == "UBI_10"
 
   # RHEL 10 appstream ships llvm-libs 21 and EPEL 10 ships llvm21-libs; both
 
   # provide libLLVM.so.21.1, so OBS reports "have choice" for rust (seen on
 
-  # common:deps:build/cargo-pgrx-*). Prefer the distro package, as the
+  # common:deps:build/cargo-pgrx-*). UBI 9 appstream moved to llvm-libs 21
 
-  # RockyLinux_9.6 block above does.
+  # too (2026-11), clashing with EPEL 9''s llvm21-libs for annobin. Prefer
+
+  # the distro package, as the RockyLinux_9.6 block above does.
 
   Prefer: llvm-libs
 
@@ -112,6 +116,23 @@ project-config: '# --- from root/project.yaml ---
   # Ubuntu: ppg:common:deps/curl is not built there.)
 
   Prefer: libcurl4t64
+
+  %endif
+
+
+  %if "%_repository" == "openSUSE_Leap_16"
+
+  # openSUSE:Backports:SLE-16.0 ships LLVM 21 and shadows the SLFO llvm/clang
+
+  # meta packages and clang-tools, but the Leap prjconf still lists only the
+
+  # SLFO compilers (clang15 clang17 clang19) as /usr/bin/clang providers, so
+
+  # clang-tools 21 is unresolvable ("have choice for /usr/bin/clang"). A
+
+  # FileProvides line replaces the inherited one for the same path.
+
+  FileProvides: /usr/bin/clang clang21
 
   %endif
 
@@ -210,6 +231,37 @@ project-config: '# --- from root/project.yaml ---
   %endif
 
 
+  # An arch-independent binary (noarch.rpm, _all.deb) and the source RPM are
+
+  # built once per architecture with different bytes, and OBS publishes one
+
+  # copy under a single file name.  Which copy wins depends on which
+
+  # architecture''s scheduler fills its publish directory first after
+
+  # publishing resumes (a release copy holds and resumes it), and the choice
+
+  # then sticks.  A repopulate can therefore swap the bytes behind an
+
+  # unchanged URL, and download CDNs keep serving the old bytes: dnf/apt fail
+
+  # with "Cannot download" / "File has unexpected size".
+
+  # Never hand the aarch64 copy to the publisher, so the published one is
+
+  # always the x86_64 build.  aarch64 still builds these packages for its own
+
+  # dependents.  OBS honours a single PublishFilter line per configuration:
+
+  # add patterns to this line, never a second line.
+
+  %ifarch aarch64
+
+  PublishFilter: \.noarch\.rpm$ \.src\.rpm$ _all\.deb$
+
+  %endif
+
+
   # --- from root/ppg/staging/16/project.yaml ---
 
   %if "%_repository" == "openSUSE_Tumbleweed" || "%_repository" == "openSUSE_Leap_16"
@@ -262,25 +314,17 @@ project-config: '# --- from root/project.yaml ---
 
   Prefer: hdf-libs
 
-  %endif
-
-  '
+  %endif'
 repositories:
 - archs:
   - x86_64
   - aarch64
   name: UBI_9
   paths:
-  - repository: UBI_9
-    subproject: ppg:common:deps
-  - repository: UBI_9
-    subproject: common:deps:build
-  - repository: UBI_9
-    subproject: ppg:releases:16
   - project: Fedora:EPEL:9
     repository: standard
   - project: RedHat:UBI-9
     repository: standard
   - project: RockyLinux:9
     repository: devel
-title: ppg releases 16 — extras
+title: ppg releases 16:extras
