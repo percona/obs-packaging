@@ -124,7 +124,11 @@ from .release_changes import (
     RunGit,
     classify_change,
     commit_line,
+    flavor_list,
+    group_image_keys,
+    merge_flavor_items,
     packaging_commits,
+    split_image_key,
     split_versrel,
 )
 
@@ -2401,46 +2405,56 @@ def _build_changelog_section(
         if release_container_pkgs:
             all_containers |= set(release_container_pkgs.keys())
 
-        for ctr in sorted(all_containers):
-            src_pkgs = source_container_pkgs.get(ctr)
-            rel_pkgs = (release_container_pkgs or {}).get(ctr)
-
-            if src_pkgs is None:
-                # Container removed.
-                prev_ver = prev_release_id or "?"
-                removed.append(f"- {ctr} [container image]: remove image {prev_ver}")
-            elif rel_pkgs is None:
-                # Container added — list all installed packages.
-                entry_lines = [f"- {ctr} [container image]: add image {release_id}"]
-                for p, v in sorted(src_pkgs.items()):
-                    entry_lines.append(f"  - {p} {v}")
-                added.append("\n".join(entry_lines))
-            else:
-                # Container changed — diff installed package lists.
-                added_pkgs = sorted(p for p in src_pkgs if p not in rel_pkgs)
-                removed_pkgs = sorted(p for p in rel_pkgs if p not in src_pkgs)
-                common_pkgs = [p for p in sorted(src_pkgs) if p in rel_pkgs]
-                kinds = {
-                    p: classify_change(rel_pkgs[p], src_pkgs[p]) for p in common_pkgs
-                }
-                version_pkgs = [p for p in common_pkgs if kinds[p] == "version"]
-                prev_ver = prev_release_id or "?"
+        # The flavors of an image (ubi8, ubi9, ...) share one entry; each
+        # sub-item is tagged with the flavors it applies to.
+        prev_ver = prev_release_id or "?"
+        for image, image_keys in group_image_keys(all_containers).items():
+            removed_flavors: list[str] = []
+            added_items: dict[str, list[tuple[str, str]]] = {}
+            version_items: dict[str, list[tuple[str, str]]] = {}
+            for ctr in image_keys:
+                flavor = split_image_key(ctr)[1]
+                src_pkgs = source_container_pkgs.get(ctr)
+                rel_pkgs = (release_container_pkgs or {}).get(ctr)
+                if src_pkgs is None:
+                    removed_flavors.append(flavor)
+                elif rel_pkgs is None:
+                    # Image added: list all installed packages.
+                    added_items[flavor] = [
+                        (p, f"{p} {v}") for p, v in sorted(src_pkgs.items())
+                    ]
+                else:
+                    # Image changed: diff installed package lists.  Repackaged
+                    # and rebuilt packages are not listed: the top-level
+                    # packaging entries carry them, with the reason.
+                    items: list[tuple[str, str]] = []
+                    for p in sorted(src_pkgs):
+                        if p not in rel_pkgs:
+                            items.append((p, f"added: {p} {src_pkgs[p]}"))
+                        elif classify_change(rel_pkgs[p], src_pkgs[p]) == "version":
+                            old_v = split_versrel(rel_pkgs[p])[0]
+                            new_v = split_versrel(src_pkgs[p])[0]
+                            items.append((p, f"updated: {p} {old_v} → {new_v}"))
+                    for p in sorted(rel_pkgs):
+                        if p not in src_pkgs:
+                            items.append((p, f"removed: {p}"))
+                    if items:
+                        version_items[flavor] = items
+            if removed_flavors:
+                tag = flavor_list(removed_flavors)
+                name = f"{image} ({tag})" if tag else image
+                removed.append(f"- {name} [container image]: remove image {prev_ver}")
+            if added_items:
+                header = f"- {image} [container image]: add image {release_id}"
+                added.append("\n".join([header, *merge_flavor_items(added_items)]))
+            if version_items:
                 header = (
-                    f"- {ctr} [container image]: update image {prev_ver} → {release_id}"
+                    f"- {image} [container image]: "
+                    f"update image {prev_ver} → {release_id}"
                 )
-                version_lines: list[str] = []
-                for p in added_pkgs:
-                    version_lines.append(f"  - added: {p} {src_pkgs[p]}")
-                for p in version_pkgs:
-                    old_v = split_versrel(rel_pkgs[p])[0]
-                    new_v = split_versrel(src_pkgs[p])[0]
-                    version_lines.append(f"  - updated: {p} {old_v} → {new_v}")
-                for p in removed_pkgs:
-                    version_lines.append(f"  - removed: {p}")
-                # Repackaged and rebuilt packages of an image are not listed:
-                # the top-level packaging entries carry them, with the reason.
-                if version_lines:
-                    version_updates.append("\n".join([header, *version_lines]))
+                version_updates.append(
+                    "\n".join([header, *merge_flavor_items(version_items)])
+                )
 
     todo = "<!-- TODO: fill in manually -->"
     if not source_versions:

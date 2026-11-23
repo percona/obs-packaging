@@ -1,5 +1,9 @@
 import pytest
 from percona_obs.release_changes import (
+    flavor_list,
+    group_image_keys,
+    merge_flavor_items,
+    split_image_key,
     CommitRef,
     classify_change,
     commit_line,
@@ -98,3 +102,60 @@ def test_commit_line_lookup_disabled():
     c = CommitRef("a" * 40, "subject")
     assert commit_line(c, "o/r", None) == "  - subject"
     assert commit_line(c, None, lambda sha: (1, "u")) == "  - subject"
+
+
+def test_split_image_key():
+    assert split_image_key("img (ubi9)") == ("img", "ubi9")
+    assert split_image_key("img (extras/ubi9)") == ("img", "extras/ubi9")
+    assert split_image_key("img") == ("img", "")
+
+
+def test_group_image_keys_natural_flavor_order():
+    grouped = group_image_keys(["b (ubi9)", "a (ubi10)", "a (ubi8)", "a (ubi9)"])
+    assert grouped == {"a": ["a (ubi8)", "a (ubi9)", "a (ubi10)"], "b": ["b (ubi9)"]}
+
+
+def test_flavor_list_natural_order():
+    assert flavor_list(["ubi10", "ubi8", "ubi9", "ubi8"]) == "ubi8, ubi9, ubi10"
+    assert flavor_list([""]) == ""
+
+
+def test_merge_flavor_items_merges_identical_lines():
+    lines = merge_flavor_items(
+        {
+            "ubi10": [("pgaudit", "updated: pgaudit 17.1 → 17.2")],
+            "ubi8": [
+                ("pgaudit", "updated: pgaudit 17.1 → 17.2"),
+                ("dns", "updated: dns 2.9.0 → 2.9.2"),
+            ],
+            "ubi9": [
+                ("pgaudit", "updated: pgaudit 17.1 → 17.2"),
+                ("dns", "updated: dns 2.9.0 → 2.9.2"),
+            ],
+        }
+    )
+    assert lines == [
+        "  - [ubi8, ubi9] updated: dns 2.9.0 → 2.9.2",
+        "  - [ubi8, ubi9, ubi10] updated: pgaudit 17.1 → 17.2",
+    ]
+
+
+def test_merge_flavor_items_same_package_ordered_by_flavor():
+    lines = merge_flavor_items(
+        {
+            "ubi10": [("expat", "expat 2.7-2.el10: CVE-1")],
+            "ubi8": [("expat", "expat 2.5-6.el8: CVE-1")],
+            "ubi9": [("expat", "expat 2.5-9.el9: CVE-1")],
+        }
+    )
+    assert lines == [
+        "  - [ubi8] expat 2.5-6.el8: CVE-1",
+        "  - [ubi9] expat 2.5-9.el9: CVE-1",
+        "  - [ubi10] expat 2.7-2.el10: CVE-1",
+    ]
+
+
+def test_merge_flavor_items_without_flavor_has_no_tag():
+    assert merge_flavor_items({"": [("zlib", "zlib 1.2: CVE-1")]}) == [
+        "  - zlib 1.2: CVE-1"
+    ]
