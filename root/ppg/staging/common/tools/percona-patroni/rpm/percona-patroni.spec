@@ -111,7 +111,6 @@ caveats. Use wisely.
 %package -n %{name}-consul
 Summary:        Related components to use patroni with Consul
 Requires:        %{name} = %{epoch}:%{version}-%{release}
-Requires:        consul
 Requires:        %{python3_pkgprefix}-py-consul >= 1.6.0
 %if 0%{?fedora} && 0%{?fedora} <= 44
 Requires:        python3-requests
