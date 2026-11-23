@@ -76,6 +76,20 @@ def test_packaging_commits_parses_git_log():
     ]
 
 
+def test_packaging_commits_skips_devel_commits():
+    out = (
+        "a" * 40
+        + "\x00devel: build the tools from the staging packaging\x1e\n"
+        + "b" * 40
+        + "\x00devel:19: link more packages\x1e\n"
+        + "c" * 40
+        + "\x00PG-1 fix development headers\x1e\n"
+    )
+    assert packaging_commits("P", "N", ["p"], lambda args: out) == [
+        CommitRef("c" * 40, "PG-1 fix development headers")
+    ]
+
+
 def test_packaging_commits_empty_output():
     assert packaging_commits("P", "N", ["p"], lambda args: "") == []
 

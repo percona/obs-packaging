@@ -2461,7 +2461,8 @@ def _build_changelog_section(
         added = [todo]
 
     lines: list[str] = [f"## [{release_id}] - {today}", ""]
-    lines += ["### Added"] + added + [""]
+    if added:
+        lines += ["### Added"] + added + [""]
     lines += ["### Changed"]
     if not source_versions:
         lines += [todo, ""]

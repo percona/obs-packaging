@@ -1461,14 +1461,16 @@ error. `project release <source-project>` does the following:
    directory, and each is linked to its pull request through `gh`. When a release changes
    nothing at all (no added, removed, version or packaging entries), `### Changed` holds the
    single line `- Rebuild only: no version or packaging changes.`; when only packages or
-   images were added or removed, `### Changed` is left empty.
+   images were added or removed, `### Changed` is left empty. `### Added` is written only
+   when it has entries.
 
    A container image entry appears under Version updates only, with `added:` / `updated:` /
    `removed:` items for its installed packages. Packages of an image that were repackaged or
    rebuilt are not listed (the top-level packaging entries carry them, with the reason), and
    an image with no version change gets no entry. A packaging update with no commit touching the
    package directory in the range carries `- no package-level commits (shared macro or
-   tooling change)`. When the previous release entry in `release.yaml` has no
+   tooling change)`. Commits whose subject starts with `devel:` are not listed (they change
+   the devel tier, which shares the staging packaging directories). When the previous release entry in `release.yaml` has no
    `source_commit`, packaging lines carry the counter change only, without commits.
 
    With `--also-profile`, a package whose previous release lives on another OBS instance is
@@ -1541,8 +1543,6 @@ For **update releases**, only packages whose version changed appear (under `### 
 
 ```markdown
 ## [17.9-2] - 2025-04-10
-
-### Added
 
 ### Changed
 - percona-postgresql17: updated to upstream version 17.9.1 (https://www.postgresql.org/docs/release/17.9/)

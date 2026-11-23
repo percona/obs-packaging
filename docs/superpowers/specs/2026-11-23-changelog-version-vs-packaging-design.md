@@ -75,8 +75,6 @@ Comparing the previous release with the one being cut, per package:
 ```markdown
 ## [17.12-2] - 2026-11-27
 
-### Added
-
 ### Changed
 
 #### Version updates
@@ -123,6 +121,10 @@ Rules:
 - Paths: the package directory in the source tree, with symlinks resolved (a
   package linked into `_shared` is matched on both the link and its target).
 - `git log --no-merges`, oldest first, subject lines only.
+- Commits whose subject starts with `devel:` are skipped: the devel tier shares
+  the staging packaging directories, and those commits say nothing about the
+  release.
+- `### Added` is written only when it has entries.
 - If the previous release entry has no `source_commit` (plain tag string), the
   packaging line is written with the counter only and no sub-items.
 

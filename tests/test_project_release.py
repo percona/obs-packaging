@@ -1956,6 +1956,7 @@ def test_changelog_rebuild_only(tmp_path):
         prev_release_id="17.11-3",
     )
     assert "### Changed\n- Rebuild only: no version or packaging changes.\n" in section
+    assert "### Added" not in section
     assert "img (ubi9)" not in section
     assert "####" not in section
 
