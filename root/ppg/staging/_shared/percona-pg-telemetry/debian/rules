@@ -22,7 +22,13 @@ override_dh_auto_test:
 	# nothing to do here
 
 override_dh_auto_install:
-	+pg_buildext install . build-%v percona-pg-telemetry%!{PG_MAJOR_VERSION}
+	# Not pg_buildext install: it adds postgresql-NN to ${misc:Depends} when
+	# control does not use ${postgresql:Depends}, and pg-telemetry must not pull
+	# in the server. This is the same make install, without the substvars.
+	$(MAKE) -C build-%!{PG_MAJOR_VERSION} -f $(CURDIR)/Makefile install \
+		DESTDIR=$(CURDIR)/debian/percona-pg-telemetry%!{PG_MAJOR_VERSION} \
+		PG_CONFIG=/usr/lib/postgresql/%!{PG_MAJOR_VERSION}/bin/pg_config \
+		VPATH=$(CURDIR) USE_PGXS=1
 
 override_dh_installdocs:
 	dh_installdocs --all README.*
