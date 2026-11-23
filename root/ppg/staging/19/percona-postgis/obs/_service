@@ -2,8 +2,9 @@
   <service name="obs_scm">
     <param name="url">https://github.com/postgis/postgis.git</param>
     <param name="scm">git</param>
-    <param name="revision">%!{POSTGIS_VERSION}</param>
-    <param name="versionformat">@PARENT_TAG@</param>
+    <param name="revision">%!{POSTGIS_REF}</param>
+    <param name="version">%!{POSTGIS_VERSION}</param>
+    <param name="versionformat">%!{SCM_VERSIONFORMAT}</param>
     <param name="filename">percona-postgis</param>
   </service>
   <service mode="buildtime" name="tar" />
@@ -14,5 +15,8 @@
   <service mode="buildtime" name="set_version">
     <param name="basename">percona-postgis</param>
     <param name="file">percona-postgis.spec</param>
+  </service>
+  <service mode="%!{SET_VERSION_DEB_MODE}" name="set_version">
+    <param name="basename">percona-postgis</param>
   </service>
 </services>

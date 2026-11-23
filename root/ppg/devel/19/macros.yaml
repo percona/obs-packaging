@@ -16,3 +16,10 @@
 # major), so devel:19 follows the PG 19 branch rather than main.
 - PGAUDIT_VERSION: 19.0
 - PGAUDIT_REF: REL_19_STABLE
+# PostGIS follows upstream master, which is one major ahead of the release
+# staging pins: POSTGIS_MAJOR_VERSION is what master installs as (its
+# Version.config), and it has to be bumped here when master moves on.
+- POSTGIS_VERSION: 3.7.0
+- POSTGIS_REF: master
+- POSTGIS_MAJOR_VERSION: 3.8
+- POSTGIS_RPM_MAJOR: 38
