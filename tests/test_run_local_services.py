@@ -8,6 +8,7 @@ loose tarballs and dropped it from the upload.  Only Phase-1 (obs_scm)
 archives may be extracted.
 """
 
+import os
 import shutil
 import stat
 import xml.etree.ElementTree as ET
@@ -213,3 +214,70 @@ def test_manual_services_rerun_when_a_package_file_they_may_read_changes(
     with pytest.raises(SystemExit) as exc:
         _run_local_services(obs_dir, cache=True)
     assert "manual service must not run on a cache hit" in str(exc.value)
+
+
+# ── obs_scm falls back to its cache when the git remote is unreachable ───────
+
+FAIL_OBS_SCM = """#!/bin/sh
+echo "fatal: unable to access remote: 502" >&2
+exit 1
+"""
+
+
+def _warm_obs_scm_entry(cache_dir: Path, sha: str, marker: str) -> Path:
+    svc = ET.fromstring(SERVICE_XML).findall("service")[0]
+    entry = cache_dir / "obs_scm" / services._service_params_cache_key(svc) / sha
+    entry.mkdir(parents=True)
+    (entry / "foo.obsinfo").write_text(f"name: foo\ncommit: {sha}\n# {marker}\n")
+    return entry
+
+
+def test_obs_scm_restored_from_cache_when_remote_unreachable(
+    fake_services, monkeypatch
+):
+    bindir, obs_dir, cache_dir = fake_services
+    old = _warm_obs_scm_entry(cache_dir, "a" * 40, "old")
+    os.utime(old, (1, 1))
+    _warm_obs_scm_entry(cache_dir, "b" * 40, "newest")
+    _install(bindir, "obs_scm", FAIL_OBS_SCM)
+    monkeypatch.setattr(services, "_git_remote_reachable", lambda url: False)
+
+    workdir = _run_local_services(obs_dir, cache=True)
+    try:
+        # the most recently used entry wins, and obs_scm was never run
+        assert "# newest" in (workdir / "foo.obsinfo").read_text()
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+def test_obs_scm_fails_when_remote_unreachable_and_cache_cold(
+    fake_services, monkeypatch
+):
+    bindir, obs_dir, _ = fake_services
+    _install(bindir, "obs_scm", FAIL_OBS_SCM)
+    monkeypatch.setattr(services, "_git_remote_reachable", lambda url: False)
+    with pytest.raises(SystemExit) as exc:
+        _run_local_services(obs_dir, cache=True)
+    assert "502" in str(exc.value)
+
+
+def test_obs_scm_no_fallback_when_ref_missing_on_reachable_remote(
+    fake_services, monkeypatch
+):
+    # The remote answers but no longer has the revision: that is a real
+    # error, not an outage, so the stale cache must not hide it.
+    bindir, obs_dir, cache_dir = fake_services
+    _warm_obs_scm_entry(cache_dir, "a" * 40, "old")
+    _install(bindir, "obs_scm", FAIL_OBS_SCM)
+    monkeypatch.setattr(services, "_git_remote_reachable", lambda url: True)
+    with pytest.raises(SystemExit):
+        _run_local_services(obs_dir, cache=True)
+
+
+def test_obs_scm_no_fallback_with_no_cache(fake_services, monkeypatch):
+    bindir, obs_dir, cache_dir = fake_services
+    _warm_obs_scm_entry(cache_dir, "a" * 40, "old")
+    _install(bindir, "obs_scm", FAIL_OBS_SCM)
+    monkeypatch.setattr(services, "_git_remote_reachable", lambda url: False)
+    with pytest.raises(SystemExit):
+        _run_local_services(obs_dir, cache=False)

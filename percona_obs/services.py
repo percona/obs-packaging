@@ -16,6 +16,7 @@ from .common import (
     _print_ok,
     _print_pending,
     _print_same,
+    github_annotation,
     logger,
 )
 
@@ -562,6 +563,42 @@ def _remote_reference_exists(remote_url: str, ref: str) -> str | None:
         return None
 
 
+def _git_remote_reachable(url: str) -> bool:
+    """Return True when the git remote *url* answers ``git ls-remote``.
+
+    Used only after a revision failed to resolve, to tell an outage of the
+    remote (server error, DNS, timeout) from a revision that the remote
+    simply does not have.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "ls-remote", "--", url, "HEAD"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return proc.returncode == 0
+
+
+def _latest_cache_entry(key_dir: Path) -> Path | None:
+    """Return the most recently used cache entry under *key_dir*, or None.
+
+    Entry mtimes are set on store and bumped on every hit, so the newest one
+    is the output of the last successful run with these service params.
+    """
+    if not key_dir.is_dir():
+        return None
+    entries = [
+        e for e in key_dir.iterdir() if e.is_dir() and not e.name.startswith("_tmp-")
+    ]
+    if not entries:
+        return None
+    return max(entries, key=lambda e: e.stat().st_mtime)
+
+
 def _git_head_sha(url: str, revision: str) -> str | None:
     """Return the resolved commit SHA of revision on a remote git repository.
 
@@ -853,6 +890,10 @@ def _run_local_services(
                 HEAD matches a cached run; on a hit the cached files are restored
                 and the obs_scm invocation is skipped entirely.  On a miss
                 obs_scm runs normally and its output is stored to the cache.
+                When the remote is unreachable, the most recently used
+                cached output for the same service params is restored
+                instead (with a warning), so an upstream outage does not
+                fail the run; with no such entry obs_scm runs and fails.
                 download_url services are cached by their service params alone
                 (the URL fully determines the content); on a hit the download
                 is skipped, on a miss the downloaded files are stored.
@@ -1018,7 +1059,33 @@ def _run_local_services(
                         f"restored {len(cached_files)} file(s)"
                     )
                     continue
-            # Cache miss or ls-remote failed: run obs_scm then store output.
+            elif obs_url:
+                # The revision did not resolve.  When that is because the
+                # remote is down, reuse the output of the last successful run
+                # with these exact params instead of failing the whole sync:
+                # an unreachable upstream is treated as an unchanged one.
+                stale_entry = _latest_cache_entry(_OBS_SCM_CACHE_DIR / obs_key)
+                if stale_entry is not None and not _git_remote_reachable(obs_url):
+                    cached_files = _cache_entry_lookup(stale_entry)
+                    if cached_files is not None:
+                        for fname in cached_files:
+                            shutil.copy2(stale_entry / fname, workdir / fname)
+                        _print_same(
+                            f"service obs_scm  {pkg_label}  "
+                            f"(cached, remote unreachable)"
+                        )
+                        warning = (
+                            f"{pkg_label or obs_dir}: git remote {obs_url} is "
+                            f"unreachable; reusing the cached obs_scm output of "
+                            f"commit {stale_entry.name[:12]}"
+                        )
+                        logger.warning(warning)
+                        github_annotation(
+                            "warning", warning, title="upstream unreachable"
+                        )
+                        continue
+            # Cache miss, or the revision is missing on a reachable remote:
+            # run obs_scm then store output.
             generated = _run_one(svc)
             if head_sha and generated:
                 try:

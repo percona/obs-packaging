@@ -284,6 +284,19 @@ removes entries unused for 7 days, and in CI additionally by the `actions/cache`
 locally and takes several minutes (it downloads every npm tarball once; later runs hit the
 service cache).
 
+### Unreachable git remotes
+
+Before running `obs_scm`, `sync` resolves the service's revision with `git ls-remote` and
+restores the cached output for that commit when there is one. If the revision cannot be
+resolved **and the remote does not answer at all** (server error, DNS failure, timeout),
+the most recently used cached output for the same service parameters is restored instead,
+and a warning names the package and the remote (a `::warning::` annotation in CI). The
+upstream is treated as unchanged, so one upstream outage does not fail the whole sync.
+
+There is no fallback when the remote answers but lacks the revision, when no output is
+cached for those parameters yet, or with `--no-cache`: `obs_scm` runs and its failure
+aborts the sync as before.
+
 ### Building the source tarball with a package script (`source_script`)
 
 Some upstreams release a tarball that is not their git tree: a "dist" step bakes in
