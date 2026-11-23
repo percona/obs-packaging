@@ -1,6 +1,6 @@
 %undefine _debugsource_packages
 %global _build_id_links none
-%global postgismajorversion 3.7
+%global postgismajorversion %!{POSTGIS_MAJOR_VERSION}
 %global postgisminorversion 7
 %global postgissomajorversion 3
 %define pgmajorversion %!{PG_MAJOR_VERSION}

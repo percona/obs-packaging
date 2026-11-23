@@ -16,6 +16,12 @@
 - PGAUDIT_VERSION: 19.0
 - PGAUDIT_REF: %!{PGAUDIT_VERSION}
 - POSTGIS_VERSION: 3.7.0
+- POSTGIS_REF: %!{POSTGIS_VERSION}
+# The PostGIS major the server spec packages (its postgismajorversion: the
+# directory and file names upstream installs carry it) and the same without
+# the dot for the RPM names.  Bump both with POSTGIS_VERSION on a new major;
+# root/ppg/devel/19/macros.yaml carries the major of upstream master.
+- POSTGIS_MAJOR_VERSION: 3.7
 - POSTGIS_RPM_MAJOR: 37
 # pg_tde has no PG 19 tag yet: build upstream main under a pre-release
 # version that sorts below the next real release. Drop both lines once a
