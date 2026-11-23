@@ -1449,6 +1449,30 @@ error. `project release <source-project>` does the following:
    `prev → new` diffs instead of full package dumps (a full dump remains only for a true
    first release). With `--also-profile`, every instance is queried and the results are
    merged.
+
+   The `### Changed` section has two subsections. `#### Version updates` lists packages whose
+   upstream version changed, with the upstream release URL. `#### Packaging updates` lists
+   packages whose packaging changed without an upstream version change (for example a new
+   release number), each with the packaging commits that touched it. Packages that were only
+   rebuilt are not listed. The commits come from
+   `git log <previous source_commit>..<source_commit>` limited to the package's source
+   directory, and each is linked to its pull request through `gh`. An empty section is left as
+   a single blank entry. Container image CVE fixes are listed under `### Security` (see below).
+
+   ```markdown
+   ### Changed
+
+   #### Version updates
+   - percona-credcheck: update upstream version 6.0 (https://github.com/HexaCluster/credcheck/releases/tag/v6.0)
+
+   #### Packaging updates
+   - percona-pgaudit: 17.2-1 → 17.2-2
+     - PG-2955 percona-pgaudit\<N>-llvmjit is not installable on EL8/9/10 ([#310](https://github.com/percona/obs-packaging/pull/310))
+
+   ### Security
+   - percona-distribution-postgresql (ubi9) [container image]: fixes 2 HIGH CVEs
+     - krb5-libs 1.21.3-11.el9 (fix: 1.21.3-11.el9_3.2): CVE-2026-112320, CVE-2026-112321
+   ```
 7. **Appends** a `{tag, source_commit}` entry to `release.yaml`'s `releases:` list (or
    updates the open one) and prepends the new section to `CHANGELOG.md` (or replaces the
    open one's).
@@ -1526,9 +1550,19 @@ that the upstream line does not already list, as
 the commit message of a CVE bump and it reaches the changelog. The scan never blocks a
 release cut — anything it cannot resolve (unrecognized upstream, network
 failure, unrecognized tag scheme) is reported as a "Not scanned: …" line
-rather than silently dropped, and UBI base-image CVEs are explicitly flagged
-as out of scope for this scan. No `### Security` section is emitted when the
+rather than silently dropped. No `### Security` section is emitted when the
 scan produces nothing (e.g. `--no-cve-scan`, or no packages changed).
+
+Container image CVEs are read from the obs-dashboard CVE scan API
+(`/api/cve/scans`). For each image present in both the source and the release
+project, the scan of the candidate image is compared with the scan of the
+previously released one, and the CVEs the candidate no longer carries are listed
+per image with the affected package and the version that fixes it. The dashboard
+base URL is taken from `OBS_DASHBOARD_URL`, set in the profile environment or in the
+process environment. When it is unset, or the dashboard cannot be reached, a single
+"Container image CVEs not scanned" line is added instead and the cut continues. An image
+that has no dashboard scan on one side is reported as "Not scanned". `--no-cve-scan` skips
+the container image CVE lines as well as the upstream scan.
 
 ### Step 2 — CI ships the release
 

@@ -380,3 +380,8 @@ def test_build_changelog_section_no_security_when_empty_list(tmp_path):
     )
 
     assert "### Security" not in section
+
+
+def test_scan_no_longer_emits_ubi_not_covered_line(tmp_path):
+    result = scan_release_cves([], tmp_path, None, fetcher=lambda *a, **k: "")
+    assert not any("UBI base-image" in line for line in result.lines)
