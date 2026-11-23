@@ -6,6 +6,9 @@
 - PG_SOURCE_GIT_URL: https://github.com/percona/postgres.git
 - PG_SOURCE_GIT_REVISION: PSP-%!{PG_VERSION}.%!{PERCONA_PG_PATCH_VERSION}
 - PG_PACKAGE_VERSION: %!{PG_VERSION}.%!{PERCONA_PG_PATCH_VERSION}
+# The server spec's "beta" switch: 1 configures PostgreSQL with
+# --enable-debug --enable-cassert.  The devel tier builds the same spec with 1.
+- PG_SPEC_BETA: 0
 
 - PPG_IMAGE_VERSION: %!{PG_VERSION}.%!{PERCONA_PG_PATCH_VERSION}
 
