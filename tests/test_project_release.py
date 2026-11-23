@@ -1984,11 +1984,11 @@ def test_changelog_container_entries_list_version_items_only(tmp_path):
         },
         prev_release_id="17.11-5",
     )
-    header = "- img (ubi9) [container image]: update image 17.11-5 → 17.12-1"
+    header = "- img [container image]: update image 17.11-5 → 17.12-1"
     assert section.count(header) == 1
-    assert "  - added: curl 8.23.0-3.1.el9" in section
-    assert "  - updated: percona-credcheck17 5.0 → 6.0" in section
-    assert "  - removed: llvm" in section
+    assert "  - [ubi9] added: curl 8.23.0-3.1.el9" in section
+    assert "  - [ubi9] updated: percona-credcheck17 5.0 → 6.0" in section
+    assert "  - [ubi9] removed: llvm" in section
     # A repackaged or rebuilt package of an image is not listed.
     assert "percona-pgaudit17" not in section
     assert "gosu" not in section
@@ -2151,7 +2151,7 @@ def test_image_cve_security_lines_diff(capsys):
         fetcher=fetcher,
     )
     assert lines == [
-        "- img (ubi9) [container image]: fixes 1 HIGH CVE\n  - zlib 1.2-1.el9: CVE-1"
+        "- img [container image]: fixes 1 HIGH CVE\n  - [ubi9] zlib 1.2-1.el9: CVE-1"
     ]
     assert sorted(seen) == [
         ("ppg:releases:17:containers", "img"),
@@ -2239,7 +2239,7 @@ def test_changelog_version_only_keys_skip_counter_comparison(tmp_path):
     assert "- etcd: update upstream version 3.5.36" in section
     assert "h3" not in section
     assert "- a: 1.0-1 → 1.0-2" in section
-    assert "  - updated: curl 8.23.0 → 8.24.0" in section
+    assert "  - [ubi9] updated: curl 8.23.0 → 8.24.0" in section
     assert "gosu" not in section
     assert "repackaged" not in section
 
@@ -2272,3 +2272,52 @@ def test_packaging_notes_git_failure_warns_once(tmp_path, monkeypatch, capsys):
     assert notes == {}
     assert len(calls) == 1
     assert capsys.readouterr().err.count("warning:") == 1
+
+
+def test_changelog_groups_image_flavors_in_one_entry(tmp_path):
+    def pkgs(dist, dns=True, pgaudit="17.2-1.1"):
+        d = {"pgaudit": f"{pgaudit}.{dist}", "gosu": f"1.19-5.2.{dist}"}
+        if dns:
+            d["dns"] = f"2.9.2-1.1.{dist}"
+        return d
+
+    def old(dist, dns=True):
+        d = {"pgaudit": f"17.1-5.1.{dist}", "gosu": f"1.19-5.1.{dist}"}
+        if dns:
+            d["dns"] = f"2.9.0-3.1.{dist}"
+        return d
+
+    section = cmd_project._build_changelog_section(
+        "17.12-2",
+        {"percona-postgresql": "17.12-1.2"},
+        {"percona-postgresql": "17.12-1.1"},
+        tmp_path,
+        source_container_pkgs={
+            "img (ubi10)": pkgs("el10", dns=False),
+            "img (ubi8)": pkgs("el8"),
+            "img (ubi9)": pkgs("el9"),
+            "new (ubi9)": {"a": "1.0-1.1.el9"},
+            "new (ubi8)": {"a": "1.0-1.1.el8"},
+        },
+        release_container_pkgs={
+            "img (ubi10)": old("el10", dns=False),
+            "img (ubi8)": old("el8"),
+            "img (ubi9)": old("el9"),
+            "gone (ubi9)": {"a": "1.0-1.1.el9"},
+            "gone (ubi8)": {"a": "1.0-1.1.el8"},
+        },
+        prev_release_id="17.12-1",
+    )
+    assert (
+        "- img [container image]: update image 17.12-1 → 17.12-2\n"
+        "  - [ubi8, ubi9] updated: dns 2.9.0 → 2.9.2\n"
+        "  - [ubi8, ubi9, ubi10] updated: pgaudit 17.1 → 17.2\n"
+    ) in section
+    assert section.count("update image") == 1
+    assert (
+        "- new [container image]: add image 17.12-2\n"
+        "  - [ubi8] a 1.0-1.1.el8\n"
+        "  - [ubi9] a 1.0-1.1.el9\n"
+    ) in section
+    assert "- gone (ubi8, ubi9) [container image]: remove image 17.12-1" in section
+    assert section.count("remove image") == 1

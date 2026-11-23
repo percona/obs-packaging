@@ -1443,8 +1443,10 @@ error. `project release <source-project>` does the following:
 6. **Builds `CHANGELOG.md`** — compares built package versions from the unit's top-level staging
    project and its `tarballs` against the release OBS project (for updates; the baseline is
    read from the release project whenever it exists on OBS) and
-   generates entries with upstream URLs. Container images are listed per flavor (`ubi8`
-   and `ubi9` as distinct entries); the previous-release image diff is queried from
+   generates entries with upstream URLs. Each container image gets one entry covering all
+   its flavors (`ubi8`, `ubi9`, `ubi10`): every sub-item is prefixed with the flavors it
+   applies to, e.g. `- [ubi8, ubi9] updated: python3.12-dns 2.9.0 → 2.9.2`, and a line
+   that is identical in several flavors is written once. The previous-release image diff is queried from
    whichever project actually holds the previous release's images, producing real
    `prev → new` diffs instead of full package dumps (a full dump remains only for a true
    first release). With `--also-profile`, every instance is queried and the results are
@@ -1486,9 +1488,12 @@ error. `project release <source-project>` does the following:
      - PG-2955 percona-pgaudit\<N>-llvmjit is not installable on EL8/9/10 ([#310](https://github.com/percona/obs-packaging/pull/310))
 
    ### Security
-   - percona-distribution-postgresql (ubi9) [container image]: fixes 2 HIGH CVEs
-     - krb5-libs 1.21.3-11.el9 (fix: 1.21.3-11.el9_3.2): CVE-2026-112320, CVE-2026-112321
+   - percona-distribution-postgresql [container image]: fixes 2 HIGH CVEs
+     - [ubi9] krb5-libs 1.21.3-11.el9 (fix: 1.21.3-11.el9_3.2): CVE-2026-112320, CVE-2026-112321
+     - [ubi10] krb5-libs 1.21.3-11.el10 (fix: 1.21.3-11.el10_3.2): CVE-2026-112320, CVE-2026-112321
    ```
+
+   The CVE count in an image's header is the number of distinct CVE ids across its flavors.
 7. **Appends** a `{tag, source_commit}` entry to `release.yaml`'s `releases:` list (or
    updates the open one) and prepends the new section to `CHANGELOG.md` (or replaces the
    open one's).

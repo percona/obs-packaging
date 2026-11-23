@@ -81,8 +81,8 @@ Comparing the previous release with the one being cut, per package:
 
 #### Version updates
 - percona-credcheck: update upstream version 6.0 (https://github.com/HexaCluster/credcheck/releases/tag/v6.0)
-- percona-distribution-postgresql (ubi8) [container image]: update image 17.12-1 → 17.12-2
-  - updated: percona-credcheck17 5.0 → 6.0
+- percona-distribution-postgresql [container image]: update image 17.12-1 → 17.12-2
+  - [ubi8, ubi9, ubi10] updated: percona-credcheck17 5.0 → 6.0
 
 #### Packaging updates
 - percona-pgaudit: 17.2-1 → 17.2-2
@@ -104,6 +104,14 @@ Rules:
   `repackaged:` items per image under Packaging updates. They duplicated the
   top-level packaging entries without the reason and made up about half of the
   section, so they were dropped.)
+- The flavors of an image (`ubi8`, `ubi9`, `ubi10`) share one entry, in
+  `### Added`, `### Changed` and `### Security` alike. Every sub-item is
+  prefixed with the flavors it applies to, in natural order; a line identical
+  in several flavors is written once. Sub-items are ordered by package, then
+  by flavor. A removed image is one line naming its flavors:
+  `- <image> (ubi8, ubi9) [container image]: remove image <prev>`.
+  (Changed 2026-11-23: the original design had one entry per image and flavor,
+  which repeated nearly identical blocks.)
 - A subsection with no entries is omitted. If both are empty, `### Changed`
   holds the single line
   `- Rebuild only: no version or packaging changes.`
@@ -157,13 +165,14 @@ the source (staging) project holds the candidate. Per image and repo:
 
 ### Output
 
-One entry per image and repo in `### Security`, after the existing
-upstream-scan lines, grouped by package, sorted by package name:
+One entry per image in `### Security`, after the existing upstream-scan
+lines, covering all its flavors; sub-items are grouped by package and tagged
+with their flavors, and the header counts the distinct CVE ids across them:
 
 ```markdown
-- percona-distribution-postgresql (ubi9) [container image]: fixes 16 HIGH/CRITICAL CVEs
-  - krb5-libs 1.21.3-11.el9 (fix: 1.21.3-11.el9_3.2): CVE-2026-112320, CVE-2026-112321
-  - python3.12-dns 2.8.0-3.1.el9 → 2.9.0-3.2.el9: CVE-2026-114605
+- percona-distribution-postgresql [container image]: fixes 16 HIGH/CRITICAL CVEs
+  - [ubi9] krb5-libs 1.21.3-11.el9 (fix: 1.21.3-11.el9_3.2): CVE-2026-112320, CVE-2026-112321
+  - [ubi9] python3.12-dns 2.8.0-3.1.el9 → 2.9.0-3.2.el9: CVE-2026-114605
 ```
 
 - Old version: the finding's `installed`.

@@ -10,6 +10,13 @@ import urllib.parse
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from .release_changes import (
+    flavor_list,
+    group_image_keys,
+    merge_flavor_items,
+    split_image_key,
+)
+
 _SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
 
 
@@ -69,38 +76,56 @@ def image_cve_lines(
     candidate: "dict[str, set[Finding]]",
     candidate_pkgs: "dict[str, dict[str, str]]",
 ) -> "list[str]":
-    """One entry per image whose CVEs were fixed, or that could not be compared."""
+    """One entry per image whose CVEs were fixed, or that could not be compared.
+
+    The flavors of an image (``"img (ubi8)"``, ``"img (ubi9)"``) share one
+    entry: each sub-item is tagged with the flavors it applies to, and the
+    header counts the distinct CVE ids across them.
+    """
     lines: "list[str]" = []
-    for key in keys:
-        if key not in previous or key not in candidate:
-            side = "candidate" if key in previous else "previous"
-            lines.append(
-                f"- Not scanned: {key} [container image] "
-                f"(no dashboard scan of the {side} image)"
+    for image, image_keys in group_image_keys(keys).items():
+        items: "dict[str, list[tuple[str, str]]]" = {}
+        ids: "set[str]" = set()
+        severities: "set[str]" = set()
+        missing: "dict[str, list[str]]" = {}
+        for key in image_keys:
+            flavor = split_image_key(key)[1]
+            if key not in previous or key not in candidate:
+                side = "candidate" if key in previous else "previous"
+                missing.setdefault(side, []).append(flavor)
+                continue
+            still_open = {f.id for f in candidate[key]}
+            fixed = [f for f in previous[key] if f.id not in still_open]
+            if not fixed:
+                continue
+            ids |= {f.id for f in fixed}
+            severities |= {f.severity for f in fixed}
+            groups: "dict[tuple[str, str, str], set[str]]" = {}
+            for f in fixed:
+                groups.setdefault((f.pkg, f.installed, f.fixed), set()).add(f.id)
+            pkgs = candidate_pkgs.get(key, {})
+            flavor_items = items.setdefault(flavor, [])
+            for (pkg, installed, fix), gids in sorted(groups.items()):
+                if pkg in pkgs:
+                    detail = f"{pkg} {installed} → {pkgs[pkg]}"
+                elif fix:
+                    detail = f"{pkg} {installed} (fix: {fix})"
+                else:
+                    detail = f"{pkg} {installed}"
+                flavor_items.append((pkg, f"{detail}: {', '.join(sorted(gids))}"))
+        if ids:
+            noun = "CVE" if len(ids) == 1 else "CVEs"
+            header = (
+                f"- {image} [container image]: fixes {len(ids)} "
+                f"{'/'.join(sorted(severities, key=_severity_rank))} {noun}"
             )
-            continue
-        still_open = {f.id for f in candidate[key]}
-        fixed = [f for f in previous[key] if f.id not in still_open]
-        if not fixed:
-            continue
-        ids = {f.id for f in fixed}
-        severities = sorted({f.severity for f in fixed}, key=_severity_rank)
-        noun = "CVE" if len(ids) == 1 else "CVEs"
-        out = [
-            f"- {key} [container image]: fixes {len(ids)} "
-            f"{'/'.join(severities)} {noun}"
-        ]
-        groups: "dict[tuple[str, str, str], set[str]]" = {}
-        for f in fixed:
-            groups.setdefault((f.pkg, f.installed, f.fixed), set()).add(f.id)
-        pkgs = candidate_pkgs.get(key, {})
-        for (pkg, installed, fix), gids in sorted(groups.items()):
-            if pkg in pkgs:
-                detail = f"{pkg} {installed} → {pkgs[pkg]}"
-            elif fix:
-                detail = f"{pkg} {installed} (fix: {fix})"
-            else:
-                detail = f"{pkg} {installed}"
-            out.append(f"  - {detail}: {', '.join(sorted(gids))}")
-        lines.append("\n".join(out))
+            lines.append("\n".join([header, *merge_flavor_items(items)]))
+        for side in ("previous", "candidate"):
+            if side in missing:
+                tag = flavor_list(missing[side])
+                name = f"{image} ({tag})" if tag else image
+                lines.append(
+                    f"- Not scanned: {name} [container image] "
+                    f"(no dashboard scan of the {side} image)"
+                )
     return lines

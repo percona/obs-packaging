@@ -8,7 +8,7 @@ openSUSE Leap puts a distribution tag first: ``lp160.3.1`` has counter ``3``.
 
 import re
 from dataclasses import dataclass
-from typing import Callable, Literal
+from typing import Callable, Iterable, Literal
 
 ChangeKind = Literal["version", "packaging", "rebuild"]
 
@@ -87,3 +87,63 @@ def commit_line(
         f"{line} ([{commit.sha[:7]}]"
         f"(https://github.com/{repo_slug}/commit/{commit.sha}))"
     )
+
+
+# Container image changelog key: "<image> (<flavor>)", e.g. "img (ubi9)" or
+# "img (extras/ubi9)".
+_IMAGE_KEY_RE = re.compile(r"^(?P<image>.+) \((?P<flavor>[^()]+)\)$")
+
+
+def split_image_key(key: str) -> "tuple[str, str]":
+    """``"img (ubi9)"`` → ``("img", "ubi9")``; a key without a flavor → ``(key, "")``."""
+    m = _IMAGE_KEY_RE.match(key)
+    return (m["image"], m["flavor"]) if m else (key, "")
+
+
+def _natural_key(text: str) -> "list[int | str]":
+    """Sort key ordering embedded numbers numerically (``ubi8`` before ``ubi10``)."""
+    return [int(p) if p.isdigit() else p for p in re.split(r"(\d+)", text)]
+
+
+def flavor_list(flavors: "Iterable[str]") -> str:
+    """``"ubi8, ubi9, ubi10"``: distinct non-empty flavors in natural order."""
+    return ", ".join(sorted({f for f in flavors if f}, key=_natural_key))
+
+
+def group_image_keys(keys: "Iterable[str]") -> "dict[str, list[str]]":
+    """Image keys grouped by image name (sorted), flavors in natural order."""
+    grouped: "dict[str, list[str]]" = {}
+    for key in sorted(keys, key=lambda k: split_image_key(k)[0]):
+        grouped.setdefault(split_image_key(key)[0], []).append(key)
+    for image_keys in grouped.values():
+        image_keys.sort(key=lambda k: _natural_key(split_image_key(k)[1]))
+    return grouped
+
+
+def merge_flavor_items(
+    per_flavor: "dict[str, list[tuple[str, str]]]",
+) -> "list[str]":
+    """Sub-item lines of one image entry, each tagged with its flavors.
+
+    *per_flavor* maps a flavor to its ``(sort name, text)`` items.  Identical
+    texts merge into one line ``"  - [ubi8, ubi9] <text>"``; lines are ordered
+    by sort name, then by their first flavor, then by text.  An item of a
+    flavorless image carries no tag.
+    """
+    flavors_of: "dict[tuple[str, str], list[str]]" = {}
+    for flavor, items in per_flavor.items():
+        for item in items:
+            flavors_of.setdefault(item, []).append(flavor)
+
+    def order(
+        entry: "tuple[tuple[str, str], list[str]]",
+    ) -> "tuple[str, list[int | str], str]":
+        (name, text), flavors = entry
+        first = min((_natural_key(f) for f in flavors), default=[])
+        return name, first, text
+
+    lines: "list[str]" = []
+    for (_, text), flavors in sorted(flavors_of.items(), key=order):
+        tag = flavor_list(flavors)
+        lines.append(f"  - [{tag}] {text}" if tag else f"  - {text}")
+    return lines

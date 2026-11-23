@@ -75,10 +75,10 @@ def test_image_cve_lines_fixed_only_and_grouped():
         {"img (ubi9)": {"python3.12-dns": "2.9.0-3.2.el9"}},
     )
     assert lines == [
-        "- img (ubi9) [container image]: fixes 4 CRITICAL/HIGH CVEs\n"
-        "  - krb5-libs 1.21-11.el9 (fix: 1.21-11.el9_3.2): CVE-1, CVE-2\n"
-        "  - python3.12-dns 2.8.0-3.1.el9 → 2.9.0-3.2.el9: CVE-3\n"
-        "  - zlib 1.2-1.el9: CVE-4"
+        "- img [container image]: fixes 4 CRITICAL/HIGH CVEs\n"
+        "  - [ubi9] krb5-libs 1.21-11.el9 (fix: 1.21-11.el9_3.2): CVE-1, CVE-2\n"
+        "  - [ubi9] python3.12-dns 2.8.0-3.1.el9 → 2.9.0-3.2.el9: CVE-3\n"
+        "  - [ubi9] zlib 1.2-1.el9: CVE-4"
     ]
 
 
@@ -111,4 +111,34 @@ def test_image_cve_lines_does_not_cross_repos():
         {"img (ubi8)": set(), "img (ubi9)": set()},
         {},
     )
-    assert len(lines) == 1 and lines[0].startswith("- img (ubi8) ")
+    assert lines == [
+        "- img [container image]: fixes 1 HIGH CVE\n  - [ubi8] zlib 1.2-1.el8: CVE-1"
+    ]
+
+
+def test_image_cve_lines_groups_flavors_of_one_image():
+    same8 = Finding("CVE-1", "dnspython", "2.9.0", "2.9.2", "HIGH")
+    same9 = Finding("CVE-1", "dnspython", "2.9.0", "2.9.2", "HIGH")
+    e8 = Finding("CVE-2", "expat", "2.5-6.el8", "2.5-10.el8", "HIGH")
+    e9 = Finding("CVE-2", "expat", "2.5-9.el9", "2.5-9.el9_8", "HIGH")
+    k10 = Finding("CVE-3", "krb5-libs", "1.21-11.el10", "", "CRITICAL")
+    lines = image_cve_lines(
+        ["img (ubi10)", "img (ubi8)", "img (ubi9)", "img (ubi11)"],
+        {
+            "img (ubi8)": {same8, e8},
+            "img (ubi9)": {same9, e9},
+            "img (ubi10)": {k10},
+            "img (ubi11)": set(),
+        },
+        {"img (ubi8)": set(), "img (ubi9)": set(), "img (ubi10)": set()},
+        {},
+    )
+    assert lines == [
+        "- img [container image]: fixes 3 CRITICAL/HIGH CVEs\n"
+        "  - [ubi8, ubi9] dnspython 2.9.0 (fix: 2.9.2): CVE-1\n"
+        "  - [ubi8] expat 2.5-6.el8 (fix: 2.5-10.el8): CVE-2\n"
+        "  - [ubi9] expat 2.5-9.el9 (fix: 2.5-9.el9_8): CVE-2\n"
+        "  - [ubi10] krb5-libs 1.21-11.el10: CVE-3",
+        "- Not scanned: img (ubi11) [container image] "
+        "(no dashboard scan of the candidate image)",
+    ]
