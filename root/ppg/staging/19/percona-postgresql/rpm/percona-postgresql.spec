@@ -9,7 +9,7 @@
 %global sname postgresql
 %global vname postgresql%{pgmajorversion}
 %global pgbaseinstdir	/usr/pgsql-%{pgmajorversion}
-%global beta 0
+%global beta %!{PG_SPEC_BETA}
 %{?beta:%global __os_install_post /usr/lib/rpm/brp-compress}
 
 %if 0%{?rhel} >= 8 && 0%{?rhel} <= 9
