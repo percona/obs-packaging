@@ -2320,8 +2320,9 @@ def _build_changelog_section(
 ) -> str:
     """Build a keep-a-changelog section for a release.
 
-    For keys in ``version_only_keys`` (previous release on another OBS
-    instance) a packaging classification is treated as a rebuild.
+    For package keys in ``version_only_keys`` (previous release on another
+    OBS instance) a packaging classification is treated as a rebuild.
+    Container image entries list version changes only.
     """
     version_only = version_only_keys or set()
     today = datetime.date.today().isoformat()
@@ -2423,11 +2424,6 @@ def _build_changelog_section(
                     p: classify_change(rel_pkgs[p], src_pkgs[p]) for p in common_pkgs
                 }
                 version_pkgs = [p for p in common_pkgs if kinds[p] == "version"]
-                repackaged_pkgs = (
-                    []
-                    if ctr in version_only
-                    else [p for p in common_pkgs if kinds[p] == "packaging"]
-                )
                 prev_ver = prev_release_id or "?"
                 header = (
                     f"- {ctr} [container image]: update image {prev_ver} → {release_id}"
@@ -2441,15 +2437,10 @@ def _build_changelog_section(
                     version_lines.append(f"  - updated: {p} {old_v} → {new_v}")
                 for p in removed_pkgs:
                     version_lines.append(f"  - removed: {p}")
+                # Repackaged and rebuilt packages of an image are not listed:
+                # the top-level packaging entries carry them, with the reason.
                 if version_lines:
                     version_updates.append("\n".join([header, *version_lines]))
-                if repackaged_pkgs:
-                    packaging_lines = [
-                        f"  - repackaged: {p} {_version_counter(rel_pkgs[p])} → "
-                        f"{_version_counter(src_pkgs[p])}"
-                        for p in repackaged_pkgs
-                    ]
-                    packaging_updates.append("\n".join([header, *packaging_lines]))
 
     todo = "<!-- TODO: fill in manually -->"
     if not source_versions:
@@ -2775,7 +2766,6 @@ class _ReleaseObsData:
     release_container_pkgs: dict[str, dict[str, str]]
     # Keys whose previous release came from another instance than their source.
     cross_instance_versions: "set[str]" = field(default_factory=set)
-    cross_instance_containers: "set[str]" = field(default_factory=set)
 
 
 def _collect_release_obs_data(
@@ -2902,9 +2892,10 @@ def _merge_release_obs_data(parts: "list[_ReleaseObsData]") -> _ReleaseObsData:
     project.
 
     The revision counter counts source commits on one instance, so counters
-    from two instances are not comparable.  Keys whose release value did not
-    come from the owner instance are returned in ``cross_instance_*`` so the
-    changelog reports only their version changes.
+    from two instances are not comparable.  Package keys whose release value
+    did not come from the owner instance are returned in
+    ``cross_instance_versions`` so the changelog reports only their version
+    changes (container image entries never compare counters).
     """
 
     def _paired(
@@ -2933,7 +2924,7 @@ def _merge_release_obs_data(parts: "list[_ReleaseObsData]") -> _ReleaseObsData:
     source_versions, release_versions, cross_versions = _paired(
         [p.source_versions for p in parts], [p.release_versions for p in parts]
     )
-    source_container_pkgs, release_container_pkgs, cross_containers = _paired(
+    source_container_pkgs, release_container_pkgs, _ = _paired(
         [p.source_container_pkgs for p in parts],
         [p.release_container_pkgs for p in parts],
     )
@@ -2944,7 +2935,6 @@ def _merge_release_obs_data(parts: "list[_ReleaseObsData]") -> _ReleaseObsData:
         source_container_pkgs=source_container_pkgs,
         release_container_pkgs=release_container_pkgs,
         cross_instance_versions=cross_versions,
-        cross_instance_containers=cross_containers,
     )
 
 
@@ -3247,12 +3237,10 @@ def cmd_project_release(args: argparse.Namespace) -> None:
         security_lines = [*(security_lines or []), *image_lines] or None
 
     _print_pending("collecting packaging commits for CHANGELOG")
-    version_only_keys = (
-        obs_data.cross_instance_versions | obs_data.cross_instance_containers
-    )
+    version_only_keys = obs_data.cross_instance_versions
     if version_only_keys:
         print(
-            f"warning: {len(version_only_keys)} package(s)/image(s) have their "
+            f"warning: {len(version_only_keys)} package(s) have their "
             "previous release on another OBS instance; revision counters are "
             "not comparable there, only version changes are reported for them",
             file=sys.stderr,

@@ -1461,16 +1461,17 @@ error. `project release <source-project>` does the following:
    single line `- Rebuild only: no version or packaging changes.`; when only packages or
    images were added or removed, `### Changed` is left empty.
 
-   A container image can appear in both subsections: `added:` / `updated:` / `removed:` items
-   under Version updates, and `repackaged:` items under Packaging updates; an image whose
-   packages were only rebuilt gets no entry. A packaging update with no commit touching the
+   A container image entry appears under Version updates only, with `added:` / `updated:` /
+   `removed:` items for its installed packages. Packages of an image that were repackaged or
+   rebuilt are not listed (the top-level packaging entries carry them, with the reason), and
+   an image with no version change gets no entry. A packaging update with no commit touching the
    package directory in the range carries `- no package-level commits (shared macro or
    tooling change)`. When the previous release entry in `release.yaml` has no
    `source_commit`, packaging lines carry the counter change only, without commits.
 
-   With `--also-profile`, a package or image whose previous release lives on another OBS
-   instance is compared by upstream version only, because revision counters are per
-   instance; the cut prints a warning saying how many such packages and images there are.
+   With `--also-profile`, a package whose previous release lives on another OBS instance is
+   compared by upstream version only, because revision counters are per instance; the cut
+   prints a warning saying how many such packages there are.
 
    Container image CVE fixes are listed under `### Security` (see below).
 

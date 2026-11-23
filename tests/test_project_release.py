@@ -1960,7 +1960,7 @@ def test_changelog_rebuild_only(tmp_path):
     assert "####" not in section
 
 
-def test_changelog_container_entries_split_by_kind(tmp_path):
+def test_changelog_container_entries_list_version_items_only(tmp_path):
     section = cmd_project._build_changelog_section(
         "17.12-1",
         {"percona-postgresql": "17.12-1.1"},
@@ -1984,14 +1984,16 @@ def test_changelog_container_entries_split_by_kind(tmp_path):
         },
         prev_release_id="17.11-5",
     )
-    version, packaging = section.split("#### Packaging updates")
     header = "- img (ubi9) [container image]: update image 17.11-5 → 17.12-1"
-    assert header in version and header in packaging
-    assert "  - added: curl 8.23.0-3.1.el9" in version
-    assert "  - updated: percona-credcheck17 5.0 → 6.0" in version
-    assert "  - removed: llvm" in version
-    assert "  - repackaged: percona-pgaudit17 17.1-5 → 17.1-6" in packaging
+    assert section.count(header) == 1
+    assert "  - added: curl 8.23.0-3.1.el9" in section
+    assert "  - updated: percona-credcheck17 5.0 → 6.0" in section
+    assert "  - removed: llvm" in section
+    # A repackaged or rebuilt package of an image is not listed.
+    assert "percona-pgaudit17" not in section
     assert "gosu" not in section
+    assert "repackaged" not in section
+    assert "#### Packaging updates" not in section
 
 
 def test_packaging_changed_keys():
@@ -2216,7 +2218,7 @@ def test_merge_release_obs_data_marks_cross_instance_keys():
     )
     merged = cmd_project._merge_release_obs_data([boo, labs])
     assert merged.cross_instance_versions == {"h3"}
-    assert merged.cross_instance_containers == {"img (ubi9)"}
+    assert not hasattr(merged, "cross_instance_containers")
 
 
 def test_changelog_version_only_keys_skip_counter_comparison(tmp_path):
@@ -2232,7 +2234,7 @@ def test_changelog_version_only_keys_skip_counter_comparison(tmp_path):
             "img (ubi9)": {"gosu": "1.19-9.1.el9", "curl": "8.23.0-3.1.el9"}
         },
         prev_release_id="17.12-1",
-        version_only_keys={"h3", "etcd", "img (ubi9)"},
+        version_only_keys={"h3", "etcd"},
     )
     assert "- etcd: update upstream version 3.5.36" in section
     assert "h3" not in section
