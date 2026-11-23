@@ -2443,9 +2443,7 @@ def _build_changelog_section(
     elif not added and not removed:
         lines += ["- Rebuild only: no version or packaging changes.", ""]
     else:
-        # Added/Removed only: leave Changed empty.  Nothing following it means
-        # the section ends with the heading and a blank line.
-        lines += [""] if removed or security_lines else ["", ""]
+        lines += [""]
     if removed:
         lines += ["### Removed"] + removed + [""]
     if security_lines:

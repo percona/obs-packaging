@@ -2008,7 +2008,7 @@ def test_changelog_no_rebuild_only_line_when_packages_added(tmp_path):
     )
     assert "- newpkg: add upstream version 1.0" in section
     assert "Rebuild only" not in section
-    assert "### Changed\n\n" in section
+    assert section.rstrip("\n").endswith("### Changed")
 
 
 def _notes_tree(tmp_path, monkeypatch):
