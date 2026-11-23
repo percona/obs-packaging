@@ -171,9 +171,10 @@ jobs:
       PROJECT: ${{ vars.OBS_ROOTPRJ || 'isv:percona' }}:ppg:staging:${{ matrix.major }}
       OBS_DOWNLOAD_URL: ${{ vars.OBS_DOWNLOAD_URL || 'https://download.opensuse.org' }}
     steps:
+      # The commit this run was started from (main on schedule, the chosen
+      # branch on a manual run), so a branch can test its own checks. The
+      # other jobs pin main on purpose; this one has no state to share with main.
       - uses: actions/checkout@v4
-        with:
-          ref: main
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
