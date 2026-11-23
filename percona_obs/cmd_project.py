@@ -164,11 +164,17 @@ def _resolve_aggregate_source(
 
     Returns None for external aggregates or unparseable files.
     local_project_id uses colon notation (e.g. 'ppg:common:deps:build').
+    ``%!{OBS_PROJECT_TIER}`` in the project is the tier of *aggregate_file* as
+    given (``<product>/<tier>/…``, see ``common.inject_computed_macros``).
     """
     try:
         root_el = ET.fromstring(aggregate_file.read_text("utf-8"))
     except (ET.ParseError, OSError):
         return None
+    try:
+        tier = next(iter(aggregate_file.relative_to(REPO_ROOT).parts[1:2]), None)
+    except ValueError:
+        tier = None
 
     for agg in root_el.findall("aggregate"):
         project_attr = (agg.get("project") or "").strip()
@@ -179,6 +185,8 @@ def _resolve_aggregate_source(
         if not pkg_name:
             continue
 
+        if tier is not None:
+            project_attr = project_attr.replace("%!{OBS_PROJECT_TIER}", tier)
         m = _LOCAL_AGGREGATE_RE.match(project_attr)
         if not m:
             continue  # external aggregate
@@ -2262,13 +2270,22 @@ def _packaging_notes(
             if sub is not None
             else source_path / pkg
         )
-        paths = [rel(pkg_dir)]
-        try:
-            resolved = rel(pkg_dir.resolve()) if pkg_dir.exists() else paths[0]
-        except ValueError:
-            resolved = paths[0]
-        if resolved not in paths:
-            paths.append(resolved)
+        # The package directory, plus the directory of the package it
+        # aggregates (its packaging lives there), each with symlinks resolved.
+        dirs = [pkg_dir]
+        agg_src = _resolve_aggregate_source(pkg_dir / "obs" / "_aggregate")
+        if agg_src is not None:
+            dirs.append(REPO_ROOT.joinpath(*agg_src[0].split(":")) / agg_src[1])
+        paths: "list[str]" = []
+        for d in dirs:
+            cands = [d, d.resolve()] if d.exists() else [d]
+            for cand in cands:
+                try:
+                    path = rel(cand)
+                except ValueError:
+                    continue
+                if path not in paths:
+                    paths.append(path)
         try:
             commits = packaging_commits(prev_commit, new_commit, paths, git)
         except Exception as exc:

@@ -120,6 +120,8 @@ Rules:
   release being cut, both from `release.yaml`.
 - Paths: the package directory in the source tree, with symlinks resolved (a
   package linked into `_shared` is matched on both the link and its target).
+  A package that is a local `_aggregate` is also matched on the directory of
+  the package it aggregates, where its packaging lives.
 - `git log --no-merges`, oldest first, subject lines only.
 - Commits whose subject starts with `devel:` are skipped: the devel tier shares
   the staging packaging directories, and those commits say nothing about the

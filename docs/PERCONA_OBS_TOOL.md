@@ -1458,7 +1458,9 @@ error. `project release <source-project>` does the following:
    release number), each with the packaging commits that touched it. Packages that were only
    rebuilt are not listed. The commits come from
    `git log <previous source_commit>..<source_commit>` limited to the package's source
-   directory, and each is linked to its pull request through `gh`. When a release changes
+   directory (a `_shared` symlink is followed, and a package that is a local `_aggregate`
+   is also matched on the directory of the package it aggregates), and each is linked to
+   its pull request through `gh`. When a release changes
    nothing at all (no added, removed, version or packaging entries), `### Changed` holds the
    single line `- Rebuild only: no version or packaging changes.`; when only packages or
    images were added or removed, `### Changed` is left empty. `### Added` is written only

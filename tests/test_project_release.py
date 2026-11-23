@@ -2060,6 +2060,39 @@ def test_packaging_notes_paths_and_lines(tmp_path, monkeypatch):
     assert calls[0][4] == "PREV..NEW"
 
 
+def test_packaging_notes_follows_local_aggregate(tmp_path, monkeypatch):
+    src = _notes_tree(tmp_path, monkeypatch)
+    root = tmp_path / "root"
+    monkeypatch.setattr(cmd_project, "REPO_ROOT", root)
+    (root / "ppg" / "staging" / "common" / "tools" / "percona-patroni").mkdir(
+        parents=True
+    )
+    shared = root / "ppg" / "staging" / "_shared" / "percona-patroni" / "obs"
+    shared.mkdir(parents=True)
+    (shared / "_aggregate").write_text(
+        "<aggregatelist>"
+        '<aggregate project="${OBS_ROOTPRJ}:ppg:%!{OBS_PROJECT_TIER}:common:tools">'
+        "<package>percona-patroni</package></aggregate></aggregatelist>"
+    )
+    (src / "percona-patroni").symlink_to("../_shared/percona-patroni")
+    calls = []
+
+    def run_git(args):
+        calls.append(args[args.index("--") + 1 :])
+        return ""
+
+    cmd_project._packaging_notes(
+        ["percona-patroni"], src, "PREV", "NEW", "o/r", run_git=run_git
+    )
+    assert calls == [
+        [
+            "root/ppg/staging/17/percona-patroni",
+            "root/ppg/staging/_shared/percona-patroni",
+            "root/ppg/staging/common/tools/percona-patroni",
+        ]
+    ]
+
+
 def test_packaging_notes_none_without_previous_commit(tmp_path, monkeypatch):
     src = _notes_tree(tmp_path, monkeypatch)
     assert (
