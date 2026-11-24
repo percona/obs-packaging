@@ -40,7 +40,7 @@ qa:
         - rhel-9-arm
         - rhel-10
         - rhel-10-arm
-      TESTING_BRANCH: main
+      TESTING_BRANCH: obs-labs-ubi-repos
 
   # pg_tde's auxiliary tools (pg_tde_* utilities, key management) from the
   # OBS packages; only the percona-qa test scripts come from git.
@@ -80,7 +80,7 @@ qa:
         - rhel-9-arm
         - rhel-10
         - rhel-10-arm
-      TESTING_BRANCH: main
+      TESTING_BRANCH: obs-labs-ubi-repos
 
   # The pg_tde developers' own tests (meson test, from the percona/pg_tde
   # repository) against the packaged pg_tde from OBS. The job builds the
@@ -124,7 +124,7 @@ qa:
         - rhel-9-arm
         - rhel-10
         - rhel-10-arm
-      TESTING_BRANCH: main
+      TESTING_BRANCH: obs-labs-ubi-repos
 
   # pg_tde upgrades (tde-upgrade-parallel): OBS-built packages only. The TO
   # side is this build from OBS; after the upgrade the server and pg_tde
@@ -142,7 +142,7 @@ qa:
       FROM_REPO: release
       TO_VERSION: ppg-%!{PG_VERSION}
       OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:%!{OBS_PROJECT_TIER}:%!{PG_MAJOR_VERSION}
-      TESTING_BRANCH: main
+      TESTING_BRANCH: obs-labs-ubi-repos
 
   # pg_tde-only upgrade: the same server version, released pg_tde upgraded to
   # this build's pg_tde. Needs this build's server version released on
@@ -155,4 +155,4 @@ qa:
       FROM_REPO: release
       TO_VERSION: ppg-%!{PG_VERSION}
       OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:%!{OBS_PROJECT_TIER}:%!{PG_MAJOR_VERSION}
-      TESTING_BRANCH: main
+      TESTING_BRANCH: obs-labs-ubi-repos

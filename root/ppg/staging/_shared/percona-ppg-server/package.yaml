@@ -40,7 +40,7 @@ qa:
       - rhel-9-arm
       - rhel-10
       - rhel-10-arm
-    TESTING_BRANCH: main
+    TESTING_BRANCH: obs-labs-ubi-repos
     IO_METHOD: %!{QA_IO_METHODS}
     SCENARIO: pg-%!{PG_MAJOR_VERSION}-meta-server
   matrix:

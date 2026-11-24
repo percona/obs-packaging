@@ -102,7 +102,7 @@ qa:
         - rhel-9-arm
         - rhel-10
         - rhel-10-arm
-      TESTING_BRANCH: main
+      TESTING_BRANCH: obs-labs-ubi-repos
       IO_METHOD:
         - worker
         - sync
@@ -132,7 +132,7 @@ qa:
       FROM_REPO: release
       FROM_OBS_PROJECT:
         project: ppg:staging:%!{PG_PREV_MAJOR_VERSION}
-      TESTING_BRANCH: main
+      TESTING_BRANCH: obs-labs-ubi-repos
       SCENARIO:
         - pg-%!{PG_MAJOR_VERSION}-minor-upgrade
         - pg-%!{PG_MAJOR_VERSION}-major-upgrade
@@ -154,4 +154,4 @@ qa:
         project: ppg:staging:%!{PG_PREV_MAJOR_VERSION}
       TO_VERSION: ppg-%!{PG_VERSION}
       OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
-      TESTING_BRANCH: main
+      TESTING_BRANCH: obs-labs-ubi-repos
