@@ -296,3 +296,31 @@ def test_allowlist_entry_without_package_is_refused():
             [{"reason": "typo: packages instead of package", "packages": "x"}],
             "cfg.yaml",
         )
+
+
+def test_reason_for_could_not_check_comes_from_the_container(monkeypatch):
+    out = (
+        "REASON Error: Failed to download metadata for repo 'epel': Cannot download repomd.xml\n"
+        "RESULT repo-unreachable checked=0"
+    )
+    monkeypatch.setattr(
+        pi, "run_container", lambda docker, image, script, env, timeout=3600: out
+    )
+    r = pi.check_repo("RockyLinux_9", "http://x/RockyLinux_9", "rocky:9", "docker")
+    assert (
+        r["status"] == "repo-unreachable"
+        and "Failed to download metadata for repo 'epel'" in r["why"]
+    )
+    md, new, broken = pi.report_markdown("p", "17", {"RockyLinux_9": r}, [])
+    assert "RockyLinux_9 (repo-unreachable: Error: Failed to download metadata" in md
+
+
+def test_container_scripts_guard_epel_and_the_second_apt_update():
+    assert (
+        "could not install epel-release" in pi.EL_SCRIPT
+        and "could not enable CRB/PowerTools" in pi.EL_SCRIPT
+    )
+    assert (
+        'grep -qF "$URL"' in pi.DEB_SCRIPT
+        and "RESULT repo-unreachable" in pi.DEB_SCRIPT
+    )

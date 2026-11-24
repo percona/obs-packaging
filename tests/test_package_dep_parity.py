@@ -493,10 +493,12 @@ def test_several_pairs_in_one_report_say_where_each_difference_is_seen(tmp_path)
     assert [d["pairs"] for d in result["new"]] == [
         ["RockyLinux_9:Debian_12", "RockyLinux_9:Ubuntu_24.04"]
     ]
-    assert result["missing"] == {"RockyLinux_9:Debian_13": "no Debian_13 repository"}
+    # the loader's own message, not a generic "not published"
+    assert list(result["missing"]) == ["RockyLinux_9:Debian_13"]
+    assert "Debian_13" in result["missing"]["RockyLinux_9:Debian_13"]
     md = summary.read_text()
     assert "| perconapostgresql | requires | perconapgtde | RPM | Debian | all |" in md
-    assert "Not compared (repository not published): RockyLinux_9:Debian_13" in md
+    assert "Not compared: RockyLinux_9:Debian_13 (" in md
 
 
 def test_a_run_that_compares_nothing_fails_even_in_report_only_mode(tmp_path):
@@ -571,3 +573,37 @@ def test_missing_pyyaml_is_an_error_not_an_empty_config(monkeypatch):
     with pytest.raises(SystemExit, match="pyyaml is needed"):
         pdp.load_qa_config(str(SCRIPT.parents[1] / "package-deps-qa.yaml"))
     assert pdp.load_qa_config("/nonexistent/config.yaml") == {}
+
+
+def test_pair_mode_keeps_the_real_reason_a_repository_was_not_compared(tmp_path):
+    files = repo_files(RPM_PG17, DEB_PG17)
+    for k in [k for k in files if "RockyLinux_9" in k and "primary" in k]:
+        del files[k]  # republishing: repomd.xml names a primary file that is gone
+    summary = tmp_path / "s.md"
+    with _Server(files) as url:
+        pdp.main(
+            [
+                "--project",
+                "isv:percona:ppg:staging:17",
+                "--base-url",
+                url,
+                "--allowlist",
+                "none",
+                "--pairs",
+                "RockyLinux_9:Debian_12",
+                "--summary",
+                str(summary),
+            ]
+        )
+    assert "being republished" in summary.read_text()
+
+
+def test_configured_parity_allowlist_covers_patroni_pysyncobj():
+    _, allow = pdp.load_config(str(SCRIPT.parents[1] / "package-deps-qa.yaml"))
+    diff = {
+        "source": "perconapatroni",
+        "kind": "hard",
+        "dep": "python3pysyncobj",
+        "only_in": "deb",
+    }
+    assert pdp.allowed(diff, "17", allow)
