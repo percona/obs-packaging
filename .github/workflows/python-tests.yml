@@ -1,7 +1,8 @@
 name: Python Tests
 
 # Runs the percona-obs tool's own checks (black, pyright, pytest) on PRs
-# that touch the Python package, its tests or its tooling config.  These
+# that touch the Python package, its tests, the workflow scripts under
+# .github/scripts (their tests live in tests/) or its tooling config.  These
 # are pure unit tests: no OBS instance, no secrets and no obs-tools
 # container, so the job also runs on PRs opened from forks.
 #
@@ -20,6 +21,8 @@ on:
       - 'requirements.txt'
       - 'pyrightconfig.json'
       - '.github/workflows/**'
+      - '.github/scripts/**'
+      - '.github/*.yaml'
 
 concurrency:
   group: python-tests-pr-${{ github.event.number }}

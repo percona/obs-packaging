@@ -562,3 +562,12 @@ def test_rpm_repo_given_as_option_equals_value_selects_one_pair(tmp_path):
     assert "pairs" not in json.loads(
         out.read_text()
     )  # single-pair result, not the multi-pair one
+
+
+def test_missing_pyyaml_is_an_error_not_an_empty_config(monkeypatch):
+    # the server-dependency and installability checks read the config through
+    # this loader too, so none of them silently runs without excludes/allowlists
+    monkeypatch.setattr(pdp, "yaml", None)
+    with pytest.raises(SystemExit, match="pyyaml is needed"):
+        pdp.load_qa_config(str(SCRIPT.parents[1] / "package-deps-qa.yaml"))
+    assert pdp.load_qa_config("/nonexistent/config.yaml") == {}
