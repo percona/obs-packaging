@@ -7,4 +7,4 @@ qa:
       USE_OBS_REPO: true
       OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:%!{OBS_PROJECT_TIER}:%!{PG_MAJOR_VERSION}
       VERSION: ppg-%!{PG_VERSION}
-      TEST_BRANCH: main
+      TEST_BRANCH: obs-labs-ubi-repos
