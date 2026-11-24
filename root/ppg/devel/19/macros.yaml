@@ -7,9 +7,9 @@
 - PG_SOURCE_GIT_URL: https://github.com/percona/postgres.git
 - PG_SOURCE_GIT_REVISION: PSP_REL_%!{PG_MAJOR_VERSION}_STABLE
 - PG_PACKAGE_VERSION: %!{PG_VERSION}.%!{PERCONA_PG_PATCH_VERSION}%!{PG_VERSION_SUFFIX}
-# Devel RPMs are debug builds with assertions enabled (the server spec's
-# "beta" switch: --enable-debug --enable-cassert); staging sets 0.
-- PG_SPEC_BETA: 1
+# The server spec's "beta" switch (--enable-debug --enable-cassert). Off since
+# PostgreSQL 19 is GA, same as staging; set to 1 to get debug/cassert RPMs.
+- PG_SPEC_BETA: 0
 
 # devel:19-only components; everything else inherits root/macros.yaml.
 # pgAudit keeps one branch per PostgreSQL major (its main moves on to the next
