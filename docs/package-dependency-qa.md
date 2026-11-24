@@ -6,7 +6,7 @@ questions about the packages in each staging project
 
 1. **Do the RPM and the Debian package ask for the same things?**
 2. **Does every extension ask for the PostgreSQL server it belongs to?**
-3. **Can every package actually be installed on every OS we ship for?**
+3. **Can every package actually be installed on every OS we check?**
 
 A "no" to any of them is almost always a packaging mistake that a customer
 would hit on the very first `dnf install` or `apt install`.
@@ -70,7 +70,8 @@ server, they still agree with each other.
 
 ### 3. Every package installs
 
-For every OS, we start a clean container of that OS, add our OBS repository,
+For every OS in the `repos:` list of `.github/package-deps-qa.yaml`, we
+start a clean container of that OS, add our OBS repository,
 and ask the package manager: "could you install this package?" We do this for
 every package in the repository.
 

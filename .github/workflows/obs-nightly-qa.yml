@@ -136,7 +136,8 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   # package-deps: dependency QA of each staging major, read straight from the
   # OBS repositories (no Jenkins, no OBS login): RPM vs Debian parity, every
-  # extension depends on its server, every package installs on every OS.
+  # extension depends on its server, every package installs on every OS in
+  # the config's repos: list.
   # One job per major. Report-only until the current findings are triaged:
   # findings are listed in the job summary but do not fail the job. Set the
   # repository variable PACKAGE_DEPS_STRICT=true to make findings that are not
@@ -189,7 +190,7 @@ jobs:
             --base-url "$OBS_DOWNLOAD_URL" --json out/server-dependency.json \
             --summary "$GITHUB_STEP_SUMMARY" $STRICT
 
-      - name: 3. Every package installs on every OS
+      - name: 3. Every package installs on every configured OS
         id: installable
         continue-on-error: true
         run: |

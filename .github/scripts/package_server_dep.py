@@ -34,31 +34,24 @@ import sys
 from collections import deque
 from pathlib import Path
 
-try:
-    import yaml
-except ImportError:  # pragma: no cover - CI installs pyyaml
-    yaml = None
-
 _spec = importlib.util.spec_from_file_location(
-    "package_dep_parity", Path(__file__).with_name("package_dep_parity.py"))
+    "package_dep_parity", Path(__file__).with_name("package_dep_parity.py")
+)
 pdp = importlib.util.module_from_spec(_spec)
 sys.modules.setdefault(_spec.name, pdp)
 _spec.loader.exec_module(pdp)
 
 
 def server_package(fmt: str, major: str) -> str:
-    return "percona-postgresql%s-server" % major if fmt == "rpm" else "percona-postgresql-%s" % major
-
-
-def load_section(path: str | None) -> dict:
-    if not path or not Path(path).is_file() or yaml is None:
-        return {}
-    data = yaml.safe_load(Path(path).read_text()) or {}
-    return data.get("server_dependency") or {}
+    return (
+        "percona-postgresql%s-server" % major
+        if fmt == "rpm"
+        else "percona-postgresql-%s" % major
+    )
 
 
 def is_candidate(name: str, major: str, exclude: list) -> bool:
-    if not name.startswith("percona-"):          # not our package (llvm17, ...)
+    if not name.startswith("percona-"):  # not our package (llvm17, ...)
         return False
     if not re.search(r"(?<![0-9])%s(?![0-9])" % re.escape(major), name):
         return False
@@ -102,8 +95,13 @@ def check(binaries: list, fmt: str, major: str, exclude: list) -> list | None:
     if server_package(fmt, major) not in names:
         return None
     reach = reaches_server(binaries, fmt, major)
-    return sorted(n for n in names
-                  if n != server_package(fmt, major) and is_candidate(n, major, exclude) and not reach[n])
+    return sorted(
+        n
+        for n in names
+        if n != server_package(fmt, major)
+        and is_candidate(n, major, exclude)
+        and not reach[n]
+    )
 
 
 def allowed(package: str, repo: str, major: str, allowlist: list) -> dict | None:
@@ -112,79 +110,125 @@ def allowed(package: str, repo: str, major: str, allowlist: list) -> dict | None
             continue
         if str(a.get("repo", "*")) not in ("*", repo):
             continue
-        if a.get("package", "*") in ("*", package) or re.fullmatch(str(a.get("package")), package):
+        if a.get("package", "*") in ("*", package) or re.fullmatch(
+            str(a.get("package")), package
+        ):
             return a
     return None
 
 
-NOTHING_CHECKED = "**Nothing was checked**: no repository could be read (see \"Not checked\" above). This is an error, not a pass."
+NOTHING_CHECKED = '**Nothing was checked**: no repository could be read (see "Not checked" above). This is an error, not a pass.'
 
 
-def report_markdown(project: str, major: str, per_repo: dict, missing: dict, allowlist: list) -> tuple:
+def report_markdown(
+    project: str, major: str, per_repo: dict, missing: dict, allowlist: list
+) -> tuple:
     rows: dict = {}
     for repo, pkgs in per_repo.items():
         for p in pkgs:
             rows.setdefault(p, []).append(repo)
     # hidden only when every repository it was found in is allowlisted: an entry
     # scoped to one repository must not hide the finding in the others
-    new = {p: r for p, r in rows.items() if not all(allowed(p, x, major, allowlist) for x in r)}
-    lines = ["### 2. Extensions depend on their server: `%s`" % project, "",
-             "%d repositories checked; **%d package(s) do not depend on the PG %s server**, %d allowlisted." %
-             (len(per_repo), len(new), major, len(rows) - len(new)), ""]
+    new = {
+        p: r
+        for p, r in rows.items()
+        if not all(allowed(p, x, major, allowlist) for x in r)
+    }
+    lines = [
+        "### 2. Extensions depend on their server: `%s`" % project,
+        "",
+        "%d repositories checked; **%d package(s) do not depend on the PG %s server**, %d allowlisted."
+        % (len(per_repo), len(new), major, len(rows) - len(new)),
+        "",
+    ]
     if new:
-        lines += ["These packages install without `%s` (RPM) / `%s` (Debian):" %
-                  (server_package("rpm", major), server_package("deb", major)), "",
-                  "| Package | Repositories |", "|---|---|"]
+        lines += [
+            "These packages install without `%s` (RPM) / `%s` (Debian):"
+            % (server_package("rpm", major), server_package("deb", major)),
+            "",
+            "| Package | Repositories |",
+            "|---|---|",
+        ]
         for p, repos in sorted(new.items()):
             lines.append("| %s | %s |" % (p, ", ".join(repos)))
         lines.append("")
     if missing:
-        lines.append("Not checked: " + ", ".join("%s (%s)" % (r, why) for r, why in sorted(missing.items())) + "\n")
+        lines.append(
+            "Not checked: "
+            + ", ".join("%s (%s)" % (r, why) for r, why in sorted(missing.items()))
+            + "\n"
+        )
     if not per_repo:
         lines.append("%s\n" % NOTHING_CHECKED)
     return "\n".join(lines), new
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--project", required=True, help="OBS project, e.g. isv:percona:ppg:staging:17")
-    ap.add_argument("--major", default="", help="PG major; default from the project name")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--project", required=True, help="OBS project, e.g. isv:percona:ppg:staging:17"
+    )
+    ap.add_argument(
+        "--major", default="", help="PG major; default from the project name"
+    )
     ap.add_argument("--rpm-repos", help="comma separated; default from the config")
     ap.add_argument("--deb-repos", help="comma separated; default from the config")
     ap.add_argument("--base-url", default="https://download.opensuse.org")
     ap.add_argument("--config", default=".github/package-deps-qa.yaml")
     ap.add_argument("--json", help="write the full result here")
-    ap.add_argument("--summary", help="append the Markdown report here (e.g. $GITHUB_STEP_SUMMARY)")
-    ap.add_argument("--strict", action="store_true", help="exit 1 on packages not in the allowlist")
+    ap.add_argument(
+        "--summary", help="append the Markdown report here (e.g. $GITHUB_STEP_SUMMARY)"
+    )
+    ap.add_argument(
+        "--strict", action="store_true", help="exit 1 on packages not in the allowlist"
+    )
     args = ap.parse_args(argv)
-    major = args.major or (re.search(r":(1[0-9])(?::|$)", args.project) or [None, ""])[1]
+    major = (
+        args.major or (re.search(r":(1[0-9])(?::|$)", args.project) or [None, ""])[1]
+    )
     if not major:
         ap.error("cannot tell the PG major from %s; give --major" % args.project)
-    section = load_section(args.config)
-    repos_cfg = {}
-    if Path(args.config).is_file() and yaml is not None:
-        repos_cfg = (yaml.safe_load(Path(args.config).read_text()) or {}).get("repos") or {}
-    rpm_repos = args.rpm_repos.split(",") if args.rpm_repos else list(repos_cfg.get("rpm") or ["RockyLinux_9"])
-    deb_repos = args.deb_repos.split(",") if args.deb_repos else list(repos_cfg.get("deb") or ["Debian_12"])
+    cfg = pdp.load_qa_config(args.config)
+    section = cfg.get("server_dependency") or {}
+    repos_cfg = cfg.get("repos") or {}
+    rpm_repos = (
+        args.rpm_repos.split(",")
+        if args.rpm_repos
+        else list(repos_cfg.get("rpm") or ["RockyLinux_9"])
+    )
+    deb_repos = (
+        args.deb_repos.split(",")
+        if args.deb_repos
+        else list(repos_cfg.get("deb") or ["Debian_12"])
+    )
     exclude = list(section.get("exclude") or [])
     allowlist = list(section.get("allowed") or [])
     for i, e in enumerate(allowlist, 1):
         # an entry without "package" (only a reason, or a typo) would allow everything
         if "package" not in (e or {}):
-            ap.error('server_dependency allowlist entry %d has no package (use "*" for any): %r' % (i, e))
+            ap.error(
+                'server_dependency allowlist entry %d has no package (use "*" for any): %r'
+                % (i, e)
+            )
 
     per_repo, missing = {}, {}
     for fmt, repos in (("rpm", rpm_repos), ("deb", deb_repos)):
         for repo in repos:
             url = pdp.repo_url(args.base_url, args.project, repo)
             try:
-                binaries = pdp.load_rpm_repo(url) if fmt == "rpm" else pdp.load_deb_repo(url)
+                binaries = (
+                    pdp.load_rpm_repo(url) if fmt == "rpm" else pdp.load_deb_repo(url)
+                )
             except SystemExit as e:
                 missing[repo] = str(e)
                 continue
             found = check(binaries, fmt, major, exclude)
             if found is None:
-                missing[repo] = "no %s package in the repository" % server_package(fmt, major)
+                missing[repo] = "no %s package in the repository" % server_package(
+                    fmt, major
+                )
             else:
                 per_repo[repo] = found
     md, new = report_markdown(args.project, major, per_repo, missing, allowlist)
@@ -193,8 +237,13 @@ def main(argv=None) -> int:
         with open(args.summary, "a") as f:
             f.write(md + "\n")
     if args.json:
-        Path(args.json).write_text(json.dumps({"per_repo": per_repo, "missing": missing, "new": new},
-                                              indent=2, sort_keys=True))
+        Path(args.json).write_text(
+            json.dumps(
+                {"per_repo": per_repo, "missing": missing, "new": new},
+                indent=2,
+                sort_keys=True,
+            )
+        )
     if not per_repo:
         return 2  # nothing checked is an error, in report-only mode too
     return 1 if (args.strict and new) else 0
