@@ -42,6 +42,11 @@ on:
         required: false
         default: ''
         type: string
+      instance:
+        description: 'OBS instance name from OBS_INSTANCES (e.g. labs); empty = the instance that hosts the project'
+        required: false
+        default: ''
+        type: string
       filter:
         description: 'Matrix-axis filter, space-separated AXIS=val[,val...] (e.g. "IO_METHOD=worker SCENARIO=pg-18"); empty = full matrix'
         required: false
@@ -65,7 +70,7 @@ run-name: >-
 # runs and another waits still cancels the waiting copy; that is the
 # documented GitHub behaviour and is accepted for a true duplicate.
 concurrency:
-  group: obs-qa-run-${{ inputs.project }}-${{ inputs.pr_number }}-${{ inputs.name }}-${{ inputs.package }}-${{ inputs.filter }}
+  group: obs-qa-run-${{ inputs.project }}-${{ inputs.pr_number }}-${{ inputs.instance }}-${{ inputs.name }}-${{ inputs.package }}-${{ inputs.filter }}
   cancel-in-progress: false
 
 jobs:
@@ -100,6 +105,7 @@ jobs:
           OBS_INSTANCES: ${{ vars.OBS_INSTANCES }}
           QA_PROJECT: ${{ inputs.project }}
           QA_PR_NUMBER: ${{ inputs.pr_number }}
+          QA_INSTANCE: ${{ inputs.instance }}
           QA_PACKAGE: ${{ inputs.package }}
           PYTHONPATH: ${{ github.workspace }}
         run: |

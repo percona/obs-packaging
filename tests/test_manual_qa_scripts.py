@@ -51,6 +51,20 @@ def test_resolve_picks_packages_instance():
     assert inst["name"] == "boo"
 
 
+def test_resolve_named_instance_overrides_hosting_rules():
+    m = _load("resolve_qa_instance")
+    # labs hosts neither this project nor its QA kind; the name wins.
+    inst = m.resolve_instance(_INSTANCES, "ppg:staging:18", "labs")
+    assert inst["name"] == "labs"
+
+
+def test_resolve_unknown_named_instance_fails():
+    m = _load("resolve_qa_instance")
+    with pytest.raises(SystemExit) as exc:
+        m.resolve_instance(_INSTANCES, "ppg:staging:18", "nope")
+    assert "nope" in str(exc.value) and "boo, labs" in str(exc.value)
+
+
 def test_resolve_picks_containers_instance():
     m = _load("resolve_qa_instance")
     inst = m.resolve_instance(_INSTANCES, "ppg:staging:18:containers")

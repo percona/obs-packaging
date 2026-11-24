@@ -25,6 +25,7 @@ Required env vars:
 
 Optional:
   QA_PR_NUMBER    PR number; empty for the production root
+  QA_INSTANCE     instance name; empty to resolve it from the project
   QA_PACKAGE      package name; empty for none
 """
 
@@ -93,9 +94,21 @@ def _hosts(instance: dict[str, Any], project: str) -> bool:
     return not kinds or qa_project_type("root:" + project) in kinds
 
 
-def resolve_instance(instances: list[dict[str, Any]], project: str) -> dict[str, Any]:
-    matches = [i for i in instances if _hosts(i, project)]
+def resolve_instance(
+    instances: list[dict[str, Any]], project: str, name: str = ""
+) -> dict[str, Any]:
     names = ", ".join(str(i.get("name", "?")) for i in instances) or "(none)"
+    if name:
+        # Explicit choice: skips the include/exclude and qa_types checks, for a
+        # project that lives on an instance other than the one that normally
+        # hosts its QA kind (e.g. a PR project built on one instance only).
+        named = [i for i in instances if str(i.get("name", "")) == name]
+        if len(named) != 1:
+            raise SystemExit(
+                f"error: no OBS instance named {name!r}; instances: {names}"
+            )
+        return named[0]
+    matches = [i for i in instances if _hosts(i, project)]
     if not matches:
         raise SystemExit(
             f"error: no OBS instance hosts {project} "
@@ -129,7 +142,9 @@ def main() -> None:
     validate_package(os.environ.get("QA_PACKAGE", ""))
 
     instances = _load_instances(os.environ.get("OBS_INSTANCES", ""))
-    inst = resolve_instance(instances, project)
+    inst = resolve_instance(
+        instances, project, os.environ.get("QA_INSTANCE", "").strip()
+    )
 
     if pr_number:
         rootprj = f"{inst.get('pr_rootprj', '')}:pr-{pr_number}"
