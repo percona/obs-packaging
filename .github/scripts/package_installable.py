@@ -58,17 +58,20 @@ DEFAULT_IMAGES = {
 EL_SCRIPT = r"""
 dnf -y -q install dnf-plugins-core >/dev/null 2>&1 || { echo "RESULT base-setup-failed checked=0"; exit 0; }
 if [ "$WITH_EPEL" = 1 ]; then
+  # without EPEL/CRB every EPEL-only dependency would look missing: fail instead
   dnf -y -q install epel-release >/dev/null 2>&1 ||
-    dnf -y -q install "https://dl.fedoraproject.org/pub/epel/epel-release-latest-$EL.noarch.rpm" >/dev/null 2>&1
+    dnf -y -q install "https://dl.fedoraproject.org/pub/epel/epel-release-latest-$EL.noarch.rpm" >/dev/null 2>&1 ||
+    { echo "REASON could not install epel-release"; echo "RESULT repo-unreachable checked=0"; exit 0; }
   dnf config-manager --set-enabled crb >/dev/null 2>&1 ||
-    dnf config-manager --set-enabled powertools >/dev/null 2>&1 || true
+    dnf config-manager --set-enabled powertools >/dev/null 2>&1 ||
+    { echo "REASON could not enable CRB/PowerTools"; echo "RESULT repo-unreachable checked=0"; exit 0; }
 fi
 # the install docs disable the distribution's postgresql module on EL8
 [ "$EL" = 8 ] && dnf -y -q module disable postgresql >/dev/null 2>&1
 printf "[obs]\nname=obs\nbaseurl=%s\nenabled=1\ngpgcheck=0\n" "$URL" > /etc/yum.repos.d/obs.repo
 # the OBS repository was found published before the container started, so a
 # failure here (ours, or a Rocky/EPEL mirror) is a failure, not "not published"
-dnf -q makecache >/tmp/makecache.log 2>&1 || { tail -3 /tmp/makecache.log | sed "s/^/    /"; echo "RESULT repo-unreachable checked=0"; exit 0; }
+dnf -q makecache >/tmp/makecache.log 2>&1 || { tail -3 /tmp/makecache.log | sed "s/^/REASON /"; echo "RESULT repo-unreachable checked=0"; exit 0; }
 n=$(dnf -q repoquery --repo obs --latest-limit 1 --arch x86_64,noarch --qf "%{name}" 2>/dev/null | sort -u | wc -l)
 [ "$n" -eq 0 ] && { echo "RESULT no-packages checked=0"; exit 0; }
 dnf -q repoclosure --check obs --newest --arch x86_64 --arch noarch 2>&1
@@ -79,12 +82,18 @@ echo "RESULT ok checked=$n"
 # indented reason for every package that cannot be installed.
 DEB_SCRIPT = r"""
 export DEBIAN_FRONTEND=noninteractive
-{ apt-get update -qq && apt-get install -y -qq ca-certificates curl gnupg xz-utils; } >/dev/null 2>&1 ||
-  { echo "RESULT base-setup-failed checked=0"; exit 0; }
-curl -fsSL "$URL/Release.key" | gpg --dearmor -o /usr/share/keyrings/obs.gpg 2>/dev/null ||
-  { echo "RESULT repo-unreachable checked=0"; exit 0; }
+{ apt-get update -qq && apt-get install -y -qq ca-certificates curl gnupg xz-utils; } >/tmp/setup.log 2>&1 ||
+  { tail -3 /tmp/setup.log | sed "s/^/REASON /"; echo "RESULT base-setup-failed checked=0"; exit 0; }
+curl -fsSL "$URL/Release.key" 2>/tmp/key.log | gpg --dearmor -o /usr/share/keyrings/obs.gpg 2>>/tmp/key.log ||
+  { tail -2 /tmp/key.log | sed "s/^/REASON /"; echo "RESULT repo-unreachable checked=0"; exit 0; }
 echo "deb [signed-by=/usr/share/keyrings/obs.gpg] $URL/ /" > /etc/apt/sources.list.d/obs.list
-apt-get update -qq >/dev/null 2>&1
+# if this update fails (or only warns about our repository), every package
+# would look not installable: report the repository as unreachable instead
+apt-get update -qq >/tmp/update.log 2>&1; rc=$?
+if [ $rc != 0 ] || grep -E "^(E|W):" /tmp/update.log | grep -qF "$URL"; then
+  grep -E "^(E|W):" /tmp/update.log | tail -3 | sed "s/^/REASON /"
+  echo "RESULT repo-unreachable checked=0"; exit 0
+fi
 { curl -fsSL "$URL/Packages.gz" | gzip -dc || curl -fsSL "$URL/Packages.xz" | xz -dc; } > /tmp/P 2>/dev/null
 awk '/^Package:/{p=$2} /^Architecture:/{a=$2}
      /^$/{if(p!=""&&(a=="amd64"||a=="all"))print p; p="";a=""}
@@ -127,6 +136,15 @@ def parse_output(text: str) -> tuple:
         if current and line.startswith("    ") and line.strip():
             failures[current].append(line.strip())
     return status, checked, failures
+
+
+def reason_of(text: str) -> str:
+    """The "REASON ..." lines a container printed (why it could not check)."""
+    return "; ".join(
+        line[len("REASON ") :].strip()
+        for line in text.splitlines()
+        if line.startswith("REASON ") and line[len("REASON ") :].strip()
+    )[:300]
 
 
 def package_name(nevra: str) -> str:
@@ -213,31 +231,26 @@ def check_repo(repo: str, url: str, image: str, docker: str) -> dict:
         return empty_result(state)
     if is_el(repo):
         el = repo.rsplit("_", 1)[1].split(".")[0]
-        full = parse_output(
-            run_container(
-                docker, image, EL_SCRIPT, {"URL": url + "/", "EL": el, "WITH_EPEL": 1}
-            )
-        )
-        base = parse_output(
-            run_container(
-                docker, image, EL_SCRIPT, {"URL": url + "/", "EL": el, "WITH_EPEL": 0}
-            )
-        )
+        env = {"URL": url + "/", "EL": el}
+        full_out = run_container(docker, image, EL_SCRIPT, dict(env, WITH_EPEL=1))
+        base_out = run_container(docker, image, EL_SCRIPT, dict(env, WITH_EPEL=0))
+        full, base = parse_output(full_out), parse_output(base_out)
         needs = {p: r for p, r in base[2].items() if p not in full[2]}
         return {
             "status": full[0],
             "checked": full[1],
             "failures": full[2],
             "needs_epel": needs,
+            "why": reason_of(full_out) if full[0] != "ok" else "",
         }
-    status, checked, failures = parse_output(
-        run_container(docker, image, DEB_SCRIPT, {"URL": url})
-    )
+    out = run_container(docker, image, DEB_SCRIPT, {"URL": url})
+    status, checked, failures = parse_output(out)
     return {
         "status": status,
         "checked": checked,
         "failures": failures,
         "needs_epel": {},
+        "why": reason_of(out) if status != "ok" else "",
     }
 
 

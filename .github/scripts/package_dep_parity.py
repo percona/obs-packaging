@@ -482,7 +482,7 @@ def report_pairs_markdown(
         lines.append("")
     if missing:
         lines.append(
-            "Not compared (repository not published): "
+            "Not compared: "
             + ", ".join("%s (%s)" % (p, why) for p, why in sorted(missing.items()))
             + "\n"
         )
@@ -518,7 +518,8 @@ def main_pairs(args, major: str) -> int:
         r, d = pair.split(":", 1)
         rg, dg = graph("rpm", r), graph("deb", d)
         if isinstance(rg, str) or isinstance(dg, str):
-            missing[pair] = "no %s repository" % (r if isinstance(rg, str) else d)
+            # the loader's own message: not published, or e.g. being republished
+            missing[pair] = rg if isinstance(rg, str) else dg
             continue
         per_pair[pair] = compare(rg, dg)
     md, new, rows = report_pairs_markdown(

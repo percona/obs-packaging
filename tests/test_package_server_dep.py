@@ -122,6 +122,7 @@ def test_candidates_need_the_major_as_a_number_of_its_own():
         and not c("geos317")
     )
     assert not c("percona-postgresql17", "17") and not c("percona-pgpool-II-pg17")
+    assert not c("percona-pgpool-II-pg17-pcp")
     assert c("percona-pgpool-II-pg17-extensions")
 
 
