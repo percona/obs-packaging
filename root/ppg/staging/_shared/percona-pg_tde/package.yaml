@@ -12,16 +12,6 @@ qa:
       INSTALL_FROM_PACKAGES: true
       TEST_SUITE: All
       PLATFORMS:
-        - debian-12
-        - debian-12-arm
-        - debian-13
-        - debian-13-arm
-        - ubuntu-jammy
-        - ubuntu-jammy-arm
-        - ubuntu-noble
-        - ubuntu-noble-arm
-        - ubuntu-resolute
-        - ubuntu-resolute-arm
         - rocky-8
         - rocky-8-arm
         - rocky-9
@@ -52,16 +42,6 @@ qa:
       VERSION: ppg-%!{PG_VERSION}
       INSTALL_FROM_PACKAGES: true
       PLATFORMS:
-        - debian-12
-        - debian-12-arm
-        - debian-13
-        - debian-13-arm
-        - ubuntu-jammy
-        - ubuntu-jammy-arm
-        - ubuntu-noble
-        - ubuntu-noble-arm
-        - ubuntu-resolute
-        - ubuntu-resolute-arm
         - rocky-8
         - rocky-8-arm
         - rocky-9
@@ -96,16 +76,6 @@ qa:
       VERSION: ppg-%!{PG_VERSION}
       TDE_BRANCH: "%!{PG_TDE_REVISION}"
       PLATFORMS:
-        - debian-12
-        - debian-12-arm
-        - debian-13
-        - debian-13-arm
-        - ubuntu-jammy
-        - ubuntu-jammy-arm
-        - ubuntu-noble
-        - ubuntu-noble-arm
-        - ubuntu-resolute
-        - ubuntu-resolute-arm
         - rocky-8
         - rocky-8-arm
         - rocky-9
