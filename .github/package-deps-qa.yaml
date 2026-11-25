@@ -103,6 +103,14 @@ server_dependency:
         SQL scripts only. Installed as a dependency of
         percona-postgresql-<major>-postgis-3, which depends on the server
         (the same as Debian's own packaging).
+    - package: 'percona-pg_repack1[0-9](-llvmjit)?'
+      repo: "*"
+      reason: >-
+        Intended, same as PGDG: the RPM ships the pg_repack client tool and the
+        extension in one package and requires only the client and -libs, so the
+        tool can be installed on hosts without a server. Debian
+        (percona-postgresql-<major>-repack) depends on the server, like Debian's
+        own package.
 
 # ---------------------------------------------------------------------------
 # 3. Installable: every package (amd64) can be installed on its OS from the
