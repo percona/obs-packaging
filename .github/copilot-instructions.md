@@ -553,7 +553,7 @@ A release ships in two hops (spec: `docs/superpowers/specs/2026-10-13-prerelease
 and covers one **release unit**: a staging project plus its direct `containers` and `tarballs`
 children (`common.BUNDLED_SUBPROJECTS`); every other subproject is a unit of its own, released
 separately (`project release ppg:staging:18:extras` → `ppg:releases:18:extras`, tag
-`ppg/extras-18.6-N`). Units, ids, `PPG_RELEASE` per unit and the prune are described in
+`ppg/extras-18.6-N`). Units, ids, `PPG_RELEASE` per unit (`UNIT_RELEASE` for the `common:*` units, which have no PG major) and the prune are described in
 [`docs/PERCONA_OBS_TOOL.md`](../docs/PERCONA_OBS_TOOL.md) under "Release units". Release mirrors
 carry no `subproject:` repository paths.
 `sync prerelease <releases-project> --branch-from <profile>` copies the unit from staging into a PR pre-release
@@ -1086,7 +1086,7 @@ Reusable setup steps called by every workflow:
 
 ### Workflow 1 — `sync-main.yml` (sync on merge to main, plus nightly)
 
-**Trigger**: push to `main` where at least one file under `root/**` changed, and a nightly `schedule` (00:00 UTC). The nightly run is what picks up upstream-only commits for packages whose `_service` tracks a moving ref (branch/HEAD, e.g. the devel tier): `--skip-unchanged` never skips those, while pinned packages are skipped from the sync-state manifest at no API cost. There is no release-only skip: a merged release PR raises `PPG_RELEASE`, and the resulting staging image retag is safe because the released images already sit in the PR's pre-release project. `obs-release.yml` neither pauses nor locks this workflow.
+**Trigger**: push to `main` where at least one file under `root/**` changed, and a nightly `schedule` (00:00 UTC). The nightly run is what picks up upstream-only commits for packages whose `_service` tracks a moving ref (branch/HEAD, e.g. the devel tier): `--skip-unchanged` never skips those, while pinned packages are skipped from the sync-state manifest at no API cost. There is no release-only skip: a merged release PR raises `PPG_RELEASE` (or `UNIT_RELEASE` for a `common:*` unit), and the resulting staging image retag is safe because the released images already sit in the PR's pre-release project. `obs-release.yml` neither pauses nor locks this workflow.
 
 **What it does** — two jobs. The `sync` job serializes on its own concurrency group and is never cancelled mid-upload; the `poll` job runs in a cancel-superseding group (newest poll wins — version lists and release tags are diffed from the last *successful* run's head SHA, so the surviving poll covers superseded runs' ranges).
 
