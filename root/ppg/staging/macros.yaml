@@ -13,6 +13,13 @@
 # ship it (-with-postgis and the extras custom image).  Empty by default;
 # staging:19 adds address_standardizer and postgis_tiger_geocoder here.
 - CONTAINER_POSTGIS_EXTRA_COMPONENTS:
+# Extras extensions installed in the custom (extras) image only where the
+# major supports them.  Every extras major ships both today; a major whose
+# PG version they do not build against overrides it empty.  The
+# value is pasted into the Dockerfile, so it uses the image's own
+# ${PPG_MAJOR_VERSION} build argument: PG_MAJOR_VERSION is not defined yet at
+# this level.
+- CUSTOM_IMAGE_EXTRA_COMPONENTS: percona-timescaledb_${PPG_MAJOR_VERSION} percona-pgvectorscale_${PPG_MAJOR_VERSION}
 # Extra Percona extensions bundled in the binary tarballs.  Empty by default;
 # majors that ship pg_tde / pg_oidc_validator override it in their own
 # macros.yaml.

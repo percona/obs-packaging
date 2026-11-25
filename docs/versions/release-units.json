@@ -95,6 +95,15 @@
     "release_dir": "root/ppg/releases/19"
   },
   {
+    "unit": "ppg:staging:19:extras",
+    "members": [
+      "ppg:staging:19:extras",
+      "ppg:staging:19:extras:containers"
+    ],
+    "release_project": "ppg:releases:19:extras",
+    "release_dir": "root/ppg/releases/19/extras"
+  },
+  {
     "unit": "ppg:staging:common:tools",
     "members": [
       "ppg:staging:common:tools",
