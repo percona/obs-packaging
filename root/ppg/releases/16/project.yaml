@@ -127,6 +127,23 @@ project-config: '# --- from root/project.yaml ---
   %endif
 
 
+  %if "%_repository" == "openSUSE_Leap_16"
+
+  # openSUSE:Backports:SLE-16.0 ships LLVM 21 and shadows the SLFO llvm/clang
+
+  # meta packages and clang-tools, but the Leap prjconf still lists only the
+
+  # SLFO compilers (clang15 clang17 clang19) as /usr/bin/clang providers, so
+
+  # clang-tools 21 is unresolvable ("have choice for /usr/bin/clang"). A
+
+  # FileProvides line replaces the inherited one for the same path.
+
+  FileProvides: /usr/bin/clang clang21
+
+  %endif
+
+
   %if "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository"
   == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04"
 
@@ -414,8 +431,6 @@ qa:
     - rhel-10-arm
     SCENARIO:
     - pg-16
-    - pg-16-meta-server
-    - pg-16-meta-ha
     TESTING_BRANCH: main
     USE_OBS_REPO: true
     VERSION: ppg-16.16
@@ -424,6 +439,8 @@ qa:
   - SCENARIO
   name: upgrade
   parameters:
+    FROM_OBS_PROJECT:
+      project: ppg:staging:15
     FROM_REPO: release
     FROM_VERSION: ''
     OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:16
@@ -506,7 +523,7 @@ qa:
 - name: percona-pgaudit.pg_audit
   package: percona-pgaudit
   parameters:
-    COMPONENT_REF: '16.1'
+    COMPONENT_REF: '16.2'
     OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:16
     PRODUCT: pg_audit
     TEST_BRANCH: main
@@ -526,7 +543,7 @@ qa:
 - name: percona-pgbackrest.pgbackrest
   package: percona-pgbackrest
   parameters:
-    COMPONENT_REF: release/2.60.0
+    COMPONENT_REF: release/2.60.1
     OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:16
     PRODUCT: pgbackrest
     TEST_BRANCH: main
@@ -582,6 +599,90 @@ qa:
     USE_OBS_REPO: true
     VERSION: ppg-16.16
   pipeline: component-generic-parallel
+- matrix:
+  - IO_METHOD
+  name: percona-ppg-server.meta-server
+  package: percona-ppg-server
+  parameters:
+    IO_METHOD:
+    - worker
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:16
+    PLATFORMS:
+    - debian-12
+    - debian-12-arm
+    - debian-13
+    - debian-13-arm
+    - ubuntu-jammy
+    - ubuntu-jammy-arm
+    - ubuntu-noble
+    - ubuntu-noble-arm
+    - ubuntu-resolute
+    - ubuntu-resolute-arm
+    - rocky-8
+    - rocky-8-arm
+    - rocky-9
+    - rocky-9-arm
+    - rocky-10
+    - rocky-10-arm
+    - ol-8
+    - ol-8-arm
+    - ol-9
+    - ol-9-arm
+    - ol-10
+    - ol-10-arm
+    - rhel-8
+    - rhel-8-arm
+    - rhel-9
+    - rhel-9-arm
+    - rhel-10
+    - rhel-10-arm
+    SCENARIO: pg-16-meta-server
+    TESTING_BRANCH: main
+    USE_OBS_REPO: true
+    VERSION: ppg-16.16
+  pipeline: ppg-multiOS-parallel
+- matrix:
+  - IO_METHOD
+  name: percona-ppg-server-ha.meta-ha
+  package: percona-ppg-server-ha
+  parameters:
+    IO_METHOD:
+    - worker
+    OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:releases:16
+    PLATFORMS:
+    - debian-12
+    - debian-12-arm
+    - debian-13
+    - debian-13-arm
+    - ubuntu-jammy
+    - ubuntu-jammy-arm
+    - ubuntu-noble
+    - ubuntu-noble-arm
+    - ubuntu-resolute
+    - ubuntu-resolute-arm
+    - rocky-8
+    - rocky-8-arm
+    - rocky-9
+    - rocky-9-arm
+    - rocky-10
+    - rocky-10-arm
+    - ol-8
+    - ol-8-arm
+    - ol-9
+    - ol-9-arm
+    - ol-10
+    - ol-10-arm
+    - rhel-8
+    - rhel-8-arm
+    - rhel-9
+    - rhel-9-arm
+    - rhel-10
+    - rhel-10-arm
+    SCENARIO: pg-16-meta-ha
+    TESTING_BRANCH: main
+    USE_OBS_REPO: true
+    VERSION: ppg-16.16
+  pipeline: ppg-multiOS-parallel
 - name: percona-wal2json.wal2json
   package: percona-wal2json
   parameters:
