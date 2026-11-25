@@ -1,7 +1,7 @@
 #!UseOBSRepositories
-#!BuildVersion: %!{PGADMIN_VERSION}
-#!BuildTag: percona-pgadmin4:<VERSION>-%!{UNIT_RELEASE}
-#!BuildTag: percona-pgadmin4:<VERSION>
+#!BuildVersion: %!{PGADMIN_VERSION}-%!{UNIT_RELEASE}
+#!BuildTag: percona-pgadmin4:%!{PGADMIN_VERSION}-%!{UNIT_RELEASE}
+#!BuildTag: percona-pgadmin4:%!{PGADMIN_VERSION}
 #!BuildTag: percona-pgadmin4:latest
 
 ARG UBI_BASE=%!{UBI9_BASE_IMAGE}
