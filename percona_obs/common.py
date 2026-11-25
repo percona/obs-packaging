@@ -339,6 +339,10 @@ def resolve_macros(sources: list[tuple[Path, str]]) -> dict[str, str]:
 # what keeps git_utils._macros_changed_since honest: it recomputes the same
 # value at the historical commit instead of seeing the name appear out of
 # nowhere.
+#
+# UNIT_RELEASE is the same idea for release units not numbered by a PG
+# version (common:tools, common:upgrade, ...): one plus the number of tags in
+# the unit's own release.yaml.
 def compute_ppg_release(
     product: str,
     pg_version: str,
@@ -360,19 +364,8 @@ def compute_ppg_release(
     than the highest ``n``: a nested unit's first tag continues its parent's
     numbering, so its tags do not start at 1.
     """
-    if not release_yaml_text:
-        return "1"
-    try:
-        data = yaml.safe_load(release_yaml_text) or {}
-    except yaml.YAMLError:
-        return "1"
-    if not isinstance(data, dict):
-        return "1"
-    from .release_record import release_tags  # local: release_record is leaf
-
-    try:
-        tags = release_tags(data)
-    except SystemExit:
+    tags = _release_record_tags(release_yaml_text)
+    if not tags:
         return "1"
     prefix = f"{product}/{unit_prefix}{pg_version}-"
     if not unit_prefix:
@@ -385,20 +378,38 @@ def compute_ppg_release(
     return str(max(numbers, default=0) + 1)
 
 
-def _has_release_tags(release_yaml_text: str) -> bool:
-    """True when *release_yaml_text* parses and records at least one tag."""
+def _release_record_tags(release_yaml_text: "str | None") -> "list[str]":
+    """Tags recorded in *release_yaml_text*; empty when it is missing, empty,
+    unparsable or malformed."""
+    if not release_yaml_text:
+        return []
     try:
         data = yaml.safe_load(release_yaml_text) or {}
     except yaml.YAMLError:
-        return False
+        return []
     if not isinstance(data, dict):
-        return False
+        return []
     from .release_record import release_tags  # local: release_record is leaf
 
     try:
-        return bool(release_tags(data))
+        return list(release_tags(data))
     except SystemExit:
-        return False
+        return []
+
+
+def compute_unit_release(release_yaml_text: "str | None") -> str:
+    """Return the counter of the NEXT release of a counter-numbered unit.
+
+    One plus the number of tags in *release_yaml_text* (the same counting as
+    ``cmd_project._derive_release_id``); a missing, empty, unparsable or
+    tag-less record is 1.
+    """
+    return str(len(_release_record_tags(release_yaml_text)) + 1)
+
+
+def _has_release_tags(release_yaml_text: str) -> bool:
+    """True when *release_yaml_text* parses and records at least one tag."""
+    return bool(_release_record_tags(release_yaml_text))
 
 
 def _read_worktree_file(path: Path) -> "str | None":
@@ -422,18 +433,18 @@ def _is_source_package(package_path: Path) -> bool:
 def _nested_unit_record(
     root: Path,
     parts: "tuple[str, ...]",
-    major: str,
+    top: str,
     read_file: "Callable[[Path], str | None]",
 ) -> "tuple[Path, str] | None":
     """(release.yaml path, tag prefix) of the nested release unit that holds
-    the project or package at *parts* (``<product>/<tier>/<major>/…``), or
-    None when it belongs to the major's own unit or is not under a major.
+    the project or package at *parts* (``<product>/<tier>/<top>/…``), or
+    None when it belongs to *top*'s own unit or is not under *top*.
 
-    The unit is the leading run of path components below the major that are
+    The unit is the leading run of path components below *top* that are
     projects and not bundled children: ``18/extras/containers/img`` →
     ``extras``.
     """
-    if len(parts) < 4 or parts[2] != major:
+    if len(parts) < 4 or parts[2] != top:
         return None
     unit: list[str] = []
     for seg in parts[3:]:
@@ -445,7 +456,7 @@ def _nested_unit_record(
     if not unit:
         return None
     return (
-        root.joinpath(parts[0], "releases", major, *unit, "release.yaml"),
+        root.joinpath(parts[0], "releases", top, *unit, "release.yaml"),
         "".join(f"{u}-" for u in unit),
     )
 
@@ -458,13 +469,14 @@ def inject_computed_macros(
 ) -> dict[str, str]:
     """Return *macros* plus the tool-computed entries, without mutating it.
 
-    Four entries: ``PG_PREV_MAJOR_VERSION`` (the major before
+    Five entries: ``PG_PREV_MAJOR_VERSION`` (the major before
     ``PG_MAJOR_VERSION``), ``OBS_PROJECT_TIER`` (the tier directory the project
     or package is synced from: ``<product>/<tier>/…`` → ``devel``, ``staging``;
     taken from the path as given, so a package symlinked from another tier
     renders with the tier of the link), ``PPG_RELEASE`` (see
     ``compute_ppg_release``) and ``PKG_REVISION`` (see
-    ``pkg_version.compute_pkg_revision``).  *read_file*
+    ``pkg_version.compute_pkg_revision``) and ``UNIT_RELEASE`` (see
+    ``compute_unit_release``).  *read_file*
     returns a repo file's contents or None; callers pass a working-tree reader
     or a git-revision reader so the identical value can be computed at any
     commit — see ``git_utils._macros_changed_since``.  *repo_root* defaults to
@@ -477,7 +489,11 @@ def inject_computed_macros(
     seeded floor + 1; source packages (a spec or dsc present) with no
     derivable version get 1; projects, aggregates, images, tarballs and
     ``_link`` packages get nothing.  An explicitly declared
-    ``PPG_RELEASE``/``PKG_REVISION`` always wins.
+    ``PPG_RELEASE``/``PKG_REVISION``/``UNIT_RELEASE`` always wins.
+
+    ``UNIT_RELEASE`` is set for paths whose third component is not a PG major
+    (``ppg/staging/common/tools/…``): one plus the tags of that unit's
+    ``releases/<top>/<unit…>/release.yaml``, 1 when it has none.
     """
     root = REPO_ROOT if repo_root is None else repo_root
     major_str = (macros.get("PG_MAJOR_VERSION") or "").strip()
@@ -493,9 +509,18 @@ def inject_computed_macros(
     if tier is not None and "OBS_PROJECT_TIER" not in macros:
         macros = {**macros, "OBS_PROJECT_TIER": tier}
 
+    product = parts[0]
+    if "UNIT_RELEASE" not in macros and len(parts) >= 3 and not parts[2].isdigit():
+        unit = _nested_unit_record(root, parts, parts[2], read_file)
+        record = (
+            unit[0]
+            if unit is not None
+            else root / product / "releases" / parts[2] / "release.yaml"
+        )
+        macros = {**macros, "UNIT_RELEASE": compute_unit_release(read_file(record))}
+
     pg_version = macros.get("PG_VERSION")
     if pg_version and "PPG_RELEASE" not in macros:
-        product = parts[0]
         major = pg_version.split(".", 1)[0].strip()
         if major:
             release_file = root / product / "releases" / major / "release.yaml"
