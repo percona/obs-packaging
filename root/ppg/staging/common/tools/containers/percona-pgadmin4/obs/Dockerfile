@@ -1,7 +1,7 @@
 #!UseOBSRepositories
-#!BuildVersion: %!{PGADMIN_VERSION}
-#!BuildTag: percona-pgadmin4:<VERSION>-<RELEASE>
-#!BuildTag: percona-pgadmin4:<VERSION>
+#!BuildVersion: %!{PGADMIN_VERSION}-%!{UNIT_RELEASE}
+#!BuildTag: percona-pgadmin4:%!{PGADMIN_VERSION}-%!{UNIT_RELEASE}
+#!BuildTag: percona-pgadmin4:%!{PGADMIN_VERSION}
 #!BuildTag: percona-pgadmin4:latest
 
 ARG UBI_BASE=%!{UBI9_BASE_IMAGE}
@@ -15,7 +15,7 @@ LABEL name="Percona pgAdmin 4" \
       org.opencontainers.image.authors="info@percona.com"
 
 LABEL version="%!{PGADMIN_VERSION}"
-LABEL release="1"
+LABEL release="%!{UNIT_RELEASE}"
 
 # curl/libcurl: the 8.23.0 build from ppg:common:deps, replacing the distro's
 # curl-minimal/libcurl-minimal (which it obsoletes).

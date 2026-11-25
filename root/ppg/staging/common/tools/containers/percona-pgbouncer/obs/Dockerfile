@@ -1,7 +1,7 @@
 #!UseOBSRepositories
-#!BuildVersion: %!{PGBOUNCER_VERSION}
-#!BuildTag: percona-pgbouncer:<VERSION>-<RELEASE>
-#!BuildTag: percona-pgbouncer:<VERSION>
+#!BuildVersion: %!{PGBOUNCER_VERSION}-%!{UNIT_RELEASE}
+#!BuildTag: percona-pgbouncer:%!{PGBOUNCER_VERSION}-%!{UNIT_RELEASE}
+#!BuildTag: percona-pgbouncer:%!{PGBOUNCER_VERSION}
 #!BuildTag: percona-pgbouncer:latest
 
 ARG UBI_BASE=%!{UBI9_BASE_IMAGE}
@@ -17,7 +17,7 @@ LABEL name="Percona PgBouncer" \
       org.opencontainers.image.authors="info@percona.com"
 
 LABEL version="%!{PGBOUNCER_VERSION}"
-LABEL release="1"
+LABEL release="%!{UNIT_RELEASE}"
 
 RUN microdnf -y update
 

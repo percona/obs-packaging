@@ -1,7 +1,7 @@
 #!UseOBSRepositories
-#!BuildVersion: 19.%!{PG_19_MINOR_VERSION}-18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}
-#!BuildTag: percona-distribution-postgresql-upgrade:19-18-17-16-15-<RELEASE>
-#!BuildTag: percona-distribution-postgresql-upgrade:19.%!{PG_19_MINOR_VERSION}-18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-<RELEASE>
+#!BuildVersion: 19.%!{PG_19_MINOR_VERSION}-18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-%!{UNIT_RELEASE}
+#!BuildTag: percona-distribution-postgresql-upgrade:19-18-17-16-15-%!{UNIT_RELEASE}
+#!BuildTag: percona-distribution-postgresql-upgrade:19.%!{PG_19_MINOR_VERSION}-18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-%!{UNIT_RELEASE}
 #!BuildTag: percona-distribution-postgresql-upgrade:19-18-17-16-15
 #!BuildTag: percona-distribution-postgresql-upgrade:19.%!{PG_19_MINOR_VERSION}-18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}
 
@@ -14,8 +14,8 @@ LABEL name="Percona Distribution for PostgreSQL Upgrade" \
       summary="Percona Distribution for PostgreSQL major version upgrade container" \
       maintainer="Percona Development <info@percona.com>" \
       org.opencontainers.image.authors="info@percona.com"
-LABEL version="%!{PG_VERSION}-%!{PPG_RELEASE}"
-LABEL release="%!{PPG_RELEASE}"
+LABEL version="%!{PG_VERSION}-%!{UNIT_RELEASE}"
+LABEL release="%!{UNIT_RELEASE}"
 
 ARG PPG_REPO
 ARG RHEL_VER
@@ -33,7 +33,7 @@ RUN microdnf -y install \
     glibc-langpack-en glibc-minimal-langpack systemd-rpm-macros file \
     mariadb-connector-c-config crypto-policies-scripts pkgconfig
 
-ENV PPG_VERSION %!{PG_VERSION}-%!{PPG_RELEASE}
+ENV PPG_VERSION %!{PG_VERSION}-%!{UNIT_RELEASE}
 ENV PPG_MAJOR_VERSION %!{PG_MAJOR_VERSION}
 ENV OS_VER ${RHEL_VER}
 

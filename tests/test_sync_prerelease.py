@@ -335,6 +335,18 @@ def test_scope_local_paths_nested_unit_watches_both_records(tmp_path, monkeypatc
     assert root / "ppg/releases/18/release.yaml" in paths
 
 
+def test_scope_paths_watch_counter_unit_record(tmp_path, monkeypatch):
+    import percona_obs.common as common
+
+    root = tmp_path / "root"
+    src = root / "ppg/staging/common/tools"
+    src.mkdir(parents=True)
+    (src / "project.yaml").write_text("title: t\n")
+    monkeypatch.setattr(common, "REPO_ROOT", root)
+    paths = cmd_sync._scope_local_paths(src, [], {}, "R")
+    assert root / "ppg/releases/common/tools/release.yaml" in paths
+
+
 def _nested_units_repo(tmp_path, monkeypatch):
     """Git repo with staging/18 (+containers, a package) and a nested
     staging/18/extras unit; returns (git, commit)."""
