@@ -5,7 +5,8 @@
 # major directory cannot silently rebuild every tool.
 # The definition itself lives in ../macros.yaml (ppg:staging:common resolves the
 # same tier configuration and needs the macro too).
-# No PG_VERSION: nothing here uses the computed PPG_RELEASE counter.
+# No PG_VERSION: the images here are numbered with the computed UNIT_RELEASE
+# (the N of the next ppg/common-tools-N release), not with PPG_RELEASE.
 
 # PGADMIN_VERSION is the single bump knob for the percona-pgadmin4 image tags
 # (containers/percona-pgadmin4/obs/Dockerfile); keep it in sync with the

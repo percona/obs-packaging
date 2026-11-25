@@ -1,6 +1,6 @@
 #!UseOBSRepositories
 #!BuildVersion: %!{PGBACKREST_VERSION}
-#!BuildTag: percona-pgbackrest:<VERSION>-<RELEASE>
+#!BuildTag: percona-pgbackrest:<VERSION>-%!{UNIT_RELEASE}
 #!BuildTag: percona-pgbackrest:<VERSION>
 #!BuildTag: percona-pgbackrest:latest
 
@@ -17,7 +17,7 @@ LABEL name="Percona pgBackRest" \
       org.opencontainers.image.authors="info@percona.com"
 
 LABEL version="%!{PGBACKREST_VERSION}"
-LABEL release="1"
+LABEL release="%!{UNIT_RELEASE}"
 
 RUN microdnf -y update
 
