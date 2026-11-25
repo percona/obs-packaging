@@ -3,6 +3,15 @@
 %:
 	dh $@
 
+# Build portable binaries: releases up to 0.8.x default to -march=native,
+# which makes the result depend on the build host CPU. Later upstream
+# defaults to an empty OPTFLAGS, so this is a no-op there.
+override_dh_auto_build:
+	dh_auto_build -- OPTFLAGS=""
+
+override_dh_auto_install:
+	dh_auto_install -- OPTFLAGS=""
+
 override_dh_builddeb:
 	dh_builddeb -- -Zgzip
 

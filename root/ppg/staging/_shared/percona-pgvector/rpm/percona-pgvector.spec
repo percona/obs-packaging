@@ -22,6 +22,11 @@
 %global with_llvm_arg with_llvm=no
 %endif
 
+# Build portable binaries: releases up to 0.8.x default to -march=native,
+# which makes the result depend on the build host CPU. Later upstream
+# defaults to an empty OPTFLAGS, so this is a no-op there.
+%global optflags_arg OPTFLAGS=""
+
 Name:		%{sname}
 Version:	1.0.0
 Release:        %!{PKG_REVISION}%{?dist}
@@ -29,10 +34,6 @@ Summary:	Open-source vector similarity search for Postgres
 License:	PostgreSQL
 URL:		https://github.com/pgvector/pgvector/
 Source0:	%{name}-%{version}.tar.gz
-
-# To be removed when upstream releases a version with this patch:
-# https://github.com/pgvector/pgvector/pull/311
-Patch0: pgvector-0.6.2-fixillegalinstructionrror.patch
 
 BuildRequires:	percona-postgresql%{pgmajorversion}-devel
 %if %llvm && ( 0%{?rhel} || 0%{?fedora} )
@@ -84,17 +85,16 @@ This package provides JIT support for pgvector
 
 %prep
 %setup -q -n %{sname}-%{version}
-%patch -P 0 -p0
 
 %build
 %if 0%{?gts_version}
 source /opt/rh/gcc-toolset-%{gts_version}/enable
 %endif
-USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags} %{with_llvm_arg}
+USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags} %{with_llvm_arg} %{optflags_arg}
 
 %install
 %{__rm} -rf %{buildroot}
-USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags} %{with_llvm_arg} install DESTDIR=%{buildroot}
+USE_PGXS=1 PATH=%{pginstdir}/bin:$PATH %{__make} %{?_smp_mflags} %{with_llvm_arg} %{optflags_arg} install DESTDIR=%{buildroot}
 
 #Remove header file, we don't need it right now:
 %{__rm} %{buildroot}%{pginstdir}/include/server/extension/%{pname}/%{pname}.h
