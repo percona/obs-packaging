@@ -43,6 +43,7 @@ jobs:
       run: ${{ steps.plan.outputs.run }}
       major: ${{ steps.plan.outputs.major }}
       marker: ${{ steps.plan.outputs.marker }}
+      majors: ${{ steps.plan.outputs.majors }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -131,6 +132,90 @@ jobs:
         with:
           name: ${{ needs.plan.outputs.marker }}
           path: /tmp/nightly-major.txt
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # package-deps: dependency QA of each staging major, read straight from the
+  # OBS repositories (no Jenkins, no OBS login): RPM vs Debian parity, every
+  # extension depends on its server, every package installs on every OS in
+  # the config's repos: list.
+  # One job per major. Report-only until the current findings are triaged:
+  # findings are listed in the job summary but do not fail the job. Set the
+  # repository variable PACKAGE_DEPS_STRICT=true to make findings that are not
+  # allowlisted in .github/package-deps-qa.yaml fail it. A check that checked
+  # nothing (no repository readable, no server package) fails the job in both
+  # modes: that is a broken run, not a pass.
+  # docs/package-dependency-qa.md explains the checks and the job summary.
+  # ──────────────────────────────────────────────────────────────────────────
+  package-deps:
+    name: Package deps / ppg:staging:${{ matrix.major }}
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
+    # The install check runs throw-away containers: the runner needs Docker.
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        major: ${{ fromJSON(needs.plan.outputs.majors) }}
+    env:
+      PROJECT: ${{ vars.OBS_ROOTPRJ || 'isv:percona' }}:ppg:staging:${{ matrix.major }}
+      STRICT: ${{ vars.PACKAGE_DEPS_STRICT == 'true' && '--strict' || '' }}
+      OBS_DOWNLOAD_URL: ${{ vars.OBS_DOWNLOAD_URL || 'https://download.opensuse.org' }}
+    steps:
+      # The commit this run was started from (main on schedule, the chosen
+      # branch on a manual run), so a branch can test its own checks. The
+      # other jobs pin main on purpose; this one has no state to share with main.
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --quiet pyyaml
+
+      - name: 1. RPM and Debian packages depend on the same packages
+        id: parity
+        continue-on-error: true
+        run: |
+          mkdir -p out
+          python3 .github/scripts/package_dep_parity.py --project "$PROJECT" \
+            --base-url "$OBS_DOWNLOAD_URL" --json out/parity.json \
+            --summary "$GITHUB_STEP_SUMMARY" $STRICT
+
+      - name: 2. Every extension depends on its server
+        id: server
+        continue-on-error: true
+        run: |
+          python3 .github/scripts/package_server_dep.py --project "$PROJECT" \
+            --base-url "$OBS_DOWNLOAD_URL" --json out/server-dependency.json \
+            --summary "$GITHUB_STEP_SUMMARY" $STRICT
+
+      - name: 3. Every package installs on every configured OS
+        id: installable
+        continue-on-error: true
+        run: |
+          python3 .github/scripts/package_installable.py --project "$PROJECT" \
+            --base-url "$OBS_DOWNLOAD_URL" --jobs 4 --json out/installable.json \
+            --summary "$GITHUB_STEP_SUMMARY" $STRICT
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: package-deps-${{ matrix.major }}
+          path: out/
+          if-no-files-found: ignore
+
+      - name: Result
+        if: always()
+        env:
+          PARITY: ${{ steps.parity.outcome }}
+          SERVER: ${{ steps.server.outcome }}
+          INSTALLABLE: ${{ steps.installable.outcome }}
+        run: |
+          echo "1. parity: $PARITY   2. server dependency: $SERVER   3. installable: $INSTALLABLE"
+          for o in "$PARITY" "$SERVER" "$INSTALLABLE"; do
+            [ "$o" = success ] || { echo "::error::Package deps for PG ${{ matrix.major }}: a check checked nothing, crashed, or (with PACKAGE_DEPS_STRICT) found problems. See the job summary and log."; exit 1; }
+          done
 
   # ──────────────────────────────────────────────────────────────────────────
   # qa: trigger Jenkins for each matrix combo (in parallel) and upload the

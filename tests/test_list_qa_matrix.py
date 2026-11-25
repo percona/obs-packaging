@@ -463,6 +463,17 @@ def test_manual_run_never_skips(tmp_path, monkeypatch):
     )
 
 
+def test_majors_json_is_one_major_or_every_scheduled_one():
+    p = _plan()
+    schedule = {"mon": "14", "tue": "15", "wed": "16", "sat": "19", "fri": "18"}
+    assert p.majors_json("17", schedule) == '["17"]'
+    assert p.majors_json("", schedule) == '["14","15","16","18","19"]'
+
+
+def test_plan_writes_majors_for_jobs_with_one_job_per_major(tmp_path, monkeypatch):
+    assert _main(tmp_path, monkeypatch, "schedule", changed=True)["majors"] == '["15"]'
+
+
 # --- nightly: each project on the OBS instance that hosts it ------------------
 
 INSTANCES = [

@@ -91,7 +91,7 @@ makes query timing information such as max/min/mean time more accurate.
 %if %llvm
 %package llvmjit
 Summary:        Just-in-time compilation support for pg_stat_monitor
-Requires:        %{name}%{?_isa} = %{version}-%{release}
+Requires:        %{name}%{?_isa} = %{epoch}:%{version}-%{release}
 %if 0%{?suse_version} == 1500
 BuildRequires:        llvm17-devel clang17-devel
 Requires:        llvm17

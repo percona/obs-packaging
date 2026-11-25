@@ -34,6 +34,15 @@ on:
     paths: ['root/**']
     types: [closed]
 
+# Same group as obs-pr-check.yml: closing a PR cancels its in-flight check run
+# and this run starts only once that one has stopped.  Without it a check run
+# still syncing when the PR is merged re-creates the PR project right after
+# the `delete` job removed it, and nothing deletes it again.  Release-only PRs
+# are not synced by obs-pr-check.yml, so there is nothing of theirs to cancel.
+concurrency:
+  group: obs-pr-check-pr-${{ github.event.number }}
+  cancel-in-progress: true
+
 jobs:
   release-dispatch:
     name: Tag release and dispatch obs-release

@@ -105,6 +105,7 @@ BuildRequires:  selinux-policy-devel
 %endif
 Requires:       percona-postgresql%{pgmajorversion} >= %{pgmajorversion}
 Requires:       percona-postgresql%{pgmajorversion}-server
+Requires:       %{name}-pcp = %{version}-%{release}
 %if 0%{?rhel}
 Requires(post):   systemd-sysv
 %endif
@@ -125,6 +126,7 @@ PostgreSQL database client. It provides the following features:
 %package devel
 Summary:        Development headers and libraries for pgpool-II
 Requires:       %{name} = %{version}-%{release}
+Requires:       %{name}-pcp = %{version}-%{release}
 
 %description devel
 Development headers and libraries for building pgpool-II client applications.
@@ -207,7 +209,7 @@ install -d %{buildroot}%{_mandir}/man8
 install doc/src/sgml/man8/*.8 %{buildroot}%{_mandir}/man8
 
 %{__install} -d %{buildroot}%{_unitdir}
-%{__install} -m 755 %{SOURCE9} %{buildroot}%{_unitdir}/pgpool-II.service
+%{__install} -m 644 %{SOURCE9} %{buildroot}%{_unitdir}/pgpool.service
 
 %{__install} -d %{buildroot}%{_sysconfdir}/sysconfig
 %{__install} -m 644 %{SOURCE2} %{buildroot}%{_sysconfdir}/sysconfig/pgpool
@@ -241,6 +243,11 @@ cp %{buildroot}%{_sysconfdir}/%{short_name}/pool_hba.conf.sample \
 touch %{buildroot}%{_sysconfdir}/%{short_name}/pool_passwd
 touch %{buildroot}%{_sysconfdir}/%{short_name}/pgpool_node_id
 
+# sudoers.d — allow postgres to run ip/arping for watchdog VIP
+install -d %{buildroot}%{_sysconfdir}/sudoers.d
+install -m 0440 src/redhat/pgpool_sudoers.d \
+    %{buildroot}%{_sysconfdir}/sudoers.d/pgpool
+
 %if %sshd_selinux
 checkmodule -M -m -o pgpool_II_sshd_fix.mod %{SOURCE1}
 semodule_package -o pgpool_II_sshd_fix.pp -m pgpool_II_sshd_fix.mod
@@ -263,7 +270,7 @@ rm -f %{buildroot}%{_libdir}/libpgpoolpcp.{a,la}
 
 %post
 /sbin/ldconfig
-%systemd_post pgpool-II.service
+%systemd_post pgpool.service
 systemd-tmpfiles --create %{_tmpfilesdir}/%{name}.conf 2>/dev/null || :
 %if %sshd_selinux
 %{_sbindir}/selinuxenabled 2>/dev/null && \
@@ -271,11 +278,11 @@ systemd-tmpfiles --create %{_tmpfilesdir}/%{name}.conf 2>/dev/null || :
 %endif
 
 %preun
-%systemd_preun pgpool-II.service
+%systemd_preun pgpool.service
 
 %postun
 /sbin/ldconfig
-%systemd_postun_with_restart pgpool-II.service
+%systemd_postun_with_restart pgpool.service
 %if %sshd_selinux
 if [ $1 -eq 0 ] ; then
 	# Package removal, not upgrade
@@ -301,7 +308,10 @@ fi
 %{_sysconfdir}/pgpool-II/*.sample*
 %{_sysusersdir}/pgpool-II.conf
 %{_tmpfilesdir}/%{name}.conf
-%{_unitdir}/pgpool-II.service
+%ghost %dir /run/pgpool
+%dir %attr(0750,root,root) %{_sysconfdir}/sudoers.d
+%{_sysconfdir}/sudoers.d/pgpool
+%{_unitdir}/pgpool.service
 %if %sshd_selinux
 %{_datadir}/selinux/packages/pgpool_II_sshd_fix.pp
 %endif

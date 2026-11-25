@@ -312,6 +312,7 @@ Requires:	openssl-libs >= 1.1.1k
 Provides:       postgresql-libs >= %{version}-%{release}
 Provides:       %{sname}-libs = %{epoch}:%{version}-%{release}
 Provides:       %{vname}-libs = %{epoch}:%{version}-%{release}
+Provides:       %{vname}-libs%{?_isa} = %{epoch}:%{version}-%{release}
 Obsoletes:      %{sname}-libs <= %{epoch}:%{version}-%{release}
 Obsoletes:      %{vname}-libs <= %{epoch}:%{version}-%{release}
 
