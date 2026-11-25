@@ -192,6 +192,10 @@ PKG_REVISION_FLOORS: dict[tuple[str, str, str], int] = {
     ("ppg:staging:common:tools", "percona-pgbadger", "13.2"): 3,
     ("ppg:staging:common:tools", "percona-patroni", "4.1.5"): 1,
     ("ppg:common:deps", "ydiff", "1.4.2"): 3,
+    # PostGIS deps: rpm only, versions keyed through set_version.  gdal38 is
+    # EL8 only; libspatialite50 at 8 on EL10, 6 on EL8/EL9.
+    ("ppg:common:deps:postgis", "gdal38", "3.8.5"): 7,
+    ("ppg:common:deps:postgis", "libspatialite50", "5.1.0"): 8,
     # production counter 1: deb "V-1+..." sorts below "V-1.codename"
     ("ppg:staging:14", "percona-postgresql-common", "293"): 1,
     ("ppg:staging:15", "percona-postgresql-common", "293"): 1,
