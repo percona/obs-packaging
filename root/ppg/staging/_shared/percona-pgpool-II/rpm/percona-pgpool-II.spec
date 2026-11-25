@@ -23,15 +23,6 @@
 %global sshd_selinux 0
 %endif
 
-# On RHEL 10, libmemcached comes from pgdg-libmemcached-awesome (EPEL is not
-# needed), which does not provide its sonames; it is found through the rpath:
-%if 0%{?rhel} == 10
-%global __requires_exclude ^lib(hashkit|memcached|memcachedutil)\\.so
-%global memcached_dir %{pgdg_libmemcachedinstdir}
-%else
-%global memcached_dir %{_includedir}/libmemcached
-%endif
-
 # pcp_* tools are all the same binary (hardlinked); suppress duplicate build-id errors
 %undefine _unique_build_ids
 

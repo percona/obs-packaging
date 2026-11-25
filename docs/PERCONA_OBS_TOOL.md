@@ -1282,6 +1282,33 @@ so a devel package that is a symlink into the staging tree renders `devel`. Shar
 files use it wherever they name their own tier's projects, e.g.
 `${OBS_ROOTPRJ}:ppg:%!{OBS_PROJECT_TIER}:common:tools` in an `obs/_aggregate`.
 
+### The `UNIT_RELEASE` counter
+
+`UNIT_RELEASE` is the same counter for release units that are not numbered by a PG
+major: the cross-version units `common:tools`, `common:upgrade` and
+`common:upgrade:extras`. `load_macros` computes it for every project or package under
+`root/<product>/<tier>/<top>/…` whose `<top>` (the third path component) is not a
+decimal number, so PG-major trees never get it. The record it reads is
+`root/<product>/releases/<top>/<unit…>/release.yaml`, where `<unit…>` is the leading
+run of project directories below `<top>` that are not bundled subprojects
+(`containers`, `tarballs`): a `containers` project reads its parent unit's record.
+
+The value is the number of tags in that record plus one, which is the `N` of the
+unit's next `ppg/common-tools-N`, `ppg/common-upgrade-N` or
+`ppg/common-upgrade-extras-N` release. It does not reset on a version bump, because
+the unit has no minor version of its own to reset against. A unit whose record is
+missing, empty or unparsable gets `1`. A `UNIT_RELEASE` declared in a `macros.yaml`
+wins over the computed value.
+
+The `percona-pgadmin4`, `percona-pgbackrest` and `percona-pgbouncer` Dockerfiles
+under `staging/common/tools/containers` tag the image `<name>:<VERSION>-%!{UNIT_RELEASE}`
+and use it in `LABEL release`; the upgrade images under `staging/common/upgrade`
+use it for their numbered tags, `LABEL version`, `LABEL release` and `ENV PPG_VERSION`.
+Because the Dockerfiles reference the macro, merging a release PR of one of these
+units changes the rendered Dockerfiles, and the next sync retags every image of that
+unit, the same way a merged PG-major release PR retags that major's images through
+`PPG_RELEASE`.
+
 ### The `PKG_REVISION` floor
 
 `PKG_REVISION` is a tool-computed macro, like `PPG_RELEASE` and `PG_PREV_MAJOR_VERSION`. It renders into every spec

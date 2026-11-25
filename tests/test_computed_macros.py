@@ -461,3 +461,91 @@ def test_project_tier_explicit_declaration_wins(tmp_path):
         repo_root=root,
     )
     assert macros["OBS_PROJECT_TIER"] == "staging"
+
+
+TOOLS_RECORD = "project: ppg:staging:common:tools\nreleases:\n- ppg/common-tools-1\n"
+UPGRADE_RECORD = (
+    "project: ppg:staging:common:upgrade\nreleases:\n"
+    "- ppg/common-upgrade-1\n"
+    "- source_commit: 3d8b3662044cbc7019c8fe8dce1c8a7e1a89d435\n"
+    "  tag: ppg/common-upgrade-2\n"
+)
+
+
+def _unit_tree(tmp_path: Path, tools: "str | None", upgrade: "str | None") -> Path:
+    root = tmp_path / "root"
+    staging = root / "ppg" / "staging"
+    for unit in ("common/tools", "common/upgrade", "common/upgrade/extras"):
+        (staging / unit / "containers" / "img").mkdir(parents=True)
+        (staging / unit / "project.yaml").write_text("title: u\n")
+        (staging / unit / "containers" / "project.yaml").write_text("title: c\n")
+    (staging / "18" / "containers" / "img").mkdir(parents=True)
+    (staging / "18" / "project.yaml").write_text("title: m\n")
+    for name, text in (("tools", tools), ("upgrade", upgrade)):
+        if text is not None:
+            rel = root / "ppg" / "releases" / "common" / name
+            rel.mkdir(parents=True)
+            (rel / "release.yaml").write_text(text)
+    return root
+
+
+def _unit_release(root: Path, rel_path: str, macros: "dict[str, str] | None" = None):
+    out = inject_computed_macros(
+        dict(macros or {}), root / rel_path, common._read_worktree_file, repo_root=root
+    )
+    return out.get("UNIT_RELEASE")
+
+
+def test_unit_release_counts_the_units_own_tags(tmp_path):
+    root = _unit_tree(tmp_path, tools=TOOLS_RECORD, upgrade=UPGRADE_RECORD)
+    assert _unit_release(root, "ppg/staging/common/tools") == "2"
+    assert _unit_release(root, "ppg/staging/common/tools/containers") == "2"
+    assert _unit_release(root, "ppg/staging/common/tools/containers/img") == "2"
+    assert _unit_release(root, "ppg/staging/common/upgrade/containers/img") == "3"
+
+
+def test_unit_release_is_one_without_a_record(tmp_path):
+    root = _unit_tree(tmp_path, tools=TOOLS_RECORD, upgrade=UPGRADE_RECORD)
+    # common:upgrade:extras is its own unit and must not borrow upgrade's count
+    assert (
+        _unit_release(root, "ppg/staging/common/upgrade/extras/containers/img") == "1"
+    )
+
+
+def test_unit_release_tolerates_broken_records(tmp_path):
+    for i, text in enumerate(("", ": : :", "releases: []\n", "- just a list\n")):
+        root = _unit_tree(tmp_path / str(i), tools=text, upgrade=None)
+        assert _unit_release(root, "ppg/staging/common/tools/containers/img") == "1"
+
+
+def test_unit_release_absent_under_a_pg_major(tmp_path):
+    root = _unit_tree(tmp_path, tools=TOOLS_RECORD, upgrade=UPGRADE_RECORD)
+    assert _unit_release(root, "ppg/staging/18", {"PG_VERSION": "18.4"}) is None
+    assert _unit_release(root, "ppg/staging/18/containers/img") is None
+
+
+def test_unit_release_explicit_declaration_wins(tmp_path):
+    root = _unit_tree(tmp_path, tools=TOOLS_RECORD, upgrade=None)
+    assert _unit_release(root, "ppg/staging/common/tools", {"UNIT_RELEASE": "9"}) == "9"
+
+
+def test_unit_release_is_pure_in_its_reader():
+    """Same value from a fake git reader: no filesystem access of its own."""
+    files = {
+        Path("/r/root/ppg/staging/common/tools/project.yaml"): "title: t\n",
+        Path("/r/root/ppg/releases/common/tools/release.yaml"): TOOLS_RECORD,
+    }
+    out = inject_computed_macros(
+        {},
+        Path("/r/root/ppg/staging/common/tools/containers/img"),
+        files.get,
+        repo_root=Path("/r/root"),
+    )
+    assert out["UNIT_RELEASE"] == "2"
+
+
+def test_unit_release_leaves_ppg_release_alone(tmp_path):
+    root = _nested_tree(
+        tmp_path, "project: ppg:staging:18:extras\nreleases:\n- ppg/extras-18.4-6\n"
+    )
+    assert _ppg_release(root, "ppg/staging/18/extras/containers/img") == "7"
