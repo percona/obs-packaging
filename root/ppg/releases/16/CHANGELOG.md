@@ -4,6 +4,92 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [16.16-2] - 2026-11-25
+
+### Changed
+#### Version updates
+- percona-pgaudit: update upstream version 16.2 (https://github.com/pgaudit/pgaudit/releases/tag/16.2)
+- percona-pgbackrest: update upstream version 2.60.1 (https://github.com/pgbackrest/pgbackrest/releases/tag/release/2.60.1)
+- percona-postgresql-common: update upstream version 297 (https://salsa.debian.org/postgresql/postgresql-common.git)
+- python3-dns: update upstream version 2.9.2 (https://github.com/rthalley/dnspython/releases/tag/v2.9.2)
+- percona-distribution-postgresql [container image]: update image 16.16-1 → 16.16-2
+  - [ubi8, ubi9, ubi10] updated: percona-pgaudit16 16.1 → 16.2
+  - [ubi8, ubi9, ubi10] updated: percona-pgbackrest 2.60.0 → 2.60.1
+  - [ubi8, ubi9, ubi10] updated: percona-postgresql-client-common 294 → 297
+  - [ubi8, ubi9, ubi10] updated: percona-postgresql-common 294 → 297
+  - [ubi8, ubi9] updated: python3.12-dns 2.9.0 → 2.9.2
+- percona-distribution-postgresql-with-postgis [container image]: update image 16.16-1 → 16.16-2
+  - [ubi8, ubi9, ubi10] updated: percona-pgaudit16 16.1 → 16.2
+  - [ubi8, ubi9, ubi10] updated: percona-pgbackrest 2.60.0 → 2.60.1
+  - [ubi8, ubi9, ubi10] updated: percona-postgresql-client-common 294 → 297
+  - [ubi8, ubi9, ubi10] updated: percona-postgresql-common 294 → 297
+  - [ubi8, ubi9] updated: python3.12-dns 2.9.0 → 2.9.2
+
+#### Packaging updates
+- etcd: 3.5.35-1 → 3.5.35-2
+  - no package-level commits (shared macro or tooling change)
+- percona-credcheck: 6.0-1 → 6.0-2
+  - openSUSE Leap 16: build against LLVM 21 from Backports ([#283](https://github.com/percona/obs-packaging/pull/283))
+- percona-patroni: 4.1.5-5 → 4.1.5-7
+  - PG-2956 percona-patroni-consul is not installable on EL8/9/10 ([#313](https://github.com/percona/obs-packaging/pull/313))
+  - PG-2954 update packaging files to fix server dependency ([#322](https://github.com/percona/obs-packaging/pull/322))
+- percona-pg-telemetry: 1.2.0-6 → 1.2.0-7
+  - percona-pg-telemetry: do not depend on the server on Debian ([#323](https://github.com/percona/obs-packaging/pull/323))
+- percona-pg_cron: 1.6.8-4 → 1.6.8-5
+  - openSUSE Leap 16: build against LLVM 21 from Backports ([#283](https://github.com/percona/obs-packaging/pull/283))
+- percona-pg_repack: 1.5.3-9 → 1.5.3-12
+  - openSUSE Leap 16: build against LLVM 21 from Backports ([#283](https://github.com/percona/obs-packaging/pull/283))
+  - PG-2954 update packaging files to fix server dependency ([#322](https://github.com/percona/obs-packaging/pull/322))
+  - pg_repack (rpm): skip the pg_attver test rewrite when upstream already has it ([#329](https://github.com/percona/obs-packaging/pull/329))
+- percona-pg_stat_monitor: 2.4.0-5 → 2.4.0-7
+  - PG-2954 update packaging files to fix server dependency ([#322](https://github.com/percona/obs-packaging/pull/322))
+  - PG-2954 fix pgpool service name and PG-2964 fix epoch in PGSM llvmjit package dependency ([#331](https://github.com/percona/obs-packaging/pull/331))
+- percona-pgbouncer: 1.26.1-5 → 1.26.1-6
+  - PG-2949 percona-pgbouncer: don't use c-ares on RHEL 8 ([#297](https://github.com/percona/obs-packaging/pull/297))
+- percona-pgpool-II: 4.7.3-1 → 4.7.3-3
+  - PG-2954 update packaging files to fix server dependency ([#322](https://github.com/percona/obs-packaging/pull/322))
+  - PG-2954 fix pgpool service name and PG-2964 fix epoch in PGSM llvmjit package dependency ([#331](https://github.com/percona/obs-packaging/pull/331))
+- percona-pgvector: 0.8.7-3 → 0.8.7-4
+  - openSUSE Leap 16: build against LLVM 21 from Backports ([#283](https://github.com/percona/obs-packaging/pull/283))
+- percona-postgis: 3.5.7-6 → 3.5.7-8
+  - openSUSE Leap 16: build against LLVM 21 from Backports ([#283](https://github.com/percona/obs-packaging/pull/283))
+  - PG-2954 update packaging files to fix server dependency ([#322](https://github.com/percona/obs-packaging/pull/322))
+- percona-postgresql: 16.16-1 → 16.16-5
+  - percona-postgresql: "- Percona Distribution" version suffix on non-PSP builds only ([#274](https://github.com/percona/obs-packaging/pull/274))
+  - openSUSE Leap 16: build against LLVM 21 from Backports ([#283](https://github.com/percona/obs-packaging/pull/283))
+  - PG-2954 update packaging files to fix server dependency ([#322](https://github.com/percona/obs-packaging/pull/322))
+  - percona-postgresql (rpm): provide arch-qualified -libs name ([#332](https://github.com/percona/obs-packaging/pull/332))
+- python3-psycopg2: 2.9.13-5 → 2.9.13-6
+  - no package-level commits (shared macro or tooling change)
+
+### Security
+- python3-dns: 2.9.0→2.9.2 fixes CVE-2026-128089 (packaging commit a841a1cd)
+- Go toolchain 1.26.10 → 1.26.11 (rebuilds of etcd, gosu, percona-telemetry-agent): fixes
+  CVE-2026-97033, CVE-2026-97034, CVE-2026-97035, CVE-2026-97036, CVE-2026-97037, CVE-2026-97038,
+  CVE-2026-97039, CVE-2026-97040, CVE-2026-97041, CVE-2026-97042, CVE-2026-97043, CVE-2026-97054,
+  plus security fixes in security (https://go.dev/doc/devel/release)
+- No CVE fixes mentioned upstream for: percona-pgaudit, percona-pgbackrest (release notes and commit logs scanned for the version range).
+- Not scanned: percona-postgresql-common (no scanner for salsa.debian.org)
+- percona-distribution-postgresql [container image]: fixes 18 HIGH CVEs
+  - [ubi8, ubi9] dnspython 2.9.0 (fix: 2.9.2): CVE-2026-128089
+  - [ubi8] expat 2.5.0-6.el8_10 (fix: 2.5.0-10.el8_10): CVE-2026-115506
+  - [ubi9] expat 2.5.0-9.el9_9.4 (fix: 2.5.0-9.el9_9.8): CVE-2026-115506
+  - [ubi10] expat 2.7.3-2.el10_3.4 (fix: 2.7.3-2.el10_3.8): CVE-2026-115506
+  - [ubi9] krb5-libs 1.21.1-10.el9_8.1 (fix: 1.21.1-10.el9_9.2): CVE-2026-107364, CVE-2026-112315, CVE-2026-112316, CVE-2026-112317, CVE-2026-112318, CVE-2026-112319, CVE-2026-112320, CVE-2026-112321, CVE-2026-112322, CVE-2026-112323, CVE-2026-118380, CVE-2026-119079, CVE-2026-71199, CVE-2026-71200
+  - [ubi10] krb5-libs 1.21.3-11.el10 (fix: 1.21.3-11.el10_3.2): CVE-2026-107364, CVE-2026-112315, CVE-2026-112316, CVE-2026-112317, CVE-2026-112318, CVE-2026-112319, CVE-2026-112320, CVE-2026-112321, CVE-2026-112322, CVE-2026-112323, CVE-2026-118380, CVE-2026-119079, CVE-2026-71199, CVE-2026-71200
+  - [ubi8] sqlite-libs 3.26.0-21.el8_10 (fix: 3.26.0-28.el8_10): CVE-2026-119373, CVE-2026-119586
+- percona-distribution-postgresql-with-postgis [container image]: fixes 20 HIGH CVEs
+  - [ubi8, ubi9] dnspython 2.9.0 (fix: 2.9.2): CVE-2026-128089
+  - [ubi8] expat 2.5.0-6.el8_10 (fix: 2.5.0-10.el8_10): CVE-2026-115506
+  - [ubi9] expat 2.5.0-9.el9_9.4 (fix: 2.5.0-9.el9_9.8): CVE-2026-115506
+  - [ubi10] expat 2.7.3-2.el10_3.4 (fix: 2.7.3-2.el10_3.8): CVE-2026-115506
+  - [ubi9] krb5-libs 1.21.1-10.el9_8.1 (fix: 1.21.1-10.el9_9.2): CVE-2026-107364, CVE-2026-112315, CVE-2026-112316, CVE-2026-112317, CVE-2026-112318, CVE-2026-112319, CVE-2026-112320, CVE-2026-112321, CVE-2026-112322, CVE-2026-112323, CVE-2026-118380, CVE-2026-119079, CVE-2026-71199, CVE-2026-71200
+  - [ubi10] krb5-libs 1.21.3-11.el10 (fix: 1.21.3-11.el10_3.2): CVE-2026-107364, CVE-2026-112315, CVE-2026-112316, CVE-2026-112317, CVE-2026-112318, CVE-2026-112319, CVE-2026-112320, CVE-2026-112321, CVE-2026-112322, CVE-2026-112323, CVE-2026-118380, CVE-2026-119079, CVE-2026-71199, CVE-2026-71200
+  - [ubi10] liblerc 4.0.0-8.el10 (fix: 4.3.0-1.el10_3): CVE-2026-10758
+  - [ubi8] qt5-qtbase 5.15.3-10.el8_10 (fix: 5.15.3-11.el8_10): CVE-2026-16762
+  - [ubi8] qt5-qtbase-common 5.15.3-10.el8_10 (fix: 5.15.3-11.el8_10): CVE-2026-16762
+  - [ubi8] sqlite-libs 3.26.0-21.el8_10 (fix: 3.26.0-28.el8_10): CVE-2026-119373, CVE-2026-119586
+
 ## [16.16-1] - 2026-11-13
 
 ### Added
