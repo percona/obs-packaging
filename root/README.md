@@ -133,10 +133,12 @@ one plus the number of releases already listed for the project's `PG_VERSION` in
 `PG_MINOR_VERSION` is bumped. For a project inside a nested unit of a PG major
 (`staging/18/extras`, `staging/16/tde`) the counter follows the unit: it is read from
 `releases/<major>/<unit>/release.yaml` once that file lists a tag, from the major's record
-before that. Declare it only to pin a project to its own counter —
-`ppg/staging/common/upgrade/containers` and `ppg/staging/common/upgrade/extras/containers` do not do this: they
-declare `PG_VERSION` as the upgrade target ahead of the rest of `staging/18`, so they
-simply track `staging/18`'s computed counter rather than having one of their own.
+before that. Declare it only to pin a project to its own counter.
+`ppg/staging/common/upgrade/containers` and `ppg/staging/common/upgrade/extras/containers`
+declare `PG_VERSION` as the upgrade target ahead of the rest of `staging/18`, so they do
+not use `PPG_RELEASE`: they use `UNIT_RELEASE`, which `percona-obs` computes from their
+own unit's record (`releases/common/upgrade/release.yaml`, `releases/common/upgrade/extras/release.yaml`)
+as one plus the number of tags in it. Projects under `staging/common` get it the same way.
 
 The cross-version projects under `ppg/staging/common` are released as three units:
 `common:tools`, `common:upgrade` and `common:upgrade:extras`, each with its `containers`

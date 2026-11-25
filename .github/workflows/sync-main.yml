@@ -13,9 +13,9 @@ name: Sync to OBS (main)
 # packages, while pinned packages (tag or full SHA) are skipped from the
 # sync-state manifest with no API traffic, so a scheduled run costs little
 # more than the services + MD5-compared upload of the moving-ref packages.
-# Merging a release PR raises PPG_RELEASE; the next sync retags the staging
-# images, which is safe because the released images already sit in that PR's
-# pre-release project.
+# Merging a release PR raises PPG_RELEASE (UNIT_RELEASE for a common:* unit);
+# the next sync retags the staging images, which is safe because the
+# released images already sit in that PR's pre-release project.
 #
 # Two-job debounce design: the `sync` job serializes on its own concurrency
 # group and is never cancelled mid-upload, so back-to-back pushes queue up
@@ -189,7 +189,7 @@ jobs:
       # releases/ directories are excluded from sync push traversal (each
       # root/*/releases/<name>/ contains a release.yaml marker that prevents
       # find_projects/find_packages from descending); release commits
-      # re-render the staging container tags (PPG_RELEASE) and are synced
+      # re-render the staging container tags (PPG_RELEASE, UNIT_RELEASE) and are synced
       # like any other push.
       # The report JSON scopes the poll job to the packages this run touched;
       # remove any stale report first (self-hosted runners reuse /tmp).
