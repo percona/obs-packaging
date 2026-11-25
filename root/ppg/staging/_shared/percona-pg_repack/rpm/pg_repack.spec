@@ -141,10 +141,14 @@ This package provides JIT support for pg_repack
 # store a "pg_attver=N" column version in pg_attribute.attoptions, so the
 # column options check of the repack-check test sees it. Leave it out of the
 # query, in both the test and its expected outputs, so that the test still
-# checks that pg_repack keeps the column options, on old and new minors:
+# checks that pg_repack keeps the column options, on old and new minors.
+# Upstream does the same after 1.5.3 (the devel tier builds master), so only
+# rewrite a source that does not handle pg_attver yet:
+if ! grep -q "attver" regress/sql/repack-check.sql; then
 sed -i "s/^SELECT attname, nullif(attstattarget, -1) as attstattarget, attoptions$/SELECT attname, nullif(attstattarget, -1) as attstattarget, nullif(array(SELECT o FROM unnest(attoptions) o WHERE o NOT LIKE 'pg_attver=%%'), '{}') AS attoptions/" \
 	regress/sql/repack-check.sql regress/expected/repack-check*.out
 test $(grep -l "pg_attver=" regress/sql/repack-check.sql regress/expected/repack-check*.out | wc -l) -eq 5
+fi
 
 %build
 %if 0%{?gts_version}

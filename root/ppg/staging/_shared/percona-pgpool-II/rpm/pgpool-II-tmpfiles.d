@@ -1,1 +1,1 @@
-d /run/pgpool-II 0755 postgres postgres -
+d /run/pgpool 0755 postgres postgres -

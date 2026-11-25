@@ -6,8 +6,9 @@ StartLimitBurst=10
 
 [Service]
 User=postgres
+Group=postgres
 
-EnvironmentFile=-/etc/sysconfig/pgpool-II
+EnvironmentFile=-/etc/sysconfig/pgpool
 ExecStart=/usr/bin/pgpool -f /etc/pgpool-II/pgpool.conf $OPTS 
 ExecStop=/usr/bin/pgpool -f /etc/pgpool-II/pgpool.conf -m fast stop
 ExecReload=/bin/kill -HUP $MAINPID

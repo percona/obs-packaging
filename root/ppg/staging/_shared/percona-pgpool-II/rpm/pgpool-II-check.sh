@@ -16,7 +16,7 @@
 
 # pgpool_setup installs pgpool_recovery, pgpool_regclass and pgpool_adm into
 # the clusters it creates, so put them into the copy of PostgreSQL.
-for d in pgpool_adm pgpool-recovery pgpool-regclass; do
+for d in pgpool_adm pgpool-recovery; do
 	USE_PGXS=1 make -C src/sql/$d install DESTDIR="$PWD/pgext" PG_CONFIG="$PGDG_PGINSTDIR/bin/pg_config"
 done
 cp -a "pgext$PGDG_PGINSTDIR/." "$PGDG_CHECK_INSTDIR/"

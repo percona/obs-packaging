@@ -27,11 +27,14 @@ Requires:       perl(strict)
 Requires:       perl(warnings)
 
 %{?perl_default_filter}
-# perl.prov/perl.req crash silently on UBI_8 aarch64 (Perl 5.26.3 parser bug
-# with this module's source). All Requires are listed explicitly below, so
-# disable auto-scanning to avoid the crash on that combination.
-%global __perl_provides /bin/true
-%global __perl_requires /bin/true
+# Auto-scanning by perl.prov/perl.req is disabled: all Requires and Provides
+# are listed explicitly. The macros must expand to nothing so rpm skips the
+# generator altogether. Do not point them at /bin/true: rpm writes the file
+# list to the generator's stdin without ignoring SIGPIPE, so a generator that
+# exits without reading it kills rpmbuild intermittently ("Broken pipe" after
+# %%doc, seen on EL8 aarch64).
+%global __perl_provides %{nil}
+%global __perl_requires %{nil}
 # Explicit provides: main module, backend marker, and bundled backportPP modules
 Provides:       perl(JSON) = %{version}
 Provides:       perl(JSON::Backend::PP)

@@ -5,4 +5,6 @@
 # -D: Discard pgpool_status file and do not restore previous status
 
 #OPTS=" -d -n"
-OPTS=" -n -D"
+OPTS=" -n"
+
+STOP_OPTS=" -m fast"
