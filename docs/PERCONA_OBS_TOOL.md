@@ -1271,6 +1271,17 @@ Two consequences follow, and both are deliberate:
 A project that needs its own pinned counter can still declare `PPG_RELEASE` in its
 `macros.yaml`; an explicit declaration always wins over the computed value.
 
+`PG_PREV_MAJOR_VERSION` is computed the same way: whenever the chain defines
+`PG_MAJOR_VERSION`, `load_macros` sets it to that major minus one (the server spec's
+`prevmajorversion` and the extras upgrade QA job use it). Declare it explicitly only
+to override the arithmetic.
+
+`OBS_PROJECT_TIER` is the tier directory a project or package is synced from
+(`root/<product>/<tier>/…` → `devel`, `staging`). It is taken from the path as given,
+so a devel package that is a symlink into the staging tree renders `devel`. Shared
+files use it wherever they name their own tier's projects, e.g.
+`${OBS_ROOTPRJ}:ppg:%!{OBS_PROJECT_TIER}:common:tools` in an `obs/_aggregate`.
+
 ### The `UNIT_RELEASE` counter
 
 `UNIT_RELEASE` is the same counter for release units that are not numbered by a PG
@@ -1297,17 +1308,6 @@ Because the Dockerfiles reference the macro, merging a release PR of one of thes
 units changes the rendered Dockerfiles, and the next sync retags every image of that
 unit, the same way a merged PG-major release PR retags that major's images through
 `PPG_RELEASE`.
-
-`PG_PREV_MAJOR_VERSION` is computed the same way: whenever the chain defines
-`PG_MAJOR_VERSION`, `load_macros` sets it to that major minus one (the server spec's
-`prevmajorversion` and the extras upgrade QA job use it). Declare it explicitly only
-to override the arithmetic.
-
-`OBS_PROJECT_TIER` is the tier directory a project or package is synced from
-(`root/<product>/<tier>/…` → `devel`, `staging`). It is taken from the path as given,
-so a devel package that is a symlink into the staging tree renders `devel`. Shared
-files use it wherever they name their own tier's projects, e.g.
-`${OBS_ROOTPRJ}:ppg:%!{OBS_PROJECT_TIER}:common:tools` in an `obs/_aggregate`.
 
 ### The `PKG_REVISION` floor
 
