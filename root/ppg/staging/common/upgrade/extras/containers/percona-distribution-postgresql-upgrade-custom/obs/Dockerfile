@@ -1,5 +1,5 @@
 #!UseOBSRepositories
-#!BuildVersion: 18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}
+#!BuildVersion: 18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-%!{UNIT_RELEASE}
 #!BuildTag: percona-distribution-postgresql-upgrade-custom:18-17-16-%!{UNIT_RELEASE}
 #!BuildTag: percona-distribution-postgresql-upgrade-custom:18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-%!{UNIT_RELEASE}
 #!BuildTag: percona-distribution-postgresql-upgrade-custom:18-17-16

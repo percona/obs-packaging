@@ -1,7 +1,7 @@
 #!UseOBSRepositories
-#!BuildVersion: %!{PGBOUNCER_VERSION}
-#!BuildTag: percona-pgbouncer:<VERSION>-%!{UNIT_RELEASE}
-#!BuildTag: percona-pgbouncer:<VERSION>
+#!BuildVersion: %!{PGBOUNCER_VERSION}-%!{UNIT_RELEASE}
+#!BuildTag: percona-pgbouncer:%!{PGBOUNCER_VERSION}-%!{UNIT_RELEASE}
+#!BuildTag: percona-pgbouncer:%!{PGBOUNCER_VERSION}
 #!BuildTag: percona-pgbouncer:latest
 
 ARG UBI_BASE=%!{UBI9_BASE_IMAGE}

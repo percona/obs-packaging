@@ -1,7 +1,7 @@
 #!UseOBSRepositories
-#!BuildVersion: %!{PGBACKREST_VERSION}
-#!BuildTag: percona-pgbackrest:<VERSION>-%!{UNIT_RELEASE}
-#!BuildTag: percona-pgbackrest:<VERSION>
+#!BuildVersion: %!{PGBACKREST_VERSION}-%!{UNIT_RELEASE}
+#!BuildTag: percona-pgbackrest:%!{PGBACKREST_VERSION}-%!{UNIT_RELEASE}
+#!BuildTag: percona-pgbackrest:%!{PGBACKREST_VERSION}
 #!BuildTag: percona-pgbackrest:latest
 
 ARG UBI_BASE=%!{UBI9_BASE_IMAGE}
