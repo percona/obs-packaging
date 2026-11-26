@@ -3451,6 +3451,9 @@ def cmd_project_freeze(args: argparse.Namespace) -> None:
             projects.extend(unit_freeze.unit_obs_projects(unit, args.rootprj))
         except ValueError as exc:
             sys.exit(f"error: {exc}: {unit}")
+    # main() skips osc configuration for the `project` group, so load the
+    # credentials here, as the other project subcommands that talk to OBS do.
+    osc.conf.get_config(override_apiurl=args.apiurl)
     apiurl = osc.conf.config["apiurl"]
     wording = _FREEZE_WORDING[args.frozen]
     for project, outcome in unit_freeze.apply_freeze(
@@ -3461,6 +3464,7 @@ def cmd_project_freeze(args: argparse.Namespace) -> None:
 
 def cmd_project_freeze_status(args: argparse.Namespace) -> None:
     """Print release units that are frozen or partially frozen."""
+    osc.conf.get_config(override_apiurl=args.apiurl)
     apiurl = osc.conf.config["apiurl"]
     found: "list[str]" = []
     for entry in list_release_units():

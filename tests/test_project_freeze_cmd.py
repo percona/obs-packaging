@@ -8,6 +8,8 @@ from percona_obs import cli, cmd_project, unit_freeze
 @pytest.fixture(autouse=True)
 def _fake_osc(monkeypatch):
     monkeypatch.setitem(cmd_project.osc.conf.config, "apiurl", "https://obs.example")
+    # Never read a real oscrc in tests.
+    monkeypatch.setattr(cmd_project.osc.conf, "get_config", lambda **_kw: None)
 
 
 def _run(argv):
@@ -113,3 +115,59 @@ def test_freeze_status_silent_when_nothing_frozen(monkeypatch, capsys):
     _run(["-R", "r", "project", "freeze-status", "--github-warning"])
     out = capsys.readouterr().out
     assert "::warning::" not in out and out == ""
+
+
+def _fake_get_config(monkeypatch):
+    """Replace osc.conf.get_config with a recorder that loads a known apiurl.
+
+    The `project` command group is skipped by main()'s osc configuration, so
+    each subcommand that talks to OBS must load the credentials itself.
+    """
+    calls = []
+
+    def fake(override_apiurl=None, **_kw):
+        calls.append(override_apiurl)
+        cmd_project.osc.conf.config["apiurl"] = "https://loaded.example"
+
+    monkeypatch.setattr(cmd_project.osc.conf, "get_config", fake)
+    return calls
+
+
+@pytest.mark.parametrize("action", ["freeze", "unfreeze"])
+def test_freeze_loads_osc_config_before_obs_calls(monkeypatch, action):
+    calls = _fake_get_config(monkeypatch)
+    monkeypatch.setattr(unit_freeze, "unit_obs_projects", lambda u, r: [f"r:{u}"])
+    seen = []
+    monkeypatch.setattr(
+        unit_freeze, "apply_freeze", lambda api, *a: seen.append(api) or []
+    )
+    _run(["-A", "https://cli.example", "-R", "r", "project", action, "ppg:staging:18"])
+    assert calls == ["https://cli.example"]
+    assert seen == ["https://loaded.example"]
+
+
+def test_freeze_invalid_unit_does_not_need_osc_config(monkeypatch):
+    calls = _fake_get_config(monkeypatch)
+
+    def bad(unit, rootprj):
+        raise ValueError("not a release unit root")
+
+    monkeypatch.setattr(unit_freeze, "unit_obs_projects", bad)
+    with pytest.raises(SystemExit):
+        _run(["-R", "r", "project", "freeze", "nope"])
+    assert calls == []
+
+
+def test_freeze_status_loads_osc_config_before_obs_calls(monkeypatch):
+    calls = _fake_get_config(monkeypatch)
+    monkeypatch.setattr(
+        cmd_project, "list_release_units", lambda: [{"unit": "ppg:staging:18"}]
+    )
+    monkeypatch.setattr(unit_freeze, "unit_obs_projects", lambda u, r: [f"r:{u}"])
+    seen = []
+    monkeypatch.setattr(
+        unit_freeze, "frozen_projects", lambda api, prjs: seen.append(api) or {}
+    )
+    _run(["-A", "https://cli.example", "-R", "r", "project", "freeze-status"])
+    assert calls == ["https://cli.example"]
+    assert seen == ["https://loaded.example"]
