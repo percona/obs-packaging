@@ -1,0 +1,120 @@
+name: OBS Freeze
+
+# Freezes or unfreezes release units (percona-obs project freeze/unfreeze) on
+# every OBS instance: a frozen unit keeps its published binaries while its
+# sources keep syncing, until it is unfrozen and rebuilt.  Manual only.
+# One leg runs per entry of the `OBS_INSTANCES` repository variable, like
+# sync-main.yml, with the same per-instance profile and credentials.
+
+on:
+  workflow_dispatch:
+    inputs:
+      units:
+        description: "Release unit roots, space-separated (e.g. ppg:staging:18 ppg:staging:17:extras)"
+        required: true
+      action:
+        description: "Freeze or unfreeze the units"
+        type: choice
+        options:
+          - freeze
+          - unfreeze
+        required: true
+
+run-name: ${{ inputs.action }} ${{ inputs.units }}
+
+permissions: {}
+
+jobs:
+  freeze:
+    name: ${{ inputs.action }} units (${{ matrix.instance.name }})
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    container: ghcr.io/${{ github.repository_owner }}/obs-tools:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: ${{ fromJSON(vars.OBS_INSTANCES) }}
+    # Serialize per instance; never cancel a freeze half-way through a project.
+    concurrency:
+      group: obs-freeze-${{ matrix.instance.name }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate the units
+        shell: bash
+        env:
+          UNITS: ${{ inputs.units }}
+        run: |
+          read -r -a UNIT_LIST <<<"$UNITS"
+          python3 .github/scripts/release_cut.py check -- "${UNIT_LIST[@]}"
+
+      - uses: ./.github/actions/obs-setup
+        with:
+          obs-apiurl: ${{ matrix.instance.apiurl }}
+          obs-user: ${{ matrix.instance.user || vars.OBS_USER }}
+          obs-password: ${{ secrets[format('OBS_PASSWORD_{0}', matrix.instance.name)] }}
+
+      # The instance's repo/project filters slice the packaging tree down to
+      # what this OBS instance builds; an absent key is an empty string and
+      # contributes no flag.
+      - name: Create percona-obs profile (${{ matrix.instance.name }})
+        shell: bash
+        env:
+          OBS_APIURL: ${{ matrix.instance.apiurl }}
+          INCLUDE_REPOS: ${{ matrix.instance.include_repos }}
+          EXCLUDE_REPOS: ${{ matrix.instance.exclude_repos }}
+          INCLUDE_PROJECTS: ${{ matrix.instance.include_projects }}
+          EXCLUDE_PROJECTS: ${{ matrix.instance.exclude_projects }}
+          INSTANCE_ENV: ${{ toJSON(matrix.instance.env) }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ -n "${INCLUDE_REPOS:-}" ]; then args+=(--include-repos "$INCLUDE_REPOS"); fi
+          if [ -n "${EXCLUDE_REPOS:-}" ]; then args+=(--exclude-repos "$EXCLUDE_REPOS"); fi
+          if [ -n "${INCLUDE_PROJECTS:-}" ]; then args+=(--include-projects "$INCLUDE_PROJECTS"); fi
+          if [ -n "${EXCLUDE_PROJECTS:-}" ]; then args+=(--exclude-projects "$EXCLUDE_PROJECTS"); fi
+          # Per-instance env from the OBS_INSTANCES entry, appended after the
+          # defaults above so an instance can override them (parse_env_overrides
+          # is last-wins, and splits KEY:VALUE on the first colon so a value
+          # such as "openSUSE.org:" survives intact).
+          env_args=()
+          if [ -n "${INSTANCE_ENV:-}" ] && [ "$INSTANCE_ENV" != "null" ]; then
+            while IFS= read -r kv; do
+              # `if`, not `[ … ] &&`: with an empty env object the test fails on
+              # the last line and, as the loop body's final command, would make
+              # the loop exit non-zero and trip `set -e`.
+              if [ -n "$kv" ]; then env_args+=(-e "$kv"); fi
+            done <<<"$(jq -r 'to_entries[] | "\(.key):\(.value)"' <<<"$INSTANCE_ENV")"
+          fi
+          venv/bin/python -m percona_obs \
+            -A "$OBS_APIURL" \
+            -R "${{ matrix.instance.rootprj }}" \
+            -e "REMOTE_OBS_ORG_INTERCONNECT:" \
+            -e "PERCONA_OBS_PACKAGING_BRANCH:main" \
+            -e "PERCONA_OBS_PACKAGING_REPO:${{ github.server_url }}/${{ github.repository }}.git" \
+            "${env_args[@]}" \
+            profile create main "${args[@]}"
+
+      # Output goes to the log and, in a code fence, to the run summary; the
+      # step still fails when the command fails (pipefail through tee).
+      - name: Freeze units (${{ matrix.instance.name }})
+        shell: bash
+        env:
+          ACTION: ${{ inputs.action }}
+          UNITS: ${{ inputs.units }}
+        run: |
+          set -euo pipefail
+          read -r -a UNIT_LIST <<<"$UNITS"
+          {
+            echo '```'
+            echo "== ${ACTION} ${UNITS}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          rc=0
+          venv/bin/python -u -m percona_obs -P main project "$ACTION" "${UNIT_LIST[@]}" 2>&1 \
+            | tee -a "$GITHUB_STEP_SUMMARY" || rc=$?
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
