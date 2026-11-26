@@ -49,6 +49,8 @@ Always use `git commit -s` (signed-off-by). Do not add `Co-Authored-By: Claude` 
 | `percona_obs/obs_api.py` | OBS API wrappers |
 | `percona_obs/release_copy.py` | Shared release hop mechanics (mirror meta apply, `osc release` copy, verify, orphans) |
 | `percona_obs/release_record.py` | `release.yaml` `releases:` entries (tag strings and `{tag, source_commit}`) |
+| `percona_obs/unit_freeze.py` | Release-unit freeze: `rebuild="local"` marker on project meta, `project freeze`/`unfreeze`/`freeze-status` mechanics |
+| `percona_obs/propagate.py` | Late-fix propagation into frozen units: dependent closure, staged rebuild triggers, `build propagate` |
 | `percona_obs/github_api.py` | `gh api` lookups (last synced `main` commit) |
 | `percona_obs/common.py` | Shared constants, colour helpers, data utilities |
 | `percona_obs/targets.py` | Target resolution helpers |

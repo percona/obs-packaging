@@ -1068,6 +1068,8 @@ When branching is involved, always confirm which OBS instance is being queried:
 | Version-independent tool with its own dependency project (pgAdmin) | `root/ppg/staging/common/tools/percona-pgadmin4/` + `root/ppg/common/deps/pgadmin/` |
 | Shared release hop mechanics (mirror meta apply, `osc release` copy, verify, prune) | `percona_obs/release_copy.py` |
 | `release.yaml` `releases:` entries (tag strings and `{tag, source_commit}`) | `percona_obs/release_record.py` |
+| Release-unit freeze (`rebuild="local"` marker, `project freeze`/`unfreeze`/`freeze-status`) | `percona_obs/unit_freeze.py` |
+| Late-fix propagation into frozen units (dependent closure, staged rebuilds, `build propagate`) | `percona_obs/propagate.py` |
 | `gh api` lookups (last synced `main` commit) | `percona_obs/github_api.py` |
 | Management script | `percona-obs` (commands: `sync push`, `sync delete`, `sync promote`, `build trigger`, `build status`, `build dependency`, `profile create`, `profile list`, `project verify`) |
 
