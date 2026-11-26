@@ -18,6 +18,8 @@ from .cmd_project import (
     cmd_project_config,
     cmd_project_install,
     cmd_project_release,
+    cmd_project_freeze,
+    cmd_project_freeze_status,
     cmd_project_release_units,
     cmd_project_verify,
     cmd_project_versions,
@@ -989,6 +991,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print every releasable staging unit as JSON (reads the git tree only).",
     )
     project_release_units_parser.set_defaults(func=cmd_project_release_units)
+
+    for name, frozen, text in (
+        ("freeze", True, "Freeze release units (rebuild=local on every repository)."),
+        ("unfreeze", False, "Unfreeze release units (drop rebuild=local)."),
+    ):
+        freeze_parser = project_subparsers.add_parser(name, help=text)
+        freeze_parser.add_argument("units", nargs="+", metavar="UNIT")
+        freeze_parser.add_argument("--dry-run", action="store_true", default=False)
+        freeze_parser.set_defaults(func=cmd_project_freeze, frozen=frozen)
+
+    project_freeze_status_parser = project_subparsers.add_parser(
+        "freeze-status", help="List release units that are frozen or partially frozen."
+    )
+    project_freeze_status_parser.add_argument(
+        "--github-warning",
+        action="store_true",
+        default=False,
+        help="Also print one ::warning:: line listing the frozen units.",
+    )
+    project_freeze_status_parser.set_defaults(func=cmd_project_freeze_status)
 
     return parser
 

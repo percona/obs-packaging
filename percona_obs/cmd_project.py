@@ -95,6 +95,7 @@ from .obs_versions import (
     first_versrel,
     project_binary_versions,
 )
+from . import unit_freeze
 from .release_scope import (
     bundled_parent,
     has_container_images,
@@ -3434,3 +3435,44 @@ def cmd_project_release(args: argparse.Namespace) -> None:
     # Commit.
     _commit_release_paths(commit_msg, committed_paths, release_dir)
     _print_ok(commit_msg)
+
+
+_FREEZE_WORDING = {
+    True: {"changed": "frozen", "unchanged": "already frozen"},
+    False: {"changed": "unfrozen", "unchanged": "already unfrozen"},
+}
+
+
+def cmd_project_freeze(args: argparse.Namespace) -> None:
+    """Freeze or unfreeze release units (``args.frozen``)."""
+    projects: "list[str]" = []
+    for unit in args.units:
+        try:
+            projects.extend(unit_freeze.unit_obs_projects(unit, args.rootprj))
+        except ValueError as exc:
+            sys.exit(f"error: {exc}: {unit}")
+    apiurl = osc.conf.config["apiurl"]
+    wording = _FREEZE_WORDING[args.frozen]
+    for project, outcome in unit_freeze.apply_freeze(
+        apiurl, projects, args.frozen, args.dry_run
+    ):
+        print(f"{project}  {wording.get(outcome, outcome)}")
+
+
+def cmd_project_freeze_status(args: argparse.Namespace) -> None:
+    """Print release units that are frozen or partially frozen."""
+    apiurl = osc.conf.config["apiurl"]
+    found: "list[str]" = []
+    for entry in list_release_units():
+        unit = entry["unit"]
+        states = unit_freeze.frozen_projects(
+            apiurl, unit_freeze.unit_obs_projects(unit, args.rootprj)
+        ).values()
+        if states and all(s == "frozen" for s in states):
+            found.append(unit)
+        elif any(s in ("frozen", "partial") for s in states):
+            found.append(f"{unit} (partial)")
+    for line in found:
+        print(line)
+    if found and args.github_warning:
+        print(f"::warning::Frozen release units: {', '.join(found)}")
