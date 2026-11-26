@@ -92,63 +92,125 @@ def plan_stages(
     frozen: "set[str]",
     project_order: "list[str]",
     aggregates: "set[Pkg]",
+    *,
+    extra: "set[Pkg] | frozenset[Pkg]" = frozenset(),
 ) -> "list[Stage]":
     """Return the staged rebuild plan for the dependents of *seeds*.
 
-    Only closure members in *frozen* projects are triggered; OBS rebuilds the
-    others itself.  One stage per frozen project, in *project_order*
-    (projects missing from it last, by name); a project's *aggregates* form
-    their own stage before its other packages.  Projects with nothing to
-    trigger get no stage.
+    Triggered: closure members in *frozen* projects (OBS rebuilds the others
+    itself), seeds in frozen projects that depend, directly or indirectly,
+    on another seed (their own upload alone may be built against the other
+    seed's old binary), and the members of *extra* in frozen projects
+    (e.g. ``expand_failed`` output), whose dependents join the closure too.
+    Every other seed is never triggered.
 
-    A stage waits for every seed or closure member a triggered package
-    depends on directly, and, behind non-frozen closure members and seeds,
-    for every seed and non-frozen member on the way to it.  Frozen members
-    are waited for but not walked through: their own stage waited for what
-    is behind them.  Members triggered in the same stage are not waited for
-    (the scheduler orders them), and neither are members triggered in a
-    later stage.
+    Triggered packages are grouped per project, a project's *aggregates*
+    apart from its other packages.  Groups are ordered by the dependency
+    graph; *project_order* (projects missing from it last, by name), then
+    aggregates before other packages, only breaks ties.  Groups that depend
+    on each other (a cycle) are merged into one stage, whose trigger may
+    then hold several projects.  Groups with nothing to trigger get no stage.
+
+    A stage waits for every package its triggered packages reach through
+    their dependencies, walking through seeds and non-frozen members;
+    triggered packages reached are waited for (they come from earlier
+    stages) but not walked through, since their own stage waited for what
+    is behind them.  Packages triggered in the same stage are not waited
+    for, except seeds, which are seen through their own upload.  A
+    triggered package with no dependency among the involved packages (an
+    *extra* member) makes its stage wait for every seed.
     """
-    members = closure(seeds, fwd_deps)
-    involved = members | set(seeds)
-    to_trigger = {m for m in members if m[0] in frozen}
+    seed_set = set(seeds)
+    start = seed_set | set(extra)
+    members = closure(start, fwd_deps) | set(extra)
+    chained = {s for s in seed_set if s in closure(start - {s}, fwd_deps)}
+    involved = members | seed_set
+    to_trigger = {m for m in members | chained if m[0] in frozen}
     if not to_trigger:
         return []
 
-    rank = {prj: i for i, prj in enumerate(project_order)}
-    projects = sorted(
-        {prj for prj, _ in to_trigger},
-        key=lambda prj: (rank.get(prj, len(rank)), prj),
-    )
-
-    groups: list[set[Pkg]] = []
-    for prj in projects:
-        in_prj = {m for m in to_trigger if m[0] == prj}
-        for group in (in_prj & aggregates, in_prj - aggregates):
-            if group:
-                groups.append(group)
-
-    stages: list[Stage] = []
-    triggered_before: set[Pkg] = set()
-    for group in groups:
+    # Per triggered package: non-triggered packages it reaches (to wait for)
+    # and the triggered packages that bound the walk.
+    reach_wait: dict[Pkg, set[Pkg]] = {}
+    reach_trig: dict[Pkg, set[Pkg]] = {}
+    for pkg in to_trigger:
         wait: set[Pkg] = set()
-        visited: set[Pkg] = set(group)
-        queue: deque[Pkg] = deque(group)
+        trig: set[Pkg] = set()
+        visited: set[Pkg] = {pkg}
+        queue: deque[Pkg] = deque([pkg])
         while queue:
-            pkg = queue.popleft()
-            for dep in _matching(fwd_deps.get(pkg, set()), involved):
+            cur = queue.popleft()
+            for dep in _matching(fwd_deps.get(cur, set()), involved):
                 if dep in visited:
                     continue
                 visited.add(dep)
                 if dep in to_trigger:
-                    if dep in triggered_before:
-                        wait.add(dep)
-                    continue
-                wait.add(dep)
-                queue.append(dep)
-        triggered_before |= group
+                    trig.add(dep)
+                else:
+                    wait.add(dep)
+                    queue.append(dep)
+        if not wait and not trig:
+            wait = set(seed_set)
+        reach_wait[pkg] = wait
+        reach_trig[pkg] = trig
+
+    rank = {prj: i for i, prj in enumerate(project_order)}
+
+    def group_key(pkg: Pkg) -> "tuple[int, str, int]":
+        return (rank.get(pkg[0], len(rank)), pkg[0], 0 if pkg in aggregates else 1)
+
+    groups: dict[tuple[int, str, int], set[Pkg]] = {}
+    for pkg in to_trigger:
+        groups.setdefault(group_key(pkg), set()).add(pkg)
+    group_deps: dict[tuple[int, str, int], set[tuple[int, str, int]]] = {
+        g: {group_key(d) for p in pkgs for d in reach_trig[p]} - {g}
+        for g, pkgs in groups.items()
+    }
+
+    def reachable(g: "tuple[int, str, int]") -> "set[tuple[int, str, int]]":
+        seen: set[tuple[int, str, int]] = set()
+        stack = [g]
+        while stack:
+            for d in group_deps[stack.pop()]:
+                if d not in seen:
+                    seen.add(d)
+                    stack.append(d)
+        return seen
+
+    reach = {g: reachable(g) for g in groups}
+    # Strongly connected sets of groups, each named by its smallest key.
+    comp_of: dict[tuple[int, str, int], tuple[int, str, int]] = {}
+    for g in sorted(groups):
+        if g not in comp_of:
+            for h in groups:
+                if h == g or (h in reach[g] and g in reach[h]):
+                    comp_of[h] = g
+    comp_deps: dict[tuple[int, str, int], set[tuple[int, str, int]]] = {}
+    for g, deps in group_deps.items():
+        comp_deps.setdefault(comp_of[g], set()).update(
+            comp_of[d] for d in deps if comp_of[d] != comp_of[g]
+        )
+
+    order: list[tuple[int, str, int]] = []
+    pending = dict(comp_deps)
+    while pending:
+        ready = min(c for c, deps in pending.items() if not deps - set(order))
+        order.append(ready)
+        del pending[ready]
+
+    stages: list[Stage] = []
+    triggered_before: set[Pkg] = set()
+    for comp in order:
+        stage_pkgs = {p for g in groups if comp_of[g] == comp for p in groups[g]}
+        wait: set[Pkg] = set()
+        for pkg in stage_pkgs:
+            wait |= reach_wait[pkg]
+            for dep in reach_trig[pkg]:
+                if dep in triggered_before or (dep in stage_pkgs and dep in seed_set):
+                    wait.add(dep)
+        triggered_before |= stage_pkgs
         trigger: dict[str, list[str]] = {}
-        for prj, name in group:
+        for prj, name in sorted(stage_pkgs, key=group_key):
             trigger.setdefault(prj, []).append(name)
         stages.append(
             Stage(frozenset(wait), {p: sorted(n) for p, n in trigger.items()})
