@@ -4,6 +4,78 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [19.0-2] - 2026-11-26
+
+### Changed
+#### Version updates
+- percona-postgresql-common: update upstream version 297 (https://salsa.debian.org/postgresql/postgresql-common.git)
+- percona-distribution-postgresql [container image]: update image 19.0-1 → 19.0-2
+  - [ubi8, ubi9, ubi10] updated: percona-postgresql-client-common 295 → 297
+  - [ubi8, ubi9, ubi10] updated: percona-postgresql-common 295 → 297
+- percona-distribution-postgresql-with-postgis [container image]: update image 19.0-1 → 19.0-2
+  - [ubi8, ubi9, ubi10] updated: percona-postgresql-client-common 295 → 297
+  - [ubi8, ubi9, ubi10] updated: percona-postgresql-common 295 → 297
+
+#### Packaging updates
+- etcd: 3.5.35-1 → 3.5.35-2
+  - no package-level commits (shared macro or tooling change)
+- gdal38: 3.8.5-4 → 3.8.5-8
+  - PG-2958 gdal38, libspatialite50: seed release floors above the released builds ([#340](https://github.com/percona/obs-packaging/pull/340))
+- libspatialite50: 5.1.0-2 → 5.1.0-9
+  - PG-2958 gdal38, libspatialite50: seed release floors above the released builds ([#340](https://github.com/percona/obs-packaging/pull/340))
+- percona-patroni: 4.1.5-6 → 4.1.5-8
+  - PG-2956 percona-patroni-consul is not installable on EL8/9/10 ([#313](https://github.com/percona/obs-packaging/pull/313))
+  - PG-2954 update packaging files to fix server dependency ([#322](https://github.com/percona/obs-packaging/pull/322))
+- percona-pg_oidc_validator: 1.1.0-5 → 1.1.0-6
+  - PG-2954 update packaging files to fix server dependency ([#322](https://github.com/percona/obs-packaging/pull/322))
+- percona-pg_repack: 1.5.3-7 → 1.5.3-9
+  - PG-2954 update packaging files to fix server dependency ([#322](https://github.com/percona/obs-packaging/pull/322))
+  - pg_repack (rpm): skip the pg_attver test rewrite when upstream already has it ([#329](https://github.com/percona/obs-packaging/pull/329))
+- percona-pg_stat_monitor: 2.4.1-20 → 2.4.1-22
+  - PG-2954 update packaging files to fix server dependency ([#322](https://github.com/percona/obs-packaging/pull/322))
+  - PG-2954 fix pgpool service name and PG-2964 fix epoch in PGSM llvmjit package dependency ([#331](https://github.com/percona/obs-packaging/pull/331))
+- percona-pg_tde: 2.3.0-3 → 2.3.0-4
+  - PG-2954 update packaging files to fix server dependency ([#322](https://github.com/percona/obs-packaging/pull/322))
+- percona-pgbackrest: 2.60.1-1 → 2.60.1-2
+  - percona-pgbackrest: build from git in staging and devel ([#308](https://github.com/percona/obs-packaging/pull/308))
+- percona-pgbouncer: 1.26.1-5 → 1.26.1-6
+  - PG-2949 percona-pgbouncer: don't use c-ares on RHEL 8 ([#297](https://github.com/percona/obs-packaging/pull/297))
+- percona-pgpool-II: 4.7.3-1 → 4.7.3-4
+  - PG-2954 update packaging files to fix server dependency ([#322](https://github.com/percona/obs-packaging/pull/322))
+  - PG-2954 fix pgpool service name and PG-2964 fix epoch in PGSM llvmjit package dependency ([#331](https://github.com/percona/obs-packaging/pull/331))
+  - percona-pgpool-II (rpm): keep libmemcached runtime dependency on EL10 ([#341](https://github.com/percona/obs-packaging/pull/341))
+- percona-pgvector: 0.8.7-4 → 0.8.7-5
+  - percona-pgvector: pass OPTFLAGS="" to make instead of patching the Makefile ([#342](https://github.com/percona/obs-packaging/pull/342))
+- percona-postgis: 3.7.0-2 → 3.7.0-4
+  - PG-2954 update packaging files to fix server dependency ([#322](https://github.com/percona/obs-packaging/pull/322))
+- percona-postgresql: 19.0.1-1 → 19.0.1-4
+  - PG-2954 update packaging files to fix server dependency ([#322](https://github.com/percona/obs-packaging/pull/322))
+  - percona-postgresql (rpm): provide arch-qualified -libs name ([#332](https://github.com/percona/obs-packaging/pull/332))
+- python3-psycopg2: 2.9.13-5 → 2.9.13-6
+  - no package-level commits (shared macro or tooling change)
+
+### Security
+- Go toolchain 1.26.10 → 1.26.11 (rebuilds of etcd, gosu, percona-telemetry-agent): fixes
+  CVE-2026-97033, CVE-2026-97034, CVE-2026-97035, CVE-2026-97036, CVE-2026-97037, CVE-2026-97038,
+  CVE-2026-97039, CVE-2026-97040, CVE-2026-97041, CVE-2026-97042, CVE-2026-97043, CVE-2026-97054,
+  plus security fixes in security (https://go.dev/doc/devel/release)
+- Not scanned: percona-postgresql-common (no scanner for salsa.debian.org)
+- percona-distribution-postgresql [container image]: fixes 17 HIGH CVEs
+  - [ubi8] expat 2.5.0-6.el8_10 (fix: 2.5.0-10.el8_10): CVE-2026-115506
+  - [ubi9] expat 2.5.0-9.el9_9.4 (fix: 2.5.0-9.el9_9.8): CVE-2026-115506
+  - [ubi10] expat 2.7.3-2.el10_3.4 (fix: 2.7.3-2.el10_3.8): CVE-2026-115506
+  - [ubi9] krb5-libs 1.21.1-10.el9_8.1 (fix: 1.21.1-10.el9_9.2): CVE-2026-107364, CVE-2026-112315, CVE-2026-112316, CVE-2026-112317, CVE-2026-112318, CVE-2026-112319, CVE-2026-112320, CVE-2026-112321, CVE-2026-112322, CVE-2026-112323, CVE-2026-118380, CVE-2026-119079, CVE-2026-71199, CVE-2026-71200
+  - [ubi10] krb5-libs 1.21.3-11.el10 (fix: 1.21.3-11.el10_3.2): CVE-2026-107364, CVE-2026-112315, CVE-2026-112316, CVE-2026-112317, CVE-2026-112318, CVE-2026-112319, CVE-2026-112320, CVE-2026-112321, CVE-2026-112322, CVE-2026-112323, CVE-2026-118380, CVE-2026-119079, CVE-2026-71199, CVE-2026-71200
+  - [ubi8] sqlite-libs 3.26.0-21.el8_10 (fix: 3.26.0-28.el8_10): CVE-2026-119373, CVE-2026-119586
+- percona-distribution-postgresql-with-postgis [container image]: fixes 18 HIGH CVEs
+  - [ubi8] expat 2.5.0-6.el8_10 (fix: 2.5.0-10.el8_10): CVE-2026-115506
+  - [ubi9] expat 2.5.0-9.el9_9.4 (fix: 2.5.0-9.el9_9.8): CVE-2026-115506
+  - [ubi10] expat 2.7.3-2.el10_3.4 (fix: 2.7.3-2.el10_3.8): CVE-2026-115506
+  - [ubi9] krb5-libs 1.21.1-10.el9_8.1 (fix: 1.21.1-10.el9_9.2): CVE-2026-107364, CVE-2026-112315, CVE-2026-112316, CVE-2026-112317, CVE-2026-112318, CVE-2026-112319, CVE-2026-112320, CVE-2026-112321, CVE-2026-112322, CVE-2026-112323, CVE-2026-118380, CVE-2026-119079, CVE-2026-71199, CVE-2026-71200
+  - [ubi10] krb5-libs 1.21.3-11.el10 (fix: 1.21.3-11.el10_3.2): CVE-2026-107364, CVE-2026-112315, CVE-2026-112316, CVE-2026-112317, CVE-2026-112318, CVE-2026-112319, CVE-2026-112320, CVE-2026-112321, CVE-2026-112322, CVE-2026-112323, CVE-2026-118380, CVE-2026-119079, CVE-2026-71199, CVE-2026-71200
+  - [ubi10] liblerc 4.0.0-8.el10 (fix: 4.3.0-1.el10_3): CVE-2026-10758
+  - [ubi8] sqlite-libs 3.26.0-21.el8_10 (fix: 3.26.0-28.el8_10): CVE-2026-119373, CVE-2026-119586
+
 ## [19.0-1] - 2026-11-18
 
 ### Added
