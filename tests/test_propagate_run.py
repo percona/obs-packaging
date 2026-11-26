@@ -573,7 +573,7 @@ def test_propagate_prints_recovery_before_dependency_queries(prop, capsys, monke
     assert "build propagate r:deps/lib" in capsys.readouterr().out
 
 
-def test_recovery_command_runs_as_printed(prop, capsys):
+def testrecovery_command_runs_as_printed(prop, capsys):
     seeds = {(D, "lib"), (R, "a b")}
     env = ["OBS_CONTAINER_REGISTRY:reg.example/x", "ODD:it's $HOME"]
     pp.propagate(

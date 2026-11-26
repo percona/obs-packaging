@@ -739,7 +739,7 @@ def _project_exists(apiurl: str, prj: str) -> bool:
     return _fetch_meta(apiurl, prj) is not None
 
 
-def _recovery_command(
+def recovery_command(
     apiurl: str,
     rootprj: str,
     seeds: "set[Pkg]",
@@ -783,7 +783,6 @@ def propagate(
     *profile* and *env_overrides* (the ``-P`` and ``-e`` values of this run)
     only go into the printed recovery command.
     """
-    _print_action(f"propagate: seeds {_names(seeds)}")
     unit_projects = sorted(
         {
             prj
@@ -794,12 +793,13 @@ def propagate(
     states = frozen_projects(apiurl, unit_projects)
     frozen = {prj for prj, state in states.items() if state == "frozen"}
     if not frozen:
-        _print_action("propagate: no frozen project, nothing to trigger")
+        logger.debug("propagate: no frozen project, nothing to trigger")
         return
+    _print_action(f"propagate: seeds {_names(seeds)}")
     if not dry_run:
         print(
             "propagate: if this run stops early, re-run: "
-            + _recovery_command(apiurl, rootprj, seeds, env_overrides, profile)
+            + recovery_command(apiurl, rootprj, seeds, env_overrides, profile)
         )
 
     paths = _path_map(apiurl, frozen, rootprj)
