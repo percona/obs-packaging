@@ -69,9 +69,20 @@ def carry_rebuild(current_xml: str, desired_xml: str) -> str:
     return ET.tostring(root, encoding="unicode")
 
 
-def unit_obs_projects(unit: str, rootprj: str, root: Path = REPO_ROOT) -> "list[str]":
-    """OBS projects of release unit *unit*: its root and existing bundled children."""
-    units = {u["unit"] for u in list_release_units(root)}
+def unit_obs_projects(
+    unit: str,
+    rootprj: str,
+    root: Path = REPO_ROOT,
+    *,
+    units: "set[str] | None" = None,
+) -> "list[str]":
+    """OBS projects of release unit *unit*: its root and existing bundled children.
+
+    *units* is the already listed set of unit names; when None the tree is
+    listed here.
+    """
+    if units is None:
+        units = {u["unit"] for u in list_release_units(root)}
     if unit not in units:
         raise ValueError(f"{unit} is not a release unit")
     unit_dir = root.joinpath(*unit.split(":"))
@@ -135,3 +146,31 @@ def frozen_projects(apiurl: str, obs_projects: "list[str]") -> "dict[str, str]":
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(one, obs_projects))
     return {prj: state for prj, state in results if state is not None}
+
+
+# Freeze states whose ``rebuild="local"`` repositories skip dependency
+# rebuilds: a partly frozen project needs propagation as much as a frozen one.
+REBUILD_LOCAL_STATES = ("frozen", "partial")
+
+
+def frozen_or_partial(states: "dict[str, str]") -> "set[str]":
+    """The projects of *states* with at least one ``rebuild="local"`` repository."""
+    return {prj for prj, state in states.items() if state in REBUILD_LOCAL_STATES}
+
+
+def release_unit_states(
+    apiurl: str, rootprj: str, root: Path = REPO_ROOT
+) -> "dict[str, str]":
+    """``{project: freeze_state}`` of every OBS project of every release unit.
+
+    The tree is listed once; projects absent on OBS are omitted.
+    """
+    units = {u["unit"] for u in list_release_units(root)}
+    projects = sorted(
+        {
+            prj
+            for unit in units
+            for prj in unit_obs_projects(unit, rootprj, root, units=units)
+        }
+    )
+    return frozen_projects(apiurl, projects)

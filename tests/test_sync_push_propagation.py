@@ -11,7 +11,11 @@ from percona_obs import cmd_sync as cs
 def spy(monkeypatch):
     from percona_obs import cmd_build
 
-    monkeypatch.setattr(cmd_build, "_propagate_targets", lambda a, env: [])
+    monkeypatch.setattr(
+        cmd_build,
+        "_propagate_targets",
+        lambda a, env: pytest.fail("targets are built by propagate, lazily"),
+    )
     calls: list = []
     queries: list = []
     frozen: dict = {}
@@ -21,12 +25,18 @@ def spy(monkeypatch):
         calls.append((set(seeds), dry_run))
         rerun.append(kw)
 
-    def fake_frozen(apiurl, projects):
-        queries.append(set(projects))
-        return {p: s for p, s in frozen.items() if p in projects}
+    def fake_states(apiurl, rootprj):
+        queries.append((apiurl, rootprj))
+        return dict(frozen)
 
     monkeypatch.setattr(cs.propagate_mod, "propagate", fake_propagate)
-    monkeypatch.setattr(cs.unit_freeze, "frozen_projects", fake_frozen)
+    monkeypatch.setattr(cs.unit_freeze, "release_unit_states", fake_states)
+    # One freeze-state read only: no second read over the candidates.
+    monkeypatch.setattr(
+        cs.unit_freeze,
+        "frozen_projects",
+        lambda *a: pytest.fail("freeze state read twice"),
+    )
     return SimpleNamespace(calls=calls, queries=queries, frozen=frozen, rerun=rerun)
 
 
@@ -40,11 +50,13 @@ def args(branch_from=None, profile=None, env_overrides=None):
 
 
 def test_calls_propagate_with_uploaded_seeds(spy):
+    spy.frozen["r:u"] = "frozen"
     cs._propagate_after_push("api", args(), ["r:u/a", "r:deps/lib"], set(), {}, False)
     assert spy.calls == [({("r:u", "a"), ("r:deps", "lib")}, False)]
 
 
 def test_rerun_flags_passed_through(spy):
+    spy.frozen["r:u"] = "frozen"
     cs._propagate_after_push(
         "api",
         args(profile="labs", env_overrides=["K:V"]),
@@ -53,10 +65,13 @@ def test_rerun_flags_passed_through(spy):
         {},
         False,
     )
-    assert spy.rerun == [{"env_overrides": ["K:V"], "profile": "labs"}]
+    assert spy.rerun == [
+        {"env_overrides": ["K:V"], "profile": "labs", "states": {"r:u": "frozen"}}
+    ]
 
 
 def test_dry_run_passed_through(spy):
+    spy.frozen["r:u"] = "frozen"
     cs._propagate_after_push("api", args(), ["r:u/a"], set(), {}, True)
     assert spy.calls == [({("r:u", "a")}, True)]
 
@@ -82,10 +97,21 @@ def test_warns_on_config_change_in_frozen_project(spy, capsys):
     assert spy.calls == []
 
 
-def test_partial_state_is_not_frozen(spy, capsys):
+def test_partial_state_counts_as_frozen(spy, capsys):
     spy.frozen["r:u"] = "partial"
     cs._propagate_after_push("api", args(), ["r:u/a"], {"r:u"}, {}, False)
-    assert "frozen" not in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "warning: r:u is partly frozen" in out
+    assert "r:u  partly frozen (rebuild=local): dependents are rebuilt" in out
+    assert spy.calls == [({("r:u", "a")}, False)]
+
+
+def test_nothing_frozen_reads_state_once_and_does_nothing_else(spy, capsys):
+    spy.frozen["r:u"] = "unfrozen"
+    cs._propagate_after_push("api", args(), ["r:u/a"], {"r:v"}, {}, False)
+    assert spy.queries == [("api", "r")]
+    assert spy.calls == []
+    assert capsys.readouterr().out == ""
 
 
 def test_notice_for_upload_into_frozen_project(spy, capsys):
@@ -94,7 +120,7 @@ def test_notice_for_upload_into_frozen_project(spy, capsys):
     out = capsys.readouterr().out
     assert "r:u  frozen (rebuild=local): dependents are rebuilt by the tool" in out
     assert "r:v" not in out
-    assert spy.queries == [{"r:u", "r:v"}]
+    assert spy.queries == [("api", "r")]
 
 
 # --- F1/F3: failure tail -------------------------------------------------
@@ -147,6 +173,63 @@ def test_finish_push_success_returns(capsys):
     assert order == ["p", "m", "r"]
 
 
+def test_freeze_state_read_failure_names_the_step(spy, monkeypatch, capsys):
+    def boom(apiurl, rootprj):
+        raise SystemExit("meta read error")
+
+    monkeypatch.setattr(cs.unit_freeze, "release_unit_states", boom)
+    with pytest.raises(SystemExit):
+        cs._finish_push(
+            lambda: cs._propagate_after_push(
+                "api", args(), ["r:u/a"], set(), {}, False
+            ),
+            lambda: None,
+            lambda: None,
+            "cmd",
+        )
+    out = capsys.readouterr().out
+    assert (
+        "error: reading the freeze state of the release units failed: "
+        "meta read error" in out
+    )
+    assert "propagating" not in out
+
+
+def test_propagation_failure_names_the_step(spy, monkeypatch, capsys):
+    spy.frozen["r:u"] = "frozen"
+
+    def boom(*a, **kw):
+        raise RuntimeError("depinfo down")
+
+    monkeypatch.setattr(cs.propagate_mod, "propagate", boom)
+    with pytest.raises(SystemExit):
+        cs._finish_push(
+            lambda: cs._propagate_after_push(
+                "api", args(), ["r:u/a"], set(), {}, False
+            ),
+            lambda: None,
+            lambda: None,
+            "cmd",
+        )
+    out = capsys.readouterr().out
+    assert "error: propagating into frozen units failed: depinfo down" in out
+    assert "re-run: cmd" in out
+
+
+def test_push_recovery_command_empty_without_uploads():
+    a = SimpleNamespace(rootprj="r", env_overrides=[], profile=None, branch_from=None)
+    assert cs._push_recovery_command("api", a, []) == ""
+
+
+def test_finish_push_omits_rerun_hint_without_command(capsys):
+    def boom():
+        raise RuntimeError("x")
+
+    with pytest.raises(SystemExit):
+        cs._finish_push(boom, lambda: None, lambda: None, "")
+    assert "re-run" not in capsys.readouterr().out
+
+
 def test_push_recovery_command_names_uploaded_packages():
     a = SimpleNamespace(
         rootprj="r", env_overrides=["A=1"], profile="labs", branch_from=None
@@ -162,12 +245,13 @@ def test_push_recovery_command_names_uploaded_packages():
 def test_propagate_gets_full_slice_targets(spy, monkeypatch):
     from percona_obs import cmd_build
 
+    spy.frozen["r:u"] = "frozen"
     full = [("r:u", "PATH")]
     monkeypatch.setattr(cmd_build, "_propagate_targets", lambda a, env: full)
     got: list = []
     monkeypatch.setattr(cs.propagate_mod, "propagate", lambda *a, **k: got.append(a[3]))
     cs._propagate_after_push("api", args(), ["r:u/a"], set(), {}, False)
-    assert got == [full]
+    assert len(got) == 1 and callable(got[0]) and got[0]() == full
 
 
 # --- F4: --project-only warns without propagating -----------------------

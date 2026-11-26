@@ -44,9 +44,8 @@ from .common import (
     logger,
 )
 from .obs_api import _fetch_combined_depinfo, _fetch_obs_package_names_or_fail
-from .release_scope import list_release_units
 from .targets import image_dep_query_repos, is_dockerfile_image
-from .unit_freeze import _fetch_meta, frozen_projects, unit_obs_projects
+from .unit_freeze import _fetch_meta, frozen_or_partial, release_unit_states
 
 Pkg = tuple[str, str]  # (obs_project, package)
 # One build target of a package: (status package name, repository, arch).
@@ -443,15 +442,23 @@ def _source_md5s(apiurl: str, prj: str, name: str) -> "set[str]":
 
 
 def _source_commit_time(apiurl: str, prj: str, name: str) -> int:
-    """Time (OBS server clock, epoch seconds) of the newest source revision."""
+    """Time (OBS server clock, epoch seconds) of the newest source revision.
+
+    Raises ``ValueError`` when the history names no revision time: a zero
+    would make every job count as newer than the change.
+    """
     url = osc.core.makeurl(
         apiurl, ["source", prj, name, "_history"], query={"limit": 1}
     )
     root = ET.fromstring(osc.connection.http_GET(url).read())
-    return max(
-        (int((r.findtext("time") or "0").strip()) for r in root.findall("revision")),
-        default=0,
-    )
+    times = [
+        int(t.strip())
+        for r in root.findall("revision")
+        if (t := r.findtext("time") or "").strip()
+    ]
+    if not times:
+        raise ValueError(f"{prj}/{name}: no source revision time")
+    return max(times)
 
 
 def record_since(apiurl: str, pkgs: "set[Pkg]") -> "dict[Pkg, dict[Target, str]]":
@@ -523,7 +530,10 @@ class _SeenRules:
     def shows_change(self, pkg: Pkg, target: Target) -> bool:
         ident, srcmd5, readytime = _newest_job(self.apiurl, pkg[0], target)
         if pkg in self.since:
-            recorded = self.since[pkg].get(target, "")
+            if target not in self.since[pkg]:
+                # Not built when the record was taken: nothing to compare.
+                return False
+            recorded = self.since[pkg][target]
             if ident:
                 return ident != recorded
             if recorded.startswith(_BINARIES_PREFIX):
@@ -735,6 +745,26 @@ def _image_pkgs(
     return image_pkgs
 
 
+def _may_reach(
+    seeds: "set[Pkg]", upstream: "set[str]", agg: "dict[Pkg, set[Pkg]]"
+) -> bool:
+    """Whether a seed can affect a project in *upstream* at all.
+
+    Works on projects, so it can only answer yes too often: a seed project
+    is in *upstream*, or a chain of ``_aggregate`` edges pulls from it into
+    a project that is.
+    """
+    reached = {prj for prj, _ in seeds}
+    grew = True
+    while grew and not reached & upstream:
+        grew = False
+        for (prj, _), deps in agg.items():
+            if prj not in reached and any(d[0] in reached for d in deps):
+                reached.add(prj)
+                grew = True
+    return bool(reached & upstream)
+
+
 def _project_exists(apiurl: str, prj: str) -> bool:
     return _fetch_meta(apiurl, prj) is not None
 
@@ -766,32 +796,32 @@ def propagate(
     apiurl: str,
     rootprj: str,
     seeds: "set[Pkg]",
-    targets: "list[tuple[str, Path]]",
+    targets: "list[tuple[str, Path]] | Callable[[], list[tuple[str, Path]]]",
     env_vars: "dict[str, str]",
     dry_run: bool,
     *,
+    states: "dict[str, str] | None" = None,
     env_overrides: "list[str] | None" = None,
     profile: "str | None" = None,
 ) -> None:
     """Trigger rebuilds of everything in a frozen project that depends on *seeds*.
 
     *targets* are the local ``(obs_project, package_path)`` packages (for
-    ``_aggregate`` edges, image edges and the dependency filter) and
-    *env_vars* the substitution variables of ``sync push``.  Does nothing,
-    and queries no dependency, when no release unit project is frozen.
+    ``_aggregate`` edges, image edges and the dependency filter), or a
+    callable returning them, called only once a project is frozen; *env_vars*
+    are the substitution variables of ``sync push``.  *states* is the
+    ``release_unit_states`` result when the caller already has it.  A
+    partly frozen project counts as frozen: its ``rebuild="local"``
+    repositories skip dependency rebuilds too.  Does nothing, and queries no
+    dependency, when no release unit project is frozen, and fetches no
+    dependency data when no seed can reach a frozen project.
 
     *profile* and *env_overrides* (the ``-P`` and ``-e`` values of this run)
     only go into the printed recovery command.
     """
-    unit_projects = sorted(
-        {
-            prj
-            for unit in list_release_units()
-            for prj in unit_obs_projects(unit["unit"], rootprj)
-        }
-    )
-    states = frozen_projects(apiurl, unit_projects)
-    frozen = {prj for prj, state in states.items() if state == "frozen"}
+    if states is None:
+        states = release_unit_states(apiurl, rootprj)
+    frozen = frozen_or_partial(states)
     if not frozen:
         logger.debug("propagate: no frozen project, nothing to trigger")
         return
@@ -803,6 +833,14 @@ def propagate(
         )
 
     paths = _path_map(apiurl, frozen, rootprj)
+    if callable(targets):
+        targets = targets()
+    agg = aggregate_edges(targets, env_vars)
+    if not _may_reach(seeds, set(paths), agg):
+        _print_action(
+            "propagate: nothing in a frozen project depends on the changed packages"
+        )
+        return
     # Instances build a slice of the tree: a seed project absent here has
     # nothing to query and is no fetch failure.
     seed_projects = {
@@ -820,7 +858,6 @@ def propagate(
         all_targets=True,
         failed=failed,
     )
-    agg = aggregate_edges(targets, env_vars)
     for pkg, deps in agg.items():
         fwd.setdefault(pkg, set()).update(deps)
 

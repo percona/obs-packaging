@@ -99,7 +99,9 @@ class FakeObs:
             return _Resp(f"<binarylist>{body}</binarylist>".encode())
         if kind == "history":
             prj, pkg = path[1], path[2]
-            t = self.history[(prj, pkg)]
+            t = self.history.get((prj, pkg))
+            if t is None:
+                return _Resp(b"<revisionlist/>")
             return _Resp(
                 f'<revisionlist><revision rev="3"><time>{t}</time></revision>'
                 "</revisionlist>".encode()
@@ -346,6 +348,29 @@ def test_member_not_seen_with_job_before_seed_commit(obs):
     assert _wait({("D", "mid")}, {}, seeds={("D", "lib")}) == {("D", "mid")}
 
 
+def test_member_not_seen_when_seed_has_no_commit_time(obs):
+    obs.codes["D"] = {("mid", "R1", "x86_64"): "succeeded"}
+    obs.jobs[("D", "R1", "x86_64", "mid")] = [("1100", "m")]
+    # ("D", "lib") has no source history.
+    assert _wait({("D", "mid")}, {}, seeds={("D", "lib")}) == {("D", "mid")}
+
+
+def test_source_commit_time_without_revision_raises(obs):
+    with pytest.raises(ValueError):
+        pp._source_commit_time(API, "D", "lib")
+
+
+def test_triggered_target_missing_from_record_is_not_seen(obs):
+    obs.codes["P"] = {
+        ("a", "R1", "x86_64"): "succeeded",
+        ("a", "R2", "x86_64"): "succeeded",
+    }
+    obs.jobs[("P", "R1", "x86_64", "a")] = [("7", "new")]
+    obs.jobs[("P", "R2", "x86_64", "a")] = [("7", "new")]
+    since = {("P", "a"): {("a", "R1", "x86_64"): "5:old"}}
+    assert _wait({("P", "a")}, since) == {("P", "a")}
+
+
 def test_member_uses_newest_seed_commit(obs):
     obs.codes["D"] = {("mid", "R1", "x86_64"): "succeeded"}
     obs.jobs[("D", "R1", "x86_64", "mid")] = [("1500", "m")]
@@ -462,15 +487,14 @@ def prop(monkeypatch):
         depinfo_calls=[],
         run=[],
         recorded=[],
+        state_reads=0,
     )
 
-    monkeypatch.setattr(
-        pp, "list_release_units", lambda: [{"unit": "u"}, {"unit": "v"}]
-    )
-    monkeypatch.setattr(
-        pp, "unit_obs_projects", lambda unit, rootprj: [f"r:{unit}", f"r:{unit}:x"]
-    )
-    monkeypatch.setattr(pp, "frozen_projects", lambda apiurl, projs: dict(st.states))
+    def fake_states(apiurl, rootprj):
+        st.state_reads += 1
+        return dict(st.states)
+
+    monkeypatch.setattr(pp, "release_unit_states", fake_states)
     monkeypatch.setattr(
         pp, "_project_path_projects", lambda apiurl, prj: st.paths.get(prj, set())
     )
@@ -503,11 +527,64 @@ def prop(monkeypatch):
     return st
 
 
-def test_propagate_nothing_frozen_queries_no_dependencies(prop, capsys):
+def _no_targets():
+    pytest.fail("targets must not be built")
+
+
+def test_propagate_nothing_frozen_queries_no_dependencies(prop, capsys, monkeypatch):
+    prop.states = {R: "unfrozen", C: "unfrozen"}
+    monkeypatch.setattr(
+        pp, "_project_path_projects", lambda *a: pytest.fail("no path query")
+    )
+    pp.propagate(API, "r", {(D, "lib")}, _no_targets, {}, dry_run=False)
+    assert prop.depinfo_calls == [] and prop.run == []
+    assert prop.state_reads == 1
+    assert capsys.readouterr().out == ""
+
+
+def test_propagate_uses_given_states(prop, monkeypatch):
+    monkeypatch.setattr(
+        pp, "release_unit_states", lambda *a: pytest.fail("states already read")
+    )
+    pp.propagate(API, "r", {(D, "lib")}, _no_targets, {}, dry_run=False, states={})
+    assert prop.depinfo_calls == []
+
+
+def test_propagate_builds_targets_once_when_frozen(prop):
+    built = []
+    pp.propagate(
+        API, "r", {(D, "lib")}, lambda: built.append(1) or [], {}, dry_run=False
+    )
+    assert built == [1] and prop.run
+
+
+def test_propagate_partial_project_counts_as_frozen(prop):
     prop.states = {R: "partial", C: "unfrozen"}
     pp.propagate(API, "r", {(D, "lib")}, [], {}, dry_run=False)
+    stages = prop.run[0][0]
+    assert [s.trigger for s in stages] == [{R: ["b"]}]
+
+
+def test_propagate_seed_that_cannot_reach_a_frozen_project_fetches_no_deps(
+    prop, capsys
+):
+    prop.paths = {R: {D}, C: {R}, D: set(), "r:devel": set()}
+    pp.propagate(API, "r", {("r:devel", "lib")}, [], {}, dry_run=False)
     assert prop.depinfo_calls == [] and prop.run == []
-    assert "build propagate" not in capsys.readouterr().out
+    assert "nothing in a frozen project depends" in capsys.readouterr().out
+
+
+def test_propagate_seed_aggregated_into_upstream_is_planned(prop, monkeypatch):
+    monkeypatch.setattr(
+        pp,
+        "aggregate_edges",
+        lambda targets, env: {
+            ("r:mid", "agg"): {("r:devel", "*")},
+            (R, "agg"): {("r:mid", "agg")},
+        },
+    )
+    pp.propagate(API, "r", {("r:devel", "lib")}, [], {}, dry_run=False)
+    assert prop.depinfo_calls
 
 
 def test_propagate_runs_plan_over_seed_and_upstream_projects(prop, capsys):
@@ -548,13 +625,17 @@ def test_propagate_failed_frozen_project_triggers_all_of_it(prop):
     assert {n for s in stages for n in s.trigger.get(C, [])} == {"img"}
 
 
-def test_propagate_absent_project_is_not_a_failure(prop):
+def test_propagate_absent_project_is_not_a_failure(prop, monkeypatch):
     prop.absent = {"r:other"}
     prop.fwd = {}
+    # An aggregate edge into a frozen project, so the seed is not pruned.
+    monkeypatch.setattr(
+        pp, "aggregate_edges", lambda targets, env: {(R, "agg"): {("r:other", "x")}}
+    )
     pp.propagate(API, "r", {("r:other", "x")}, [], {}, dry_run=False)
     projects, _ = prop.depinfo_calls[0]
     assert "r:other" not in projects
-    assert prop.run == []
+    assert [s.trigger for s in prop.run[0][0]] == [{R: ["agg"]}]
 
 
 def test_propagate_dry_run(prop, capsys):
@@ -611,6 +692,9 @@ def test_project_order_puts_paths_first():
 
 def test_cli_build_propagate(monkeypatch):
     monkeypatch.setitem(cmd_build.osc.conf.config, "apiurl", API)
+    monkeypatch.setattr(
+        cmd_build.unit_freeze, "release_unit_states", lambda a, r: {"r:u": "frozen"}
+    )
     calls = []
     monkeypatch.setattr(cmd_build, "_propagate_targets", lambda args, env: [])
 
@@ -640,9 +724,32 @@ def test_cli_build_propagate(monkeypatch):
             "r",
             {("r:u", "a"), ("r:deps", "lib")},
             True,
-            {"env_overrides": ["K:V"], "profile": "labs"},
+            {
+                "env_overrides": ["K:V"],
+                "profile": "labs",
+                "states": {"r:u": "frozen"},
+            },
         )
     ]
+
+
+def test_cli_build_propagate_says_when_nothing_is_frozen(monkeypatch, capsys):
+    monkeypatch.setitem(cmd_build.osc.conf.config, "apiurl", API)
+    monkeypatch.setattr(
+        cmd_build.unit_freeze, "release_unit_states", lambda a, r: {"r:u": "unfrozen"}
+    )
+    monkeypatch.setattr(
+        cmd_build, "_propagate_targets", lambda *a: pytest.fail("no targets")
+    )
+    monkeypatch.setattr(
+        pp, "propagate", lambda *a, **k: pytest.fail("must not propagate")
+    )
+    args = cli.build_parser().parse_args(["-R", "r", "build", "propagate", "r:u/a"])
+    args.func(args)
+    assert (
+        capsys.readouterr().out.strip()
+        == "propagate: no frozen project, nothing to trigger"
+    )
 
 
 def test_cli_build_propagate_rejects_bad_argument(monkeypatch):

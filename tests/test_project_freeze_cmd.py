@@ -40,6 +40,24 @@ def test_unfreeze_unchanged_wording(monkeypatch, capsys):
     assert "already unfrozen" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    "command, frozen, dry_run",
+    [
+        ("freeze", True, True),
+        ("freeze", True, False),
+        ("unfreeze", False, True),
+        ("unfreeze", False, False),
+    ],
+)
+def test_dry_run_reaches_apply_freeze(monkeypatch, command, frozen, dry_run):
+    monkeypatch.setattr(unit_freeze, "unit_obs_projects", lambda u, r: [f"r:{u}"])
+    calls = []
+    monkeypatch.setattr(unit_freeze, "apply_freeze", lambda *a: calls.append(a) or [])
+    argv = ["-R", "r", "project", command, "ppg:staging:18"]
+    _run(argv + (["--dry-run"] if dry_run else []))
+    assert calls == [("https://obs.example", ["r:ppg:staging:18"], frozen, dry_run)]
+
+
 def test_invalid_unit_makes_no_call(monkeypatch):
     apply_calls = []
 
