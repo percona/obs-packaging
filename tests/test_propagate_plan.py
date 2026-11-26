@@ -49,6 +49,46 @@ def test_aggregates_first_within_project():
     assert (R, "agg") in st[1].wait_for
 
 
+def test_same_project_aggregate_of_dependent_comes_after_it():
+    fwd = {(R, "x"): {(D, "lib")}, (R, "agg"): {(R, "x")}}
+    st = pp.plan_stages({(D, "lib")}, fwd, {R}, ORDER, {(R, "agg")})
+    assert [s.trigger for s in st] == [{R: ["x"]}, {R: ["agg"]}]
+    assert (D, "lib") in st[0].wait_for
+    assert (R, "x") in st[1].wait_for
+
+
+def test_graph_order_beats_project_order():
+    fwd = {(R, "b"): {(R, "a")}, (I, "img"): {(R, "b")}}
+    st = pp.plan_stages({(R, "a")}, fwd, {R, I}, [I, C, R, D], set())
+    assert [s.trigger for s in st] == [{R: ["b"]}, {I: ["img"]}]
+    assert (R, "b") in st[1].wait_for
+
+
+def test_frozen_projects_in_a_cycle_share_one_stage():
+    fwd = {(R, "b"): {(R, "a"), (C, "t")}, (C, "t"): {(R, "b")}}
+    st = pp.plan_stages({(R, "a")}, fwd, {R, C}, ORDER, set())
+    assert [s.trigger for s in st] == [{R: ["b"], C: ["t"]}]
+    assert (R, "a") in st[0].wait_for
+
+
+def test_frozen_seed_depending_on_another_seed_is_triggered():
+    fwd = {(R, "b"): {(R, "a")}}
+    st = pp.plan_stages({(R, "a"), (R, "b")}, fwd, {R}, ORDER, set())
+    assert len(st) == 1
+    assert (R, "a") in st[0].wait_for
+    assert st[0].trigger == {R: ["b"]}
+
+
+def test_non_frozen_seed_depending_on_another_seed_is_not_triggered():
+    fwd = {(R, "b"): {(R, "a")}}
+    assert pp.plan_stages({(R, "a"), (R, "b")}, fwd, set(), ORDER, set()) == []
+
+
+def test_extra_members_are_triggered_and_wait_for_seeds():
+    st = pp.plan_stages({(D, "lib")}, {}, {R}, ORDER, set(), extra={(R, "a"), (R, "b")})
+    assert st == [pp.Stage(frozenset({(D, "lib")}), {R: ["a", "b"]})]
+
+
 def test_nothing_frozen_downstream():
     assert pp.plan_stages({(R, "a")}, {(R, "b"): {(R, "a")}}, set(), ORDER, set()) == []
 
