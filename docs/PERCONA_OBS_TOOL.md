@@ -2009,10 +2009,20 @@ builds against changes. `_aggregate` packages also stop re-copying, because
 the project configuration of the tree carries `BuildFlags: aggregate-checklocal`
 (it has no effect on a project that is not frozen).
 
+A project with `rebuild="local"` on some but not all repositories is
+**partly frozen**. Its `local` repositories skip dependency rebuilds just the
+same, so `sync push` and `build propagate` treat it as frozen.
+
 The state lives only in the OBS project meta; nothing is committed to git.
 Each OBS instance holds its own state, so a unit is frozen once per instance.
 Pre-release projects, release mirrors and `--branch-from` PR projects are
 never frozen.
+
+This freeze is not the "build freeze" of `sync release` (its `--no-freeze`
+and `--freeze-timeout` options): that one disables the unit's builds for the
+few minutes of the release copy and enables them again. The two are
+different mechanisms and independent of each other: either one is used with
+or without the other.
 
 ### Commands
 
@@ -2091,26 +2101,42 @@ changed:
 
 ```
 <project>  frozen (rebuild=local): dependents are rebuilt by the tool
+<project>  partly frozen (rebuild=local): dependents are rebuilt by the tool
 propagate: seeds <project>/<package> ...
 propagate: if this run stops early, re-run: percona-obs -P <profile> -A <apiurl> -R <rootprj> build propagate <project>/<package> ...
 propagate stage 1/2: wait for ...
 ```
 
 and `propagate: nothing in a frozen project depends on the changed packages`
-when there is nothing to do. With `--dry-run` it prints the seeds and the
-staged plan (`dry-run: propagate stage ...`) and triggers nothing. A sync that
-touches no frozen project and changes nothing in one does no extra work.
+when there is nothing to do. When no changed package is in a project a frozen
+project builds against (or reaches one through an `_aggregate`), that line is
+printed without asking OBS for any dependency data. With `--dry-run` it prints
+the seeds and the staged plan (`dry-run: propagate stage ...`) and triggers
+nothing. When no release unit project is frozen, a sync that uploads or
+changes project meta does one extra thing: it reads the freeze state of the
+release unit projects. It prints nothing more and asks OBS nothing else.
+
+A late fix pushed while `sync release` holds the unit's builds disabled for its
+copy (see above) is propagated against disabled targets, which the waits count
+as seen, so the stages are triggered back to back without waiting. Avoid
+pushing a late fix to a unit during its release copy, or run `build propagate`
+for it again once the copy has finished.
 
 A sync that changes the project meta or configuration (prjconf, repository
 paths) of a frozen project rebuilds nothing, as with any prjconf change under
 `rebuild="local"`. `sync push` prints
-`warning: <project> is frozen: the project meta/config change rebuilds nothing; run 'build propagate' or unfreeze if it needs a rebuild`.
+`warning: <project> is frozen: the project meta/config change rebuilds nothing; run 'build propagate' or unfreeze if it needs a rebuild`
+(`is partly frozen` for a partly frozen project).
 
 If propagation fails, `sync push` still writes its sync-state manifest and its
-report, then prints `error: propagation into frozen units failed: ...` and
+report, then prints the step that failed,
+`error: reading the freeze state of the release units failed: ...` or
+`error: propagating into frozen units failed: ...`, followed by
 `re-run: <command>`, and exits non-zero. A later `sync push` sees nothing
 changed and does not retry the propagation by itself, so the failed run's
 `re-run:` command (or the `propagate:` line above) is the way to finish it.
+When the sync uploaded no package (only project meta or configuration
+changed) there is nothing to propagate and no `re-run:` line is printed.
 
 ### `build propagate`
 
@@ -2123,8 +2149,9 @@ upload. The arguments are packages with their **full OBS project name**, the
 form of the `promoted` list in the sync report, for example
 `isv:percona:ppg:staging:18/percona-pg_tde`. The command line printed in a
 `sync push` log already contains the profile and the resolved `-A` and `-R`,
-so it can be pasted as it is. It does nothing, and asks OBS for no dependency
-data, when no unit project is frozen.
+so it can be pasted as it is. When no unit project is frozen or partly frozen
+it prints `propagate: no frozen project, nothing to trigger` and asks OBS for
+no dependency data.
 
 Run it by hand when:
 
@@ -2197,18 +2224,31 @@ command reports no error (packages report their real states).
 Passed when each project reports `unfrozen`, `freeze-status` no longer lists
 the unit, and OBS starts the rebuilds that were postponed.
 
-**2. `BuildFlags: aggregate-checklocal` starts no rebuild by itself.** On labs,
-with a unit not frozen, sync a project configuration that adds the line:
+**2. `BuildFlags: aggregate-checklocal` starts no rebuild by itself.** The line
+is already in the tree (`root/project.yaml` and
+`root/ppg/staging/16/tde/project.yaml`), so a sync of the current tree changes nothing on an instance
+that already has it. The check is a one-time observation at rollout: the
+**first** sync of this change to an instance is the one that adds the line to
+every project's prjconf. On labs, with the unit not frozen, before that first
+sync:
 
 ```sh
-./percona-obs -P labsmain sync push --dry-run ppg:staging:18
-./percona-obs -P labsmain sync push ppg:staging:18
+# Before the first sync that brings the line: note the unit's state.
 ./percona-obs -P labsmain build status ppg:staging:18
 ```
 
-Passed when, after the push has changed the prjconf, no package of the project
-(and no `_aggregate` package) leaves `succeeded`. A rebuild after the change
-means the line is not safe to roll out in a prjconf and needs a rethink.
+Then let that first sync run (the `sync-main` run after the merge, or
+`sync push` on labs), and look again:
+
+```sh
+./percona-obs -P labsmain build status ppg:staging:18
+```
+
+Passed when no package that was `succeeded` before the sync (no `_aggregate`
+package either) moved to `scheduled` or `building` because of the prjconf
+change. A rebuild caused by the change means the line is not safe to roll out
+in a prjconf and needs a rethink. Once an instance has the line, this check
+cannot be repeated there.
 
 **3. build.opensuse.org, one low-traffic unit.** Pick a unit that few packages
 depend on, and use the production profile only through the workflow.
@@ -2216,6 +2256,7 @@ depend on, and use the production profile only through the workflow.
 ```sh
 # PRODUCTION (-P isv writes to build.opensuse.org): run through the workflow.
 gh workflow run obs-freeze.yml -f units="<unit>" -f action=freeze
+# Read-only against production: these two only read.
 ./percona-obs -P isv project freeze-status
 ./percona-obs -P isv build status <unit>
 ```
