@@ -186,6 +186,11 @@ repositories:
     archs: [x86_64, aarch64]
 
 project-config: |
+  # Only acts under rebuild="local" (a frozen unit): _aggregate packages stop
+  # re-copying when their source package rebuilds.  Repeated here because this
+  # project does not inherit the root project-config.
+  BuildFlags: aggregate-checklocal
+
   %if "%_repository" == "RockyLinux_8"
   ExpandFlags: module:llvm-toolset-rhel8
   ExpandFlags: module:perl-5.26
