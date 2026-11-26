@@ -4,7 +4,12 @@
 %global common_libdir %{_prefix}/lib
 %global rustlibdir %{common_libdir}/rustlib
 
-Name:     rust
+# The source package carries the versioned name so it cannot collide with the
+# distro's own `rust` source package: the OBS scheduler blocks every build that
+# needs a binary whose *source name* is building in a path project, and the
+# EL10 build root always pulls the distro's rust-toolset-srpm-macros (source
+# `rust`).  The binary packages keep their plain names.
+Name:     rust-1.96.1
 Version:  1.96.1
 Release:  1%{?dist}
 Summary:  Rust compiler and Cargo toolchain
@@ -33,10 +38,15 @@ ExclusiveArch: x86_64 aarch64
 BuildRequires:  gcc gcc-c++ make cmake ninja-build python3 curl-devel libxml2-devel
 BuildRequires:  openssl-devel zlib-devel xz-devel ncurses-devel pkgconfig llvm-devel
 
-# Extensions select the matching tool with `BuildRequires: rust = 1.96.1`.
-Provides:       rust = %{version}
-
 %description
+Rust 1.96.1 compiler toolchain built for OBS to satisfy the
+Rust compiler and Cargo version requirements of cargo-pgrx 0.19.1.
+
+# Extensions select the matching tool with `BuildRequires: rust = 1.96.1`.
+%package -n rust
+Summary:        Rust compiler
+
+%description -n rust
 Rust 1.96.1 compiler toolchain built for OBS to satisfy the
 Rust compiler and Cargo version requirements of cargo-pgrx 0.19.1.
 
@@ -56,13 +66,13 @@ Requires: rust%{?_isa} = %{version}-%{release}
 Rust formatting tools built alongside Rust %{version}.
 
 %if 0%{?rhel}
-%package toolset
+%package -n rust-toolset
 Summary:        Rust Toolset
 BuildArch:      noarch
 Requires:       rust = %{version}-%{release}
 Requires:       cargo = %{version}-%{release}
 
-%description toolset
+%description -n rust-toolset
 This is the metapackage for Rust Toolset, bringing in the Rust compiler,
 the Cargo package manager, and a few convenience macros for rpm builds.
 %endif
@@ -156,7 +166,7 @@ rm -f %{buildroot}%{_mandir}/man1/cargo*.1*
 rm -f %{buildroot}%{_mandir}/man1/rustc.1*
 rm -f %{buildroot}%{_mandir}/man1/rustdoc.1*
 
-%files
+%files -n rust
 %license COPYRIGHT LICENSE-APACHE LICENSE-MIT
 %{_bindir}/rustc
 %{_bindir}/cargo-clippy
@@ -177,12 +187,15 @@ rm -f %{buildroot}%{_mandir}/man1/rustdoc.1*
 %license src/tools/rustfmt/LICENSE-{APACHE,MIT}
 
 %if 0%{?rhel}
-%files toolset
+%files -n rust-toolset
 %{rpmmacrodir}/macros.rust-toolset
 %{_fileattrsdir}/cargo_vendor.attr
 %{_rpmconfigdir}/cargo_vendor.prov
 %endif
 
 %changelog
+* Thu Nov 26 2026 Percona Development Team <info@percona.com> - 1.96.1-1
+- Rename the source package to rust-1.96.1; binary package names are unchanged
+
 * Tue Oct 13 2026 Percona Development Team <info@percona.com> - 1.96.1-1
 - Package rust 1.96.1 for building cargo-pgrx 0.19.1 based PostgreSQL extensions
