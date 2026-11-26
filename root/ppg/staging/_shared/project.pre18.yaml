@@ -74,7 +74,7 @@ qa:
         - rhel-9-arm
         - rhel-10
         - rhel-10-arm
-      TESTING_BRANCH: main
+      TESTING_BRANCH: obs-labs-ubi-repos
       # The meta scenarios (pg-<major>-meta-server, -meta-ha) are in the meta
       # packages' package.yaml: they run only for majors that ship them.
       SCENARIO:
@@ -99,7 +99,7 @@ qa:
       FROM_REPO: release
       FROM_OBS_PROJECT:
         project: ppg:staging:%!{PG_PREV_MAJOR_VERSION}
-      TESTING_BRANCH: main
+      TESTING_BRANCH: obs-labs-ubi-repos
       SCENARIO:
         - pg-%!{PG_MAJOR_VERSION}-minor-upgrade
         - pg-%!{PG_MAJOR_VERSION}-major-upgrade

@@ -1,1 +1,161 @@
-../_shared/project.post18.yaml
+# Shared project.yaml for the PostgreSQL 18+ majors of this tier: each
+# <V>/project.yaml is a symlink to this file and renders it with its own
+# macros.yaml (PG_MAJOR_VERSION, PG_PREV_MAJOR_VERSION, ...).  14-17 use
+# project.pre18.yaml because their llvm and SUSE Ignore policy differs.
+title: Percona Distribution for PostgreSQL %!{PG_MAJOR_VERSION}
+description: |
+  Packages for Percona Distribution for PostgreSQL %!{PG_MAJOR_VERSION} — the server, extensions,
+  HA components (Patroni, etcd, HAProxy, pgBouncer, pgPool-II), and companion tools.
+
+# Repositories, debuginfo flags and the shared build configuration come from
+# root/project.yaml and root/ppg/staging/subprojects.yaml.  Only what is
+# specific to this major is declared here.
+project-config: |
+  # TEMPORARY (PR #330, do not merge): dummy prjconf change so that obs-sync
+  # promotes every ppg:staging:18 package into the PR project.  This file is a
+  # copy of ../_shared/project.post18.yaml; restore the symlink before merging.
+
+  %if "%_repository" == "openSUSE_Tumbleweed" || "%_repository" == "openSUSE_Leap_16"
+  # Suppress the previous major's system package so that this project does not
+  # pick it up when both majors are present in the interconnect.
+  Ignore: postgresql%!{PG_PREV_MAJOR_VERSION}-server
+  %endif
+
+  %if "%_repository" == "Debian_12" || "%_repository" == "Ubuntu_22.04"
+  # PG 18 JIT requires LLVM >= 19; use repackaged llvm-21 from common:deps:build.
+  Prefer: llvm-21-dev
+  Prefer: clang-21
+  Substitute: llvm-dev llvm-21-dev
+  Substitute: clang clang-21
+  # Force the whole llvm-21 toolchain into every Debian 12 build root. clang-21/
+  # llvm-21-dev pull the rest transitively but an inherited Ignore strips them,
+  # and extensions (pgvector, postgis) need clang-21 for PGXS bitcode yet only
+  # Build-Depend on the server-dev package. Support: beats the Ignore.
+  Support: clang-21
+  Support: llvm-21-dev
+  Support: libllvm21
+  Support: libclang-cpp21
+  Support: libclang-common-21-dev
+  Support: llvm-21-linker-tools
+  Support: libclang1-21
+  Support: llvm-21
+  Support: llvm-21-runtime
+  Support: llvm-21-tools
+  Support: libc++-21-dev
+  Support: libc++abi-21-dev
+  Support: libc++1-21
+  Support: libc++abi1-21
+  %endif
+
+  %if "%_repository" == "Debian_12"
+  # Prefer repackaged llvm-21 over Bookworm's system LLVM 14.
+  Ignore: libllvm14
+  Ignore: llvm-14-runtime
+  Ignore: llvm-14-linker-tools
+  Ignore: libclang-cpp14
+  Ignore: libclang-common-14-dev
+  Ignore: libclang1-14
+  Ignore: llvm-14-tools
+  Ignore: llvm-14
+  Ignore: llvm-14-dev
+  Ignore: clang-14
+  %endif
+
+# QA: the QA team's test jobs for this major's packages, run by the PR check
+# (qa-packages label), the nightly QA, obs-qa-run and release QA. OBS_PROJECT
+# points the jobs at ${OBS_ROOTPRJ}:ppg:staging:<major>: this project on main,
+# the PR's own copy (isv:percona:PR:pr-<N>:ppg:staging:<major>) in a PR.
+#
+# server: PPG server and meta-package tests (ppg-multiOS-parallel).
+# One entry per component: that component's own upstream test suite
+# (component-generic-parallel), checked out at the same repository and tag
+# the package's obs/_service builds from, so QA tests the packaged source.
+qa:
+  - name: server
+    pipeline: ppg-multiOS-parallel
+    parameters:
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      PLATFORMS:
+        - debian-12
+        - debian-12-arm
+        - debian-13
+        - debian-13-arm
+        - ubuntu-jammy
+        - ubuntu-jammy-arm
+        - ubuntu-noble
+        - ubuntu-noble-arm
+        - ubuntu-resolute
+        - ubuntu-resolute-arm
+        - rocky-8
+        - rocky-8-arm
+        - rocky-9
+        - rocky-9-arm
+        - rocky-10
+        - rocky-10-arm
+        - ol-8
+        - ol-8-arm
+        - ol-9
+        - ol-9-arm
+        - ol-10
+        - ol-10-arm
+        - rhel-8
+        - rhel-8-arm
+        - rhel-9
+        - rhel-9-arm
+        - rhel-10
+        - rhel-10-arm
+      TESTING_BRANCH: obs-labs-ubi-repos
+      IO_METHOD:
+        - worker
+        - sync
+        - io_uring
+      # The meta scenarios (pg-<major>-meta-server, -meta-ha) are in the meta
+      # packages' package.yaml: they run only for majors that ship them.
+      SCENARIO:
+        - pg-%!{PG_MAJOR_VERSION}
+    matrix:
+      - IO_METHOD
+      - SCENARIO
+  # Package upgrades into this major. Minor: latest released N.x (FROM_REPO,
+  # repo.percona.com) -> this build; PG 19's needs a released 19.x to start
+  # from. Major: OBS to OBS, the previous major's build (FROM_OBS_PROJECT) ->
+  # this build. FROM_OBS_PROJECT is a project reference: the previous major
+  # in the root under test (its release project in a release PR) when it is
+  # there, else main's staging project. FROM_VERSION empty = each scenario's
+  # default_from_version in ppg-testing ppg/versions.yml; for the major
+  # upgrade it only labels the run and drives its version gates.
+  - name: upgrade
+    pipeline: ppg-upgrade-parallel
+    parameters:
+      USE_OBS_REPO: true
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      VERSION: ppg-%!{PG_VERSION}
+      FROM_VERSION: ''
+      FROM_REPO: release
+      FROM_OBS_PROJECT:
+        project: ppg:staging:%!{PG_PREV_MAJOR_VERSION}
+      TESTING_BRANCH: obs-labs-ubi-repos
+      SCENARIO:
+        - pg-%!{PG_MAJOR_VERSION}-minor-upgrade
+        - pg-%!{PG_MAJOR_VERSION}-major-upgrade
+    matrix:
+      - SCENARIO
+
+  # pg_tde major upgrade into this major, OBS to OBS: the previous major's
+  # OBS build (FROM_OBS_PROJECT, a project reference as in the upgrade entry
+  # above) to this build, via pg_tde_upgrade. Here and not
+  # with the pg_tde package's entries, because the package file is shared
+  # with PG 17, whose previous major (16) has no pg_tde.
+  - name: pg_tde-upgrade-major
+    pipeline: tde-upgrade-parallel
+    parameters:
+      UPGRADE_TYPE: server_major
+      TDE_UPGRADE: true
+      FROM_VERSION: ''
+      FROM_OBS_PROJECT:
+        project: ppg:staging:%!{PG_PREV_MAJOR_VERSION}
+      TO_VERSION: ppg-%!{PG_VERSION}
+      OBS_PROJECT: ${OBS_ROOTPRJ}:ppg:staging:%!{PG_MAJOR_VERSION}
+      TESTING_BRANCH: obs-labs-ubi-repos
