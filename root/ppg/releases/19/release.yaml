@@ -2,4 +2,6 @@ project: ppg:staging:19
 releases:
 - source_commit: 6a72fb76213461927beff734e0359c26da05f405
   tag: ppg/19.0-1
+- source_commit: ada4cd4d75a3e3f1626a17e9d658594eb14462e4
+  tag: ppg/19.0-2
 repository: ${PERCONA_OBS_PACKAGING_REPO}
