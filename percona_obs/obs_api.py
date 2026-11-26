@@ -617,6 +617,7 @@ def _fetch_image_pkg_deps(
     path_chain: list[str],
     global_providers: dict[str, set[tuple[str, str]]],
     local_pkg_set: set[tuple[str, str]],
+    failed: "set[str] | None" = None,
 ) -> set[tuple[str, str]]:
     """Return local source packages a Dockerfile image depends on, via _buildinfo.
 
@@ -629,6 +630,9 @@ def _fetch_image_pkg_deps(
     (the <path> projects of the image's repository) so that same-named
     binaries built in multiple sibling projects are attributed to the tier the
     image actually pulls from.
+
+    When the _buildinfo cannot be fetched or parsed the result is empty and,
+    if *failed* is given, *branch_project* is added to it.
     """
     try:
         url = osc.core.makeurl(
@@ -639,6 +643,8 @@ def _fetch_image_pkg_deps(
         logger.debug(
             f"_fetch_image_pkg_deps: error fetching {branch_project}/{repo}/{arch}/{pkg_name}: {exc}"
         )
+        if failed is not None:
+            failed.add(branch_project)
         return set()
 
     deps: set[tuple[str, str]] = set()
@@ -663,6 +669,9 @@ def _fetch_combined_depinfo(
     branch_projects: set[str],
     local_pkg_set: set[tuple[str, str]],
     image_pkgs: "dict[str, list[tuple[str, str, str]]] | None" = None,
+    *,
+    all_targets: bool = False,
+    failed: "set[str] | None" = None,
 ) -> dict[tuple[str, str], set[tuple[str, str]]]:
     """Return a project-aware forward build-dependency map across OBS projects.
 
@@ -700,6 +709,18 @@ def _fetch_combined_depinfo(
     ``image_pkgs`` optionally extends the map with Dockerfile-image → RPM
     edges that OBS omits from _builddepinfo.  It maps image pkg_name →
     list of (branch_project, repo, arch) to query per-package _buildinfo for.
+
+    By default only the first repository and its first architecture of each
+    project are queried.  With ``all_targets=True`` every repository and
+    every architecture is queried and the edges are the union, so an edge
+    present on only one target is not missed.
+
+    ``failed``, when given, collects the projects whose data could not be
+    fetched (HTTP or parse error on the project listing, a _builddepinfo, or
+    an image _buildinfo, including a project that is not listed on OBS at
+    all); the edges of the other projects are still returned.  A project
+    that lists successfully but has no repositories or architectures is not
+    a failure.
     """
     # providers_by_project[P][binary] = (P, source_pkg) for binaries built
     # in P itself (inherited entries excluded).
@@ -707,18 +728,16 @@ def _fetch_combined_depinfo(
     # path_chains[(P, repo)] = ordered <path> projects of P's repo, used as
     # the provider search order after P itself.
     path_chains: dict[tuple[str, str], list[str]] = {}
-    # queried_repo[P] = the repository whose builddepinfo was fetched for P.
-    queried_repo: dict[str, str] = {}
     # project_repos[P] = every repository listed by /build/P (empty set when
     # the project does not exist).  Used to skip per-image _buildinfo queries
     # for repositories the branch-source project does not have yet (a PR
     # adding a brand-new repo): OBS 404s those, but only after tens of
     # seconds each.
     project_repos: dict[str, set[str]] = {}
-    # Each entry: (pkg_elem, home_project, src) where home_project is the
-    # OBS project this <package> belongs to (the queried project, after
-    # filtering out inherited entries).
-    all_pkg_elems: list[tuple[ET.Element, str, str]] = []
+    # Each entry: (pkg_elem, home_project, src, repo) where home_project is
+    # the OBS project this <package> belongs to (the queried project, after
+    # filtering out inherited entries) and repo the repository it came from.
+    all_pkg_elems: list[tuple[ET.Element, str, str, str]] = []
 
     for obs_project in branch_projects:
         try:
@@ -727,20 +746,6 @@ def _fetch_combined_depinfo(
             repos = [
                 e.get("name", "") for e in repo_root.findall("entry") if e.get("name")
             ]
-            project_repos[obs_project] = set(repos)
-            if not repos:
-                continue
-            arch_url = osc.core.makeurl(apiurl, ["build", obs_project, repos[0]])
-            arch_root = ET.fromstring(osc.connection.http_GET(arch_url).read())
-            archs = [
-                e.get("name", "") for e in arch_root.findall("entry") if e.get("name")
-            ]
-            if not archs:
-                continue
-            dep_url = osc.core.makeurl(
-                apiurl, ["build", obs_project, repos[0], archs[0], "_builddepinfo"]
-            )
-            dep_root = ET.fromstring(osc.connection.http_GET(dep_url).read())
         except Exception as exc:
             logger.debug(
                 f"_fetch_combined_depinfo: error fetching {obs_project}: {exc}"
@@ -749,32 +754,68 @@ def _fetch_combined_depinfo(
             # are known; remember that so the image loop below does not
             # re-list the project.
             project_repos.setdefault(obs_project, set())
+            if failed is not None:
+                failed.add(obs_project)
             continue
+        project_repos[obs_project] = set(repos)
 
-        queried_repo[obs_project] = repos[0]
-        path_chains[(obs_project, repos[0])] = _fetch_repo_path_projects(
-            apiurl, obs_project, repos[0]
-        )
+        for repo in repos if all_targets else repos[:1]:
+            try:
+                arch_url = osc.core.makeurl(apiurl, ["build", obs_project, repo])
+                arch_root = ET.fromstring(osc.connection.http_GET(arch_url).read())
+                archs = [
+                    e.get("name", "")
+                    for e in arch_root.findall("entry")
+                    if e.get("name")
+                ]
+            except Exception as exc:
+                logger.debug(
+                    f"_fetch_combined_depinfo: error fetching {obs_project}/{repo}: {exc}"
+                )
+                if failed is not None:
+                    failed.add(obs_project)
+                continue
 
-        for pkg_elem in dep_root.findall("package"):
-            # Skip <package> entries inherited from path targets — they are
-            # attributed to their home project when that project is queried,
-            # not to the queried project here.
-            elem_proj = pkg_elem.get("project", "")
-            if elem_proj and elem_proj != obs_project:
-                continue
-            raw_src = pkg_elem.get("name", "")
-            if not raw_src:
-                continue
-            # Strip multibuild flavor suffix (e.g. "pkg:flavor" → "pkg") so
-            # that dep lookups always use the base package name.
-            src = raw_src.split(":")[0]
-            all_pkg_elems.append((pkg_elem, obs_project, src))
-            project_providers = providers_by_project.setdefault(obs_project, {})
-            for subpkg in pkg_elem.findall("subpkg"):
-                binary = (subpkg.text or "").strip()
-                if binary:
-                    project_providers[binary] = (obs_project, src)
+            repo_chain_set = False
+            for arch in archs if all_targets else archs[:1]:
+                try:
+                    dep_url = osc.core.makeurl(
+                        apiurl, ["build", obs_project, repo, arch, "_builddepinfo"]
+                    )
+                    dep_root = ET.fromstring(osc.connection.http_GET(dep_url).read())
+                except Exception as exc:
+                    logger.debug(
+                        f"_fetch_combined_depinfo: error fetching {obs_project}/{repo}/{arch}: {exc}"
+                    )
+                    if failed is not None:
+                        failed.add(obs_project)
+                    continue
+
+                if not repo_chain_set:
+                    path_chains[(obs_project, repo)] = _fetch_repo_path_projects(
+                        apiurl, obs_project, repo
+                    )
+                    repo_chain_set = True
+
+                for pkg_elem in dep_root.findall("package"):
+                    # Skip <package> entries inherited from path targets —
+                    # they are attributed to their home project when that
+                    # project is queried, not to the queried project here.
+                    elem_proj = pkg_elem.get("project", "")
+                    if elem_proj and elem_proj != obs_project:
+                        continue
+                    raw_src = pkg_elem.get("name", "")
+                    if not raw_src:
+                        continue
+                    # Strip multibuild flavor suffix (e.g. "pkg:flavor" →
+                    # "pkg") so dep lookups always use the base package name.
+                    src = raw_src.split(":")[0]
+                    all_pkg_elems.append((pkg_elem, obs_project, src, repo))
+                    project_providers = providers_by_project.setdefault(obs_project, {})
+                    for subpkg in pkg_elem.findall("subpkg"):
+                        binary = (subpkg.text or "").strip()
+                        if binary:
+                            project_providers[binary] = (obs_project, src)
 
     # global_providers[binary] = every (project, src) building it — the
     # unambiguous fallback for binaries not visible through a consumer's
@@ -786,11 +827,11 @@ def _fetch_combined_depinfo(
 
     # Build forward dep map: fwd_deps[(P, A)] = {(Q, B), ...}.
     fwd_deps: dict[tuple[str, str], set[tuple[str, str]]] = {}
-    for pkg_elem, home_project, src in all_pkg_elems:
+    for pkg_elem, home_project, src, repo in all_pkg_elems:
         if not src:
             continue
         src_key = (home_project, src)
-        chain = path_chains.get((home_project, queried_repo.get(home_project, "")), [])
+        chain = path_chains.get((home_project, repo), [])
         for pkgdep in pkg_elem.findall("pkgdep"):
             binary = (pkgdep.text or "").strip()
             provider = _resolve_provider(
@@ -807,6 +848,10 @@ def _fetch_combined_depinfo(
                     project_repos[branch_project] = _fetch_obs_project_repository_names(
                         apiurl, branch_project
                     )
+                    if failed is not None and not project_repos[branch_project]:
+                        # The listing helper swallows errors, so an empty
+                        # result cannot be told apart from a fetch failure.
+                        failed.add(branch_project)
                 if repo not in project_repos[branch_project]:
                     logger.debug(
                         f"_fetch_combined_depinfo: skipping image dep query for "
@@ -829,6 +874,7 @@ def _fetch_combined_depinfo(
                     path_chains[chain_key],
                     global_providers,
                     local_pkg_set,
+                    failed,
                 )
                 if extra:
                     fwd_deps.setdefault((branch_project, pkg_name), set()).update(extra)

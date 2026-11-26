@@ -120,3 +120,165 @@ def test_image_project_outside_dep_projects_is_listed_once(fake_obs):
     reqs = _buildinfo_requests(fake_obs)
     assert len(reqs) == 2
     assert not any("/ubi10/" in u for u in reqs)
+
+
+class _GraphOBS:
+    """Serves a configurable /build tree with per-(project, repo, arch)
+    _builddepinfo documents.  ``fail`` holds project names whose
+    _builddepinfo answers HTTP 500."""
+
+    def __init__(self, tree, fail=(), image_fail=()):
+        # tree[project][repo][arch] = list of (src, [subpkgs], [pkgdeps])
+        self.tree = tree
+        self.fail = set(fail)
+        self.image_fail = set(image_fail)
+
+    def __call__(self, url: str):
+        parts = url.split("/", 3)[3].split("/")
+        assert parts[0] == "build"
+        project = parts[1]
+        if project not in self.tree:
+            raise RuntimeError(f"HTTP Error 404: {project}")
+        repos = self.tree[project]
+        if len(parts) == 2:
+            return _Resp(
+                (
+                    "<directory>"
+                    + "".join(f'<entry name="{r}"/>' for r in repos)
+                    + "</directory>"
+                ).encode()
+            )
+        repo = parts[2]
+        if len(parts) == 3:
+            return _Resp(
+                (
+                    "<directory>"
+                    + "".join(f'<entry name="{a}"/>' for a in repos[repo])
+                    + "</directory>"
+                ).encode()
+            )
+        arch = parts[3]
+        if parts[-1] == "_buildinfo":
+            if project in self.image_fail:
+                raise RuntimeError("HTTP Error 500: buildinfo")
+            return _Resp(b'<buildinfo><bdep name="liba"/></buildinfo>')
+        assert parts[-1] == "_builddepinfo"
+        if project in self.fail:
+            raise RuntimeError("HTTP Error 500: builddepinfo")
+        body = ""
+        for src, subpkgs, deps in repos[repo][arch]:
+            body += f'<package name="{src}">'
+            body += "".join(f"<subpkg>{s}</subpkg>" for s in subpkgs)
+            body += "".join(f"<pkgdep>{d}</pkgdep>" for d in deps)
+            body += "</package>"
+        return _Resp(f"<builddepinfo>{body}</builddepinfo>".encode())
+
+
+def _graph(monkeypatch, obs):
+    monkeypatch.setattr(osc.connection, "http_GET", obs)
+    monkeypatch.setattr(
+        "percona_obs.obs_api._fetch_repo_path_projects", lambda *a, **k: []
+    )
+
+
+API = "https://obs.example"
+
+
+def test_all_targets_unions_repos_and_archs(monkeypatch):
+    tree = {
+        "P": {
+            "R1": {
+                "x86_64": [("a", ["liba"], []), ("b", ["libb"], ["liba"])],
+                "aarch64": [],
+            },
+            "R2": {"aarch64": [("a", ["liba"], []), ("c", ["libc"], ["liba"])]},
+        }
+    }
+    _graph(monkeypatch, _GraphOBS(tree))
+    local = {("P", "a"), ("P", "b"), ("P", "c")}
+    default = _fetch_combined_depinfo(API, {"P"}, local)
+    exact = _fetch_combined_depinfo(API, {"P"}, local, all_targets=True)
+    assert ("P", "c") not in default
+    assert ("P", "a") in default[("P", "b")]
+    assert ("P", "a") in exact[("P", "c")]
+    assert ("P", "a") in exact[("P", "b")]
+
+
+def test_all_targets_edge_on_second_arch_of_first_repo(monkeypatch):
+    tree = {
+        "P": {
+            "R1": {
+                "x86_64": [("a", ["liba"], [])],
+                "aarch64": [("a", ["liba"], []), ("d", ["libd"], ["liba"])],
+            }
+        }
+    }
+    _graph(monkeypatch, _GraphOBS(tree))
+    local = {("P", "a"), ("P", "d")}
+    assert _fetch_combined_depinfo(API, {"P"}, local) == {}
+    exact = _fetch_combined_depinfo(API, {"P"}, local, all_targets=True)
+    assert exact == {("P", "d"): {("P", "a")}}
+
+
+def test_failed_projects_are_reported(monkeypatch):
+    tree = {
+        "P": {"R1": {"x86_64": [("a", ["liba"], []), ("b", ["libb"], ["liba"])]}},
+        "Q": {"R1": {"x86_64": []}},
+    }
+    _graph(monkeypatch, _GraphOBS(tree, fail={"Q"}))
+    local = {("P", "a"), ("P", "b")}
+    failed: set[str] = set()
+    got = _fetch_combined_depinfo(
+        API, {"P", "Q"}, local, all_targets=True, failed=failed
+    )
+    assert failed == {"Q"}
+    assert ("P", "a") in got[("P", "b")]
+
+
+def test_unlisted_project_is_reported_failed(monkeypatch):
+    tree = {"P": {"R1": {"x86_64": []}}}
+    _graph(monkeypatch, _GraphOBS(tree))
+    failed: set[str] = set()
+    _fetch_combined_depinfo(API, {"P", "Gone"}, set(), failed=failed)
+    assert failed == {"Gone"}
+
+
+def test_failed_not_touched_when_everything_fetches(monkeypatch):
+    tree = {"P": {"R1": {"x86_64": [("a", ["liba"], [])]}}}
+    _graph(monkeypatch, _GraphOBS(tree))
+    failed: set[str] = set()
+    _fetch_combined_depinfo(API, {"P"}, {("P", "a")}, failed=failed)
+    assert failed == set()
+
+
+def test_image_buildinfo_failure_reports_project(monkeypatch):
+    tree = {
+        "P": {"R1": {"x86_64": [("a", ["liba"], [])]}},
+        "I": {"R1": {"x86_64": []}},
+    }
+    _graph(monkeypatch, _GraphOBS(tree, image_fail={"I"}))
+    failed: set[str] = set()
+    got = _fetch_combined_depinfo(
+        API,
+        {"P", "I"},
+        {("P", "a")},
+        image_pkgs={"img": [("I", "R1", "x86_64")]},
+        failed=failed,
+    )
+    assert failed == {"I"}
+    assert got == {}
+
+
+def test_image_edges_still_returned_without_failure(monkeypatch):
+    tree = {"P": {"R1": {"x86_64": [("a", ["liba"], [])]}}, "I": {"R1": {"x86_64": []}}}
+    _graph(monkeypatch, _GraphOBS(tree))
+    failed: set[str] = set()
+    got = _fetch_combined_depinfo(
+        API,
+        {"P", "I"},
+        {("P", "a"), ("I", "img")},
+        image_pkgs={"img": [("I", "R1", "x86_64")]},
+        failed=failed,
+    )
+    assert failed == set()
+    assert got == {("I", "img"): {("P", "a")}}
