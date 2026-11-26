@@ -4,4 +4,6 @@ releases:
   tag: ppg/common-upgrade-1
 - source_commit: 3d8b3662044cbc7019c8fe8dce1c8a7e1a89d435
   tag: ppg/common-upgrade-2
+- source_commit: ada4cd4d75a3e3f1626a17e9d658594eb14462e4
+  tag: ppg/common-upgrade-3
 repository: ${PERCONA_OBS_PACKAGING_REPO}
