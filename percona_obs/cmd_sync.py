@@ -11,6 +11,7 @@ import time
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Callable
 
 import osc.conf
 import osc.core
@@ -1887,6 +1888,10 @@ def cmd_sync(args):
         # carries only project-config-triggered entries; skipped still
         # reflects the Phase-1 decisions, which run unconditionally.
         _write_report()
+        # Nothing was uploaded: only the frozen-project meta/config warning.
+        _propagate_after_push(
+            apiurl, args, [], meta_changed_projects, env_vars, args.dry_run
+        )
         if (
             not get_default_repository_filter().is_empty
             or _slice_skipped_projects
@@ -2211,31 +2216,25 @@ def cmd_sync(args):
             forget_project(sync_manifest, orphan_proj)
 
     # Propagate into frozen units.  A failure must not lose the manifest or the
-    # report, so it is held until both are written.
-    propagate_error: Exception | None = None
-    try:
-        _propagate_after_push(
+    # report, so _finish_push holds it until both are written.
+    def _save_manifest() -> None:
+        # Persist the sync-state manifest for the next run's zero-request skips.
+        if skip_unchanged and not dry_run_obs:
+            save_manifest(apiurl, args.rootprj, sync_manifest)
+
+    _finish_push(
+        lambda: _propagate_after_push(
             apiurl,
             args,
             promoted_uploads,
             meta_changed_projects,
-            targets,
             env_vars,
             args.dry_run,
-        )
-    except Exception as exc:
-        propagate_error = exc
-
-    # Persist the sync-state manifest for the next run's zero-request skips.
-    if skip_unchanged and not dry_run_obs:
-        save_manifest(apiurl, args.rootprj, sync_manifest)
-
-    # Write the sync report (read-only output — also written in dry-run).
-    _write_report()
-
-    if propagate_error is not None:
-        print(f"error: propagation into frozen units failed: {propagate_error}")
-        sys.exit(1)
+        ),
+        _save_manifest,
+        _write_report,  # read-only output, also written in dry-run
+        _push_recovery_command(apiurl, args, promoted_uploads),
+    )
 
     if (
         not get_default_repository_filter().is_empty
@@ -2255,7 +2254,6 @@ def _propagate_after_push(
     args,
     promoted_uploads: "list[str]",
     config_changed_projects: "set[str]",
-    targets,
     env_vars: "dict[str, str]",
     dry_run: bool,
 ) -> None:
@@ -2286,16 +2284,61 @@ def _propagate_after_push(
         for upload in promoted_uploads:
             prj, _, pkg = upload.rpartition("/")
             seeds.add((prj, pkg))
+        # Lazy import: cmd_build imports this module lazily too.
+        from .cmd_build import _propagate_targets
+
+        # Full-slice targets, not the sync's scope: a scoped `sync push` would
+        # otherwise cut multi-hop chains and aggregate/image edges short.
         propagate_mod.propagate(
             apiurl,
             args.rootprj,
             seeds,
-            targets,
+            _propagate_targets(args, env_vars),
             env_vars,
             dry_run,
             env_overrides=list(getattr(args, "env_overrides", None) or []),
             profile=getattr(args, "profile", None),
         )
+
+
+def _push_recovery_command(apiurl: str, args, promoted_uploads: "list[str]") -> str:
+    """The ``build propagate`` command that repeats this push's propagation."""
+    seeds: set[tuple[str, str]] = set()
+    for upload in promoted_uploads:
+        prj, _, pkg = upload.rpartition("/")
+        seeds.add((prj, pkg))
+    return propagate_mod.recovery_command(
+        apiurl,
+        args.rootprj,
+        seeds,
+        list(getattr(args, "env_overrides", None) or []),
+        getattr(args, "profile", None),
+    )
+
+
+def _finish_push(
+    run_propagation: "Callable[[], None]",
+    save_manifest_fn: "Callable[[], None]",
+    write_report_fn: "Callable[[], None]",
+    recovery: str,
+) -> None:
+    """Propagate, then always save the manifest and write the report.
+
+    A propagation failure (including SystemExit from OBS API helpers, but not
+    KeyboardInterrupt) is held until both are written, then exits non-zero
+    with the command that repeats the propagation.
+    """
+    error: BaseException | None = None
+    try:
+        run_propagation()
+    except (Exception, SystemExit) as exc:
+        error = exc
+    save_manifest_fn()
+    write_report_fn()
+    if error is not None:
+        print(f"error: propagation into frozen units failed: {error}")
+        print(f"re-run: {recovery}")
+        sys.exit(1)
 
 
 def _prune_sync_manifest(
