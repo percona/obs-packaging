@@ -1,8 +1,9 @@
 name: OBS Freeze
 
 # Freezes or unfreezes release units (percona-obs project freeze/unfreeze) on
-# every OBS instance: a frozen unit keeps its published binaries while its
-# sources keep syncing, until it is unfrozen and rebuilt.  Manual only.
+# every OBS instance: a frozen unit is not rebuilt for dependency changes
+# (new OS packages), while late fixes synced to it still rebuild it and its
+# dependents.  Manual only.
 # One leg runs per entry of the `OBS_INSTANCES` repository variable, like
 # sync-main.yml, with the same per-instance profile and credentials.
 
