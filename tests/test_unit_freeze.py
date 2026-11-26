@@ -131,3 +131,71 @@ def test_carry_rebuild_new_repo_in_unfrozen_project():
     des = '<project name="p"><repository name="A"/><repository name="N"/></project>'
     got = ET.fromstring(uf.carry_rebuild(cur, des))
     assert got.find("repository[@name='N']").get("rebuild") is None
+
+
+def test_apply_freeze_partial_becomes_frozen(monkeypatch):
+    partial = META.replace(
+        '<repository name="A">', '<repository name="A" rebuild="local">'
+    )
+    assert uf.freeze_state(partial) == "partial"
+    metas = {"p1": partial}
+    writes = _fake_obs(monkeypatch, metas)
+    out = uf.apply_freeze("api", ["p1"], frozen=True, dry_run=False)
+    assert out == [("p1", "changed")] and [p for p, _ in writes] == ["p1"]
+    repos = ET.fromstring(metas["p1"]).findall("repository")
+    assert repos and all(r.get("rebuild") == "local" for r in repos)
+
+
+def _unit_tree(tmp_path):
+    for unit in ("ppg/staging/17", "ppg/staging/18"):
+        d = tmp_path / unit
+        (d / "containers").mkdir(parents=True)
+        (d / "project.yaml").write_text("title: t\n")
+        (d / "containers" / "project.yaml").write_text("title: t\n")
+        (d / "pkg").mkdir()
+        (d / "pkg" / "package.yaml").write_text("{}\n")
+
+
+def test_unit_obs_projects_with_listed_units_does_not_list(tmp_path, monkeypatch):
+    _unit_tree(tmp_path)
+    monkeypatch.setattr(
+        uf, "list_release_units", lambda root: pytest.fail("must not list units")
+    )
+    got = uf.unit_obs_projects(
+        "ppg:staging:18", "r", root=tmp_path, units={"ppg:staging:18"}
+    )
+    assert got == ["r:ppg:staging:18", "r:ppg:staging:18:containers"]
+    with pytest.raises(ValueError):
+        uf.unit_obs_projects("ppg:staging:17", "r", root=tmp_path, units=set())
+
+
+def test_release_unit_states_lists_units_once(tmp_path, monkeypatch):
+    _unit_tree(tmp_path)
+    real = uf.list_release_units
+    calls = []
+    monkeypatch.setattr(
+        uf, "list_release_units", lambda root: calls.append(root) or real(root)
+    )
+    read = []
+    monkeypatch.setattr(
+        uf,
+        "frozen_projects",
+        lambda apiurl, projects: read.append(list(projects))
+        or {"r:ppg:staging:18": "frozen"},
+    )
+    states = uf.release_unit_states("api", "r", root=tmp_path)
+    assert states == {"r:ppg:staging:18": "frozen"}
+    assert len(calls) == 1
+    assert read == [
+        [
+            "r:ppg:staging:17",
+            "r:ppg:staging:17:containers",
+            "r:ppg:staging:18",
+            "r:ppg:staging:18:containers",
+        ]
+    ]
+
+
+def test_frozen_or_partial():
+    states = {"a": "frozen", "b": "partial", "c": "unfrozen", "d": "empty"}
+    assert uf.frozen_or_partial(states) == {"a", "b"}

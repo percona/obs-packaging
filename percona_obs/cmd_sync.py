@@ -2260,7 +2260,10 @@ def _propagate_after_push(
     """Report frozen projects touched by a sync and rebuild their dependents.
 
     Does nothing for ``--branch-from`` (PR) syncs, and asks OBS nothing when
-    the sync uploaded nothing and changed no project meta/config.
+    the sync uploaded nothing and changed no project meta/config.  Otherwise
+    the freeze state of the release units is read once; with nothing frozen
+    that read is all it does.  A partly frozen project counts as frozen.
+    Failures are raised as ``_PropagationError`` naming the failed step.
     """
     if args.branch_from:
         return
@@ -2268,41 +2271,69 @@ def _propagate_after_push(
     candidates = uploaded_projects | config_changed_projects
     if not candidates:
         return
-    state = unit_freeze.frozen_projects(apiurl, sorted(candidates))
-    frozen = {p for p, s in state.items() if s == "frozen"}
+    try:
+        states = unit_freeze.release_unit_states(apiurl, args.rootprj)
+    except (Exception, SystemExit) as exc:
+        raise _PropagationError(
+            "reading the freeze state of the release units", exc
+        ) from exc
+    frozen = unit_freeze.frozen_or_partial(states)
+
+    def label(prj: str) -> str:
+        return "frozen" if states.get(prj) == "frozen" else "partly frozen"
+
     for prj in sorted(config_changed_projects & frozen):
         print(
-            f"warning: {prj} is frozen: the project meta/config change rebuilds "
-            "nothing; run 'build propagate' or unfreeze if it needs a rebuild"
+            f"warning: {prj} is {label(prj)}: the project meta/config change "
+            "rebuilds nothing; run 'build propagate' or unfreeze if it needs a "
+            "rebuild"
         )
     for prj in sorted(uploaded_projects & frozen):
         _print_same(
-            f"{prj}  frozen (rebuild=local): dependents are rebuilt by the tool"
+            f"{prj}  {label(prj)} (rebuild=local): dependents are rebuilt by the tool"
         )
-    if promoted_uploads:
-        seeds: set[tuple[str, str]] = set()
-        for upload in promoted_uploads:
-            prj, _, pkg = upload.rpartition("/")
-            seeds.add((prj, pkg))
-        # Lazy import: cmd_build imports this module lazily too.
-        from .cmd_build import _propagate_targets
+    if not promoted_uploads or not frozen:
+        return
+    seeds: set[tuple[str, str]] = set()
+    for upload in promoted_uploads:
+        prj, _, pkg = upload.rpartition("/")
+        seeds.add((prj, pkg))
+    # Lazy import: cmd_build imports this module lazily too.
+    from .cmd_build import _propagate_targets
 
-        # Full-slice targets, not the sync's scope: a scoped `sync push` would
-        # otherwise cut multi-hop chains and aggregate/image edges short.
+    # Full-slice targets, not the sync's scope: a scoped `sync push` would
+    # otherwise cut multi-hop chains and aggregate/image edges short.  Built
+    # by propagate only when it needs them.
+    try:
         propagate_mod.propagate(
             apiurl,
             args.rootprj,
             seeds,
-            _propagate_targets(args, env_vars),
+            lambda: _propagate_targets(args, env_vars),
             env_vars,
             dry_run,
+            states=states,
             env_overrides=list(getattr(args, "env_overrides", None) or []),
             profile=getattr(args, "profile", None),
         )
+    except (Exception, SystemExit) as exc:
+        raise _PropagationError("propagating into frozen units", exc) from exc
+
+
+class _PropagationError(Exception):
+    """A failed step of ``_propagate_after_push``; the message names it."""
+
+    def __init__(self, step: str, cause: BaseException):
+        super().__init__(f"{step} failed: {cause}")
 
 
 def _push_recovery_command(apiurl: str, args, promoted_uploads: "list[str]") -> str:
-    """The ``build propagate`` command that repeats this push's propagation."""
+    """The ``build propagate`` command that repeats this push's propagation.
+
+    Empty when nothing was uploaded: ``build propagate`` needs a package.
+    """
+    if not promoted_uploads:
+        return ""
     seeds: set[tuple[str, str]] = set()
     for upload in promoted_uploads:
         prj, _, pkg = upload.rpartition("/")
@@ -2326,7 +2357,8 @@ def _finish_push(
 
     A propagation failure (including SystemExit from OBS API helpers, but not
     KeyboardInterrupt) is held until both are written, then exits non-zero
-    with the command that repeats the propagation.
+    with the command that repeats the propagation (*recovery*; no hint when
+    it is empty).
     """
     error: BaseException | None = None
     try:
@@ -2336,8 +2368,12 @@ def _finish_push(
     save_manifest_fn()
     write_report_fn()
     if error is not None:
-        print(f"error: propagation into frozen units failed: {error}")
-        print(f"re-run: {recovery}")
+        if isinstance(error, _PropagationError):
+            print(f"error: {error}")
+        else:
+            print(f"error: propagation into frozen units failed: {error}")
+        if recovery:
+            print(f"re-run: {recovery}")
         sys.exit(1)
 
 

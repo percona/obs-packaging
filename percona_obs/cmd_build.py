@@ -29,6 +29,7 @@ from .common import (
     REPO_ROOT,
 )
 from . import propagate as propagate_mod
+from . import unit_freeze
 from .obs_api import _fetch_combined_depinfo, _fetch_obs_package_latest_comment
 from .targets import _resolve_targets, image_dep_query_repos, is_dockerfile_image
 
@@ -650,14 +651,18 @@ def cmd_build_propagate(args) -> None:
         **auto_rootprj_env(args.rootprj),
     }
     apiurl = osc.conf.config["apiurl"]
-    targets = _propagate_targets(args, env_vars)
+    states = unit_freeze.release_unit_states(apiurl, args.rootprj)
+    if not unit_freeze.frozen_or_partial(states):
+        print("propagate: no frozen project, nothing to trigger")
+        return
     propagate_mod.propagate(
         apiurl,
         args.rootprj,
         seeds,
-        targets,
+        lambda: _propagate_targets(args, env_vars),
         env_vars,
         args.dry_run,
+        states=states,
         env_overrides=list(args.env_overrides or []),
         profile=args.profile,
     )
