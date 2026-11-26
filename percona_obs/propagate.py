@@ -7,31 +7,51 @@ those triggers are only safe once the OBS scheduler has seen the change they
 depend on: a trigger sent too early rebuilds the dependent against the old
 binaries and nothing corrects it afterwards.
 
-This module holds the pure planning part: which packages depend on the
-changed ones (``closure``), and in which stages they are triggered
-(``plan_stages``).  ``aggregate_edges`` adds the edges of local
-``_aggregate`` files, ``expand_failed`` covers frozen projects whose
-dependency data could not be fetched, and ``upstream_projects`` lists the
-projects whose dependency data the plan needs.
+Planning: which packages depend on the changed ones (``closure``), and in
+which stages they are triggered (``plan_stages``).  ``aggregate_edges`` adds
+the edges of local ``_aggregate`` files, ``expand_failed`` covers frozen
+projects whose dependency data could not be fetched, and
+``upstream_projects`` lists the projects whose dependency data the plan
+needs.
+
+Running: ``run_stages`` waits until the scheduler has seen each stage's
+prerequisites (``wait_seen``) and then sends the stage's ``cmd=rebuild``
+triggers (``trigger_rebuild``).  ``propagate`` composes everything.
 """
 
+import time
+import urllib.error
 import xml.etree.ElementTree as ET
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
+import osc.connection
 import osc.core
 
+from . import release_freeze
 from .common import (
     _decode_obs_response,
+    _print_action,
     apply_env_substitution,
     apply_macro_substitution,
     expand_for_blocks,
     load_macros,
     load_project_yaml,
+    logger,
 )
+from .obs_api import _fetch_combined_depinfo, _fetch_obs_package_names_or_fail
+from .release_scope import list_release_units
+from .targets import image_dep_query_repos, is_dockerfile_image
+from .unit_freeze import _fetch_meta, frozen_projects, unit_obs_projects
 
 Pkg = tuple[str, str]  # (obs_project, package)
+# One build target of a package: (status package name, repository, arch).
+# The status name is the package or one of its multibuild flavors
+# ("pkg:flavor").
+Target = tuple[str, str, str]
 
 # Package name standing for "every package of the project" in a dependency
 # set: an <aggregate> with no <package> children pulls the whole project.
@@ -295,6 +315,34 @@ def _path_projects(meta_xml: str) -> "set[str]":
     }
 
 
+def _project_path_projects(apiurl: str, prj: str) -> "set[str]":
+    """The ``<path project>`` entries of every repository of *prj*."""
+    return _path_projects(_decode_obs_response(osc.core.show_project_meta(apiurl, prj)))
+
+
+def _path_map(apiurl: str, start: "set[str]", rootprj: str) -> "dict[str, set[str]]":
+    """``{project: path projects under rootprj}`` for *start* and everything
+    they build against, transitively.
+
+    Projects outside *rootprj* (distribution bases) are neither keys nor
+    values.  A meta fetch error propagates: a missing project would mean
+    missing edges.
+    """
+
+    def under_root(prj: str) -> bool:
+        return prj == rootprj or prj.startswith(rootprj + ":")
+
+    paths: dict[str, set[str]] = {}
+    queue: deque[str] = deque(sorted(start))
+    while queue:
+        prj = queue.popleft()
+        if prj in paths:
+            continue
+        paths[prj] = {p for p in _project_path_projects(apiurl, prj) if under_root(p)}
+        queue.extend(sorted(paths[prj] - set(paths)))
+    return paths
+
+
 def upstream_projects(apiurl: str, frozen: "set[str]", rootprj: str) -> "set[str]":
     """Return *frozen* plus every project under *rootprj* they build against.
 
@@ -302,16 +350,378 @@ def upstream_projects(apiurl: str, frozen: "set[str]", rootprj: str) -> "set[str
     Projects outside *rootprj* (distribution bases) are not followed.  A meta
     fetch error propagates: a missing project would mean missing edges.
     """
-    result: set[str] = set(frozen)
-    queue: deque[str] = deque(sorted(frozen))
-    while queue:
-        prj = queue.popleft()
-        meta = _decode_obs_response(osc.core.show_project_meta(apiurl, prj))
-        for path_prj in sorted(_path_projects(meta)):
-            if path_prj in result:
-                continue
-            if path_prj != rootprj and not path_prj.startswith(rootprj + ":"):
-                continue
-            result.add(path_prj)
-            queue.append(path_prj)
-    return result
+    return set(_path_map(apiurl, frozen, rootprj))
+
+
+# ---------------------------------------------------------------------------
+# Running a plan
+
+# Package codes of targets that never build; they are ignored by the waits.
+_NOT_BUILT_CODES = frozenset({"excluded", "disabled"})
+_JOB_WORKERS = 8
+
+
+def trigger_rebuild(apiurl: str, obs_project: str, packages: "list[str]") -> None:
+    """Send ``cmd=rebuild`` for *packages* of *obs_project*, 50 per request."""
+    for i in range(0, len(packages), 50):
+        url = osc.core.makeurl(
+            apiurl,
+            ["build", obs_project],
+            query={"cmd": "rebuild", "package": packages[i : i + 50]},
+        )
+        osc.connection.http_POST(url)
+
+
+def _project_codes(apiurl: str, prj: str) -> "dict[Target, str] | None":
+    """Built targets of every package of *prj*: ``{target: code}``.
+
+    Excluded and disabled targets are left out; a project absent on this
+    instance has none (``{}``).  ``None`` when the results cannot be read.
+    """
+    try:
+        pkg_codes, _ = release_freeze.fetch_project_results(apiurl, prj)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return {}
+        logger.debug(f"propagate: build results of {prj}: {exc}")
+        return None
+    except Exception as exc:
+        logger.debug(f"propagate: build results of {prj}: {exc}")
+        return None
+    return {t: c for t, c in pkg_codes.items() if c not in _NOT_BUILT_CODES}
+
+
+def _pkg_targets(codes: "dict[Target, str]", name: str) -> "dict[Target, str]":
+    """The targets of package *name*, its multibuild flavors included."""
+    return {
+        t: c for t, c in codes.items() if t[0] == name or t[0].startswith(name + ":")
+    }
+
+
+def _newest_job(apiurl: str, prj: str, target: Target) -> "tuple[str, str]":
+    """``(identity, srcmd5)`` of the newest job of *target*; ``("", "")`` when
+    the job history is empty."""
+    name, repo, arch = target
+    url = osc.core.makeurl(
+        apiurl,
+        ["build", prj, repo, arch, "_jobhistory"],
+        query={"package": name, "limit": 1},
+    )
+    root = ET.fromstring(osc.connection.http_GET(url).read())
+    jobs = root.findall("jobhist")
+    if not jobs:
+        return "", ""
+    job = max(jobs, key=lambda j: int(j.get("readytime") or 0))
+    srcmd5 = job.get("srcmd5", "")
+    return f"{job.get('readytime', '')}:{srcmd5}", srcmd5
+
+
+def _source_md5(apiurl: str, prj: str, name: str) -> str:
+    """The source md5 the scheduler builds: ``verifymd5`` when present."""
+    url = osc.core.makeurl(apiurl, ["source", prj, name], query={"view": "info"})
+    root = ET.fromstring(osc.connection.http_GET(url).read())
+    return root.get("verifymd5") or root.get("srcmd5", "")
+
+
+def record_since(apiurl: str, pkgs: "set[Pkg]") -> "dict[Pkg, dict[Target, str]]":
+    """Identity of the newest job of every built target of *pkgs*.
+
+    ``wait_seen`` counts a target as seen once its newest job differs from
+    the one recorded here.  A target without job history records ``""``.
+    Read errors propagate: a missing record would make the next wait pass
+    at once, and the trigger after it could come too early.
+    """
+    jobs: list[tuple[Pkg, Target]] = []
+    since: dict[Pkg, dict[Target, str]] = {pkg: {} for pkg in pkgs}
+    for prj in sorted({p for p, _ in pkgs}):
+        try:
+            pkg_codes, _ = release_freeze.fetch_project_results(apiurl, prj)
+        except urllib.error.HTTPError as exc:
+            if exc.code != 404:
+                raise
+            pkg_codes = {}
+        codes = {t: c for t, c in pkg_codes.items() if c not in _NOT_BUILT_CODES}
+        for pkg in sorted(p for p in pkgs if p[0] == prj):
+            jobs.extend((pkg, t) for t in sorted(_pkg_targets(codes, pkg[1])))
+
+    def one(item: "tuple[Pkg, Target]") -> "tuple[Pkg, Target, str]":
+        pkg, target = item
+        return pkg, target, _newest_job(apiurl, pkg[0], target)[0]
+
+    with ThreadPoolExecutor(max_workers=_JOB_WORKERS) as pool:
+        for pkg, target, ident in pool.map(one, jobs):
+            since[pkg][target] = ident
+    return since
+
+
+def _poll_unseen(
+    apiurl: str,
+    pkgs: "set[Pkg]",
+    since: "dict[Pkg, dict[Target, str]]",
+    seen: "set[tuple[Pkg, Target]]",
+    source_md5: "dict[Pkg, str]",
+) -> "set[Pkg]":
+    """One poll of ``wait_seen``: the members of *pkgs* not seen yet.
+
+    *seen* (targets already seen) and *source_md5* (seeds' current source)
+    carry over between polls.
+    """
+    unseen: set[Pkg] = set()
+    to_check: list[tuple[Pkg, Target]] = []
+    for prj in sorted({p for p, _ in pkgs}):
+        codes = _project_codes(apiurl, prj)
+        prj_pkgs = {p for p in pkgs if p[0] == prj}
+        if codes is None:
+            unseen |= prj_pkgs
+            continue
+        for pkg in prj_pkgs:
+            for target, code in _pkg_targets(codes, pkg[1]).items():
+                if (pkg, target) in seen:
+                    continue
+                if code in release_freeze.PENDING_PKG_CODES:
+                    seen.add((pkg, target))
+                else:
+                    to_check.append((pkg, target))
+
+    def one(item: "tuple[Pkg, Target]") -> bool:
+        pkg, target = item
+        try:
+            ident, srcmd5 = _newest_job(apiurl, pkg[0], target)
+            if pkg in since:
+                return ident != since[pkg].get(target, "")
+            if pkg not in source_md5:
+                source_md5[pkg] = _source_md5(apiurl, pkg[0], pkg[1])
+            return bool(srcmd5) and srcmd5 == source_md5[pkg]
+        except Exception as exc:
+            logger.debug(f"propagate: job history of {pkg[0]}/{target}: {exc}")
+            return False
+
+    with ThreadPoolExecutor(max_workers=_JOB_WORKERS) as pool:
+        for item, ok in zip(to_check, pool.map(one, to_check)):
+            if ok:
+                seen.add(item)
+            else:
+                unseen.add(item[0])
+    return unseen
+
+
+def wait_seen(
+    apiurl: str,
+    pkgs: "set[Pkg]",
+    since: "dict[Pkg, dict[Target, str]]",
+    timeout_s: float = SEEN_TIMEOUT_S,
+    poll_s: float = SEEN_POLL_S,
+    sleep: "Callable[[float], None]" = time.sleep,
+    clock: "Callable[[], float]" = time.monotonic,
+) -> "set[Pkg]":
+    """Wait until the scheduler has seen every package of *pkgs*.
+
+    A package is seen when every target it builds on (excluded and disabled
+    targets ignored; a package with none left is seen) is pending
+    (``release_freeze.PENDING_PKG_CODES``) or has a newest job that shows
+    the change: for a package in *since*, a job other than the one recorded
+    there (``record_since``); for any other package (a seed), a job built
+    from the package's current source.  A target seen once stays seen.
+
+    Returns the packages still not seen when *timeout_s* runs out.
+    """
+    deadline = clock() + timeout_s
+    seen: set[tuple[Pkg, Target]] = set()
+    source_md5: dict[Pkg, str] = {}
+    remaining = set(pkgs)
+    while True:
+        remaining = _poll_unseen(apiurl, remaining, since, seen, source_md5)
+        if not remaining or clock() >= deadline:
+            return remaining
+        sleep(poll_s)
+
+
+def _names(pkgs: "set[Pkg] | frozenset[Pkg]") -> str:
+    return ", ".join(f"{p}/{n}" for p, n in sorted(pkgs))
+
+
+def run_stages(
+    apiurl: str,
+    stages: "list[Stage]",
+    dry_run: bool,
+    *,
+    since: "dict[Pkg, dict[Target, str]] | None" = None,
+    sleep: "Callable[[float], None]" = time.sleep,
+    clock: "Callable[[], float]" = time.monotonic,
+) -> None:
+    """Send the triggers of *stages* in order, each after its wait.
+
+    *since* holds ``record_since`` data for waited-for packages that no
+    stage triggers and that are not seeds; the record of each stage's own
+    packages is added right before they are triggered.  A wait that times
+    out prints a warning and the stage is triggered anyway.  With *dry_run*
+    the stages are only printed.
+    """
+    known = dict(since or {})
+    for i, stage in enumerate(stages, 1):
+        triggered = {(prj, n) for prj, names in stage.trigger.items() for n in names}
+        prefix = "dry-run: " if dry_run else ""
+        _print_action(
+            f"{prefix}propagate stage {i}/{len(stages)}: wait for "
+            f"{_names(stage.wait_for) or 'nothing'}"
+        )
+        for prj, names in stage.trigger.items():
+            print(f"      {prj}: {' '.join(names)}")
+        if dry_run:
+            continue
+        if stage.wait_for:
+            unseen = wait_seen(
+                apiurl, set(stage.wait_for), known, sleep=sleep, clock=clock
+            )
+            if unseen:
+                print(
+                    f"warning: propagate stage {i}: not seen by the scheduler "
+                    f"after {SEEN_TIMEOUT_S}s: {_names(unseen)}; triggering anyway"
+                )
+        known.update(record_since(apiurl, triggered))
+        for prj, names in stage.trigger.items():
+            trigger_rebuild(apiurl, prj, names)
+
+
+def _project_order(paths: "dict[str, set[str]]") -> "list[str]":
+    """Projects ordered so each comes after every project in its paths."""
+    order: list[str] = []
+    done: set[str] = set()
+
+    def visit(prj: str, stack: "set[str]") -> None:
+        if prj in done or prj in stack:
+            return
+        stack.add(prj)
+        for dep in sorted(paths.get(prj, set())):
+            visit(dep, stack)
+        stack.discard(prj)
+        done.add(prj)
+        order.append(prj)
+
+    for prj in sorted(paths):
+        visit(prj, set())
+    return order
+
+
+def _image_pkgs(
+    targets: "list[tuple[str, Path]]", env_vars: "dict[str, str]", projects: "set[str]"
+) -> "dict[str, list[tuple[str, str, str]]]":
+    """Dockerfile images of *projects*, in ``_fetch_combined_depinfo`` form.
+
+    Same shape as ``sync push`` builds it: one ``(project, repo, "x86_64")``
+    entry per image repository.
+    """
+    image_pkgs: dict[str, list[tuple[str, str, str]]] = {}
+    repos_cache: dict[Path, set[str]] = {}
+    for obs_project, pkg_path in targets:
+        if obs_project not in projects or not is_dockerfile_image(pkg_path):
+            continue
+        for repo in sorted(image_dep_query_repos(pkg_path, env_vars, repos_cache)):
+            image_pkgs.setdefault(pkg_path.name, []).append(
+                (obs_project, repo, "x86_64")
+            )
+    return image_pkgs
+
+
+def _project_exists(apiurl: str, prj: str) -> bool:
+    return _fetch_meta(apiurl, prj) is not None
+
+
+def propagate(
+    apiurl: str,
+    rootprj: str,
+    seeds: "set[Pkg]",
+    targets: "list[tuple[str, Path]]",
+    env_vars: "dict[str, str]",
+    dry_run: bool,
+) -> None:
+    """Trigger rebuilds of everything in a frozen project that depends on *seeds*.
+
+    *targets* are the local ``(obs_project, package_path)`` packages (for
+    ``_aggregate`` edges, image edges and the dependency filter) and
+    *env_vars* the substitution variables of ``sync push``.  Does nothing,
+    and queries no dependency, when no release unit project is frozen.
+    """
+    _print_action(f"propagate: seeds {_names(seeds)}")
+    unit_projects = sorted(
+        {
+            prj
+            for unit in list_release_units()
+            for prj in unit_obs_projects(unit["unit"], rootprj)
+        }
+    )
+    states = frozen_projects(apiurl, unit_projects)
+    frozen = {prj for prj, state in states.items() if state == "frozen"}
+    if not frozen:
+        _print_action("propagate: no frozen project, nothing to trigger")
+        return
+    if not dry_run:
+        print(
+            "propagate: if this run stops early, re-run it with the same profile: "
+            "percona-obs build propagate "
+            + " ".join(f"{p}/{n}" for p, n in sorted(seeds))
+        )
+
+    paths = _path_map(apiurl, frozen, rootprj)
+    # Instances build a slice of the tree: a seed project absent here has
+    # nothing to query and is no fetch failure.
+    seed_projects = {
+        prj for prj, _ in seeds if prj in paths or _project_exists(apiurl, prj)
+    }
+    projects = set(paths) | seed_projects
+    local_pkg_set = {(prj, path.name) for prj, path in targets}
+    image_pkgs = _image_pkgs(targets, env_vars, projects)
+    failed: set[str] = set()
+    fwd = _fetch_combined_depinfo(
+        apiurl,
+        projects,
+        local_pkg_set,
+        image_pkgs or None,
+        all_targets=True,
+        failed=failed,
+    )
+    agg = aggregate_edges(targets, env_vars)
+    for pkg, deps in agg.items():
+        fwd.setdefault(pkg, set()).update(deps)
+
+    extra: set[Pkg] = set()
+    if failed:
+        print(f"warning: propagate: no dependency data for {', '.join(sorted(failed))}")
+        consumers_of: dict[str, set[str]] = {}
+        for prj in frozen:
+            reach: set[str] = set()
+            stack = [prj]
+            while stack:
+                for dep in paths.get(stack.pop(), set()):
+                    if dep not in reach:
+                        reach.add(dep)
+                        stack.append(dep)
+            for dep in reach:
+                consumers_of.setdefault(dep, set()).add(prj)
+        for (prj, _), deps in agg.items():
+            for dep_prj, _ in deps:
+                consumers_of.setdefault(dep_prj, set()).add(prj)
+        packages = {
+            prj: sorted(_fetch_obs_package_names_or_fail(apiurl, prj)) for prj in frozen
+        }
+        extra = expand_failed(failed, frozen, consumers_of, packages)
+
+    stages = plan_stages(
+        seeds, fwd, frozen, _project_order(paths), set(agg), extra=extra
+    )
+    if not stages:
+        _print_action(
+            "propagate: nothing in a frozen project depends on the changed packages"
+        )
+        return
+
+    triggered = {
+        (p, n) for s in stages for p, names in s.trigger.items() for n in names
+    }
+    waited = {pkg for s in stages for pkg in s.wait_for}
+    since = None
+    if not dry_run:
+        # Non-frozen members are rebuilt by OBS itself: record their newest
+        # job now so the waits can tell when that rebuild happens.
+        since = record_since(apiurl, waited - triggered - set(seeds))
+    run_stages(apiurl, stages, dry_run, since=since)
