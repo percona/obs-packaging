@@ -7,6 +7,12 @@ build:
   RockyLinux_8: false
   UBI_8: false
   RockyLinux_9.6: false
+  # Only the UBI_9 consumers (ppg:staging:<V>:extras and
+  # ppg:common:deps:pgadmin) use this package, so every other EL repository
+  # is switched off. Re-enable UBI_10 when a UBI_10 consumer appears.
+  RockyLinux_9: false
+  RockyLinux_10: false
+  UBI_10: false
   Debian_13: false
   Ubuntu_22.04: false
   Ubuntu_24.04: false
