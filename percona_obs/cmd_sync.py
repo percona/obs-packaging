@@ -27,6 +27,8 @@ from .cmd_project import (
     _validate_subproject_refs,
 )
 from . import common
+from . import propagate as propagate_mod
+from . import unit_freeze
 from .common import (
     REPO_ROOT,
     _REPO_DIR,
@@ -1318,6 +1320,9 @@ def cmd_sync(args):
     # triggered (committed file uploads or meta/prjconf changes) plus the
     # per-package upload list, consumed by CI to scope build monitoring.
     rebuild_projects: set[str] = set()
+    # Projects whose meta or prjconf this sync changed (a subset of
+    # rebuild_projects); a frozen one does not rebuild from that change.
+    meta_changed_projects: set[str] = set()
     promoted_uploads: list[str] = []
 
     def _write_report() -> None:
@@ -1852,6 +1857,7 @@ def cmd_sync(args):
             )
             if _proj_changed:
                 rebuild_projects.add(prj_name)
+                meta_changed_projects.add(prj_name)
             if stripped:
                 needs_reconfig.append((raw_proj, prj_name, proj_path))
             seen_projects.add(raw_proj)
@@ -1874,6 +1880,7 @@ def cmd_sync(args):
             )
             if _proj_changed2:
                 rebuild_projects.add(prj_name)
+                meta_changed_projects.add(prj_name)
 
     if args.project_only:
         # Uploads are empty here (Phase 3 never runs), so rebuild_projects
@@ -1979,6 +1986,7 @@ def cmd_sync(args):
                         )
                         if _proj_changed:
                             rebuild_projects.add(prj_name)
+                            meta_changed_projects.add(prj_name)
                         if stripped:
                             chain_needs_reconfig.append((raw_proj, prj_name, proj_path))
                         seen_projects.add(raw_proj)
@@ -1997,6 +2005,7 @@ def cmd_sync(args):
                     )
                     if _proj_changed2:
                         rebuild_projects.add(prj_name)
+                        meta_changed_projects.add(prj_name)
 
         obs_dir = package_path / "obs"
         key = (obs_project_name, package_path.name)
@@ -2201,12 +2210,32 @@ def cmd_sync(args):
             # deleted project took with it.
             forget_project(sync_manifest, orphan_proj)
 
+    # Propagate into frozen units.  A failure must not lose the manifest or the
+    # report, so it is held until both are written.
+    propagate_error: Exception | None = None
+    try:
+        _propagate_after_push(
+            apiurl,
+            args,
+            promoted_uploads,
+            meta_changed_projects,
+            targets,
+            env_vars,
+            args.dry_run,
+        )
+    except Exception as exc:
+        propagate_error = exc
+
     # Persist the sync-state manifest for the next run's zero-request skips.
     if skip_unchanged and not dry_run_obs:
         save_manifest(apiurl, args.rootprj, sync_manifest)
 
     # Write the sync report (read-only output — also written in dry-run).
     _write_report()
+
+    if propagate_error is not None:
+        print(f"error: propagation into frozen units failed: {propagate_error}")
+        sys.exit(1)
 
     if (
         not get_default_repository_filter().is_empty
@@ -2219,6 +2248,52 @@ def cmd_sync(args):
         )
     suffix = " (dry run)" if args.dry_run else ""
     _print_ok(f"sync successful{suffix}")
+
+
+def _propagate_after_push(
+    apiurl: str,
+    args,
+    promoted_uploads: "list[str]",
+    config_changed_projects: "set[str]",
+    targets,
+    env_vars: "dict[str, str]",
+    dry_run: bool,
+) -> None:
+    """Report frozen projects touched by a sync and rebuild their dependents.
+
+    Does nothing for ``--branch-from`` (PR) syncs, and asks OBS nothing when
+    the sync uploaded nothing and changed no project meta/config.
+    """
+    if args.branch_from:
+        return
+    uploaded_projects = {u.rpartition("/")[0] for u in promoted_uploads}
+    candidates = uploaded_projects | config_changed_projects
+    if not candidates:
+        return
+    state = unit_freeze.frozen_projects(apiurl, sorted(candidates))
+    frozen = {p for p, s in state.items() if s == "frozen"}
+    for prj in sorted(config_changed_projects & frozen):
+        print(
+            f"warning: {prj} is frozen: the project meta/config change rebuilds "
+            "nothing; run 'build propagate' or unfreeze if it needs a rebuild"
+        )
+    for prj in sorted(uploaded_projects & frozen):
+        _print_same(
+            f"{prj}  frozen (rebuild=local): dependents are rebuilt by the tool"
+        )
+    if promoted_uploads:
+        seeds: set[tuple[str, str]] = set()
+        for upload in promoted_uploads:
+            prj, _, pkg = upload.rpartition("/")
+            seeds.add((prj, pkg))
+        propagate_mod.propagate(
+            apiurl,
+            args.rootprj,
+            seeds,
+            targets,
+            env_vars,
+            dry_run,
+        )
 
 
 def _prune_sync_manifest(
