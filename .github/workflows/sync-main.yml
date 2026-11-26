@@ -226,10 +226,12 @@ jobs:
 
       # Nightly reminder of units left frozen: freeze-status prints a GitHub
       # ::warning:: annotation per frozen or partially frozen unit.  Scheduled
-      # runs only; a status failure must not fail the sync.
+      # runs only, also when the sync failed; a status failure must not fail
+      # the sync.
       - name: Warn about frozen units
-        if: github.event_name == 'schedule'
+        if: always() && github.event_name == 'schedule'
         continue-on-error: true
+        timeout-minutes: 5
         shell: bash
         run: venv/bin/python -m percona_obs -P main project freeze-status --github-warning
 

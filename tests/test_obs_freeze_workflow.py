@@ -112,8 +112,10 @@ def test_nightly_warning_step():
     names = [s.get("name") for s in steps]
     step = next(s for s in steps if "freeze-status" in s.get("run", ""))
     assert names.index("Sync to OBS") + 1 == steps.index(step)
-    assert step["if"] == "github.event_name == 'schedule'"
+    # always(): a red nightly sync must still print the reminder.
+    assert step["if"] == "always() && github.event_name == 'schedule'"
     assert step["continue-on-error"] is True
+    assert step["timeout-minutes"] == 5
     assert "-P main project freeze-status --github-warning" in step["run"]
 
 
