@@ -1,6 +1,6 @@
 # Nightly QA: which PostgreSQL major runs on which night.
 #
-# The scheduled run (obs-nightly-qa.yml, 23:00 UTC) looks up the current UTC
+# The scheduled run (obs-nightly-qa.yml, 02:00 UTC) looks up the current UTC
 # weekday here and runs that major's QA only: its own projects
 # (ppg:staging:<major>, :containers, :extras:containers, :tarballs, ...) plus
 # the shared-image builds that involve it (component images named -pg<major>,
