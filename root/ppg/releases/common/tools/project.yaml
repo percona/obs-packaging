@@ -127,6 +127,23 @@ project-config: '# --- from root/project.yaml ---
   %endif
 
 
+  %if "%_repository" == "openSUSE_Leap_16"
+
+  # openSUSE:Backports:SLE-16.0 ships LLVM 21 and shadows the SLFO llvm/clang
+
+  # meta packages and clang-tools, but the Leap prjconf still lists only the
+
+  # SLFO compilers (clang15 clang17 clang19) as /usr/bin/clang providers, so
+
+  # clang-tools 21 is unresolvable ("have choice for /usr/bin/clang"). A
+
+  # FileProvides line replaces the inherited one for the same path.
+
+  FileProvides: /usr/bin/clang clang21
+
+  %endif
+
+
   %if "%_repository" == "Debian_12" || "%_repository" == "Debian_13" || "%_repository"
   == "Ubuntu_22.04" || "%_repository" == "Ubuntu_24.04"
 
@@ -217,6 +234,37 @@ project-config: '# --- from root/project.yaml ---
   || "%_repository" == "UBI_9" || "%_repository" == "UBI_10"
 
   Release: <CI_CNT>.<B_CNT> spec:<CI_CNT>.<B_CNT>%%{?dist}
+
+  %endif
+
+
+  # An arch-independent binary (noarch.rpm, _all.deb) and the source RPM are
+
+  # built once per architecture with different bytes, and OBS publishes one
+
+  # copy under a single file name.  Which copy wins depends on which
+
+  # architecture''s scheduler fills its publish directory first after
+
+  # publishing resumes (a release copy holds and resumes it), and the choice
+
+  # then sticks.  A repopulate can therefore swap the bytes behind an
+
+  # unchanged URL, and download CDNs keep serving the old bytes: dnf/apt fail
+
+  # with "Cannot download" / "File has unexpected size".
+
+  # Never hand the aarch64 copy to the publisher, so the published one is
+
+  # always the x86_64 build.  aarch64 still builds these packages for its own
+
+  # dependents.  OBS honours a single PublishFilter line per configuration:
+
+  # add patterns to this line, never a second line.
+
+  %ifarch aarch64
+
+  PublishFilter: \.noarch\.rpm$ \.src\.rpm$ _all\.deb$
 
   %endif
 
