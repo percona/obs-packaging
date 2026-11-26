@@ -1482,6 +1482,10 @@ def _apply_project_config(
         # Existing project: preserve all OBS-managed elements (person/group/lock/link).
         managed = _extract_obs_managed_elements(current)
         meta_to_upload = _inject_obs_managed_elements(meta, managed)
+        # A freeze (rebuild="local") is not in project.yaml; keep it.
+        from .unit_freeze import carry_rebuild  # lazy: unit_freeze imports obs_api
+
+        meta_to_upload = carry_rebuild(current.decode(), meta_to_upload)
         if not dry_run:
             paths_stripped = _edit_project_meta(
                 apiurl, obs_project_name, meta_to_upload, force=force

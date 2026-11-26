@@ -107,3 +107,27 @@ def test_unit_obs_projects(tmp_path):
     ]
     with pytest.raises(ValueError, match="ppg:staging:18:containers"):
         uf.unit_obs_projects("ppg:staging:18:containers", "isv:percona", root=tmp_path)
+
+
+def test_carry_rebuild_same_names():
+    cur = '<project name="p"><repository name="A" rebuild="local"/><repository name="B" rebuild="direct"/></project>'
+    des = '<project name="p"><repository name="A"/><repository name="B"/></project>'
+    got = ET.fromstring(uf.carry_rebuild(cur, des))
+    assert [(r.get("name"), r.get("rebuild")) for r in got.findall("repository")] == [
+        ("A", "local"),
+        ("B", "direct"),
+    ]
+
+
+def test_carry_rebuild_new_repo_in_frozen_project():
+    cur = '<project name="p"><repository name="A" rebuild="local"/></project>'
+    des = '<project name="p"><repository name="A"/><repository name="N"/></project>'
+    got = ET.fromstring(uf.carry_rebuild(cur, des))
+    assert got.find("repository[@name='N']").get("rebuild") == "local"
+
+
+def test_carry_rebuild_new_repo_in_unfrozen_project():
+    cur = '<project name="p"><repository name="A"/></project>'
+    des = '<project name="p"><repository name="A"/><repository name="N"/></project>'
+    got = ET.fromstring(uf.carry_rebuild(cur, des))
+    assert got.find("repository[@name='N']").get("rebuild") is None

@@ -48,6 +48,27 @@ def with_rebuild_mode(meta_xml: str, mode: "str | None") -> str:
     return ET.tostring(root, encoding="unicode")
 
 
+def carry_rebuild(current_xml: str, desired_xml: str) -> str:
+    """*desired_xml* with the live ``rebuild`` values of *current_xml* kept.
+
+    Each repository takes the value of the same-named live repository.  A
+    repository that is new in a fully frozen project is frozen too.
+    """
+    live = {
+        r.get("name"): r.get("rebuild")
+        for r in ET.fromstring(current_xml).findall("repository")
+    }
+    frozen = freeze_state(current_xml) == "frozen"
+    root = ET.fromstring(desired_xml)
+    for repo in root.findall("repository"):
+        mode = live.get(repo.get("name"))
+        if mode is None and frozen:
+            mode = REBUILD_FROZEN
+        if mode is not None:
+            repo.set("rebuild", mode)
+    return ET.tostring(root, encoding="unicode")
+
+
 def unit_obs_projects(unit: str, rootprj: str, root: Path = REPO_ROOT) -> "list[str]":
     """OBS projects of release unit *unit*: its root and existing bundled children."""
     units = {u["unit"] for u in list_release_units(root)}
