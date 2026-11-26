@@ -17,14 +17,18 @@ from .common import (
     _col,
     _print_ok,
     _print_pending,
+    auto_rootprj_env,
     find_packages,
+    get_default_repository_filter,
     is_package,
     load_project_yaml,
     load_yaml,
     logger,
+    parse_env_overrides,
     resolve_project_path,
     REPO_ROOT,
 )
+from . import propagate as propagate_mod
 from .obs_api import _fetch_combined_depinfo, _fetch_obs_package_latest_comment
 from .targets import _resolve_targets, image_dep_query_repos, is_dockerfile_image
 
@@ -608,4 +612,45 @@ def cmd_build_status(args):
         False,
         is_root=True,
         repo_filter=getattr(args, "repo", None),
+    )
+
+
+def _propagate_targets(args, env_vars: "dict[str, str]") -> "list[tuple[str, Path]]":
+    """Every local package of the active profile's slice, as a full sync sees it."""
+    # Lazy import: cmd_sync imports this module.
+    from .cmd_sync import _slice_targets
+
+    targets = list(find_packages(REPO_ROOT, args.rootprj))
+    targets, _, _ = _slice_targets(
+        targets, env_vars, get_default_repository_filter(), {}
+    )
+    return targets
+
+
+def cmd_build_propagate(args) -> None:
+    """Trigger rebuilds of what depends on the given packages in frozen units.
+
+    Supported call form:
+      build propagate <obs_project>/<package> [...] [--dry-run]
+
+    Project names are full OBS names (with the root project), the format of
+    the sync report's ``promoted`` list.
+    """
+    seeds: set[tuple[str, str]] = set()
+    for arg in args.packages:
+        prj, sep, pkg = arg.rpartition("/")
+        if not sep or not prj or not pkg:
+            raise SystemExit(
+                f"error: '{arg}' is not <obs_project>/<package> "
+                "(e.g. home:me:ppg:staging:18/percona-pg_tde)"
+            )
+        seeds.add((prj, pkg))
+    env_vars = {
+        **(parse_env_overrides(args.env_overrides) if args.env_overrides else {}),
+        **auto_rootprj_env(args.rootprj),
+    }
+    apiurl = osc.conf.config["apiurl"]
+    targets = _propagate_targets(args, env_vars)
+    propagate_mod.propagate(
+        apiurl, args.rootprj, seeds, targets, env_vars, args.dry_run
     )

@@ -6,7 +6,12 @@ import sys
 import osc.conf
 import urllib3.exceptions
 
-from .cmd_build import cmd_build_dependency, cmd_build_status, cmd_build_trigger
+from .cmd_build import (
+    cmd_build_dependency,
+    cmd_build_propagate,
+    cmd_build_status,
+    cmd_build_trigger,
+)
 from .cmd_profile import (
     _load_profile,
     _load_profile_env_strings,
@@ -487,6 +492,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Filter output to a specific repository name (e.g. RockyLinux_9).",
     )
     build_status_parser.set_defaults(func=cmd_build_status)
+
+    build_propagate_parser = build_subparsers.add_parser(
+        "propagate",
+        help="Trigger staged rebuilds of everything in frozen release units that "
+        "depends on the given packages (late-fix recovery).",
+    )
+    build_propagate_parser.add_argument(
+        "packages",
+        nargs="+",
+        metavar="<obs_project>/<package>",
+        help="Changed package, with its full OBS project name "
+        "(e.g. home:me:ppg:staging:18/percona-pg_tde). Can be repeated.",
+    )
+    build_propagate_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Print the seeds and the staged plan; trigger nothing.",
+    )
+    build_propagate_parser.set_defaults(func=cmd_build_propagate)
 
     build_dep_parser = build_subparsers.add_parser(
         "dependency",
