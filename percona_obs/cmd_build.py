@@ -652,5 +652,12 @@ def cmd_build_propagate(args) -> None:
     apiurl = osc.conf.config["apiurl"]
     targets = _propagate_targets(args, env_vars)
     propagate_mod.propagate(
-        apiurl, args.rootprj, seeds, targets, env_vars, args.dry_run
+        apiurl,
+        args.rootprj,
+        seeds,
+        targets,
+        env_vars,
+        args.dry_run,
+        env_overrides=list(args.env_overrides or []),
+        profile=args.profile,
     )

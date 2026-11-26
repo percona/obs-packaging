@@ -12,9 +12,11 @@ def spy(monkeypatch):
     calls: list = []
     queries: list = []
     frozen: dict = {}
+    rerun: list = []
 
-    def fake_propagate(apiurl, rootprj, seeds, targets, env_vars, dry_run):
+    def fake_propagate(apiurl, rootprj, seeds, targets, env_vars, dry_run, **kw):
         calls.append((set(seeds), dry_run))
+        rerun.append(kw)
 
     def fake_frozen(apiurl, projects):
         queries.append(set(projects))
@@ -22,11 +24,16 @@ def spy(monkeypatch):
 
     monkeypatch.setattr(cs.propagate_mod, "propagate", fake_propagate)
     monkeypatch.setattr(cs.unit_freeze, "frozen_projects", fake_frozen)
-    return SimpleNamespace(calls=calls, queries=queries, frozen=frozen)
+    return SimpleNamespace(calls=calls, queries=queries, frozen=frozen, rerun=rerun)
 
 
-def args(branch_from=None):
-    return SimpleNamespace(branch_from=branch_from, rootprj="r")
+def args(branch_from=None, profile=None, env_overrides=None):
+    return SimpleNamespace(
+        branch_from=branch_from,
+        rootprj="r",
+        profile=profile,
+        env_overrides=env_overrides or [],
+    )
 
 
 def test_calls_propagate_with_uploaded_seeds(spy):
@@ -34,6 +41,19 @@ def test_calls_propagate_with_uploaded_seeds(spy):
         "api", args(), ["r:u/a", "r:deps/lib"], set(), [], {}, False
     )
     assert spy.calls == [({("r:u", "a"), ("r:deps", "lib")}, False)]
+
+
+def test_rerun_flags_passed_through(spy):
+    cs._propagate_after_push(
+        "api",
+        args(profile="labs", env_overrides=["K:V"]),
+        ["r:u/a"],
+        set(),
+        [],
+        {},
+        False,
+    )
+    assert spy.rerun == [{"env_overrides": ["K:V"], "profile": "labs"}]
 
 
 def test_dry_run_passed_through(spy):

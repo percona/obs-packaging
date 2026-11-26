@@ -1,12 +1,14 @@
 # tests/test_propagate_run.py
 """Unit tests for running a propagation plan against OBS.
 
-No OBS traffic: release_freeze.fetch_project_results, the _jobhistory and
-source-info GETs and http_POST are faked; wait_seen gets fake sleep and
-clock callables so no real time passes.
+No OBS traffic: release_freeze.fetch_project_results, the _jobhistory,
+binary-list, source-info and source-history GETs and http_POST are faked;
+wait_seen gets fake sleep and clock callables so no real time passes.
 """
 
+import shlex
 import urllib.error
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -27,14 +29,18 @@ class _Resp:
 
 
 class FakeObs:
-    """Canned build results, job histories and source md5s."""
+    """Canned build results, job histories, binary lists and sources."""
 
     def __init__(self, monkeypatch):
         self.codes: dict[str, dict[tuple[str, str, str], str]] = {}
         # (project, repo, arch, package) -> list of (readytime, srcmd5)
         self.jobs: dict[tuple[str, str, str, str], list[tuple[str, str]]] = {}
+        # (project, repo, arch, package) -> list of (filename, mtime, size)
+        self.binaries: dict[tuple[str, str, str, str], list[tuple[str, str, str]]] = {}
         # (project, package) -> (srcmd5, verifymd5 or None)
         self.source: dict[tuple[str, str], tuple[str, "str | None"]] = {}
+        # (project, package) -> time of the newest source revision
+        self.history: dict[tuple[str, str], str] = {}
         self.absent: set[str] = set()
         self.posts: list[str] = []
         self.gets: list[str] = []
@@ -53,12 +59,29 @@ class FakeObs:
             raise urllib.error.HTTPError(project, 404, "not found", {}, None)  # type: ignore[arg-type]
         return self.codes.get(project, {}), {}
 
+    def kind_gets(self, kind):
+        return [u for u in self.gets if self._kind(u) == kind]
+
+    @staticmethod
+    def _kind(url):
+        path = urlsplit(url).path.strip("/").split("/")
+        if path[0] == "build" and path[-1] == "_jobhistory":
+            return "jobhistory"
+        if path[0] == "build" and len(path) == 5:
+            return "binaries"
+        if path[0] == "source" and path[-1] == "_history":
+            return "history"
+        if path[0] == "source":
+            return "info"
+        return "other"
+
     def http_get(self, url, *a, **kw):
         self.gets.append(url)
         parts = urlsplit(url)
         path = parts.path.strip("/").split("/")
         query = parse_qs(parts.query)
-        if path[0] == "build" and path[-1] == "_jobhistory":
+        kind = self._kind(url)
+        if kind == "jobhistory":
             prj, repo, arch = path[1], path[2], path[3]
             pkg = query["package"][0]
             entries = self.jobs.get((prj, repo, arch, pkg), [])[-1:]
@@ -67,7 +90,21 @@ class FakeObs:
                 for rt, md5 in entries
             )
             return _Resp(f"<jobhistlist>{body}</jobhistlist>".encode())
-        if path[0] == "source":
+        if kind == "binaries":
+            prj, repo, arch, pkg = path[1], path[2], path[3], path[4]
+            body = "".join(
+                f'<binary filename="{f}" mtime="{m}" size="{s}"/>'
+                for f, m, s in self.binaries.get((prj, repo, arch, pkg), [])
+            )
+            return _Resp(f"<binarylist>{body}</binarylist>".encode())
+        if kind == "history":
+            prj, pkg = path[1], path[2]
+            t = self.history[(prj, pkg)]
+            return _Resp(
+                f'<revisionlist><revision rev="3"><time>{t}</time></revision>'
+                "</revisionlist>".encode()
+            )
+        if kind == "info":
             prj, pkg = path[1], path[2]
             srcmd5, verifymd5 = self.source[(prj, pkg)]
             verify = f' verifymd5="{verifymd5}"' if verifymd5 else ""
@@ -95,6 +132,19 @@ class FakeTime:
         self.now += s
 
 
+def _wait(pkgs, since, *, seeds=frozenset(), timeout_s=4):
+    t = FakeTime()
+    return pp.wait_seen(
+        API,
+        pkgs,
+        since,
+        timeout_s=timeout_s,
+        sleep=t.sleep,
+        clock=t.clock,
+        seeds=seeds,
+    )
+
+
 # ---------------------------------------------------------------------------
 # trigger_rebuild
 
@@ -111,7 +161,7 @@ def test_trigger_chunks(obs):
 
 
 # ---------------------------------------------------------------------------
-# wait_seen
+# wait_seen: common rules
 
 
 def test_seen_when_pending_on_all_built_targets(obs):
@@ -121,16 +171,6 @@ def test_seen_when_pending_on_all_built_targets(obs):
     }
     assert pp.wait_seen(API, {("P", "a")}, since={}) == set()
     assert obs.gets == []  # pending needs no job history
-
-
-def test_seen_when_jobhistory_moved(obs):
-    obs.codes["P"] = {("a", "R1", "x86_64"): "succeeded"}
-    obs.jobs[("P", "R1", "x86_64", "a")] = [("6", "m"), ("7", "m")]
-    since = pp.record_since(API, {("P", "a")})
-    obs.jobs[("P", "R1", "x86_64", "a")] = [("6", "m")]
-    assert pp.wait_seen(API, {("P", "a")}, since={("P", "a"): {}}) == set()
-    obs.jobs[("P", "R1", "x86_64", "a")] = [("6", "m"), ("7", "m"), ("8", "m")]
-    assert pp.wait_seen(API, {("P", "a")}, since=since) == set()
 
 
 def test_timeout_returns_unseen(obs):
@@ -143,19 +183,6 @@ def test_timeout_returns_unseen(obs):
     )
     assert unseen == {("P", "a")}
     assert t.sleeps == 3 and t.now == 6
-
-
-def test_seen_needs_every_target(obs):
-    obs.codes["P"] = {
-        ("a", "R1", "x86_64"): "scheduled",
-        ("a", "R1", "aarch64"): "succeeded",
-    }
-    obs.jobs[("P", "R1", "aarch64", "a")] = [("7", "m")]
-    since = pp.record_since(API, {("P", "a")})
-    t = FakeTime()
-    assert pp.wait_seen(
-        API, {("P", "a")}, since=since, timeout_s=4, sleep=t.sleep, clock=t.clock
-    ) == {("P", "a")}
 
 
 def test_target_seen_once_stays_seen(obs):
@@ -177,34 +204,11 @@ def test_target_seen_once_stays_seen(obs):
             ("a", "R1", "aarch64"): "scheduled",
         }
 
-    assert pp.wait_seen(API, {("P", "a")}, since={}, sleep=sleep, clock=t.clock) == (
-        set()
+    unseen = pp.wait_seen(
+        API, {("P", "a")}, since={}, sleep=sleep, clock=t.clock, seeds={("P", "a")}
     )
+    assert unseen == set()
     assert t.sleeps == 1
-
-
-def test_seed_seen_when_newest_job_built_current_source(obs):
-    obs.codes["P"] = {("s", "R1", "x86_64"): "succeeded"}
-    obs.jobs[("P", "R1", "x86_64", "s")] = [("7", "new")]
-    obs.source[("P", "s")] = ("new", None)
-    assert pp.wait_seen(API, {("P", "s")}, since={}) == set()
-
-
-def test_seed_prefers_verifymd5(obs):
-    obs.codes["P"] = {("s", "R1", "x86_64"): "succeeded"}
-    obs.jobs[("P", "R1", "x86_64", "s")] = [("7", "expanded")]
-    obs.source[("P", "s")] = ("unexpanded", "expanded")
-    assert pp.wait_seen(API, {("P", "s")}, since={}) == set()
-
-
-def test_seed_not_seen_while_newest_job_is_old_source(obs):
-    obs.codes["P"] = {("s", "R1", "x86_64"): "succeeded"}
-    obs.jobs[("P", "R1", "x86_64", "s")] = [("7", "old")]
-    obs.source[("P", "s")] = ("new", None)
-    t = FakeTime()
-    assert pp.wait_seen(
-        API, {("P", "s")}, since={}, timeout_s=2, sleep=t.sleep, clock=t.clock
-    ) == {("P", "s")}
 
 
 def test_package_without_built_targets_is_seen(obs):
@@ -218,13 +222,26 @@ def test_package_without_built_targets_is_seen(obs):
     )
 
 
-def test_record_since_fails_loudly(obs, monkeypatch):
-    def boom(apiurl, project):
-        raise urllib.error.HTTPError(project, 500, "error", {}, None)  # type: ignore[arg-type]
+# ---------------------------------------------------------------------------
+# wait_seen: packages we triggered (record moved)
 
-    monkeypatch.setattr(pp.release_freeze, "fetch_project_results", boom)
-    with pytest.raises(urllib.error.HTTPError):
-        pp.record_since(API, {("P", "a")})
+
+def test_seen_when_jobhistory_moved(obs):
+    obs.codes["P"] = {("a", "R1", "x86_64"): "succeeded"}
+    obs.jobs[("P", "R1", "x86_64", "a")] = [("7", "m")]
+    since = pp.record_since(API, {("P", "a")})
+    obs.jobs[("P", "R1", "x86_64", "a")] = [("7", "m"), ("8", "m")]
+    assert _wait({("P", "a")}, since) == set()
+
+
+def test_seen_needs_every_target(obs):
+    obs.codes["P"] = {
+        ("a", "R1", "x86_64"): "scheduled",
+        ("a", "R1", "aarch64"): "succeeded",
+    }
+    obs.jobs[("P", "R1", "aarch64", "a")] = [("7", "m")]
+    since = pp.record_since(API, {("P", "a")})
+    assert _wait({("P", "a")}, since) == {("P", "a")}
 
 
 def test_multibuild_flavors_are_targets(obs):
@@ -234,10 +251,108 @@ def test_multibuild_flavors_are_targets(obs):
     }
     obs.jobs[("P", "R1", "x86_64", "a:docs")] = [("7", "m")]
     since = pp.record_since(API, {("P", "a")})
-    t = FakeTime()
-    assert pp.wait_seen(
-        API, {("P", "a")}, since=since, timeout_s=2, sleep=t.sleep, clock=t.clock
-    ) == {("P", "a")}
+    assert _wait({("P", "a")}, since) == {("P", "a")}
+
+
+def test_record_since_fails_loudly(obs, monkeypatch):
+    def boom(apiurl, project):
+        raise urllib.error.HTTPError(project, 500, "error", {}, None)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(pp.release_freeze, "fetch_project_results", boom)
+    with pytest.raises(urllib.error.HTTPError):
+        pp.record_since(API, {("P", "a")})
+
+
+def test_jobless_target_seen_when_binary_list_changes(obs):
+    # An aggregate: no job history, its binaries are re-copied in place.
+    obs.codes["P"] = {("agg", "R1", "x86_64"): "succeeded"}
+    obs.binaries[("P", "R1", "x86_64", "agg")] = [("x.rpm", "100", "5")]
+    since = pp.record_since(API, {("P", "agg")})
+    obs.binaries[("P", "R1", "x86_64", "agg")] = [("x.rpm", "200", "5")]
+    assert _wait({("P", "agg")}, since) == set()
+
+
+def test_jobless_target_not_seen_while_binary_list_unchanged(obs):
+    obs.codes["P"] = {("agg", "R1", "x86_64"): "succeeded"}
+    obs.binaries[("P", "R1", "x86_64", "agg")] = [("x.rpm", "100", "5")]
+    since = pp.record_since(API, {("P", "agg")})
+    assert _wait({("P", "agg")}, since) == {("P", "agg")}
+
+
+def test_target_with_job_history_needs_no_binary_list(obs):
+    obs.codes["P"] = {("a", "R1", "x86_64"): "succeeded"}
+    obs.jobs[("P", "R1", "x86_64", "a")] = [("7", "m")]
+    since = pp.record_since(API, {("P", "a")})
+    _wait({("P", "a")}, since)
+    assert obs.kind_gets("binaries") == []
+
+
+def test_triggered_seed_uses_its_record(obs):
+    # A chained seed we triggered: its newest job already built the current
+    # source, but only a job after the trigger counts.
+    obs.codes["P"] = {("s", "R1", "x86_64"): "succeeded"}
+    obs.jobs[("P", "R1", "x86_64", "s")] = [("7", "new")]
+    obs.source[("P", "s")] = ("new", None)
+    since = pp.record_since(API, {("P", "s")})
+    assert _wait({("P", "s")}, since, seeds={("P", "s")}) == {("P", "s")}
+
+
+# ---------------------------------------------------------------------------
+# wait_seen: seeds (current source built)
+
+
+def test_seed_seen_when_newest_job_built_current_source(obs):
+    obs.codes["P"] = {("s", "R1", "x86_64"): "succeeded"}
+    obs.jobs[("P", "R1", "x86_64", "s")] = [("7", "new")]
+    obs.source[("P", "s")] = ("new", None)
+    assert _wait({("P", "s")}, {}, seeds={("P", "s")}) == set()
+
+
+@pytest.mark.parametrize("job_md5", ["unexpanded", "expanded"])
+def test_seed_accepts_srcmd5_or_verifymd5(obs, job_md5):
+    obs.codes["P"] = {("s", "R1", "x86_64"): "succeeded"}
+    obs.jobs[("P", "R1", "x86_64", "s")] = [("7", job_md5)]
+    obs.source[("P", "s")] = ("unexpanded", "expanded")
+    assert _wait({("P", "s")}, {}, seeds={("P", "s")}) == set()
+
+
+def test_seed_not_seen_while_newest_job_is_old_source(obs):
+    obs.codes["P"] = {("s", "R1", "x86_64"): "succeeded"}
+    obs.jobs[("P", "R1", "x86_64", "s")] = [("7", "old")]
+    obs.source[("P", "s")] = ("new", "newer")
+    assert _wait({("P", "s")}, {}, seeds={("P", "s")}) == {("P", "s")}
+
+
+# ---------------------------------------------------------------------------
+# wait_seen: members OBS rebuilds itself (job after the seed commit)
+
+
+def test_member_seen_when_job_ready_after_seed_commit(obs):
+    obs.codes["D"] = {
+        ("lib", "R1", "x86_64"): "succeeded",
+        ("mid", "R1", "x86_64"): "succeeded",
+    }
+    obs.jobs[("D", "R1", "x86_64", "lib")] = [("1050", "new")]
+    obs.jobs[("D", "R1", "x86_64", "mid")] = [("1100", "m")]
+    obs.source[("D", "lib")] = ("new", None)
+    obs.history[("D", "lib")] = "1000"
+    assert _wait({("D", "mid")}, {}, seeds={("D", "lib")}) == set()
+
+
+def test_member_not_seen_with_job_before_seed_commit(obs):
+    obs.codes["D"] = {("mid", "R1", "x86_64"): "succeeded"}
+    obs.jobs[("D", "R1", "x86_64", "mid")] = [("900", "m")]
+    obs.history[("D", "lib")] = "1000"
+    assert _wait({("D", "mid")}, {}, seeds={("D", "lib")}) == {("D", "mid")}
+
+
+def test_member_uses_newest_seed_commit(obs):
+    obs.codes["D"] = {("mid", "R1", "x86_64"): "succeeded"}
+    obs.jobs[("D", "R1", "x86_64", "mid")] = [("1500", "m")]
+    obs.history[("D", "lib")] = "1000"
+    obs.history[("D", "lib2")] = "2000"
+    seeds = {("D", "lib"), ("D", "lib2")}
+    assert _wait({("D", "mid")}, {}, seeds=seeds) == {("D", "mid")}
 
 
 # ---------------------------------------------------------------------------
@@ -248,10 +363,12 @@ def test_multibuild_flavors_are_targets(obs):
 def events(monkeypatch):
     log: list[str] = []
     unseen: dict[frozenset, set] = {}
+    wait_kw: list[dict] = []
 
     def fake_wait(apiurl, pkgs, since, **kw):
         log.append("wait:" + ",".join(sorted(n for _, n in pkgs)))
         log.append("since:" + ",".join(sorted(f"{p}/{n}" for p, n in since)))
+        wait_kw.append(kw)
         return unseen.get(frozenset(pkgs), set())
 
     def fake_record(apiurl, pkgs):
@@ -265,10 +382,7 @@ def events(monkeypatch):
         "trigger_rebuild",
         lambda apiurl, prj, pkgs: log.append(f"trigger:{prj}:{','.join(pkgs)}"),
     )
-    log_obj = type("E", (), {})()
-    log_obj.log = log  # type: ignore[attr-defined]
-    log_obj.unseen = unseen  # type: ignore[attr-defined]
-    return log_obj
+    return SimpleNamespace(log=log, unseen=unseen, wait_kw=wait_kw)
 
 
 STAGES = [
@@ -278,7 +392,7 @@ STAGES = [
 
 
 def test_run_stages_orders_wait_then_trigger(events):
-    pp.run_stages(API, STAGES, dry_run=False)
+    pp.run_stages(API, STAGES, dry_run=False, seeds={("P", "a")})
     assert [e for e in events.log if not e.startswith("since:")] == [
         "wait:a",
         "record:P/b",
@@ -289,6 +403,7 @@ def test_run_stages_orders_wait_then_trigger(events):
     ]
     # The second wait sees the record taken before b was triggered.
     assert events.log[events.log.index("wait:b") + 1] == "since:P/b"
+    assert all(kw["seeds"] == {("P", "a")} for kw in events.wait_kw)
 
 
 def test_run_stages_triggers_every_project_of_a_stage(events):
@@ -298,17 +413,24 @@ def test_run_stages_triggers_every_project_of_a_stage(events):
     assert "record:P/b,Q/t" in events.log
 
 
-def test_run_stages_keeps_given_since(events):
-    pp.run_stages(API, STAGES[:1], dry_run=False, since={("D", "mid"): {}})
-    assert events.log[1] == "since:D/mid"
+def test_run_stages_triggered_package_without_record_is_an_error(events, monkeypatch):
+    monkeypatch.setattr(pp, "record_since", lambda apiurl, pkgs: {})
+    with pytest.raises(RuntimeError, match="P/b"):
+        pp.run_stages(API, STAGES, dry_run=False)
+    assert "trigger:Q:img" not in events.log
 
 
-def test_run_stages_continues_after_timeout(capsys, events):
+def test_run_stages_continues_after_timeout(capsys, events, obs):
+    obs.codes["P"] = {
+        ("a", "R1", "x86_64"): "unresolvable",
+        ("a", "R2", "aarch64"): "succeeded",
+    }
     events.unseen[frozenset({("P", "a")})] = {("P", "a")}
     pp.run_stages(API, STAGES, dry_run=False)
     out = capsys.readouterr().out
     assert "trigger:P:b" in events.log and "trigger:Q:img" in events.log
-    assert "not seen" in out and "P/a" in out
+    assert "not seen" in out
+    assert "P/a [R1/x86_64: unresolvable, R2/aarch64: succeeded]" in out
 
 
 def test_dry_run_sends_nothing(capsys, obs, monkeypatch):
@@ -331,15 +453,16 @@ R, C, D = "r:u", "r:u:containers", "r:deps"
 @pytest.fixture
 def prop(monkeypatch):
     """Fake every OBS-facing piece propagate composes."""
-    st = type("S", (), {})()
-    st.states = {R: "frozen", C: "frozen"}  # type: ignore[attr-defined]
-    st.paths = {R: {D}, C: {R}, D: set()}  # type: ignore[attr-defined]
-    st.fwd = {(R, "b"): {(D, "lib")}, (C, "img"): {(R, "b")}}  # type: ignore[attr-defined]
-    st.fail = set()  # type: ignore[attr-defined]
-    st.absent = set()  # type: ignore[attr-defined]
-    st.depinfo_calls = []  # type: ignore[attr-defined]
-    st.run = []  # type: ignore[attr-defined]
-    st.recorded = []  # type: ignore[attr-defined]
+    st = SimpleNamespace(
+        states={R: "frozen", C: "frozen"},
+        paths={R: {D}, C: {R}, D: set()},
+        fwd={(R, "b"): {(D, "lib")}, (C, "img"): {(R, "b")}},
+        fail=set(),
+        absent=set(),
+        depinfo_calls=[],
+        run=[],
+        recorded=[],
+    )
 
     monkeypatch.setattr(
         pp, "list_release_units", lambda: [{"unit": "u"}, {"unit": "v"}]
@@ -347,27 +470,17 @@ def prop(monkeypatch):
     monkeypatch.setattr(
         pp, "unit_obs_projects", lambda unit, rootprj: [f"r:{unit}", f"r:{unit}:x"]
     )
+    monkeypatch.setattr(pp, "frozen_projects", lambda apiurl, projs: dict(st.states))
     monkeypatch.setattr(
-        pp,
-        "frozen_projects",
-        lambda apiurl, projs: {p: s for p, s in st.states.items()},  # type: ignore[attr-defined]
+        pp, "_project_path_projects", lambda apiurl, prj: st.paths.get(prj, set())
     )
-
-    def fake_paths(apiurl, prj):
-        return st.paths.get(prj, set())  # type: ignore[attr-defined]
-
-    monkeypatch.setattr(pp, "_project_path_projects", fake_paths)
-    monkeypatch.setattr(
-        pp,
-        "_project_exists",
-        lambda apiurl, prj: prj not in st.absent,  # type: ignore[attr-defined]
-    )
+    monkeypatch.setattr(pp, "_project_exists", lambda apiurl, prj: prj not in st.absent)
 
     def fake_depinfo(apiurl, projects, local, image_pkgs=None, **kw):
-        st.depinfo_calls.append((set(projects), kw))  # type: ignore[attr-defined]
+        st.depinfo_calls.append((set(projects), kw))
         if kw.get("failed") is not None:
-            kw["failed"].update(st.fail)  # type: ignore[attr-defined]
-        return {k: set(v) for k, v in st.fwd.items()}  # type: ignore[attr-defined]
+            kw["failed"].update(st.fail)
+        return {k: set(v) for k, v in st.fwd.items()}
 
     monkeypatch.setattr(pp, "_fetch_combined_depinfo", fake_depinfo)
     monkeypatch.setattr(pp, "aggregate_edges", lambda targets, env: {})
@@ -379,12 +492,12 @@ def prop(monkeypatch):
     monkeypatch.setattr(
         pp,
         "record_since",
-        lambda apiurl, pkgs: st.recorded.append(set(pkgs)) or {p: {} for p in pkgs},  # type: ignore[attr-defined]
+        lambda apiurl, pkgs: st.recorded.append(set(pkgs)) or {p: {} for p in pkgs},
     )
 
-    def fake_run(apiurl, stages, dry_run, *, since=None, **kw):
+    def fake_run(apiurl, stages, dry_run, *, seeds=frozenset(), **kw):
         print("RUN")
-        st.run.append((stages, dry_run, since))  # type: ignore[attr-defined]
+        st.run.append((stages, dry_run, set(seeds)))
 
     monkeypatch.setattr(pp, "run_stages", fake_run)
     return st
@@ -394,6 +507,7 @@ def test_propagate_nothing_frozen_queries_no_dependencies(prop, capsys):
     prop.states = {R: "partial", C: "unfrozen"}
     pp.propagate(API, "r", {(D, "lib")}, [], {}, dry_run=False)
     assert prop.depinfo_calls == [] and prop.run == []
+    assert "build propagate" not in capsys.readouterr().out
 
 
 def test_propagate_runs_plan_over_seed_and_upstream_projects(prop, capsys):
@@ -401,21 +515,20 @@ def test_propagate_runs_plan_over_seed_and_upstream_projects(prop, capsys):
     projects, kw = prop.depinfo_calls[0]
     assert projects == {R, C, D}
     assert kw["all_targets"] is True
-    stages, dry_run, since = prop.run[0]
+    stages, dry_run, seeds = prop.run[0]
     assert [s.trigger for s in stages] == [{R: ["b"]}, {C: ["img"]}]
-    assert dry_run is False
+    assert dry_run is False and seeds == {(D, "lib")}
     out = capsys.readouterr().out
-    assert "percona-obs build propagate r:deps/lib" in out
+    assert "build propagate r:deps/lib" in out
     assert out.index("build propagate") < out.index("RUN")
     assert "r:deps/lib" in out.split("build propagate")[0]  # seeds printed
 
 
-def test_propagate_records_non_frozen_members_before_running(prop):
-    prop.paths = {R: {D}, D: set(), C: {R}}
+def test_propagate_records_nothing_for_members_obs_rebuilds(prop):
     prop.fwd = {(D, "mid"): {(D, "lib")}, (R, "b"): {(D, "mid")}}
     pp.propagate(API, "r", {(D, "lib")}, [], {}, dry_run=False)
-    assert prop.recorded == [{(D, "mid")}]
-    assert prop.run[0][2] == {(D, "mid"): {}}
+    assert prop.recorded == []
+    assert (D, "mid") in prop.run[0][0][0].wait_for
 
 
 def test_propagate_empty_plan_says_so(prop, capsys):
@@ -444,11 +557,8 @@ def test_propagate_absent_project_is_not_a_failure(prop):
     assert prop.run == []
 
 
-def test_propagate_dry_run_records_nothing(prop, capsys):
-    prop.paths = {R: {D}, D: set(), C: {R}}
-    prop.fwd = {(D, "mid"): {(D, "lib")}, (R, "b"): {(D, "mid")}}
+def test_propagate_dry_run(prop, capsys):
     pp.propagate(API, "r", {(D, "lib")}, [], {}, dry_run=True)
-    assert prop.recorded == []
     assert prop.run[0][1] is True
     assert "build propagate" not in capsys.readouterr().out
 
@@ -460,7 +570,34 @@ def test_propagate_prints_recovery_before_dependency_queries(prop, capsys, monke
     monkeypatch.setattr(pp, "_fetch_combined_depinfo", boom)
     with pytest.raises(RuntimeError):
         pp.propagate(API, "r", {(D, "lib")}, [], {}, dry_run=False)
-    assert "percona-obs build propagate r:deps/lib" in capsys.readouterr().out
+    assert "build propagate r:deps/lib" in capsys.readouterr().out
+
+
+def test_recovery_command_runs_as_printed(prop, capsys):
+    seeds = {(D, "lib"), (R, "a b")}
+    env = ["OBS_CONTAINER_REGISTRY:reg.example/x", "ODD:it's $HOME"]
+    pp.propagate(
+        "https://obs.example:444",
+        "home:me:ppg",
+        seeds,
+        [],
+        {},
+        dry_run=False,
+        env_overrides=env,
+        profile="labs main",
+    )
+    line = next(
+        ln for ln in capsys.readouterr().out.splitlines() if "build propagate" in ln
+    )
+    argv = shlex.split(line[line.index("percona-obs") :])
+    assert argv[0] == "percona-obs"
+    args = cli.build_parser().parse_args(argv[1:])
+    assert args.apiurl == "https://obs.example:444"
+    assert args.rootprj == "home:me:ppg"
+    assert args.profile == "labs main"
+    assert args.env_overrides == env
+    assert args.build_command == "propagate" and args.dry_run is False
+    assert {tuple(p.rsplit("/", 1)) for p in args.packages} == seeds
 
 
 def test_project_order_puts_paths_first():
@@ -476,18 +613,36 @@ def test_cli_build_propagate(monkeypatch):
     monkeypatch.setitem(cmd_build.osc.conf.config, "apiurl", API)
     calls = []
     monkeypatch.setattr(cmd_build, "_propagate_targets", lambda args, env: [])
-    monkeypatch.setattr(
-        pp,
-        "propagate",
-        lambda apiurl, rootprj, seeds, targets, env, dry_run: calls.append(
-            (apiurl, rootprj, seeds, dry_run)
-        ),
-    )
+
+    def fake_propagate(apiurl, rootprj, seeds, targets, env, dry_run, **kw):
+        calls.append((apiurl, rootprj, seeds, dry_run, kw))
+
+    monkeypatch.setattr(pp, "propagate", fake_propagate)
     args = cli.build_parser().parse_args(
-        ["-R", "r", "build", "propagate", "r:u/a", "r:deps/lib", "--dry-run"]
+        [
+            "-R",
+            "r",
+            "-P",
+            "labs",
+            "-e",
+            "K:V",
+            "build",
+            "propagate",
+            "r:u/a",
+            "r:deps/lib",
+            "--dry-run",
+        ]
     )
     args.func(args)
-    assert calls == [(API, "r", {("r:u", "a"), ("r:deps", "lib")}, True)]
+    assert calls == [
+        (
+            API,
+            "r",
+            {("r:u", "a"), ("r:deps", "lib")},
+            True,
+            {"env_overrides": ["K:V"], "profile": "labs"},
+        )
+    ]
 
 
 def test_cli_build_propagate_rejects_bad_argument(monkeypatch):

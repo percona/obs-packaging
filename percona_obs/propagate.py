@@ -19,6 +19,7 @@ prerequisites (``wait_seen``) and then sends the stage's ``cmd=rebuild``
 triggers (``trigger_rebuild``).  ``propagate`` composes everything.
 """
 
+import shlex
 import time
 import urllib.error
 import xml.etree.ElementTree as ET
@@ -398,9 +399,9 @@ def _pkg_targets(codes: "dict[Target, str]", name: str) -> "dict[Target, str]":
     }
 
 
-def _newest_job(apiurl: str, prj: str, target: Target) -> "tuple[str, str]":
-    """``(identity, srcmd5)`` of the newest job of *target*; ``("", "")`` when
-    the job history is empty."""
+def _newest_job(apiurl: str, prj: str, target: Target) -> "tuple[str, str, int]":
+    """``(identity, srcmd5, readytime)`` of the newest job of *target*;
+    ``("", "", 0)`` when the job history is empty."""
     name, repo, arch = target
     url = osc.core.makeurl(
         apiurl,
@@ -410,26 +411,57 @@ def _newest_job(apiurl: str, prj: str, target: Target) -> "tuple[str, str]":
     root = ET.fromstring(osc.connection.http_GET(url).read())
     jobs = root.findall("jobhist")
     if not jobs:
-        return "", ""
+        return "", "", 0
     job = max(jobs, key=lambda j: int(j.get("readytime") or 0))
     srcmd5 = job.get("srcmd5", "")
-    return f"{job.get('readytime', '')}:{srcmd5}", srcmd5
+    readytime = int(job.get("readytime") or 0)
+    return f"{job.get('readytime', '')}:{srcmd5}", srcmd5, readytime
 
 
-def _source_md5(apiurl: str, prj: str, name: str) -> str:
-    """The source md5 the scheduler builds: ``verifymd5`` when present."""
+# Prefix of a record taken from the binary list, for targets without job
+# history (aggregates: the scheduler copies them without a build job).
+_BINARIES_PREFIX = "binaries:"
+
+
+def _binaries_signature(apiurl: str, prj: str, target: Target) -> str:
+    """Sorted ``(filename, mtime, size)`` of *target*'s binary list."""
+    name, repo, arch = target
+    url = osc.core.makeurl(apiurl, ["build", prj, repo, arch, name])
+    root = ET.fromstring(osc.connection.http_GET(url).read())
+    entries = sorted(
+        (b.get("filename", ""), b.get("mtime", ""), b.get("size", ""))
+        for b in root.findall("binary")
+    )
+    return _BINARIES_PREFIX + ";".join("|".join(e) for e in entries)
+
+
+def _source_md5s(apiurl: str, prj: str, name: str) -> "set[str]":
+    """The md5s naming the current source: ``srcmd5`` and ``verifymd5``."""
     url = osc.core.makeurl(apiurl, ["source", prj, name], query={"view": "info"})
     root = ET.fromstring(osc.connection.http_GET(url).read())
-    return root.get("verifymd5") or root.get("srcmd5", "")
+    return {m for m in (root.get("srcmd5"), root.get("verifymd5")) if m}
+
+
+def _source_commit_time(apiurl: str, prj: str, name: str) -> int:
+    """Time (OBS server clock, epoch seconds) of the newest source revision."""
+    url = osc.core.makeurl(
+        apiurl, ["source", prj, name, "_history"], query={"limit": 1}
+    )
+    root = ET.fromstring(osc.connection.http_GET(url).read())
+    return max(
+        (int((r.findtext("time") or "0").strip()) for r in root.findall("revision")),
+        default=0,
+    )
 
 
 def record_since(apiurl: str, pkgs: "set[Pkg]") -> "dict[Pkg, dict[Target, str]]":
-    """Identity of the newest job of every built target of *pkgs*.
+    """Record the current state of every built target of *pkgs*.
 
-    ``wait_seen`` counts a target as seen once its newest job differs from
-    the one recorded here.  A target without job history records ``""``.
-    Read errors propagate: a missing record would make the next wait pass
-    at once, and the trigger after it could come too early.
+    The record is the identity of the newest job, or, for a target without
+    job history (an aggregate), its binary-list signature.  ``wait_seen``
+    counts a target as seen once that record changes.  Read errors
+    propagate: a missing record would make the next wait pass at once, and
+    the trigger after it could come too early.
     """
     jobs: list[tuple[Pkg, Target]] = []
     since: dict[Pkg, dict[Target, str]] = {pkg: {} for pkg in pkgs}
@@ -446,7 +478,10 @@ def record_since(apiurl: str, pkgs: "set[Pkg]") -> "dict[Pkg, dict[Target, str]]
 
     def one(item: "tuple[Pkg, Target]") -> "tuple[Pkg, Target, str]":
         pkg, target = item
-        return pkg, target, _newest_job(apiurl, pkg[0], target)[0]
+        ident = _newest_job(apiurl, pkg[0], target)[0]
+        if not ident:
+            ident = _binaries_signature(apiurl, pkg[0], target)
+        return pkg, target, ident
 
     with ThreadPoolExecutor(max_workers=_JOB_WORKERS) as pool:
         for pkg, target, ident in pool.map(one, jobs):
@@ -454,17 +489,64 @@ def record_since(apiurl: str, pkgs: "set[Pkg]") -> "dict[Pkg, dict[Target, str]]
     return since
 
 
+class _SeenRules:
+    """Decides whether one non-pending target shows the change.
+
+    - A package in *since* (triggered by us): its record changed (newest
+      job, or binary list for a job-less target).  Checked first, so a seed
+      we triggered waits for the rebuild we asked for.
+    - A seed: its newest job built the current source.
+    - Any other package (a member OBS rebuilds by itself): its newest job
+      became ready after the newest seed commit.
+    """
+
+    def __init__(
+        self,
+        apiurl: str,
+        since: "dict[Pkg, dict[Target, str]]",
+        seeds: "set[Pkg] | frozenset[Pkg]",
+    ):
+        self.apiurl = apiurl
+        self.since = since
+        self.seeds = seeds
+        self._md5s: dict[Pkg, set[str]] = {}
+        self._seed_time: "int | None" = None
+
+    def seed_time(self) -> int:
+        if self._seed_time is None:
+            self._seed_time = max(
+                (_source_commit_time(self.apiurl, p, n) for p, n in self.seeds),
+                default=0,
+            )
+        return self._seed_time
+
+    def shows_change(self, pkg: Pkg, target: Target) -> bool:
+        ident, srcmd5, readytime = _newest_job(self.apiurl, pkg[0], target)
+        if pkg in self.since:
+            recorded = self.since[pkg].get(target, "")
+            if ident:
+                return ident != recorded
+            if recorded.startswith(_BINARIES_PREFIX):
+                return recorded != _binaries_signature(self.apiurl, pkg[0], target)
+            return False
+        if pkg in self.seeds:
+            if pkg not in self._md5s:
+                self._md5s[pkg] = _source_md5s(self.apiurl, pkg[0], pkg[1])
+            return srcmd5 in self._md5s[pkg]
+        if not self.seeds or not readytime:
+            return False
+        return readytime > self.seed_time()
+
+
 def _poll_unseen(
     apiurl: str,
     pkgs: "set[Pkg]",
-    since: "dict[Pkg, dict[Target, str]]",
+    rules: _SeenRules,
     seen: "set[tuple[Pkg, Target]]",
-    source_md5: "dict[Pkg, str]",
 ) -> "set[Pkg]":
     """One poll of ``wait_seen``: the members of *pkgs* not seen yet.
 
-    *seen* (targets already seen) and *source_md5* (seeds' current source)
-    carry over between polls.
+    *seen* (targets already seen) carries over between polls.
     """
     unseen: set[Pkg] = set()
     to_check: list[tuple[Pkg, Target]] = []
@@ -484,16 +566,10 @@ def _poll_unseen(
                     to_check.append((pkg, target))
 
     def one(item: "tuple[Pkg, Target]") -> bool:
-        pkg, target = item
         try:
-            ident, srcmd5 = _newest_job(apiurl, pkg[0], target)
-            if pkg in since:
-                return ident != since[pkg].get(target, "")
-            if pkg not in source_md5:
-                source_md5[pkg] = _source_md5(apiurl, pkg[0], pkg[1])
-            return bool(srcmd5) and srcmd5 == source_md5[pkg]
+            return rules.shows_change(*item)
         except Exception as exc:
-            logger.debug(f"propagate: job history of {pkg[0]}/{target}: {exc}")
+            logger.debug(f"propagate: state of {item[0][0]}/{item[1]}: {exc}")
             return False
 
     with ThreadPoolExecutor(max_workers=_JOB_WORKERS) as pool:
@@ -513,24 +589,26 @@ def wait_seen(
     poll_s: float = SEEN_POLL_S,
     sleep: "Callable[[float], None]" = time.sleep,
     clock: "Callable[[], float]" = time.monotonic,
+    *,
+    seeds: "set[Pkg] | frozenset[Pkg]" = frozenset(),
 ) -> "set[Pkg]":
     """Wait until the scheduler has seen every package of *pkgs*.
 
     A package is seen when every target it builds on (excluded and disabled
     targets ignored; a package with none left is seen) is pending
-    (``release_freeze.PENDING_PKG_CODES``) or has a newest job that shows
-    the change: for a package in *since*, a job other than the one recorded
-    there (``record_since``); for any other package (a seed), a job built
-    from the package's current source.  A target seen once stays seen.
+    (``release_freeze.PENDING_PKG_CODES``) or shows the change by the rule
+    of its class (see ``_SeenRules``): packages in *since* were triggered by
+    us, *seeds* are the changed packages, anything else is a member OBS
+    rebuilds by itself.  A target seen once stays seen.
 
     Returns the packages still not seen when *timeout_s* runs out.
     """
     deadline = clock() + timeout_s
+    rules = _SeenRules(apiurl, since, seeds)
     seen: set[tuple[Pkg, Target]] = set()
-    source_md5: dict[Pkg, str] = {}
     remaining = set(pkgs)
     while True:
-        remaining = _poll_unseen(apiurl, remaining, since, seen, source_md5)
+        remaining = _poll_unseen(apiurl, remaining, rules, seen)
         if not remaining or clock() >= deadline:
             return remaining
         sleep(poll_s)
@@ -540,24 +618,45 @@ def _names(pkgs: "set[Pkg] | frozenset[Pkg]") -> str:
     return ", ".join(f"{p}/{n}" for p, n in sorted(pkgs))
 
 
+def _describe_codes(apiurl: str, pkgs: "set[Pkg]") -> str:
+    """``prj/pkg [repo/arch: code, ...]`` per package, for the timeout warning."""
+    parts: list[str] = []
+    codes_by_prj = {prj: _project_codes(apiurl, prj) for prj in {p for p, _ in pkgs}}
+    for prj, name in sorted(pkgs):
+        codes = codes_by_prj[prj]
+        if codes is None:
+            parts.append(f"{prj}/{name} [build results unreadable]")
+            continue
+        states = ", ".join(
+            f"{repo}/{arch}{'' if t_name == name else ' ' + t_name}: {code}"
+            for (t_name, repo, arch), code in sorted(
+                _pkg_targets(codes, name).items(), key=lambda kv: kv[0][1:] + kv[0][:1]
+            )
+        )
+        parts.append(f"{prj}/{name} [{states}]")
+    return "; ".join(parts)
+
+
 def run_stages(
     apiurl: str,
     stages: "list[Stage]",
     dry_run: bool,
     *,
-    since: "dict[Pkg, dict[Target, str]] | None" = None,
+    seeds: "set[Pkg] | frozenset[Pkg]" = frozenset(),
     sleep: "Callable[[float], None]" = time.sleep,
     clock: "Callable[[], float]" = time.monotonic,
 ) -> None:
     """Send the triggers of *stages* in order, each after its wait.
 
-    *since* holds ``record_since`` data for waited-for packages that no
-    stage triggers and that are not seeds; the record of each stage's own
-    packages is added right before they are triggered.  A wait that times
-    out prints a warning and the stage is triggered anyway.  With *dry_run*
-    the stages are only printed.
+    The state of each stage's packages is recorded (``record_since``) right
+    before they are triggered; later waits on them need that record, and a
+    triggered package without one is an error.  *seeds* tells the waits
+    which packages are the changed ones.  A wait that times out prints a
+    warning with the packages' current codes and the stage is triggered
+    anyway.  With *dry_run* the stages are only printed.
     """
-    known = dict(since or {})
+    known: dict[Pkg, dict[Target, str]] = {}
+    triggered_before: set[Pkg] = set()
     for i, stage in enumerate(stages, 1):
         triggered = {(prj, n) for prj, names in stage.trigger.items() for n in names}
         prefix = "dry-run: " if dry_run else ""
@@ -568,17 +667,30 @@ def run_stages(
         for prj, names in stage.trigger.items():
             print(f"      {prj}: {' '.join(names)}")
         if dry_run:
+            triggered_before |= triggered
             continue
+        missing = {p for p in stage.wait_for & triggered_before if p not in known}
+        if missing:
+            raise RuntimeError(
+                f"propagate stage {i}: no record for triggered {_names(missing)}"
+            )
         if stage.wait_for:
             unseen = wait_seen(
-                apiurl, set(stage.wait_for), known, sleep=sleep, clock=clock
+                apiurl,
+                set(stage.wait_for),
+                known,
+                sleep=sleep,
+                clock=clock,
+                seeds=seeds,
             )
             if unseen:
                 print(
                     f"warning: propagate stage {i}: not seen by the scheduler "
-                    f"after {SEEN_TIMEOUT_S}s: {_names(unseen)}; triggering anyway"
+                    f"after {SEEN_TIMEOUT_S}s: {_describe_codes(apiurl, unseen)}; "
+                    "triggering anyway"
                 )
         known.update(record_since(apiurl, triggered))
+        triggered_before |= triggered
         for prj, names in stage.trigger.items():
             trigger_rebuild(apiurl, prj, names)
 
@@ -627,6 +739,29 @@ def _project_exists(apiurl: str, prj: str) -> bool:
     return _fetch_meta(apiurl, prj) is not None
 
 
+def _recovery_command(
+    apiurl: str,
+    rootprj: str,
+    seeds: "set[Pkg]",
+    env_overrides: "list[str] | None",
+    profile: "str | None",
+) -> str:
+    """The ``build propagate`` command line that repeats this run.
+
+    ``-P`` brings the profile's slice (repository filter); the explicit
+    ``-A``/``-R`` values override the profile's, and the ``-e`` values come
+    last, so the run resolves to the same apiurl, rootprj and env vars.
+    """
+    argv = ["percona-obs"]
+    if profile:
+        argv += ["-P", profile]
+    argv += ["-A", apiurl, "-R", rootprj]
+    for entry in env_overrides or []:
+        argv += ["-e", entry]
+    argv += ["build", "propagate"] + [f"{p}/{n}" for p, n in sorted(seeds)]
+    return shlex.join(argv)
+
+
 def propagate(
     apiurl: str,
     rootprj: str,
@@ -634,6 +769,9 @@ def propagate(
     targets: "list[tuple[str, Path]]",
     env_vars: "dict[str, str]",
     dry_run: bool,
+    *,
+    env_overrides: "list[str] | None" = None,
+    profile: "str | None" = None,
 ) -> None:
     """Trigger rebuilds of everything in a frozen project that depends on *seeds*.
 
@@ -641,6 +779,9 @@ def propagate(
     ``_aggregate`` edges, image edges and the dependency filter) and
     *env_vars* the substitution variables of ``sync push``.  Does nothing,
     and queries no dependency, when no release unit project is frozen.
+
+    *profile* and *env_overrides* (the ``-P`` and ``-e`` values of this run)
+    only go into the printed recovery command.
     """
     _print_action(f"propagate: seeds {_names(seeds)}")
     unit_projects = sorted(
@@ -657,9 +798,8 @@ def propagate(
         return
     if not dry_run:
         print(
-            "propagate: if this run stops early, re-run it with the same profile: "
-            "percona-obs build propagate "
-            + " ".join(f"{p}/{n}" for p, n in sorted(seeds))
+            "propagate: if this run stops early, re-run: "
+            + _recovery_command(apiurl, rootprj, seeds, env_overrides, profile)
         )
 
     paths = _path_map(apiurl, frozen, rootprj)
@@ -715,13 +855,4 @@ def propagate(
         )
         return
 
-    triggered = {
-        (p, n) for s in stages for p, names in s.trigger.items() for n in names
-    }
-    waited = {pkg for s in stages for pkg in s.wait_for}
-    since = None
-    if not dry_run:
-        # Non-frozen members are rebuilt by OBS itself: record their newest
-        # job now so the waits can tell when that rebuild happens.
-        since = record_since(apiurl, waited - triggered - set(seeds))
-    run_stages(apiurl, stages, dry_run, since=since)
+    run_stages(apiurl, stages, dry_run, seeds=frozenset(seeds))

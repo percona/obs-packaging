@@ -2293,6 +2293,8 @@ def _propagate_after_push(
             targets,
             env_vars,
             dry_run,
+            env_overrides=list(getattr(args, "env_overrides", None) or []),
+            profile=getattr(args, "profile", None),
         )
 
 
