@@ -164,8 +164,8 @@ qa:
 - name: ubi8-pgbackrest-pg14
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '14'
     REPOSITORY:
       image: percona-pgbackrest
@@ -181,8 +181,8 @@ qa:
 - name: ubi8-pgbackrest-pg15
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '15'
     REPOSITORY:
       image: percona-pgbackrest
@@ -198,8 +198,8 @@ qa:
 - name: ubi8-pgbackrest-pg16
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '16'
     REPOSITORY:
       image: percona-pgbackrest
@@ -215,8 +215,8 @@ qa:
 - name: ubi8-pgbackrest-pg17
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '17'
     REPOSITORY:
       image: percona-pgbackrest
@@ -232,8 +232,8 @@ qa:
 - name: ubi8-pgbackrest-pg18
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '18'
     REPOSITORY:
       image: percona-pgbackrest
@@ -249,8 +249,8 @@ qa:
 - name: ubi8-pgbackrest-pg19
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '19'
     REPOSITORY:
       image: percona-pgbackrest
@@ -368,8 +368,8 @@ qa:
 - name: ubi9-pgbackrest-pg14
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '14'
     REPOSITORY:
       image: percona-pgbackrest
@@ -385,8 +385,8 @@ qa:
 - name: ubi9-pgbackrest-pg15
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '15'
     REPOSITORY:
       image: percona-pgbackrest
@@ -402,8 +402,8 @@ qa:
 - name: ubi9-pgbackrest-pg16
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '16'
     REPOSITORY:
       image: percona-pgbackrest
@@ -419,8 +419,8 @@ qa:
 - name: ubi9-pgbackrest-pg17
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '17'
     REPOSITORY:
       image: percona-pgbackrest
@@ -436,8 +436,8 @@ qa:
 - name: ubi9-pgbackrest-pg18
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '18'
     REPOSITORY:
       image: percona-pgbackrest
@@ -453,8 +453,8 @@ qa:
 - name: ubi9-pgbackrest-pg19
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '19'
     REPOSITORY:
       image: percona-pgbackrest
@@ -572,8 +572,8 @@ qa:
 - name: ubi10-pgbackrest-pg14
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '14'
     REPOSITORY:
       image: percona-pgbackrest
@@ -589,8 +589,8 @@ qa:
 - name: ubi10-pgbackrest-pg15
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '15'
     REPOSITORY:
       image: percona-pgbackrest
@@ -606,8 +606,8 @@ qa:
 - name: ubi10-pgbackrest-pg16
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '16'
     REPOSITORY:
       image: percona-pgbackrest
@@ -623,8 +623,8 @@ qa:
 - name: ubi10-pgbackrest-pg17
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '17'
     REPOSITORY:
       image: percona-pgbackrest
@@ -640,8 +640,8 @@ qa:
 - name: ubi10-pgbackrest-pg18
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '18'
     REPOSITORY:
       image: percona-pgbackrest
@@ -657,8 +657,8 @@ qa:
 - name: ubi10-pgbackrest-pg19
   parameters:
     COMPONENT: pgbackrest
-    COMPONENT_VERSION: 2.60.0
-    DOCKER_COMPONENT_TAG: 2.60.0
+    COMPONENT_VERSION: 2.60.1
+    DOCKER_COMPONENT_TAG: 2.60.1
     DOCKER_SERVER_TAG: '19'
     REPOSITORY:
       image: percona-pgbackrest
