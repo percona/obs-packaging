@@ -3029,6 +3029,9 @@ def _scope_local_paths(
     # blob, so the link target must be a pathspec of its own.  The same holds
     # for symlinks inside a package's obs/ (shared upgrade-scripts trees),
     # including those of nested release units below the source.
+    # A target inside a nested unit belongs to that unit alone: adding it
+    # would defeat the unit's exclude below.
+    nested_dirs = nested_unit_dirs(source_path)
     for d in project_dirs:
         for child in sorted(d.iterdir()):
             if child.is_symlink():
@@ -3036,7 +3039,8 @@ def _scope_local_paths(
                     _add(target)
         for _prj, pkg in common.find_packages(d, ""):
             for target in _package_pathspecs(pkg)[1:]:
-                _add(target)
+                if not any(target.is_relative_to(n) for n in nested_dirs):
+                    _add(target)
     for prj, pkgs in freeze_packages_map.items():
         base = resolve_project_path(prj[len(rootprj) + 1 :])
         for pkg in sorted(pkgs):
@@ -3045,7 +3049,7 @@ def _scope_local_paths(
     # An exclude pathspec hides matching paths from every positive one, so a
     # nested unit that is also frozen (or holds a watched file) stays in.
     watched = [p for p in paths if isinstance(p, Path) and p != source_path]
-    for nested in nested_unit_dirs(source_path):
+    for nested in nested_dirs:
         if not any(p == nested or p.is_relative_to(nested) for p in watched):
             paths.append(_exclude_pathspec(nested))
     return paths

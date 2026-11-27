@@ -339,3 +339,17 @@ def test_git_pathspecs_obs_symlink_adds_lexical_target(tmp_path):
     obs.mkdir(parents=True)
     (obs / "upgrade-scripts").symlink_to("../../../_shared/upgrade-scripts")
     assert _package_pathspecs(obs.parent) == [obs.parent, shared]
+
+
+def test_git_pathspecs_symlinked_package_with_obs_link(tmp_path):
+    base = tmp_path / "root/ppg/staging"
+    pkg_target = base / "_shared/pkg"
+    (pkg_target / "obs").mkdir(parents=True)
+    scripts = base / "_shared/scripts"
+    scripts.mkdir()
+    (pkg_target / "obs/scripts").symlink_to("../../scripts")
+    proj = base / "17"
+    proj.mkdir()
+    link = proj / "pkg"
+    link.symlink_to("../_shared/pkg")
+    assert _package_pathspecs(link) == [link, pkg_target, scripts]
