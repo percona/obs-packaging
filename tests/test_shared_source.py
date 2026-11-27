@@ -330,3 +330,12 @@ def test_file_modify_date_macro_is_stable_through_symlink(tree):
         "%!{FILE_MODIFY_DATE_RFC5322}", {}, source=through_link
     )
     assert "1970" not in rendered
+
+
+def test_git_pathspecs_obs_symlink_adds_lexical_target(tmp_path):
+    shared = tmp_path / "root/ppg/staging/common/upgrade/_shared/upgrade-scripts"
+    shared.mkdir(parents=True)
+    obs = tmp_path / "root/ppg/staging/common/upgrade/containers/img/obs"
+    obs.mkdir(parents=True)
+    (obs / "upgrade-scripts").symlink_to("../../../_shared/upgrade-scripts")
+    assert _package_pathspecs(obs.parent) == [obs.parent, shared]
