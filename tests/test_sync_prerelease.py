@@ -568,3 +568,25 @@ def test_nested_unit_sees_parent_shared_obs_link_edit(tmp_path, monkeypatch):
     assert cmd_sync._changed_files_between(a, b, paths) == [
         "root/ppg/staging/common/upgrade/_shared/upgrade-scripts/bin/x.sh"
     ]
+
+
+def test_nested_unit_own_obs_link_target_keeps_exclude(tmp_path, monkeypatch):
+    import percona_obs.common as common
+
+    up = tmp_path / "root/ppg/staging/common/upgrade"
+    (up / "extras/_shared/x").mkdir(parents=True)
+    (up / "extras/containers/img/obs").mkdir(parents=True)
+    (up / "extras/containers/img/obs/x").symlink_to("../../../_shared/x")
+    (up / "project.yaml").write_text("title: U\n")
+    (up / "extras/project.yaml").write_text("title: E\n")
+    (tmp_path / "root/macros.yaml").write_text("- M: 1\n")
+    monkeypatch.setattr(cmd_sync, "_REPO_DIR", tmp_path)
+    monkeypatch.setattr(common, "REPO_ROOT", tmp_path / "root")
+    monkeypatch.setattr(
+        cmd_sync,
+        "resolve_project_path",
+        lambda pid: tmp_path / "root" / pid.replace(":", "/"),
+    )
+    paths = cmd_sync._scope_local_paths(up, [], {}, "home:Admin")
+    assert cmd_sync._exclude_pathspec(up / "extras") in paths
+    assert up / "extras/_shared/x" not in paths
