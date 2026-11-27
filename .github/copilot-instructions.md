@@ -375,7 +375,7 @@ The corresponding branch OBS project is derived by substituting the current `roo
 3. If the message matches and the detail does **not** start with `"local changes on"` (i.e. was synced from a pushed branch):
    - Call `git log` to check whether any commits touching `<package_path>` exist since `<sha>`.
    - Check for uncommitted edits inside `<package_path>`.
-   - Check whether any macro the package references (`%!{NAME}` tokens in its obs/, debian/, rpm/ files) renders to a different value now than at `<sha>` (`_macros_changed_since`). The comparison is by rendered value, not by which `macros.yaml` files were touched: moving a macro between ancestor files with the same value, or bumping a macro this package never uses, is not a change. For symlinked package directories (`_shared/` sources, see `root/README.md`) the git checks cover both the link and its target.
+   - Check whether any macro the package references (`%!{NAME}` tokens in its obs/, debian/, rpm/ files) renders to a different value now than at `<sha>` (`_macros_changed_since`). The comparison is by rendered value, not by which `macros.yaml` files were touched: moving a macro between ancestor files with the same value, or bumping a macro this package never uses, is not a change. For symlinked package directories (`_shared/` sources, see `root/README.md`) the git checks cover both the link and its target. A package may also symlink an `obs/<dir>` into a `_shared/` tree (e.g. `obs/upgrade-scripts`); change detection follows those links too (`_package_pathspecs` / `_scope_local_paths`), so an edit there counts as a change of each linking package and release unit (targets inside nested release units are skipped).
    - **Nothing changed** → aggregate (package unchanged). **Otherwise** → fall back to the content check.
 
 #### Fallback — content check
@@ -601,6 +601,7 @@ If a package's `obs/_service` contains any service with `mode="manual"`, `sync` 
 3. Service outputs are merged into a shared work directory so later services can consume earlier outputs (e.g. `go_modules` consuming `obs_scm` tarballs).
 4. Only files produced by `mode="manual"` services are committed to OBS. Files produced by no-mode services (e.g. obs_scm source tarballs) are used locally but **not** uploaded — OBS regenerates those on its server.
 5. `.obscpio` files produced by `mode="manual"` services (e.g. `node_modules.obscpio`) are kept and uploaded; only `obs_scm` archives are extracted locally.
+6. `obs/` subdirectories (symlinks followed; a dangling link is an error) are copied verbatim — no `%!{}`/`${}` substitution — into the work directory so services can consume them (e.g. `source_script --source <dir> --output <name>.tar.gz` packs one with every mtime 0). Directories are never uploaded; the manual-service cache key covers their contents.
 
 If a service binary is missing from `/usr/lib/obs/service/`, a warning is logged and the service is skipped. A non-zero service exit code aborts the entire `sync` run.
 

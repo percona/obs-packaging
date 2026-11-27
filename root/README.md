@@ -227,6 +227,11 @@ a fully rendered, independent package in OBS. Any macro the shared files referen
 defined at or above every linking major. Edits under `_shared/` count as changes for every linking
 package (change detection follows the link target).
 
+`_shared/` trees may also be referenced from inside a package's `obs/` by a symlink to a directory
+(e.g. `obs/upgrade-scripts -> ../../_shared/upgrade-scripts`). The directory is handed verbatim to
+the package's manual services (such as `source_script --source`) and never uploaded to OBS; an edit
+under the target counts as a change of every package that links it.
+
 Links may also live inside a nested subproject of a major — the tarballs packages are the example:
 `staging/17/tarballs/percona-psql -> ../../_shared/percona-psql` (likewise
 `percona-postgresql-tarball`), discovered under `ppg:staging:17:tarballs` with macros still rendered
