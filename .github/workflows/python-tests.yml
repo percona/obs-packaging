@@ -2,7 +2,8 @@ name: Python Tests
 
 # Runs the percona-obs tool's own checks (black, pyright, pytest) on PRs
 # that touch the Python package, its tests, the workflow scripts under
-# .github/scripts (their tests live in tests/) or its tooling config.  These
+# .github/scripts (their tests live in tests/), the tools under tools/ (e.g.
+# the QA dashboard) or its tooling config.  These
 # are pure unit tests: no OBS instance, no secrets and no obs-tools
 # container, so the job also runs on PRs opened from forks.
 #
@@ -23,6 +24,8 @@ on:
       - '.github/workflows/**'
       - '.github/scripts/**'
       - '.github/*.yaml'
+      - '.github/*.yml'
+      - 'tools/**'
 
 concurrency:
   group: python-tests-pr-${{ github.event.number }}
@@ -48,7 +51,7 @@ jobs:
           venv/bin/pip install -r requirements.txt
 
       - name: black
-        run: venv/bin/black --check percona_obs/ tests/
+        run: venv/bin/black --check percona_obs/ tests/ tools/qa-dashboard/
 
       - name: pyright
         run: venv/bin/pyright

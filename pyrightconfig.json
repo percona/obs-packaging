@@ -1,5 +1,5 @@
 {
   "venvPath": ".",
   "venv": "venv",
-  "include": ["percona_obs"]
+  "include": ["percona_obs", "tools/qa-dashboard"]
 }
