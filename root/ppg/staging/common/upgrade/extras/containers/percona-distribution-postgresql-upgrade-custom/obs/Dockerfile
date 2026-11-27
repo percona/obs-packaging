@@ -141,7 +141,7 @@ RUN cp /usr/share/doc/percona-postgresql${PPG_MAJOR_VERSION}/COPYRIGHT /licenses
 RUN mkdir -p /opt/crunchy/bin /pgolddata /pgnewdata /opt/crunchy/conf
 COPY upgrade-scripts.tar.gz /tmp/upgrade-scripts.tar.gz
 RUN mkdir -p /tmp/upgrade-scripts && \
-    tar -xzf /tmp/upgrade-scripts.tar.gz -C /tmp/upgrade-scripts && \
+    tar -xzf /tmp/upgrade-scripts.tar.gz -C /tmp/upgrade-scripts --strip-components=1 && \
     cp /tmp/upgrade-scripts/bin/upgrade/start.sh /tmp/upgrade-scripts/bin/common/*.sh /opt/crunchy/bin/ && \
     cp /tmp/upgrade-scripts/conf/upgrade/passwd.template /tmp/upgrade-scripts/conf/upgrade/group.template /opt/crunchy/conf/ && \
     cp /tmp/upgrade-scripts/bin/relocate-extensions.sh /usr/local/bin/relocate-extensions.sh && \
