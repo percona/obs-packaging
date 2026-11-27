@@ -8,16 +8,20 @@
     whose release tarball is produced by a "dist" step rather than being the
     git tree. Run with mode="manual" after obs_scm; leave out the tar and
     recompress services, the tarball this service writes is the source.
+    With the "source" parameter it instead packs a directory of the package
+    (copied from obs/ into the work directory), optionally after running the
+    script on a copy of it.
   </description>
   <parameter name="archive">
-    <description>Glob matching the obs_scm source archive (.obscpio or tar). Exactly one file must match, and its .obsinfo must be present.</description>
-    <required/>
+    <description>Glob matching the obs_scm source archive (.obscpio or tar). Exactly one file must match, and its .obsinfo must be present. Give exactly one of "archive" and "source".</description>
+  </parameter>
+  <parameter name="source">
+    <description>Plain name of a directory in the work directory to pack, such as "upgrade-scripts". Requires "output". Symlinks are followed; every mtime is 0.</description>
   </parameter>
   <parameter name="script">
-    <description>Script file from the package's obs/ directory. Needs a #! line.</description>
-    <required/>
+    <description>Script file from the package's obs/ directory. Needs a #! line. Required with "archive", optional with "source" (runs on a copy of the directory).</description>
   </parameter>
   <parameter name="output">
-    <description>Tarball file name. Default: "name-version.tar.gz" from the archive's .obsinfo.</description>
+    <description>Tarball file name. Default: "name-version.tar.gz" from the archive's .obsinfo. Required with "source".</description>
   </parameter>
 </service>

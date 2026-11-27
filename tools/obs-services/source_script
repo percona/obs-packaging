@@ -35,6 +35,24 @@ locations of the home directory hidden.  Where it cannot (some CI
 containers) the script runs with the cleared environment only, and a note is
 printed on stderr.
 
+With ``source`` instead of ``archive`` the service packs a directory of the
+package itself (a directory of the work directory, such as ``upgrade-scripts``
+that percona-obs copied from the package's ``obs/``) rather than an
+``obs_scm`` checkout::
+
+    <service name="source_script" mode="manual">
+      <param name="source">upgrade-scripts</param>
+      <param name="output">upgrade-scripts.tar.gz</param>
+    </service>
+
+The tarball holds ``<source>/`` and its tree, with every mtime 0 (there is no
+commit), so the same contents always give the same bytes.  ``output`` is
+required.  ``script`` is optional here: when given it runs on a copy of the
+directory as its current directory, with ``NAME`` the directory name, empty
+``VERSION`` and ``COMMIT`` and ``SOURCE_DATE_EPOCH=0``, and the one directory
+it leaves in ``OUT_DIR`` is packed instead.  Symlinks are followed, so a
+symlinked directory packs the files it points at.
+
 Only the Python standard library is used; ``cpio`` and ``bwrap`` are external.
 """
 
@@ -252,6 +270,16 @@ def run_script(script: Path, src: Path, env: dict[str, str], work: Path) -> None
         die(message)
 
 
+def resolve_source(name: str) -> Path:
+    """Return the directory *name*, which must be a plain name of one in cwd."""
+    if not name or os.sep in name or name in (".", ".."):
+        die(f"--source {name!r} must be a plain name of a directory in cwd")
+    source = Path(name)
+    if not source.is_dir():
+        die(f"--source {name!r} is not a directory in {os.getcwd()}")
+    return source
+
+
 def single_output_dir(out: Path, script_name: str) -> Path:
     """Return the one directory *script_name* left in *out*."""
     entries = sorted(out.iterdir())
@@ -307,14 +335,21 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--archive",
-        required=True,
+        default="",
         help="glob matching the obs_scm source archive (.obscpio or tar); "
-        "exactly one file must match",
+        "exactly one file must match (exactly one of --archive/--source)",
+    )
+    parser.add_argument(
+        "--source",
+        default="",
+        help="plain name of a directory of the work directory to pack "
+        "(needs --output)",
     )
     parser.add_argument(
         "--script",
-        required=True,
-        help="script file from the package's obs/ directory; needs a #! line",
+        default="",
+        help="script file from the package's obs/ directory; needs a #! line "
+        "(required with --archive, optional with --source)",
     )
     parser.add_argument(
         "--output",
@@ -331,10 +366,24 @@ def main(argv: list[str]) -> int:
     if not outdir.is_dir():
         die(f"--outdir {args.outdir!r} is not a directory")
 
-    archive = resolve_archive(args.archive)
-    script = resolve_script(args.script)
-    info = read_obsinfo(archive)
-    output = args.output or f"{info['name']}-{info['version']}{OUTPUT_SUFFIX}"
+    if bool(args.archive) == bool(args.source):
+        die("exactly one of --archive and --source is required")
+    if args.source and not args.output:
+        die("--source needs --output")
+    if args.archive and not args.script:
+        die("--archive needs --script")
+
+    if args.source:
+        source = resolve_source(args.source)
+        archive = None
+        info = {"name": source.name, "version": "", "commit": "", "mtime": "0"}
+        output = args.output
+    else:
+        source = None
+        archive = resolve_archive(args.archive)
+        info = read_obsinfo(archive)
+        output = args.output or f"{info['name']}-{info['version']}{OUTPUT_SUFFIX}"
+    script = resolve_script(args.script) if args.script else None
     if os.sep in output or not output.endswith(OUTPUT_SUFFIX):
         die(f"--output {output!r} must be a file name ending in {OUTPUT_SUFFIX}")
 
@@ -342,14 +391,24 @@ def main(argv: list[str]) -> int:
     try:
         for sub in ("src", "out", "home"):
             (work / sub).mkdir()
-        runnable = work / script.name
-        shutil.copyfile(script, runnable)
-        runnable.chmod(0o755)
+        runnable = None
+        if script is not None:
+            runnable = work / script.name
+            shutil.copyfile(script, runnable)
+            runnable.chmod(0o755)
 
-        src = unpack(archive, work / "src")
-        env = script_env(src, work / "out", work / "home", info)
-        run_script(runnable, src, env, work)
-        tree = single_output_dir(work / "out", script.name)
+        if source is not None:
+            src = work / "src" / source.name
+            shutil.copytree(source, src, symlinks=False)
+        else:
+            assert archive is not None
+            src = unpack(archive, work / "src")
+        if runnable is not None and script is not None:
+            env = script_env(src, work / "out", work / "home", info)
+            run_script(runnable, src, env, work)
+            tree = single_output_dir(work / "out", script.name)
+        else:
+            tree = src
         pack(tree, outdir / output, int(info["mtime"]))
     finally:
         shutil.rmtree(work, ignore_errors=True)
