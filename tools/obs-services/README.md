@@ -8,7 +8,7 @@ on the OBS server.
 
 | Service | Purpose |
 |---|---|
-| `source_script` | Build the source tarball by running a script from the package's `obs/` directory on the `obs_scm` checkout, for upstreams whose release tarball comes out of a "dist" step (generated code, rendered docs) rather than being the git tree. The script runs with a cleared environment and, where `bwrap` can create a sandbox, without network; the directory it produces is packed reproducibly. With the `source` parameter instead of `archive` it packs a directory of the package (e.g. git-tracked upgrade scripts) into a tarball with every mtime 0, optionally running the script on a copy of it first. Needs `cpio`; `bwrap` (bubblewrap) is optional. |
+| `source_script` | Build the source tarball by running a script from the package's `obs/` directory on the `obs_scm` checkout, for upstreams whose release tarball comes out of a "dist" step (generated code, rendered docs) rather than being the git tree. The script runs with a cleared environment and, where `bwrap` can create a sandbox, without network; the directory it produces is packed reproducibly. With the `source` parameter (`--source`) instead of `archive` it packs a directory of the package (e.g. git-tracked upgrade scripts) into a tarball with every mtime 0, optionally running the script on a copy of it first. Needs `cpio`; `bwrap` (bubblewrap) is optional. |
 | `npm_lockfile` | Generate `package-lock.json` from an upstream source archive so the OBS `node_modules` service can vendor npm dependencies (upstreams that ship only `yarn.lock`, e.g. pgAdmin 4). Needs `npm` (Node.js ≥ 18) and `cpio` on the machine. |
 
 ## Installing locally

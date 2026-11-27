@@ -322,7 +322,30 @@ and no owner, so the same commit and script give the same bytes. Leave out the `
 when the script needs the git history.
 
 Outputs of manual services are cached per upstream commit, manual-service parameters and
-the contents of the package's other `obs/` files, so editing the script reruns it.
+the contents of the package's other `obs/` files (subdirectories included), so editing the
+script reruns it.
+
+**Packing a directory (`--source`).** Instead of `archive`, `source_script` can pack a
+directory of the service work directory: a plain name, which may be a symlink to a directory.
+`--output <name>.tar.gz` is required; `--script` is optional and runs on a copy of the
+directory. Exactly one of `--archive` / `--source` is allowed. Every mtime is 0 and owners and
+modes are normalised, so the bytes depend on the contents only. The intended use is git-tracked
+upgrade scripts shared by the upgrade images: `obs/upgrade-scripts` is a symlink to
+`root/ppg/staging/common/upgrade/_shared/upgrade-scripts`, and the `_service` is
+
+```xml
+<service name="source_script" mode="manual">
+  <param name="source">upgrade-scripts</param>
+  <param name="output">upgrade-scripts.tar.gz</param>
+</service>
+```
+
+`obs/` subdirectories (symlinks followed) are copied verbatim, with no `%!{}` / `${}`
+substitution, into the service work directory; a dangling link is an error. Directories are
+never uploaded to OBS — only the tarball the service produces is. For change detection
+(`--skip-unchanged`, branch decisions, repopulate and release-unit freeze checks), an edit in
+a `_shared/` tree linked from a package's `obs/` counts as a change of every package that
+links it, and of its release unit unless the target lies inside a nested release unit.
 
 Two rules in `percona-obs` make this work:
 
