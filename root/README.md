@@ -228,7 +228,7 @@ defined at or above every linking major. Edits under `_shared/` count as changes
 package (change detection follows the link target).
 
 `_shared/` trees may also be referenced from inside a package's `obs/` by a symlink to a directory
-(e.g. `obs/upgrade-scripts -> ../../_shared/upgrade-scripts`). The directory is handed verbatim to
+(e.g. `staging/common/upgrade/containers/<pkg>/obs/upgrade-scripts -> ../../../_shared/upgrade-scripts`, with `_shared/` beside `containers/`). The directory is handed verbatim to
 the package's manual services (such as `source_script --source`) and never uploaded to OBS; an edit
 under the target counts as a change of every package that links it.
 

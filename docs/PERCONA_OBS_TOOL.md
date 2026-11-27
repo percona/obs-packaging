@@ -346,6 +346,9 @@ never uploaded to OBS — only the tarball the service produces is. For change d
 (`--skip-unchanged`, branch decisions, repopulate and release-unit freeze checks), an edit in
 a `_shared/` tree linked from a package's `obs/` counts as a change of every package that
 links it, and of its release unit unless the target lies inside a nested release unit.
+Change detection follows only symlinks directly in a package's `obs/`; symlinks deeper inside
+`obs/<dir>/` or inside the target tree are copied and packed, but edits under their targets are
+not seen as changes.
 
 Two rules in `percona-obs` make this work:
 

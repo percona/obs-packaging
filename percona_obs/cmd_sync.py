@@ -3027,10 +3027,10 @@ def _scope_local_paths(
             _add(d / "subprojects.yaml")
     # Package dirs that are symlinks into _shared/: git sees only the link
     # blob, so the link target must be a pathspec of its own.  The same holds
-    # for symlinks inside a package's obs/ (shared upgrade-scripts trees),
-    # including those of nested release units below the source.
-    # A target inside a nested unit belongs to that unit alone: adding it
-    # would defeat the unit's exclude below.
+    # for symlinks inside a package's obs/ (shared upgrade-scripts trees).
+    # Packages inside a nested release unit belong to that unit alone and are
+    # skipped (their link targets lie outside it and would defeat its exclude
+    # below); so is any target inside a nested unit.
     nested_dirs = nested_unit_dirs(source_path)
     for d in project_dirs:
         for child in sorted(d.iterdir()):
@@ -3038,6 +3038,8 @@ def _scope_local_paths(
                 for target in _package_pathspecs(child)[1:]:
                     _add(target)
         for _prj, pkg in common.find_packages(d, ""):
+            if any(pkg.is_relative_to(n) for n in nested_dirs):
+                continue
             for target in _package_pathspecs(pkg)[1:]:
                 if not any(target.is_relative_to(n) for n in nested_dirs):
                     _add(target)
