@@ -1343,7 +1343,7 @@ def test_component_title_and_key_from_older_reports_use_product():
         build("component-generic-parallel", PRODUCT="pgbouncer")
     )
     tde = dict(component("pg_tde"), project="isv:percona:ppg:staging:16:tde")
-    assert collect.build_title(tde) == "component-generic-parallel · pg_tde · tde"
+    assert collect.project_of(tde) == "ppg:staging:16:tde"
     assert collect.build_key(tde) != collect.build_key(component("pg_tde", major="16"))
 
 
@@ -1444,3 +1444,40 @@ def test_schedule_text():
     assert schedule == {"mon": "14", "tue": "15", "sat": "19"}
     assert collect.schedule_text(schedule) == "Mon PG 14 → Sat PG 19"
     assert collect.schedule_text({}) == ""
+
+
+def test_staging_and_devel_failures_are_kept_apart_and_show_their_project():
+    """The nightly tests ppg:staging:<major> and ppg:devel:<major>: the same
+    Jenkins job failing in both is two failures, each with its project."""
+
+    def in_project(stage, result, url):
+        b = build("ppg-multiOS-parallel", result, url=url, VERSION="ppg-19.0")
+        b["project"] = f"isv:percona:ppg:{stage}:19"
+        return b
+
+    runs = [
+        run(
+            2,
+            14,
+            [
+                in_project("staging", "FAILURE", "s2"),
+                in_project("devel", "FAILURE", "d2"),
+            ],
+        ),
+        run(
+            1,
+            7,
+            [
+                in_project("staging", "SUCCESS", "s1"),
+                in_project("devel", "FAILURE", "d1"),
+            ],
+        ),
+    ]
+    data = collect.build_dashboard(runs, [], NOW)
+    rows = {f["project"]: f["since"] for f in data["failures"]}
+    assert rows == {
+        "ppg:staging:19": "14 Nov · 1 run",
+        "ppg:devel:19": "7 Nov · 2 runs",
+    }
+    assert data["details"]["19"]["projects"] == ["ppg:staging:19", "ppg:devel:19"]
+    assert data["projects"] == ["ppg:staging", "ppg:devel"]

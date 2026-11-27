@@ -88,6 +88,13 @@
     return (majors.length ? 'PG ' + majors.map(esc).join(', ') + ' nightly' : 'Nightly') + (run.rerun ? ' (re-run)' : '');
   }
 
+  // the OBS project a failing build comes from (ppg:staging:19, ppg:devel:19, ...)
+  function projectTag(f) {
+    if (!f.project) return '';
+    var devel = /^ppg:devel:/.test(f.project);
+    return ' <span class="proj' + (devel ? ' devel' : '') + '" title="OBS project">' + esc(f.project) + '</span>';
+  }
+
   // a cell of the majors grid
   function cell(tag, cls, html) {
     return '<' + tag + ' class="grid-row' + (cls ? ' ' + cls : '') + '">' + html + '</' + tag + '>';
@@ -102,7 +109,8 @@
   }
 
   function overview() {
-    var h = header('PPG Nightly QA', 'OBS staging · ppg:staging:14 – 19 · one major per night' +
+    var projects = (data.projects && data.projects.length ? data.projects : ['ppg:staging']).map(esc).join(' + ');
+    var h = header('PPG Nightly QA', 'OBS ' + projects + ' · PG 14 – 19 · one major per night' +
       (data.schedule ? ' (' + esc(data.schedule) + ')' : ''));
     // every nightly in progress, then the ones waiting to start
     (data.running || []).forEach(function (run) {
@@ -160,7 +168,7 @@
     shown.forEach(function (f) {
       h += '<article class="failure"><div class="tag">' + (f.is_new ? '<span class="badge-new">NEW · no ticket</span>' : knownBadge(f)) + '</div>' +
         '<span class="major">PG ' + esc(f.major) + '</span>' +
-        '<div class="what"><b>' + esc(f.title) + '</b><span>' + esc(f.job) + ' · ' + esc(f.platforms) + '</span></div>' +
+        '<div class="what"><b>' + esc(f.title) + projectTag(f) + '</b><span>' + esc(f.job) + ' · ' + esc(f.platforms) + '</span></div>' +
         '<div class="since stack"><span class="small-label">Failing since</span><span>' + esc(f.since) + '</span></div>' +
         link(f.build_url, 'Jenkins ' + esc(f.build) + ' →', 'details-link') + '</article>';
     });
@@ -174,7 +182,7 @@
     var d = data.details[major];
     if (!d) return '<a class="back" href="#">← All majors</a><p class="empty">No runs for PG ' + esc(major) + ' yet.</p>';
     var h = '<a class="back" href="#">← All majors</a>' +
-      header('PG ' + esc(major), 'ppg:staging:' + esc(major) +
+      header('PG ' + esc(major), ((d.projects && d.projects.length) ? d.projects : ['ppg:staging:' + major]).map(esc).join(' + ') +
         ((data.schedule_days || {})[major] ? ' · nightly on ' + esc(data.schedule_days[major]) : ''));
     var known = d.known_tickets.length ? ' · ' + (d.failing - d.new) + ' known (' + d.known_tickets.map(esc).join(', ') + ')' : '';
     h += '<section class="summary" aria-label="Summary">' +
@@ -203,7 +211,7 @@
     d.failing_builds.forEach(function (f) {
       h += '<article class="fb"><div class="fb-head">' +
         (f.is_new ? '<span class="badge-new">NEW</span>' : knownBadge(f)) +
-        '<b>' + esc(f.title) + '</b><span class="muted" style="font-size:13px">' + esc(f.job) + ' · failing since ' + esc(f.since) + '</span>' +
+        '<b>' + esc(f.title) + '</b>' + projectTag(f) + '<span class="muted" style="font-size:13px">' + esc(f.job) + ' · failing since ' + esc(f.since) + '</span>' +
         link(f.build_url, 'Jenkins ' + esc(f.build) + ' →', 'details-link push') + '</div>';
       if (f.failed_platforms.length) {
         h += '<div class="plat-list">' + f.failed_platforms.map(function (p) {

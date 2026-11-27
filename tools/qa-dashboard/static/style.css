@@ -112,3 +112,5 @@ footer { font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; g
 .status-cell { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .chip.notrun { background: var(--line-soft); color: var(--muted); border: 1px dashed #9AA1AD; text-decoration: none; font-size: 12px; }
 .chip.notrun:hover { color: var(--ink); text-decoration: underline; }
+.proj { display: inline-block; font: 600 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); background: #EEF0F3; border-radius: 6px; padding: 1px 7px; vertical-align: middle; }
+.proj.devel { color: #5B3FA8; background: #EFEAFB; }

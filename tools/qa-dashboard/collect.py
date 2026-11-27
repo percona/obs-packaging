@@ -119,11 +119,24 @@ def component_of(build: dict[str, Any]) -> str:
     )
 
 
-def project_suffix(build: dict[str, Any]) -> str:
-    """What follows ppg:staging:<major> in the build's OBS project (tde,
-    extras:containers, ...), "" for the major's main project."""
-    m = re.search(r":staging:1\d:(.+)$", str(build.get("project") or ""))
-    return m.group(1) if m else ""
+def project_of(build: dict[str, Any]) -> str:
+    """The build's OBS project from ppg: on (ppg:staging:19, ppg:devel:19,
+    ppg:staging:16:tde, ...): the nightly tests both staging and devel
+    projects, so the same Jenkins job can fail in either. "" if unknown."""
+    project = str(build.get("project") or "")
+    m = re.search(r"(?:^|:)(ppg:.+)$", project)
+    return m.group(1) if m else project
+
+
+def main_projects(builds: list[dict[str, Any]], major: str) -> list[str]:
+    """The major's own projects these builds come from: ppg:staging:<major>,
+    ppg:devel:<major> (not their subprojects, nor shared ones)."""
+    found = set()
+    for b in builds:
+        m = re.match(r"(ppg:[a-z]+:%s)(?::|$)" % re.escape(major), project_of(b))
+        if m:
+            found.add(m.group(1))
+    return sorted(found, key=lambda p: (not p.startswith("ppg:staging:"), p))
 
 
 def build_key(build: dict[str, Any]) -> str:
@@ -133,7 +146,7 @@ def build_key(build: dict[str, Any]) -> str:
     return "|".join(
         [
             build["pipeline"],
-            project_suffix(build),
+            project_of(build),
             component_of(build),
             build.get("label") or "default",
             old_major_of(build["params"]),
@@ -147,8 +160,6 @@ def build_title(build: dict[str, Any]) -> str:
     component = component_of(build)
     if component:
         parts.append(component.removeprefix("percona-"))
-    if project_suffix(build):
-        parts.append(project_suffix(build))
     old = old_major_of(params)
     new = major_of(params, build.get("label") or "")
     if old and new and old != new:
@@ -509,6 +520,7 @@ def build_dashboard(
                     else ""
                 ),
                 "title": (entry or {}).get("title") or build_title(b),
+                "project": project_of(b),
                 "job": build_title(b) if entry else b["pipeline"],
                 "platforms": ", ".join(failed_platforms or []) or "platforms unknown",
                 "since": (
@@ -599,6 +611,10 @@ def build_dashboard(
             "median_minutes": round(median / 60) if median else 0,
             "runtimes": runtimes,
             "failing_builds": detail_failing,
+            # where the last runs' builds come from (staging, devel or both)
+            "projects": main_projects(
+                [b for r in completed[:RUNS_SHOWN] for b in r["builds"]], m
+            ),
         }
 
     failures_out.sort(key=lambda f: (not f["is_new"], -int(f["major"])))
@@ -607,6 +623,15 @@ def build_dashboard(
         "refresh_minutes": REFRESH_MINUTES,
         "repo": REPO,
         "schedule": schedule_text(schedule),
+        # project families the shown runs tested: ["ppg:staging", "ppg:devel"]
+        "projects": sorted(
+            {
+                ":".join(p.split(":")[:2])
+                for m in MAJORS
+                for p in (details.get(m) or {}).get("projects", [])
+            },
+            key=lambda p: (p != "ppg:staging", p),
+        ),
         "schedule_days": {major: day.title() for day, major in schedule.items()},
         # problems that don't stop the refresh (e.g. known failures unreadable)
         "warnings": list(warnings or []),
