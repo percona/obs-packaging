@@ -10,6 +10,7 @@ import gzip
 import importlib.machinery
 import importlib.util
 import io
+import os
 import shutil
 import subprocess
 import tarfile
@@ -331,3 +332,145 @@ def test_manual_cache_key_follows_the_service_params_not_the_service_file(tmp_pa
     assert services._manual_cache_key(COMMIT, [_manual()], obs) == key
     assert services._manual_cache_key(COMMIT, [_manual("other.sh")], obs) != key
     assert services._manual_cache_key("0" * 40, [_manual()], obs) != key
+
+
+# --- --source: pack a directory of the package --------------------------------
+
+
+@pytest.fixture
+def srcdir(tmp_path, monkeypatch):
+    """A service work directory holding an upgrade-scripts directory."""
+    work = tmp_path / "srcwork"
+    start = work / "upgrade-scripts" / "bin" / "upgrade" / "start.sh"
+    start.parent.mkdir(parents=True)
+    start.write_text("echo ${NEW_VERSION}\n")
+    start.chmod(0o755)
+    passwd = work / "upgrade-scripts" / "conf" / "upgrade" / "passwd.template"
+    passwd.parent.mkdir(parents=True)
+    passwd.write_text("postgres:x:26:26::/var/lib/pgsql:/bin/bash\n")
+    passwd.chmod(0o644)
+    (tmp_path / "out").mkdir()
+    monkeypatch.chdir(work)
+    return work
+
+
+def _run_source(tmp_path, *extra, output="upgrade-scripts.tar.gz"):
+    out = tmp_path / "out"
+    rc = svc.main(
+        [
+            "--source",
+            "upgrade-scripts",
+            "--output",
+            output,
+            "--outdir",
+            str(out),
+            *extra,
+        ]
+    )
+    assert rc == 0
+    return out / output
+
+
+def test_source_mode_packs_the_directory(srcdir, tmp_path):
+    m = _members(_run_source(tmp_path))
+    assert set(m) == {
+        "upgrade-scripts",
+        "upgrade-scripts/bin",
+        "upgrade-scripts/bin/upgrade",
+        "upgrade-scripts/bin/upgrade/start.sh",
+        "upgrade-scripts/conf",
+        "upgrade-scripts/conf/upgrade",
+        "upgrade-scripts/conf/upgrade/passwd.template",
+    }
+    assert all(
+        x.mtime == 0 and x.uid == 0 and x.gid == 0 and x.uname == "" and x.gname == ""
+        for x in m.values()
+    )
+
+
+def test_source_mode_keeps_exec_bits(srcdir, tmp_path):
+    m = _members(_run_source(tmp_path))
+    assert m["upgrade-scripts/bin/upgrade/start.sh"].mode == 0o755
+    assert m["upgrade-scripts/conf/upgrade/passwd.template"].mode == 0o644
+
+
+def test_source_mode_same_contents_same_bytes(srcdir, tmp_path):
+    first = _run_source(tmp_path).read_bytes()
+
+    other = tmp_path / "other"
+    shutil.copytree(srcdir, other / "srcwork")
+    for i, path in enumerate(sorted((other / "srcwork").rglob("*"))):
+        os.utime(path, (1_600_000_000 + i * 7, 1_600_000_000 + i * 7))
+    (tmp_path / "out2").mkdir()
+    os.chdir(other / "srcwork")
+    rc = svc.main(
+        [
+            "--source",
+            "upgrade-scripts",
+            "--output",
+            "upgrade-scripts.tar.gz",
+            "--outdir",
+            str(tmp_path / "out2"),
+        ]
+    )
+    assert rc == 0
+    assert (tmp_path / "out2" / "upgrade-scripts.tar.gz").read_bytes() == first
+
+
+def test_source_symlinked_dir_packs_its_contents(srcdir, tmp_path):
+    shared = srcdir.parent / "shared"
+    shared.mkdir()
+    shutil.move(str(srcdir / "upgrade-scripts"), str(shared / "upgrade-scripts"))
+    (srcdir / "upgrade-scripts").symlink_to(shared / "upgrade-scripts")
+    m = _members(_run_source(tmp_path))
+    assert "upgrade-scripts/bin/upgrade/start.sh" in m
+    assert not any(x.issym() for x in m.values())
+
+
+def test_source_mode_runs_the_script_on_a_copy(srcdir, tmp_path):
+    (srcdir / "prep.sh").write_text(
+        "#!/bin/sh\n"
+        "set -eu\n"
+        'mkdir "$OUT_DIR/pkg"\n'
+        'echo "$NAME|$VERSION|$COMMIT|$SOURCE_DATE_EPOCH" > "$OUT_DIR/pkg/env.txt"\n'
+        "rm bin/upgrade/start.sh\n"
+        'cp -R . "$OUT_DIR/pkg/"\n'
+    )
+    m = _members(_run_source(tmp_path, "--script", "prep.sh"))
+    with tarfile.open(tmp_path / "out" / "upgrade-scripts.tar.gz") as tar:
+        member = tar.extractfile("pkg/env.txt")
+        assert member is not None
+        assert member.read() == b"upgrade-scripts|||0\n"
+    assert "pkg/conf/upgrade/passwd.template" in m
+    assert "pkg/bin/upgrade/start.sh" not in m
+    assert all(x.mtime == 0 for x in m.values())
+    assert (srcdir / "upgrade-scripts" / "bin" / "upgrade" / "start.sh").is_file()
+
+
+@pytest.mark.parametrize(
+    "args, cause",
+    [
+        (
+            [
+                "--archive",
+                "x*",
+                "--source",
+                "upgrade-scripts",
+                "--script",
+                "dist.sh",
+            ],
+            "exactly one of",
+        ),
+        ([], "exactly one of"),
+        (["--source", "upgrade-scripts"], "--output"),
+        (["--archive", "percona-foo*.tar.gz"], "--script"),
+        (["--source", "../upgrade-scripts", "--output", "a.tar.gz"], "plain name"),
+        (["--source", "..", "--output", "a.tar.gz"], "plain name"),
+        (["--source", "missing", "--output", "a.tar.gz"], "not a directory"),
+    ],
+)
+def test_source_mode_argument_errors(srcdir, tmp_path, capsys, args, cause):
+    err = _fails(srcdir, tmp_path, capsys, *args)
+    assert cause in err
+    assert err.startswith("source_script: ")
+    assert len(err.strip().splitlines()) == 1
