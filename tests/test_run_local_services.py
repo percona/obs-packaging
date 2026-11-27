@@ -358,3 +358,25 @@ def test_dangling_obs_subdir_link_fails_clearly(cat_services):
     with pytest.raises(SystemExit) as exc:
         _run_local_services(obs_dir, cache=False)
     assert "upgrade-scripts" in str(exc.value)
+
+
+def test_obs_files_reach_workdir_with_macros_expanded(fake_services):
+    """Plain obs/ files left in the workdir are uploaded over the caller's own
+    substituted copies, so they must carry the same %!{} and {{FOR}}
+    expansion — otherwise a Dockerfile in a package with a _service reaches
+    OBS with raw macro tokens."""
+    _, obs_dir, _ = fake_services
+    (obs_dir / "Dockerfile").write_text(
+        "ENV V %!{PG_MAJOR_VERSION}\n"
+        "{{FOR v IN 17,16}}\nRUN install pg${v}\n{{ENDFOR}}\n"
+        "ENV OS ${RHEL_VER}\n"
+    )
+    workdir = _run_local_services(
+        obs_dir, cache=False, macros={"PG_MAJOR_VERSION": "19"}, env_vars={}
+    )
+    try:
+        assert (workdir / "Dockerfile").read_text() == (
+            "ENV V 19\nRUN install pg17\nRUN install pg16\nENV OS ${RHEL_VER}\n"
+        )
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
