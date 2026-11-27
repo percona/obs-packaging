@@ -1,0 +1,147 @@
+#!UseOBSRepositories
+#!BuildVersion: 18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-14.%!{PG_14_MINOR_VERSION}-%!{UNIT_RELEASE}
+#!BuildTag: percona-distribution-postgresql-upgrade:18-17-16-15-14-%!{UNIT_RELEASE}
+#!BuildTag: percona-distribution-postgresql-upgrade:18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-14.%!{PG_14_MINOR_VERSION}-%!{UNIT_RELEASE}
+#!BuildTag: percona-distribution-postgresql-upgrade:18-17-16-15-14
+#!BuildTag: percona-distribution-postgresql-upgrade:18.%!{PG_18_MINOR_VERSION}-17.%!{PG_17_MINOR_VERSION}-16.%!{PG_16_MINOR_VERSION}-15.%!{PG_15_MINOR_VERSION}-14.%!{PG_14_MINOR_VERSION}
+
+ARG UBI_BASE=%!{UBI9_BASE_IMAGE}
+FROM $UBI_BASE
+
+LABEL name="Percona Distribution for PostgreSQL Upgrade" \
+      description="Upgrade container for Percona Distribution for PostgreSQL. Facilitates major version upgrades from PostgreSQL 14, 15, 16, or 17 to 18 using pg_upgrade." \
+      vendor="Percona" \
+      summary="Percona Distribution for PostgreSQL major version upgrade container" \
+      maintainer="Percona Development <info@percona.com>" \
+      org.opencontainers.image.authors="info@percona.com"
+LABEL version="18.%!{PG_18_MINOR_VERSION}-%!{UNIT_RELEASE}"
+LABEL release="%!{UNIT_RELEASE}"
+
+ARG PPG_REPO
+ARG RHEL_VER
+
+RUN microdnf -y update
+
+# curl/libcurl 8.23.0 from ppg:common:deps replace the distro's (curl-minimal/
+# libcurl-minimal on ubi-minimal, which they obsolete). Named explicitly so the
+# image carries them even where nothing installed below links libcurl.
+RUN microdnf -y install curl libcurl
+
+# glibc-minimal-langpack: see the percona-distribution-postgresql Dockerfile;
+# ubi-minimal pre-installs it and OBS must upload it for glibc to upgrade.
+RUN microdnf -y install \
+    glibc-langpack-en glibc-minimal-langpack systemd-rpm-macros file \
+    mariadb-connector-c-config crypto-policies-scripts pkgconfig
+
+ENV PPG_VERSION 18.%!{PG_18_MINOR_VERSION}-%!{UNIT_RELEASE}
+ENV PPG_MAJOR_VERSION 18
+ENV OS_VER ${RHEL_VER}
+
+RUN microdnf -y install \
+        bind-utils \
+        gettext \
+        hostname \
+        perl \
+        tar \
+        bzip2 \
+        lz4 \
+        procps-ng \
+        nss_wrapper \
+        shadow-utils \
+        libedit
+
+# ubi-minimal ships tzdata with /usr/share/zoneinfo stripped. Inside OBS only
+# `microdnf install/update` reach the build repository (`reinstall` fails
+# silently here), so drop the package with rpm and install it again.
+RUN if rpm -q tzdata >/dev/null; then rpm -e --nodeps tzdata; fi; \
+    microdnf -y install tzdata; \
+    microdnf clean all
+
+# pg_upgrade ships in percona-postgresqlN-server at /usr/pgsql-N/bin/pg_upgrade
+
+# Install PG${PPG_MAJOR_VERSION} (target version) with all extensions including PostGIS
+RUN set -ex; \
+    microdnf install -y \
+        percona-postgresql${PPG_MAJOR_VERSION}-server \
+        percona-postgresql${PPG_MAJOR_VERSION}-contrib \
+        percona-postgresql-common \
+        percona-pg_tde${PPG_MAJOR_VERSION} \
+        percona-pg_stat_monitor${PPG_MAJOR_VERSION} \
+        percona-pg_repack${PPG_MAJOR_VERSION} \
+        percona-pgaudit${PPG_MAJOR_VERSION} \
+        percona-pgaudit${PPG_MAJOR_VERSION}_set_user \
+        percona-pg_oidc_validator${PPG_MAJOR_VERSION} \
+        percona-pgvector_${PPG_MAJOR_VERSION} \
+        percona-postgresql${PPG_MAJOR_VERSION}-llvmjit \
+        percona-pgvector_${PPG_MAJOR_VERSION}-llvmjit \
+        percona-wal2json${PPG_MAJOR_VERSION} \
+        percona-postgis35_${PPG_MAJOR_VERSION} \
+        percona-postgis35_${PPG_MAJOR_VERSION}-client \
+        percona-postgis35_${PPG_MAJOR_VERSION}-gui \
+        percona-postgis35_${PPG_MAJOR_VERSION}-llvmjit \
+        percona-postgis35_${PPG_MAJOR_VERSION}-utils \
+        percona-credcheck${PPG_MAJOR_VERSION} \
+        percona-pg_cron_${PPG_MAJOR_VERSION}; \
+    microdnf clean all
+
+# Install every older PG major version this image can upgrade from, with the extensions
+# that exist for that version, so a single image can upgrade from any of them to
+# ${PPG_MAJOR_VERSION}. This block is expanded by percona-obs's sync tooling
+# (expand_for_blocks) into one literal, fully-expanded RUN per version before the file
+# ever reaches OBS — OBS's Dockerfile scanner statically resolves package names and
+# cannot expand a real shell loop variable, so what OBS sees is never this block itself.
+{{FOR pg_version IN 17,16,15,14}}
+RUN set -ex; \
+    microdnf install -y \
+        percona-postgresql${pg_version}-server \
+        percona-postgresql${pg_version}-contrib \
+        percona-postgresql${pg_version}-llvmjit \
+        percona-pg_stat_monitor${pg_version} \
+        percona-pg_repack${pg_version} \
+        percona-pgaudit${pg_version} \
+        percona-pgaudit${pg_version}_set_user \
+        percona-pgvector_${pg_version} \
+        percona-pgvector_${pg_version}-llvmjit \
+        percona-wal2json${pg_version} \
+        percona-postgis35_${pg_version} \
+        percona-postgis35_${pg_version}-llvmjit \
+        percona-credcheck${pg_version} \
+        percona-pg_cron_${pg_version}; \
+    microdnf clean all
+{{ENDFOR}}
+
+# pg_tde is only packaged standalone from PG17 onward, so it's installed separately
+# here rather than inside the loop above.
+RUN set -ex; \
+    microdnf install -y percona-pg_tde17; \
+    microdnf clean all; \
+    rm -rf /var/cache/dnf /var/cache/yum
+
+COPY LICENSE /licenses/LICENSE.Dockerfile
+# The perl metapackage drags in perl-Archive-Tar and perl-IO-Compress, which
+# nothing in the image uses and which carry open CVEs on EL8. Drop them the
+# way the retired kiwi base image did; UBI 9/10 ship fixed versions.
+RUN if [ "$RHEL_VER" = "el8" ]; then rpm -e --nodeps perl-Archive-Tar perl-IO-Compress; fi
+RUN cp /usr/share/doc/percona-postgresql${PPG_MAJOR_VERSION}/COPYRIGHT /licenses/COPYRIGHT.PostgreSQL
+
+RUN mkdir -p /opt/crunchy/bin /pgolddata /pgnewdata /opt/crunchy/conf
+COPY upgrade-scripts.tar.gz /tmp/upgrade-scripts.tar.gz
+RUN mkdir -p /tmp/upgrade-scripts && \
+    tar -xzf /tmp/upgrade-scripts.tar.gz -C /tmp/upgrade-scripts --strip-components=1 && \
+    cp /tmp/upgrade-scripts/bin/upgrade/start.sh /tmp/upgrade-scripts/bin/common/*.sh /opt/crunchy/bin/ && \
+    cp /tmp/upgrade-scripts/conf/upgrade/passwd.template /tmp/upgrade-scripts/conf/upgrade/group.template /opt/crunchy/conf/ && \
+    cp /tmp/upgrade-scripts/bin/relocate-extensions.sh /usr/local/bin/relocate-extensions.sh && \
+    rm -rf /tmp/upgrade-scripts /tmp/upgrade-scripts.tar.gz && \
+    chown -R postgres:postgres /opt/crunchy /pgolddata /pgnewdata && \
+    chmod -R g=u /opt/crunchy /pgolddata /pgnewdata && \
+    chmod +x /opt/crunchy/bin/*.sh /usr/local/bin/relocate-extensions.sh
+
+VOLUME /pgolddata /pgnewdata
+
+ENV NSS_WRAPPER_SUBDIR="upgrade"
+
+ENTRYPOINT ["/opt/crunchy/bin/uid_postgres.sh"]
+
+USER 26
+
+CMD ["/opt/crunchy/bin/start.sh"]
