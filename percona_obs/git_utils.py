@@ -61,11 +61,23 @@ def _package_pathspecs(package_path: Path) -> list[Path]:
     ``os.readlink`` + ``normpath`` rather than ``Path.resolve()`` so the result
     stays inside the worktree's own path namespace even when the checkout
     itself sits under a symlink.
+
+    Symlinks directly inside the package's ``obs/`` (e.g. a shared
+    ``upgrade-scripts`` tree) add their lexical targets too, resolved from the
+    package's real location (the link target when the package itself is a
+    symlink).
     """
     paths = [package_path]
     if package_path.is_symlink():
         target = os.path.normpath(package_path.parent / os.readlink(package_path))
         paths.append(Path(target))
+    obs = paths[-1] / "obs"
+    if obs.is_dir():
+        for link in sorted(obs.iterdir()):
+            if link.is_symlink():
+                target_path = Path(os.path.normpath(link.parent / os.readlink(link)))
+                if target_path not in paths:
+                    paths.append(target_path)
     return paths
 
 

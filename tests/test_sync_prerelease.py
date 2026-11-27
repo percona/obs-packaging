@@ -520,3 +520,51 @@ def test_release_from_skips_a_unit_out_of_slice(tmp_path, monkeypatch, capsys):
     )
     assert calls == []
     assert "skipped: ppg:releases:17" in capsys.readouterr().out
+
+
+def test_nested_unit_sees_parent_shared_obs_link_edit(tmp_path, monkeypatch):
+    import subprocess
+
+    import percona_obs.common as common
+
+    def git(*a):
+        return subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@x", *a],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    git("init", "-q")
+    up = tmp_path / "root/ppg/staging/common/upgrade"
+    script = up / "_shared/upgrade-scripts/bin/x.sh"
+    script.parent.mkdir(parents=True)
+    script.write_text("echo 1\n")
+    (up / "project.yaml").write_text("title: U\n")
+    extras = up / "extras"
+    (extras / "containers/img/obs").mkdir(parents=True)
+    (extras / "project.yaml").write_text("title: E\n")
+    (extras / "containers/project.yaml").write_text("title: C\n")
+    (extras / "containers/img/obs/upgrade-scripts").symlink_to(
+        "../../../../_shared/upgrade-scripts"
+    )
+    (tmp_path / "root/macros.yaml").write_text("- M: 1\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "a")
+    a = git("rev-parse", "HEAD")
+    script.write_text("echo 2\n")
+    git("commit", "-q", "-am", "b")
+    b = git("rev-parse", "HEAD")
+
+    monkeypatch.setattr(cmd_sync, "_REPO_DIR", tmp_path)
+    monkeypatch.setattr(common, "REPO_ROOT", tmp_path / "root")
+    monkeypatch.setattr(
+        cmd_sync,
+        "resolve_project_path",
+        lambda pid: tmp_path / "root" / pid.replace(":", "/"),
+    )
+    paths = cmd_sync._scope_local_paths(extras, [], {}, "home:Admin")
+    assert cmd_sync._changed_files_between(a, b, paths) == [
+        "root/ppg/staging/common/upgrade/_shared/upgrade-scripts/bin/x.sh"
+    ]

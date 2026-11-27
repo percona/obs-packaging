@@ -3026,12 +3026,17 @@ def _scope_local_paths(
             _add(d / "project.yaml")
             _add(d / "subprojects.yaml")
     # Package dirs that are symlinks into _shared/: git sees only the link
-    # blob, so the link target must be a pathspec of its own.
+    # blob, so the link target must be a pathspec of its own.  The same holds
+    # for symlinks inside a package's obs/ (shared upgrade-scripts trees),
+    # including those of nested release units below the source.
     for d in project_dirs:
         for child in sorted(d.iterdir()):
             if child.is_symlink():
                 for target in _package_pathspecs(child)[1:]:
                     _add(target)
+        for _prj, pkg in common.find_packages(d, ""):
+            for target in _package_pathspecs(pkg)[1:]:
+                _add(target)
     for prj, pkgs in freeze_packages_map.items():
         base = resolve_project_path(prj[len(rootprj) + 1 :])
         for pkg in sorted(pkgs):
