@@ -1,0 +1,9 @@
+<services>
+  <!-- obs/upgrade-scripts links to the scripts tree shared by every upgrade
+       image (root/ppg/staging/common/upgrade/_shared/upgrade-scripts).
+       percona-obs sync packs it into upgrade-scripts.tar.gz. -->
+  <service name="source_script" mode="manual">
+    <param name="source">upgrade-scripts</param>
+    <param name="output">upgrade-scripts.tar.gz</param>
+  </service>
+</services>
