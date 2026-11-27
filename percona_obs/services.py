@@ -369,7 +369,34 @@ def _manual_cache_key(
         if src.is_file() and src.name != "_service":
             digest.update(src.name.encode())
             digest.update(hashlib.sha256(src.read_bytes()).digest())
+    for src in sorted(obs_dir.iterdir()):
+        if not src.is_dir():
+            continue
+        for root, dirs, files in os.walk(src, followlinks=True):
+            dirs.sort()
+            for fname in sorted(files):
+                path = Path(root) / fname
+                if not path.is_file():
+                    continue
+                digest.update(str(path.relative_to(obs_dir)).encode())
+                digest.update(hashlib.sha256(path.read_bytes()).digest())
     return f"{commit_hash}-{digest.hexdigest()[:16]}"
+
+
+def _copy_obs_subdirs(obs_dir: Path, workdir: Path) -> None:
+    """Copy the ``obs/`` subdirectories (symlinks followed) into *workdir*.
+
+    Copied verbatim, with no macro or env substitution, so a service can pack
+    a directory of the package.  Raises SystemExit on a dangling link.
+    """
+    for src in sorted(obs_dir.iterdir()):
+        if src.is_dir():
+            shutil.copytree(src, workdir / src.name, symlinks=False)
+        elif src.is_symlink() and not src.exists():
+            shutil.rmtree(workdir, ignore_errors=True)
+            raise SystemExit(
+                f"error: {src}: link target {os.readlink(src)!r} does not exist"
+            )
 
 
 def _cache_entry_lookup(entry: Path) -> list[str] | None:
@@ -942,6 +969,7 @@ def _run_local_services(
                 (workdir / "_service").write_text(svc_text, "utf-8")
             else:
                 shutil.copy2(src, workdir / src.name)
+    _copy_obs_subdirs(obs_dir, workdir)
 
     def _run_one(svc: ET.Element) -> list[str]:
         """Invoke one service binary; return list of generated filenames."""
