@@ -281,3 +281,80 @@ def test_obs_scm_no_fallback_with_no_cache(fake_services, monkeypatch):
     monkeypatch.setattr(services, "_git_remote_reachable", lambda url: False)
     with pytest.raises(SystemExit):
         _run_local_services(obs_dir, cache=False)
+
+
+# --- obs/ subdirectories reach the services -----------------------------------
+
+FAKE_CAT = """#!/bin/sh
+set -e
+outdir=""
+while [ $# -gt 0 ]; do
+  if [ "$1" = "--outdir" ]; then outdir="$2"; shift; fi
+  shift
+done
+cat upgrade-scripts/a.sh > "$outdir/seen.txt"
+"""
+
+CAT_SERVICE_XML = """<services>
+  <service name="fake_cat" mode="manual"/>
+</services>
+"""
+
+SCRIPT_TEXT = "echo ${FOO} %!{BAR}\n"
+
+
+@pytest.fixture
+def cat_services(fake_services):
+    bindir, obs_dir, cache_dir = fake_services
+    _install(bindir, "fake_cat", FAKE_CAT)
+    (obs_dir / "_service").write_text(CAT_SERVICE_XML)
+    return bindir, obs_dir, cache_dir
+
+
+def test_obs_subdir_reaches_services_verbatim(cat_services):
+    _, obs_dir, _ = cat_services
+    (obs_dir / "upgrade-scripts").mkdir()
+    (obs_dir / "upgrade-scripts" / "a.sh").write_text(SCRIPT_TEXT)
+    workdir = _run_local_services(
+        obs_dir, cache=False, env_vars={"FOO": "x"}, macros={"BAR": "y"}
+    )
+    try:
+        assert (workdir / "seen.txt").read_text() == SCRIPT_TEXT
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+def test_obs_symlinked_subdir_reaches_services(cat_services):
+    _, obs_dir, _ = cat_services
+    shared = obs_dir.parent.parent / "shared" / "upgrade-scripts"
+    shared.mkdir(parents=True)
+    (shared / "a.sh").write_text(SCRIPT_TEXT)
+    (obs_dir / "upgrade-scripts").symlink_to(
+        os.path.relpath(shared, obs_dir), target_is_directory=True
+    )
+    workdir = _run_local_services(
+        obs_dir, cache=False, env_vars={"FOO": "x"}, macros={"BAR": "y"}
+    )
+    try:
+        assert (workdir / "seen.txt").read_text() == SCRIPT_TEXT
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+def test_obs_subdir_not_left_in_workdir(cat_services):
+    _, obs_dir, _ = cat_services
+    (obs_dir / "upgrade-scripts").mkdir()
+    (obs_dir / "upgrade-scripts" / "a.sh").write_text(SCRIPT_TEXT)
+    workdir = _run_local_services(obs_dir, cache=False)
+    try:
+        assert not [p for p in workdir.iterdir() if p.is_dir()]
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+def test_dangling_obs_subdir_link_fails_clearly(cat_services):
+    _, obs_dir, _ = cat_services
+    (obs_dir / "upgrade-scripts").symlink_to("../nowhere")
+    with pytest.raises(SystemExit) as exc:
+        _run_local_services(obs_dir, cache=False)
+    assert "upgrade-scripts" in str(exc.value)

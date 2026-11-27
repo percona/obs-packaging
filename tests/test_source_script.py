@@ -320,6 +320,36 @@ def test_manual_cache_key_follows_the_script_content(tmp_path):
     assert services._manual_cache_key(COMMIT, [_manual()], obs) != key
 
 
+def test_manual_cache_key_follows_obs_subdir_content(tmp_path):
+    obs = tmp_path / "obs"
+    obs.mkdir()
+    (obs / "_service").write_text("<services/>")
+    (obs / "dist.sh").write_text("#!/bin/sh\n")
+    plain = services._manual_cache_key(COMMIT, [_manual()], obs)
+
+    sub = obs / "upgrade-scripts"
+    sub.mkdir()
+    (sub / "a.sh").write_text("one\n")
+    key = services._manual_cache_key(COMMIT, [_manual()], obs)
+    assert key != plain
+    assert key == services._manual_cache_key(COMMIT, [_manual()], obs)
+
+    (sub / "a.sh").write_text("two\n")
+    assert services._manual_cache_key(COMMIT, [_manual()], obs) != key
+
+
+def test_manual_cache_key_unchanged_without_obs_subdirs(tmp_path):
+    obs = tmp_path / "obs"
+    obs.mkdir()
+    (obs / "_service").write_text("<services/>")
+    (obs / "dist.sh").write_text("#!/bin/sh\n")
+    (obs / "empty").mkdir()
+    # an empty subdirectory contributes nothing, so the key keeps its value
+    with_empty = services._manual_cache_key(COMMIT, [_manual()], obs)
+    (obs / "empty").rmdir()
+    assert services._manual_cache_key(COMMIT, [_manual()], obs) == with_empty
+
+
 def test_manual_cache_key_follows_the_service_params_not_the_service_file(tmp_path):
     obs = tmp_path / "obs"
     obs.mkdir()
